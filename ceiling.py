@@ -1,0 +1,122 @@
+from house_drawing import *
+
+
+drawing = Drawing(-1000, -1000, 8000, 14000)
+
+drawing.add_wall(-250, -250, 6750, 12750)
+drawing.add_box(0, 0, 6500, 3750)
+drawing.add_box(0, 4000, 6500, 8125)
+drawing.add_box(0, 8375, 6500, 12500)
+
+drawing.add_ceiling(-250, -125-70, 4000+140, [
+	Beam(visible=False),
+	Narrow(visible=False),
+	Beam(visible=False),
+	Narrow(visible=False),
+	Beam(visible=False),
+	Narrow(visible=False),
+	Beam(visible=False),
+	Wide(visible=False),
+	Beam(visible=False),
+	Narrow(top_offset=2600),
+	Beam(),
+	Narrow(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(visible=False),
+])
+
+drawing.add_ceiling(-250, 3750+125-70, 4375+140, [
+	Beam(visible=False),
+	Narrow(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Narrow(),
+	Beam(),
+	Narrow(),
+	Beam(top_offset=-1500),
+	Wide(),
+	Beam(),
+	Narrow(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Narrow(),
+	Beam(visible=False),
+])
+
+drawing.add_ceiling(-250, 8125+125-70, 4375+140, [
+	Beam(visible=False),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(),
+	Wide(),
+	Beam(visible=False),
+])
+
+# komin
+drawing.add_box(4500-250, 3750-750, 4500+250, 3750, hatch="xx", facecolor="#c080c0")
+
+# schody
+drawing.add_box(0, 0, 1000, 3750, facecolor="#d0d0d0")
+drawing.add_box(0, 0, 2350, 1000, facecolor="#d0d0d0")
+drawing.add_box(0, 3750-1000, 1830, 3750, facecolor="#d0d0d0")
+
+# sachta kuchyn
+drawing.add_box(625-200, 3750+250, 625+200, 3750+250+150, hatch="xx", facecolor="#c080c0")
+
+# pricka dole
+drawing.add_box(6500/2-125, 3750+4125+250+250, 6500/2+125, 3750+4125+250+250+1000, hatch="x")
+
+# sachta loznice
+drawing.add_box((6500-250)/2-375, 3750+4125+250+250, (6500-250)/2-375+100, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
+
+# sachta risanek
+drawing.add_box((6500-250)/2+625-100, 3750+4125+250+250, (6500-250)/2+625, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
+
+
+# A second wall and a dimension showing their 300 cm span.
+#drawing.add_wall(30, 10, 330, 30)
+#drawing.add_dimension(30, 30, 330, 30, offset=50)
+
+# Styles can be overridden per wall.
+#drawing.add_wall(330, 10, 350, 200, facecolor="#dbeafe", hatch="xx")
+
+drawing.save("ceiling.svg")
+drawing.save("ceiling.png", dpi=200)
