@@ -32,6 +32,33 @@ class DrawingTests(unittest.TestCase):
         self.assertEqual(wall.get_height(), 60)
         drawing.close()
 
+    def test_ellipse_is_inscribed_in_normalised_box(self) -> None:
+        drawing = Drawing(0, 0, 100, 100)
+        ellipse = drawing.add_ellipse(
+            80,
+            70,
+            20,
+            10,
+            facecolor="lightblue",
+            hatch="xx",
+        )
+
+        self.assertEqual(ellipse.center, (50, 40))
+        self.assertEqual(ellipse.width, 60)
+        self.assertEqual(ellipse.height, 60)
+        self.assertEqual(ellipse.get_hatch(), "xx")
+        self.assertEqual(ellipse.get_facecolor(), to_rgba("lightblue"))
+        drawing.close()
+
+    def test_out_of_bounds_ellipse_is_rejected(self) -> None:
+        drawing = Drawing(0, 0, 100, 100)
+
+        with self.assertRaisesRegex(ValueError, "outside the drawing area"):
+            drawing.add_ellipse(10, 10, 101, 90)
+
+        self.assertEqual(len(drawing.ax.patches), 0)
+        drawing.close()
+
     def test_out_of_bounds_wall_is_rejected(self) -> None:
         drawing = Drawing(0, 0, 100, 100)
         with self.assertRaisesRegex(ValueError, "outside the drawing area"):

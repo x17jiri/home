@@ -16,7 +16,7 @@ from typing import Any, Iterable, Sequence
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from matplotlib.patches import Polygon, Rectangle
+from matplotlib.patches import Ellipse, Polygon, Rectangle
 
 
 Number = int | float
@@ -182,6 +182,39 @@ class Drawing:
         )
         self.axes.add_patch(box)
         return box
+
+    def add_ellipse(
+        self,
+        x1: Number,
+        y1: Number,
+        x2: Number,
+        y2: Number,
+        *,
+        facecolor: str = "white",
+        edgecolor: str = "black",
+        linewidth: Number = 1.0,
+        linestyle: str | tuple[Any, ...] = "solid",
+        hatch: str | None = None,
+        **kwargs: Any,
+    ) -> Ellipse:
+        """Draw an ellipse inscribed in the box between two opposite corners."""
+        x1, y1 = self._point(x1, y1, "ellipse box corner 1")
+        x2, y2 = self._point(x2, y2, "ellipse box corner 2")
+        left, right = sorted((x1, x2))
+        top, bottom = sorted((y1, y2))
+        ellipse = Ellipse(
+            ((left + right) / 2, (top + bottom) / 2),
+            right - left,
+            bottom - top,
+            facecolor=facecolor,
+            edgecolor=edgecolor,
+            linewidth=linewidth,
+            linestyle=linestyle,
+            hatch=hatch,
+            **kwargs,
+        )
+        self.axes.add_patch(ellipse)
+        return ellipse
 
     def add_wall(
         self,

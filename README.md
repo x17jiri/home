@@ -24,7 +24,7 @@ drawing.add_wall(
 )
 ```
 
-The module also has `add_line()`, `add_box()`, `add_text()` and
+The module also has `add_line()`, `add_box()`, `add_ellipse()`, `add_text()` and
 `add_dimension()` helpers. Use `drawing.ax` and `drawing.fig` when direct access
 to Matplotlib is useful.
 

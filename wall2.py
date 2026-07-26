@@ -27,21 +27,22 @@ def main() -> None:
 	)
 
 	drawing.add_brick_wall(
-		start_y=-2750-210,
+		start_y=-2750-210-250,
 		polygon=[
 			(-3500, -2750-210),
 			(-3500, -2750-210),
-			(-3500, -2750-210-1250),
-			(-3250, -2750-210-1250),
-#    	    (-3250, -2750-210-1250-120),
-			(-1000, -2750-210-3250),
-			(+1000, -2750-210-3250),
-#        	(+3250, -2750-210-1250-120),
+			(-3500, -2750-210-2500),
+			(-3250, -2750-210-2500),
+			(-1125, -2750-210-3125),
+			(+1125, -2750-210-3125),
 			(+3250, -2750-210-1250),
 			(+3500, -2750-210-1250),
 			(+3500, -2750-210),
 		],
+		half_rows=[10],
 	)
+	drawing.add_box(-1125, -2750-210-3125, -1125+500, -2750-210-2875, facecolor="#e8e8e8")
+	drawing.add_box(+1125, -2750-210-3125, +1125-500, -2750-210-2875, facecolor="#e8e8e8")
 
 	# venec
 	drawing.add_wall(
@@ -49,9 +50,19 @@ def main() -> None:
 		3500, -2750-210-1000,
 		hatch="oo"
 	)
+	drawing.add_wall(
+		-3500, -2750-210-2500,
+		-2875, -2750-210-2500+250,
+		hatch="oo"
+	)
 	drawing.add_box(
 		-3500+125-80, -2750-210-1250-120,
 		-3250-125+80, -2750-210-1250,
+		facecolor="yellow"
+	)
+	drawing.add_box(
+		-3500+125-80, -2750-210-2500-120,
+		-3250-125+80, -2750-210-2500,
 		facecolor="yellow"
 	)
 	drawing.add_box(
@@ -61,13 +72,13 @@ def main() -> None:
 	)
 
 	drawing.add_box(
-		-875-70, -2750-210-3250-240,
-		-870+70, -2750-210-3250,
+		-875-70, -2750-210-3125-240,
+		-870+70, -2750-210-3125,
 		facecolor="yellow"
 	)
 	drawing.add_box(
-		+875+70, -2750-210-3250-240,
-		+870-70, -2750-210-3250,
+		+875+70, -2750-210-3125-240,
+		+870-70, -2750-210-3125,
 		facecolor="yellow"
 	)
 
@@ -79,6 +90,12 @@ def main() -> None:
 	drawing.add_box(+250, -2750-210, +1250, -2750-210-1000-1250)
 	drawing.add_wall(0, -2750-210-1000-1250, +1500, -2750-210-1000-1250-250) # preklad
 
+	# instalacni sachta
+	drawing.add_box(-500-125, -2750-210-3125, +500+125, -2750-210-2875)
+	drawing.add_box(-500, -2750-210-2875, +500, -2750-210-2750)
+	drawing.add_line(-500-125, -2750-210-3125, +500+125, -2750-210-3125, color="white", linewidth=2)
+	drawing.add_line(-500, -2750-210-2875, +500, -2750-210-2875, color="white", linewidth=2)
+
 	# strop
 	drawing.add_wall(-3500, -2750, +3500, -2750-210, hatch="xx")
 
@@ -86,8 +103,12 @@ def main() -> None:
 	drawing.add_wall(-3500, 250, +3500, 400, hatch="xx")
 
 	drawing.add_box(750-30, -2250, 750+30, -2250-250, facecolor="#b0d0ff")
-	drawing.add_box(-1250-125, -2250, -1250+125, -2250+250, facecolor="#b0d0ff")
-	drawing.add_box(-1250-125, -250, -1250+125, 0, facecolor="#b0d0ff")
+	drawing.add_box(-1250-250, -2250, -1250+250, -2250-250, facecolor="#e8e8e8")
+	drawing.add_ellipse(-1250-125, -2250, -1250+125, -2250+250, facecolor="#b0d0ff")
+	drawing.add_box(-1250-250, -250, -1250+250, -500, facecolor="#e8e8e8")
+	drawing.add_ellipse(-1250-125, -250, -1250+125, 0, facecolor="#b0d0ff")
+
+	drawing.add_ellipse(750-30, 50, 750+30, 110, facecolor="#b0d0ff")
 
 	drawing.save("wall2.svg")
 	drawing.save("wall2.png", dpi=200)
