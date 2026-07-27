@@ -91,7 +91,9 @@ drawing.add_ceiling(-250, 8125+125-70, 4375+140, [
 ])
 
 # komin
-drawing.add_box(4500-250, 3750-750, 4500+250, 3750, hatch="xx", facecolor="#c080c0")
+drawing.add_box(4500-250, 3750-750, 4500+250, 3750-250, hatch="xx", facecolor="#c080c0")
+# odpad
+drawing.add_box(4500+250+125, 3750-250, 4500+250+125+500, 3750, hatch="xx", facecolor="#c080c0")
 
 # schody
 drawing.add_box(0, 0, 1000, 3750, facecolor="#d0d0d0")
@@ -102,13 +104,13 @@ drawing.add_box(0, 3750-1000, 1830, 3750, facecolor="#d0d0d0")
 drawing.add_box(625-200, 3750+250, 625+200, 3750+250+150, hatch="xx", facecolor="#c080c0")
 
 # pricka dole
-drawing.add_box(6500/2-125, 3750+4125+250+250, 6500/2+125, 3750+4125+250+250+1000, hatch="x")
+drawing.add_box(6500/2-125, 3750+4125+250+250, 6500/2+125, 12750, facecolor="none", linestyle="dotted", hatch="xx")
 
 # sachta loznice
-drawing.add_box((6500-250)/2-375, 3750+4125+250+250, (6500-250)/2-375+100, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
+drawing.add_box(6500/2-125, 3750+4125+250+250, 6500/2-250, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
 
 # sachta risanek
-drawing.add_box((6500-250)/2+625-100, 3750+4125+250+250, (6500-250)/2+625, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
+drawing.add_box(6500/2+125, 3750+4125+250+250, 6500/2+250, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
 
 
 # A second wall and a dimension showing their 300 cm span.

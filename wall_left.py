@@ -8,7 +8,7 @@ def main() -> None:
 
 	# spodek
 	drawing.add_brick_wall(
-		start_y=0,
+		start_y=250,
 		polygon=[
 			(-12750, 250),
 			(-12750, -2750),
@@ -19,7 +19,7 @@ def main() -> None:
 
 	# ytong
 	drawing.add_brick_wall(
-		start_y=0,
+		start_y=250,
 		polygon=[
 			(-12750, 250),
 			(-12750, 0),
@@ -29,18 +29,25 @@ def main() -> None:
 		facecolor="#f0e0e0"
 	)
 
-	# vrsek
+	# vrsek 1
 	drawing.add_brick_wall(
-		start_y=-2750-210-250,
 		polygon=[
 			(-12750, -2750-210),
 			(-12750, -2750-210-1250),
+			(+250, -2750-210-1250),
+			(+250, -2750-210),
+		],
+		half_rows=[7],
+	)
+
+	# vrsek 2
+	drawing.add_brick_wall(
+		start_y=-2750-210-250,
+		polygon=[
 			(-12750+250+4125, -2750-210-1250),
 			(-12750+250+4125, -2750-210-2625),
 			(-12750+250+4125+250+4125+250, -2750-210-2625),
 			(-12750+250+4125+250+4125+250, -2750-210-1250),
-			(+250, -2750-210-1250),
-			(+250, -2750-210),
 		],
 		half_rows=[7],
 	)
@@ -121,6 +128,15 @@ def main() -> None:
 
 	# zaklad
 	drawing.add_wall(-12750, 250, +250, 400, hatch="xx")
+
+	# otvor na vzduch pro krb
+	drawing.add_box(-12750+750+4125*2+125, -750, -12750+750+4125*2+625, -500, facecolor="#e8e8e8")
+	drawing.add_ellipse(-12750+750+4125*2+250, -250, -12750+750+4125*2+500, -500, facecolor="#b0d0ff")
+
+	# otvor privod rekuperace
+	# TODO - je pres pul cihly
+	drawing.add_box(-12750+750+4125*2+125, -2750-210-750, -12750+750+4125*2+625, -2750-210-500, facecolor="#e8e8e8")
+	drawing.add_ellipse(-12750+750+4125*2+250, -2750-210-250, -12750+750+4125*2+500, -2750-210-500, facecolor="#b0d0ff")
 
 	drawing.save("wall_left.svg")
 	drawing.save("wall_left.png", dpi=200)
