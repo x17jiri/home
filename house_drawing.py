@@ -51,9 +51,9 @@ class Narrow:
 
 
 _CEILING_STYLES: dict[type[object], tuple[float, str]] = {
-    Beam: (125.0, "#f4cccc"),
-    Wide: (500.0, "#cfe2f3"),
-    Narrow: (375.0, "#d9ead3"),
+    Beam: (170.0, "#f4cccc"),
+    Wide: (625.0-170.0, "#cfe2f3"),
+    Narrow: (500.0-170.0, "#d9ead3"),
 }
 
 
@@ -414,7 +414,8 @@ class Drawing:
 
         Beams are 125 mm wide, wide sections are 500 mm wide, and narrow
         sections are 375 mm wide. Each object's offsets are added to its top
-        and bottom coordinates. All sections use solid fills.
+        and bottom coordinates. All sections use solid fills. The x-coordinate
+        of every beam is printed in millimetres.
         """
         x, y = self._point(x, y, "ceiling start")
         height = self._number(height, "height")
@@ -427,6 +428,7 @@ class Drawing:
             raise TypeError("objects must be an iterable of Beam, Wide, or Narrow") from error
 
         specifications: list[tuple[float, str, float | None, float | None, bool]] = []
+        beam_x_coordinates: list[float] = []
         current_x = x
         for index, ceiling_object in enumerate(ceiling_objects):
             try:
@@ -439,6 +441,9 @@ class Drawing:
 
             if not isinstance(ceiling_object.visible, bool):
                 raise TypeError(f"ceiling object at index {index} visible must be a bool")
+
+            if isinstance(ceiling_object, Beam):
+                beam_x_coordinates.append(current_x)
 
             if not ceiling_object.visible:
                 # A hidden object still consumes its full horizontal width.
@@ -481,6 +486,9 @@ class Drawing:
 
         if not specifications:
             self._point(x, y + height, "ceiling end")
+
+        for beam_x_coordinate in beam_x_coordinates:
+            print(f"Beam x-coordinate: {beam_x_coordinate:g} mm")
 
         sections: list[Rectangle] = []
         current_x = x

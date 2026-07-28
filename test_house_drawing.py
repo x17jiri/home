@@ -1,4 +1,6 @@
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -139,6 +141,28 @@ class DrawingTests(unittest.TestCase):
         self.assertEqual(
             [(section.get_x(), section.get_width()) for section in sections],
             [(100, 125), (725, 375)],
+        )
+        drawing.close()
+
+    def test_ceiling_prints_each_beam_x_coordinate(self) -> None:
+        drawing = Drawing(0, 0, 2000, 2000)
+        output = StringIO()
+
+        with redirect_stdout(output):
+            drawing.add_ceiling(
+                100,
+                200,
+                1000,
+                [Beam(), Wide(), Beam(visible=False), Narrow(), Beam()],
+            )
+
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [
+                "Beam x-coordinate: 100 mm",
+                "Beam x-coordinate: 725 mm",
+                "Beam x-coordinate: 1225 mm",
+            ],
         )
         drawing.close()
 

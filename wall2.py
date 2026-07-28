@@ -90,8 +90,8 @@ def main() -> None:
 	drawing.add_wall(-1000, -2250, +500, -2250-250) # preklad
 
 	# dvere horni pokoj
-	drawing.add_box(+250, -2750-210, +1250, -2750-210-1000-1250)
-	drawing.add_wall(0, -2750-210-1000-1250, +1500, -2750-210-1000-1250-250) # preklad
+	drawing.add_box(-125, -2750-210, +875, -2750-210-1000-1250)
+	drawing.add_wall(-375, -2750-210-1000-1250, +1125, -2750-210-1000-1250-250) # preklad
 
 	# horni instalacni sachta
 	drawing.add_box(-500-125, -2750-210-3250, +500+125, -2750-210-3000)
