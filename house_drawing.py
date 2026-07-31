@@ -183,6 +183,51 @@ class Drawing:
         self.axes.add_patch(box)
         return box
 
+    def add_polygon(
+        self,
+        points: Sequence[Point],
+        *,
+        facecolor: str = "white",
+        edgecolor: str = "black",
+        linewidth: Number = 1.0,
+        linestyle: str | tuple[Any, ...] = "solid",
+        hatch: str | None = None,
+        **kwargs: Any,
+    ) -> Polygon:
+        """Draw a closed polygon through at least three points."""
+        try:
+            raw_points = list(points)
+        except TypeError as error:
+            raise TypeError("points must be a sequence of (x, y) points") from error
+
+        if len(raw_points) < 3:
+            raise ValueError("polygon must contain at least three points")
+
+        polygon_points: list[tuple[float, float]] = []
+        for index, point in enumerate(raw_points):
+            try:
+                point_x, point_y = point
+            except (TypeError, ValueError) as error:
+                raise TypeError(
+                    f"polygon point {index} must contain exactly two coordinates"
+                ) from error
+            polygon_points.append(
+                self._point(point_x, point_y, f"polygon point {index}")
+            )
+
+        polygon = Polygon(
+            polygon_points,
+            closed=True,
+            facecolor=facecolor,
+            edgecolor=edgecolor,
+            linewidth=linewidth,
+            linestyle=linestyle,
+            hatch=hatch,
+            **kwargs,
+        )
+        self.axes.add_patch(polygon)
+        return polygon
+
     def add_ellipse(
         self,
         x1: Number,

@@ -86,18 +86,35 @@ def main() -> None:
 	)
 
 	# dvere kuchyn
-	drawing.add_box(-750, 250, +250, -2250)
-	drawing.add_wall(-1000, -2250, +500, -2250-250) # preklad
+	drawing.add_polygon(
+		[
+			(125, 250),
+			(125-1000, 250),
+			(125-1000, 0),
+			(125-2000, 0),
+			(125-2000, -2125),
+			(125, -2125)
+		]
+	)
+	drawing.add_wall(125+125, -2125, 125-2000-125, -2125-125) # preklad
+	drawing.add_box(125, -2000, 125+375, -2000-125, facecolor="#e8e8e8")
+	drawing.add_box(125-2000, -2000, 125-2000-375, -2000-125, facecolor="#e8e8e8")
+	drawing.add_box(
+		125-50, 70,
+		125-950, -2100+70,
+		facecolor="none",
+		edgecolor="#8080ff",
+		linestyle="dashed",
+		linewidth=2.0,
+	)
 
 	# dvere horni pokoj
-	drawing.add_box(-125, -2750-210, +875, -2750-210-1000-1250)
-	drawing.add_wall(-375, -2750-210-1000-1250, +1125, -2750-210-1000-1250-250) # preklad
+	drawing.add_box(-125, -2750-210, +875, -2750-210-2250)
+	drawing.add_wall(-125-125, -2750-210-2250, +875+125, -2750-210-2250-125) # preklad
 
 	# horni instalacni sachta
-	drawing.add_box(-500-125, -2750-210-3250, +500+125, -2750-210-3000)
-	drawing.add_box(-500, -2750-210-3000, +500, -2750-210-2750)
-	drawing.add_line(-500-125, -2750-210-3250, +500+125, -2750-210-3250, color="white", linewidth=2)
-	drawing.add_line(-500, -2750-210-3000, +500, -2750-210-3000, color="white", linewidth=2)
+	drawing.add_wall(-500-125, -2750-210-3125, +500+125, -2750-210-3000)
+	drawing.add_box(-500, -2750-210-3000, +500, -2750-210-2750, facecolor="#b0d0ff")
 
 	# strop
 	drawing.add_wall(-3500, -2750, +3500, -2750-210, hatch="xx")
@@ -105,15 +122,23 @@ def main() -> None:
 	# zaklad
 	drawing.add_wall(-3500, 250, +3500, 400, hatch="xx")
 
+	# otvor voda
 	drawing.add_box(875-30, -2250, 875+30, -2250-250, facecolor="#b0d0ff")
-	drawing.add_box(-1250-250, -2250, -1250+250, -2250+250, facecolor="#e8e8e8")
-	drawing.add_ellipse(-1250-125, -2250+500, -1250+125, -2250+250, facecolor="#b0d0ff")
-	drawing.add_box(-1250-250, -500, -1250+250, -750, facecolor="#e8e8e8")
-	drawing.add_ellipse(-1250-125, -500, -1250+125, -250, facecolor="#b0d0ff")
+	# otvor topeni
+	drawing.add_box(-3250, -2250, -3250+50, -2250-250, facecolor="#b0d0ff")
 
 	#drawing.add_ellipse(750-30, 50, 750+30, 110, facecolor="#b0d0ff")
 
 	#drawing.add_line(-3250-125-80, -2750-210-2500-120, -875-70, -2750-210-3250-240)
+
+	# komin
+	drawing.add_box(-1040, 250, -1040-455, -8000,
+		facecolor="none",
+		edgecolor="#8080ff",
+		linestyle="dashed",
+		linewidth=2.0,
+	)
+
 
 	drawing.save("wall2.svg")
 	drawing.save("wall2.png", dpi=200)

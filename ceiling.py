@@ -19,9 +19,7 @@ drawing.add_ceiling(-40, -125-70, 4000+140, [
 	Beam(visible=False),
 	Narrow(visible=False),
 	Beam(),
-	Wide(),
-	Beam(),
-	Wide(),
+	Narrow(),
 	Beam(),
 	Narrow(),
 	Beam(),
@@ -31,7 +29,9 @@ drawing.add_ceiling(-40, -125-70, 4000+140, [
 	Beam(),
 	Wide(),
 	Beam(),
-	Narrow(),
+	Wide(),
+	Beam(),
+	Wide(),
 ])
 
 drawing.add_ceiling(-40, 3750+125-70, 4375+140, [
@@ -45,9 +45,7 @@ drawing.add_ceiling(-40, 3750+125-70, 4375+140, [
 	Beam(),
 	Narrow(),
 	Beam(),
-	Wide(),
-	Beam(),
-	Wide(),
+	Narrow(),
 	Beam(),
 	Narrow(),
 	Beam(),
@@ -57,7 +55,9 @@ drawing.add_ceiling(-40, 3750+125-70, 4375+140, [
 	Beam(),
 	Wide(),
 	Beam(),
-	Narrow(),
+	Wide(),
+	Beam(),
+	Wide(),
 ])
 
 drawing.add_ceiling(-40, 8125+125-70, 4375+140, [
@@ -69,25 +69,25 @@ drawing.add_ceiling(-40, 8125+125-70, 4375+140, [
 	Beam(),
 	Wide(),
 	Beam(),
+	Wide(),
+	Beam(),
+	Narrow(),
+	Beam(),
+	Narrow(),
+	Beam(),
 	Narrow(),
 	Beam(),
 	Wide(),
 	Beam(),
 	Wide(),
 	Beam(),
-	Narrow(),
-	Beam(),
 	Wide(),
 	Beam(),
 	Wide(),
-	Beam(),
-	Wide(),
-	Beam(),
-	Narrow(),
 ])
 
 # komin
-drawing.add_box(4562.5-250, 3750-750, 4562.5+250, 3750-250, hatch="xx", facecolor="#c080c0")
+drawing.add_box(3250+960, 3750-600, 3250+960+455, 3750-1000, hatch="xx", facecolor="#c080c0")
 # odpad
 drawing.add_box(4500+250+125, 3750-250, 4500+250+125+500, 3750, hatch="xx", facecolor="#c080c0")
 
@@ -106,7 +106,12 @@ drawing.add_box(6500/2-125, 3750+4125+250+250, 6500/2+125, 12750, facecolor="non
 drawing.add_box(3040-150, 3750+4125+250+250, 3040, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
 
 # sachta risanek
-drawing.add_box(3665-150, 3750+4125+250+250, 3665, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
+drawing.add_box(3540-150, 3750+4125+250+250, 3540, 3750+4125+250+250+150, hatch="xx", facecolor="#c080c0")
+
+# dvere
+drawing.add_box(3250+125, 3750-500, 3250-875, 3750+750, linestyle="dotted", facecolor="none")
+drawing.add_box(3250-500, 3750+250+4125-500, 3250-1500, 3750+250+4125+750, linestyle="dotted", facecolor="none")
+
 
 # NOTE:
 # G21a.1.4.250 Uložení stropních trámů POT na vnitřní stěnu v příčném směru, uložení menší než 125 mm, tl. stropu 250 mm

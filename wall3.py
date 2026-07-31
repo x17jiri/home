@@ -7,7 +7,7 @@ def main() -> None:
 	drawing = Drawing(-4000, -10000, 4000, 2000)
 
 	drawing.add_brick_wall(
-		start_y = 250,
+		start_y=0,
 		polygon=[
 			(-3500, 250),
 			(-3500, -2750),
@@ -18,7 +18,7 @@ def main() -> None:
 	)
 
 	drawing.add_brick_wall(
-		start_y = 250,
+		start_y=0,
 		polygon=[
 			(-3500, 250),
 			(-3500, 0),
@@ -29,7 +29,7 @@ def main() -> None:
 	)
 
 	drawing.add_brick_wall(
-		start_y=-2750-210,
+		start_y=-2750-210-250,
 		polygon=[
 			(-3500, -2750-210),
 			(-3500, -2750-210),
@@ -44,11 +44,7 @@ def main() -> None:
 		],
 #		half_rows=[10],
 	)
-	drawing.add_box(-875, -2750-210-3000, -1375, -2750-210-2750, facecolor="#e8e8e8")
-	drawing.add_box(-875, -2750-210-3000, 375, -2750-210-2750, facecolor="#e8e8e8")
 	drawing.add_box(-1125, -2750-210-3250, -1125+500, -2750-210-3000, facecolor="#e8e8e8")
-	drawing.add_box(+875, -2750-210-3000, +1375, -2750-210-2750, facecolor="#e8e8e8")
-	drawing.add_box(+875, -2750-210-3000, -375, -2750-210-2750, facecolor="#e8e8e8")
 	drawing.add_box(+1125, -2750-210-3250, +1125-500, -2750-210-3000, facecolor="#e8e8e8")
 
 	# venec
@@ -91,25 +87,19 @@ def main() -> None:
 
 	# dvere loznice
 	drawing.add_box(1250, 250, 2250, -2250)
-	drawing.add_wall(1000, -2250, 2500, -2250-250) # preklad
-	drawing.add_box(1250, -2250, 750, -2000, facecolor="#e8e8e8")
-	drawing.add_box(2250, -2250, 2750, -2000, facecolor="#e8e8e8")
+	drawing.add_wall(1000, -2125, 2500, -2125-250) # preklad
 
 	# dvere risanek
 	drawing.add_box(-250, 250, -1250, -2250)
-	drawing.add_wall(0, -2250, -1500, -2250-250) # preklad
-	drawing.add_box(-250, -2250, 250, -2000, facecolor="#e8e8e8")
-	drawing.add_box(-1250, -2250, -1750, -2000, facecolor="#e8e8e8")
+	drawing.add_wall(0, -2125, -1500, -2125-250) # preklad
 
 	# dvere horni pokoj
 	drawing.add_box(+500, -2750-210, +1500, -2750-210-1000-1250)
 	drawing.add_wall(250, -2750-210-1000-1250, +1750, -2750-210-1000-1250-250) # preklad
 
 	# horni instalacni sachta
-	drawing.add_box(-500-125, -2750-210-3250, +500+125, -2750-210-3000)
-	drawing.add_box(-500+125, -2750-210-3000, +500-125, -2750-210-2750)
-	drawing.add_line(-500-125, -2750-210-3250, +500+125, -2750-210-3250, color="white", linewidth=2)
-	drawing.add_line(-500+125, -2750-210-3000, +500-125, -2750-210-3000, color="white", linewidth=2)
+	drawing.add_wall(-500-125, -2750-210-3250, +500+125, -2750-210-3000)
+	drawing.add_box(-500, -2750-210-3000, +500, -2750-210-2750)
 
 	# strop
 	drawing.add_wall(-3500, -2750, +3500, -2750-210, hatch="xx")

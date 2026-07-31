@@ -34,6 +34,52 @@ class DrawingTests(unittest.TestCase):
         self.assertEqual(wall.get_height(), 60)
         drawing.close()
 
+    def test_polygon_connects_multiple_points_with_box_styling(self) -> None:
+        drawing = Drawing(0, 0, 100, 100)
+        polygon = drawing.add_polygon(
+            [(10, 20), (80, 10), (70, 90), (20, 70)],
+            facecolor="lightblue",
+            edgecolor="red",
+            linewidth=2,
+            linestyle="dashed",
+            hatch="xx",
+        )
+
+        self.assertEqual(
+            polygon.get_xy().tolist(),
+            [
+                [10, 20],
+                [80, 10],
+                [70, 90],
+                [20, 70],
+                [10, 20],
+            ],
+        )
+        self.assertEqual(polygon.get_facecolor(), to_rgba("lightblue"))
+        self.assertEqual(polygon.get_edgecolor(), to_rgba("red"))
+        self.assertEqual(polygon.get_linewidth(), 2)
+        self.assertEqual(polygon.get_linestyle(), "dashed")
+        self.assertEqual(polygon.get_hatch(), "xx")
+        drawing.close()
+
+    def test_polygon_needs_three_points(self) -> None:
+        drawing = Drawing(0, 0, 100, 100)
+
+        with self.assertRaisesRegex(ValueError, "at least three points"):
+            drawing.add_polygon([(10, 10), (90, 90)])
+
+        self.assertEqual(len(drawing.ax.patches), 0)
+        drawing.close()
+
+    def test_out_of_bounds_polygon_is_rejected_before_drawing(self) -> None:
+        drawing = Drawing(0, 0, 100, 100)
+
+        with self.assertRaisesRegex(ValueError, "outside the drawing area"):
+            drawing.add_polygon([(10, 10), (90, 10), (101, 90)])
+
+        self.assertEqual(len(drawing.ax.patches), 0)
+        drawing.close()
+
     def test_ellipse_is_inscribed_in_normalised_box(self) -> None:
         drawing = Drawing(0, 0, 100, 100)
         ellipse = drawing.add_ellipse(
