@@ -144,8 +144,8 @@ def main() -> None:
 
 	# otvor privod rekuperace
 	# TODO - je pres pul cihly
-	drawing.add_box(-12750+750+4125*2+125, -2750-210-750, -12750+750+4125*2+625, -2750-210-500, facecolor="#e8e8e8")
-	drawing.add_ellipse(-12750+750+4125*2+250, -2750-210-250, -12750+750+4125*2+500, -2750-210-500, facecolor="#b0d0ff")
+	drawing.add_box(-12750+750+4125*2+250, -2750-210-750, -12750+750+4125*2+750, -2750-210-500, facecolor="#e8e8e8")
+	drawing.add_ellipse(-12750+750+4125*2+375, -2750-210-250, -12750+750+4125*2+625, -2750-210-500, facecolor="#b0d0ff")
 
 	drawing.save("wall_left.svg")
 	drawing.save("wall_left.png", dpi=200)

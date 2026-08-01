@@ -86,19 +86,16 @@ def main() -> None:
 	)
 
 	# dvere kuchyn
-	drawing.add_polygon(
-		[
-			(125, 250),
-			(125-1000, 250),
-			(125-1000, 0),
-			(125-2000, 0),
-			(125-2000, -2125),
-			(125, -2125)
-		]
+	drawing.add_box(
+		125, 250,
+		125-1000, -2125,
 	)
-	drawing.add_wall(125+125, -2125, 125-2000-125, -2125-125) # preklad
-	drawing.add_box(125, -2000, 125+375, -2000-125, facecolor="#e8e8e8")
-	drawing.add_box(125-2000, -2000, 125-2000-375, -2000-125, facecolor="#e8e8e8")
+	drawing.add_box(
+		125-2375, 0,
+		125-1000-375, -2125,
+	)
+	drawing.add_wall(125+125, -2125, 125-2375-125, -2125-125) # preklad
+	drawing.add_box(125, -2250, 125+375, -2250-125, facecolor="#e8e8e8")
 	drawing.add_box(
 		125-50, 70,
 		125-950, -2100+70,
@@ -132,13 +129,12 @@ def main() -> None:
 	#drawing.add_line(-3250-125-80, -2750-210-2500-120, -875-70, -2750-210-3250-240)
 
 	# komin
-	drawing.add_box(-1040, 250, -1040-455, -8000,
+	drawing.add_box(-1085, 250, -1085-455, -8000,
 		facecolor="none",
 		edgecolor="#8080ff",
 		linestyle="dashed",
 		linewidth=2.0,
 	)
-
 
 	drawing.save("wall2.svg")
 	drawing.save("wall2.png", dpi=200)
