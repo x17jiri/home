@@ -95,7 +95,7 @@ def main() -> None:
 		125-1000-375, -2125,
 	)
 	drawing.add_wall(125+125, -2125, 125-2375-125, -2125-125) # preklad
-	drawing.add_box(125, -2250, 125+375, -2250-125, facecolor="#e8e8e8")
+	drawing.add_box(125, -2125, 125+375, -2000, facecolor="#e8e8e8")
 	drawing.add_box(
 		125-50, 70,
 		125-950, -2100+70,
@@ -135,6 +135,13 @@ def main() -> None:
 		linestyle="dashed",
 		linewidth=2.0,
 	)
+
+	# schody
+	drawing.add_box(2250, 70-0*185, 3250, 70-5*185, facecolor="none", edgecolor="#8080ff", linestyle="dashed", linewidth=2.0)
+	drawing.add_box(2250-1*270, 70-4*185, 2250, 70-3*185, facecolor="none", edgecolor="#8080ff", linestyle="dashed", linewidth=2.0)
+	drawing.add_box(2250-2*270, 70-3*185, 2250, 70-2*185, facecolor="none", edgecolor="#8080ff", linestyle="dashed", linewidth=2.0)
+	drawing.add_box(2250-3*270, 70-2*185, 2250, 70-1*185, facecolor="none", edgecolor="#8080ff", linestyle="dashed", linewidth=2.0)
+	drawing.add_box(2250-4*270, 70-1*185, 2250, 70-0*185, facecolor="none", edgecolor="#8080ff", linestyle="dashed", linewidth=2.0)
 
 	drawing.save("wall2.svg")
 	drawing.save("wall2.png", dpi=200)
