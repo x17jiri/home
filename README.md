@@ -84,3 +84,75 @@ python example_house.py
 ```
 
 It creates both `house_plan.svg` and `house_plan.png`.
+
+## IFC wall types and material layers
+
+`ifc_utils.py` can define a reusable wall construction as an `IfcWallType`.
+Each layer is an ordered `(material_name, thickness_in_metres)` pair. Looking
+from a wall's `start` point towards its `end` point, layers are listed from left
+to right:
+
+```python
+from ifc_utils import House
+
+house = House("My house")
+exterior_wall = house.wall_type(
+    "Brick and rock wool",
+    layers=[
+        ("Brick", 0.12),
+        "axis",
+        ("Rock wool", 0.10),
+    ],
+)
+
+ground = house.storey("Ground floor", elevation=0)
+wall_1 = ground.wall((0, 0), (5, 0), wall_type=exterior_wall, height=2.8)
+wall_2 = ground.wall((5, 0), (5, 4), wall_type=exterior_wall, height=2.8)
+ground.connect_wall(wall_1, wall_2)
+house.write("house.ifc")
+```
+
+The optional `"axis"` marker places the reference line at a boundary between
+layers. In this example, brick extends 120 mm to the left of the axis and rock
+wool extends 100 mm to the right. Without a marker, the wall construction is
+centred on its axis. The direct `thickness=...` form also creates a centred
+wall. `connect_wall()` creates an
+`IfcRelConnectsPathElements` relationship and regenerates both wall bodies. By
+default it joins their nearest ends; pass `is_atpath=True` to terminate the end
+of the first wall along the path of the second wall at a T-junction.
+
+## Automated Bonsai plans
+
+After writing the IFC model, `House.generate_plan()` can launch Blender and
+Bonsai, create a downward-looking orthographic camera, and save a styled SVG:
+
+```python
+house.write("house.ifc")
+house.generate_plan(
+    "house.svg",
+    x=0,
+    y=0,
+    z=1.6,
+    radius=5,
+    png=True,
+)
+```
+
+The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
+metres in both X and Y, so the example cuts the model at 1.6 m and covers a
+10 m by 10 m area. `png=True` additionally creates `house.png` through
+Inkscape.
+
+The Blender-side implementation is in `bonsai_scripts/generate_plan.py`.
+Parameters are passed directly after Blender's `--` command separator instead
+of through a shared parameter file, preventing stale settings and allowing
+independent runs. Bonsai must be installed and enabled in Blender. The current
+drawing operators require a live 3D viewport, so Blender opens normally, runs
+without user interaction, and closes after creating the SVG.
+
+The editable drawing stylesheet is `bonsai_scripts/assets/plan.css`. Each plan
+generation explicitly assigns this file to the Bonsai drawing and embeds its
+current contents in the SVG. This makes the SVG disposable: change `plan.css`
+and regenerate instead of editing `drawings/assets/default.css` or the output
+SVG. A different complete stylesheet can be supplied with
+`stylesheet="path/to/other.css"`.
