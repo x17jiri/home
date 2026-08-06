@@ -84,9 +84,9 @@ wall_front.add_window(
 wall_back.add_window(
 	at=2.75, width=0.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=0.25+3.5+0.25+0.5, width=1, sill_height=0.25+0.875, height=0.25+2.25)
+	at=0.25+3.5+0.25+0.5+1.5+1,width=1, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=0.25+3.5+0.25+0.375+1.5+0.75,
+	at=0.25+3.5+0.25+0.5,
 	width=1.5, sill_height=0.25+0.25, height=0.25+2.125)
 
 wall_back.add_window(
@@ -142,6 +142,7 @@ stairs1 = ground.stair(
     (12-0.25-0.5, 0.25+1+0.27*8),       # bottom centre
     (12-0.25-0.5, 0.25+1),       # upper landing edge centre
     width=1.0,
+	start_height=0.2,
     height=stair_height/17*9,
     risers=9,
     name="Main stair",
@@ -188,6 +189,14 @@ w1 = ground.wall(
 	(0.25+3+0.25+4.5+0.25+1, 4.68),
 	(0.25+3+0.25+4.5+0.25+3.5, 4.68),
 	wall_type=partition_wall, height=ground_floor_height)
+wall_3.add_door(
+    at=8-0.25-1.5,
+    width=1.0,
+    height=2.125,
+    sill_height=0.2,
+    name="Bedroom door",
+	operation="SINGLE_SWING_RIGHT"
+)
 # Vyklenek Krb
 w2 = ground.wall(
 	(0.25+3+0.25+4.5+0.25+1.0, 4.68),
@@ -240,8 +249,8 @@ opening = wall_3.add_opening(
 # MIAKO
 ceiling1 = upper.miako_slab(
     "Ceiling 1",
-    start=(0.125, 8.0-0.25+0.04),
-    end=(0.25+3.0+0.125, 8.0-0.25+0.04),
+    start=(0.1, 8.0-0.25+0.04),
+    end=(0.25+3.0+0.25-0.15, 8.0-0.25+0.04),
     top=0,
 	topping=0.11,
 	beam_height=0.25,
@@ -309,6 +318,78 @@ ceiling3 = upper.miako_slab(
 		],
 )
 
+# upper floor
+side_cuts = [
+	(
+		(0, 0.125-0.08, 3.25+1.25+0.12),
+		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
+		(5, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
+	),
+	(
+		(0, 8.0-0.125+0.08, 3.25+1.25+0.12),
+		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24),
+		(5, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24),
+	),
+	(
+		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25),
+		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25),
+		(5, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25),
+	),
+]
+
+wall_front = upper.wall((0, 0), (12, 0), wall_type=load_bearing_wall, height=1.25)
+wall_back = upper.wall((12, 8), (0, 8), wall_type=load_bearing_wall, height=1.25)
+wall_1 = upper.wall(
+	(0, 8), (0, 0),
+	wall_type=load_bearing_wall,
+	height=4,
+	cuts=side_cuts,
+)
+
+#upper.connect_wall(wall_1, wall_front)
+#upper.connect_wall(wall_1, wall_back)
+
+#ground.connect_wall(wall_2, wall_front, is_atpath=True)
+#ground.connect_wall(wall_2, wall_back, is_atpath=True)
+#
+#ground.connect_wall(wall_3, wall_front, is_atpath=True)
+#ground.connect_wall(wall_3, wall_back, is_atpath=True)
+#
+#ground.connect_wall(wall_4, wall_front)
+#ground.connect_wall(wall_4, wall_back)
+
+beam1 = upper.beam(
+    "Beam",
+    start=(0, 4.0-0.8, 3.25+2.875+0.5+0.12),
+    end=(12, 4.0-0.8, 3.25+2.875+0.5+0.12),
+    size=(0.14, 0.24),
+    material="Wood",
+    kind="BEAM",
+)
+beam2 = upper.beam(
+    "Beam",
+    start=(0, 4.0+0.8, 3.25+2.875+0.5+0.12),
+    end=(12, 4.0+0.8, 3.25+2.875+0.5+0.12),
+    size=(0.14, 0.24),
+    material="Wood",
+    kind="BEAM",
+)
+beam3 = upper.beam(
+    "Beam",
+    start=(0, 0.125, 3.25+1.25+0.06),
+    end=(12, 0.125, 3.25+1.25+0.06),
+    size=(0.16, 0.12),
+    material="Wood",
+    kind="BEAM",
+)
+beam4 = upper.beam(
+    "Beam",
+    start=(0, 8-0.125, 3.25+1.25+0.06),
+    end=(12, 8-0.125, 3.25+1.25+0.06),
+    size=(0.16, 0.12),
+    material="Wood",
+    kind="BEAM",
+)
 # Drawing 1
 drawing1 = house.add_drawing("Drawing 1", x=6, y=4, z=0.25+2, radius=8)
 

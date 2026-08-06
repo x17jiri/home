@@ -9,6 +9,7 @@ relative to that axis.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 from math import atan2, cos, hypot, isfinite, radians, sin
 from os import PathLike
 from pathlib import Path
@@ -39,6 +40,7 @@ import numpy as np
 
 
 __all__ = [
+    "Beam",
     "Chimney",
     "Drawing",
     "House",
@@ -51,6 +53,8 @@ __all__ = [
 
 Number: TypeAlias = int | float
 Point: TypeAlias = tuple[Number, Number]
+Point3D: TypeAlias = tuple[Number, Number, Number]
+WallCut: TypeAlias = tuple[Point3D, Point3D, Point3D]
 Layer: TypeAlias = tuple[str, Number]
 LayerItem: TypeAlias = Layer | Literal["axis"]
 DoorOperation: TypeAlias = Literal[
@@ -84,6 +88,18 @@ FurnitureKind: TypeAlias = Literal[
     "FILECABINET",
     "SHELF",
     "SOFA",
+    "USERDEFINED",
+    "NOTDEFINED",
+]
+BeamKind: TypeAlias = Literal[
+    "BEAM",
+    "JOIST",
+    "HOLLOWCORE",
+    "LINTEL",
+    "SPANDREL",
+    "T_BEAM",
+    "RAFTER",
+    "PURLIN",
     "USERDEFINED",
     "NOTDEFINED",
 ]
@@ -136,6 +152,18 @@ _FURNITURE_KINDS = {
     "USERDEFINED",
     "NOTDEFINED",
 }
+_BEAM_KINDS = {
+    "BEAM",
+    "JOIST",
+    "HOLLOWCORE",
+    "LINTEL",
+    "SPANDREL",
+    "T_BEAM",
+    "RAFTER",
+    "PURLIN",
+    "USERDEFINED",
+    "NOTDEFINED",
+}
 _MIAKO_WIDTHS = {
     "beam": 0.17,
     "wide": 0.455,
@@ -170,6 +198,20 @@ def _point(value: Point, argument: str) -> tuple[float, float]:
     except (TypeError, ValueError) as error:
         raise TypeError(f"{argument} must contain exactly two coordinates") from error
     return _number(x, f"{argument} x"), _number(y, f"{argument} y")
+
+
+def _point_3d(value: Point3D, argument: str) -> tuple[float, float, float]:
+    try:
+        x, y, z = value
+    except (TypeError, ValueError) as error:
+        raise TypeError(
+            f"{argument} must contain exactly three coordinates"
+        ) from error
+    return (
+        _number(x, f"{argument} x"),
+        _number(y, f"{argument} y"),
+        _number(z, f"{argument} z"),
+    )
 
 
 def _enum(value: str, argument: str, allowed: set[str]) -> str:
@@ -1301,6 +1343,42 @@ class Drawing:
         )
 
 
+class Beam(ifcopenshell.entity_instance):
+    """A rectangular ``IfcBeam`` spanning two world-coordinate points."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+        *,
+        start: tuple[float, float, float],
+        end: tuple[float, float, float],
+        size: tuple[float, float],
+        length: float,
+        kind: str,
+        material_name: str,
+        rotation: float,
+        placement: np.ndarray,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "start", start)
+        object.__setattr__(self, "end", end)
+        object.__setattr__(self, "size", size)
+        object.__setattr__(self, "width", size[0])
+        object.__setattr__(self, "height", size[1])
+        object.__setattr__(self, "length", length)
+        object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "material_name", material_name)
+        object.__setattr__(self, "rotation", rotation)
+        object.__setattr__(self, "placement", placement)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this beam as its underlying IFC entity."""
+        return self
+
+
 class Chimney(ifcopenshell.entity_instance):
     """An ``IfcChimney`` with a square stack and central circular flue."""
 
@@ -1454,6 +1532,7 @@ class Wall(ifcopenshell.entity_instance):
         thickness: float,
         body_offset: float,
         surface_style: ifcopenshell.entity_instance | None,
+        cuts: tuple[WallCut, ...],
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "storey", storey)
@@ -1464,6 +1543,7 @@ class Wall(ifcopenshell.entity_instance):
         object.__setattr__(self, "thickness", thickness)
         object.__setattr__(self, "body_offset", body_offset)
         object.__setattr__(self, "surface_style", surface_style)
+        object.__setattr__(self, "cuts", cuts)
         object.__setattr__(self, "_openings", [])
 
     @property
@@ -2278,6 +2358,197 @@ class Storey:
             properties={"Thickness": thickness},
         )
         return annotation
+
+    def beam(
+        self,
+        name: str,
+        *,
+        start: Point3D,
+        end: Point3D,
+        size: Sequence[Number],
+        material: str = "Wood",
+        kind: BeamKind = "BEAM",
+        rotation: Number = 0,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> Beam:
+        """Create a rectangular beam between two world-coordinate points.
+
+        ``start`` and ``end`` are the beam centreline endpoints in global XYZ
+        coordinates.  ``size`` is ``(width, height)`` perpendicular to that
+        centreline.  The height axis stays as vertical as the beam direction
+        permits, while ``rotation`` applies a right-hand roll in degrees about
+        the start-to-end axis.
+
+        IFC4 has no dedicated rafter or purlin enum, so ``"RAFTER"`` and
+        ``"PURLIN"`` are stored as user-defined ``IfcBeam`` types.  Wood is
+        shown brown by default unless the house has a default beam color or an
+        explicit ``color`` is supplied.
+        """
+        beam_name = _name(name, "name")
+        start_point = _point_3d(start, "start")
+        end_point = _point_3d(end, "end")
+        if isinstance(size, (str, bytes)):
+            raise TypeError("size must contain exactly two dimensions")
+        try:
+            width, height = size
+        except (TypeError, ValueError) as error:
+            raise TypeError(
+                "size must contain exactly two dimensions"
+            ) from error
+        width = _number(width, "size width")
+        height = _number(height, "size height")
+        if width <= 0 or height <= 0:
+            raise ValueError("size dimensions must be greater than zero")
+        material_name = _name(material, "material")
+        kind = _enum(kind, "kind", _BEAM_KINDS)
+        rotation = _number(rotation, "rotation")
+
+        start_vector = np.array(start_point, dtype=float)
+        end_vector = np.array(end_point, dtype=float)
+        direction = end_vector - start_vector
+        length = float(np.linalg.norm(direction))
+        if length == 0:
+            raise ValueError("beam start and end must be different points")
+        local_x = direction / length
+
+        # Project world up into the plane normal to the beam, keeping the
+        # section vertical for horizontal and sloping roof members.  A
+        # vertical member uses world Y as the stable fallback height axis.
+        world_up = np.array((0.0, 0.0, 1.0), dtype=float)
+        local_z = world_up - np.dot(world_up, local_x) * local_x
+        local_z_length = float(np.linalg.norm(local_z))
+        if local_z_length < 1e-9:
+            fallback = np.array((0.0, 1.0, 0.0), dtype=float)
+            local_z = fallback - np.dot(fallback, local_x) * local_x
+            local_z_length = float(np.linalg.norm(local_z))
+        local_z /= local_z_length
+        local_y = np.cross(local_z, local_x)
+        local_y /= np.linalg.norm(local_y)
+
+        roll = radians(rotation)
+        rolled_y = cos(roll) * local_y + sin(roll) * local_z
+        rolled_z = -sin(roll) * local_y + cos(roll) * local_z
+        placement = np.eye(4)
+        placement[:3, 0] = local_x
+        placement[:3, 1] = rolled_y
+        placement[:3, 2] = rolled_z
+        placement[:3, 3] = start_vector
+
+        predefined_type = (
+            "USERDEFINED" if kind in {"RAFTER", "PURLIN"} else kind
+        )
+        model = self.house.model
+        element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcBeam",
+            name=beam_name,
+            predefined_type=predefined_type,
+        )
+        if kind in {"RAFTER", "PURLIN"}:
+            element.ObjectType = kind
+        elif kind == "USERDEFINED":
+            element.ObjectType = beam_name
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[element],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=element,
+            matrix=placement,
+            is_si=True,
+        )
+
+        half_width = width / 2
+        half_height = height / 2
+        vertices = [
+            (0.0, -half_width, -half_height),
+            (length, -half_width, -half_height),
+            (length, half_width, -half_height),
+            (0.0, half_width, -half_height),
+            (0.0, -half_width, half_height),
+            (length, -half_width, half_height),
+            (length, half_width, half_height),
+            (0.0, half_width, half_height),
+        ]
+        faces = [
+            (3, 2, 1, 0),
+            (4, 5, 6, 7),
+            (0, 1, 5, 4),
+            (1, 2, 6, 5),
+            (2, 3, 7, 6),
+            (3, 0, 4, 7),
+        ]
+        body = ifcopenshell.api.geometry.add_mesh_representation(
+            model,
+            context=self.house._body_context,
+            vertices=[vertices],
+            faces=[faces],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=element,
+            representation=body,
+        )
+
+        resolved_color = color
+        if (
+            resolved_color is None
+            and "beam" not in self.house._default_colors
+            and material_name.casefold() == "wood"
+        ):
+            resolved_color = "#8B5A2B"
+        surface_style = self.house._surface_style(
+            "beam",
+            color=resolved_color,
+            transparency=transparency,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+
+        ifc_material = self.house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category=material_name.casefold(),
+            )
+            self.house._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[element],
+            type="IfcMaterial",
+            material=ifc_material,
+        )
+        common_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=element,
+            name="Pset_BeamCommon",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=common_pset,
+            properties={"LoadBearing": True},
+        )
+
+        return Beam(
+            element,
+            self,
+            start=start_point,
+            end=end_point,
+            size=(width, height),
+            length=length,
+            kind=kind,
+            material_name=material_name,
+            rotation=rotation,
+            placement=placement,
+        )
 
     def furniture(
         self,
@@ -3424,6 +3695,7 @@ class Storey:
         thickness: Number | None = None,
         height: Number,
         wall_type: ifcopenshell.entity_instance | None = None,
+        cuts: Sequence[WallCut] | None = None,
         color: str | None = None,
         transparency: Number = 0,
     ) -> Wall:
@@ -3434,6 +3706,10 @@ class Storey:
         ``thickness`` or a reusable ``wall_type`` created by
         :meth:`House.wall_type`.  Direct-thickness walls are centred on their
         axis; layered walls use their type's optional ``"axis"`` marker.
+        Each item in ``cuts`` contains three world-coordinate points defining
+        an infinite clipping plane.  Point order does not matter: the side
+        containing the original wall centre is retained and the opposite
+        half-space is removed.  Multiple planes are applied cumulatively.
         ``color`` and ``transparency`` affect only the 3D body.
         """
         start_x, start_y = _point(start, "start")
@@ -3487,6 +3763,89 @@ class Storey:
         if length == 0:
             raise ValueError("wall start and end must be different points")
 
+        angle = atan2(delta_y, delta_x)
+        placement = np.eye(4)
+        placement[0, 0] = cos(angle)
+        placement[0, 1] = -sin(angle)
+        placement[1, 0] = sin(angle)
+        placement[1, 1] = cos(angle)
+        placement[0, 3] = start_x
+        placement[1, 3] = start_y
+        placement[2, 3] = self.elevation
+
+        if cuts is None:
+            supplied_cuts: list[WallCut] = []
+        else:
+            if isinstance(cuts, (str, bytes)):
+                raise TypeError("cuts must be a sequence of three-point planes")
+            try:
+                supplied_cuts = list(cuts)
+            except TypeError as error:
+                raise TypeError(
+                    "cuts must be a sequence of three-point planes"
+                ) from error
+
+        normalised_cuts: list[WallCut] = []
+        clippings: list[dict[str, tuple[float, float, float]]] = []
+        world_to_local = np.linalg.inv(placement)
+        wall_centre = np.array(
+            (length / 2, body_offset + thickness / 2, height / 2),
+            dtype=float,
+        )
+        for cut_index, supplied_cut in enumerate(supplied_cuts, start=1):
+            if isinstance(supplied_cut, (str, bytes)):
+                raise TypeError(
+                    f"cut {cut_index} must contain exactly three points"
+                )
+            try:
+                supplied_points = list(supplied_cut)
+            except TypeError as error:
+                raise TypeError(
+                    f"cut {cut_index} must contain exactly three points"
+                ) from error
+            if len(supplied_points) != 3:
+                raise TypeError(
+                    f"cut {cut_index} must contain exactly three points"
+                )
+            world_points = tuple(
+                _point_3d(point, f"cut {cut_index} point {point_index}")
+                for point_index, point in enumerate(supplied_points, start=1)
+            )
+            local_points = [
+                (
+                    world_to_local
+                    @ np.array((*point, 1.0), dtype=float)
+                )[:3]
+                for point in world_points
+            ]
+            normal = np.cross(
+                local_points[1] - local_points[0],
+                local_points[2] - local_points[0],
+            )
+            normal_length = float(np.linalg.norm(normal))
+            if normal_length <= 1e-9:
+                raise ValueError(f"cut {cut_index} points must not be collinear")
+            normal /= normal_length
+            centre_side = float(
+                np.dot(normal, wall_centre - local_points[0])
+            )
+            if abs(centre_side) <= 1e-9:
+                raise ValueError(
+                    f"cut {cut_index} passes through the wall centre; "
+                    "the retained side is ambiguous"
+                )
+            # If the normal points at the centre, reverse it.  IfcOpenShell's
+            # clipping normal points into removed rather than retained matter.
+            if centre_side > 0:
+                normal *= -1
+            normalised_cuts.append(world_points)
+            clippings.append(
+                {
+                    "location": tuple(float(value) for value in local_points[0]),
+                    "normal": tuple(float(value) for value in normal),
+                }
+            )
+
         self._wall_count += 1
         wall_element = ifcopenshell.api.root.create_entity(
             self.house.model,
@@ -3503,6 +3862,7 @@ class Storey:
             thickness=thickness,
             body_offset=body_offset,
             surface_style=surface_style,
+            cuts=tuple(normalised_cuts),
         )
         ifcopenshell.api.spatial.assign_container(
             self.house.model, products=[wall], relating_structure=self.element
@@ -3528,15 +3888,6 @@ class Storey:
                 },
             )
 
-        angle = atan2(delta_y, delta_x)
-        placement = np.eye(4)
-        placement[0, 0] = cos(angle)
-        placement[0, 1] = -sin(angle)
-        placement[1, 0] = sin(angle)
-        placement[1, 1] = cos(angle)
-        placement[0, 3] = start_x
-        placement[1, 3] = start_y
-        placement[2, 3] = self.elevation
         ifcopenshell.api.geometry.edit_object_placement(
             self.house.model,
             product=wall,
@@ -3552,6 +3903,29 @@ class Storey:
             thickness=thickness,
             offset=body_offset,
         )
+        if clippings:
+            item = body.Items[0]
+            clipping_ids: list[int] = []
+            for clipping in clippings:
+                item = ifcopenshell.api.geometry.clip_solid(
+                    self.house.model,
+                    item=item,
+                    location=clipping["location"],
+                    normal=clipping["normal"],
+                )
+                clipping_ids.append(item.id())
+            body.Items = [item]
+            body.RepresentationType = "Clipping"
+            boolean_pset = ifcopenshell.api.pset.add_pset(
+                self.house.model,
+                product=wall,
+                name="BBIM_Boolean",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                self.house.model,
+                pset=boolean_pset,
+                properties={"Data": json.dumps(clipping_ids)},
+            )
         ifcopenshell.api.geometry.assign_representation(
             self.house.model, product=wall, representation=body
         )

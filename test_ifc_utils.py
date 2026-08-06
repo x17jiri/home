@@ -1,3 +1,4 @@
+import json
 import unittest
 from math import hypot
 from pathlib import Path
@@ -13,7 +14,7 @@ import ifcopenshell.util.representation
 import ifcopenshell.util.shape
 import numpy as np
 
-from ifc_utils import Chimney, House, MiakoSlab, Stair, Wall, generate_plan
+from ifc_utils import Beam, Chimney, House, MiakoSlab, Stair, Wall, generate_plan
 
 
 class HouseTests(unittest.TestCase):
@@ -78,6 +79,105 @@ class HouseTests(unittest.TestCase):
             for actual, expected in zip(actual_rgb, expected_rgb):
                 self.assertAlmostEqual(actual, expected)
             self.assertAlmostEqual(shading.Transparency, expected_transparency)
+
+    def test_creates_a_sloping_wooden_roof_beam_between_3d_points(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        rafter = upper.beam(
+            "Roof rafter",
+            start=(1, 2, 4),
+            end=(5, 2, 7),
+            size=(0.12, 0.2),
+            kind="RAFTER",
+        )
+
+        self.assertIsInstance(rafter, Beam)
+        self.assertTrue(rafter.is_a("IfcBeam"))
+        self.assertIs(rafter.element, rafter)
+        self.assertEqual(rafter.PredefinedType, "USERDEFINED")
+        self.assertEqual(
+            ifcopenshell.util.element.get_predefined_type(rafter), "RAFTER"
+        )
+        self.assertEqual(rafter.start, (1, 2, 4))
+        self.assertEqual(rafter.end, (5, 2, 7))
+        self.assertEqual(rafter.size, (0.12, 0.2))
+        self.assertEqual(rafter.material_name, "Wood")
+        self.assertEqual(rafter.length, 5)
+        self.assertEqual(
+            rafter.ContainedInStructure[0].RelatingStructure,
+            upper.element,
+        )
+
+        placement = ifcopenshell.util.placement.get_local_placement(
+            rafter.ObjectPlacement
+        )
+        np.testing.assert_allclose(placement[:3, 3], (1, 2, 4), atol=1e-9)
+        np.testing.assert_allclose(placement[:3, 0], (0.8, 0, 0.6), atol=1e-9)
+        np.testing.assert_allclose(placement[:3, 1], (0, 1, 0), atol=1e-9)
+        np.testing.assert_allclose(placement[:3, 2], (-0.6, 0, 0.8), atol=1e-9)
+        self.assertAlmostEqual(np.linalg.det(placement[:3, :3]), 1)
+
+        body = ifcopenshell.util.representation.get_representation(
+            rafter, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "Tessellation")
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), rafter)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            5 * 0.12 * 0.2,
+        )
+        self.assertEqual(ifcopenshell.util.element.get_material(rafter).Name, "Wood")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                rafter, "Pset_BeamCommon", "LoadBearing"
+            ),
+            True,
+        )
+        self.assert_surface_style(rafter, (139 / 255, 90 / 255, 43 / 255))
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "roof-beam.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(len(reopened.by_type("IfcBeam")), 1)
+            self.assertEqual(
+                ifcopenshell.util.element.get_predefined_type(
+                    reopened.by_type("IfcBeam")[0]
+                ),
+                "RAFTER",
+            )
+
+    def test_rolls_and_validates_generic_beams(self) -> None:
+        house = House("My house", colors={"beam": "blue"})
+        upper = house.storey("Upper floor", elevation=3)
+        purlin = upper.beam(
+            "Purlin",
+            start=(0, 0, 5),
+            end=(4, 0, 5),
+            size=(0.1, 0.2),
+            kind="PURLIN",
+            rotation=90,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            purlin.ObjectPlacement
+        )
+        np.testing.assert_allclose(placement[:3, 1], (0, 0, 1), atol=1e-9)
+        np.testing.assert_allclose(placement[:3, 2], (0, -1, 0), atol=1e-9)
+        self.assert_surface_style(purlin, (0, 0, 1))
+
+        arguments = {
+            "start": (0, 0, 4),
+            "end": (1, 0, 4),
+            "size": (0.1, 0.2),
+        }
+        with self.assertRaisesRegex(ValueError, "different points"):
+            upper.beam("Invalid", **(arguments | {"end": (0, 0, 4)}))
+        with self.assertRaisesRegex(TypeError, "exactly two"):
+            upper.beam("Invalid", **(arguments | {"size": (0.1, 0.2, 0.3)}))
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            upper.beam("Invalid", **(arguments | {"size": (0, 0.2)}))
+        with self.assertRaisesRegex(ValueError, "kind must be one of"):
+            upper.beam("Invalid", **arguments, kind="COLUMN")
 
     def test_assigns_3d_colors_with_defaults_and_element_overrides(self) -> None:
         house = House(
@@ -1217,6 +1317,113 @@ class HouseTests(unittest.TestCase):
             {"Axis", "Body"},
         )
 
+    def test_clips_a_wall_with_three_world_coordinate_planes(self) -> None:
+        house = House("My house", colors={"wall": "white"})
+        upper = house.storey("Upper floor", elevation=3)
+        cuts = [
+            ((0, 0, 4), (0, 1, 4), (5, 0, 9)),
+            ((5, 0, 9), (5, 1, 9), (10, 0, 4)),
+            ((0, 0, 8.5), (1, 0, 8.5), (0, 1, 8.5)),
+        ]
+        wall = upper.wall(
+            (0, 0),
+            (10, 0),
+            thickness=0.2,
+            height=6,
+            cuts=cuts,
+        )
+
+        self.assertEqual(wall.cuts, tuple(cuts))
+        body = ifcopenshell.util.representation.get_representation(
+            wall, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "Clipping")
+        item = body.Items[0]
+        clipping_results = []
+        while item.is_a("IfcBooleanClippingResult"):
+            clipping_results.append(item)
+            item = item.FirstOperand
+        self.assertEqual(len(clipping_results), 3)
+        self.assertTrue(item.is_a("IfcExtrudedAreaSolid"))
+        boolean_ids = json.loads(
+            ifcopenshell.util.element.get_pset(
+                wall, "BBIM_Boolean", "Data"
+            )
+        )
+        self.assertEqual(
+            boolean_ids,
+            [result.id() for result in reversed(clipping_results)],
+        )
+
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), wall
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 10)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(shape.geometry), 0.2
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(shape.geometry), 5.5
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry), 6.95
+        )
+        vertices = ifcopenshell.util.shape.get_vertices(shape.geometry)
+        self.assertAlmostEqual(min(vertex[0] for vertex in vertices), 0)
+        self.assertAlmostEqual(max(vertex[0] for vertex in vertices), 10)
+        self.assertAlmostEqual(max(vertex[2] for vertex in vertices), 5.5)
+        self.assert_surface_style(wall, (1, 1, 1))
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "cut-wall.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            reopened_wall = reopened.by_type("IfcWall")[0]
+            reopened_body = ifcopenshell.util.representation.get_representation(
+                reopened_wall, "Model", "Body", "MODEL_VIEW"
+            )
+            self.assertEqual(reopened_body.RepresentationType, "Clipping")
+
+    def test_preserves_wall_plane_cuts_when_connecting_layered_walls(
+        self,
+    ) -> None:
+        house = House("My house")
+        wall_type = house.wall_type("Brick", layers=[("Brick", 0.2)])
+        ground = house.storey("Ground floor", elevation=0)
+        cut_wall = ground.wall(
+            (0, 0),
+            (5, 0),
+            wall_type=wall_type,
+            height=3,
+            cuts=[((0, 0, 2.5), (1, 0, 2.5), (0, 1, 2.5))],
+        )
+        adjoining_wall = ground.wall(
+            (5, 0),
+            (5, 3),
+            wall_type=wall_type,
+            height=3,
+        )
+
+        ground.connect_wall(cut_wall, adjoining_wall)
+
+        body = ifcopenshell.util.representation.get_representation(
+            cut_wall, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "Clipping")
+        self.assertTrue(body.Items[0].is_a("IfcBooleanClippingResult"))
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), cut_wall
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_z(shape.geometry), 2.5)
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    cut_wall, "BBIM_Boolean", "Data"
+                )
+            ),
+            [body.Items[0].id()],
+        )
+
     def test_adds_doors_and_windows_as_semantic_wall_openings(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
@@ -1870,6 +2077,34 @@ class HouseTests(unittest.TestCase):
             ground.wall((0, 0), (1, 0), thickness=0, height=2.8)
         with self.assertRaisesRegex(ValueError, "height"):
             ground.wall((0, 0), (1, 0), thickness=0.12, height=-1)
+        wall_arguments = {
+            "start": (0, 0),
+            "end": (2, 0),
+            "thickness": 0.2,
+            "height": 2,
+        }
+        with self.assertRaisesRegex(TypeError, "cuts must be a sequence"):
+            ground.wall(**wall_arguments, cuts="plane")
+        with self.assertRaisesRegex(TypeError, "exactly three points"):
+            ground.wall(
+                **wall_arguments,
+                cuts=[((0, 0, 1), (1, 0, 1))],
+            )
+        with self.assertRaisesRegex(TypeError, "exactly three coordinates"):
+            ground.wall(
+                **wall_arguments,
+                cuts=[((0, 0), (1, 0, 1), (0, 1, 1))],
+            )
+        with self.assertRaisesRegex(ValueError, "must not be collinear"):
+            ground.wall(
+                **wall_arguments,
+                cuts=[((0, 0, 1), (1, 0, 1), (2, 0, 1))],
+            )
+        with self.assertRaisesRegex(ValueError, "retained side is ambiguous"):
+            ground.wall(
+                **wall_arguments,
+                cuts=[((0, 0, 1), (1, 0, 1), (0, 1, 1))],
+            )
 
     def test_rejects_invalid_wall_layers_and_type_usage(self) -> None:
         house = House("My house")
