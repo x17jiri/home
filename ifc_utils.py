@@ -20,6 +20,7 @@ import ifcopenshell
 import ifcopenshell.api.aggregate
 import ifcopenshell.api.context
 import ifcopenshell.api.document
+import ifcopenshell.api.drawing
 import ifcopenshell.api.feature
 import ifcopenshell.api.geometry
 import ifcopenshell.api.group
@@ -33,6 +34,7 @@ import ifcopenshell.api.type
 import ifcopenshell.api.unit
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
+from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
 
 
@@ -40,6 +42,7 @@ __all__ = [
     "Chimney",
     "Drawing",
     "House",
+    "MiakoSlab",
     "Stair",
     "Storey",
     "Wall",
@@ -72,6 +75,19 @@ WindowPartition: TypeAlias = Literal[
     "TRIPLE_PANEL_HORIZONTAL",
     "TRIPLE_PANEL_VERTICAL",
 ]
+WindowAlignment: TypeAlias = Literal["axis", "inside"]
+FurnitureKind: TypeAlias = Literal[
+    "CHAIR",
+    "TABLE",
+    "DESK",
+    "BED",
+    "FILECABINET",
+    "SHELF",
+    "SOFA",
+    "USERDEFINED",
+    "NOTDEFINED",
+]
+MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow"]
 
 _COLOR_NAMES = {
     "black": "#000000",
@@ -107,6 +123,23 @@ _WINDOW_PARTITIONS = {
     "TRIPLE_PANEL_RIGHT",
     "TRIPLE_PANEL_HORIZONTAL",
     "TRIPLE_PANEL_VERTICAL",
+}
+_WINDOW_ALIGNMENTS = {"AXIS", "INSIDE"}
+_FURNITURE_KINDS = {
+    "CHAIR",
+    "TABLE",
+    "DESK",
+    "BED",
+    "FILECABINET",
+    "SHELF",
+    "SOFA",
+    "USERDEFINED",
+    "NOTDEFINED",
+}
+_MIAKO_WIDTHS = {
+    "beam": 0.17,
+    "wide": 0.455,
+    "narrow": 0.33,
 }
 
 
@@ -402,9 +435,10 @@ class House:
     All public coordinates and dimensions are expressed in metres.  The
     underlying IFC file also uses metres, which keeps generated values easy to
     inspect while remaining compatible with IFC viewers such as Bonsai.
-    ``colors`` may define default 3D colors for ``"chimney"``, ``"wall"``,
-    ``"door"``, ``"stair"``, and ``"window"`` elements using named colors
-    or ``#RGB``/``#RRGGBB`` values.
+    ``colors`` may define default 3D colors for ``"beam"``, ``"block"``,
+    ``"chimney"``, ``"wall"``, ``"door"``, ``"furniture"`, ``"slab"``,
+    ``"stair"``, and ``"window"`` elements using named colors or
+    ``#RGB``/``#RRGGBB`` values.
     """
 
     def __init__(
@@ -418,7 +452,17 @@ class House:
             colors = {}
         elif not isinstance(colors, Mapping):
             raise TypeError("colors must be a mapping")
-        allowed_colors = {"chimney", "wall", "door", "stair", "window"}
+        allowed_colors = {
+            "beam",
+            "block",
+            "chimney",
+            "wall",
+            "door",
+            "furniture",
+            "slab",
+            "stair",
+            "window",
+        }
         self._default_colors: dict[str, tuple[float, float, float]] = {}
         for category, color in colors.items():
             if not isinstance(category, str):
@@ -506,11 +550,24 @@ class House:
             tuple[tuple[float, float, float], float],
             ifcopenshell.entity_instance,
         ] = {}
+        self._miako_component_types: dict[
+            tuple[object, ...], ifcopenshell.entity_instance
+        ] = {}
         self._ifc_path: Path | None = None
 
     def _surface_style(
         self,
-        category: Literal["chimney", "wall", "door", "stair", "window"],
+        category: Literal[
+            "beam",
+            "block",
+            "chimney",
+            "wall",
+            "door",
+            "furniture",
+            "slab",
+            "stair",
+            "window",
+        ],
         *,
         color: str | None,
         transparency: Number,
@@ -1275,6 +1332,61 @@ class Chimney(ifcopenshell.entity_instance):
         return self
 
 
+class MiakoSlab(ifcopenshell.entity_instance):
+    """A decomposed ``IfcSlab`` made from MIAKO beams, blocks, and topping."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+        *,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        direction: tuple[float, float],
+        structure: tuple[str, ...],
+        length: float,
+        width: float,
+        top: float,
+        block_length: float,
+        block_height: float,
+        beam_height: float,
+        topping: float,
+        placement: np.ndarray,
+        beams: tuple[ifcopenshell.entity_instance, ...],
+        blocks: tuple[ifcopenshell.entity_instance, ...],
+        topping_element: ifcopenshell.entity_instance,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "start", start)
+        object.__setattr__(self, "end", end)
+        object.__setattr__(self, "direction", direction)
+        object.__setattr__(self, "structure", structure)
+        object.__setattr__(self, "length", length)
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "top", top)
+        object.__setattr__(self, "block_length", block_length)
+        object.__setattr__(self, "block_height", block_height)
+        object.__setattr__(self, "beam_height", beam_height)
+        object.__setattr__(self, "topping", topping)
+        object.__setattr__(self, "height", block_height + topping)
+        object.__setattr__(self, "bottom", top - (block_height + topping))
+        object.__setattr__(self, "placement", placement)
+        object.__setattr__(self, "beams", beams)
+        object.__setattr__(self, "blocks", blocks)
+        object.__setattr__(self, "topping_element", topping_element)
+        object.__setattr__(
+            self,
+            "components",
+            (*beams, *blocks, topping_element),
+        )
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this MIAKO slab as its underlying IFC entity."""
+        return self
+
+
 class Stair(ifcopenshell.entity_instance):
     """An ``IfcStair`` containing one straight ``IfcStairFlight``."""
 
@@ -1544,6 +1656,7 @@ class Wall(ifcopenshell.entity_instance):
         *,
         operation: str,
         open_angle: float,
+        reverse_swing: bool,
         width: float,
         panel_offset_x: float,
         panel_offset_y: float,
@@ -1565,18 +1678,19 @@ class Wall(ifcopenshell.entity_instance):
         ]
         pivot_y = self.body_offset + panel_offset_y
         model = self.storey.house.model
+        swing_sign = -1 if reverse_swing else 1
         if operation.startswith("DOUBLE_DOOR"):
             half = len(items) // 2
             _rotate_items_about_z(
                 model,
                 items[:half],
-                angle=open_angle,
+                angle=swing_sign * open_angle,
                 pivot=(panel_offset_x, pivot_y),
             )
             _rotate_items_about_z(
                 model,
                 items[half:],
-                angle=-open_angle,
+                angle=-swing_sign * open_angle,
                 pivot=(width - panel_offset_x, pivot_y),
             )
         else:
@@ -1584,12 +1698,30 @@ class Wall(ifcopenshell.entity_instance):
             _rotate_items_about_z(
                 model,
                 items,
-                angle=open_angle if is_left_hinged else -open_angle,
+                angle=(
+                    swing_sign * open_angle
+                    if is_left_hinged
+                    else -swing_sign * open_angle
+                ),
                 pivot=(
                     panel_offset_x if is_left_hinged else width - panel_offset_x,
                     pivot_y,
                 ),
             )
+
+    def _reverse_door_plan_swing(
+        self,
+        representation: ifcopenshell.entity_instance,
+    ) -> None:
+        """Mirror plan-only leaf and arc geometry across the closed leaf."""
+        items = list(representation.Items)
+        if len(items) < 3:
+            raise RuntimeError("unexpected door plan representation structure")
+        ShapeBuilder(self.storey.house.model).mirror(
+            items[2:],
+            mirror_axes=(0.0, 1.0),
+            mirror_point=(0.0, self.body_offset + self.thickness),
+        )
 
     def add_opening(
         self,
@@ -1657,6 +1789,7 @@ class Wall(ifcopenshell.entity_instance):
         opening_height: Number | None = None,
         operation: DoorOperation = "SINGLE_SWING_LEFT",
         open_angle: Number = 45,
+        reverse_swing: bool = False,
         show_overhead: bool = True,
         color: str | None = None,
         transparency: Number = 0,
@@ -1668,14 +1801,19 @@ class Wall(ifcopenshell.entity_instance):
         The actual door is centred horizontally in ``opening_width`` and its
         bottom is ``sill_height`` metres above the storey elevation.  Opening
         dimensions default to the door dimensions.  ``open_angle`` rotates
-        only the 3D leaf; ``show_overhead`` adds dashed plan-only wall linework
-        across the rough opening.  ``color`` and ``transparency`` affect only
-        the 3D body.
+        only the 3D leaf.  ``reverse_swing`` opens the leaf on the opposite
+        side of the wall without changing its hinge end, in both 3D and plan.
+        ``show_overhead`` adds dashed plan-only wall linework across the rough
+        opening.  ``color`` and ``transparency`` affect only the 3D body.
         """
         operation = _enum(operation, "operation", _DOOR_OPERATIONS)
         open_angle = _number(open_angle, "open_angle")
         if not 0 <= open_angle <= 180:
             raise ValueError("open_angle must be between 0 and 180 degrees")
+        if not isinstance(reverse_swing, bool):
+            raise TypeError("reverse_swing must be a boolean")
+        if reverse_swing and "SLIDING" in operation:
+            raise ValueError("reverse_swing is not supported for sliding doors")
         if not isinstance(show_overhead, bool):
             raise TypeError("show_overhead must be a boolean")
         surface_style = self.storey.house._surface_style(
@@ -1773,6 +1911,7 @@ class Wall(ifcopenshell.entity_instance):
             door,
             operation=operation,
             open_angle=open_angle,
+            reverse_swing=reverse_swing,
             width=width,
             panel_offset_x=panel_offset_x,
             panel_offset_y=panel_offset_y,
@@ -1787,6 +1926,8 @@ class Wall(ifcopenshell.entity_instance):
             lining_properties=lining_properties,
         )
         if plan_representation is not None:
+            if reverse_swing:
+                self._reverse_door_plan_swing(plan_representation)
             ifcopenshell.api.geometry.assign_representation(
                 model,
                 product=door,
@@ -1809,6 +1950,74 @@ class Wall(ifcopenshell.entity_instance):
             )
         return door
 
+    def _align_window_panel_to_axis(
+        self,
+        window: ifcopenshell.entity_instance,
+    ) -> None:
+        """Move the generated 3D frame and glazing onto the wall axis."""
+        aspects = {
+            aspect.Name: aspect
+            for aspect in window.Representation.HasShapeAspects
+        }
+        glazing = aspects.get("Glazing")
+        if glazing is None:
+            raise RuntimeError("window representation has no glazing aspect")
+        glazing_representation = next(
+            representation
+            for representation in glazing.ShapeRepresentations
+            if representation.ContextOfItems == self.storey.house._body_context
+        )
+        glass = glazing_representation.Items[0]
+        glass_placement = ifcopenshell.util.placement.get_axis2placement(
+            glass.Position
+        )
+        extrusion_direction = np.array(
+            tuple(glass.ExtrudedDirection.DirectionRatios),
+            dtype=float,
+        )
+        glass_center = glass_placement[:3, 3] + (
+            glass_placement[:3, :3]
+            @ extrusion_direction
+            * float(glass.Depth)
+            / 2
+        )
+        offset_y = -float(glass_center[1])
+
+        for aspect_name in ("Framing", "Glazing"):
+            aspect = aspects.get(aspect_name)
+            if aspect is None:
+                raise RuntimeError(
+                    f"window representation has no {aspect_name.lower()} aspect"
+                )
+            for representation in aspect.ShapeRepresentations:
+                if representation.ContextOfItems != self.storey.house._body_context:
+                    continue
+                for item in representation.Items:
+                    coordinates = list(item.Position.Location.Coordinates)
+                    coordinates[1] += offset_y
+                    item.Position.Location.Coordinates = tuple(coordinates)
+
+    def _align_window_plan_to_axis(
+        self,
+        representation: ifcopenshell.entity_instance,
+    ) -> None:
+        """Move each generated 2D frame and glass group onto the wall axis."""
+        items = list(representation.Items)
+        items_per_panel = 8
+        if not items or len(items) % items_per_panel:
+            raise RuntimeError("unexpected window plan representation structure")
+
+        for start in range(0, len(items), items_per_panel):
+            panel_items = items[start : start + items_per_panel]
+            glass_line = panel_items[-1]
+            glass_coordinates = glass_line.Points.CoordList
+            offset_y = -float(glass_coordinates[0][1])
+            for item in panel_items[3:]:
+                item.Points.CoordList = tuple(
+                    (float(x), float(y) + offset_y)
+                    for x, y in item.Points.CoordList
+                )
+
     def add_window(
         self,
         *,
@@ -1817,6 +2026,8 @@ class Wall(ifcopenshell.entity_instance):
         height: Number,
         sill_height: Number,
         partition: WindowPartition = "SINGLE_PANEL",
+        align: WindowAlignment = "axis",
+        glass_transparency: Number = 0.75,
         color: str | None = None,
         transparency: Number = 0,
         name: str | None = None,
@@ -1825,14 +2036,30 @@ class Wall(ifcopenshell.entity_instance):
 
         ``at`` is the opening start measured from the wall start and
         ``sill_height`` and ``height`` are the bottom and top coordinates
-        measured above the storey elevation.  ``color`` and ``transparency``
-        affect only the 3D body.
+        measured above the storey elevation.  ``align="axis"`` centres the
+        frame and glazing on the wall reference axis in both the 3D and plan
+        representations; ``align="inside"`` keeps IfcOpenShell's legacy panel
+        position.  ``color`` applies to the whole 3D window, ``transparency``
+        controls its lining and frame, and ``glass_transparency`` independently
+        controls the glazing.
         """
         partition = _enum(partition, "partition", _WINDOW_PARTITIONS)
+        align = _enum(align, "align", _WINDOW_ALIGNMENTS)
         surface_style = self.storey.house._surface_style(
             "window",
             color=color,
             transparency=transparency,
+        )
+        glass_color = color
+        if (
+            glass_color is None
+            and "window" not in self.storey.house._default_colors
+        ):
+            glass_color = "#B7D9E8"
+        glass_surface_style = self.storey.house._surface_style(
+            "window",
+            color=glass_color,
+            transparency=glass_transparency,
         )
         at = _number(at, "at")
         width = _number(width, "width")
@@ -1872,10 +2099,13 @@ class Wall(ifcopenshell.entity_instance):
         window.OverallWidth = width
         window.OverallHeight = window_height
         window.PartitioningType = partition
+        window.Representation = model.createIfcProductDefinitionShape()
         lining_properties = {
             "LiningDepth": self.thickness,
             "LiningOffset": self.body_offset,
         }
+        body_representation = None
+        plan_representation = None
         for context in (
             self.storey.house._body_context,
             self.storey.house._plan_body_context,
@@ -1887,20 +2117,47 @@ class Wall(ifcopenshell.entity_instance):
                 overall_width=width,
                 partition_type=partition,
                 lining_properties=lining_properties,
+                part_of_product=(
+                    window.Representation
+                    if context == self.storey.house._body_context
+                    else None
+                ),
             )
             ifcopenshell.api.geometry.assign_representation(
                 model,
                 product=window,
                 representation=representation,
             )
-            if (
-                context == self.storey.house._body_context
-                and surface_style is not None
-            ):
-                ifcopenshell.api.style.assign_representation_styles(
+            if context == self.storey.house._body_context:
+                body_representation = representation
+            else:
+                plan_representation = representation
+        if body_representation is None:
+            raise RuntimeError("window has no 3D body representation")
+        if plan_representation is None:
+            raise RuntimeError("window has no plan representation")
+        if align == "AXIS":
+            self._align_window_panel_to_axis(window)
+            self._align_window_plan_to_axis(plan_representation)
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body_representation,
+                styles=[surface_style],
+            )
+        glazing = next(
+            aspect
+            for aspect in window.Representation.HasShapeAspects
+            if aspect.Name == "Glazing"
+        )
+        for representation in glazing.ShapeRepresentations:
+            if representation.ContextOfItems != self.storey.house._body_context:
+                continue
+            for item in representation.Items:
+                ifcopenshell.api.style.assign_item_style(
                     model,
-                    shape_representation=representation,
-                    styles=[surface_style],
+                    item=item,
+                    style=glass_surface_style,
                 )
         self._place_filling(window, opening, placement)
         self._openings.append(
@@ -2021,6 +2278,665 @@ class Storey:
             properties={"Thickness": thickness},
         )
         return annotation
+
+    def furniture(
+        self,
+        name: str,
+        *,
+        kind: FurnitureKind,
+        size: Sequence[Number],
+        center: Point,
+        rotation: Number = 0,
+        start_height: Number = 0,
+        color: str | None = None,
+        transparency: Number = 0,
+        label: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a semantic piece of furniture represented by a simple box.
+
+        ``size`` is ``(width, depth, height)`` in the furniture's local axes.
+        ``center`` locates the middle of the box in plan, ``rotation`` is
+        counter-clockwise in degrees from global X, and ``start_height`` is
+        measured above this storey's elevation.  The plan representation is a
+        dashed rectangle with ``label`` centred inside; when omitted, the
+        furniture name is used as the label.
+        """
+        furniture_name = _name(name, "name")
+        kind = _enum(kind, "kind", _FURNITURE_KINDS)
+        if isinstance(size, (str, bytes)):
+            raise TypeError("size must contain exactly three dimensions")
+        try:
+            width, depth, height = size
+        except (TypeError, ValueError) as error:
+            raise TypeError(
+                "size must contain exactly three dimensions"
+            ) from error
+        width = _number(width, "size width")
+        depth = _number(depth, "size depth")
+        height = _number(height, "size height")
+        if width <= 0 or depth <= 0 or height <= 0:
+            raise ValueError("size dimensions must be greater than zero")
+        center_x, center_y = _point(center, "center")
+        rotation = _number(rotation, "rotation")
+        start_height = _number(start_height, "start_height")
+        if start_height < 0:
+            raise ValueError("start_height must be zero or greater")
+        label_text = furniture_name if label is None else _name(label, "label")
+        surface_style = self.house._surface_style(
+            "furniture",
+            color=color,
+            transparency=transparency,
+        )
+
+        model = self.house.model
+        furniture = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcFurniture",
+            name=furniture_name,
+            predefined_type=kind,
+        )
+        if kind == "USERDEFINED":
+            furniture.ObjectType = furniture_name
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[furniture],
+            relating_structure=self.element,
+        )
+
+        angle = radians(rotation)
+        placement = np.eye(4)
+        placement[0, 0] = cos(angle)
+        placement[0, 1] = -sin(angle)
+        placement[1, 0] = sin(angle)
+        placement[1, 1] = cos(angle)
+        placement[0, 3] = center_x
+        placement[1, 3] = center_y
+        placement[2, 3] = self.elevation + start_height
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=furniture,
+            matrix=placement,
+            is_si=True,
+        )
+
+        half_width = width / 2
+        half_depth = depth / 2
+        footprint = [
+            (-half_width, -half_depth),
+            (half_width, -half_depth),
+            (half_width, half_depth),
+            (-half_width, half_depth),
+        ]
+        body = ifcopenshell.api.geometry.add_slab_representation(
+            model,
+            context=self.house._body_context,
+            depth=height,
+            polyline=footprint,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=furniture,
+            representation=body,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+
+        plan = ifcopenshell.api.geometry.add_axis_representation(
+            model,
+            context=self.house._plan_body_context,
+            axis=[*footprint, footprint[0]],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=furniture,
+            representation=plan,
+        )
+
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{furniture_name} Label",
+            predefined_type="TEXT",
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[annotation],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement.copy(),
+            is_si=True,
+        )
+        literal_origin = model.createIfcAxis2Placement3D(
+            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+            model.createIfcDirection((0.0, 0.0, 1.0)),
+            model.createIfcDirection((1.0, 0.0, 0.0)),
+        )
+        literal = model.createIfcTextLiteralWithExtent(
+            label_text,
+            literal_origin,
+            "RIGHT",
+            model.createIfcPlanarExtent(width, depth),
+            "center",
+        )
+        label_representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [literal],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=label_representation,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={"Classes": "furniture-label small"},
+        )
+        ifcopenshell.api.drawing.assign_product(
+            model,
+            relating_product=furniture,
+            related_object=annotation,
+        )
+        self.house._plan_annotations.append(annotation)
+        for drawing in self.house._drawings:
+            ifcopenshell.api.group.assign_group(
+                model,
+                group=drawing.group,
+                products=[annotation],
+            )
+        return furniture
+
+    def miako_slab(
+        self,
+        name: str,
+        *,
+        start: Point,
+        end: Point,
+        top: Number,
+        direction: Point,
+        structure: Sequence[MiakoStructureItem],
+        block_length: Number = 0.25,
+        block_height: Number = 0.19,
+        topping: Number = 0.06,
+        beam_height: Number | None = None,
+        beam_color: str | None = "red",
+        wide_color: str | None = "blue",
+        narrow_color: str | None = "green",
+        concrete_color: str | None = None,
+        transparency: Number = 0,
+    ) -> MiakoSlab:
+        """Create a detailed MIAKO floor slab from a crosswise strip layout.
+
+        ``start`` and ``end`` define the joist span.  ``direction`` must be
+        perpendicular to that line and selects the side on which the slab is
+        constructed.  Items in ``structure`` are inserted successively in
+        that direction: ``"beam"`` is 0.17 m wide, ``"wide"`` is a 0.455 m
+        block bay, and ``"narrow"`` is a 0.33 m block bay.  Consequently a
+        wide bay plus a beam forms a 0.625 m module and a narrow bay plus a
+        beam forms a 0.5 m module.
+
+        ``top`` is measured from this storey's elevation.  Blocks and beams
+        terminate beneath the concrete topping, so the whole assembly extends
+        downward by ``block_height + topping``.  Repeated components use
+        mapped type geometry and are decomposed beneath one semantic
+        ``IfcSlab`` contained by this storey.  Beams are red, wide blocks are
+        blue, and narrow blocks are green by default; their respective color
+        arguments may override these 3D styles.
+        """
+        slab_name = _name(name, "name")
+        start_x, start_y = _point(start, "start")
+        end_x, end_y = _point(end, "end")
+        direction_x, direction_y = _point(direction, "direction")
+        top = _number(top, "top")
+        block_length = _number(block_length, "block_length")
+        block_height = _number(block_height, "block_height")
+        topping = _number(topping, "topping")
+        if beam_height is None:
+            beam_height = block_height
+        else:
+            beam_height = _number(beam_height, "beam_height")
+        for value, argument in (
+            (block_length, "block_length"),
+            (block_height, "block_height"),
+            (topping, "topping"),
+            (beam_height, "beam_height"),
+        ):
+            if value <= 0:
+                raise ValueError(f"{argument} must be greater than zero")
+        if beam_height > block_height:
+            raise ValueError("beam_height must not be greater than block_height")
+
+        span_x = end_x - start_x
+        span_y = end_y - start_y
+        length = hypot(span_x, span_y)
+        if length == 0:
+            raise ValueError("slab start and end must be different points")
+        direction_length = hypot(direction_x, direction_y)
+        if direction_length == 0:
+            raise ValueError("direction must not be a zero vector")
+        span_x /= length
+        span_y /= length
+        direction_x /= direction_length
+        direction_y /= direction_length
+        if abs(span_x * direction_x + span_y * direction_y) > 1e-6:
+            raise ValueError("direction must be perpendicular to start-end line")
+
+        if isinstance(structure, (str, bytes)):
+            raise TypeError("structure must be a sequence of layout items")
+        try:
+            supplied_structure = list(structure)
+        except TypeError as error:
+            raise TypeError(
+                "structure must be a sequence of layout items"
+            ) from error
+        if not supplied_structure:
+            raise ValueError("structure must contain at least one item")
+        normalised_structure: list[str] = []
+        previous_was_block = False
+        for index, supplied_item in enumerate(supplied_structure, start=1):
+            item = _name(supplied_item, f"structure item {index}").lower()
+            if item not in _MIAKO_WIDTHS:
+                choices = ", ".join(_MIAKO_WIDTHS)
+                raise ValueError(
+                    f"structure item {index} must be one of: {choices}"
+                )
+            is_block = item in {"wide", "narrow"}
+            if is_block and previous_was_block:
+                raise ValueError("MIAKO block bays must be separated by a beam")
+            normalised_structure.append(item)
+            previous_was_block = is_block
+        if "beam" not in normalised_structure:
+            raise ValueError("structure must contain at least one beam")
+        if not any(item in {"wide", "narrow"} for item in normalised_structure):
+            raise ValueError("structure must contain at least one block bay")
+        structure_tuple = tuple(normalised_structure)
+        width = sum(_MIAKO_WIDTHS[item] for item in structure_tuple)
+
+        beam_style = self.house._surface_style(
+            "beam", color=beam_color, transparency=transparency
+        )
+        wide_style = self.house._surface_style(
+            "block", color=wide_color, transparency=transparency
+        )
+        narrow_style = self.house._surface_style(
+            "block", color=narrow_color, transparency=transparency
+        )
+        concrete_style = self.house._surface_style(
+            "slab", color=concrete_color, transparency=transparency
+        )
+
+        # Keep +Z upward and the placement right-handed.  The requested
+        # direction is represented as a sign along the placement's local Y.
+        local_y_x = -span_y
+        local_y_y = span_x
+        layout_sign = (
+            1.0
+            if direction_x * local_y_x + direction_y * local_y_y > 0
+            else -1.0
+        )
+        bottom_elevation = self.elevation + top - block_height - topping
+        placement = np.eye(4)
+        placement[0, 0] = span_x
+        placement[1, 0] = span_y
+        placement[0, 1] = local_y_x
+        placement[1, 1] = local_y_y
+        placement[0, 3] = start_x
+        placement[1, 3] = start_y
+        placement[2, 3] = bottom_elevation
+
+        model = self.house.model
+        slab_element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcSlab",
+            name=slab_name,
+            predefined_type="FLOOR",
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[slab_element],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=slab_element,
+            matrix=placement,
+            is_si=True,
+        )
+
+        signed_width = layout_sign * width
+        plan = ifcopenshell.api.geometry.add_axis_representation(
+            model,
+            context=self.house._plan_body_context,
+            axis=[
+                (0.0, 0.0),
+                (length, 0.0),
+                (length, signed_width),
+                (0.0, signed_width),
+                (0.0, 0.0),
+            ],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=slab_element,
+            representation=plan,
+        )
+
+        common_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=slab_element,
+            name="Pset_SlabCommon",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=common_pset,
+            properties={"LoadBearing": True},
+        )
+        miako_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=slab_element,
+            name="BBIM_MiakoSlab",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=miako_pset,
+            properties={
+                "Structure": ",".join(structure_tuple),
+                "SpanLength": length,
+                "OverallWidth": width,
+                "BlockLength": block_length,
+                "BlockHeight": block_height,
+                "BeamHeight": beam_height,
+                "ToppingThickness": topping,
+            },
+        )
+
+        def get_material(
+            material_name: str,
+            category: str,
+        ) -> ifcopenshell.entity_instance:
+            material = self.house._materials.get(material_name)
+            if material is None:
+                material = ifcopenshell.api.material.add_material(
+                    model,
+                    name=material_name,
+                    category=category,
+                )
+                self.house._materials[material_name] = material
+            return material
+
+        beam_material = get_material("MIAKO ceramic concrete", "concrete")
+        block_material = get_material("MIAKO ceramic", "ceramic")
+        concrete_material = get_material("Concrete topping", "concrete")
+
+        def get_component_type(
+            *,
+            component: Literal["beam", "wide", "narrow"],
+            component_length: float,
+            component_width: float,
+            component_height: float,
+            style: ifcopenshell.entity_instance | None,
+            material: ifcopenshell.entity_instance,
+        ) -> ifcopenshell.entity_instance:
+            style_id = style.id() if style is not None else None
+            key = (
+                component,
+                round(component_length, 9),
+                round(component_width, 9),
+                round(component_height, 9),
+                int(layout_sign),
+                style_id,
+            )
+            component_type = self.house._miako_component_types.get(key)
+            if component_type is not None:
+                return component_type
+
+            if component == "beam":
+                type_class = "IfcBeamType"
+                predefined_type = "JOIST"
+                type_name = (
+                    f"MIAKO beam {component_width * 1000:.0f}x"
+                    f"{component_height * 1000:.0f}, L={component_length:.3f} m"
+                )
+            else:
+                type_class = "IfcBuildingElementPartType"
+                predefined_type = "USERDEFINED"
+                type_name = (
+                    f"MIAKO {component} block "
+                    f"{component_length * 1000:.0f}x"
+                    f"{component_width * 1000:.0f}x"
+                    f"{component_height * 1000:.0f}"
+                )
+            component_type = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class=type_class,
+                name=type_name,
+                predefined_type=predefined_type,
+            )
+            if component != "beam":
+                component_type.ElementType = f"MIAKO {component} block"
+            signed_component_width = layout_sign * component_width
+            representation = ifcopenshell.api.geometry.add_slab_representation(
+                model,
+                context=self.house._body_context,
+                depth=component_height,
+                polyline=[
+                    (0.0, 0.0),
+                    (component_length, 0.0),
+                    (component_length, signed_component_width),
+                    (0.0, signed_component_width),
+                ],
+            )
+            if style is not None:
+                ifcopenshell.api.style.assign_representation_styles(
+                    model,
+                    shape_representation=representation,
+                    styles=[style],
+                )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=component_type,
+                representation=representation,
+            )
+            ifcopenshell.api.material.assign_material(
+                model,
+                products=[component_type],
+                type="IfcMaterial",
+                material=material,
+            )
+            self.house._miako_component_types[key] = component_type
+            return component_type
+
+        def component_placement(
+            local_x: float,
+            local_y: float,
+            local_z: float,
+        ) -> np.ndarray:
+            result = placement.copy()
+            result[:3, 3] = (
+                placement
+                @ np.array((local_x, local_y, local_z, 1.0), dtype=float)
+            )[:3]
+            return result
+
+        components: list[ifcopenshell.entity_instance] = []
+        component_placements: list[np.ndarray] = []
+        beams: list[ifcopenshell.entity_instance] = []
+        blocks: list[ifcopenshell.entity_instance] = []
+        offset = 0.0
+        beam_number = 0
+        bay_number = 0
+        tolerance = 1e-9
+        full_block_count = int(length / block_length)
+        remainder = length - full_block_count * block_length
+        if remainder < tolerance:
+            remainder = 0.0
+        elif block_length - remainder < tolerance:
+            full_block_count += 1
+            remainder = 0.0
+
+        for item in structure_tuple:
+            item_width = _MIAKO_WIDTHS[item]
+            signed_offset = layout_sign * offset
+            if item == "beam":
+                beam_number += 1
+                beam = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcBeam",
+                    name=f"{slab_name} Beam {beam_number}",
+                    predefined_type="JOIST",
+                )
+                beam_type = get_component_type(
+                    component="beam",
+                    component_length=length,
+                    component_width=item_width,
+                    component_height=beam_height,
+                    style=beam_style,
+                    material=beam_material,
+                )
+                ifcopenshell.api.type.assign_type(
+                    model,
+                    related_objects=[beam],
+                    relating_type=beam_type,
+                )
+                beams.append(beam)
+                components.append(beam)
+                component_placements.append(
+                    component_placement(
+                        0.0,
+                        signed_offset,
+                        block_height - beam_height,
+                    )
+                )
+            else:
+                bay_number += 1
+                block_lengths = [block_length] * full_block_count
+                if remainder:
+                    block_lengths.append(remainder)
+                along = 0.0
+                for block_number, current_length in enumerate(
+                    block_lengths,
+                    start=1,
+                ):
+                    block = ifcopenshell.api.root.create_entity(
+                        model,
+                        ifc_class="IfcBuildingElementPart",
+                        name=(
+                            f"{slab_name} {item.title()} Block "
+                            f"{bay_number}.{block_number}"
+                        ),
+                        predefined_type="USERDEFINED",
+                    )
+                    block.ObjectType = f"MIAKO {item} block"
+                    block_type = get_component_type(
+                        component=item,
+                        component_length=current_length,
+                        component_width=item_width,
+                        component_height=block_height,
+                        style=wide_style if item == "wide" else narrow_style,
+                        material=block_material,
+                    )
+                    ifcopenshell.api.type.assign_type(
+                        model,
+                        related_objects=[block],
+                        relating_type=block_type,
+                    )
+                    blocks.append(block)
+                    components.append(block)
+                    component_placements.append(
+                        component_placement(along, signed_offset, 0.0)
+                    )
+                    along += current_length
+            offset += item_width
+
+        topping_element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcBuildingElementPart",
+            name=f"{slab_name} Concrete Topping",
+            predefined_type="USERDEFINED",
+        )
+        topping_element.ObjectType = "Concrete topping"
+        topping_representation = ifcopenshell.api.geometry.add_slab_representation(
+            model,
+            context=self.house._body_context,
+            depth=topping,
+            polyline=[
+                (0.0, 0.0),
+                (length, 0.0),
+                (length, signed_width),
+                (0.0, signed_width),
+            ],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=topping_element,
+            representation=topping_representation,
+        )
+        if concrete_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=topping_representation,
+                styles=[concrete_style],
+            )
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[topping_element],
+            type="IfcMaterial",
+            material=concrete_material,
+        )
+        components.append(topping_element)
+        component_placements.append(
+            component_placement(0.0, 0.0, block_height)
+        )
+
+        ifcopenshell.api.aggregate.assign_object(
+            model,
+            products=components,
+            relating_object=slab_element,
+        )
+        for component, component_matrix in zip(
+            components,
+            component_placements,
+        ):
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=component,
+                matrix=component_matrix,
+                is_si=True,
+            )
+
+        return MiakoSlab(
+            slab_element,
+            self,
+            start=(start_x, start_y),
+            end=(end_x, end_y),
+            direction=(direction_x, direction_y),
+            structure=structure_tuple,
+            length=length,
+            width=width,
+            top=top,
+            block_length=block_length,
+            block_height=block_height,
+            beam_height=beam_height,
+            topping=topping,
+            placement=placement,
+            beams=tuple(beams),
+            blocks=tuple(blocks),
+            topping_element=topping_element,
+        )
 
     def chimney(
         self,

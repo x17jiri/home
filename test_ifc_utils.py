@@ -11,8 +11,9 @@ import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.representation
 import ifcopenshell.util.shape
+import numpy as np
 
-from ifc_utils import Chimney, House, Stair, Wall, generate_plan
+from ifc_utils import Chimney, House, MiakoSlab, Stair, Wall, generate_plan
 
 
 class HouseTests(unittest.TestCase):
@@ -30,6 +31,40 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(len(item.StyledByItem), 1)
             surface_style = item.StyledByItem[0].Styles[0]
             self.assertTrue(surface_style.is_a("IfcSurfaceStyle"))
+            shading = next(
+                style
+                for style in surface_style.Styles
+                if style.is_a("IfcSurfaceStyleShading")
+            )
+            actual_rgb = (
+                shading.SurfaceColour.Red,
+                shading.SurfaceColour.Green,
+                shading.SurfaceColour.Blue,
+            )
+            for actual, expected in zip(actual_rgb, expected_rgb):
+                self.assertAlmostEqual(actual, expected)
+            self.assertAlmostEqual(shading.Transparency, expected_transparency)
+
+    def assert_shape_aspect_surface_style(
+        self,
+        product: ifcopenshell.entity_instance,
+        aspect_name: str,
+        expected_rgb: tuple[float, float, float],
+        expected_transparency: float,
+    ) -> None:
+        aspect = next(
+            aspect
+            for aspect in product.Representation.HasShapeAspects
+            if aspect.Name == aspect_name
+        )
+        representation = next(
+            representation
+            for representation in aspect.ShapeRepresentations
+            if representation.ContextOfItems.ContextType == "Model"
+        )
+        for item in representation.Items:
+            self.assertEqual(len(item.StyledByItem), 1)
+            surface_style = item.StyledByItem[0].Styles[0]
             shading = next(
                 style
                 for style in surface_style.Styles
@@ -81,7 +116,15 @@ class HouseTests(unittest.TestCase):
         self.assert_surface_style(wall, (245 / 255, 245 / 255, 245 / 255))
         self.assert_surface_style(adjoining_wall, (1, 0, 0))
         self.assert_surface_style(door, (139 / 255, 90 / 255, 43 / 255))
-        self.assert_surface_style(window, (0.2, 0.4, 0.6), 0.25)
+        self.assert_shape_aspect_surface_style(
+            window, "Lining", (0.2, 0.4, 0.6), 0.25
+        )
+        self.assert_shape_aspect_surface_style(
+            window, "Framing", (0.2, 0.4, 0.6), 0.25
+        )
+        self.assert_shape_aspect_surface_style(
+            window, "Glazing", (0.2, 0.4, 0.6), 0.75
+        )
 
         for filling in (door, window):
             plan = ifcopenshell.util.representation.get_representation(
@@ -109,6 +152,247 @@ class HouseTests(unittest.TestCase):
                 color="blue",
                 transparency=1.1,
             )
+
+    def test_creates_semantic_box_furniture_with_a_labeled_plan_symbol(
+        self,
+    ) -> None:
+        house = House("My house", colors={"furniture": "#8B5A2B"})
+        ground = house.storey("Ground floor", elevation=0.25)
+        drawing = house.add_drawing("Ground plan", 5, 3, 1.6, 4)
+        table = ground.furniture(
+            "Dining table",
+            kind="TABLE",
+            size=(1.8, 0.9, 0.75),
+            center=(5, 3),
+            rotation=90,
+            start_height=0.1,
+        )
+
+        self.assertTrue(table.is_a("IfcFurniture"))
+        self.assertEqual(table.PredefinedType, "TABLE")
+        self.assertIsNone(table.ObjectType)
+        self.assertEqual(
+            table.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            table.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[0, 0], 0)
+        self.assertAlmostEqual(placement[0, 1], -1)
+        self.assertAlmostEqual(placement[1, 0], 1)
+        self.assertAlmostEqual(placement[1, 1], 0)
+        self.assertEqual(tuple(placement[:2, 3]), (5, 3))
+        self.assertAlmostEqual(placement[2, 3], 0.35)
+
+        body = ifcopenshell.util.representation.get_representation(
+            table, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "SweptSolid")
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), table
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 1.8)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_y(shape.geometry), 0.9)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_z(shape.geometry), 0.75)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            1.8 * 0.9 * 0.75,
+        )
+        self.assert_surface_style(
+            table, (139 / 255, 90 / 255, 43 / 255)
+        )
+
+        plan = ifcopenshell.util.representation.get_representation(
+            table, "Plan", "Body", "PLAN_VIEW"
+        )
+        self.assertEqual(plan.RepresentationType, "Curve2D")
+        self.assertEqual(
+            plan.Items[0].Points.CoordList,
+            (
+                (-0.9, -0.45),
+                (0.9, -0.45),
+                (0.9, 0.45),
+                (-0.9, 0.45),
+                (-0.9, -0.45),
+            ),
+        )
+        self.assertFalse(plan.Items[0].StyledByItem)
+
+        label = next(
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if annotation.ObjectType == "TEXT"
+        )
+        self.assertEqual(
+            label.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        literal = label.Representation.Representations[0].Items[0]
+        self.assertTrue(literal.is_a("IfcTextLiteralWithExtent"))
+        self.assertEqual(literal.Literal, "Dining table")
+        self.assertEqual(literal.BoxAlignment, "center")
+        self.assertAlmostEqual(literal.Extent.SizeInX, 1.8)
+        self.assertAlmostEqual(literal.Extent.SizeInY, 0.9)
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                label, "EPset_Annotation", "Classes"
+            ),
+            "furniture-label small",
+        )
+        assignment = next(
+            relation
+            for relation in label.HasAssignments
+            if relation.is_a("IfcRelAssignsToProduct")
+        )
+        self.assertEqual(assignment.RelatingProduct, table)
+        self.assertIn(
+            label,
+            drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "furniture.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(len(reopened.by_type("IfcFurniture")), 1)
+            self.assertEqual(
+                reopened.by_type("IfcTextLiteralWithExtent")[0].Literal,
+                "Dining table",
+            )
+
+    def test_validates_furniture_and_marks_custom_kinds(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+
+        custom = ground.furniture(
+            "Kitchen island",
+            kind="USERDEFINED",
+            size=(1.2, 0.6, 0.9),
+            center=(2, 1),
+            label="ISLAND",
+        )
+        self.assertEqual(custom.PredefinedType, "USERDEFINED")
+        self.assertEqual(custom.ObjectType, "Kitchen island")
+        label = house.model.by_type("IfcTextLiteralWithExtent")[0]
+        self.assertEqual(label.Literal, "ISLAND")
+
+        with self.assertRaisesRegex(ValueError, "kind must be one of"):
+            ground.furniture(
+                "Stool", kind="STOOL", size=(0.4, 0.4, 0.5), center=(0, 0)
+            )
+        with self.assertRaisesRegex(TypeError, "exactly three dimensions"):
+            ground.furniture(
+                "Table", kind="TABLE", size=(1, 1), center=(0, 0)
+            )
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            ground.furniture(
+                "Table", kind="TABLE", size=(1, 1, 0), center=(0, 0)
+            )
+        with self.assertRaisesRegex(ValueError, "zero or greater"):
+            ground.furniture(
+                "Table",
+                kind="TABLE",
+                size=(1, 1, 1),
+                center=(0, 0),
+                start_height=-0.1,
+            )
+        with self.assertRaisesRegex(ValueError, "between 0 and 1"):
+            ground.furniture(
+                "Table",
+                kind="TABLE",
+                size=(1, 1, 1),
+                center=(0, 0),
+                transparency=1.1,
+            )
+        with self.assertRaisesRegex(ValueError, "label must not be empty"):
+            ground.furniture(
+                "Table",
+                kind="TABLE",
+                size=(1, 1, 1),
+                center=(0, 0),
+                label=" ",
+            )
+
+    def test_aligns_transparent_window_glazing_on_the_wall_axis(self) -> None:
+        house = House("My house", colors={"window": "#369"})
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.25, height=3)
+        axis_window = wall.add_window(
+            at=0.5,
+            width=1,
+            height=2,
+            sill_height=1,
+        )
+        inside_window = wall.add_window(
+            at=2.5,
+            width=1,
+            height=2,
+            sill_height=1,
+            align="inside",
+        )
+
+        def glass_center_y(window: ifcopenshell.entity_instance) -> float:
+            glazing = next(
+                aspect
+                for aspect in window.Representation.HasShapeAspects
+                if aspect.Name == "Glazing"
+            )
+            representation = next(
+                representation
+                for representation in glazing.ShapeRepresentations
+                if representation.ContextOfItems.ContextType == "Model"
+            )
+            glass = representation.Items[0]
+            placement = ifcopenshell.util.placement.get_axis2placement(
+                glass.Position
+            )
+            direction = np.array(glass.ExtrudedDirection.DirectionRatios)
+            centre = placement[:3, 3] + (
+                placement[:3, :3] @ direction * float(glass.Depth) / 2
+            )
+            return float(centre[1])
+
+        self.assertAlmostEqual(glass_center_y(axis_window), 0)
+        self.assertNotAlmostEqual(glass_center_y(inside_window), 0)
+        self.assert_shape_aspect_surface_style(
+            axis_window, "Lining", (0.2, 0.4, 0.6), 0
+        )
+        self.assert_shape_aspect_surface_style(
+            axis_window, "Framing", (0.2, 0.4, 0.6), 0
+        )
+        self.assert_shape_aspect_surface_style(
+            axis_window, "Glazing", (0.2, 0.4, 0.6), 0.75
+        )
+        plan = ifcopenshell.util.representation.get_representation(
+            axis_window, "Plan", "Body", "PLAN_VIEW"
+        )
+        inside_plan = ifcopenshell.util.representation.get_representation(
+            inside_window, "Plan", "Body", "PLAN_VIEW"
+        )
+        self.assertTrue(
+            all(
+                abs(coordinate[1]) < 1e-9
+                for coordinate in plan.Items[-1].Points.CoordList
+            )
+        )
+        self.assertTrue(
+            any(
+                abs(coordinate[1]) > 1e-9
+                for coordinate in inside_plan.Items[-1].Points.CoordList
+            )
+        )
+        frame_coordinates = plan.Items[3].Points.CoordList
+        self.assertLess(min(point[1] for point in frame_coordinates), 0)
+        self.assertGreater(max(point[1] for point in frame_coordinates), 0)
+        for axis_item, inside_item in zip(
+            plan.Items[:3], inside_plan.Items[:3]
+        ):
+            self.assertEqual(
+                axis_item.Points.CoordList,
+                inside_item.Points.CoordList,
+            )
+        self.assertTrue(all(not item.StyledByItem for item in plan.Items))
 
     def test_creates_semantic_straight_stair_and_scoped_plan_symbol(self) -> None:
         house = House("My house", colors={"stair": "#C8B090"})
@@ -503,6 +787,304 @@ class HouseTests(unittest.TestCase):
         )
         self.assert_surface_style(landing, (200 / 255, 176 / 255, 144 / 255))
 
+    def test_creates_a_decomposed_miako_slab_from_a_mixed_layout(self) -> None:
+        house = House(
+            "My house",
+            colors={"slab": "#AAAAAA"},
+        )
+        upper = house.storey("Upper floor", elevation=3)
+        slab = upper.miako_slab(
+            "Ground-floor ceiling",
+            start=(0, 0),
+            end=(0, 8),
+            top=0,
+            direction=(1, 0),
+            structure=["wide", "beam", "narrow", "beam"],
+        )
+
+        self.assertIsInstance(slab, MiakoSlab)
+        self.assertTrue(slab.is_a("IfcSlab"))
+        self.assertIs(slab.element, slab)
+        self.assertEqual(slab.PredefinedType, "FLOOR")
+        self.assertEqual(slab.start, (0, 0))
+        self.assertEqual(slab.end, (0, 8))
+        self.assertEqual(slab.direction, (1, 0))
+        self.assertEqual(
+            slab.structure,
+            ("wide", "beam", "narrow", "beam"),
+        )
+        self.assertEqual(slab.length, 8)
+        self.assertAlmostEqual(slab.width, 1.125)
+        self.assertAlmostEqual(slab.height, 0.25)
+        self.assertAlmostEqual(slab.bottom, -0.25)
+        self.assertEqual(
+            slab.ContainedInStructure[0].RelatingStructure,
+            upper.element,
+        )
+        slab_placement = ifcopenshell.util.placement.get_local_placement(
+            slab.ObjectPlacement
+        )
+        self.assertEqual(tuple(slab_placement[:2, 3]), (0, 0))
+        self.assertAlmostEqual(slab_placement[2, 3], 2.75)
+        self.assertAlmostEqual(np.linalg.det(slab_placement[:3, :3]), 1)
+
+        plan = ifcopenshell.util.representation.get_representation(
+            slab, "Plan", "Body", "PLAN_VIEW"
+        )
+        self.assertEqual(plan.RepresentationType, "Curve2D")
+        self.assertEqual(
+            plan.Items[0].Points.CoordList,
+            (
+                (0.0, 0.0),
+                (8.0, 0.0),
+                (8.0, -1.125),
+                (0.0, -1.125),
+                (0.0, 0.0),
+            ),
+        )
+
+        self.assertEqual(len(slab.beams), 2)
+        self.assertEqual(len(slab.blocks), 64)
+        self.assertEqual(len(slab.components), 67)
+        decomposition = slab.IsDecomposedBy[0]
+        self.assertTrue(decomposition.is_a("IfcRelAggregates"))
+        self.assertEqual(set(decomposition.RelatedObjects), set(slab.components))
+        self.assertTrue(
+            all(not component.ContainedInStructure for component in slab.components)
+        )
+
+        first_beam, second_beam = slab.beams
+        self.assertEqual(
+            ifcopenshell.util.element.get_predefined_type(first_beam),
+            "JOIST",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_type(first_beam),
+            ifcopenshell.util.element.get_type(second_beam),
+        )
+        first_beam_placement = ifcopenshell.util.placement.get_local_placement(
+            first_beam.ObjectPlacement
+        )
+        second_beam_placement = ifcopenshell.util.placement.get_local_placement(
+            second_beam.ObjectPlacement
+        )
+        self.assertEqual(tuple(first_beam_placement[:2, 3]), (0.455, 0))
+        self.assertAlmostEqual(second_beam_placement[0, 3], 0.955)
+        self.assertAlmostEqual(second_beam_placement[1, 3], 0)
+        beam_body = ifcopenshell.util.representation.get_representation(
+            first_beam, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(beam_body.RepresentationType, "MappedRepresentation")
+        beam_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), first_beam
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(beam_shape.geometry), 8
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(beam_shape.geometry), 0.17
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(beam_shape.geometry), 0.19
+        )
+
+        def mapped_rgb(
+            product: ifcopenshell.entity_instance,
+        ) -> tuple[float, float, float]:
+            representation = ifcopenshell.util.representation.get_representation(
+                product, "Model", "Body", "MODEL_VIEW"
+            )
+            mapped_representation = (
+                representation.Items[0].MappingSource.MappedRepresentation
+            )
+            surface_style = mapped_representation.Items[0].StyledByItem[0].Styles[0]
+            shading = next(
+                style
+                for style in surface_style.Styles
+                if style.is_a("IfcSurfaceStyleShading")
+            )
+            return (
+                shading.SurfaceColour.Red,
+                shading.SurfaceColour.Green,
+                shading.SurfaceColour.Blue,
+            )
+
+        self.assertEqual(mapped_rgb(first_beam), (1, 0, 0))
+
+        wide_blocks = [
+            block
+            for block in slab.blocks
+            if ifcopenshell.util.element.get_predefined_type(block)
+            == "MIAKO wide block"
+        ]
+        narrow_blocks = [
+            block
+            for block in slab.blocks
+            if ifcopenshell.util.element.get_predefined_type(block)
+            == "MIAKO narrow block"
+        ]
+        self.assertEqual(len(wide_blocks), 32)
+        self.assertEqual(len(narrow_blocks), 32)
+        self.assertEqual(
+            len({ifcopenshell.util.element.get_type(block) for block in wide_blocks}),
+            1,
+        )
+        self.assertEqual(
+            len(
+                {
+                    ifcopenshell.util.element.get_type(block)
+                    for block in narrow_blocks
+                }
+            ),
+            1,
+        )
+        wide_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), wide_blocks[0]
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(wide_shape.geometry), 0.25
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(wide_shape.geometry), 0.455
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(wide_shape.geometry), 0.19
+        )
+        self.assertEqual(mapped_rgb(wide_blocks[0]), (0, 0, 1))
+        self.assertEqual(mapped_rgb(narrow_blocks[0]), (0, 128 / 255, 0))
+
+        topping_placement = ifcopenshell.util.placement.get_local_placement(
+            slab.topping_element.ObjectPlacement
+        )
+        self.assertAlmostEqual(topping_placement[2, 3], 2.94)
+        topping_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), slab.topping_element
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(topping_shape.geometry), 8
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(topping_shape.geometry), 1.125
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(topping_shape.geometry), 0.06
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                slab, "Pset_SlabCommon", "LoadBearing"
+            ),
+            True,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                slab, "BBIM_MiakoSlab", "Structure"
+            ),
+            "wide,beam,narrow,beam",
+        )
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "miako.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(len(reopened.by_type("IfcSlab")), 1)
+            self.assertEqual(len(reopened.by_type("IfcBeam")), 2)
+            self.assertEqual(len(reopened.by_type("IfcBuildingElementPart")), 65)
+            self.assertEqual(len(reopened.by_type("IfcBeamType")), 1)
+            self.assertEqual(
+                len(reopened.by_type("IfcBuildingElementPartType")), 2
+            )
+
+    def test_handles_partial_miako_blocks_and_validates_the_layout(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        slab = upper.miako_slab(
+            "Short ceiling",
+            start=(0, 0),
+            end=(0, 0.6),
+            top=-0.1,
+            direction=(-1, 0),
+            structure=["wide", "beam", "narrow", "beam"],
+            beam_height=0.175,
+        )
+
+        self.assertEqual(len(slab.blocks), 6)
+        block_lengths = sorted(
+            {
+                round(
+                    ifcopenshell.util.shape.get_x(
+                        ifcopenshell.geom.create_shape(
+                            ifcopenshell.geom.settings(), block
+                        ).geometry
+                    ),
+                    9,
+                )
+                for block in slab.blocks
+            }
+        )
+        self.assertEqual(block_lengths, [0.1, 0.25])
+        plan = ifcopenshell.util.representation.get_representation(
+            slab, "Plan", "Body", "PLAN_VIEW"
+        )
+        self.assertEqual(plan.Items[0].Points.CoordList[2], (0.6, 1.125))
+        first_beam_placement = ifcopenshell.util.placement.get_local_placement(
+            slab.beams[0].ObjectPlacement
+        )
+        self.assertAlmostEqual(first_beam_placement[0, 3], -0.455)
+        self.assertAlmostEqual(first_beam_placement[2, 3], 2.665)
+
+        valid_arguments = {
+            "start": (0, 0),
+            "end": (0, 2),
+            "top": 0,
+            "direction": (1, 0),
+            "structure": ["wide", "beam"],
+        }
+        with self.assertRaisesRegex(ValueError, "different points"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"end": (0, 0)})
+            )
+        with self.assertRaisesRegex(ValueError, "zero vector"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"direction": (0, 0)})
+            )
+        with self.assertRaisesRegex(ValueError, "perpendicular"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"direction": (1, 1)})
+            )
+        with self.assertRaisesRegex(TypeError, "sequence"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"structure": "wide"})
+            )
+        with self.assertRaisesRegex(ValueError, "at least one item"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"structure": []})
+            )
+        with self.assertRaisesRegex(ValueError, "must be one of"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"structure": ["wide", "rib"]})
+            )
+        with self.assertRaisesRegex(ValueError, "separated by a beam"):
+            upper.miako_slab(
+                "Invalid",
+                **(valid_arguments | {"structure": ["wide", "narrow", "beam"]}),
+            )
+        with self.assertRaisesRegex(ValueError, "at least one beam"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"structure": ["wide"]})
+            )
+        with self.assertRaisesRegex(ValueError, "at least one block bay"):
+            upper.miako_slab(
+                "Invalid", **(valid_arguments | {"structure": ["beam"]})
+            )
+        with self.assertRaisesRegex(ValueError, "block_length"):
+            upper.miako_slab(
+                "Invalid", **valid_arguments, block_length=0
+            )
+        with self.assertRaisesRegex(ValueError, "beam_height"):
+            upper.miako_slab(
+                "Invalid", **valid_arguments, beam_height=0.2
+            )
+
     def test_connects_and_mitres_two_layered_walls(self) -> None:
         house = House("My house")
         wall_type = house.wall_type(
@@ -786,6 +1368,21 @@ class HouseTests(unittest.TestCase):
             wall.add_door(at=1, width=0.9, height=2.1, operation="REVOLVING")
         with self.assertRaisesRegex(ValueError, "between 0 and 180"):
             wall.add_door(at=1, width=0.9, height=2.1, open_angle=181)
+        with self.assertRaisesRegex(TypeError, "reverse_swing"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                reverse_swing="yes",
+            )
+        with self.assertRaisesRegex(ValueError, "sliding doors"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                operation="SLIDING_TO_LEFT",
+                reverse_swing=True,
+            )
         with self.assertRaisesRegex(ValueError, "sill_height"):
             wall.add_door(
                 at=1,
@@ -836,6 +1433,22 @@ class HouseTests(unittest.TestCase):
                 sill_height=1,
                 partition="ROUND",
             )
+        with self.assertRaisesRegex(ValueError, "align must be one of"):
+            wall.add_window(
+                at=3,
+                width=1,
+                height=2,
+                sill_height=1,
+                align="outside",
+            )
+        with self.assertRaisesRegex(ValueError, "between 0 and 1"):
+            wall.add_window(
+                at=3,
+                width=1,
+                height=2,
+                sill_height=1,
+                glass_transparency=1.1,
+            )
 
         with self.assertRaisesRegex(ValueError, "greater than sill_height"):
             wall.add_window(
@@ -855,6 +1468,95 @@ class HouseTests(unittest.TestCase):
                 height=2,
                 sill_height=1,
             )
+
+    def test_reverses_door_swing_without_changing_the_hinge_side(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.25, height=3)
+        normal = wall.add_door(
+            at=0.25,
+            width=0.9,
+            height=2.1,
+            operation="SINGLE_SWING_LEFT",
+            open_angle=45,
+            show_overhead=False,
+        )
+        reversed_door = wall.add_door(
+            at=2,
+            width=0.9,
+            height=2.1,
+            operation="SINGLE_SWING_LEFT",
+            open_angle=45,
+            reverse_swing=True,
+            show_overhead=False,
+        )
+
+        self.assertEqual(normal.OperationType, "SINGLE_SWING_LEFT")
+        self.assertEqual(reversed_door.OperationType, normal.OperationType)
+
+        def first_framing_placement(
+            door: ifcopenshell.entity_instance,
+        ) -> np.ndarray:
+            framing = next(
+                aspect
+                for aspect in door.Representation.HasShapeAspects
+                if aspect.Name == "Framing"
+            )
+            representation = next(
+                representation
+                for representation in framing.ShapeRepresentations
+                if representation.ContextOfItems.ContextType == "Model"
+            )
+            return ifcopenshell.util.placement.get_axis2placement(
+                representation.Items[0].Position
+            )
+
+        normal_placement = first_framing_placement(normal)
+        reversed_placement = first_framing_placement(reversed_door)
+        self.assertAlmostEqual(normal_placement[0, 3], reversed_placement[0, 3])
+        self.assertAlmostEqual(normal_placement[1, 3], reversed_placement[1, 3])
+        self.assertAlmostEqual(normal_placement[0, 0], reversed_placement[0, 0])
+        self.assertAlmostEqual(normal_placement[1, 0], -reversed_placement[1, 0])
+
+        normal_plan = ifcopenshell.util.representation.get_representation(
+            normal, "Plan", "Body", "PLAN_VIEW"
+        )
+        reversed_plan = ifcopenshell.util.representation.get_representation(
+            reversed_door, "Plan", "Body", "PLAN_VIEW"
+        )
+        for normal_lining, reversed_lining in zip(
+            normal_plan.Items[:2], reversed_plan.Items[:2]
+        ):
+            self.assertEqual(
+                normal_lining.Points.CoordList,
+                reversed_lining.Points.CoordList,
+            )
+
+        closed_leaf_y = wall.body_offset + wall.thickness
+        normal_leaf = normal_plan.Items[-1]
+        reversed_leaf = reversed_plan.Items[-1]
+        self.assertEqual(
+            tuple(point[0] for point in normal_leaf.Points.CoordList),
+            tuple(point[0] for point in reversed_leaf.Points.CoordList),
+        )
+        self.assertGreater(
+            max(point[1] for point in normal_leaf.Points.CoordList),
+            closed_leaf_y,
+        )
+        self.assertLess(
+            min(point[1] for point in reversed_leaf.Points.CoordList),
+            closed_leaf_y,
+        )
+        normal_arc = normal_plan.Items[-2]
+        reversed_arc = reversed_plan.Items[-2]
+        self.assertAlmostEqual(
+            normal_arc.BasisCurve.Position.Location.Coordinates[0],
+            reversed_arc.BasisCurve.Position.Location.Coordinates[0],
+        )
+        self.assertAlmostEqual(
+            normal_arc.BasisCurve.Position.Location.Coordinates[1],
+            reversed_arc.BasisCurve.Position.Location.Coordinates[1],
+        )
 
     def test_adds_an_unfilled_semantic_wall_opening(self) -> None:
         house = House("My house")

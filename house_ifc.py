@@ -10,6 +10,7 @@ house = House(
 )
 
 ground = house.storey("Ground floor", elevation=0)
+upper = house.storey("Ground floor", elevation=3.0 + 0.25 + 0.11)
 
 load_bearing_wall = house.wall_type(
     "Load bearing wall - VPC 240 mm",
@@ -96,11 +97,45 @@ wall_back.add_window(
 wall_bathroom = ground.wall(
 	(0.25+3, 0.25+2.5), (0.25, 0.25+2.5),
 	wall_type=partition_wall, height=ground_floor_height)
+ground.furniture(
+    "LG",
+    kind="USERDEFINED",
+    size=(0.80, 0.40, 1),
+    color="#ffffff",
+    center=(0.25+2.0, -0.2),
+)
 
 # Kitchen
 wall_kitchen = ground.wall(
 	(0.25+3+0.25+4.5, 0.25+1.75), (0.25+3+0.25, 0.25+1.75),
 	wall_type=partition_wall, height=ground_floor_height)
+kitchen_door = wall_kitchen.add_door(
+	at=1.0,
+	opening_width=1.0, width=0.9,
+	height=0.25+2.125,
+	sill_height=0.2,
+	operation="SINGLE_SWING_LEFT",
+#	reverse_swing=True,
+)
+
+# Pokoj Risanek
+wall_2.add_door(
+	at=8.0-0.25-3.0,
+	opening_width=1.0, width=0.9,
+	height=0.25+2.125,
+	sill_height=0.2,
+	operation="SINGLE_SWING_LEFT",
+#	reverse_swing=True,
+)
+
+# Bathroom
+wall_2.add_door(
+    at=0.25+0.5,
+    width=1.0,
+    height=2.125,
+    sill_height=0.2,
+	reverse_swing=True,
+)
 
 # Main hallway
 stairs1 = ground.stair(
@@ -136,15 +171,60 @@ stair_landing = ground.stair_landing(
 )
 
 # Chimney
-
 chimney = ground.chimney(
-    center=(0.25+3+0.25+4.5+0.25+0.6+0.2, 4+0.21+0.2),
+    center=(0.25+3+0.25+4.5+0.25+0.6+0.2, 4.43),
     size=0.4,
     height=8.0,
     flue_diameter=0.18,
     start_height=0,
     name="Main chimney",
     color="#B8A99A",
+)
+# zed loznice
+ground.wall(
+	(0.25+3+0.25+4.5+0.25, 4.23), (0.25+3+0.25+4.5+0.25+0.55, 4.23),
+	wall_type=partition_wall, height=ground_floor_height)
+w1 = ground.wall(
+	(0.25+3+0.25+4.5+0.25+1, 4.68),
+	(0.25+3+0.25+4.5+0.25+3.5, 4.68),
+	wall_type=partition_wall, height=ground_floor_height)
+# Vyklenek Krb
+w2 = ground.wall(
+	(0.25+3+0.25+4.5+0.25+1.0, 4.68),
+	(0.25+3+0.25+4.5+0.25+1.0, 5.03),
+	wall_type=partition_wall, height=ground_floor_height)
+w3 = ground.wall(
+	(0.25+3+0.25+4.5+0.25+1.0, 4.23+1.0),
+	(0.25+3+0.25+4.5+0.25, 4.23+1.0),
+	wall_type=partition_wall, height=ground_floor_height)
+wall_3.add_opening(
+    at=4.25,
+    width=1.0,
+    height=2.125,
+    sill_height=0.2,
+    name="Fireplace opening",
+)
+ground.connect_wall(w1, w2)
+ground.connect_wall(w2, w3)
+
+ground.furniture(
+    "Krb",
+    kind="USERDEFINED",
+    size=(0.5, 0.5, 1.5),
+    color="#ffff2B",
+    center=(0.25+3+0.25+4.5+0.25, 4.75),
+	start_height=0.2,
+#    rotation=90,
+)
+
+# Loznice
+bed = ground.furniture(
+    "Postel",
+    kind="BED",
+    size=(1.6, 2.0, 0.5),
+    color="#8B5A2B",
+    center=(0.25+3+0.25+4.5+0.25+3.5/2, 8-0.25-1),
+#    rotation=90,
 )
 
 # Opening from main to side hallway
@@ -155,6 +235,78 @@ opening = wall_3.add_opening(
     sill_height=0.2,
     name="Hallway passage",
     show_overhead=True,
+)
+
+# MIAKO
+ceiling1 = upper.miako_slab(
+    "Ceiling 1",
+    start=(0.125, 8.0-0.25+0.04),
+    end=(0.25+3.0+0.125, 8.0-0.25+0.04),
+    top=0,
+	topping=0.11,
+	beam_height=0.25,
+	block_height=0.25,
+    direction=(0, -1),
+    structure=[
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"narrow", "beam",
+		"narrow", "beam",
+		"narrow",
+		],
+)
+ceiling2 = upper.miako_slab(
+    "Ceiling 2",
+    start=(0.25+3.0+0.125, 8.0-0.25+0.04),
+    end=(0.25+3.0+0.25+4.5+0.125, 8.0-0.25+0.04),
+    top=0,
+	topping=0.11,
+	beam_height=0.25,
+	block_height=0.25,
+    direction=(0, -1),
+    structure=[
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"narrow", "beam",
+		"narrow", "beam",
+		"narrow",
+		],
+)
+ceiling3 = upper.miako_slab(
+    "Ceiling 3",
+    start=(0.25+3.0+0.25+4.5+0.15, 8.0-0.25+0.04),
+    end=(0.25+3.0+0.25+4.5+0.15+3.75, 8.0-0.25+0.04),
+    top=0,
+	topping=0.11,
+	beam_height=0.25,
+	block_height=0.25,
+    direction=(0, -1),
+    structure=[
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"beam",
+		],
 )
 
 # Drawing 1

@@ -11,6 +11,13 @@ a text, a tspan { fill: blue !important; text-decoration: underline; }
 a:hover { cursor: pointer; }
 .cut { fill: black; stroke: black; stroke-linecap: round; stroke-width: 0.35; fill-rule: evenodd; }
 .projection { fill: white; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
+.IfcFurniture.projection,
+.IfcFurniture.cut {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.25 !important;
+    stroke-dasharray: 3, 2;
+}
 .surface { stroke: none; fill: #fff; fill-rule: evenodd; }
 .annotation { fill: none; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
 .IfcAnnotation { fill: none; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
