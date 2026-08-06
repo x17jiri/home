@@ -36,7 +36,15 @@ import ifcopenshell.util.placement
 import numpy as np
 
 
-__all__ = ["Drawing", "House", "Storey", "Wall", "generate_plan"]
+__all__ = [
+    "Chimney",
+    "Drawing",
+    "House",
+    "Stair",
+    "Storey",
+    "Wall",
+    "generate_plan",
+]
 
 Number: TypeAlias = int | float
 Point: TypeAlias = tuple[Number, Number]
@@ -394,6 +402,9 @@ class House:
     All public coordinates and dimensions are expressed in metres.  The
     underlying IFC file also uses metres, which keeps generated values easy to
     inspect while remaining compatible with IFC viewers such as Bonsai.
+    ``colors`` may define default 3D colors for ``"chimney"``, ``"wall"``,
+    ``"door"``, ``"stair"``, and ``"window"`` elements using named colors
+    or ``#RGB``/``#RRGGBB`` values.
     """
 
     def __init__(
@@ -407,7 +418,7 @@ class House:
             colors = {}
         elif not isinstance(colors, Mapping):
             raise TypeError("colors must be a mapping")
-        allowed_colors = {"wall", "door", "window"}
+        allowed_colors = {"chimney", "wall", "door", "stair", "window"}
         self._default_colors: dict[str, tuple[float, float, float]] = {}
         for category, color in colors.items():
             if not isinstance(category, str):
@@ -499,7 +510,7 @@ class House:
 
     def _surface_style(
         self,
-        category: Literal["wall", "door", "window"],
+        category: Literal["chimney", "wall", "door", "stair", "window"],
         *,
         color: str | None,
         transparency: Number,
@@ -556,7 +567,8 @@ class House:
         layers are ordered from left to right (local positive Y to negative Y).
         An optional ``"axis"`` item places the wall's reference line at that
         boundary.  Without it, the construction is centred on the reference
-        line.
+        line.  ``color`` and ``transparency`` set the default 3D appearance of
+        wall occurrences using this type.
         """
         type_name = _name(name, "name")
         if isinstance(layers, (str, bytes)):
@@ -730,6 +742,8 @@ class Drawing:
         if self.radius <= 0:
             raise ValueError("radius must be greater than zero")
         self._batting_count = 0
+        self._annotated_stairs: set[int] = set()
+        self._annotated_chimneys: set[int] = set()
 
         model = house.model
         self.element = ifcopenshell.api.root.create_entity(
@@ -942,6 +956,248 @@ class Drawing:
         )
         return annotation
 
+    def add_chimney_annotation(
+        self,
+        chimney: Chimney,
+        *,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a circle with a diagonal half-fill for ``chimney`` to this drawing."""
+        if not isinstance(chimney, Chimney):
+            raise TypeError("chimney must be a Chimney created by Storey.chimney")
+        if chimney.file is not self.house.model:
+            raise ValueError("chimney must belong to this house")
+        if chimney.id() in self._annotated_chimneys:
+            raise ValueError("chimney already has an annotation in this drawing")
+
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} {chimney.Name} Flue Symbol"
+        )
+        model = self.house.model
+        radius = chimney.flue_diameter / 2
+        circle_points = [
+            (
+                radius * cos(radians(index * 360 / 32)),
+                radius * sin(radians(index * 360 / 32)),
+            )
+            for index in range(33)
+        ]
+
+        fill = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{annotation_name} Fill",
+            predefined_type="FILLAREA",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=fill,
+            matrix=chimney.placement.copy(),
+            is_si=True,
+        )
+        fill_points = [
+            (
+                radius * cos(radians(45 + index * 180 / 16)),
+                radius * sin(radians(45 + index * 180 / 16)),
+            )
+            for index in range(17)
+        ]
+        fill_points.append(fill_points[0])
+        fill_curve = model.createIfcIndexedPolyCurve(
+            model.createIfcCartesianPointList2D(fill_points),
+            None,
+            False,
+        )
+        fill_area = model.createIfcAnnotationFillArea(fill_curve, None)
+        fill_representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [fill_area],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=fill,
+            representation=fill_representation,
+        )
+        fill_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=fill,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=fill_pset,
+            properties={"Classes": "chimney-flue-fill"},
+        )
+
+        outline = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=annotation_name,
+            predefined_type="LINEWORK",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=outline,
+            matrix=chimney.placement.copy(),
+            is_si=True,
+        )
+        outline_curve = model.createIfcIndexedPolyCurve(
+            model.createIfcCartesianPointList2D(circle_points),
+            None,
+            False,
+        )
+        outline_representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet([outline_curve])],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=outline,
+            representation=outline_representation,
+        )
+        outline_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=outline,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=outline_pset,
+            properties={"Classes": "chimney-flue"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[fill, outline],
+        )
+        self._annotated_chimneys.add(chimney.id())
+        return outline
+
+    def add_stair_annotation(
+        self,
+        stair: Stair,
+        *,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a conventional plan symbol for ``stair`` to this drawing only.
+
+        The annotation contains the stair outline, tread lines, an upward
+        walking-direction arrow, and a break line at this drawing's cut
+        elevation.  It does not alter the stair's 3D representation.
+        """
+        if not isinstance(stair, Stair):
+            raise TypeError("stair must be a Stair created by Storey.stair")
+        if stair.file is not self.house.model:
+            raise ValueError("stair must belong to this house")
+        if stair.id() in self._annotated_stairs:
+            raise ValueError("stair already has an annotation in this drawing")
+
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} {stair.Name} Plan Symbol"
+        )
+        model = self.house.model
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=annotation_name,
+            predefined_type="LINEWORK",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=stair.placement.copy(),
+            is_si=True,
+        )
+
+        half_width = stair.width / 2
+        tread_length = stair.tread_length
+        polylines: list[list[tuple[float, float]]] = [
+            [
+                (0.0, -half_width),
+                (stair.length, -half_width),
+                (stair.length, half_width),
+                (0.0, half_width),
+                (0.0, -half_width),
+            ]
+        ]
+        for tread in range(1, stair.treads):
+            x = tread * tread_length
+            polylines.append([(x, -half_width), (x, half_width)])
+
+        arrow_start = min(tread_length / 2, stair.length * 0.1)
+        arrow_end = stair.length * 0.85
+        arrow_size = min(stair.width * 0.18, stair.length * 0.06)
+        polylines.extend(
+            [
+                [(arrow_start, 0.0), (arrow_end, 0.0)],
+                [
+                    (arrow_end - arrow_size, -arrow_size),
+                    (arrow_end, 0.0),
+                    (arrow_end - arrow_size, arrow_size),
+                ],
+            ]
+        )
+
+        relative_cut_height = self.z - (
+            stair.storey.elevation + stair.start_height
+        )
+        if 0 < relative_cut_height < stair.height:
+            break_x = stair.length * relative_cut_height / stair.height
+        else:
+            break_x = stair.length * 0.55
+        break_x = min(max(break_x, stair.length * 0.2), stair.length * 0.8)
+        break_offset = min(stair.width * 0.12, stair.length * 0.04)
+        polylines.append(
+            [
+                (break_x - break_offset, -half_width),
+                (break_x + break_offset, -half_width / 3),
+                (break_x - break_offset, half_width / 3),
+                (break_x + break_offset, half_width),
+            ]
+        )
+
+        curves = []
+        for points in polylines:
+            point_list = model.createIfcCartesianPointList2D(points)
+            curves.append(model.createIfcIndexedPolyCurve(point_list, None, False))
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet(curves)],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={"Classes": "stair"},
+        )
+
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        self._annotated_stairs.add(stair.id())
+        return annotation
+
     def render(
         self,
         output: str | PathLike[str],
@@ -986,6 +1242,84 @@ class Drawing:
             blender=blender,
             inkscape=inkscape,
         )
+
+
+class Chimney(ifcopenshell.entity_instance):
+    """An ``IfcChimney`` with a square stack and central circular flue."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+        *,
+        center: tuple[float, float],
+        size: float,
+        height: float,
+        flue_diameter: float,
+        start_height: float,
+        placement: np.ndarray,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "center", center)
+        object.__setattr__(self, "size", size)
+        object.__setattr__(self, "height", height)
+        object.__setattr__(self, "flue_diameter", flue_diameter)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "end_height", start_height + height)
+        object.__setattr__(self, "placement", placement)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this chimney as its underlying IFC entity."""
+        return self
+
+
+class Stair(ifcopenshell.entity_instance):
+    """An ``IfcStair`` containing one straight ``IfcStairFlight``."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+        *,
+        flight: ifcopenshell.entity_instance,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        length: float,
+        width: float,
+        height: float,
+        start_height: float,
+        risers: int,
+        treads: int,
+        riser_height: float,
+        tread_length: float,
+        underside: Literal["solid", "sloped"],
+        waist_thickness: float | None,
+        placement: np.ndarray,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "flight", flight)
+        object.__setattr__(self, "start", start)
+        object.__setattr__(self, "end", end)
+        object.__setattr__(self, "length", length)
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "height", height)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "end_height", start_height + height)
+        object.__setattr__(self, "risers", risers)
+        object.__setattr__(self, "treads", treads)
+        object.__setattr__(self, "riser_height", riser_height)
+        object.__setattr__(self, "tread_length", tread_length)
+        object.__setattr__(self, "underside", underside)
+        object.__setattr__(self, "waist_thickness", waist_thickness)
+        object.__setattr__(self, "placement", placement)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this stair as its underlying IFC entity."""
+        return self
 
 
 class Wall(ifcopenshell.entity_instance):
@@ -1092,7 +1426,7 @@ class Wall(ifcopenshell.entity_instance):
         opening = ifcopenshell.api.root.create_entity(
             model,
             ifc_class="IfcOpeningElement",
-            name=f"{name} Opening",
+            name=name,
             predefined_type="OPENING",
         )
         overlap = 0.05
@@ -1257,12 +1591,68 @@ class Wall(ifcopenshell.entity_instance):
                 ),
             )
 
+    def add_opening(
+        self,
+        *,
+        at: Number,
+        width: Number,
+        height: Number,
+        sill_height: Number = 0,
+        show_overhead: bool = True,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Cut an unfilled rectangular opening in this wall.
+
+        ``at`` locates the start of the opening along the wall and
+        ``sill_height`` locates its bottom above the storey elevation.
+        ``height`` is the vertical size of the opening.  ``show_overhead``
+        adds dashed plan-only wall linework across it.
+        """
+        if not isinstance(show_overhead, bool):
+            raise TypeError("show_overhead must be a boolean")
+        opening_start, width, height, sill_height = self._validate_opening(
+            opening_start=at,
+            width=width,
+            height=height,
+            sill_height=sill_height,
+        )
+
+        self.storey._opening_count += 1
+        opening_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Wall Opening {self.storey._opening_count}"
+        )
+        opening = self._create_opening(
+            name=opening_name,
+            opening_start=opening_start,
+            width=width,
+            height=height,
+            sill_height=sill_height,
+        )
+        self._openings.append(
+            (
+                opening_start,
+                opening_start + width,
+                sill_height,
+                sill_height + height,
+            )
+        )
+        if show_overhead:
+            self._add_dashed_overhead_line(
+                name=opening_name,
+                opening_start=opening_start,
+                opening_width=width,
+            )
+        return opening
+
     def add_door(
         self,
         *,
         at: Number,
         width: Number,
         height: Number,
+        sill_height: Number = 0,
         opening_width: Number | None = None,
         opening_height: Number | None = None,
         operation: DoorOperation = "SINGLE_SWING_LEFT",
@@ -1276,10 +1666,11 @@ class Wall(ifcopenshell.entity_instance):
 
         ``at`` is the start of the rough opening measured from the wall start.
         The actual door is centred horizontally in ``opening_width`` and its
-        bottom remains at the storey elevation.  Opening dimensions default
-        to the door dimensions.  ``open_angle`` rotates only the 3D leaf;
-        ``show_overhead`` adds dashed plan-only wall linework across the rough
-        opening.  ``color`` and ``transparency`` affect only the 3D body.
+        bottom is ``sill_height`` metres above the storey elevation.  Opening
+        dimensions default to the door dimensions.  ``open_angle`` rotates
+        only the 3D leaf; ``show_overhead`` adds dashed plan-only wall linework
+        across the rough opening.  ``color`` and ``transparency`` affect only
+        the 3D body.
         """
         operation = _enum(operation, "operation", _DOOR_OPERATIONS)
         open_angle = _number(open_angle, "open_angle")
@@ -1295,6 +1686,7 @@ class Wall(ifcopenshell.entity_instance):
         at = _number(at, "at")
         width = _number(width, "width")
         height = _number(height, "height")
+        sill_height = _number(sill_height, "sill_height")
         if width <= 0:
             raise ValueError("width must be greater than zero")
         if height <= 0:
@@ -1319,11 +1711,11 @@ class Wall(ifcopenshell.entity_instance):
                 opening_start=at,
                 width=opening_width,
                 height=opening_height,
-                sill_height=0,
+                sill_height=sill_height,
             )
         )
         door_start = opening_start + (opening_width - width) / 2
-        filling_placement = self._placement(door_start, 0)
+        filling_placement = self._placement(door_start, sill_height)
         self.storey._door_count += 1
         door_name = (
             _name(name, "name")
@@ -1331,7 +1723,7 @@ class Wall(ifcopenshell.entity_instance):
             else f"Door {self.storey._door_count}"
         )
         opening = self._create_opening(
-            name=door_name,
+            name=f"{door_name} Opening",
             opening_start=opening_start,
             width=opening_width,
             height=opening_height,
@@ -1402,7 +1794,12 @@ class Wall(ifcopenshell.entity_instance):
             )
         self._place_filling(door, opening, filling_placement)
         self._openings.append(
-            (opening_start, opening_start + opening_width, 0.0, opening_height)
+            (
+                opening_start,
+                opening_start + opening_width,
+                sill_height,
+                sill_height + opening_height,
+            )
         )
         if show_overhead:
             self._add_dashed_overhead_line(
@@ -1457,7 +1854,7 @@ class Wall(ifcopenshell.entity_instance):
             else f"Window {self.storey._window_count}"
         )
         opening = self._create_opening(
-            name=window_name,
+            name=f"{window_name} Opening",
             opening_start=opening_start,
             width=width,
             height=window_height,
@@ -1496,7 +1893,10 @@ class Wall(ifcopenshell.entity_instance):
                 product=window,
                 representation=representation,
             )
-            if context == self.storey.house._body_context and surface_style is not None:
+            if (
+                context == self.storey.house._body_context
+                and surface_style is not None
+            ):
                 ifcopenshell.api.style.assign_representation_styles(
                     model,
                     shape_representation=representation,
@@ -1534,8 +1934,12 @@ class Storey:
         )
         self._wall_count = 0
         self._batting_count = 0
+        self._opening_count = 0
         self._door_count = 0
         self._window_count = 0
+        self._stair_count = 0
+        self._landing_count = 0
+        self._chimney_count = 0
 
     def batting(
         self,
@@ -1617,6 +2021,484 @@ class Storey:
             properties={"Thickness": thickness},
         )
         return annotation
+
+    def chimney(
+        self,
+        center: Point,
+        *,
+        size: Number,
+        height: Number,
+        flue_diameter: Number,
+        start_height: Number = 0,
+        name: str | None = None,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> Chimney:
+        """Create a square chimney with a central circular flue void.
+
+        ``center`` locates the stack in plan, ``size`` is its outside side
+        length, and ``height`` is its vertical extent.  ``start_height`` is
+        measured above this storey's elevation.  ``color`` and
+        ``transparency`` affect only the 3D body.
+        """
+        center_x, center_y = _point(center, "center")
+        size = _number(size, "size")
+        height = _number(height, "height")
+        flue_diameter = _number(flue_diameter, "flue_diameter")
+        start_height = _number(start_height, "start_height")
+        if size <= 0:
+            raise ValueError("size must be greater than zero")
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        if flue_diameter <= 0:
+            raise ValueError("flue_diameter must be greater than zero")
+        if flue_diameter >= size:
+            raise ValueError("flue_diameter must be smaller than size")
+        surface_style = self.house._surface_style(
+            "chimney",
+            color=color,
+            transparency=transparency,
+        )
+
+        self._chimney_count += 1
+        chimney_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Chimney {self._chimney_count}"
+        )
+        model = self.house.model
+        chimney_element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcChimney",
+            name=chimney_name,
+            predefined_type="NOTDEFINED",
+        )
+        placement = np.eye(4)
+        placement[0, 3] = center_x
+        placement[1, 3] = center_y
+        placement[2, 3] = self.elevation + start_height
+        chimney = Chimney(
+            chimney_element,
+            self,
+            center=(center_x, center_y),
+            size=size,
+            height=height,
+            flue_diameter=flue_diameter,
+            start_height=start_height,
+            placement=placement,
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[chimney],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=chimney,
+            matrix=placement,
+            is_si=True,
+        )
+
+        half_size = size / 2
+        outer_points = model.createIfcCartesianPointList2D(
+            [
+                (-half_size, -half_size),
+                (half_size, -half_size),
+                (half_size, half_size),
+                (-half_size, half_size),
+                (-half_size, -half_size),
+            ]
+        )
+        outer_curve = model.createIfcIndexedPolyCurve(
+            outer_points,
+            None,
+            False,
+        )
+        flue_position = model.createIfcAxis2Placement2D(
+            model.createIfcCartesianPoint((0.0, 0.0)),
+            model.createIfcDirection((1.0, 0.0)),
+        )
+        flue_curve = model.createIfcCircle(flue_position, flue_diameter / 2)
+        profile = model.createIfcArbitraryProfileDefWithVoids(
+            "AREA",
+            f"{chimney_name} Profile",
+            outer_curve,
+            [flue_curve],
+        )
+        body = ifcopenshell.api.geometry.add_profile_representation(
+            model,
+            context=self.house._body_context,
+            profile=profile,
+            depth=height,
+            cardinal_point=None,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=chimney,
+            representation=body,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=chimney,
+            name="Pset_ChimneyCommon",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={"NumberOfDrafts": 1},
+        )
+        return chimney
+
+    def stair_landing(
+        self,
+        start: Point,
+        end: Point,
+        *,
+        height: Number,
+        thickness: Number,
+        name: str | None = None,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> ifcopenshell.entity_instance:
+        """Create a rectangular stair landing between two opposite corners.
+
+        ``height`` is the coordinate of the landing's top surface measured
+        above this storey's elevation.  The slab extends downward by
+        ``thickness``.  ``color`` and ``transparency`` affect only its 3D body.
+        """
+        start_x, start_y = _point(start, "start")
+        end_x, end_y = _point(end, "end")
+        height = _number(height, "height")
+        thickness = _number(thickness, "thickness")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        min_x, max_x = sorted((start_x, end_x))
+        min_y, max_y = sorted((start_y, end_y))
+        width = max_x - min_x
+        depth = max_y - min_y
+        if width == 0 or depth == 0:
+            raise ValueError("landing corners must define a rectangle")
+        surface_style = self.house._surface_style(
+            "stair",
+            color=color,
+            transparency=transparency,
+        )
+
+        self._landing_count += 1
+        landing_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Stair Landing {self._landing_count}"
+        )
+        model = self.house.model
+        landing = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcSlab",
+            name=landing_name,
+            predefined_type="LANDING",
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[landing],
+            relating_structure=self.element,
+        )
+        placement = np.eye(4)
+        placement[0, 3] = min_x
+        placement[1, 3] = min_y
+        placement[2, 3] = self.elevation + height - thickness
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=landing,
+            matrix=placement,
+            is_si=True,
+        )
+        body = ifcopenshell.api.geometry.add_slab_representation(
+            model,
+            context=self.house._body_context,
+            depth=thickness,
+            polyline=[
+                (0.0, 0.0),
+                (width, 0.0),
+                (width, depth),
+                (0.0, depth),
+            ],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=landing,
+            representation=body,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+        return landing
+
+    def stair(
+        self,
+        start: Point,
+        end: Point,
+        *,
+        width: Number,
+        height: Number,
+        risers: int,
+        start_height: Number = 0,
+        underside: Literal["solid", "sloped"] = "solid",
+        waist_thickness: Number = 0.15,
+        name: str | None = None,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> Stair:
+        """Create a semantic straight stair rising from ``start`` to ``end``.
+
+        The points define the centre line of the horizontal run, with ``start``
+        at the bottom and ``end`` at the upper landing edge.  ``start_height``
+        is measured above this storey's elevation and defaults to zero.  The
+        stair is centred on its plan line.  Its tread count is one less than
+        ``risers``; riser height and tread length are calculated from the total
+        rise ``height`` and horizontal run.  The returned stair exposes its
+        calculated ``end_height`` for chaining another flight.  ``color`` and
+        ``transparency`` affect only its 3D flight body.  Set ``underside`` to
+        ``"sloped"`` to leave the space beneath the flight open;
+        ``waist_thickness`` is the perpendicular structural thickness between
+        the stair pitch line and its planar underside.
+        """
+        start_x, start_y = _point(start, "start")
+        end_x, end_y = _point(end, "end")
+        width = _number(width, "width")
+        height = _number(height, "height")
+        start_height = _number(start_height, "start_height")
+        if not isinstance(underside, str):
+            raise TypeError("underside must be 'solid' or 'sloped'")
+        if underside not in {"solid", "sloped"}:
+            raise ValueError("underside must be 'solid' or 'sloped'")
+        waist_thickness = _number(waist_thickness, "waist_thickness")
+        if width <= 0:
+            raise ValueError("width must be greater than zero")
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        if waist_thickness <= 0:
+            raise ValueError("waist_thickness must be greater than zero")
+        if isinstance(risers, bool) or not isinstance(risers, int):
+            raise TypeError("risers must be an integer")
+        if risers < 2:
+            raise ValueError("risers must be at least 2")
+
+        delta_x = end_x - start_x
+        delta_y = end_y - start_y
+        length = hypot(delta_x, delta_y)
+        if length == 0:
+            raise ValueError("stair start and end must be different points")
+        treads = risers - 1
+        riser_height = height / risers
+        tread_length = length / treads
+        stepped_rise = treads * riser_height
+        pitch_cosine = length / hypot(length, stepped_rise)
+        underside_vertical_offset = waist_thickness / pitch_cosine
+        if underside == "sloped" and underside_vertical_offset >= stepped_rise:
+            raise ValueError("waist_thickness is too large for the stair flight")
+        surface_style = self.house._surface_style(
+            "stair",
+            color=color,
+            transparency=transparency,
+        )
+
+        self._stair_count += 1
+        stair_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Stair {self._stair_count}"
+        )
+        model = self.house.model
+        stair_element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcStair",
+            name=stair_name,
+            predefined_type="STRAIGHT_RUN_STAIR",
+        )
+        flight = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcStairFlight",
+            name=f"{stair_name} Flight",
+            predefined_type="STRAIGHT",
+        )
+        flight.NumberOfRisers = risers
+        flight.NumberOfTreads = treads
+        flight.RiserHeight = riser_height
+        flight.TreadLength = tread_length
+
+        angle = atan2(delta_y, delta_x)
+        placement = np.eye(4)
+        placement[0, 0] = cos(angle)
+        placement[0, 1] = -sin(angle)
+        placement[1, 0] = sin(angle)
+        placement[1, 1] = cos(angle)
+        placement[0, 3] = start_x
+        placement[1, 3] = start_y
+        placement[2, 3] = self.elevation + start_height
+        stair = Stair(
+            stair_element,
+            self,
+            flight=flight,
+            start=(start_x, start_y),
+            end=(end_x, end_y),
+            length=length,
+            width=width,
+            height=height,
+            start_height=start_height,
+            risers=risers,
+            treads=treads,
+            riser_height=riser_height,
+            tread_length=tread_length,
+            underside=underside,
+            waist_thickness=(
+                waist_thickness if underside == "sloped" else None
+            ),
+            placement=placement,
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[stair],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.aggregate.assign_object(
+            model,
+            products=[flight],
+            relating_object=stair,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=stair,
+            matrix=placement,
+            is_si=True,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=flight,
+            matrix=placement,
+            is_si=True,
+        )
+
+        # Build one closed stepped solid.  A sloped underside is parallel to
+        # the stair pitch line and clipped at the flight's starting elevation,
+        # leaving a short solid bearing at the bottom.  The final riser is a
+        # separate face: the upper storey floor acts as the landing instead of
+        # another tread.
+        profile: list[tuple[float, float]] = [(0.0, 0.0)]
+        if underside == "sloped":
+            underside_end_z = stepped_rise - underside_vertical_offset
+            underside_start_x = (
+                underside_vertical_offset * length / stepped_rise
+            )
+            profile.extend(
+                [
+                    (underside_start_x, 0.0),
+                    (length, underside_end_z),
+                ]
+            )
+        else:
+            profile.append((length, 0.0))
+        profile.append((length, stepped_rise))
+        for tread in range(treads, 0, -1):
+            x = (tread - 1) * tread_length
+            profile.append((x, tread * riser_height))
+            if tread > 1:
+                profile.append((x, (tread - 1) * riser_height))
+
+        half_width = width / 2
+        vertices = [
+            (x, -half_width, z)
+            for x, z in profile
+        ] + [
+            (x, half_width, z)
+            for x, z in profile
+        ]
+        profile_size = len(profile)
+        faces: list[tuple[int, ...]] = [
+            tuple(reversed(range(profile_size))),
+            tuple(range(profile_size, 2 * profile_size)),
+        ]
+        for index in range(profile_size):
+            next_index = (index + 1) % profile_size
+            faces.append(
+                (
+                    index,
+                    next_index,
+                    next_index + profile_size,
+                    index + profile_size,
+                )
+            )
+        final_riser_depth = min(tread_length * 0.025, 0.005)
+        final_riser_x = length - final_riser_depth
+        final_riser_z = treads * riser_height
+        final_riser_vertices = [
+            (final_riser_x, -half_width, final_riser_z),
+            (length, -half_width, final_riser_z),
+            (length, half_width, final_riser_z),
+            (final_riser_x, half_width, final_riser_z),
+            (final_riser_x, -half_width, height),
+            (length, -half_width, height),
+            (length, half_width, height),
+            (final_riser_x, half_width, height),
+        ]
+        final_riser_start = len(vertices)
+        vertices.extend(final_riser_vertices)
+        faces.extend(
+            [
+                tuple(final_riser_start + index for index in (1, 2, 3, 0)),
+                tuple(final_riser_start + index for index in (7, 6, 5, 4)),
+                tuple(final_riser_start + index for index in (4, 5, 1, 0)),
+                tuple(final_riser_start + index for index in (5, 6, 2, 1)),
+                tuple(final_riser_start + index for index in (6, 7, 3, 2)),
+                tuple(final_riser_start + index for index in (7, 4, 0, 3)),
+            ]
+        )
+        body = ifcopenshell.api.geometry.add_mesh_representation(
+            model,
+            context=self.house._body_context,
+            vertices=[vertices],
+            faces=[faces],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=flight,
+            representation=body,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=flight,
+            name="Pset_StairFlightCommon",
+        )
+        pset_properties = {
+            "NumberOfRiser": risers,
+            "NumberOfTreads": treads,
+            "RiserHeight": riser_height,
+            "TreadLength": tread_length,
+        }
+        if underside == "sloped":
+            pset_properties["WaistThickness"] = waist_thickness
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties=pset_properties,
+        )
+        return stair
 
     def wall(
         self,

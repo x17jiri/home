@@ -1,4 +1,5 @@
 import unittest
+from math import hypot
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
@@ -11,10 +12,497 @@ import ifcopenshell.util.placement
 import ifcopenshell.util.representation
 import ifcopenshell.util.shape
 
-from ifc_utils import House, Wall, generate_plan
+from ifc_utils import Chimney, House, Stair, Wall, generate_plan
 
 
 class HouseTests(unittest.TestCase):
+    def assert_surface_style(
+        self,
+        product: ifcopenshell.entity_instance,
+        expected_rgb: tuple[float, float, float],
+        expected_transparency: float = 0,
+    ) -> None:
+        body = ifcopenshell.util.representation.get_representation(
+            product, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertIsNotNone(body)
+        for item in body.Items:
+            self.assertEqual(len(item.StyledByItem), 1)
+            surface_style = item.StyledByItem[0].Styles[0]
+            self.assertTrue(surface_style.is_a("IfcSurfaceStyle"))
+            shading = next(
+                style
+                for style in surface_style.Styles
+                if style.is_a("IfcSurfaceStyleShading")
+            )
+            actual_rgb = (
+                shading.SurfaceColour.Red,
+                shading.SurfaceColour.Green,
+                shading.SurfaceColour.Blue,
+            )
+            for actual, expected in zip(actual_rgb, expected_rgb):
+                self.assertAlmostEqual(actual, expected)
+            self.assertAlmostEqual(shading.Transparency, expected_transparency)
+
+    def test_assigns_3d_colors_with_defaults_and_element_overrides(self) -> None:
+        house = House(
+            "Colored house",
+            colors={
+                "wall": "#F5F5F5",
+                "door": "#8B5A2B",
+                "window": "#4A90E2",
+            },
+        )
+        wall_type = house.wall_type("Brick wall", layers=[("Brick", 0.2)])
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall(
+            (0, 0), (5, 0), wall_type=wall_type, height=3
+        )
+        adjoining_wall = ground.wall(
+            (5, 0), (5, 4), wall_type=wall_type, height=3, color="red"
+        )
+
+        ground.connect_wall(wall, adjoining_wall)
+        door = wall.add_door(
+            at=0.5,
+            width=0.9,
+            height=2.1,
+            show_overhead=False,
+        )
+        window = wall.add_window(
+            at=2.5,
+            width=1,
+            sill_height=1,
+            height=2,
+            color="#369",
+            transparency=0.25,
+        )
+
+        self.assert_surface_style(wall, (245 / 255, 245 / 255, 245 / 255))
+        self.assert_surface_style(adjoining_wall, (1, 0, 0))
+        self.assert_surface_style(door, (139 / 255, 90 / 255, 43 / 255))
+        self.assert_surface_style(window, (0.2, 0.4, 0.6), 0.25)
+
+        for filling in (door, window):
+            plan = ifcopenshell.util.representation.get_representation(
+                filling, "Plan", "Body", "PLAN_VIEW"
+            )
+            self.assertTrue(all(not item.StyledByItem for item in plan.Items))
+
+    def test_rejects_invalid_3d_colors_and_transparency(self) -> None:
+        with self.assertRaisesRegex(TypeError, "colors must be a mapping"):
+            House("Invalid", colors=[("wall", "white")])
+        with self.assertRaisesRegex(ValueError, "wall, window"):
+            House("Invalid", colors={"roof": "red"})
+        with self.assertRaisesRegex(ValueError, "named color"):
+            House("Invalid", colors={"wall": "not-a-color"})
+
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.2, height=3)
+        with self.assertRaisesRegex(ValueError, "between 0 and 1"):
+            wall.add_window(
+                at=1,
+                width=1,
+                sill_height=1,
+                height=2,
+                color="blue",
+                transparency=1.1,
+            )
+
+    def test_creates_semantic_straight_stair_and_scoped_plan_symbol(self) -> None:
+        house = House("My house", colors={"stair": "#C8B090"})
+        ground = house.storey("Ground floor", elevation=0)
+        stair = ground.stair(
+            (2, 1),
+            (5, 1),
+            width=0.9,
+            height=2.75,
+            risers=16,
+            name="Main stair",
+        )
+
+        self.assertIsInstance(stair, Stair)
+        self.assertTrue(stair.is_a("IfcStair"))
+        self.assertIs(stair.element, stair)
+        self.assertEqual(stair.PredefinedType, "STRAIGHT_RUN_STAIR")
+        self.assertIsNone(stair.Representation)
+        self.assertEqual(
+            stair.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+
+        flight = stair.flight
+        self.assertTrue(flight.is_a("IfcStairFlight"))
+        self.assertEqual(flight.PredefinedType, "STRAIGHT")
+        self.assertEqual(flight.Decomposes[0].RelatingObject, stair)
+        self.assertFalse(flight.ContainedInStructure)
+        self.assertEqual(flight.NumberOfRisers, 16)
+        self.assertEqual(flight.NumberOfTreads, 15)
+        self.assertAlmostEqual(flight.RiserHeight, 2.75 / 16)
+        self.assertAlmostEqual(flight.TreadLength, 3 / 15)
+        common = ifcopenshell.util.element.get_pset(
+            flight, "Pset_StairFlightCommon"
+        )
+        self.assertEqual(common["NumberOfRiser"], 16)
+        self.assertEqual(common["NumberOfTreads"], 15)
+
+        placement = ifcopenshell.util.placement.get_local_placement(
+            flight.ObjectPlacement
+        )
+        self.assertEqual(tuple(placement[:3, 3]), (2, 1, 0))
+        body = ifcopenshell.util.representation.get_representation(
+            flight, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "Tessellation")
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), flight
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 3)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_y(shape.geometry), 0.9)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_z(shape.geometry), 2.75)
+        self.assert_surface_style(flight, (200 / 255, 176 / 255, 144 / 255))
+
+        drawing = house.add_drawing("Ground plan", 3.5, 1, 1.6, 5)
+        other_drawing = house.add_drawing("Other plan", 3.5, 1, 1.6, 5)
+        annotation = drawing.add_stair_annotation(stair)
+
+        self.assertEqual(annotation.ObjectType, "LINEWORK")
+        annotation_representation = annotation.Representation.Representations[0]
+        self.assertEqual(
+            annotation_representation.RepresentationType,
+            "GeometricCurveSet",
+        )
+        curve_set = annotation_representation.Items[0]
+        self.assertGreater(len(curve_set.Elements), stair.treads)
+        drawing_members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
+        other_members = set(other_drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(annotation, drawing_members)
+        self.assertFalse(
+            any(
+                member.is_a("IfcAnnotation") and member.ObjectType == "TEXT"
+                for member in drawing_members
+            )
+        )
+        self.assertEqual(other_members, {other_drawing.element})
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "stairs.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(len(reopened.by_type("IfcStair")), 1)
+            self.assertEqual(len(reopened.by_type("IfcStairFlight")), 1)
+
+    def test_creates_chimney_with_flue_and_scoped_plan_symbol(self) -> None:
+        house = House("My house", colors={"chimney": "#B8A99A"})
+        ground = house.storey("Ground floor", elevation=0.25)
+        chimney = ground.chimney(
+            (2, 3),
+            size=0.5,
+            height=6.5,
+            flue_diameter=0.18,
+            start_height=0.1,
+            name="Main chimney",
+        )
+
+        self.assertIsInstance(chimney, Chimney)
+        self.assertTrue(chimney.is_a("IfcChimney"))
+        self.assertIs(chimney.element, chimney)
+        self.assertEqual(chimney.PredefinedType, "NOTDEFINED")
+        self.assertEqual(chimney.center, (2, 3))
+        self.assertEqual(chimney.end_height, 6.6)
+        self.assertEqual(
+            chimney.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            chimney.ObjectPlacement
+        )
+        self.assertEqual(tuple(placement[:2, 3]), (2, 3))
+        self.assertAlmostEqual(placement[2, 3], 0.35)
+
+        body = ifcopenshell.util.representation.get_representation(
+            chimney, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "SweptSolid")
+        profile = body.Items[0].SweptArea
+        self.assertTrue(profile.is_a("IfcArbitraryProfileDefWithVoids"))
+        self.assertEqual(len(profile.InnerCurves), 1)
+        self.assertTrue(profile.InnerCurves[0].is_a("IfcCircle"))
+        self.assertAlmostEqual(profile.InnerCurves[0].Radius, 0.09)
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), chimney
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 0.5)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_y(shape.geometry), 0.5)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_z(shape.geometry), 6.5)
+        expected_volume = (0.5**2 - 3.141592653589793 * 0.09**2) * 6.5
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            expected_volume,
+            delta=0.002,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                chimney, "Pset_ChimneyCommon", "NumberOfDrafts"
+            ),
+            1,
+        )
+        self.assert_surface_style(
+            chimney, (184 / 255, 169 / 255, 154 / 255)
+        )
+
+        drawing = house.add_drawing("Ground plan", 2, 3, 1.6, 3)
+        other_drawing = house.add_drawing("Other plan", 2, 3, 1.6, 3)
+        outline = drawing.add_chimney_annotation(chimney)
+        drawing_members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
+        fill = next(
+            member
+            for member in drawing_members
+            if member.is_a("IfcAnnotation")
+            and ifcopenshell.util.element.get_pset(
+                member, "EPset_Annotation", "Classes"
+            )
+            == "chimney-flue-fill"
+        )
+        self.assertEqual(outline.ObjectType, "LINEWORK")
+        outline_curve = (
+            outline.Representation.Representations[0].Items[0].Elements[0]
+        )
+        self.assertTrue(outline_curve.is_a("IfcIndexedPolyCurve"))
+        self.assertEqual(len(outline_curve.Points.CoordList), 33)
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                fill, "EPset_Annotation", "Classes"
+            ),
+            "chimney-flue-fill",
+        )
+        self.assertEqual(
+            set(other_drawing.group.IsGroupedBy[0].RelatedObjects),
+            {other_drawing.element},
+        )
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "chimney.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(len(reopened.by_type("IfcChimney")), 1)
+
+    def test_rejects_invalid_chimneys_and_duplicate_symbols(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+
+        with self.assertRaisesRegex(ValueError, "size"):
+            ground.chimney((0, 0), size=0, height=5, flue_diameter=0.18)
+        with self.assertRaisesRegex(ValueError, "height"):
+            ground.chimney((0, 0), size=0.5, height=0, flue_diameter=0.18)
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            ground.chimney((0, 0), size=0.5, height=5, flue_diameter=0)
+        with self.assertRaisesRegex(ValueError, "smaller than size"):
+            ground.chimney((0, 0), size=0.5, height=5, flue_diameter=0.5)
+
+        chimney = ground.chimney(
+            (0, 0), size=0.5, height=5, flue_diameter=0.18
+        )
+        drawing = house.add_drawing("Ground plan", 0, 0, 1.6, 3)
+        drawing.add_chimney_annotation(chimney)
+        with self.assertRaisesRegex(ValueError, "already has"):
+            drawing.add_chimney_annotation(chimney)
+
+    def test_rejects_invalid_straight_stairs_and_duplicate_symbols(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+
+        with self.assertRaisesRegex(ValueError, "different points"):
+            ground.stair((1, 1), (1, 1), width=0.9, height=2.75, risers=16)
+        with self.assertRaisesRegex(ValueError, "width"):
+            ground.stair((0, 0), (3, 0), width=0, height=2.75, risers=16)
+        with self.assertRaisesRegex(TypeError, "integer"):
+            ground.stair((0, 0), (3, 0), width=0.9, height=2.75, risers=15.5)
+        with self.assertRaisesRegex(ValueError, "at least 2"):
+            ground.stair((0, 0), (3, 0), width=0.9, height=2.75, risers=1)
+        with self.assertRaisesRegex(TypeError, "underside"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                underside=True,
+            )
+        with self.assertRaisesRegex(ValueError, "underside"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                underside="curved",
+            )
+        with self.assertRaisesRegex(ValueError, "waist_thickness"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                underside="sloped",
+                waist_thickness=0,
+            )
+        with self.assertRaisesRegex(ValueError, "too large"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                underside="sloped",
+                waist_thickness=3,
+            )
+        with self.assertRaisesRegex(ValueError, "define a rectangle"):
+            ground.stair_landing(
+                (0, 0), (2, 0), height=1.5, thickness=0.2
+            )
+        with self.assertRaisesRegex(ValueError, "thickness"):
+            ground.stair_landing(
+                (0, 0), (2, 1), height=1.5, thickness=0
+            )
+
+        stair = ground.stair(
+            (0, 0), (3, 0), width=0.9, height=2.75, risers=16
+        )
+        drawing = house.add_drawing("Ground plan", 1.5, 0, 1.6, 5)
+        drawing.add_stair_annotation(stair)
+        with self.assertRaisesRegex(ValueError, "already has"):
+            drawing.add_stair_annotation(stair)
+
+    def test_cuts_open_space_below_a_sloped_stair_underside(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        stair = ground.stair(
+            (0, 0),
+            (3, 0),
+            width=0.9,
+            height=2.75,
+            risers=16,
+            underside="sloped",
+            waist_thickness=0.15,
+        )
+        solid_stair = ground.stair(
+            (0, 2),
+            (3, 2),
+            width=0.9,
+            height=2.75,
+            risers=16,
+        )
+
+        self.assertEqual(stair.underside, "sloped")
+        self.assertAlmostEqual(stair.waist_thickness, 0.15)
+        self.assertEqual(solid_stair.underside, "solid")
+        self.assertIsNone(solid_stair.waist_thickness)
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                stair.flight,
+                "Pset_StairFlightCommon",
+                "WaistThickness",
+            ),
+            0.15,
+        )
+
+        body = ifcopenshell.util.representation.get_representation(
+            stair.flight, "Model", "Body", "MODEL_VIEW"
+        )
+        coordinates = body.Items[0].Coordinates.CoordList
+        stepped_rise = stair.treads * stair.riser_height
+        pitch_cosine = stair.length / hypot(stair.length, stepped_rise)
+        vertical_offset = stair.waist_thickness / pitch_cosine
+        expected_start_x = vertical_offset * stair.length / stepped_rise
+        self.assertAlmostEqual(coordinates[1][0], expected_start_x)
+        self.assertAlmostEqual(coordinates[1][2], 0)
+        self.assertAlmostEqual(coordinates[2][0], stair.length)
+        self.assertAlmostEqual(
+            coordinates[2][2],
+            stepped_rise - vertical_offset,
+        )
+
+        settings = ifcopenshell.geom.settings()
+        open_shape = ifcopenshell.geom.create_shape(settings, stair.flight)
+        solid_shape = ifcopenshell.geom.create_shape(
+            settings, solid_stair.flight
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(open_shape.geometry), stair.length
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(open_shape.geometry), stair.height
+        )
+        self.assertLess(
+            ifcopenshell.util.shape.get_volume(open_shape.geometry),
+            ifcopenshell.util.shape.get_volume(solid_shape.geometry),
+        )
+
+    def test_chains_an_elevated_stair_flight_from_the_previous_flight(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.25)
+        lower = ground.stair(
+            (0, 3),
+            (0, 0),
+            width=1,
+            height=1.5,
+            risers=9,
+            name="Lower flight",
+        )
+        upper = ground.stair(
+            (-1, 0),
+            (-1, 3),
+            width=1,
+            height=1.5,
+            risers=9,
+            start_height=lower.end_height,
+            name="Upper flight",
+        )
+        landing = ground.stair_landing(
+            (-1.5, -1),
+            (0.5, 0),
+            height=lower.end_height,
+            thickness=0.2,
+            name="Half landing",
+            color="#C8B090",
+        )
+
+        self.assertEqual(lower.start_height, 0)
+        self.assertEqual(lower.end_height, 1.5)
+        self.assertEqual(upper.start_height, lower.end_height)
+        self.assertEqual(upper.end_height, 3)
+        upper_placement = ifcopenshell.util.placement.get_local_placement(
+            upper.flight.ObjectPlacement
+        )
+        self.assertAlmostEqual(upper_placement[2, 3], 1.75)
+        self.assertTrue(landing.is_a("IfcSlab"))
+        self.assertEqual(landing.PredefinedType, "LANDING")
+        self.assertEqual(
+            landing.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        landing_placement = ifcopenshell.util.placement.get_local_placement(
+            landing.ObjectPlacement
+        )
+        self.assertEqual(tuple(landing_placement[:2, 3]), (-1.5, -1))
+        self.assertAlmostEqual(landing_placement[2, 3], 1.55)
+        landing_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), landing
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(landing_shape.geometry), 2
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(landing_shape.geometry), 1
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(landing_shape.geometry), 0.2
+        )
+        self.assert_surface_style(landing, (200 / 255, 176 / 255, 144 / 255))
+
     def test_connects_and_mitres_two_layered_walls(self) -> None:
         house = House("My house")
         wall_type = house.wall_type(
@@ -156,6 +644,7 @@ class HouseTests(unittest.TestCase):
             at=0.5,
             width=0.9,
             height=2.1,
+            sill_height=0.2,
             opening_width=1.1,
             opening_height=2.2,
             operation="SINGLE_SWING_RIGHT",
@@ -207,6 +696,7 @@ class HouseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(opening_placement[0, 3], 1)
         self.assertAlmostEqual(opening_placement[1, 3], 2.5)
+        self.assertAlmostEqual(opening_placement[2, 3], 0.2)
         opening_body = ifcopenshell.util.representation.get_representation(
             door_opening, "Model", "Body", "MODEL_VIEW"
         )
@@ -263,7 +753,7 @@ class HouseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(door_placement[0, 3], 1)
         self.assertAlmostEqual(door_placement[1, 3], 2.6)
-        self.assertAlmostEqual(door_placement[2, 3], 0)
+        self.assertAlmostEqual(door_placement[2, 3], 0.2)
         window_placement = ifcopenshell.util.placement.get_local_placement(
             window.ObjectPlacement
         )
@@ -296,6 +786,20 @@ class HouseTests(unittest.TestCase):
             wall.add_door(at=1, width=0.9, height=2.1, operation="REVOLVING")
         with self.assertRaisesRegex(ValueError, "between 0 and 180"):
             wall.add_door(at=1, width=0.9, height=2.1, open_angle=181)
+        with self.assertRaisesRegex(ValueError, "sill_height"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                sill_height=-0.1,
+            )
+        with self.assertRaisesRegex(ValueError, "wall height"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                sill_height=1,
+            )
         with self.assertRaisesRegex(ValueError, "opening_width"):
             wall.add_door(
                 at=1,
@@ -317,6 +821,13 @@ class HouseTests(unittest.TestCase):
                 height=2.1,
                 show_overhead="yes",
             )
+        with self.assertRaisesRegex(TypeError, "show_overhead"):
+            wall.add_opening(
+                at=1,
+                width=1,
+                height=2,
+                show_overhead="yes",
+            )
         with self.assertRaisesRegex(ValueError, "partition must be one of"):
             wall.add_window(
                 at=3,
@@ -336,12 +847,70 @@ class HouseTests(unittest.TestCase):
 
         wall.add_door(at=1, width=0.9, height=2.1)
         with self.assertRaisesRegex(ValueError, "overlaps"):
+            wall.add_opening(at=1, width=1, height=2)
+        with self.assertRaisesRegex(ValueError, "overlaps"):
             wall.add_window(
                 at=1,
                 width=1,
                 height=2,
                 sill_height=1,
             )
+
+    def test_adds_an_unfilled_semantic_wall_opening(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.25)
+        wall = ground.wall((1, 2), (1, 7), thickness=0.25, height=3)
+        opening = wall.add_opening(
+            at=0.5,
+            width=1.2,
+            height=2,
+            sill_height=0.2,
+            name="Kitchen passage",
+        )
+
+        self.assertTrue(opening.is_a("IfcOpeningElement"))
+        self.assertEqual(opening.Name, "Kitchen passage")
+        self.assertEqual(opening.PredefinedType, "OPENING")
+        self.assertEqual(opening.VoidsElements[0].RelatingBuildingElement, wall)
+        self.assertFalse(opening.HasFillings)
+        placement = ifcopenshell.util.placement.get_local_placement(
+            opening.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[0, 3], 1)
+        self.assertAlmostEqual(placement[1, 3], 2.5)
+        self.assertAlmostEqual(placement[2, 3], 0.45)
+        body = ifcopenshell.util.representation.get_representation(
+            opening, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertAlmostEqual(body.Items[0].Depth, 2)
+
+        wall_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), wall
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(wall_shape.geometry),
+            5 * 0.25 * 3 - 1.2 * 0.25 * 2,
+        )
+        overhead = next(
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if annotation.ObjectType == "LINEWORK"
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                overhead, "EPset_Annotation", "Classes"
+            ),
+            "dashed",
+        )
+        drawing = house.add_drawing("Ground plan", 1, 4.5, 1.5, 4)
+        self.assertIn(overhead, drawing.group.IsGroupedBy[0].RelatedObjects)
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "opening.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(len(reopened.by_type("IfcOpeningElement")), 1)
+            self.assertEqual(len(reopened.by_type("IfcDoor")), 0)
 
     def test_writes_a_file_that_ifcopenshell_can_reopen(self) -> None:
         house = House("My house")

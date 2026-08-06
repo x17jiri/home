@@ -88,3 +88,27 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 marker[id^="batting-"] path {
     stroke-width: 0.05 !important;
 }
+
+/* Only "Partition wall - VPC 115 mm" */
+.cut.material-PartitionwallVPC115mm {
+    fill: url(#diagonal1) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcChimney.cut {
+    fill: url(#brick) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.PredefinedType-FILLAREA.chimney-flue-fill {
+    fill: black !important;
+    stroke: none !important;
+}
+
+.PredefinedType-LINEWORK.chimney-flue {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.25 !important;
+}
