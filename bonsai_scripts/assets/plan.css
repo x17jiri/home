@@ -74,12 +74,17 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 /* Editable house material rules. */
 .cut.layer-material-Brick {
     fill: url(#brick) !important;
-    stroke: rgb(225, 5, 5);
-    stroke-width: 0.18;
+    stroke: black;
+    stroke-width: 0.05 !important;
 }
 
 .cut.layer-material-Rockwool {
     fill: yellow !important;
     stroke: black;
-    stroke-width: 0.18;
+    stroke-width: 0.05 !important;
+}
+
+/* Bonsai generates batting marker paths with an inline 0.18 stroke. */
+marker[id^="batting-"] path {
+    stroke-width: 0.05 !important;
 }
