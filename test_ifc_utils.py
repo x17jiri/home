@@ -1317,6 +1317,77 @@ class HouseTests(unittest.TestCase):
             {"Axis", "Body"},
         )
 
+    def test_stacks_an_elevated_wall_part_above_a_lower_wall(self) -> None:
+        house = House("My house")
+        wall_type = house.wall_type("Brick", layers=[("Brick", 0.2)])
+        upper = house.storey("Upper floor", elevation=3)
+        lower = upper.wall(
+            (0, 0),
+            (6, 0),
+            wall_type=wall_type,
+            height=2.4,
+        )
+        raised = upper.wall(
+            (2, 0),
+            (4, 0),
+            wall_type=wall_type,
+            start_height=lower.end_height,
+            height=1.2,
+        )
+
+        self.assertEqual(lower.start_height, 0)
+        self.assertEqual(lower.end_height, 2.4)
+        self.assertEqual(raised.start_height, 2.4)
+        self.assertAlmostEqual(raised.end_height, 3.6)
+        placement = ifcopenshell.util.placement.get_local_placement(
+            raised.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[2, 3], 5.4)
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), raised
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 2)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_y(shape.geometry), 0.2)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_z(shape.geometry), 1.2)
+
+        window = raised.add_window(
+            at=0.5,
+            width=1,
+            sill_height=2.5,
+            height=3.3,
+        )
+        window_placement = ifcopenshell.util.placement.get_local_placement(
+            window.ObjectPlacement
+        )
+        self.assertAlmostEqual(window_placement[2, 3], 5.5)
+        with self.assertRaisesRegex(ValueError, "below the wall"):
+            raised.add_opening(
+                at=0,
+                width=0.25,
+                sill_height=2.3,
+                height=0.1,
+            )
+        with self.assertRaisesRegex(ValueError, "within the wall height"):
+            raised.add_opening(
+                at=1.75,
+                width=0.25,
+                sill_height=3.5,
+                height=0.2,
+            )
+
+        adjoining = upper.wall(
+            (4, 0),
+            (4, 2),
+            wall_type=wall_type,
+            start_height=2.4,
+            height=1.2,
+        )
+        upper.connect_wall(raised, adjoining)
+        regenerated_placement = ifcopenshell.util.placement.get_local_placement(
+            raised.ObjectPlacement
+        )
+        self.assertAlmostEqual(regenerated_placement[2, 3], 5.4)
+
     def test_clips_a_wall_with_three_world_coordinate_planes(self) -> None:
         house = House("My house", colors={"wall": "white"})
         upper = house.storey("Upper floor", elevation=3)
@@ -2077,6 +2148,14 @@ class HouseTests(unittest.TestCase):
             ground.wall((0, 0), (1, 0), thickness=0, height=2.8)
         with self.assertRaisesRegex(ValueError, "height"):
             ground.wall((0, 0), (1, 0), thickness=0.12, height=-1)
+        with self.assertRaisesRegex(ValueError, "start_height"):
+            ground.wall(
+                (0, 0),
+                (1, 0),
+                thickness=0.12,
+                height=2.8,
+                start_height=-0.1,
+            )
         wall_arguments = {
             "start": (0, 0),
             "end": (2, 0),

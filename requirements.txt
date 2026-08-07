@@ -1,0 +1,2 @@
+matplotlib>=3.6
+ifcopenshell>=0.8,<0.9

@@ -10,7 +10,7 @@ house = House(
 )
 
 ground = house.storey("Ground floor", elevation=0)
-upper = house.storey("Ground floor", elevation=3.0 + 0.25 + 0.11)
+upper = house.storey("Ground floor", elevation=3.0 + 0.25)
 
 load_bearing_wall = house.wall_type(
     "Load bearing wall - VPC 240 mm",
@@ -26,6 +26,14 @@ partition_wall = house.wall_type(
         ("Brick", 0.115),
         "axis",
     ],
+)
+sdk_wall = house.wall_type(
+    "SDK wall - 100 mm",
+    layers=[
+        ("SDK", 0.100),
+        "axis",
+    ],
+	color="#dfefcf"
 )
 
 facade_insulation = house.wall_type(
@@ -88,7 +96,6 @@ wall_back.add_window(
 wall_back.add_window(
 	at=0.25+3.5+0.25+0.5,
 	width=1.5, sill_height=0.25+0.25, height=0.25+2.125)
-
 wall_back.add_window(
 	at=0.25+3.5+0.25+4.5+0.25+0.75,
 	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
@@ -251,7 +258,7 @@ ceiling1 = upper.miako_slab(
     "Ceiling 1",
     start=(0.1, 8.0-0.25+0.04),
     end=(0.25+3.0+0.25-0.15, 8.0-0.25+0.04),
-    top=0,
+    top=0.11,
 	topping=0.11,
 	beam_height=0.25,
 	block_height=0.25,
@@ -276,7 +283,7 @@ ceiling2 = upper.miako_slab(
     "Ceiling 2",
     start=(0.25+3.0+0.125, 8.0-0.25+0.04),
     end=(0.25+3.0+0.25+4.5+0.125, 8.0-0.25+0.04),
-    top=0,
+    top=0.11,
 	topping=0.11,
 	beam_height=0.25,
 	block_height=0.25,
@@ -301,7 +308,7 @@ ceiling3 = upper.miako_slab(
     "Ceiling 3",
     start=(0.25+3.0+0.25+4.5+0.15, 8.0-0.25+0.04),
     end=(0.25+3.0+0.25+4.5+0.15+3.75, 8.0-0.25+0.04),
-    top=0,
+    top=0.11,
 	topping=0.11,
 	beam_height=0.25,
 	block_height=0.25,
@@ -319,7 +326,7 @@ ceiling3 = upper.miako_slab(
 )
 
 # upper floor
-side_cuts = [
+wall_cuts_1_4 = [
 	(
 		(0, 0.125-0.08, 3.25+1.25+0.12),
 		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
@@ -335,28 +342,74 @@ side_cuts = [
 		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25),
 		(5, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25),
 	),
+#	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
+]
+wall_cuts_2_3 = [
+	(
+		(0, 0.125-0.08, 3.25+1.25+0.12),
+		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
+		(5, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
+	),
+	(
+		(0, 8.0-0.125+0.08, 3.25+2.5+0.12),
+		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24),
+		(5, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24),
+	),
+	(
+		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25),
+		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25),
+		(5, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25),
+	),
 ]
 
+wall_dormer = upper.wall((0.25+3+0.25+4.5+0.25, 8), (0.25+3, 8), wall_type=load_bearing_wall, height=1.25, start_height=1.25)
 wall_front = upper.wall((0, 0), (12, 0), wall_type=load_bearing_wall, height=1.25)
 wall_back = upper.wall((12, 8), (0, 8), wall_type=load_bearing_wall, height=1.25)
 wall_1 = upper.wall(
 	(0, 8), (0, 0),
 	wall_type=load_bearing_wall,
 	height=4,
-	cuts=side_cuts,
+	cuts=wall_cuts_1_4,
 )
+wall_1.add_opening(at=0, width=0.25, height=0.25, sill_height=1.25)
+wall_1.add_opening(at=7.75, width=0.25, height=0.25, sill_height=1.25)
 
-#upper.connect_wall(wall_1, wall_front)
-#upper.connect_wall(wall_1, wall_back)
+wall_2 = upper.wall(
+	(wall2_x, 0), (wall2_x, 8),
+	cuts=wall_cuts_2_3,
+	wall_type=load_bearing_wall, height=4)
+wall_3 = upper.wall(
+	(wall3_x, 0), (wall3_x, 8),
+	cuts=wall_cuts_2_3,
+	wall_type=load_bearing_wall, height=4)
 
-#ground.connect_wall(wall_2, wall_front, is_atpath=True)
-#ground.connect_wall(wall_2, wall_back, is_atpath=True)
-#
-#ground.connect_wall(wall_3, wall_front, is_atpath=True)
-#ground.connect_wall(wall_3, wall_back, is_atpath=True)
-#
-#ground.connect_wall(wall_4, wall_front)
-#ground.connect_wall(wall_4, wall_back)
+wall_4 = upper.wall(
+	(12, 0), (12, 8),
+	wall_type=load_bearing_wall,
+	height=4,
+	cuts=wall_cuts_1_4,
+)
+wall_4.add_opening(at=0, width=0.25, height=0.25, sill_height=1.25)
+wall_4.add_opening(at=7.75, width=0.25, height=0.25, sill_height=1.25)
+
+wall_pracovna = upper.wall(
+	start=(0.25+3+0.25+4.5, 2.75),
+	end=(0.25+3+0.25, 2.75),
+	wall_type=sdk_wall, height=4, cuts=wall_cuts_2_3)
+
+upper.connect_wall(wall_1, wall_front)
+upper.connect_wall(wall_1, wall_back)
+
+upper.connect_wall(wall_2, wall_front, is_atpath=True)
+upper.connect_wall(wall_2, wall_back, is_atpath=True)
+upper.connect_wall(wall_2, wall_dormer)
+
+upper.connect_wall(wall_3, wall_front, is_atpath=True)
+upper.connect_wall(wall_3, wall_back, is_atpath=True)
+upper.connect_wall(wall_3, wall_dormer)
+
+upper.connect_wall(wall_4, wall_front)
+upper.connect_wall(wall_4, wall_back)
 
 beam1 = upper.beam(
     "Beam",
@@ -390,6 +443,53 @@ beam4 = upper.beam(
     material="Wood",
     kind="BEAM",
 )
+beam_dormer = upper.beam(
+    "Beam",
+    start=(0.25+3+0.25+4.5+0.25, 8-0.125, 3.25+2.5+0.06),
+    end=(0.25+3, 8-0.125, 3.25+2.5+0.06),
+    size=(0.16, 0.12),
+    material="Wood",
+    kind="BEAM",
+)
+
+# Okna obyvak
+wall_dormer.add_window(
+	at=0.25+0.5,width=1.5, sill_height=1.25, height=2.25)
+wall_dormer.add_window(
+	at=0.25+2.5,
+	width=1.5, sill_height=1.25, height=2.25)
+# Dvere obyvak
+wall_3.add_door(
+	at=4.43+0.07+0.125,
+	opening_width=1, width=0.9,
+	height=2.25,
+	sill_height=0.11,
+	operation="SINGLE_SWING_RIGHT")
+# Dvere pokojik nahore
+wall_2.add_door(
+	at=2.75,
+	opening_width=1, width=0.9,
+	height=2.25,
+	sill_height=0.11,
+	operation="SINGLE_SWING_RIGHT")
+wall_2.add_door(
+	at=4.25,
+	opening_width=1, width=0.9,
+	height=2.25,
+	sill_height=0.11,
+	operation="SINGLE_SWING_LEFT")
+# Okna pokojik nahore
+wall_1.add_window(
+	at=2.75,
+	width=1,
+	height=2.25,
+	sill_height=1, partition="SINGLE_PANEL",)
+wall_1.add_window(
+	at=4.25,
+	width=1,
+	height=2.25,
+	sill_height=1, partition="SINGLE_PANEL",)
+
 # Drawing 1
 drawing1 = house.add_drawing("Drawing 1", x=6, y=4, z=0.25+2, radius=8)
 

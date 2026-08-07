@@ -1529,6 +1529,7 @@ class Wall(ifcopenshell.entity_instance):
         end: tuple[float, float],
         length: float,
         height: float,
+        start_height: float,
         thickness: float,
         body_offset: float,
         surface_style: ifcopenshell.entity_instance | None,
@@ -1540,6 +1541,8 @@ class Wall(ifcopenshell.entity_instance):
         object.__setattr__(self, "end", end)
         object.__setattr__(self, "length", length)
         object.__setattr__(self, "height", height)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "end_height", start_height + height)
         object.__setattr__(self, "thickness", thickness)
         object.__setattr__(self, "body_offset", body_offset)
         object.__setattr__(self, "surface_style", surface_style)
@@ -1569,13 +1572,15 @@ class Wall(ifcopenshell.entity_instance):
             raise ValueError("height must be greater than zero")
         if sill_height < 0:
             raise ValueError("sill_height must not be negative")
+        if sill_height < self.start_height:
+            raise ValueError("opening must not start below the wall")
 
         opening_end = opening_start + width
         opening_top = sill_height + height
         tolerance = 1e-9
         if opening_start < -tolerance or opening_end > self.length + tolerance:
             raise ValueError("opening must fit within the wall length")
-        if opening_top > self.height + tolerance:
+        if opening_top > self.end_height + tolerance:
             raise ValueError("opening must fit within the wall height")
 
         for existing_start, existing_end, existing_bottom, existing_top in self._openings:
@@ -3694,6 +3699,7 @@ class Storey:
         *,
         thickness: Number | None = None,
         height: Number,
+        start_height: Number = 0,
         wall_type: ifcopenshell.entity_instance | None = None,
         cuts: Sequence[WallCut] | None = None,
         color: str | None = None,
@@ -3701,11 +3707,12 @@ class Storey:
     ) -> Wall:
         """Create a straight wall whose axis runs from ``start`` to ``end``.
 
-        Points, thickness and height are in metres.  The wall starts at this
-        storey's elevation and extends upwards.  Supply either a direct
-        ``thickness`` or a reusable ``wall_type`` created by
-        :meth:`House.wall_type`.  Direct-thickness walls are centred on their
-        axis; layered walls use their type's optional ``"axis"`` marker.
+        Points, thickness and height are in metres.  ``start_height`` is the
+        wall bottom above this storey's elevation and ``height`` is its
+        vertical extent.  Supply either a direct ``thickness`` or a reusable
+        ``wall_type`` created by :meth:`House.wall_type`.  Direct-thickness
+        walls are centred on their axis; layered walls use their type's
+        optional ``"axis"`` marker.
         Each item in ``cuts`` contains three world-coordinate points defining
         an infinite clipping plane.  Point order does not matter: the side
         containing the original wall centre is retained and the opposite
@@ -3740,10 +3747,13 @@ class Storey:
             body_offset = -thickness / 2
             usage_offset = thickness / 2
         height = _number(height, "height")
+        start_height = _number(start_height, "start_height")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
         if height <= 0:
             raise ValueError("height must be greater than zero")
+        if start_height < 0:
+            raise ValueError("start_height must be zero or greater")
         transparency = _number(transparency, "transparency")
         if not 0 <= transparency <= 1:
             raise ValueError("transparency must be between 0 and 1")
@@ -3771,7 +3781,7 @@ class Storey:
         placement[1, 1] = cos(angle)
         placement[0, 3] = start_x
         placement[1, 3] = start_y
-        placement[2, 3] = self.elevation
+        placement[2, 3] = self.elevation + start_height
 
         if cuts is None:
             supplied_cuts: list[WallCut] = []
@@ -3859,6 +3869,7 @@ class Storey:
             end=(end_x, end_y),
             length=length,
             height=height,
+            start_height=start_height,
             thickness=thickness,
             body_offset=body_offset,
             surface_style=surface_style,
