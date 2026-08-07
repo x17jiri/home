@@ -329,8 +329,8 @@ ceiling3 = upper.miako_slab(
 wall_cuts_1_4 = [
 	(
 		(0, 0.125-0.08, 3.25+1.25+0.12),
-		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
 		(5, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
+		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24),
 	),
 	(
 		(0, 8.0-0.125+0.08, 3.25+1.25+0.12),
@@ -489,6 +489,47 @@ wall_1.add_window(
 	width=1,
 	height=2.25,
 	sill_height=1, partition="SINGLE_PANEL",)
+
+# Roof
+
+roof = upper.roof("Main roof")
+
+street_roof = roof.plane(
+    "Street slope",
+    points=(
+		(0, 0.125-0.08, 3.25+1.25+0.12), # origin
+		(10, 0.125-0.08, 3.25+1.25+0.12), # +X direction
+		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24), # +Y direction
+	),
+    cuts=[((0, 4, 0), (10, 4, 0), (0, 4, 10))],
+)
+garden_roof = roof.plane(
+    "Garden slope",
+    points=(
+		(0, 8.0-0.125+0.08, 3.25+1.25+0.12), # origin
+		(10, 8.0-0.125+0.08, 3.25+1.25+0.12), # +X direction
+		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24), # +Y direction
+	),
+    cuts=[((0, 4, 0), (10, 4, 0), (0, 4, 10))],
+)
+
+for i in range(20):
+	rafter = street_roof.beam(
+		"Rafter 1",
+		start=(0.25+0.65*i, -1),
+		end=(0.25+0.65*i, 6),
+		z_offset=-0.05,
+		size=(0.06, 0.20),
+		kind="RAFTER",
+	)
+	rafter = garden_roof.beam(
+		"Rafter 1",
+		start=(0.25+0.65*i, -1),
+		end=(0.25+0.65*i, 6),
+		z_offset=-0.05,
+		size=(0.06, 0.20),
+		kind="RAFTER",
+	)
 
 # Drawing 1
 drawing1 = house.add_drawing("Drawing 1", x=6, y=4, z=0.25+2, radius=8)

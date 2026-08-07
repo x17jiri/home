@@ -14,7 +14,18 @@ import ifcopenshell.util.representation
 import ifcopenshell.util.shape
 import numpy as np
 
-from ifc_utils import Beam, Chimney, House, MiakoSlab, Stair, Wall, generate_plan
+from ifc_utils import (
+    Beam,
+    Chimney,
+    House,
+    MiakoSlab,
+    Roof,
+    RoofLayer,
+    RoofPlane,
+    Stair,
+    Wall,
+    generate_plan,
+)
 
 
 class HouseTests(unittest.TestCase):
@@ -120,7 +131,7 @@ class HouseTests(unittest.TestCase):
         body = ifcopenshell.util.representation.get_representation(
             rafter, "Model", "Body", "MODEL_VIEW"
         )
-        self.assertEqual(body.RepresentationType, "Tessellation")
+        self.assertEqual(body.RepresentationType, "SweptSolid")
         shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), rafter)
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_volume(shape.geometry),
@@ -178,6 +189,318 @@ class HouseTests(unittest.TestCase):
             upper.beam("Invalid", **(arguments | {"size": (0, 0.2)}))
         with self.assertRaisesRegex(ValueError, "kind must be one of"):
             upper.beam("Invalid", **arguments, kind="COLUMN")
+
+    def test_creates_a_cut_roof_plane_with_local_beams_and_layers(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        cuts = [
+            ((0, 0, 0), (0, 1, 0), (0, 0, 1)),
+            ((6, 0, 0), (6, 1, 0), (6, 0, 1)),
+        ]
+        south = roof.plane(
+            "South slope",
+            points=((0, 0, 4), (6, 0, 4), (0, 4, 6)),
+            cuts=cuts,
+        )
+
+        self.assertIsInstance(roof, Roof)
+        self.assertTrue(roof.is_a("IfcRoof"))
+        self.assertEqual(
+            roof.ContainedInStructure[0].RelatingStructure,
+            upper.element,
+        )
+        self.assertIsInstance(south, RoofPlane)
+        self.assertTrue(south.is_a("IfcElementAssembly"))
+        self.assertEqual(south.ObjectType, "ROOF_PLANE")
+        self.assertEqual(south.Decomposes[0].RelatingObject, roof)
+        self.assertEqual(roof.planes, (south,))
+        self.assertEqual(south.cuts, tuple(cuts))
+        np.testing.assert_allclose(south.x_axis, (1, 0, 0), atol=1e-9)
+        np.testing.assert_allclose(
+            south.y_axis,
+            (0, 2 / np.sqrt(5), 1 / np.sqrt(5)),
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            south.z_axis,
+            (0, -1 / np.sqrt(5), 2 / np.sqrt(5)),
+            atol=1e-9,
+        )
+        world_point = south.to_world((1, 2, 0.3))
+        np.testing.assert_allclose(
+            south.to_local(world_point),
+            (1, 2, 0.3),
+            atol=1e-9,
+        )
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    south, "BBIM_RoofPlane", "Cuts"
+                )
+            ),
+            [[list(point) for point in cut] for cut in cuts],
+        )
+
+        purlin = south.beam(
+            "Purlin",
+            start=(-1, 2),
+            end=(7, 2),
+            z_offset=0.2,
+            size=(0.1, 0.2),
+            kind="PURLIN",
+        )
+        self.assertEqual(purlin.local_start, (-1, 2))
+        self.assertEqual(purlin.local_end, (7, 2))
+        self.assertEqual(purlin.z_offset, 0.2)
+        self.assertAlmostEqual(purlin.centerline_z_offset, 0.3)
+        self.assertAlmostEqual(south.to_local(purlin.start)[2], 0.3)
+        self.assertIs(purlin.roof_plane, south)
+        self.assertFalse(purlin.ContainedInStructure)
+        self.assertEqual(purlin.Decomposes[0].RelatingObject, south)
+        np.testing.assert_allclose(
+            purlin.placement[:3, 2], south.z_axis, atol=1e-9
+        )
+        beam_body = ifcopenshell.util.representation.get_representation(
+            purlin, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(beam_body.RepresentationType, "Clipping")
+        beam_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), purlin
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(beam_shape.geometry),
+            6 * 0.1 * 0.2,
+        )
+        rolled_rafter = south.beam(
+            "Rolled rafter",
+            start=(1, 0),
+            end=(1, 4),
+            z_offset=0.4,
+            size=(0.1, 0.2),
+            kind="RAFTER",
+            rotation=90,
+        )
+        self.assertAlmostEqual(rolled_rafter.centerline_z_offset, 0.45)
+        self.assertAlmostEqual(south.to_local(rolled_rafter.start)[2], 0.45)
+
+        deck = south.layer(
+            "Roof decking",
+            outline=((-1, 0), (7, 0), (7, 4), (-1, 4)),
+            z_offset=0.3,
+            thickness=0.1,
+            material="Wood",
+        )
+        self.assertIsInstance(deck, RoofLayer)
+        self.assertTrue(deck.is_a("IfcSlab"))
+        self.assertEqual(deck.PredefinedType, "ROOF")
+        self.assertEqual(deck.Decomposes[0].RelatingObject, south)
+        self.assertFalse(deck.ContainedInStructure)
+        self.assertEqual(deck.z_offset, 0.3)
+        self.assertEqual(deck.thickness, 0.1)
+        self.assertEqual(ifcopenshell.util.element.get_material(deck).Name, "Wood")
+        layer_body = ifcopenshell.util.representation.get_representation(
+            deck, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(layer_body.RepresentationType, "Clipping")
+        layer_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), deck
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(layer_shape.geometry),
+            6 * 4 * 0.1,
+        )
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "roof.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            reopened_roof = reopened.by_type("IfcRoof")[0]
+            reopened_plane = reopened.by_type("IfcElementAssembly")[0]
+            self.assertEqual(reopened_plane.Decomposes[0].RelatingObject, reopened_roof)
+            self.assertEqual(
+                {part.is_a() for part in reopened_plane.IsDecomposedBy[0].RelatedObjects},
+                {"IfcBeam", "IfcSlab"},
+            )
+
+    def test_adds_existing_elements_to_a_roof_and_validates_planes(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        dormer_wall = upper.wall(
+            (1, 1),
+            (2, 1),
+            thickness=0.2,
+            start_height=2,
+            height=1,
+        )
+        dormer_side = upper.wall(
+            (2, 1),
+            (2, 2),
+            thickness=0.2,
+            start_height=2,
+            height=1,
+        )
+        # Direct-thickness walls cannot be connected, so use a layered pair
+        # to verify connections after roof aggregation separately below.
+        roof.add(dormer_wall, dormer_side)
+        self.assertFalse(dormer_wall.ContainedInStructure)
+        self.assertEqual(dormer_wall.Decomposes[0].RelatingObject, roof)
+
+        wall_type = house.wall_type("Dormer wall", layers=[("Brick", 0.2)])
+        connected_front = upper.wall(
+            (3, 1),
+            (4, 1),
+            wall_type=wall_type,
+            start_height=2,
+            height=1,
+        )
+        connected_side = upper.wall(
+            (4, 1),
+            (4, 2),
+            wall_type=wall_type,
+            start_height=2,
+            height=1,
+        )
+        roof.add(connected_front, connected_side)
+        upper.connect_wall(connected_front, connected_side)
+        self.assertEqual(
+            ifcopenshell.util.element.get_container(
+                connected_front, ifc_class="IfcBuildingStorey"
+            ),
+            upper.element,
+        )
+
+        valid_points = ((0, 0, 4), (4, 0, 4), (0, 3, 6))
+        roof.plane("South", points=valid_points)
+        with self.assertRaisesRegex(ValueError, "name already exists"):
+            roof.plane("South", points=valid_points)
+        with self.assertRaisesRegex(TypeError, "exactly three points"):
+            roof.plane("Invalid", points=valid_points[:2])
+        with self.assertRaisesRegex(ValueError, "first and second"):
+            roof.plane(
+                "Invalid",
+                points=((0, 0, 4), (0, 0, 4), (0, 3, 6)),
+            )
+        with self.assertRaisesRegex(ValueError, "must not be collinear"):
+            roof.plane(
+                "Invalid",
+                points=((0, 0, 4), (1, 0, 4), (2, 0, 4)),
+            )
+        with self.assertRaisesRegex(ValueError, "non-zero global Z"):
+            roof.plane(
+                "Invalid",
+                points=((0, 0, 4), (1, 0, 4), (0, 0, 5)),
+            )
+        with self.assertRaisesRegex(ValueError, "cut 1 points"):
+            roof.plane(
+                "Invalid",
+                points=valid_points,
+                cuts=[((0, 0, 0), (1, 0, 0), (2, 0, 0))],
+            )
+
+    def test_flips_only_the_offset_normal_for_a_mirrored_roof_slope(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        points = ((0, 8, 4), (6, 8, 4), (0, 4, 6))
+        garden = roof.plane(
+            "Garden slope",
+            points=points,
+            cuts=[((0, 4, 0), (10, 4, 0), (0, 4, 10))],
+        )
+
+        self.assertEqual(garden.points, points)
+        self.assertEqual(garden.origin, points[0])
+        self.assertTrue(garden.normal_flipped)
+        np.testing.assert_allclose(garden.x_axis, (1, 0, 0), atol=1e-9)
+        np.testing.assert_allclose(
+            garden.y_axis,
+            (0, -2 / np.sqrt(5), 1 / np.sqrt(5)),
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            garden.z_axis,
+            (0, 1 / np.sqrt(5), 2 / np.sqrt(5)),
+            atol=1e-9,
+        )
+        self.assertGreater(garden.to_world((0, 0, 1))[2], garden.origin[2])
+        np.testing.assert_allclose(
+            garden.to_world((0, np.sqrt(20), 0)),
+            points[2],
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            garden.to_local(points[2]),
+            (0, np.sqrt(20), 0),
+            atol=1e-9,
+        )
+        ifc_placement = ifcopenshell.util.placement.get_local_placement(
+            garden.ObjectPlacement
+        )
+        self.assertAlmostEqual(np.linalg.det(ifc_placement[:3, :3]), 1)
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                garden, "BBIM_RoofPlane", "NormalFlipped"
+            ),
+            True,
+        )
+
+        rafter = garden.beam(
+            "Garden rafter",
+            start=(1, -1),
+            end=(1, 6),
+            z_offset=0,
+            size=(0.12, 0.2),
+            kind="RAFTER",
+        )
+        self.assertAlmostEqual(garden.to_local(rafter.start)[2], 0.1)
+        self.assertGreater(rafter.start[2], garden.to_world((1, -1, 0))[2])
+        rafter_body = ifcopenshell.util.representation.get_representation(
+            rafter, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(rafter_body.RepresentationType, "Clipping")
+        rafter_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), rafter
+        )
+        self.assertGreater(
+            ifcopenshell.util.shape.get_volume(rafter_shape.geometry),
+            0,
+        )
+
+        layer = garden.layer(
+            "Garden decking",
+            outline=((0, 0), (6, 0), (6, 6), (0, 6)),
+            z_offset=0.2,
+            thickness=0.025,
+            material="Wood",
+        )
+        layer_placement = ifcopenshell.util.placement.get_local_placement(
+            layer.ObjectPlacement
+        )
+        self.assertAlmostEqual(np.linalg.det(layer_placement[:3, :3]), 1)
+        np.testing.assert_allclose(
+            layer_placement[:3, 2], garden.z_axis, atol=1e-9
+        )
+        layer_body = ifcopenshell.util.representation.get_representation(
+            layer, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(layer_body.RepresentationType, "Clipping")
+        layer_item = layer_body.Items[0]
+        while layer_item.is_a("IfcBooleanClippingResult"):
+            layer_item = layer_item.FirstOperand
+        profile_points = layer_item.SweptArea.OuterCurve.Points.CoordList
+        self.assertEqual(
+            {round(point[1], 9) for point in profile_points},
+            {-6.0, 0.0},
+        )
+        layer_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), layer
+        )
+        self.assertGreater(
+            ifcopenshell.util.shape.get_volume(layer_shape.geometry),
+            0,
+        )
 
     def test_assigns_3d_colors_with_defaults_and_element_overrides(self) -> None:
         house = House(

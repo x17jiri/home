@@ -45,6 +45,9 @@ __all__ = [
     "Drawing",
     "House",
     "MiakoSlab",
+    "Roof",
+    "RoofLayer",
+    "RoofPlane",
     "Stair",
     "Storey",
     "Wall",
@@ -54,7 +57,8 @@ __all__ = [
 Number: TypeAlias = int | float
 Point: TypeAlias = tuple[Number, Number]
 Point3D: TypeAlias = tuple[Number, Number, Number]
-WallCut: TypeAlias = tuple[Point3D, Point3D, Point3D]
+PlaneCut: TypeAlias = tuple[Point3D, Point3D, Point3D]
+WallCut: TypeAlias = PlaneCut
 Layer: TypeAlias = tuple[str, Number]
 LayerItem: TypeAlias = Layer | Literal["axis"]
 DoorOperation: TypeAlias = Literal[
@@ -211,6 +215,126 @@ def _point_3d(value: Point3D, argument: str) -> tuple[float, float, float]:
         _number(x, f"{argument} x"),
         _number(y, f"{argument} y"),
         _number(z, f"{argument} z"),
+    )
+
+
+def _plane_cuts(
+    value: Sequence[PlaneCut] | None,
+    argument: str = "cuts",
+) -> tuple[
+    tuple[
+        tuple[float, float, float],
+        tuple[float, float, float],
+        tuple[float, float, float],
+    ],
+    ...,
+]:
+    """Validate global three-point clipping planes without choosing a side."""
+    if value is None:
+        return ()
+    if isinstance(value, (str, bytes)):
+        raise TypeError(f"{argument} must be a sequence of three-point planes")
+    try:
+        supplied_cuts = list(value)
+    except TypeError as error:
+        raise TypeError(
+            f"{argument} must be a sequence of three-point planes"
+        ) from error
+
+    result = []
+    for cut_index, supplied_cut in enumerate(supplied_cuts, start=1):
+        if isinstance(supplied_cut, (str, bytes)):
+            raise TypeError(f"cut {cut_index} must contain exactly three points")
+        try:
+            supplied_points = list(supplied_cut)
+        except TypeError as error:
+            raise TypeError(
+                f"cut {cut_index} must contain exactly three points"
+            ) from error
+        if len(supplied_points) != 3:
+            raise TypeError(f"cut {cut_index} must contain exactly three points")
+        points = tuple(
+            _point_3d(point, f"cut {cut_index} point {point_index}")
+            for point_index, point in enumerate(supplied_points, start=1)
+        )
+        normal = np.cross(
+            np.array(points[1], dtype=float) - np.array(points[0], dtype=float),
+            np.array(points[2], dtype=float) - np.array(points[0], dtype=float),
+        )
+        if float(np.linalg.norm(normal)) <= 1e-9:
+            raise ValueError(f"cut {cut_index} points must not be collinear")
+        result.append(points)
+    return tuple(result)
+
+
+def _local_clippings(
+    cuts: Sequence[PlaneCut],
+    placement: np.ndarray,
+    retained_point: Sequence[Number],
+) -> list[dict[str, tuple[float, float, float]]]:
+    """Convert global planes to a product frame, retaining its centre side."""
+    world_to_local = np.linalg.inv(placement)
+    retained_point_vector = np.array(retained_point, dtype=float)
+    result = []
+    for cut_index, cut in enumerate(cuts, start=1):
+        local_points = [
+            (world_to_local @ np.array((*point, 1.0), dtype=float))[:3]
+            for point in cut
+        ]
+        normal = np.cross(
+            local_points[1] - local_points[0],
+            local_points[2] - local_points[0],
+        )
+        normal /= np.linalg.norm(normal)
+        centre_side = float(
+            np.dot(normal, retained_point_vector - local_points[0])
+        )
+        if abs(centre_side) <= 1e-9:
+            raise ValueError(
+                f"cut {cut_index} passes through the element centre; "
+                "the retained side is ambiguous"
+            )
+        if centre_side > 0:
+            normal *= -1
+        result.append(
+            {
+                "location": tuple(float(value) for value in local_points[0]),
+                "normal": tuple(float(value) for value in normal),
+            }
+        )
+    return result
+
+
+def _clip_body_representation(
+    model: ifcopenshell.file,
+    element: ifcopenshell.entity_instance,
+    body: ifcopenshell.entity_instance,
+    clippings: Sequence[dict[str, tuple[float, float, float]]],
+) -> None:
+    """Apply ordered half-space cuts and persist their boolean identifiers."""
+    if not clippings:
+        return
+    item = body.Items[0]
+    clipping_ids = []
+    for clipping in clippings:
+        item = ifcopenshell.api.geometry.clip_solid(
+            model,
+            item=item,
+            location=clipping["location"],
+            normal=clipping["normal"],
+        )
+        clipping_ids.append(item.id())
+    body.Items = [item]
+    body.RepresentationType = "Clipping"
+    boolean_pset = ifcopenshell.api.pset.add_pset(
+        model,
+        product=element,
+        name="BBIM_Boolean",
+    )
+    ifcopenshell.api.pset.edit_pset(
+        model,
+        pset=boolean_pset,
+        properties={"Data": json.dumps(clipping_ids)},
     )
 
 
@@ -1358,6 +1482,8 @@ class Beam(ifcopenshell.entity_instance):
         kind: str,
         material_name: str,
         rotation: float,
+        height_axis: tuple[float, float, float],
+        cuts: tuple[PlaneCut, ...],
         placement: np.ndarray,
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
@@ -1371,11 +1497,492 @@ class Beam(ifcopenshell.entity_instance):
         object.__setattr__(self, "kind", kind)
         object.__setattr__(self, "material_name", material_name)
         object.__setattr__(self, "rotation", rotation)
+        object.__setattr__(self, "height_axis", height_axis)
+        object.__setattr__(self, "cuts", cuts)
         object.__setattr__(self, "placement", placement)
 
     @property
     def element(self) -> ifcopenshell.entity_instance:
         """Return this beam as its underlying IFC entity."""
+        return self
+
+
+class Roof(ifcopenshell.entity_instance):
+    """An ``IfcRoof`` aggregate containing planes and other roof elements."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "_planes", [])
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this roof as its underlying IFC entity."""
+        return self
+
+    @property
+    def planes(self) -> tuple[RoofPlane, ...]:
+        """Return the coordinate planes created beneath this roof."""
+        return tuple(self._planes)
+
+    def add(
+        self,
+        *elements: ifcopenshell.entity_instance,
+    ) -> ifcopenshell.entity_instance:
+        """Aggregate existing IFC elements beneath this roof."""
+        if not elements:
+            raise ValueError("roof.add requires at least one element")
+        normalised = []
+        for index, element in enumerate(elements, start=1):
+            if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a(
+                "IfcElement"
+            ):
+                raise TypeError(f"element {index} must be an IfcElement")
+            if element.file is not self.file:
+                raise ValueError(f"element {index} must belong to this house")
+            if element == self:
+                raise ValueError("a roof cannot aggregate itself")
+            normalised.append(element)
+        return ifcopenshell.api.aggregate.assign_object(
+            self.file,
+            products=normalised,
+            relating_object=self,
+        )
+
+    def plane(
+        self,
+        name: str,
+        *,
+        points: Sequence[Point3D],
+        cuts: Sequence[PlaneCut] | None = None,
+    ) -> RoofPlane:
+        """Create a roof-local frame from three global points.
+
+        The first point is the origin, the second defines local positive X,
+        and the third defines the roof plane and approximate positive Y.  Y is
+        orthogonalised against X.  The perpendicular offset axis is flipped
+        when necessary so positive local Z always has a positive global Z
+        component, without changing the supplied X or Y directions.  ``cuts``
+        are global three-point planes inherited by elements created through
+        the returned plane.
+        """
+        plane_name = _name(name, "name")
+        if any(plane.Name == plane_name for plane in self._planes):
+            raise ValueError(f'roof plane name already exists: "{plane_name}"')
+        if isinstance(points, (str, bytes)):
+            raise TypeError("points must contain exactly three points")
+        try:
+            supplied_points = list(points)
+        except TypeError as error:
+            raise TypeError("points must contain exactly three points") from error
+        if len(supplied_points) != 3:
+            raise TypeError("points must contain exactly three points")
+        origin, x_point, y_point = (
+            _point_3d(point, f"point {index}")
+            for index, point in enumerate(supplied_points, start=1)
+        )
+        origin_vector = np.array(origin, dtype=float)
+        x_direction = np.array(x_point, dtype=float) - origin_vector
+        x_length = float(np.linalg.norm(x_direction))
+        if x_length <= 1e-9:
+            raise ValueError("the first and second roof plane points must differ")
+        x_axis = x_direction / x_length
+        y_hint = np.array(y_point, dtype=float) - origin_vector
+        raw_z_axis = np.cross(x_axis, y_hint)
+        z_length = float(np.linalg.norm(raw_z_axis))
+        if z_length <= 1e-9:
+            raise ValueError("roof plane points must not be collinear")
+        raw_z_axis /= z_length
+        y_axis = np.cross(raw_z_axis, x_axis)
+        y_axis /= np.linalg.norm(y_axis)
+        if abs(float(raw_z_axis[2])) <= 1e-9:
+            raise ValueError(
+                "roof plane must have a normal with a non-zero global Z component"
+            )
+        normal_flipped = bool(raw_z_axis[2] < 0)
+        z_axis = -raw_z_axis if normal_flipped else raw_z_axis
+        geometry_y_sign = -1.0 if normal_flipped else 1.0
+
+        # IFC placements must remain right-handed.  If the user-defined
+        # X/Y directions yield a downward normal, reflect geometry's local Y
+        # while preserving the user coordinate transform separately.
+        placement = np.eye(4)
+        placement[:3, 0] = x_axis
+        placement[:3, 1] = geometry_y_sign * y_axis
+        placement[:3, 2] = z_axis
+        placement[:3, 3] = origin_vector
+        coordinate_matrix = np.eye(4)
+        coordinate_matrix[:3, 0] = x_axis
+        coordinate_matrix[:3, 1] = y_axis
+        coordinate_matrix[:3, 2] = z_axis
+        coordinate_matrix[:3, 3] = origin_vector
+        normalised_cuts = _plane_cuts(cuts)
+
+        assembly = ifcopenshell.api.root.create_entity(
+            self.file,
+            ifc_class="IfcElementAssembly",
+            name=plane_name,
+            predefined_type="USERDEFINED",
+        )
+        assembly.ObjectType = "ROOF_PLANE"
+        assembly.AssemblyPlace = "SITE"
+        ifcopenshell.api.aggregate.assign_object(
+            self.file,
+            products=[assembly],
+            relating_object=self,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            self.file,
+            product=assembly,
+            matrix=placement,
+            is_si=True,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            self.file,
+            product=assembly,
+            name="BBIM_RoofPlane",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            self.file,
+            pset=pset,
+            properties={
+                "Points": json.dumps((origin, x_point, y_point)),
+                "Cuts": json.dumps(normalised_cuts),
+                "NormalFlipped": normal_flipped,
+            },
+        )
+        plane = RoofPlane(
+            assembly,
+            self,
+            points=(origin, x_point, y_point),
+            cuts=normalised_cuts,
+            placement=placement,
+            coordinate_matrix=coordinate_matrix,
+            normal_flipped=normal_flipped,
+        )
+        self._planes.append(plane)
+        return plane
+
+
+class RoofPlane(ifcopenshell.entity_instance):
+    """An IFC assembly providing a local coordinate frame for one roof slope."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        roof: Roof,
+        *,
+        points: tuple[
+            tuple[float, float, float],
+            tuple[float, float, float],
+            tuple[float, float, float],
+        ],
+        cuts: tuple[PlaneCut, ...],
+        placement: np.ndarray,
+        coordinate_matrix: np.ndarray,
+        normal_flipped: bool,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "roof", roof)
+        object.__setattr__(self, "storey", roof.storey)
+        object.__setattr__(self, "points", points)
+        object.__setattr__(self, "origin", points[0])
+        object.__setattr__(self, "cuts", cuts)
+        object.__setattr__(self, "placement", placement)
+        object.__setattr__(self, "coordinate_matrix", coordinate_matrix)
+        object.__setattr__(self, "normal_flipped", normal_flipped)
+        object.__setattr__(self, "geometry_y_sign", -1.0 if normal_flipped else 1.0)
+        object.__setattr__(
+            self,
+            "x_axis",
+            tuple(float(v) for v in coordinate_matrix[:3, 0]),
+        )
+        object.__setattr__(
+            self,
+            "y_axis",
+            tuple(float(v) for v in coordinate_matrix[:3, 1]),
+        )
+        object.__setattr__(
+            self,
+            "z_axis",
+            tuple(float(v) for v in coordinate_matrix[:3, 2]),
+        )
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this roof plane as its underlying IFC assembly."""
+        return self
+
+    def to_world(self, point: Point3D) -> tuple[float, float, float]:
+        """Transform a local XYZ point into global coordinates."""
+        local = _point_3d(point, "point")
+        world = self.coordinate_matrix @ np.array((*local, 1.0), dtype=float)
+        return tuple(float(value) for value in world[:3])
+
+    def to_local(self, point: Point3D) -> tuple[float, float, float]:
+        """Transform a global XYZ point into this plane's coordinates."""
+        world = _point_3d(point, "point")
+        local = np.linalg.inv(self.coordinate_matrix) @ np.array(
+            (*world, 1.0), dtype=float
+        )
+        return tuple(float(value) for value in local[:3])
+
+    def add(
+        self,
+        *elements: ifcopenshell.entity_instance,
+    ) -> ifcopenshell.entity_instance:
+        """Aggregate existing IFC elements beneath this roof plane."""
+        if not elements:
+            raise ValueError("roof_plane.add requires at least one element")
+        normalised = []
+        for index, element in enumerate(elements, start=1):
+            if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a(
+                "IfcElement"
+            ):
+                raise TypeError(f"element {index} must be an IfcElement")
+            if element.file is not self.file:
+                raise ValueError(f"element {index} must belong to this house")
+            if element in {self, self.roof}:
+                raise ValueError("a roof plane cannot aggregate itself or its roof")
+            normalised.append(element)
+        return ifcopenshell.api.aggregate.assign_object(
+            self.file,
+            products=normalised,
+            relating_object=self,
+        )
+
+    def beam(
+        self,
+        name: str,
+        *,
+        start: Point,
+        end: Point,
+        size: Sequence[Number],
+        z_offset: Number = 0,
+        material: str = "Wood",
+        kind: BeamKind = "BEAM",
+        rotation: Number = 0,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> Beam:
+        """Create a plane-local beam with its bottom at ``z_offset``.
+
+        The unrotated section height follows the roof plane's local Z.  When
+        ``rotation`` rolls the section, the centreline is raised as necessary
+        so its lowest point along local Z remains at ``z_offset``.
+        """
+        start_x, start_y = _point(start, "start")
+        end_x, end_y = _point(end, "end")
+        z_offset = _number(z_offset, "z_offset")
+        if isinstance(size, (str, bytes)):
+            raise TypeError("size must contain exactly two dimensions")
+        try:
+            width, height = size
+        except (TypeError, ValueError) as error:
+            raise TypeError(
+                "size must contain exactly two dimensions"
+            ) from error
+        width = _number(width, "size width")
+        height = _number(height, "size height")
+        if width <= 0 or height <= 0:
+            raise ValueError("size dimensions must be greater than zero")
+        rotation = _number(rotation, "rotation")
+        roll = radians(rotation)
+        section_extent_below_centre = (
+            abs(sin(roll)) * width / 2
+            + abs(cos(roll)) * height / 2
+        )
+        centreline_z_offset = z_offset + section_extent_below_centre
+        beam = self.storey.beam(
+            name,
+            start=self.to_world((start_x, start_y, centreline_z_offset)),
+            end=self.to_world((end_x, end_y, centreline_z_offset)),
+            size=(width, height),
+            material=material,
+            kind=kind,
+            rotation=rotation,
+            color=color,
+            transparency=transparency,
+            height_axis=self.z_axis,
+            cuts=self.cuts,
+        )
+        self.add(beam)
+        object.__setattr__(beam, "roof_plane", self)
+        object.__setattr__(beam, "local_start", (start_x, start_y))
+        object.__setattr__(beam, "local_end", (end_x, end_y))
+        object.__setattr__(beam, "z_offset", z_offset)
+        object.__setattr__(beam, "centerline_z_offset", centreline_z_offset)
+        return beam
+
+    def layer(
+        self,
+        name: str,
+        *,
+        outline: Sequence[Point],
+        z_offset: Number = 0,
+        thickness: Number,
+        material: str,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> RoofLayer:
+        """Create an ``IfcSlab/ROOF`` extruded along this plane's positive Z."""
+        layer_name = _name(name, "name")
+        material_name = _name(material, "material")
+        z_offset = _number(z_offset, "z_offset")
+        thickness = _number(thickness, "thickness")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if isinstance(outline, (str, bytes)):
+            raise TypeError("outline must contain at least three points")
+        try:
+            supplied_outline = list(outline)
+        except TypeError as error:
+            raise TypeError("outline must contain at least three points") from error
+        if len(supplied_outline) < 3:
+            raise ValueError("outline must contain at least three points")
+        points = tuple(
+            _point(point, f"outline point {index}")
+            for index, point in enumerate(supplied_outline, start=1)
+        )
+        twice_area = 0.0
+        centroid_x_sum = 0.0
+        centroid_y_sum = 0.0
+        for point, next_point in zip(points, (*points[1:], points[0])):
+            cross = point[0] * next_point[1] - next_point[0] * point[1]
+            twice_area += cross
+            centroid_x_sum += (point[0] + next_point[0]) * cross
+            centroid_y_sum += (point[1] + next_point[1]) * cross
+        if abs(twice_area) <= 1e-9:
+            raise ValueError("outline must enclose a non-zero area")
+        centroid = (
+            centroid_x_sum / (3 * twice_area),
+            centroid_y_sum / (3 * twice_area),
+        )
+        geometry_points = tuple(
+            (x, self.geometry_y_sign * y) for x, y in points
+        )
+        geometry_centroid = (
+            centroid[0],
+            self.geometry_y_sign * centroid[1],
+        )
+
+        placement = self.placement.copy()
+        placement[:3, 3] = np.array(self.to_world((0, 0, z_offset)))
+        clippings = _local_clippings(
+            self.cuts,
+            placement,
+            (geometry_centroid[0], geometry_centroid[1], thickness / 2),
+        )
+        model = self.file
+        element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcSlab",
+            name=layer_name,
+            predefined_type="ROOF",
+        )
+        layer = RoofLayer(
+            element,
+            self,
+            outline=points,
+            z_offset=z_offset,
+            thickness=thickness,
+            material_name=material_name,
+            placement=placement,
+        )
+        self.add(layer)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=layer,
+            matrix=placement,
+            is_si=True,
+        )
+        body = ifcopenshell.api.geometry.add_slab_representation(
+            model,
+            context=self.storey.house._body_context,
+            depth=thickness,
+            polyline=geometry_points,
+        )
+        _clip_body_representation(model, layer, body, clippings)
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=layer,
+            representation=body,
+        )
+        surface_style = self.storey.house._surface_style(
+            "slab",
+            color=color,
+            transparency=transparency,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+        ifc_material = self.storey.house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category=material_name.casefold(),
+            )
+            self.storey.house._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[layer],
+            type="IfcMaterial",
+            material=ifc_material,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=layer,
+            name="BBIM_RoofLayer",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={
+                "RoofPlane": self.GlobalId,
+                "Outline": json.dumps(points),
+                "ZOffset": z_offset,
+                "Thickness": thickness,
+            },
+        )
+        return layer
+
+
+class RoofLayer(ifcopenshell.entity_instance):
+    """A physical ``IfcSlab/ROOF`` layer created in a roof-plane frame."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        plane: RoofPlane,
+        *,
+        outline: tuple[tuple[float, float], ...],
+        z_offset: float,
+        thickness: float,
+        material_name: str,
+        placement: np.ndarray,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "plane", plane)
+        object.__setattr__(self, "roof", plane.roof)
+        object.__setattr__(self, "storey", plane.storey)
+        object.__setattr__(self, "outline", outline)
+        object.__setattr__(self, "z_offset", z_offset)
+        object.__setattr__(self, "thickness", thickness)
+        object.__setattr__(self, "material_name", material_name)
+        object.__setattr__(self, "placement", placement)
+        object.__setattr__(self, "cuts", plane.cuts)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this roof layer as its underlying IFC entity."""
         return self
 
 
@@ -2283,6 +2890,31 @@ class Storey:
         self._landing_count = 0
         self._chimney_count = 0
 
+    def roof(self, name: str) -> Roof:
+        """Create an ``IfcRoof`` aggregate contained by this storey."""
+        roof_name = _name(name, "name")
+        element = ifcopenshell.api.root.create_entity(
+            self.house.model,
+            ifc_class="IfcRoof",
+            name=roof_name,
+            predefined_type="NOTDEFINED",
+        )
+        roof = Roof(element, self)
+        ifcopenshell.api.spatial.assign_container(
+            self.house.model,
+            products=[roof],
+            relating_structure=self.element,
+        )
+        placement = np.eye(4)
+        placement[2, 3] = self.elevation
+        ifcopenshell.api.geometry.edit_object_placement(
+            self.house.model,
+            product=roof,
+            matrix=placement,
+            is_si=True,
+        )
+        return roof
+
     def batting(
         self,
         start: Point,
@@ -2376,6 +3008,8 @@ class Storey:
         rotation: Number = 0,
         color: str | None = None,
         transparency: Number = 0,
+        height_axis: Point3D | None = None,
+        cuts: Sequence[PlaneCut] | None = None,
     ) -> Beam:
         """Create a rectangular beam between two world-coordinate points.
 
@@ -2383,7 +3017,9 @@ class Storey:
         coordinates.  ``size`` is ``(width, height)`` perpendicular to that
         centreline.  The height axis stays as vertical as the beam direction
         permits, while ``rotation`` applies a right-hand roll in degrees about
-        the start-to-end axis.
+        the start-to-end axis.  ``height_axis`` may supply another global
+        reference direction, such as a roof-plane normal.  Global three-point
+        ``cuts`` retain the side containing the uncut beam centre.
 
         IFC4 has no dedicated rafter or purlin enum, so ``"RAFTER"`` and
         ``"PURLIN"`` are stored as user-defined ``IfcBeam`` types.  Wood is
@@ -2417,13 +3053,25 @@ class Storey:
             raise ValueError("beam start and end must be different points")
         local_x = direction / length
 
-        # Project world up into the plane normal to the beam, keeping the
-        # section vertical for horizontal and sloping roof members.  A
-        # vertical member uses world Y as the stable fallback height axis.
-        world_up = np.array((0.0, 0.0, 1.0), dtype=float)
-        local_z = world_up - np.dot(world_up, local_x) * local_x
+        # Project the requested height reference into the plane normal to the
+        # beam.  The default keeps ordinary beam sections as upright as their
+        # direction permits; roof planes supply their own normal instead.
+        supplied_height_axis = height_axis
+        reference_height = np.array(
+            (0.0, 0.0, 1.0)
+            if supplied_height_axis is None
+            else _point_3d(supplied_height_axis, "height_axis"),
+            dtype=float,
+        )
+        reference_length = float(np.linalg.norm(reference_height))
+        if reference_length <= 1e-9:
+            raise ValueError("height_axis must not be a zero vector")
+        reference_height /= reference_length
+        local_z = reference_height - np.dot(reference_height, local_x) * local_x
         local_z_length = float(np.linalg.norm(local_z))
         if local_z_length < 1e-9:
+            if supplied_height_axis is not None:
+                raise ValueError("height_axis must not be parallel to the beam")
             fallback = np.array((0.0, 1.0, 0.0), dtype=float)
             local_z = fallback - np.dot(fallback, local_x) * local_x
             local_z_length = float(np.linalg.norm(local_z))
@@ -2439,6 +3087,12 @@ class Storey:
         placement[:3, 1] = rolled_y
         placement[:3, 2] = rolled_z
         placement[:3, 3] = start_vector
+        normalised_cuts = _plane_cuts(cuts)
+        clippings = _local_clippings(
+            normalised_cuts,
+            placement,
+            (length / 2, 0.0, 0.0),
+        )
 
         predefined_type = (
             "USERDEFINED" if kind in {"RAFTER", "PURLIN"} else kind
@@ -2466,32 +3120,22 @@ class Storey:
             is_si=True,
         )
 
-        half_width = width / 2
-        half_height = height / 2
-        vertices = [
-            (0.0, -half_width, -half_height),
-            (length, -half_width, -half_height),
-            (length, half_width, -half_height),
-            (0.0, half_width, -half_height),
-            (0.0, -half_width, half_height),
-            (length, -half_width, half_height),
-            (length, half_width, half_height),
-            (0.0, half_width, half_height),
-        ]
-        faces = [
-            (3, 2, 1, 0),
-            (4, 5, 6, 7),
-            (0, 1, 5, 4),
-            (1, 2, 6, 5),
-            (2, 3, 7, 6),
-            (3, 0, 4, 7),
-        ]
-        body = ifcopenshell.api.geometry.add_mesh_representation(
+        profile = model.createIfcRectangleProfileDef(
+            "AREA",
+            f"{beam_name} Profile",
+            None,
+            width,
+            height,
+        )
+        body = ifcopenshell.api.geometry.add_profile_representation(
             model,
             context=self.house._body_context,
-            vertices=[vertices],
-            faces=[faces],
+            profile=profile,
+            depth=length,
+            cardinal_point="mid-depth centre",
+            placement_zx_axes=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         )
+        _clip_body_representation(model, element, body, clippings)
         ifcopenshell.api.geometry.assign_representation(
             model,
             product=element,
@@ -2552,6 +3196,8 @@ class Storey:
             kind=kind,
             material_name=material_name,
             rotation=rotation,
+            height_axis=tuple(float(value) for value in reference_height),
+            cuts=normalised_cuts,
             placement=placement,
         )
 
@@ -3984,8 +4630,11 @@ class Storey:
                 raise TypeError(f"{argument} must be an IfcWall")
             if wall.file is not self.house.model:
                 raise ValueError(f"{argument} must belong to this house")
-            containers = wall.ContainedInStructure
-            if not containers or containers[0].RelatingStructure != self.element:
+            container = ifcopenshell.util.element.get_container(
+                wall,
+                ifc_class="IfcBuildingStorey",
+            )
+            if container != self.element:
                 raise ValueError(f"{argument} must belong to this storey")
             usage = ifcopenshell.util.element.get_material(wall)
             if not usage or not usage.is_a("IfcMaterialLayerSetUsage"):
