@@ -10,7 +10,7 @@ house = House(
 )
 
 ground = house.storey("Ground floor", elevation=0)
-upper = house.storey("Ground floor", elevation=3.0 + 0.25)
+upper = house.storey("Upper floor", elevation=3.0 + 0.25)
 
 load_bearing_wall = house.wall_type(
     "Load bearing wall - VPC 240 mm",
@@ -183,7 +183,7 @@ CHIMNEY_DIST=0.5
 chimney = ground.chimney(
     center=(0.25+3+0.25+4.5+0.25+CHIMNEY_DIST+0.2, 4.43),
     size=0.4,
-    height=8.0,
+    height=8.5,
     flue_diameter=0.18,
     start_height=0,
     name="Main chimney",
@@ -535,6 +535,36 @@ dormer_roof = roof.plane(
 	],
 )
 
+# Bonsai creates Outliner collections from spatial containers, but flattens
+# ordinary IFC aggregation.  These intentionally artificial storeys provide
+# one portable visibility collection for each roof layer in shared IFC files.
+roof_layer_storeys = {
+	"Rafters": house.storey("Roof - 0: Rafters", elevation=upper.elevation),
+	"Roof sheathing": house.storey("Roof - +1: Sheathing", elevation=upper.elevation),
+	"Roofing underlay": house.storey("Roof - +2: Underlay", elevation=upper.elevation),
+	"Counter-battens": house.storey("Roof - +3: Counter-battens", elevation=upper.elevation),
+	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
+	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
+}
+for layer_name, layer_storey in roof_layer_storeys.items():
+	layer_storey.element.ObjectType = "ROOF_LAYER"
+	layer_storey.element.Description = f"Visibility container for {layer_name}"
+
+RAFTER_Z_OFFSET = -0.05
+RAFTER_SIZE = (0.06, 0.20)
+SHEATHING_THICKNESS = 0.025
+UNDERLAY_THICKNESS = 0.005
+COUNTER_BATTEN_SIZE = (0.04, 0.06)
+TILE_BATTEN_SIZE = (0.05, 0.04)
+TILE_BATTEN_SPACING = 0.32
+ROOF_TILE_THICKNESS = 0.03
+
+SHEATHING_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
+UNDERLAY_BOTTOM = SHEATHING_BOTTOM + SHEATHING_THICKNESS
+COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
+TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
+ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
+
 rafters = [
 	0.03, 0.65, 0.65, 0.65,
 	0.89, ############################################
@@ -554,19 +584,175 @@ rafters = [
 	]
 skip_street = [5, 7, 9, 11, 12, 14, 16, 18, 20]
 skip_garden = [6, 8, 10, 13, 15, 17, 19]
+rafter_positions = []
 rafter_x = 0.25
-for i in range(len(rafters)):
-	rafter_x += rafters[i]
+for distance in rafters:
+	rafter_x += distance
+	rafter_positions.append(rafter_x)
+
+dormer_rafter_indices = [
+	i for i in range(5, 21)
+	if i not in skip_garden
+]
+dormer_x_min = min(rafter_positions[i] for i in dormer_rafter_indices) - RAFTER_SIZE[0] / 2
+dormer_x_max = max(rafter_positions[i] for i in dormer_rafter_indices) + RAFTER_SIZE[0] / 2
+
+
+def add_continuous_roof_layers(plane, name, x_min, x_max, y_min, y_max):
+	outline = (
+		(x_min, y_min),
+		(x_max, y_min),
+		(x_max, y_max),
+		(x_min, y_max),
+	)
+	sheathing = plane.layer(
+		f"{name} roof sheathing",
+		outline=outline,
+		z_offset=SHEATHING_BOTTOM,
+		thickness=SHEATHING_THICKNESS,
+		material="Wood",
+		color="#D1A46F",
+	)
+	roof_layer_storeys["Roof sheathing"].add(sheathing)
+	underlay = plane.layer(
+		f"{name} roofing underlay",
+		outline=outline,
+		z_offset=UNDERLAY_BOTTOM,
+		thickness=UNDERLAY_THICKNESS,
+		material="Roofing underlay",
+		color="#3B4148",
+	)
+	roof_layer_storeys["Roofing underlay"].add(underlay)
+	tiles = plane.layer(
+		f"{name} roof tiles",
+		outline=outline,
+		z_offset=ROOF_TILE_BOTTOM,
+		thickness=ROOF_TILE_THICKNESS,
+		material="Roof tiles",
+		color="#A64B35",
+	)
+	roof_layer_storeys["Roof tiles"].add(tiles)
+
+
+def local_y_limits_from_cuts(plane, local_z=0):
+	"""Return local Y limits for the two constant-global-Y roof cuts."""
+	limits = []
+	for cut in plane.cuts:
+		global_y_values = [point[1] for point in cut]
+		if max(global_y_values) - min(global_y_values) <= 1e-9:
+			limits.append(
+				(
+					global_y_values[0]
+					- plane.origin[1]
+					- local_z * plane.z_axis[1]
+				) / plane.y_axis[1]
+			)
+	if len(limits) != 2:
+		raise ValueError(f"{plane.Name} must have two constant-global-Y cuts")
+	return min(limits), max(limits)
+
+
+def add_tile_battens(plane, name, x_ranges, y_min, y_max):
+	row = 1
+	y = y_min + TILE_BATTEN_SPACING / 2
+	while y < y_max:
+		for segment, (x_min, x_max) in enumerate(x_ranges, start=1):
+			tile_batten = plane.beam(
+				f"{name} tile batten {row}.{segment}",
+				start=(x_min, y),
+				end=(x_max, y),
+				z_offset=TILE_BATTEN_BOTTOM,
+				size=TILE_BATTEN_SIZE,
+				material="Wood",
+				kind="BEAM",
+			)
+			roof_layer_storeys["Tile battens"].add(tile_batten)
+		row += 1
+		y += TILE_BATTEN_SPACING
+
+
+# The continuous layers deliberately overshoot in local Y.  The roof-plane
+# cuts trim them at the ridge and eaves.  Around the dormer, the normal garden
+# slope covers the ridge side and the dormer slope covers the eaves side.
+roof_y_min = -2
+roof_y_max = 7
+add_continuous_roof_layers(
+	street_roof, "Street", 0, 12, roof_y_min, roof_y_max
+)
+add_continuous_roof_layers(
+	garden_roof, "Garden left", 0, dormer_x_min, roof_y_min, roof_y_max
+)
+add_continuous_roof_layers(
+	garden_roof, "Garden right", dormer_x_max, 12, roof_y_min, roof_y_max
+)
+add_continuous_roof_layers(
+	garden_roof, "Garden above dormer",
+	dormer_x_min, dormer_x_max, roof_y_min, 0,
+)
+add_continuous_roof_layers(
+	dormer_roof, "Dormer", dormer_x_min, dormer_x_max, 0, roof_y_max
+)
+
+# A batten whose centre lies completely beyond a cut would retain the wrong
+# half-space, so derive the first and last tile-batten rows from the cuts.  The
+# longer continuous layers and counter-battens can safely overshoot them.
+tile_batten_centerline_z = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1] / 2
+street_y_min, street_y_max = local_y_limits_from_cuts(
+	street_roof, tile_batten_centerline_z
+)
+garden_y_min, garden_y_max = local_y_limits_from_cuts(
+	garden_roof, tile_batten_centerline_z
+)
+dormer_y_min, dormer_y_max = local_y_limits_from_cuts(
+	dormer_roof, tile_batten_centerline_z
+)
+add_tile_battens(
+	street_roof, "Street", [(0, 12)], street_y_min, street_y_max
+)
+add_tile_battens(
+	garden_roof,
+	"Garden outer",
+	[(0, dormer_x_min), (dormer_x_max, 12)],
+	garden_y_min,
+	garden_y_max,
+)
+add_tile_battens(
+	garden_roof,
+	"Garden above dormer",
+	[(dormer_x_min, dormer_x_max)],
+	garden_y_min,
+	0,
+)
+add_tile_battens(
+	dormer_roof,
+	"Dormer",
+	[(dormer_x_min, dormer_x_max)],
+	0,
+	dormer_y_max,
+)
+
+for i, rafter_x in enumerate(rafter_positions):
 	print("rafter_x = ", rafter_x)
 	if i not in skip_street:
 		rafter = street_roof.beam(
 			"Rafter 1",
 			start=(rafter_x, -2),
 			end=(rafter_x, 5),
-			z_offset=-0.05,
-			size=(0.06, 0.20),
+			z_offset=RAFTER_Z_OFFSET,
+			size=RAFTER_SIZE,
 			kind="RAFTER",
 		)
+		roof_layer_storeys["Rafters"].add(rafter)
+		counter_batten = street_roof.beam(
+			f"Street counter-batten {i + 1}",
+			start=(rafter_x, -2),
+			end=(rafter_x, 5),
+			z_offset=COUNTER_BATTEN_BOTTOM,
+			size=COUNTER_BATTEN_SIZE,
+			material="Wood",
+			kind="BEAM",
+		)
+		roof_layer_storeys["Counter-battens"].add(counter_batten)
 
 	if i > 4 and i < 21:
 		if i in skip_garden:
@@ -574,29 +760,62 @@ for i in range(len(rafters)):
 				"Rafter 1",
 				start=(rafter_x, -2),
 				end=(rafter_x, 0.5),
-				z_offset=-0.05,
-				size=(0.06, 0.20),
+				z_offset=RAFTER_Z_OFFSET,
+				size=RAFTER_SIZE,
 				kind="RAFTER",
 			)
+			roof_layer_storeys["Rafters"].add(rafter)
+			counter_batten = garden_roof.beam(
+				f"Garden counter-batten {i + 1}",
+				start=(rafter_x, -2),
+				end=(rafter_x, 0.5),
+				z_offset=COUNTER_BATTEN_BOTTOM,
+				size=COUNTER_BATTEN_SIZE,
+				material="Wood",
+				kind="BEAM",
+			)
+			roof_layer_storeys["Counter-battens"].add(counter_batten)
 		else:
 			rafter = dormer_roof.beam(
 				"Rafter 1",
 				start=(rafter_x, -0.5),
 				end=(rafter_x, 5),
-				z_offset=-0.05,
-				size=(0.06, 0.20),
+				z_offset=RAFTER_Z_OFFSET,
+				size=RAFTER_SIZE,
 				kind="RAFTER",
 			)
+			roof_layer_storeys["Rafters"].add(rafter)
+			counter_batten = dormer_roof.beam(
+				f"Dormer counter-batten {i + 1}",
+				start=(rafter_x, -0.5),
+				end=(rafter_x, 5),
+				z_offset=COUNTER_BATTEN_BOTTOM,
+				size=COUNTER_BATTEN_SIZE,
+				material="Wood",
+				kind="BEAM",
+			)
+			roof_layer_storeys["Counter-battens"].add(counter_batten)
 	else:
 		if i not in skip_garden:
 			rafter = garden_roof.beam(
 				"Rafter 1",
 				start=(rafter_x, -2),
 				end=(rafter_x, 5),
-				z_offset=-0.05,
-				size=(0.06, 0.20),
+				z_offset=RAFTER_Z_OFFSET,
+				size=RAFTER_SIZE,
 				kind="RAFTER",
 			)
+			roof_layer_storeys["Rafters"].add(rafter)
+			counter_batten = garden_roof.beam(
+				f"Garden counter-batten {i + 1}",
+				start=(rafter_x, -2),
+				end=(rafter_x, 5),
+				z_offset=COUNTER_BATTEN_BOTTOM,
+				size=COUNTER_BATTEN_SIZE,
+				material="Wood",
+				kind="BEAM",
+			)
+			roof_layer_storeys["Counter-battens"].add(counter_batten)
 
 # Drawing 1
 drawing1 = house.add_drawing("Drawing 1", x=6, y=4, z=0.25+2, radius=8)

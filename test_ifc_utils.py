@@ -399,6 +399,98 @@ class HouseTests(unittest.TestCase):
                 cuts=[((0, 0, 0), (1, 0, 0), (2, 0, 0))],
             )
 
+    def test_reassigns_roof_parts_to_visibility_storeys(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        south = roof.plane(
+            "South slope",
+            points=((0, 0, 4), (6, 0, 4), (0, 4, 6)),
+        )
+
+        rafter = south.beam(
+            "Rafter",
+            start=(1, 0),
+            end=(1, 4),
+            size=(0.1, 0.2),
+            kind="RAFTER",
+        )
+        sheathing = south.layer(
+            "Sheathing",
+            outline=((0, 0), (6, 0), (6, 4), (0, 4)),
+            thickness=0.025,
+            material="Wood",
+        )
+        rafter_storey = house.storey("Roof - Rafters", elevation=3)
+        sheathing_storey = house.storey("Roof - Sheathing", elevation=3)
+        rafter_storey.add(rafter)
+        sheathing_storey.add(sheathing)
+
+        self.assertFalse(rafter.Decomposes)
+        self.assertFalse(sheathing.Decomposes)
+        self.assertEqual(
+            rafter.ContainedInStructure[0].RelatingStructure,
+            rafter_storey.element,
+        )
+        self.assertEqual(
+            sheathing.ContainedInStructure[0].RelatingStructure,
+            sheathing_storey.element,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_container(rafter),
+            rafter_storey.element,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_container(sheathing),
+            sheathing_storey.element,
+        )
+
+        rafter_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), rafter
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(rafter_shape.geometry),
+            4 * 0.1 * 0.2,
+        )
+        sheathing_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), sheathing
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(sheathing_shape.geometry),
+            6 * 4 * 0.025,
+        )
+
+        with self.assertRaisesRegex(ValueError, "at least one element"):
+            rafter_storey.add()
+        with self.assertRaisesRegex(TypeError, "must be an IfcElement"):
+            rafter_storey.add(upper.element)
+        other_house = House("Other house")
+        other_beam = other_house.storey("Ground", elevation=0).beam(
+            "Other beam",
+            start=(0, 0, 1),
+            end=(1, 0, 1),
+            size=(0.1, 0.2),
+        )
+        with self.assertRaisesRegex(ValueError, "must belong to this house"):
+            rafter_storey.add(other_beam)
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "roof-storeys.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(
+                {
+                    storey.Name
+                    for storey in reopened.by_type("IfcBuildingStorey")
+                },
+                {"Upper floor", "Roof - Rafters", "Roof - Sheathing"},
+            )
+            reopened_rafter = reopened.by_type("IfcBeam")[0]
+            self.assertEqual(
+                reopened_rafter.ContainedInStructure[0].RelatingStructure.Name,
+                "Roof - Rafters",
+            )
+
     def test_flips_only_the_offset_normal_for_a_mirrored_roof_slope(self) -> None:
         house = House("My house")
         upper = house.storey("Upper floor", elevation=3)

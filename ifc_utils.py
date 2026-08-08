@@ -2890,6 +2890,28 @@ class Storey:
         self._landing_count = 0
         self._chimney_count = 0
 
+    def add(
+        self,
+        *elements: ifcopenshell.entity_instance,
+    ) -> ifcopenshell.entity_instance:
+        """Spatially contain existing IFC elements in this storey."""
+        if not elements:
+            raise ValueError("storey.add requires at least one element")
+        normalised = []
+        for index, element in enumerate(elements, start=1):
+            if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a(
+                "IfcElement"
+            ):
+                raise TypeError(f"element {index} must be an IfcElement")
+            if element.file is not self.house.model:
+                raise ValueError(f"element {index} must belong to this house")
+            normalised.append(element)
+        return ifcopenshell.api.spatial.assign_container(
+            self.house.model,
+            products=normalised,
+            relating_structure=self.element,
+        )
+
     def roof(self, name: str) -> Roof:
         """Create an ``IfcRoof`` aggregate contained by this storey."""
         roof_name = _name(name, "name")
