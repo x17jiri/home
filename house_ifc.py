@@ -179,8 +179,9 @@ stair_landing = ground.stair_landing(
 )
 
 # Chimney
+CHIMNEY_DIST=0.5
 chimney = ground.chimney(
-    center=(0.25+3+0.25+4.5+0.25+0.6+0.2, 4.43),
+    center=(0.25+3+0.25+4.5+0.25+CHIMNEY_DIST+0.2, 4.43),
     size=0.4,
     height=8.0,
     flue_diameter=0.18,
@@ -445,8 +446,8 @@ beam4 = upper.beam(
 )
 beam_dormer = upper.beam(
     "Beam",
-    start=(0.25+3+0.25+4.5+0.25, 8-0.125, 3.25+2.5+0.06),
-    end=(0.25+3, 8-0.125, 3.25+2.5+0.06),
+    start=(0.25+3+0.25+4.5+0.25+0.3, 8-0.125, 3.25+2.5+0.06),
+    end=(0.25+3-0.3, 8-0.125, 3.25+2.5+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
@@ -497,39 +498,93 @@ roof = upper.roof("Main roof")
 street_roof = roof.plane(
     "Street slope",
     points=(
-		(0, 0.125-0.08, 3.25+1.25+0.12), # origin
-		(10, 0.125-0.08, 3.25+1.25+0.12), # +X direction
-		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24), # +Y direction
+		(0, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24), # origin
+		(10, 4.0-0.8-0.07, 3.25+2.875+0.25+0.25+0.24), # +X direction
+		(0, 0.125-0.08, 3.25+1.25+0.12), # +Y direction
 	),
     cuts=[((0, 4, 0), (10, 4, 0), (0, 4, 10))],
 )
 garden_roof = roof.plane(
     "Garden slope",
     points=(
-		(0, 8.0-0.125+0.08, 3.25+1.25+0.12), # origin
-		(10, 8.0-0.125+0.08, 3.25+1.25+0.12), # +X direction
-		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24), # +Y direction
+		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24), # origin
+		(10, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24), # +X direction
+		(0, 8.0-0.125+0.08, 3.25+1.25+0.12), # +Y direction
+	),
+    cuts=[((0, 4, 0), (10, 4, 0), (0, 4, 10))],
+)
+dormer_roof = roof.plane(
+    "Dormer slope",
+    points=(
+		(0, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24), # origin
+		(10, 4.0+0.8+0.07, 3.25+2.875+0.25+0.25+0.24), # +X direction
+		(0, 8.0-0.125+0.08, 3.25+2.5+0.12), # +Y direction
 	),
     cuts=[((0, 4, 0), (10, 4, 0), (0, 4, 10))],
 )
 
-for i in range(20):
-	rafter = street_roof.beam(
-		"Rafter 1",
-		start=(0.25+0.65*i, -1),
-		end=(0.25+0.65*i, 6),
-		z_offset=-0.05,
-		size=(0.06, 0.20),
-		kind="RAFTER",
-	)
-	rafter = garden_roof.beam(
-		"Rafter 1",
-		start=(0.25+0.65*i, -1),
-		end=(0.25+0.65*i, 6),
-		z_offset=-0.05,
-		size=(0.06, 0.20),
-		kind="RAFTER",
-	)
+rafters = [
+	0.03, 0.65, 0.65, 0.65,
+	0.89, ############################################
+
+	0.06, 0.59,
+	0.06, 0.59,
+	0.06, 0.59,
+	0.06, 0.59,
+	0.06, 0.59,
+	0.06, 0.59,
+	0.06, 0.59,
+	0.06, 0.59,
+
+	0.06, 0.9,
+	0.65, 0.65, 0.65,
+	0.49 #############################################
+	]
+skip_street = [5, 7, 9, 11, 12, 14, 16, 18, 20]
+skip_garden = [6, 8, 10, 13, 15, 17, 19]
+rafter_x = 0.25
+for i in range(len(rafters)):
+	rafter_x += rafters[i]
+	print("rafter_x = ", rafter_x)
+	if i not in skip_street:
+		rafter = street_roof.beam(
+			"Rafter 1",
+			start=(rafter_x, -2),
+			end=(rafter_x, 5),
+			z_offset=-0.05,
+			size=(0.06, 0.20),
+			kind="RAFTER",
+		)
+
+	if i > 4 and i < 21:
+		if i in skip_garden:
+			rafter = garden_roof.beam(
+				"Rafter 1",
+				start=(rafter_x, -2),
+				end=(rafter_x, 0.5),
+				z_offset=-0.05,
+				size=(0.06, 0.20),
+				kind="RAFTER",
+			)
+		else:
+			rafter = dormer_roof.beam(
+				"Rafter 1",
+				start=(rafter_x, -0.5),
+				end=(rafter_x, 5),
+				z_offset=-0.05,
+				size=(0.06, 0.20),
+				kind="RAFTER",
+			)
+	else:
+		if i not in skip_garden:
+			rafter = garden_roof.beam(
+				"Rafter 1",
+				start=(rafter_x, -2),
+				end=(rafter_x, 5),
+				z_offset=-0.05,
+				size=(0.06, 0.20),
+				kind="RAFTER",
+			)
 
 # Drawing 1
 drawing1 = house.add_drawing("Drawing 1", x=6, y=4, z=0.25+2, radius=8)
