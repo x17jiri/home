@@ -298,6 +298,8 @@ class HouseTests(unittest.TestCase):
         self.assertFalse(deck.ContainedInStructure)
         self.assertEqual(deck.z_offset, 0.3)
         self.assertEqual(deck.thickness, 0.1)
+        self.assertEqual(deck.cuts, tuple(cuts))
+        self.assertEqual(deck.extra_cuts, ())
         self.assertEqual(ifcopenshell.util.element.get_material(deck).Name, "Wood")
         layer_body = ifcopenshell.util.representation.get_representation(
             deck, "Model", "Body", "MODEL_VIEW"
@@ -321,6 +323,71 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(
                 {part.is_a() for part in reopened_plane.IsDecomposedBy[0].RelatedObjects},
                 {"IfcBeam", "IfcSlab"},
+            )
+
+    def test_appends_layer_specific_cuts_to_roof_plane_cuts(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        plane_cuts = [
+            ((0, 0, 0), (0, 1, 0), (0, 0, 1)),
+            ((6, 0, 0), (6, 1, 0), (6, 0, 1)),
+        ]
+        extra_cut = ((0, 3, 0), (6, 3, 0), (0, 3, 10))
+        plane = roof.plane(
+            "Flat roof",
+            points=((0, 0, 4), (6, 0, 4), (0, 4, 4)),
+            cuts=plane_cuts,
+        )
+
+        layer = plane.layer(
+            "Trimmed plasterboard",
+            outline=((-1, 0), (7, 0), (7, 4), (-1, 4)),
+            thickness=0.1,
+            material="Gypsum plasterboard",
+            extra_cuts=[extra_cut],
+        )
+
+        self.assertEqual(layer.extra_cuts, (extra_cut,))
+        self.assertEqual(layer.cuts, (*plane_cuts, extra_cut))
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    layer, "BBIM_RoofLayer", "ExtraCuts"
+                )
+            ),
+            [[list(point) for point in extra_cut]],
+        )
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    layer, "BBIM_RoofLayer", "Cuts"
+                )
+            ),
+            [[list(point) for point in cut] for cut in (*plane_cuts, extra_cut)],
+        )
+        body = ifcopenshell.util.representation.get_representation(
+            layer, "Model", "Body", "MODEL_VIEW"
+        )
+        item = body.Items[0]
+        clipping_count = 0
+        while item.is_a("IfcBooleanClippingResult"):
+            clipping_count += 1
+            item = item.FirstOperand
+        self.assertEqual(clipping_count, 3)
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), layer)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            6 * 3 * 0.1,
+        )
+
+        with self.assertRaisesRegex(ValueError, "cut 1 points"):
+            plane.layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1), (0, 1)),
+                thickness=0.1,
+                material="Wood",
+                extra_cuts=[((0, 0, 0), (1, 0, 0), (2, 0, 0))],
             )
 
     def test_adds_existing_elements_to_a_roof_and_validates_planes(self) -> None:

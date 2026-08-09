@@ -1828,8 +1828,9 @@ class RoofPlane(ifcopenshell.entity_instance):
         material: str,
         color: str | None = None,
         transparency: Number = 0,
+        extra_cuts: Sequence[PlaneCut] | None = None,
     ) -> RoofLayer:
-        """Create an ``IfcSlab/ROOF`` extruded along this plane's positive Z."""
+        """Create a roof layer, optionally appending global clipping planes."""
         layer_name = _name(name, "name")
         material_name = _name(material, "material")
         z_offset = _number(z_offset, "z_offset")
@@ -1869,11 +1870,13 @@ class RoofPlane(ifcopenshell.entity_instance):
             centroid[0],
             self.geometry_y_sign * centroid[1],
         )
+        normalised_extra_cuts = _plane_cuts(extra_cuts)
+        effective_cuts = (*self.cuts, *normalised_extra_cuts)
 
         placement = self.placement.copy()
         placement[:3, 3] = np.array(self.to_world((0, 0, z_offset)))
         clippings = _local_clippings(
-            self.cuts,
+            effective_cuts,
             placement,
             (geometry_centroid[0], geometry_centroid[1], thickness / 2),
         )
@@ -1892,6 +1895,8 @@ class RoofPlane(ifcopenshell.entity_instance):
             thickness=thickness,
             material_name=material_name,
             placement=placement,
+            cuts=effective_cuts,
+            extra_cuts=normalised_extra_cuts,
         )
         self.add(layer)
         ifcopenshell.api.geometry.edit_object_placement(
@@ -1950,6 +1955,8 @@ class RoofPlane(ifcopenshell.entity_instance):
                 "Outline": json.dumps(points),
                 "ZOffset": z_offset,
                 "Thickness": thickness,
+                "Cuts": json.dumps(effective_cuts),
+                "ExtraCuts": json.dumps(normalised_extra_cuts),
             },
         )
         return layer
@@ -1968,6 +1975,8 @@ class RoofLayer(ifcopenshell.entity_instance):
         thickness: float,
         material_name: str,
         placement: np.ndarray,
+        cuts: tuple[PlaneCut, ...],
+        extra_cuts: tuple[PlaneCut, ...],
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "plane", plane)
@@ -1978,7 +1987,8 @@ class RoofLayer(ifcopenshell.entity_instance):
         object.__setattr__(self, "thickness", thickness)
         object.__setattr__(self, "material_name", material_name)
         object.__setattr__(self, "placement", placement)
-        object.__setattr__(self, "cuts", plane.cuts)
+        object.__setattr__(self, "cuts", cuts)
+        object.__setattr__(self, "extra_cuts", extra_cuts)
 
     @property
     def element(self) -> ifcopenshell.entity_instance:

@@ -381,10 +381,12 @@ wall_2 = upper.wall(
 	(wall2_x, 0), (wall2_x, 8),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
+wall_2.add_opening(at=3.5, width=1, height=0.25, sill_height=UNDER_HOLE)
 wall_3 = upper.wall(
 	(wall3_x, 0), (wall3_x, 8),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
+wall_3.add_opening(at=3.5, width=1, height=0.25, sill_height=UNDER_HOLE)
 
 wall_4 = upper.wall(
 	(12, 0), (12, 8),
@@ -396,9 +398,23 @@ wall_4.add_opening(at=0, width=0.25, height=0.25, sill_height=1.25)
 wall_4.add_opening(at=7.75, width=0.25, height=0.25, sill_height=1.25)
 
 wall_pracovna = upper.wall(
-	start=(0.25+3+0.25+4.5, 2.75),
-	end=(0.25+3+0.25, 2.75),
+	start=(0.25+3+0.25+4.5, 2.7),
+	end=(0.25+3+0.25, 2.7),
 	wall_type=sdk_wall, height=4, cuts=wall_cuts_2_3)
+wall_pracovna.add_door(
+	at=2.2,
+	opening_width=1, width=0.9,
+	height=2.25,
+	sill_height=0.11,
+	operation="SINGLE_SWING_RIGHT")
+upper.furniture(
+    "zachod nahore",
+    kind="USERDEFINED",
+    size=(1.2, 1, 2.1),
+    color="#ffff2B",
+    center=(3.5+0.6, 0.25+2.35-0.5),
+	start_height=0.11,
+)
 
 upper.connect_wall(wall_1, wall_front)
 upper.connect_wall(wall_1, wall_back)
@@ -498,6 +514,13 @@ wall_1.add_window(
 
 roof = upper.roof("Main roof")
 
+roof_inner_cuts = [
+	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
+	((0, 7.75, 0), (10, 7.75, 0), (0, 7.75, 10)),
+	((0.25, 0, 0), (0.25, 10, 0), (0.25, 0, 10)),
+	((11.75, 0, 0), (11.75, 10, 0), (11.75, 0, 10)),
+]
+
 street_roof = roof.plane(
     "Street slope",
     points=(
@@ -539,6 +562,14 @@ dormer_roof = roof.plane(
 # ordinary IFC aggregation.  These intentionally artificial storeys provide
 # one portable visibility collection for each roof layer in shared IFC files.
 roof_layer_storeys = {
+	"Thermal insulation 100 mm": house.storey(
+		"Roof - -1: 100 mm thermal insulation", elevation=upper.elevation),
+	"Vapour barrier": house.storey(
+		"Roof - -2: Vapour barrier", elevation=upper.elevation),
+	"Thermal insulation 50 mm": house.storey(
+		"Roof - -3: 50 mm thermal insulation", elevation=upper.elevation),
+	"Gypsum plasterboard": house.storey(
+		"Roof - -4: Gypsum plasterboard", elevation=upper.elevation),
 	"Rafters": house.storey("Roof - 0: Rafters", elevation=upper.elevation),
 	"Roof sheathing": house.storey("Roof - +1: Sheathing", elevation=upper.elevation),
 	"Roofing underlay": house.storey("Roof - +2: Underlay", elevation=upper.elevation),
@@ -552,6 +583,10 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 
 RAFTER_Z_OFFSET = -0.05
 RAFTER_SIZE = (0.06, 0.20)
+THERMAL_INSULATION_100_THICKNESS = 0.10
+VAPOUR_BARRIER_THICKNESS = 0.001
+THERMAL_INSULATION_50_THICKNESS = 0.05
+GYPSUM_PLASTERBOARD_THICKNESS = 0.025
 SHEATHING_THICKNESS = 0.025
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.04, 0.06)
@@ -559,6 +594,18 @@ TILE_BATTEN_SIZE = (0.05, 0.04)
 TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.03
 
+THERMAL_INSULATION_100_BOTTOM = (
+	RAFTER_Z_OFFSET - THERMAL_INSULATION_100_THICKNESS
+)
+VAPOUR_BARRIER_BOTTOM = (
+	THERMAL_INSULATION_100_BOTTOM - VAPOUR_BARRIER_THICKNESS
+)
+THERMAL_INSULATION_50_BOTTOM = (
+	VAPOUR_BARRIER_BOTTOM - THERMAL_INSULATION_50_THICKNESS
+)
+GYPSUM_PLASTERBOARD_BOTTOM = (
+	THERMAL_INSULATION_50_BOTTOM - GYPSUM_PLASTERBOARD_THICKNESS
+)
 SHEATHING_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
 UNDERLAY_BOTTOM = SHEATHING_BOTTOM + SHEATHING_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
@@ -598,13 +645,66 @@ dormer_x_min = min(rafter_positions[i] for i in dormer_rafter_indices) - RAFTER_
 dormer_x_max = max(rafter_positions[i] for i in dormer_rafter_indices) + RAFTER_SIZE[0] / 2
 
 
-def add_continuous_roof_layers(plane, name, x_min, x_max, y_min, y_max):
+def add_continuous_roof_layers(
+	plane, name, x_min, x_max, y_min, y_max, *, inner_cuts=[],
+):
+	"""Add the roof build-up with optional global cuts keyed by layer name."""
+	allowed_layers = {
+		"thermal_insulation_100",
+		"vapour_barrier",
+		"thermal_insulation_50",
+		"gypsum_plasterboard",
+		"roof_sheathing",
+		"roofing_underlay",
+		"roof_tiles",
+	}
 	outline = (
 		(x_min, y_min),
 		(x_max, y_min),
 		(x_max, y_max),
 		(x_min, y_max),
 	)
+	insulation_100 = plane.layer(
+		f"{name} 100 mm thermal insulation",
+		outline=outline,
+		z_offset=THERMAL_INSULATION_100_BOTTOM,
+		thickness=THERMAL_INSULATION_100_THICKNESS,
+		material="Thermal insulation",
+		color="#E8D36D",
+		extra_cuts=inner_cuts,
+	)
+	roof_layer_storeys["Thermal insulation 100 mm"].add(insulation_100)
+	vapour_barrier = plane.layer(
+		f"{name} vapour barrier",
+		outline=outline,
+		z_offset=VAPOUR_BARRIER_BOTTOM,
+		thickness=VAPOUR_BARRIER_THICKNESS,
+		material="Vapour barrier",
+		color="#4A90E2",
+		transparency=0.35,
+		extra_cuts=inner_cuts,
+	)
+	roof_layer_storeys["Vapour barrier"].add(vapour_barrier)
+	insulation_50 = plane.layer(
+		f"{name} 50 mm thermal insulation",
+		outline=outline,
+		z_offset=THERMAL_INSULATION_50_BOTTOM,
+		thickness=THERMAL_INSULATION_50_THICKNESS,
+		material="Thermal insulation",
+		color="#E8D36D",
+		extra_cuts=inner_cuts,
+	)
+	roof_layer_storeys["Thermal insulation 50 mm"].add(insulation_50)
+	gypsum_plasterboard = plane.layer(
+		f"{name} gypsum plasterboard",
+		outline=outline,
+		z_offset=GYPSUM_PLASTERBOARD_BOTTOM,
+		thickness=GYPSUM_PLASTERBOARD_THICKNESS,
+		material="Gypsum plasterboard",
+		color="#E8E5DE",
+		extra_cuts=inner_cuts,
+	)
+	roof_layer_storeys["Gypsum plasterboard"].add(gypsum_plasterboard)
 	sheathing = plane.layer(
 		f"{name} roof sheathing",
 		outline=outline,
@@ -674,23 +774,29 @@ def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 # The continuous layers deliberately overshoot in local Y.  The roof-plane
 # cuts trim them at the ridge and eaves.  Around the dormer, the normal garden
 # slope covers the ridge side and the dormer slope covers the eaves side.
-roof_y_min = -2
+roof_y_min = -1.5
 roof_y_max = 7
 add_continuous_roof_layers(
-	street_roof, "Street", 0, 12, roof_y_min, roof_y_max
+	street_roof, "Street", 0, 12, roof_y_min, roof_y_max,
+	inner_cuts=roof_inner_cuts
 )
 add_continuous_roof_layers(
-	garden_roof, "Garden left", 0, dormer_x_min, roof_y_min, roof_y_max
+	garden_roof, "Garden left", 0, dormer_x_min, roof_y_min, roof_y_max,
+	inner_cuts=roof_inner_cuts
 )
 add_continuous_roof_layers(
-	garden_roof, "Garden right", dormer_x_max, 12, roof_y_min, roof_y_max
+	garden_roof, "Garden right", dormer_x_max, 12, roof_y_min, roof_y_max,
+	inner_cuts=roof_inner_cuts
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden above dormer",
 	dormer_x_min, dormer_x_max, roof_y_min, 0,
+	inner_cuts=roof_inner_cuts
 )
 add_continuous_roof_layers(
-	dormer_roof, "Dormer", dormer_x_min, dormer_x_max, 0, roof_y_max
+	dormer_roof, "Dormer", dormer_x_min, dormer_x_max, 0,
+	roof_y_max-1, # overshoot a little less for the dormer so our cuts work properly
+	inner_cuts=roof_inner_cuts
 )
 
 # A batten whose centre lies completely beyond a cut would retain the wrong
