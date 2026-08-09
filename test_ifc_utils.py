@@ -2467,6 +2467,120 @@ class HouseTests(unittest.TestCase):
             ]
             self.assertEqual({drawing.Name for drawing in drawings}, {"Ground plan", "Other plan"})
 
+    def test_scopes_drawing_geometry_and_automatic_annotations_by_storey(
+        self,
+    ) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        upper = house.storey("Upper floor", elevation=3)
+        ground_wall = ground.wall((0, 0), (5, 0), thickness=0.2, height=2.8)
+        upper_wall = upper.wall((0, 0), (5, 0), thickness=0.2, height=2.8)
+
+        # Exercise annotations created after their drawings.
+        ground_drawing = house.add_drawing(
+            "Ground plan", 2.5, 2, 1.6, 4, storeys=[ground]
+        )
+        all_storeys_drawing = house.add_drawing("All storeys", 2.5, 2, 1.6, 4)
+        empty_drawing = house.add_drawing(
+            "No storeys", 2.5, 2, 1.6, 4, storeys=[]
+        )
+        ground_wall.add_door(at=0.5, width=0.9, height=2.1)
+        upper_wall.add_door(at=2, width=0.9, height=2.1)
+        ground.furniture(
+            "Ground table",
+            kind="TABLE",
+            size=(1, 1, 0.75),
+            center=(1, 2),
+        )
+        upper.furniture(
+            "Upper table",
+            kind="TABLE",
+            size=(1, 1, 0.75),
+            center=(3, 2),
+        )
+
+        automatic_annotations = {
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if annotation.ObjectType in {"LINEWORK", "TEXT"}
+        }
+        ground_annotations = {
+            annotation
+            for annotation in automatic_annotations
+            if ifcopenshell.util.element.get_container(annotation) == ground.element
+        }
+        upper_annotations = automatic_annotations - ground_annotations
+
+        def automatic_members(drawing):
+            return (
+                set(drawing.group.IsGroupedBy[0].RelatedObjects)
+                & automatic_annotations
+            )
+
+        self.assertEqual(automatic_members(ground_drawing), ground_annotations)
+        self.assertEqual(
+            automatic_members(all_storeys_drawing), automatic_annotations
+        )
+        self.assertEqual(automatic_members(empty_drawing), set())
+        self.assertEqual(ground_drawing.storeys, (ground,))
+        self.assertEqual(all_storeys_drawing.storeys, (ground, upper))
+        self.assertFalse(ground_drawing.includes_all_storeys)
+        self.assertTrue(all_storeys_drawing.includes_all_storeys)
+
+        ground_include = ifcopenshell.util.element.get_pset(
+            ground_drawing.element, "EPset_Drawing", "Include"
+        )
+        self.assertEqual(ground_include, f'location="{ground.element.GlobalId}"')
+        self.assertIsNone(
+            ifcopenshell.util.element.get_pset(
+                all_storeys_drawing.element, "EPset_Drawing", "Include"
+            )
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                empty_drawing.element, "EPset_Drawing", "Include"
+            ),
+            "0000000000000000000000",
+        )
+
+        # Exercise annotations which already exist when their drawing is made.
+        upper_drawing = house.add_drawing(
+            "Upper plan", 2.5, 2, 4.6, 4, storeys=[upper]
+        )
+        self.assertEqual(automatic_members(upper_drawing), upper_annotations)
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "scoped-drawings.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            reopened_ground = next(
+                drawing
+                for drawing in reopened.by_type("IfcAnnotation")
+                if drawing.ObjectType == "DRAWING" and drawing.Name == "Ground plan"
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    reopened_ground, "EPset_Drawing", "Include"
+                ),
+                f'location="{ground.element.GlobalId}"',
+            )
+
+    def test_rejects_invalid_drawing_storeys(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        other_storey = House("Other house").storey("Ground floor", elevation=0)
+
+        with self.assertRaisesRegex(TypeError, "sequence of Storey"):
+            house.add_drawing(
+                "String", 0, 0, 1.6, 3, storeys="Ground floor"
+            )
+        with self.assertRaisesRegex(TypeError, "storey 1 must be a Storey"):
+            house.add_drawing("Entity", 0, 0, 1.6, 3, storeys=[ground.element])
+        with self.assertRaisesRegex(ValueError, "belong to this house"):
+            house.add_drawing("Foreign", 0, 0, 1.6, 3, storeys=[other_storey])
+        with self.assertRaisesRegex(ValueError, "duplicated"):
+            house.add_drawing("Duplicate", 0, 0, 1.6, 3, storeys=[ground, ground])
+
     def test_renders_a_persisted_drawing_by_global_id(self) -> None:
         house = House("My house")
         drawing = house.add_drawing("Ground plan", 2, 3, 1.6, 5)

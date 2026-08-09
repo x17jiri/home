@@ -891,12 +891,27 @@ class House:
         y: Number,
         z: Number,
         radius: Number,
+        *,
+        storeys: Sequence[Storey] | None = None,
     ) -> Drawing:
-        """Add a persisted square plan drawing to this IFC model."""
+        """Add a persisted square plan drawing to this IFC model.
+
+        ``storeys`` limits both model geometry and automatic plan annotations
+        to the supplied building storeys.  When omitted, all storeys are
+        included.  Drawing-specific annotations are always included.
+        """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
             raise ValueError(f'drawing name already exists: "{drawing_name}"')
-        drawing = Drawing(self, drawing_name, x=x, y=y, z=z, radius=radius)
+        drawing = Drawing(
+            self,
+            drawing_name,
+            x=x,
+            y=y,
+            z=z,
+            radius=radius,
+            storeys=storeys,
+        )
         self._drawings.append(drawing)
         return drawing
 
@@ -955,6 +970,7 @@ class Drawing:
         y: Number,
         z: Number,
         radius: Number,
+        storeys: Sequence[Storey] | None,
     ) -> None:
         self.house = house
         self.name = name
@@ -967,6 +983,30 @@ class Drawing:
         self._batting_count = 0
         self._annotated_stairs: set[int] = set()
         self._annotated_chimneys: set[int] = set()
+        self._includes_all_storeys = storeys is None
+        if storeys is None:
+            self._storeys: tuple[Storey, ...] = ()
+        else:
+            if isinstance(storeys, (str, bytes)):
+                raise TypeError("storeys must be a sequence of Storey objects")
+            try:
+                supplied_storeys = list(storeys)
+            except TypeError as error:
+                raise TypeError(
+                    "storeys must be a sequence of Storey objects"
+                ) from error
+            normalised_storeys = []
+            seen_storeys: set[int] = set()
+            for index, storey in enumerate(supplied_storeys, start=1):
+                if not isinstance(storey, Storey):
+                    raise TypeError(f"storey {index} must be a Storey")
+                if storey.house is not house:
+                    raise ValueError(f"storey {index} must belong to this house")
+                if storey.element.id() in seen_storeys:
+                    raise ValueError(f"storey {index} is duplicated")
+                seen_storeys.add(storey.element.id())
+                normalised_storeys.append(storey)
+            self._storeys = tuple(normalised_storeys)
 
         model = house.model
         self.element = ifcopenshell.api.root.create_entity(
@@ -1033,11 +1073,18 @@ class Drawing:
             group=self.group,
             products=[self.element],
         )
-        if house._plan_annotations:
+        plan_annotations = [
+            annotation
+            for annotation in house._plan_annotations
+            if self._includes_storey_element(
+                ifcopenshell.util.element.get_container(annotation)
+            )
+        ]
+        if plan_annotations:
             ifcopenshell.api.group.assign_group(
                 model,
                 group=self.group,
-                products=house._plan_annotations,
+                products=plan_annotations,
             )
 
         project_dir = Path(__file__).resolve().parent
@@ -1047,28 +1094,39 @@ class Drawing:
             product=self.element,
             name="EPset_Drawing",
         )
+        drawing_properties = {
+            "TargetView": "PLAN_VIEW",
+            "Scale": "1/100",
+            "HumanScale": "1:100",
+            "HasUnderlay": False,
+            "HasLinework": True,
+            "HasAnnotation": True,
+            "GlobalReferencing": True,
+            "DPI": 96,
+            "LineworkMode": "OPENCASCADE",
+            "FillMode": "NONE",
+            "CutMode": "BISECT",
+            "Stylesheet": str(project_dir / "bonsai_scripts" / "assets" / "plan.css"),
+            "Markers": str(drawing_assets / "markers.svg"),
+            "Symbols": str(drawing_assets / "symbols.svg"),
+            "Patterns": str(drawing_assets / "patterns.svg"),
+            "ShadingStyles": str(drawing_assets / "shading_styles.json"),
+            "CurrentShadingStyle": "Technical",
+        }
+        if not self._includes_all_storeys:
+            drawing_properties["Include"] = (
+                "+".join(
+                    f'location="{storey.element.GlobalId}"'
+                    for storey in self._storeys
+                )
+                # A deliberately nonexistent IFC GUID makes an explicitly
+                # empty storey list select no model elements in Bonsai.
+                or "0000000000000000000000"
+            )
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=self._drawing_pset,
-            properties={
-                "TargetView": "PLAN_VIEW",
-                "Scale": "1/100",
-                "HumanScale": "1:100",
-                "HasUnderlay": False,
-                "HasLinework": True,
-                "HasAnnotation": True,
-                "GlobalReferencing": True,
-                "DPI": 96,
-                "LineworkMode": "OPENCASCADE",
-                "FillMode": "NONE",
-                "CutMode": "BISECT",
-                "Stylesheet": str(project_dir / "bonsai_scripts" / "assets" / "plan.css"),
-                "Markers": str(drawing_assets / "markers.svg"),
-                "Symbols": str(drawing_assets / "symbols.svg"),
-                "Patterns": str(drawing_assets / "patterns.svg"),
-                "ShadingStyles": str(drawing_assets / "shading_styles.json"),
-                "CurrentShadingStyle": "Technical",
-            },
+            properties=drawing_properties,
         )
 
         self.information = ifcopenshell.api.document.add_information(model)
@@ -1095,6 +1153,29 @@ class Drawing:
             model,
             products=[self.element],
             document=self.document,
+        )
+
+    @property
+    def storeys(self) -> tuple[Storey, ...]:
+        """Return the explicitly selected storeys, or all current storeys."""
+        if self._includes_all_storeys:
+            return tuple(self.house._storeys)
+        return self._storeys
+
+    @property
+    def includes_all_storeys(self) -> bool:
+        """Return whether this drawing uses the default all-storeys scope."""
+        return self._includes_all_storeys
+
+    def _includes_storey(self, storey: Storey) -> bool:
+        return self._includes_all_storeys or storey in self._storeys
+
+    def _includes_storey_element(
+        self,
+        storey: ifcopenshell.entity_instance | None,
+    ) -> bool:
+        return self._includes_all_storeys or any(
+            selected.element == storey for selected in self._storeys
         )
 
     def add_batting(
@@ -2321,11 +2402,12 @@ class Wall(ifcopenshell.entity_instance):
         house = self.storey.house
         house._plan_annotations.append(annotation)
         for drawing in house._drawings:
-            ifcopenshell.api.group.assign_group(
-                model,
-                group=drawing.group,
-                products=[annotation],
-            )
+            if drawing._includes_storey(self.storey):
+                ifcopenshell.api.group.assign_group(
+                    model,
+                    group=drawing.group,
+                    products=[annotation],
+                )
         return annotation
 
     def _place_filling(
@@ -3407,11 +3489,12 @@ class Storey:
         )
         self.house._plan_annotations.append(annotation)
         for drawing in self.house._drawings:
-            ifcopenshell.api.group.assign_group(
-                model,
-                group=drawing.group,
-                products=[annotation],
-            )
+            if drawing._includes_storey(self):
+                ifcopenshell.api.group.assign_group(
+                    model,
+                    group=drawing.group,
+                    products=[annotation],
+                )
         return furniture
 
     def miako_slab(

@@ -1,3 +1,12 @@
+
+# Kamna:
+#	Eva Calor Arianna - Krbová kamna na dřevo,hermetická
+#	https://www.centrumvytapeni.cz/eva-calor-arianna-krbova-kamna-na-drevo-hermeticka/
+
+# Cerpadlo:
+#	Tepelné čerpadlo LG Therma V Split 12kW HN1636M+HU123MA (model 2023)
+#	https://www.vzduchotechnika1.cz/lg-therma-v-split-12kw-hn1636m-hu123ma
+
 from ifc_utils import *
 
 house = House(
@@ -107,9 +116,16 @@ wall_bathroom = ground.wall(
 ground.furniture(
     "LG",
     kind="USERDEFINED",
-    size=(0.80, 0.40, 1),
+    size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(0.25+2.0, -0.2),
+    center=(0.25+2.5, 0-0.25),
+)
+ground.furniture(
+    "hydrobox",
+    kind="USERDEFINED",
+    size=(0.5, 0.4, 0.9),
+    color="#ffffff",
+    center=(0.25+2.7, 0.25+0.2),
 )
 
 # Kitchen
@@ -183,7 +199,7 @@ CHIMNEY_DIST=0.5
 chimney = ground.chimney(
     center=(0.25+3+0.25+4.5+0.25+CHIMNEY_DIST+0.2, 4.43),
     size=0.4,
-    height=8.5,
+    height=8.8,
     flue_diameter=0.18,
     start_height=0,
     name="Main chimney",
@@ -924,7 +940,9 @@ for i, rafter_x in enumerate(rafter_positions):
 			roof_layer_storeys["Counter-battens"].add(counter_batten)
 
 # Drawing 1
-drawing1 = house.add_drawing("Drawing 1", x=6, y=4, z=0.25+2, radius=8)
+drawing1 = house.add_drawing(
+	"Drawing 1", x=6, y=4, z=0.25+2, radius=8, storeys=[ground]
+)
 
 drawing1.add_stair_annotation(stairs1)
 drawing1.add_stair_annotation(stairs2)

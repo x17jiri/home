@@ -119,3 +119,15 @@ marker[id^="batting-"] path {
     stroke: black !important;
     stroke-width: 0.25 !important;
 }
+
+.IfcFurniture.projection,
+.IfcFurniture.cut {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.13 !important;
+    stroke-dasharray: 1, 0.75;
+}
+text.furniture-label,
+tspan.furniture-label {
+    font-size: 2px !important;
+}
