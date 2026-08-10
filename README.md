@@ -121,6 +121,60 @@ wall. `connect_wall()` creates an
 default it joins their nearest ends; pass `is_atpath=True` to terminate the end
 of the first wall along the path of the second wall at a T-junction.
 
+## Library objects and plan symbols
+
+`House.assets` provides a searchable catalog of the plan-ready objects in
+Bonsai's IFC furniture library. You do not need to remember its original type
+names:
+
+```python
+house.assets.search("toilet")
+house.assets.search("cooker")
+house.assets.list(category="sanitary")
+```
+
+Each result is an `AssetInfo` with a short `alias`, the original `type_name`,
+its category, and its IFC classes. Place an object using the alias:
+
+```python
+ground.asset(
+    "WC",
+    asset="toilet_with_cistern",
+    center=(2.85, 2.05),
+    rotation=90,
+)
+ground.asset("Basin", asset="basin_medium", center=(2.1, 1.2))
+ground.asset("Sink", asset="sink_86x44", center=(5.0, 1.0))
+ground.asset("Cooker", asset="cooktop_58x51", center=(6.0, 1.0))
+ground.asset("Shower", asset="shower_90x90", center=(0.8, 1.8))
+```
+
+The object keeps its semantic IFC class and shares its imported IFC type with
+repeated instances. Its 3D body and purpose-made 2D plan symbol are both
+included. `center` consistently means the centre of the object in plan even
+when the source library uses a corner or wall face as its origin.
+
+Common search synonyms such as `wc`, `toilet`, `cooker`, `basin`, and `sink`
+also work directly as the `asset` value. To select a type outside the stable
+aliases, use the exact name returned by a search:
+
+```python
+ground.asset(
+    "Special fixture",
+    type_name="Generic Toilet without Cistern",
+    center=(3.5, 2.0),
+    start_height=0.1,
+    label="WC",
+)
+```
+
+The Bonsai library is discovered automatically. If it is installed elsewhere,
+configure it once when creating the house:
+
+```python
+house = House("My house", asset_library="path/to/IFC4 Furniture Library.ifc")
+```
+
 ## Automated Bonsai plans
 
 After writing the IFC model, `House.generate_plan()` can launch Blender and

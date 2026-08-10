@@ -7,6 +7,12 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import ifcopenshell
+import ifcopenshell.api.aggregate
+import ifcopenshell.api.context
+import ifcopenshell.api.geometry
+import ifcopenshell.api.project
+import ifcopenshell.api.root
+import ifcopenshell.api.unit
 import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
@@ -30,6 +36,77 @@ from ifc_utils import (
 
 
 class HouseTests(unittest.TestCase):
+    def write_asset_library(self, path: Path) -> None:
+        library = ifcopenshell.api.project.create_file(version="IFC4")
+        project = ifcopenshell.api.root.create_entity(
+            library, ifc_class="IfcProject", name="Test asset library"
+        )
+        project_library = ifcopenshell.api.root.create_entity(
+            library, ifc_class="IfcProjectLibrary", name="Test asset library"
+        )
+        ifcopenshell.api.aggregate.assign_object(
+            library, products=[project_library], relating_object=project
+        )
+        units = [
+            ifcopenshell.api.unit.add_si_unit(library, unit_type="LENGTHUNIT")
+        ]
+        ifcopenshell.api.unit.assign_unit(library, units=units)
+        model_context = ifcopenshell.api.context.add_context(
+            library, context_type="Model"
+        )
+        body_context = ifcopenshell.api.context.add_context(
+            library,
+            context_type="Model",
+            context_identifier="Body",
+            target_view="MODEL_VIEW",
+            parent=model_context,
+        )
+        plan_context = ifcopenshell.api.context.add_context(
+            library, context_type="Plan"
+        )
+        plan_body_context = ifcopenshell.api.context.add_context(
+            library,
+            context_type="Plan",
+            context_identifier="Body",
+            target_view="PLAN_VIEW",
+            parent=plan_context,
+        )
+
+        def add_type(ifc_class: str, name: str) -> None:
+            asset_type = ifcopenshell.api.root.create_entity(
+                library,
+                ifc_class=ifc_class,
+                name=name,
+                predefined_type="NOTDEFINED",
+            )
+            footprint = [(0.0, -0.6), (0.4, -0.6), (0.4, 0.0), (0.0, 0.0)]
+            body = ifcopenshell.api.geometry.add_slab_representation(
+                library,
+                context=body_context,
+                depth=0.8,
+                polyline=footprint,
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                library, product=asset_type, representation=body
+            )
+            plan = ifcopenshell.api.geometry.add_axis_representation(
+                library,
+                context=plan_body_context,
+                axis=[*footprint, footprint[0]],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                library, product=asset_type, representation=plan
+            )
+            ifcopenshell.api.project.assign_declaration(
+                library,
+                definitions=[asset_type],
+                relating_context=project_library,
+            )
+
+        add_type("IfcSanitaryTerminalType", "Neufert Toilet with Cistern")
+        add_type("IfcElectricApplianceType", "Neufert Cooktop 58x51")
+        library.write(path)
+
     def assert_surface_style(
         self,
         product: ifcopenshell.entity_instance,
@@ -735,6 +812,128 @@ class HouseTests(unittest.TestCase):
                 color="blue",
                 transparency=1.1,
             )
+
+    def test_discovers_and_places_plan_ready_library_assets(self) -> None:
+        with TemporaryDirectory() as directory:
+            library_path = Path(directory) / "fixtures.ifc"
+            self.write_asset_library(library_path)
+            house = House("My house", asset_library=library_path)
+
+            self.assertEqual(house.assets.path, library_path.resolve())
+            self.assertEqual(
+                [entry.alias for entry in house.assets.list(category="sanitary")],
+                ["toilet_with_cistern"],
+            )
+            self.assertEqual(
+                [entry.alias for entry in house.assets.search("WC")],
+                ["toilet_with_cistern"],
+            )
+            self.assertEqual(
+                [entry.alias for entry in house.assets.search("cooker")],
+                ["cooktop_58x51"],
+            )
+
+            ground = house.storey("Ground floor", elevation=0.25)
+            toilet = ground.asset(
+                "WC",
+                asset="toilet_with_cistern",
+                center=(2, 3),
+                rotation=90,
+                start_height=0.1,
+                label="WC",
+            )
+            second_toilet = ground.asset(
+                "Guest WC",
+                asset="wc",
+                center=(3, 3),
+            )
+
+            self.assertTrue(toilet.is_a("IfcSanitaryTerminal"))
+            self.assertEqual(
+                ifcopenshell.util.element.get_type(toilet).Name,
+                "Neufert Toilet with Cistern",
+            )
+            self.assertEqual(
+                toilet.ContainedInStructure[0].RelatingStructure,
+                ground.element,
+            )
+            self.assertEqual(
+                len(house.model.by_type("IfcSanitaryTerminalType")), 1
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_type(second_toilet),
+                ifcopenshell.util.element.get_type(toilet),
+            )
+            representations = {
+                (
+                    representation.ContextOfItems.ContextType,
+                    representation.ContextOfItems.ContextIdentifier,
+                    representation.ContextOfItems.TargetView,
+                ): representation.RepresentationType
+                for representation in toilet.Representation.Representations
+            }
+            self.assertEqual(
+                representations[("Model", "Body", "MODEL_VIEW")],
+                "MappedRepresentation",
+            )
+            self.assertEqual(
+                representations[("Plan", "Body", "PLAN_VIEW")],
+                "MappedRepresentation",
+            )
+
+            settings = ifcopenshell.geom.settings()
+            settings.set(settings.USE_WORLD_COORDS, True)
+            shape = ifcopenshell.geom.create_shape(settings, toilet)
+            vertices = shape.geometry.verts
+            points = tuple(zip(vertices[::3], vertices[1::3], vertices[2::3]))
+            self.assertAlmostEqual(
+                (min(point[0] for point in points) + max(point[0] for point in points))
+                / 2,
+                2,
+            )
+            self.assertAlmostEqual(
+                (min(point[1] for point in points) + max(point[1] for point in points))
+                / 2,
+                3,
+            )
+            self.assertAlmostEqual(min(point[2] for point in points), 0.35)
+            label = house.model.by_type("IfcTextLiteralWithExtent")[0]
+            self.assertEqual(label.Literal, "WC")
+
+    def test_validates_library_asset_selection_and_placement(self) -> None:
+        with TemporaryDirectory() as directory:
+            library_path = Path(directory) / "fixtures.ifc"
+            self.write_asset_library(library_path)
+            house = House("My house", asset_library=library_path)
+            ground = house.storey("Ground floor", elevation=0)
+
+            cooktop = ground.asset(
+                "Cooktop",
+                type_name="Neufert Cooktop 58x51",
+                center=(1, 1),
+            )
+            self.assertTrue(cooktop.is_a("IfcElectricAppliance"))
+
+            with self.assertRaisesRegex(TypeError, "exactly one"):
+                ground.asset("Missing", center=(0, 0))
+            with self.assertRaisesRegex(TypeError, "exactly one"):
+                ground.asset(
+                    "Ambiguous",
+                    asset="cooker",
+                    type_name="Neufert Cooktop 58x51",
+                    center=(0, 0),
+                )
+            with self.assertRaisesRegex(ValueError, "toilet_with_cistern"):
+                ground.asset(
+                    "Typo", asset="toilet_with_cisterm", center=(0, 0)
+                )
+            with self.assertRaisesRegex(ValueError, "zero or greater"):
+                ground.asset(
+                    "Too low",
+                    asset="toilet_with_cistern",
+                    center=(0, 0),
+                    start_height=-0.1,
+                )
 
     def test_creates_semantic_box_furniture_with_a_labeled_plan_symbol(
         self,
@@ -2067,8 +2266,8 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(
             overhead_coordinates,
             [
-                ((0.02, -0.125), (1.08, -0.125)),
-                ((0.02, 0.125), (1.08, 0.125)),
+                ((0.025, -0.125), (1.0750000000000002, -0.125)),
+                ((0.025, 0.125), (1.0750000000000002, 0.125)),
             ],
         )
         drawing = house.add_drawing("Ground plan", 1, 4.5, 1.5, 4)
@@ -2384,8 +2583,8 @@ class HouseTests(unittest.TestCase):
                 for curve in overhead_representation.Items[0].Elements
             ],
             [
-                ((0.02, -0.125), (1.18, -0.125)),
-                ((0.02, 0.125), (1.18, 0.125)),
+                ((0.025, -0.125), (1.175, -0.125)),
+                ((0.025, 0.125), (1.175, 0.125)),
             ],
         )
         drawing = house.add_drawing("Ground plan", 1, 4.5, 1.5, 4)

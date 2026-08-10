@@ -9,9 +9,11 @@ relative to that axis.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
+from difflib import get_close_matches
 import json
 from math import atan2, cos, hypot, isfinite, radians, sin
-from os import PathLike
+from os import PathLike, environ
 from pathlib import Path
 import re
 import shutil
@@ -34,14 +36,18 @@ import ifcopenshell.api.spatial
 import ifcopenshell.api.style
 import ifcopenshell.api.type
 import ifcopenshell.api.unit
+import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.representation
+import ifcopenshell.util.type
 from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
 
 
 __all__ = [
+    "AssetCatalog",
+    "AssetInfo",
     "Beam",
     "Chimney",
     "Drawing",
@@ -97,6 +103,349 @@ FurnitureKind: TypeAlias = Literal[
     "USERDEFINED",
     "NOTDEFINED",
 ]
+
+
+@dataclass(frozen=True)
+class AssetInfo:
+    """A discoverable object type in the configured IFC asset library."""
+
+    alias: str
+    type_name: str
+    category: str
+    ifc_class: str
+    ifc_type_class: str
+
+
+_ASSET_PRIMARY_ALIASES = {
+    "Neufert Toilet with Cistern": "toilet_with_cistern",
+    "Generic Toilet without Cistern": "toilet_without_cistern",
+    "Neufert Extra Small Basin": "basin_extra_small",
+    "Neufert Small Basin": "basin_small",
+    "Neufert Medium Basin": "basin_medium",
+    "Neufert Large Basin": "basin_large",
+    "Neufert Small Bathtub": "bathtub_small",
+    "Neufert Medium Bathtub": "bathtub_medium",
+    "Neufert Large Bathtub": "bathtub_large",
+    "Neufert Dishwasher": "dishwasher",
+    "Neufert Washing Machine": "washing_machine",
+    "Neufert Drier": "dryer",
+    "Generic Small Fridge Zone": "fridge_small",
+    "Generic Medium Fridge Zone": "fridge_medium",
+    "Generic Large Fridge Zone": "fridge_large",
+    "Neufert Small Kitchen Bench": "kitchen_bench_small",
+    "Neufert Medium Kitchen Bench": "kitchen_bench_medium",
+    "Neufert Large Kitchen Bench": "kitchen_bench_large",
+}
+
+_ASSET_SYNONYMS = {
+    "basin": "basin_medium",
+    "cooker": "cooktop_58x51",
+    "drier": "dryer",
+    "fridge": "fridge_medium",
+    "sink": "sink_86x44",
+    "toilet": "toilet_with_cistern",
+    "washbasin": "basin_medium",
+    "wc": "toilet_with_cistern",
+}
+
+
+def _asset_alias(type_name: str) -> str:
+    alias = type_name
+    for prefix in ("Generic ", "Neufert "):
+        if alias.startswith(prefix):
+            alias = alias[len(prefix) :]
+            break
+    alias = re.sub(r"[^a-z0-9]+", "_", alias.casefold()).strip("_")
+    return _ASSET_PRIMARY_ALIASES.get(type_name, alias)
+
+
+def _asset_category(type_name: str, ifc_type_class: str) -> str:
+    if ifc_type_class == "IfcSanitaryTerminalType":
+        return "sanitary"
+    if ifc_type_class == "IfcElectricApplianceType":
+        return "appliances"
+
+    name = type_name.casefold()
+    if any(word in name for word in ("bed", "wardrobe")):
+        return "bedroom"
+    if any(word in name for word in ("kitchen", "cupboard", "island", "laundry")):
+        return "kitchen"
+    if "desk" in name:
+        return "office"
+    if any(word in name for word in ("chair", "stool", "sofa")):
+        return "seating"
+    if "table" in name:
+        return "tables"
+    return "furniture"
+
+
+def _find_bonsai_furniture_library() -> Path:
+    configured = environ.get("BONSAI_FURNITURE_LIBRARY")
+    if configured:
+        path = Path(configured).expanduser()
+        if path.is_file():
+            return path
+        raise FileNotFoundError(
+            f"BONSAI_FURNITURE_LIBRARY does not name a file: {path}"
+        )
+
+    filename = "IFC4 Furniture Library.ifc"
+    candidates = [Path(__file__).resolve().parent / filename]
+    candidates.extend(
+        Path.home().glob(
+            ".config/blender/*/extensions/.local/lib/python*/site-packages/"
+            f"bonsai/bim/data/libraries/{filename}"
+        )
+    )
+    existing = [path for path in candidates if path.is_file()]
+    if existing:
+        return max(existing, key=lambda path: path.stat().st_mtime)
+    raise FileNotFoundError(
+        "Bonsai's IFC4 Furniture Library.ifc was not found. Install Bonsai, "
+        "pass asset_library=... to House(), or set BONSAI_FURNITURE_LIBRARY."
+    )
+
+
+class AssetCatalog:
+    """Search and import plan-ready object types from a Bonsai IFC library."""
+
+    def __init__(
+        self,
+        house: House,
+        library_path: str | PathLike[str] | None = None,
+    ) -> None:
+        self._house = house
+        self._configured_path = (
+            None if library_path is None else Path(library_path).expanduser()
+        )
+        self._path: Path | None = None
+        self._library: ifcopenshell.file | None = None
+        self._entries: tuple[AssetInfo, ...] | None = None
+        self._source_types: dict[str, ifcopenshell.entity_instance] = {}
+        self._imported_types: dict[str, ifcopenshell.entity_instance] = {}
+        self._reuse_identities: dict[int, ifcopenshell.entity_instance] = {}
+        self._bounds: dict[str, tuple[float, float, float, float, float, float]] = {}
+
+    @property
+    def path(self) -> Path:
+        """Return the automatically discovered or explicitly configured library path."""
+        self._load()
+        assert self._path is not None
+        return self._path
+
+    def list(self, *, category: str | None = None) -> tuple[AssetInfo, ...]:
+        """List available assets, optionally limited to a category."""
+        self._load()
+        assert self._entries is not None
+        if category is None:
+            return self._entries
+        category_name = _name(category, "category").casefold()
+        return tuple(
+            entry for entry in self._entries if entry.category == category_name
+        )
+
+    def search(
+        self,
+        query: str,
+        *,
+        category: str | None = None,
+    ) -> tuple[AssetInfo, ...]:
+        """Find assets by friendly alias, synonym, or original library name."""
+        query_text = _name(query, "query").casefold()
+        query_alias = query_text.replace("-", "_").replace(" ", "_")
+        normalised_query = query_text.replace("_", " ").replace("-", " ")
+        entries = self.list(category=category)
+        terms = normalised_query.split()
+
+        def aliases_for(entry: AssetInfo) -> tuple[str, ...]:
+            synonyms = tuple(
+                synonym
+                for synonym, target in _ASSET_SYNONYMS.items()
+                if target == entry.alias
+            )
+            return (entry.alias, *synonyms)
+
+        matches = []
+        for entry in entries:
+            aliases = aliases_for(entry)
+            haystack = " ".join((*aliases, entry.type_name.casefold())).replace(
+                "_", " "
+            )
+            if not all(term in haystack for term in terms):
+                continue
+            exact_alias = query_alias in aliases
+            prefix_alias = any(alias.startswith(query_alias) for alias in aliases)
+            name_position = haystack.find(normalised_query)
+            matches.append(
+                (
+                    0 if exact_alias else 1 if prefix_alias else 2,
+                    name_position if name_position >= 0 else len(haystack),
+                    entry.alias,
+                    entry,
+                )
+            )
+        return tuple(item[-1] for item in sorted(matches))
+
+    def _load(self) -> None:
+        if self._library is not None:
+            return
+        path = self._configured_path or _find_bonsai_furniture_library()
+        if not path.is_file():
+            raise FileNotFoundError(f"asset library does not exist: {path}")
+        library = ifcopenshell.open(path)
+        if library.schema != self._house.model.schema:
+            raise ValueError(
+                f"asset library uses {library.schema}; house uses {self._house.model.schema}"
+            )
+
+        entries = []
+        used_aliases: set[str] = set()
+        for source_type in library.by_type("IfcTypeProduct"):
+            type_name = source_type.Name
+            if not type_name:
+                continue
+            occurrence_classes = ifcopenshell.util.type.get_applicable_entities(
+                source_type.is_a(), self._house.model.schema
+            )
+            occurrence_class = next(
+                (
+                    ifc_class
+                    for ifc_class in occurrence_classes
+                    if ifc_class != "IfcSpace"
+                ),
+                None,
+            )
+            if occurrence_class is None:
+                continue
+            has_plan_body = any(
+                representation_map.MappedRepresentation.ContextOfItems.ContextType
+                == "Plan"
+                and representation_map.MappedRepresentation.ContextOfItems.ContextIdentifier
+                == "Body"
+                for representation_map in source_type.RepresentationMaps or ()
+            )
+            if not has_plan_body:
+                continue
+
+            base_alias = _asset_alias(type_name)
+            alias = base_alias
+            suffix = 2
+            while alias in used_aliases:
+                alias = f"{base_alias}_{suffix}"
+                suffix += 1
+            used_aliases.add(alias)
+            entry = AssetInfo(
+                alias=alias,
+                type_name=type_name,
+                category=_asset_category(type_name, source_type.is_a()),
+                ifc_class=occurrence_class,
+                ifc_type_class=source_type.is_a(),
+            )
+            entries.append(entry)
+            self._source_types[type_name] = source_type
+
+        self._path = path.resolve()
+        self._library = library
+        self._entries = tuple(sorted(entries, key=lambda entry: entry.alias))
+
+    def _resolve(
+        self,
+        *,
+        asset: str | AssetInfo | None,
+        type_name: str | None,
+    ) -> AssetInfo:
+        if (asset is None) == (type_name is None):
+            raise TypeError("supply exactly one of asset or type_name")
+        self._load()
+        assert self._entries is not None
+
+        if isinstance(asset, AssetInfo):
+            type_name = asset.type_name
+            asset = None
+        if type_name is not None:
+            requested_type = _name(type_name, "type_name")
+            entry = next(
+                (
+                    candidate
+                    for candidate in self._entries
+                    if candidate.type_name.casefold() == requested_type.casefold()
+                ),
+                None,
+            )
+            if entry is None:
+                choices = [candidate.type_name for candidate in self._entries]
+                suggestions = get_close_matches(requested_type, choices, n=3)
+                hint = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
+                raise ValueError(f'unknown asset type_name "{requested_type}".{hint}')
+            return entry
+
+        if not isinstance(asset, str):
+            raise TypeError("asset must be a string or AssetInfo")
+        requested_alias = _name(asset, "asset").casefold().replace("-", "_")
+        requested_alias = _ASSET_SYNONYMS.get(requested_alias, requested_alias)
+        entry = next(
+            (
+                candidate
+                for candidate in self._entries
+                if candidate.alias == requested_alias
+            ),
+            None,
+        )
+        if entry is not None:
+            return entry
+
+        choices = [candidate.alias for candidate in self._entries]
+        suggestions = get_close_matches(requested_alias, choices, n=3)
+        hint = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
+        raise ValueError(
+            f'unknown asset "{asset}".{hint} Use house.assets.search(...) to browse.'
+        )
+
+    def _import_type(self, entry: AssetInfo) -> ifcopenshell.entity_instance:
+        imported = self._imported_types.get(entry.type_name)
+        if imported is not None:
+            return imported
+        self._load()
+        assert self._library is not None
+        imported = ifcopenshell.api.project.append_asset(
+            self._house.model,
+            library=self._library,
+            element=self._source_types[entry.type_name],
+            reuse_identities=self._reuse_identities,
+        )
+        self._imported_types[entry.type_name] = imported
+        return imported
+
+    def _local_bounds(
+        self,
+        entry: AssetInfo,
+        occurrence: ifcopenshell.entity_instance,
+    ) -> tuple[float, float, float, float, float, float]:
+        bounds = self._bounds.get(entry.type_name)
+        if bounds is not None:
+            return bounds
+        try:
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), occurrence
+            )
+            vertices = shape.geometry.verts
+            coordinates = tuple(zip(vertices[::3], vertices[1::3], vertices[2::3]))
+            if not coordinates:
+                raise ValueError("empty body")
+            bounds = (
+                min(point[0] for point in coordinates),
+                min(point[1] for point in coordinates),
+                min(point[2] for point in coordinates),
+                max(point[0] for point in coordinates),
+                max(point[1] for point in coordinates),
+                max(point[2] for point in coordinates),
+            )
+        except (RuntimeError, ValueError) as error:
+            raise RuntimeError(
+                f'asset "{entry.alias}" has no usable 3D body'
+            ) from error
+        self._bounds[entry.type_name] = bounds
+        return bounds
 
 
 _DOOR_OVERHEAD_LINE = re.compile(
@@ -692,7 +1041,8 @@ class House:
     ``colors`` may define default 3D colors for ``"beam"``, ``"block"``,
     ``"chimney"``, ``"wall"``, ``"door"``, ``"furniture"`, ``"slab"``,
     ``"stair"``, and ``"window"`` elements using named colors or
-    ``#RGB``/``#RRGGBB`` values.
+    ``#RGB``/``#RRGGBB`` values.  ``asset_library`` may override the
+    automatically discovered Bonsai furniture-library IFC path.
     """
 
     def __init__(
@@ -700,6 +1050,7 @@ class House:
         name: str,
         *,
         colors: Mapping[str, str] | None = None,
+        asset_library: str | PathLike[str] | None = None,
     ) -> None:
         self.name = _name(name, "name")
         if colors is None:
@@ -808,6 +1159,7 @@ class House:
             tuple[object, ...], ifcopenshell.entity_instance
         ] = {}
         self._ifc_path: Path | None = None
+        self.assets = AssetCatalog(self, asset_library)
 
     def _surface_style(
         self,
@@ -3738,6 +4090,173 @@ class Storey:
             placement=placement,
         )
 
+    def asset(
+        self,
+        name: str,
+        *,
+        asset: str | AssetInfo | None = None,
+        type_name: str | None = None,
+        center: Point,
+        rotation: Number = 0,
+        start_height: Number = 0,
+        label: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Place a plan-ready object from :attr:`House.assets`.
+
+        Use the stable friendly ``asset`` alias returned by
+        ``house.assets.search(...)`` or, as an advanced escape hatch, pass the
+        library's exact ``type_name``.  ``center`` is the centre of the
+        object's 3D bounding box in plan, independent of the library type's
+        original drawing origin.  ``rotation`` is counter-clockwise in
+        degrees, and ``start_height`` places the bottom of the object above
+        this storey's elevation.
+        """
+        object_name = _name(name, "name")
+        center_x, center_y = _point(center, "center")
+        rotation = _number(rotation, "rotation")
+        start_height = _number(start_height, "start_height")
+        if start_height < 0:
+            raise ValueError("start_height must be zero or greater")
+        label_text = None if label is None else _name(label, "label")
+
+        catalog = self.house.assets
+        entry = catalog._resolve(asset=asset, type_name=type_name)
+        imported_type = catalog._import_type(entry)
+        model = self.house.model
+        occurrence = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class=entry.ifc_class,
+            name=object_name,
+        )
+        ifcopenshell.api.type.assign_type(
+            model,
+            related_objects=[occurrence],
+            relating_type=imported_type,
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[occurrence],
+            relating_structure=self.element,
+        )
+
+        min_x, min_y, min_z, max_x, max_y, max_z = catalog._local_bounds(
+            entry, occurrence
+        )
+        local_center_x = (min_x + max_x) / 2
+        local_center_y = (min_y + max_y) / 2
+        angle = radians(rotation)
+        cosine = cos(angle)
+        sine = sin(angle)
+        placement = np.eye(4)
+        placement[0, 0] = cosine
+        placement[0, 1] = -sine
+        placement[1, 0] = sine
+        placement[1, 1] = cosine
+        placement[0, 3] = center_x - (
+            cosine * local_center_x - sine * local_center_y
+        )
+        placement[1, 3] = center_y - (
+            sine * local_center_x + cosine * local_center_y
+        )
+        placement[2, 3] = self.elevation + start_height - min_z
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=occurrence,
+            matrix=placement,
+            is_si=True,
+        )
+
+        if label_text is not None:
+            label_placement = placement.copy()
+            label_placement[0, 3] = center_x
+            label_placement[1, 3] = center_y
+            label_placement[2, 3] = self.elevation + start_height
+            self._add_plan_label(
+                occurrence,
+                name=object_name,
+                text=label_text,
+                placement=label_placement,
+                width=max_x - min_x,
+                depth=max_y - min_y,
+            )
+        return occurrence
+
+    def _add_plan_label(
+        self,
+        product: ifcopenshell.entity_instance,
+        *,
+        name: str,
+        text: str,
+        placement: np.ndarray,
+        width: float,
+        depth: float,
+    ) -> ifcopenshell.entity_instance:
+        model = self.house.model
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{name} Label",
+            predefined_type="TEXT",
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[annotation],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+        literal_origin = model.createIfcAxis2Placement3D(
+            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+            model.createIfcDirection((0.0, 0.0, 1.0)),
+            model.createIfcDirection((1.0, 0.0, 0.0)),
+        )
+        literal = model.createIfcTextLiteralWithExtent(
+            text,
+            literal_origin,
+            "RIGHT",
+            model.createIfcPlanarExtent(width, depth),
+            "center",
+        )
+        label_representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [literal],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=label_representation,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={"Classes": "furniture-label small"},
+        )
+        ifcopenshell.api.drawing.assign_product(
+            model,
+            relating_product=product,
+            related_object=annotation,
+        )
+        self.house._plan_annotations.append(annotation)
+        for drawing in self.house._drawings:
+            if drawing._includes_storey(self):
+                ifcopenshell.api.group.assign_group(
+                    model,
+                    group=drawing.group,
+                    products=[annotation],
+                )
+        return annotation
+
     def furniture(
         self,
         name: str,
@@ -3855,69 +4374,14 @@ class Storey:
             representation=plan,
         )
 
-        annotation = ifcopenshell.api.root.create_entity(
-            model,
-            ifc_class="IfcAnnotation",
-            name=f"{furniture_name} Label",
-            predefined_type="TEXT",
+        self._add_plan_label(
+            furniture,
+            name=furniture_name,
+            text=label_text,
+            placement=placement.copy(),
+            width=width,
+            depth=depth,
         )
-        ifcopenshell.api.spatial.assign_container(
-            model,
-            products=[annotation],
-            relating_structure=self.element,
-        )
-        ifcopenshell.api.geometry.edit_object_placement(
-            model,
-            product=annotation,
-            matrix=placement.copy(),
-            is_si=True,
-        )
-        literal_origin = model.createIfcAxis2Placement3D(
-            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
-            model.createIfcDirection((0.0, 0.0, 1.0)),
-            model.createIfcDirection((1.0, 0.0, 0.0)),
-        )
-        literal = model.createIfcTextLiteralWithExtent(
-            label_text,
-            literal_origin,
-            "RIGHT",
-            model.createIfcPlanarExtent(width, depth),
-            "center",
-        )
-        label_representation = model.createIfcShapeRepresentation(
-            self.house._annotation_context,
-            "Annotation",
-            "Annotation2D",
-            [literal],
-        )
-        ifcopenshell.api.geometry.assign_representation(
-            model,
-            product=annotation,
-            representation=label_representation,
-        )
-        pset = ifcopenshell.api.pset.add_pset(
-            model,
-            product=annotation,
-            name="EPset_Annotation",
-        )
-        ifcopenshell.api.pset.edit_pset(
-            model,
-            pset=pset,
-            properties={"Classes": "furniture-label small"},
-        )
-        ifcopenshell.api.drawing.assign_product(
-            model,
-            relating_product=furniture,
-            related_object=annotation,
-        )
-        self.house._plan_annotations.append(annotation)
-        for drawing in self.house._drawings:
-            if drawing._includes_storey(self):
-                ifcopenshell.api.group.assign_group(
-                    model,
-                    group=drawing.group,
-                    products=[annotation],
-                )
         return furniture
 
     def miako_slab(

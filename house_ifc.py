@@ -155,12 +155,18 @@ ground.furniture(
     color="#ffffff",
     center=(0.25+0.5, 0.25+1.8),
 )
-ground.furniture(
+#ground.furniture(
+#    "WC",
+#    kind="USERDEFINED",
+#    size=(0.7, 0.4, 1.0),
+#    color="#ffffff",
+#    center=(0.25+2.6, 0.25+1.8),
+#)
+ground.asset(
     "WC",
-    kind="USERDEFINED",
-    size=(0.7, 0.4, 1.0),
-    color="#ffffff",
+    asset="toilet_with_cistern",
     center=(0.25+2.6, 0.25+1.8),
+    rotation=-90,
 )
 
 # Kitchen
@@ -230,6 +236,15 @@ stair_landing = ground.stair_landing(
     color="#C8B090",
 )
 
+# Vedlejsi chodba
+ground.furniture(
+    "vestavna skrin",
+    kind="USERDEFINED",
+    size=(4.4, 0.5, 1.5),
+    color="#ffffff",
+    center=(0.25+3+0.25+4.5/2, 0.25+0.6/2),
+)
+
 # Chimney
 CHIMNEY_DIST=0.5
 chimney = ground.chimney(
@@ -282,7 +297,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.5, 0.5, 1.5),
     color="#ffff2B",
-    center=(0.25+3+0.25+4.5-0.25, 4.75),
+    center=(0.25+3+0.25+4.5-0.27, 4.75),
 	start_height=0.2,
 #    rotation=90,
 )
@@ -985,7 +1000,6 @@ drawing1.add_stair_annotation(stairs1)
 drawing1.add_stair_annotation(stairs2)
 drawing1.add_chimney_annotation(chimney)
 
-drawing1.add_dimension(start=(0.5, 0.25+2.3+0.125), end=(0.5, 7.75), offset=1.5)
 drawing1.add_dimension(start=(0.5, 0.25), end=(0.5, 0.25+2.3), offset=1.5)
 drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
 drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
