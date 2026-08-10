@@ -24,6 +24,7 @@ from ifc_utils import (
     RoofPlane,
     Stair,
     Wall,
+    _postprocess_door_overheads,
     generate_plan,
 )
 
@@ -2066,8 +2067,8 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(
             overhead_coordinates,
             [
-                ((0.0, -0.125), (1.1, -0.125)),
-                ((0.0, 0.125), (1.1, 0.125)),
+                ((0.02, -0.125), (1.08, -0.125)),
+                ((0.02, 0.125), (1.08, 0.125)),
             ],
         )
         drawing = house.add_drawing("Ground plan", 1, 4.5, 1.5, 4)
@@ -2372,7 +2373,20 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.element.get_pset(
                 overhead, "EPset_Annotation", "Classes"
             ),
-            "dashed",
+            "door-overhead dashed",
+        )
+        overhead_representation = ifcopenshell.util.representation.get_representation(
+            overhead, "Plan", "Annotation", "PLAN_VIEW"
+        )
+        self.assertEqual(
+            [
+                curve.Points.CoordList
+                for curve in overhead_representation.Items[0].Elements
+            ],
+            [
+                ((0.02, -0.125), (1.18, -0.125)),
+                ((0.02, 0.125), (1.18, 0.125)),
+            ],
         )
         drawing = house.add_drawing("Ground plan", 1, 4.5, 1.5, 4)
         self.assertIn(overhead, drawing.group.IsGroupedBy[0].RelatedObjects)
@@ -2839,6 +2853,37 @@ class HouseTests(unittest.TestCase):
                 if association.is_a("IfcRelAssociatesDocument")
             )
             self.assertEqual(Path(document.Location), output.resolve())
+
+    def test_layers_door_symbols_above_each_mask_and_overhead_pair(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "plan.svg"
+            svg_path.write_text(
+                """<svg>
+  <g id="product-door" class="IfcDoor material-null projection"><path/></g>
+  <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK door-overhead dashed" x1="10" x2="20" y1="30" y2="30"/>
+  <text>unrelated annotation</text>
+  <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK door-overhead dashed" x1="10" x2="20" y1="32" y2="32"/>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_door_overheads(svg_path)
+            _postprocess_door_overheads(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            polygon = (
+                '<polygon class="door-overhead-mask" '
+                'points="10,30 20,30 20,32 10,32"/>'
+            )
+            self.assertEqual(svg.count(polygon), 1)
+            self.assertLess(svg.index(polygon), svg.index("door-overhead dashed"))
+            overlay = (
+                '<use href="#product-door" '
+                'xlink:href="#product-door"/>'
+            )
+            self.assertEqual(svg.count(overlay), 1)
+            self.assertGreater(svg.index(overlay), svg.rindex("door-overhead dashed"))
 
     def test_generates_svg_and_optional_png_from_an_ifc_file(self) -> None:
         house = House("My house")

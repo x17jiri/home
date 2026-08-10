@@ -13,6 +13,7 @@ import json
 from math import atan2, cos, hypot, isfinite, radians, sin
 from os import PathLike
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from typing import Literal, Sequence, TypeAlias
@@ -96,6 +97,90 @@ FurnitureKind: TypeAlias = Literal[
     "USERDEFINED",
     "NOTDEFINED",
 ]
+
+
+_DOOR_OVERHEAD_LINE = re.compile(
+    r'(?P<indent>^[ \t]*)<line\b(?P<attrs>[^>\n]*\bdoor-overhead\b[^>\n]*)/>[ \t]*$',
+    re.MULTILINE,
+)
+
+
+def _postprocess_door_overheads(svg_path: Path) -> None:
+    """Mask solid wall lines, add dashes, then repaint door symbols on top."""
+    svg = svg_path.read_text(encoding="utf-8")
+    changed = False
+
+    if '<polygon class="door-overhead-mask"' not in svg:
+        line_groups: dict[str, list[re.Match[str]]] = {}
+        for match in _DOOR_OVERHEAD_LINE.finditer(svg):
+            attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
+            global_id = next(
+                (
+                    token
+                    for token in attributes.get("class", "").split()
+                    if token.startswith("GlobalId-")
+                ),
+                None,
+            )
+            if global_id is not None:
+                line_groups.setdefault(global_id, []).append(match)
+
+        insertions = []
+        for lines in line_groups.values():
+            if len(lines) != 2:
+                continue
+            first = dict(re.findall(r'([\w:-]+)="([^"]*)"', lines[0]["attrs"]))
+            second = dict(re.findall(r'([\w:-]+)="([^"]*)"', lines[1]["attrs"]))
+            coordinate_names = ("x1", "y1", "x2", "y2")
+            if any(
+                name not in first or name not in second
+                for name in coordinate_names
+            ):
+                continue
+            points = " ".join(
+                (
+                    f'{first["x1"]},{first["y1"]}',
+                    f'{first["x2"]},{first["y2"]}',
+                    f'{second["x2"]},{second["y2"]}',
+                    f'{second["x1"]},{second["y1"]}',
+                )
+            )
+            polygon = (
+                f'{lines[0]["indent"]}<polygon class="door-overhead-mask" '
+                f'points="{points}"/>\n'
+            )
+            insertions.append((lines[0].start(), polygon))
+
+        for offset, polygon in reversed(insertions):
+            svg = f"{svg[:offset]}{polygon}{svg[offset:]}"
+        changed = bool(insertions)
+
+    if '<g class="door-symbol-overlays">' not in svg:
+        door_ids = []
+        for match in re.finditer(r'<g\b(?P<attrs>[^>\n]*)>', svg):
+            attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
+            classes = set(attributes.get("class", "").split())
+            element_id = attributes.get("id")
+            if element_id and {"IfcDoor", "projection"} <= classes:
+                door_ids.append(element_id)
+        closing_svg = svg.rfind("</svg>")
+        if door_ids and closing_svg >= 0:
+            uses = "\n".join(
+                f'    <use href="#{element_id}" xlink:href="#{element_id}"/>'
+                for element_id in door_ids
+            )
+            overlays = (
+                '  <g class="door-symbol-overlays">\n'
+                f"{uses}\n"
+                "  </g>\n"
+            )
+            svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+            changed = True
+
+    if changed:
+        svg_path.write_text(svg, encoding="utf-8")
+
+
 BeamKind: TypeAlias = Literal[
     "BEAM",
     "JOIST",
@@ -489,6 +574,7 @@ def generate_plan(
 
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG plan: {absolute_output}")
+    _postprocess_door_overheads(absolute_output)
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -569,6 +655,7 @@ def _render_existing_drawing(
     )
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
+    _postprocess_door_overheads(absolute_output)
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -2688,10 +2775,11 @@ class Wall(ifcopenshell.entity_instance):
             relating_structure=self.storey.element,
         )
         if wall_faces:
+            inset = min(0.025, opening_width / 4)
             curves = []
             for y in (self.body_offset, self.body_offset + self.thickness):
                 point_list = model.createIfcCartesianPointList2D(
-                    [(0.0, y), (opening_width, y)]
+                    [(inset, y), (opening_width - inset, y)]
                 )
                 curves.append(
                     model.createIfcIndexedPolyCurve(point_list, None, False)
@@ -2892,6 +2980,7 @@ class Wall(ifcopenshell.entity_instance):
                 name=opening_name,
                 opening_start=opening_start,
                 opening_width=width,
+                wall_faces=True,
             )
         return opening
 

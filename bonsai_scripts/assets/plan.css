@@ -156,11 +156,17 @@ tspan.DIMENSION {
     stroke-width: 0.1 !important;
 }
 
+.door-overhead-mask {
+    fill: white !important;
+    stroke: white !important;
+    stroke-width: 0.3 !important;
+}
+
 .PredefinedType-LINEWORK.door-overhead {
     fill: none !important;
     stroke: black !important;
     stroke-width: 0.1 !important;
-    stroke-dasharray: 1, 0.75 !important;
+    stroke-dasharray: 0.7 0.8 !important;
 }
 
 text.door-dimension,
