@@ -2053,13 +2053,23 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.element.get_pset(
                 overhead, "EPset_Annotation", "Classes"
             ),
-            "dashed",
+            "door-overhead dashed",
         )
         overhead_representation = ifcopenshell.util.representation.get_representation(
             overhead, "Plan", "Annotation", "PLAN_VIEW"
         )
-        overhead_coordinates = overhead_representation.Items[0].Points.CoordList
-        self.assertEqual(overhead_coordinates, ((0.0, 0.0), (1.1, 0.0)))
+        self.assertEqual(overhead_representation.RepresentationType, "GeometricCurveSet")
+        overhead_coordinates = [
+            curve.Points.CoordList
+            for curve in overhead_representation.Items[0].Elements
+        ]
+        self.assertEqual(
+            overhead_coordinates,
+            [
+                ((0.0, -0.125), (1.1, -0.125)),
+                ((0.0, 0.125), (1.1, 0.125)),
+            ],
+        )
         drawing = house.add_drawing("Ground plan", 1, 4.5, 1.5, 4)
         self.assertIn(overhead, drawing.group.IsGroupedBy[0].RelatedObjects)
 
@@ -2419,6 +2429,197 @@ class HouseTests(unittest.TestCase):
             annotations = reopened.by_type("IfcAnnotation")
             self.assertEqual(len(annotations), 1)
             self.assertEqual(annotations[0].ObjectType, "BATTING")
+
+    def test_adds_a_scoped_linear_dimension_with_extension_lines(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.25)
+        drawing = house.add_drawing(
+            "Ground plan", 2, 3, 1.6, 5, storeys=[ground]
+        )
+        other_drawing = house.add_drawing(
+            "Other plan", 2, 3, 1.6, 5, storeys=[ground]
+        )
+
+        dimension = drawing.add_dimension(
+            (1, 2),
+            (4, 6),
+            offset=0.5,
+            name="Overall width",
+        )
+
+        self.assertEqual(dimension.is_a(), "IfcAnnotation")
+        self.assertEqual(
+            ifcopenshell.util.element.get_predefined_type(dimension),
+            "DIMENSION",
+        )
+        self.assertEqual(dimension.Name, "Overall width")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                dimension, "BBIM_Dimension", "CustomUnit"
+            ),
+            ["Millimeters"],
+        )
+        representation = ifcopenshell.util.representation.get_representation(
+            dimension, "Plan", "Annotation", "PLAN_VIEW"
+        )
+        self.assertEqual(representation.RepresentationType, "Curve2D")
+        np.testing.assert_allclose(
+            representation.Items[0].Points.CoordList,
+            ((0.6, 2.3), (3.6, 6.3)),
+            atol=1e-9,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            dimension.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[2, 3], ground.elevation)
+
+        extension = next(
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if annotation.Name == "Overall width Extension Lines"
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                extension, "EPset_Annotation", "Classes"
+            ),
+            "dimension-extension fine",
+        )
+        extension_representation = ifcopenshell.util.representation.get_representation(
+            extension, "Plan", "Annotation", "PLAN_VIEW"
+        )
+        extension_curves = extension_representation.Items[0].Elements
+        self.assertEqual(len(extension_curves), 2)
+        np.testing.assert_allclose(
+            extension_curves[0].Points.CoordList,
+            ((1, 2), (0.52, 2.36)),
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            extension_curves[1].Points.CoordList,
+            ((4, 6), (3.52, 6.36)),
+            atol=1e-9,
+        )
+
+        drawing_members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(dimension, drawing_members)
+        self.assertIn(extension, drawing_members)
+        self.assertEqual(
+            set(other_drawing.group.IsGroupedBy[0].RelatedObjects),
+            {other_drawing.element},
+        )
+
+        dimension_without_extensions = drawing.add_dimension((0, 0), (2, 0))
+        self.assertNotIn(
+            f"{dimension_without_extensions.Name} Extension Lines",
+            {annotation.Name for annotation in house.model.by_type("IfcAnnotation")},
+        )
+
+        with self.assertRaisesRegex(ValueError, "must be different points"):
+            drawing.add_dimension((1, 1), (1, 1))
+        with self.assertRaisesRegex(TypeError, "offset must be a number"):
+            drawing.add_dimension((0, 0), (1, 0), offset="outside")
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "dimension.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            reopened_dimension = next(
+                annotation
+                for annotation in reopened.by_type("IfcAnnotation")
+                if annotation.Name == "Overall width"
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    reopened_dimension, "BBIM_Dimension", "CustomUnit"
+                ),
+                ["Millimeters"],
+            )
+
+    def test_adds_a_scoped_door_width_height_annotation(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.25)
+        upper = house.storey("Upper floor", elevation=3)
+        wall = ground.wall((1, 2), (5, 2), thickness=0.25, height=3)
+        door = wall.add_door(
+            at=1,
+            width=0.9,
+            height=2.1,
+            opening_width=1.1,
+            operation="SINGLE_SWING_RIGHT",
+        )
+        upper_door = upper.wall(
+            (1, 2), (5, 2), thickness=0.25, height=3
+        ).add_door(at=1, width=0.8, height=1.97)
+        drawing = house.add_drawing(
+            "Ground plan", 3, 2, 1.6, 4, storeys=[ground]
+        )
+        other_drawing = house.add_drawing(
+            "Other plan", 3, 2, 1.6, 4, storeys=[ground]
+        )
+
+        annotation = drawing.add_door_annotation(
+            door,
+            offset=0.05,
+            name="Kitchen door dimensions",
+        )
+
+        self.assertEqual(annotation.ObjectType, "TEXT")
+        self.assertEqual(annotation.Name, "Kitchen door dimensions")
+        literal = annotation.Representation.Representations[0].Items[0]
+        self.assertTrue(literal.is_a("IfcTextLiteralWithExtent"))
+        self.assertEqual(literal.Literal, "900\n2100")
+        self.assertEqual(literal.BoxAlignment, "center")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"
+            ),
+            "door-dimension small",
+        )
+        assignment = next(
+            relation
+            for relation in annotation.HasAssignments
+            if relation.is_a("IfcRelAssignsToProduct")
+        )
+        self.assertEqual(assignment.RelatingProduct, door)
+
+        annotation_placement = ifcopenshell.util.placement.get_local_placement(
+            annotation.ObjectPlacement
+        )
+        door_placement = ifcopenshell.util.placement.get_local_placement(
+            door.ObjectPlacement
+        )
+        local_annotation_point = np.linalg.inv(door_placement) @ np.append(
+            annotation_placement[:3, 3], 1
+        )
+        self.assertAlmostEqual(local_annotation_point[0], 0.45)
+        self.assertGreater(abs(local_annotation_point[1]), 0.2)
+        self.assertAlmostEqual(
+            abs(np.dot(annotation_placement[:3, 0], door_placement[:3, 1])),
+            1,
+        )
+        self.assertIn(annotation, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(
+            annotation,
+            other_drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+
+        with self.assertRaisesRegex(ValueError, "already has"):
+            drawing.add_door_annotation(door)
+        with self.assertRaisesRegex(TypeError, "must be an IfcDoor"):
+            drawing.add_door_annotation(wall)
+        with self.assertRaisesRegex(ValueError, "not included"):
+            drawing.add_door_annotation(upper_door)
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "door-annotation.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            reopened_literal = next(
+                literal
+                for literal in reopened.by_type("IfcTextLiteralWithExtent")
+                if literal.Literal == "900\n2100"
+            )
+            self.assertEqual(reopened_literal.Literal, "900\n2100")
 
     def test_stores_drawing_camera_and_scoped_batting_in_ifc(self) -> None:
         house = House("My house")

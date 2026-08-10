@@ -32,7 +32,7 @@ load_bearing_wall = house.wall_type(
 partition_wall = house.wall_type(
     "Partition wall - VPC 115 mm",
     layers=[
-        ("Brick", 0.115),
+        ("Brick", 0.125),
         "axis",
     ],
 )
@@ -111,7 +111,7 @@ wall_back.add_window(
 
 # Bathroom
 wall_bathroom = ground.wall(
-	(0.25+3, 0.25+2.5), (0.25, 0.25+2.5),
+	(0.25, 0.25+2.3), (0.25+3, 0.25+2.3),
 	wall_type=partition_wall, height=ground_floor_height)
 ground.furniture(
     "LG",
@@ -121,24 +121,59 @@ ground.furniture(
     center=(0.25+2.5, 0-0.25),
 )
 ground.furniture(
-    "hydrobox",
+    "LG",
     kind="USERDEFINED",
     size=(0.5, 0.4, 0.9),
     color="#ffffff",
     center=(0.25+2.7, 0.25+0.2),
 )
+ground.furniture(
+    "TUV",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 2.0),
+    color="#ffffff",
+    center=(0.25+0.4, 0.25+0.35),
+)
+ground.furniture(
+    "Pracka",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 2.0),
+    color="#ffffff",
+    center=(0.25+1.2, 0.25+0.35),
+)
+ground.furniture(
+    "Umyv",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 2.0),
+    color="#ffffff",
+    center=(0.25+2, 0.25+0.35),
+)
+ground.furniture(
+    "Sprcha",
+    kind="USERDEFINED",
+    size=(1, 1, 2.0),
+    color="#ffffff",
+    center=(0.25+0.5, 0.25+1.8),
+)
+ground.furniture(
+    "WC",
+    kind="USERDEFINED",
+    size=(0.7, 0.4, 1.0),
+    color="#ffffff",
+    center=(0.25+2.6, 0.25+1.8),
+)
 
 # Kitchen
 wall_kitchen = ground.wall(
-	(0.25+3+0.25+4.5, 0.25+1.75), (0.25+3+0.25, 0.25+1.75),
+	(0.25+3+0.25, 0.25+1.625+0.05), (0.25+3+0.25+4.5, 0.25+1.625+0.05),
 	wall_type=partition_wall, height=ground_floor_height)
 kitchen_door = wall_kitchen.add_door(
-	at=1.0,
+	at=2.5,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=0.2,
 	operation="SINGLE_SWING_LEFT",
-#	reverse_swing=True,
+	reverse_swing=True,
 )
 
 # Pokoj Risanek
@@ -153,8 +188,8 @@ wall_2.add_door(
 
 # Bathroom
 wall_2.add_door(
-    at=0.25+0.5,
-    width=1.0,
+    at=0.25+0.625,
+    opening_width=1.0, width=0.9,
     height=2.125,
     sill_height=0.2,
 	reverse_swing=True,
@@ -207,15 +242,16 @@ chimney = ground.chimney(
 )
 # zed loznice
 ground.wall(
-	(0.25+3+0.25+4.5+0.25, 4.23), (0.25+3+0.25+4.5+0.25+0.55, 4.23),
+	(0.25+3+0.25+4.5+0.25+0.9, 4.23),
+	(0.25+3+0.25+4.5+0.25, 4.23),
 	wall_type=partition_wall, height=ground_floor_height)
 w1 = ground.wall(
-	(0.25+3+0.25+4.5+0.25+1, 4.68),
-	(0.25+3+0.25+4.5+0.25+3.5, 4.68),
+	(0.25+3+0.25+4.5+0.25+0.5, 4.63),
+	(0.25+3+0.25+4.5+0.25+3.5, 4.63),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_3.add_door(
     at=8-0.25-1.5,
-    width=1.0,
+    opening_width=1.0, width=0.9,
     height=2.125,
     sill_height=0.2,
     name="Bedroom door",
@@ -223,12 +259,12 @@ wall_3.add_door(
 )
 # Vyklenek Krb
 w2 = ground.wall(
-	(0.25+3+0.25+4.5+0.25+1.0, 4.68),
-	(0.25+3+0.25+4.5+0.25+1.0, 5.03),
+	(0.25+3+0.25+4.5+0.25+0.5, 5.23),
+	(0.25+3+0.25+4.5+0.25+0.5, 4.63),
 	wall_type=partition_wall, height=ground_floor_height)
 w3 = ground.wall(
-	(0.25+3+0.25+4.5+0.25+1.0, 4.23+1.0),
 	(0.25+3+0.25+4.5+0.25, 4.23+1.0),
+	(0.25+3+0.25+4.5+0.25+0.4, 4.23+1.0),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_3.add_opening(
     at=4.25,
@@ -237,7 +273,6 @@ wall_3.add_opening(
     sill_height=0.2,
     name="Fireplace opening",
 )
-ground.connect_wall(w1, w2)
 ground.connect_wall(w2, w3)
 
 ground.furniture(
@@ -245,7 +280,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.5, 0.5, 1.5),
     color="#ffff2B",
-    center=(0.25+3+0.25+4.5+0.25, 4.75),
+    center=(0.25+3+0.25+4.5-0.25, 4.75),
 	start_height=0.2,
 #    rotation=90,
 )
@@ -262,7 +297,7 @@ bed = ground.furniture(
 
 # Opening from main to side hallway
 opening = wall_3.add_opening(
-    at=0.25+0.5,
+    at=0.25+0.625,
     width=1.0,
     height=2.125,
     sill_height=0.2,
@@ -947,6 +982,15 @@ drawing1 = house.add_drawing(
 drawing1.add_stair_annotation(stairs1)
 drawing1.add_stair_annotation(stairs2)
 drawing1.add_chimney_annotation(chimney)
+
+drawing1.add_dimension(start=(0.5, 0.25+2.3+0.125), end=(0.5, 7.75), offset=1.5)
+drawing1.add_dimension(start=(0.5, 0.25), end=(0.5, 0.25+2.3), offset=1.5)
+drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
+drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
+drawing1.add_dimension(start=(8.25, 7.5), end=(11.75, 7.5), offset=1.5)
+drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
+drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
+drawing1.add_dimension(start=(11.5, 4.75), end=(11.5, 7.75), offset=-1)
 
 # The Rockwool occupies the right side of each wall axis.  These annotations
 # belong only to Drawing 1 and follow the Rockwool centre lines.

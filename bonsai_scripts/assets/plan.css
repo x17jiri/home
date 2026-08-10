@@ -123,11 +123,49 @@ marker[id^="batting-"] path {
 .IfcFurniture.projection,
 .IfcFurniture.cut {
     fill: none !important;
-    stroke: black !important;
+    stroke: #6FB9D6 !important;
     stroke-width: 0.13 !important;
-    stroke-dasharray: 1, 0.75;
+    stroke-dasharray: none !important;
 }
 text.furniture-label,
 tspan.furniture-label {
+    fill: #6FB9D6 !important;
+    stroke: none !important;
+    font-size: 2px !important;
+}
+
+/* Compact plan dimensions: thinner linework, ticks, and labels. */
+.PredefinedType-DIMENSION {
+    stroke-width: 0.1 !important;
+}
+
+.PredefinedType-LINEWORK.dimension-extension {
+    stroke-width: 0.1 !important;
+}
+
+text.DIMENSION,
+tspan.DIMENSION {
+    font-size: 2px !important;
+}
+
+/* Doors: light plan swing, both overhead wall faces, and size labels. */
+.IfcDoor.projection,
+.IfcDoor.cut {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+}
+
+.PredefinedType-LINEWORK.door-overhead {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: 1, 0.75 !important;
+}
+
+text.door-dimension,
+tspan.door-dimension {
+    fill: black !important;
+    stroke: none !important;
     font-size: 2px !important;
 }

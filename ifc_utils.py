@@ -35,6 +35,7 @@ import ifcopenshell.api.type
 import ifcopenshell.api.unit
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
+import ifcopenshell.util.representation
 from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
 
@@ -981,8 +982,10 @@ class Drawing:
         if self.radius <= 0:
             raise ValueError("radius must be greater than zero")
         self._batting_count = 0
+        self._dimension_count = 0
         self._annotated_stairs: set[int] = set()
         self._annotated_chimneys: set[int] = set()
+        self._annotated_doors: set[int] = set()
         self._includes_all_storeys = storeys is None
         if storeys is None:
             self._storeys: tuple[Storey, ...] = ()
@@ -1177,6 +1180,317 @@ class Drawing:
         return self._includes_all_storeys or any(
             selected.element == storey for selected in self._storeys
         )
+
+    def add_dimension(
+        self,
+        start: Point,
+        end: Point,
+        *,
+        offset: Number = 0,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add one linear plan dimension scoped only to this drawing.
+
+        ``start`` and ``end`` are the measured points in global model XY
+        coordinates.  ``offset`` moves the dimension line to its left when
+        positive and to its right when negative, looking from ``start`` to
+        ``end``.  Coordinates and offset are metres; Bonsai displays the
+        measured value in millimetres.  A non-zero offset adds extension lines
+        from the measured points to 1 mm beyond the dimension line at 1:100.
+        """
+        start_x, start_y = _point(start, "start")
+        end_x, end_y = _point(end, "end")
+        offset = _number(offset, "offset")
+        delta_x = end_x - start_x
+        delta_y = end_y - start_y
+        length = hypot(delta_x, delta_y)
+        if length == 0:
+            raise ValueError("dimension start and end must be different points")
+
+        self._dimension_count += 1
+        dimension_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} Dimension {self._dimension_count}"
+        )
+        normal_x = -delta_y / length
+        normal_y = delta_x / length
+        offset_x = normal_x * offset
+        offset_y = normal_y * offset
+        dimension_start = (start_x + offset_x, start_y + offset_y)
+        dimension_end = (end_x + offset_x, end_y + offset_y)
+
+        selected_storeys_below = [
+            storey for storey in self.storeys if storey.elevation <= self.z
+        ]
+        annotation_z = (
+            max(
+                selected_storeys_below,
+                key=lambda storey: storey.elevation,
+            ).elevation
+            if selected_storeys_below
+            else 0.0
+        )
+        placement = np.eye(4)
+        placement[2, 3] = annotation_z
+
+        model = self.house.model
+        dimension = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=dimension_name,
+            predefined_type="DIMENSION",
+        )
+        dimension_representation = ifcopenshell.api.geometry.add_axis_representation(
+            model,
+            context=self.house._annotation_context,
+            axis=[dimension_start, dimension_end],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=dimension,
+            representation=dimension_representation,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=dimension,
+            matrix=placement,
+            is_si=True,
+        )
+
+        dimension_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=dimension,
+            name="BBIM_Dimension",
+        )
+        unit_choices = (
+            "Feet and Inches - Fractional",
+            "Feet - Decimal",
+            "Inches - Fractional",
+            "Inches - Decimal",
+            "Meters",
+            "Decimeters",
+            "Centimeters",
+            "Millimeters",
+        )
+        unit_enumeration = model.createIfcPropertyEnumeration(
+            "CustomUnit",
+            [model.createIfcText(unit) for unit in unit_choices],
+            None,
+        )
+        custom_unit = model.createIfcPropertyEnumeratedValue(
+            "CustomUnit",
+            None,
+            [model.createIfcText("Millimeters")],
+            unit_enumeration,
+        )
+        dimension_pset.HasProperties = (
+            *(dimension_pset.HasProperties or ()),
+            custom_unit,
+        )
+
+        drawing_products = [dimension]
+        if offset != 0:
+            extension_direction = 1.0 if offset > 0 else -1.0
+            # Model-space equivalent of 1 mm on this fixed 1:100 drawing.
+            extension_length = 0.1
+            beyond_x = normal_x * extension_direction * extension_length
+            beyond_y = normal_y * extension_direction * extension_length
+            extension_curves = []
+            for measured_point, dimension_point in (
+                ((start_x, start_y), dimension_start),
+                ((end_x, end_y), dimension_end),
+            ):
+                point_list = model.createIfcCartesianPointList2D(
+                    [
+                        measured_point,
+                        (
+                            dimension_point[0] + beyond_x,
+                            dimension_point[1] + beyond_y,
+                        ),
+                    ]
+                )
+                extension_curves.append(
+                    model.createIfcIndexedPolyCurve(point_list, None, False)
+                )
+            extension = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcAnnotation",
+                name=f"{dimension_name} Extension Lines",
+                predefined_type="LINEWORK",
+            )
+            extension_representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context,
+                "Annotation",
+                "GeometricCurveSet",
+                [model.createIfcGeometricCurveSet(extension_curves)],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=extension,
+                representation=extension_representation,
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=extension,
+                matrix=placement.copy(),
+                is_si=True,
+            )
+            extension_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=extension,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=extension_pset,
+                properties={"Classes": "dimension-extension fine"},
+            )
+            drawing_products.append(extension)
+
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=drawing_products,
+        )
+        return dimension
+
+    def add_door_annotation(
+        self,
+        door: ifcopenshell.entity_instance,
+        *,
+        offset: Number = 0,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a drawing-specific ``width/height`` label for ``door``.
+
+        The values come from ``IfcDoor.OverallWidth`` and ``OverallHeight``
+        and are displayed in millimetres on two lines.  The label is placed
+        inside the plan swing and oriented across the wall.  ``offset`` moves
+        it farther into the swing, in model metres; a negative value moves it
+        toward the wall.
+        """
+        if not isinstance(door, ifcopenshell.entity_instance) or not door.is_a(
+            "IfcDoor"
+        ):
+            raise TypeError("door must be an IfcDoor created by Wall.add_door")
+        if door.file is not self.house.model:
+            raise ValueError("door must belong to this house")
+        if door.id() in self._annotated_doors:
+            raise ValueError("door already has an annotation in this drawing")
+
+        storey = ifcopenshell.util.element.get_container(door)
+        if storey is None or not storey.is_a("IfcBuildingStorey"):
+            raise ValueError("door must belong to a building storey")
+        if not self._includes_storey_element(storey):
+            raise ValueError("door storey is not included in this drawing")
+        if door.OverallWidth is None or door.OverallHeight is None:
+            raise ValueError("door must define OverallWidth and OverallHeight")
+        width = float(door.OverallWidth)
+        height = float(door.OverallHeight)
+        offset = _number(offset, "offset")
+
+        plan = ifcopenshell.util.representation.get_representation(
+            door,
+            "Plan",
+            "Body",
+            "PLAN_VIEW",
+        )
+        if plan is None:
+            raise ValueError("door has no plan representation")
+        y_coordinates = [
+            float(point[1])
+            for item in plan.Items
+            if item.is_a("IfcIndexedPolyCurve")
+            for point in item.Points.CoordList
+        ]
+        if not y_coordinates:
+            raise ValueError("door plan representation has no swing geometry")
+        swing_y = max(y_coordinates, key=abs)
+        swing_sign = 1.0 if swing_y >= 0 else -1.0
+        # Swinging leaves reach approximately one door width into the room.
+        # Sliding-door plan geometry does not, so ensure that its label still
+        # clears the wall lining.
+        label_y = swing_y * 0.55 + swing_sign * offset
+        if abs(label_y) < 0.2:
+            label_y = swing_sign * (0.2 + offset)
+
+        door_placement = ifcopenshell.util.placement.get_local_placement(
+            door.ObjectPlacement
+        )
+        label_point = door_placement @ np.array(
+            (width / 2, label_y, 0.0, 1.0),
+            dtype=float,
+        )
+        placement = np.eye(4)
+        placement[:3, 0] = swing_sign * door_placement[:3, 1]
+        placement[:3, 1] = -swing_sign * door_placement[:3, 0]
+        placement[:3, 2] = door_placement[:3, 2]
+        placement[:3, 3] = label_point[:3]
+
+        model = self.house.model
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} {door.Name or 'Door'} Dimensions"
+        )
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=annotation_name,
+            predefined_type="TEXT",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+        literal_origin = model.createIfcAxis2Placement3D(
+            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+            model.createIfcDirection((0.0, 0.0, 1.0)),
+            model.createIfcDirection((1.0, 0.0, 0.0)),
+        )
+        literal = model.createIfcTextLiteralWithExtent(
+            f"{round(width * 1000)}\n{round(height * 1000)}",
+            literal_origin,
+            "RIGHT",
+            model.createIfcPlanarExtent(max(width, 0.5), max(width, 0.5)),
+            "center",
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [literal],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={"Classes": "door-dimension small"},
+        )
+        ifcopenshell.api.drawing.assign_product(
+            model,
+            relating_product=door,
+            related_object=annotation,
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        self._annotated_doors.add(door.id())
+        return annotation
 
     def add_batting(
         self,
@@ -2358,8 +2672,9 @@ class Wall(ifcopenshell.entity_instance):
         name: str,
         opening_start: float,
         opening_width: float,
+        wall_faces: bool = False,
     ) -> ifcopenshell.entity_instance:
-        """Add plan-only dashed linework for the wall above a door opening."""
+        """Add plan-only dashed linework for the wall above an opening."""
         model = self.storey.house.model
         annotation = ifcopenshell.api.root.create_entity(
             model,
@@ -2372,12 +2687,30 @@ class Wall(ifcopenshell.entity_instance):
             products=[annotation],
             relating_structure=self.storey.element,
         )
-        wall_centre = self.body_offset + self.thickness / 2
-        representation = ifcopenshell.api.geometry.add_axis_representation(
-            model,
-            context=self.storey.house._annotation_context,
-            axis=[(0.0, wall_centre), (opening_width, wall_centre)],
-        )
+        if wall_faces:
+            curves = []
+            for y in (self.body_offset, self.body_offset + self.thickness):
+                point_list = model.createIfcCartesianPointList2D(
+                    [(0.0, y), (opening_width, y)]
+                )
+                curves.append(
+                    model.createIfcIndexedPolyCurve(point_list, None, False)
+                )
+            representation = model.createIfcShapeRepresentation(
+                self.storey.house._annotation_context,
+                "Annotation",
+                "GeometricCurveSet",
+                [model.createIfcGeometricCurveSet(curves)],
+            )
+            classes = "door-overhead dashed"
+        else:
+            wall_centre = self.body_offset + self.thickness / 2
+            representation = ifcopenshell.api.geometry.add_axis_representation(
+                model,
+                context=self.storey.house._annotation_context,
+                axis=[(0.0, wall_centre), (opening_width, wall_centre)],
+            )
+            classes = "dashed"
         ifcopenshell.api.geometry.assign_representation(
             model,
             product=annotation,
@@ -2397,7 +2730,7 @@ class Wall(ifcopenshell.entity_instance):
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=pset,
-            properties={"Classes": "dashed"},
+            properties={"Classes": classes},
         )
         house = self.storey.house
         house._plan_annotations.append(annotation)
@@ -2731,6 +3064,7 @@ class Wall(ifcopenshell.entity_instance):
                 name=door_name,
                 opening_start=opening_start,
                 opening_width=opening_width,
+                wall_faces=True,
             )
         return door
 
