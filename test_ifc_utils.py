@@ -3053,15 +3053,19 @@ class HouseTests(unittest.TestCase):
             )
             self.assertEqual(Path(document.Location), output.resolve())
 
-    def test_layers_door_symbols_above_each_mask_and_overhead_pair(self) -> None:
+    def test_layers_door_and_furniture_symbols_above_plan_linework(self) -> None:
         with TemporaryDirectory() as directory:
             svg_path = Path(directory) / "plan.svg"
             svg_path.write_text(
                 """<svg>
   <g id="product-door" class="IfcDoor material-null projection"><path/></g>
+  <g id="product-table" class="IfcFurniture material-null projection"><path/></g>
+  <g id="product-basin" class="IfcSanitaryTerminal material-null cut"><path/></g>
+  <g id="product-cooker" class="IfcElectricAppliance material-null projection"><path/></g>
   <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK door-overhead dashed" x1="10" x2="20" y1="30" y2="30"/>
   <text>unrelated annotation</text>
   <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK door-overhead dashed" x1="10" x2="20" y1="32" y2="32"/>
+  <text><tspan class="IfcAnnotation furniture-label">TABLE</tspan></text>
 </svg>
 """,
                 encoding="utf-8",
@@ -3083,6 +3087,27 @@ class HouseTests(unittest.TestCase):
             )
             self.assertEqual(svg.count(overlay), 1)
             self.assertGreater(svg.index(overlay), svg.rindex("door-overhead dashed"))
+            furniture_overlay = '<g class="furniture-symbol-overlays">'
+            self.assertEqual(svg.count(furniture_overlay), 1)
+            for product_id in (
+                "product-table",
+                "product-basin",
+                "product-cooker",
+            ):
+                use = (
+                    f'<use href="#{product_id}" '
+                    f'xlink:href="#{product_id}"/>'
+                )
+                self.assertEqual(svg.count(use), 1)
+                self.assertGreater(svg.index(use), svg.index(overlay))
+            self.assertNotIn(
+                '<use href="#product-door" xlink:href="#product-door"/>',
+                svg[svg.index(furniture_overlay) :],
+            )
+            label_overlay = '<g class="furniture-label-overlays">'
+            self.assertEqual(svg.count(label_overlay), 1)
+            self.assertGreater(svg.index(label_overlay), svg.index(furniture_overlay))
+            self.assertEqual(svg.count("TABLE"), 2)
 
     def test_generates_svg_and_optional_png_from_an_ifc_file(self) -> None:
         house = House("My house")

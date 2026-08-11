@@ -1,7 +1,7 @@
 
 # Kamna:
-#	Eva Calor Arianna - Krbová kamna na dřevo,hermetická
-#	https://www.centrumvytapeni.cz/eva-calor-arianna-krbova-kamna-na-drevo-hermeticka/
+#	ROMOTOP LUGO N04 AKUM krbová kamna 3-7,8kW, akumulační, pískovec
+#	https://www.kotelrychle.cz/romotop-lugo-n04-akum-krbova-kamna-3-7-8kw--akumulacni--piskovec/
 
 # Cerpadlo:
 #	Tepelné čerpadlo LG Therma V Split 12kW HN1636M+HU123MA (model 2023)
@@ -147,6 +147,15 @@ ground.asset(
     center=(0.25+1.2, 0.25+0.35),
 	rotation=90,
 )
+ground.asset(
+	"Gauc", asset="3_seater_sofa",
+	center=(0.25+3+0.25+1.1, 7.2),
+)
+ground.asset(
+	"Gauc", asset="1_seater_sofa",
+	center=(0.25+3+0.25+0.5, 6.2),
+	rotation=90,
+)
 #ground.furniture(
 #    "Umyv",
 #    kind="USERDEFINED",
@@ -192,12 +201,12 @@ wall_kitchen = ground.wall(
 	(0.25+3+0.25, 0.25+1.7),
 	(0.25+3+0.25+4.5, 0.25+1.7),
 	wall_type=partition_wall, height=ground_floor_height)
-kitchen_door = wall_kitchen.add_door(
-	at=2.75,
+kitchen_door = wall_3.add_door(
+	at=0.25+0.625+1+1,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=0.2,
-	operation="SINGLE_SWING_LEFT",
+	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True,
 )
 
@@ -276,12 +285,12 @@ chimney = ground.chimney(
 )
 # zed loznice
 w0 = ground.wall(
-	(0.25+3+0.25+4.5+0.25+0.5, 4.25),
-	(0.25+3+0.25+4.5+0.25, 4.25),
+	(0.25+3+0.25+4.5+0.25+0.9, 4.21),
+	(0.25+3+0.25+4.5+0.25, 4.21),
 	wall_type=partition_wall, height=ground_floor_height)
 w1 = ground.wall(
-	(0.25+3+0.25+4.5+0.25+0.9, 4.63),
-	(0.25+3+0.25+4.5+0.25+3.5, 4.63),
+	(0.25+3+0.25+4.5+0.25+0.9, 4.65),
+	(0.25+3+0.25+4.5+0.25+3.5, 4.65),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_3.add_door(
     at=8-0.25-1.5,
@@ -297,11 +306,11 @@ w2 = ground.wall(
 	(0.25+3+0.25+4.5+0.25+0.5, 4.65),
 	wall_type=partition_wall, height=ground_floor_height)
 w3 = ground.wall(
-	(0.25+3+0.25+4.5+0.25, 4.25+1.0),
-	(0.25+3+0.25+4.5+0.25+0.4, 4.25+1.0),
+	(0.25+3+0.25+4.5+0.25, 4.375+1.0),
+	(0.25+3+0.25+4.5+0.25+0.4, 4.375+1.0),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_3.add_opening(
-    at=4.25,
+    at=0.25+0.625+1+1+1.5,
     width=1.0,
     height=2.125,
     sill_height=0.2,
@@ -311,17 +320,17 @@ ground.connect_wall(w1, w2)
 ground.connect_wall(w2, w3)
 
 ground.furniture(
-    "Krb",
+    "Kamna",
     kind="USERDEFINED",
-    size=(0.5, 0.5, 1.5),
+    size=(0.5, 0.6, 1.5),
     color="#ffff2B",
-    center=(0.25+3+0.25+4.5-0.27, 4.75),
+    center=(0.25+3+0.25+4.5+0.2, 4.375+0.5),
 	start_height=0.2,
 #    rotation=90,
 )
 
 # Kuchyn
-print("SEARCH: ", "\n".join(str(x) for x in house.assets.search("sink")))
+print("SEARCH: ", "\n".join(str(x) for x in house.assets.search("table")))
 ground.furniture(
 	"Drez",
     kind="USERDEFINED",
@@ -349,14 +358,14 @@ ground.furniture(
 ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
-    size=(1.25, 0.7, 0.8),
-    center=(0.25+3+0.25+0.7+0.7+1.25/2, 0.25+1.7+0.15+0.35),
+    size=(3.1, 0.7, 0.8),
+    center=(0.25+3+0.25+0.7+0.7+3.1/2, 0.25+1.7+0.15+0.35),
 )
-ground.furniture(
-	"Kuch.\nLinka",
-    kind="USERDEFINED",
-    size=(0.7, 1.8, 0.8),
-    center=(0.25+3+0.25+4.5-0.35, 0.25+1.7+0.15+0.9),
+ground.asset(
+    "Stul",
+    asset="retail_4_seater_rectangular_table",
+    center=(6, 4.5),
+#	rotation=90,
 )
 
 # Loznice
@@ -1062,7 +1071,7 @@ drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
 drawing1.add_dimension(start=(8.25, 7.5), end=(11.75, 7.5), offset=1.5)
 drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
 drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
-drawing1.add_dimension(start=(11.5, 4.63), end=(11.5, 7.75), offset=-1)
+drawing1.add_dimension(start=(11.5, 4.65), end=(11.5, 7.75), offset=-1)
 drawing1.add_dimension(start=(5, 0.25), end=(5, 0.25+1.7), offset=0)
 
 # The Rockwool occupies the right side of each wall axis.  These annotations

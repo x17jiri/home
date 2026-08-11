@@ -455,7 +455,7 @@ _DOOR_OVERHEAD_LINE = re.compile(
 
 
 def _postprocess_door_overheads(svg_path: Path) -> None:
-    """Mask solid wall lines, add dashes, then repaint door symbols on top."""
+    """Apply the final wall, door, furniture, and label drawing order."""
     svg = svg_path.read_text(encoding="utf-8")
     changed = False
 
@@ -521,6 +521,57 @@ def _postprocess_door_overheads(svg_path: Path) -> None:
             overlays = (
                 '  <g class="door-symbol-overlays">\n'
                 f"{uses}\n"
+                "  </g>\n"
+            )
+            svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+            changed = True
+
+    if '<g class="furniture-symbol-overlays">' not in svg:
+        furniture_ids = []
+        furniture_classes = {
+            "IfcFurniture",
+            "IfcSanitaryTerminal",
+            "IfcElectricAppliance",
+        }
+        for match in re.finditer(r'<g\b(?P<attrs>[^>\n]*)>', svg):
+            attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
+            classes = set(attributes.get("class", "").split())
+            element_id = attributes.get("id")
+            if (
+                element_id
+                and furniture_classes & classes
+                and {"projection", "cut"} & classes
+            ):
+                furniture_ids.append(element_id)
+        closing_svg = svg.rfind("</svg>")
+        if furniture_ids and closing_svg >= 0:
+            uses = "\n".join(
+                f'    <use href="#{element_id}" xlink:href="#{element_id}"/>'
+                for element_id in furniture_ids
+            )
+            overlays = (
+                '  <g class="furniture-symbol-overlays">\n'
+                f"{uses}\n"
+                "  </g>\n"
+            )
+            svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+            changed = True
+
+    if '<g class="furniture-label-overlays">' not in svg:
+        furniture_labels = [
+            match.group(0).strip()
+            for match in re.finditer(r"<text\b[^>]*>.*?</text>", svg, re.DOTALL)
+            if "furniture-label" in match.group(0)
+        ]
+        closing_svg = svg.rfind("</svg>")
+        if furniture_labels and closing_svg >= 0:
+            labels = "\n".join(
+                "    " + label.replace("\n", "\n    ")
+                for label in furniture_labels
+            )
+            overlays = (
+                '  <g class="furniture-label-overlays">\n'
+                f"{labels}\n"
                 "  </g>\n"
             )
             svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
