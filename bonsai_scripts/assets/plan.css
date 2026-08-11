@@ -121,7 +121,11 @@ marker[id^="batting-"] path {
 }
 
 .IfcFurniture.projection,
-.IfcFurniture.cut {
+.IfcFurniture.cut,
+.IfcSanitaryTerminal.projection,
+.IfcSanitaryTerminal.cut,
+.IfcElectricAppliance.projection,
+.IfcElectricAppliance.cut {
     fill: none !important;
     stroke: #6FB9D6 !important;
     stroke-width: 0.13 !important;

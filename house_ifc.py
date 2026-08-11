@@ -32,7 +32,7 @@ load_bearing_wall = house.wall_type(
 partition_wall = house.wall_type(
     "Partition wall - VPC 115 mm",
     layers=[
-        ("Brick", 0.125),
+        ("Brick", 0.15),
         "axis",
     ],
 )
@@ -134,26 +134,44 @@ ground.furniture(
     color="#ffffff",
     center=(0.25+0.4, 0.25+0.35),
 )
-ground.furniture(
+#ground.furniture(
+#    "Pracka",
+#    kind="USERDEFINED",
+#    size=(0.7, 0.7, 2.0),
+#    color="#ffffff",
+#    center=(0.25+1.2, 0.25+0.35),
+#)
+ground.asset(
     "Pracka",
-    kind="USERDEFINED",
-    size=(0.7, 0.7, 2.0),
-    color="#ffffff",
+    asset="washing_machine",
     center=(0.25+1.2, 0.25+0.35),
+	rotation=90,
 )
-ground.furniture(
+#ground.furniture(
+#    "Umyv",
+#    kind="USERDEFINED",
+#    size=(0.7, 0.7, 2.0),
+#    color="#ffffff",
+#    center=(0.25+2, 0.25+0.35),
+#)
+ground.asset(
     "Umyv",
-    kind="USERDEFINED",
-    size=(0.7, 0.7, 2.0),
-    color="#ffffff",
+    asset="basin_large",
     center=(0.25+2, 0.25+0.35),
+	rotation=180,
 )
-ground.furniture(
+#ground.furniture(
+#    "Sprcha",
+#    kind="USERDEFINED",
+#    size=(1, 1, 2.0),
+#    color="#ffffff",
+#    center=(0.25+0.5, 0.25+1.8),
+#)
+ground.asset(
     "Sprcha",
-    kind="USERDEFINED",
-    size=(1, 1, 2.0),
-    color="#ffffff",
+    asset="shower_90x90",
     center=(0.25+0.5, 0.25+1.8),
+	rotation=90,
 )
 #ground.furniture(
 #    "WC",
@@ -164,18 +182,18 @@ ground.furniture(
 #)
 ground.asset(
     "WC",
-    asset="toilet_with_cistern",
+    asset="toilet_without_cistern",
     center=(0.25+2.6, 0.25+1.8),
     rotation=-90,
 )
 
-# Kitchen
+# Kitchen, Kuchyn
 wall_kitchen = ground.wall(
 	(0.25+3+0.25, 0.25+1.7),
 	(0.25+3+0.25+4.5, 0.25+1.7),
 	wall_type=partition_wall, height=ground_floor_height)
 kitchen_door = wall_kitchen.add_door(
-	at=2.5,
+	at=2.75,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=0.2,
@@ -302,6 +320,45 @@ ground.furniture(
 #    rotation=90,
 )
 
+# Kuchyn
+print("SEARCH: ", "\n".join(str(x) for x in house.assets.search("sink")))
+ground.furniture(
+	"Drez",
+    kind="USERDEFINED",
+    size=(0.7, 0.95, 0.8),
+    center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+(0.95/2)),
+)
+ground.furniture(
+	"Mycka",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 0.8),
+    center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+0.35+0.95),
+)
+ground.furniture(
+	"Lednice",
+    kind="USERDEFINED",
+    size=(0.7, 1, 2),
+    center=(0.25+3+0.25+0.35, 4.75-0.5),
+)
+ground.furniture(
+	"Sporak",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 0.8),
+    center=(0.25+3+0.25+0.35+0.7, 0.25+1.7+0.15+0.35),
+)
+ground.furniture(
+	"Kuch.\nLinka",
+    kind="USERDEFINED",
+    size=(1.25, 0.7, 0.8),
+    center=(0.25+3+0.25+0.7+0.7+1.25/2, 0.25+1.7+0.15+0.35),
+)
+ground.furniture(
+	"Kuch.\nLinka",
+    kind="USERDEFINED",
+    size=(0.7, 1.8, 0.8),
+    center=(0.25+3+0.25+4.5-0.35, 0.25+1.7+0.15+0.9),
+)
+
 # Loznice
 bed = ground.furniture(
     "Postel",
@@ -309,7 +366,6 @@ bed = ground.furniture(
     size=(1.6, 2.0, 0.5),
     color="#8B5A2B",
     center=(0.25+3+0.25+4.5+0.25+3.5/2, 8-0.25-1),
-#    rotation=90,
 )
 
 # Opening from main to side hallway
