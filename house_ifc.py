@@ -103,10 +103,10 @@ wall_front.add_window(
 wall_back.add_window(
 	at=2.75, width=0.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=0.25+3.5+0.25+0.5+1.5+1,width=1, sill_height=0.25+0.875, height=0.25+2.25)
-wall_back.add_window(
+	at=0.25+3.5+0.25+0.5+1+1,width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
+wall_back.add_door(
 	at=0.25+3.5+0.25+0.5,
-	width=1.5, sill_height=0.25+0.25, height=0.25+2.125)
+	width=0.8, sill_height=0.25+0.1, height=2.15, opening_width=1, clear_height=2)
 wall_back.add_window(
 	at=0.25+3.5+0.25+4.5+0.25+0.75,
 	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
@@ -137,7 +137,7 @@ ground.furniture(
     center=(0.25+0.4, 0.25+0.35),
 )
 ground.furniture(
-    "Pracka",
+    "Pračka",
     kind="USERDEFINED",
     size=(0.7, 0.7, 2.0),
     color="#ffffff",
@@ -267,7 +267,7 @@ stair_landing = ground.stair_landing(
 
 # Vedlejsi chodba
 ground.furniture(
-    "vestavna skrin",
+    "vestavěná skříň",
     kind="USERDEFINED",
     size=(4.4, 0.5, 1.5),
     color="#ffffff",
@@ -300,7 +300,8 @@ wall_3.add_door(
     height=0.25+2.125,
     clear_height=door_clear_height,
     name="Bedroom door",
-	operation="SINGLE_SWING_RIGHT"
+	operation="SINGLE_SWING_RIGHT",
+	reverse_swing=True,
 )
 # Vyklenek Krb
 w2 = ground.wall(
@@ -334,13 +335,13 @@ ground.furniture(
 # Kuchyn
 print("SEARCH: ", "\n".join(str(x) for x in house.assets.search("table")))
 ground.furniture(
-	"Drez",
+	"Dřez",
     kind="USERDEFINED",
     size=(0.7, 0.95, 0.8),
     center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+(0.95/2)),
 )
 ground.furniture(
-	"Mycka",
+	"Myčka",
     kind="USERDEFINED",
     size=(0.7, 0.7, 0.8),
     center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+0.35+0.95),
@@ -352,13 +353,13 @@ ground.furniture(
     center=(0.25+3+0.25+0.35, 4.75-0.5),
 )
 ground.furniture(
-	"Sporak",
+	"Sporák",
     kind="USERDEFINED",
     size=(0.7, 0.7, 0.8),
     center=(0.25+3+0.25+0.35+0.7, 0.25+1.7+0.15+0.35),
 )
 ground.furniture(
-	"Kuch.\nLinka",
+	"Kuchyňská Linka",
     kind="USERDEFINED",
     size=(3.1, 0.7, 0.8),
     center=(0.25+3+0.25+0.7+0.7+3.1/2, 0.25+1.7+0.15+0.35),
@@ -1083,17 +1084,48 @@ drawing1.add_dimension(start=(5, 0.25), end=(5, 0.25+1.7), offset=0)
 
 drawing1.add_dimension(start=(3.5+4.75, 0.25), end=(3.5+4.75, 0.25+0.625), offset=1.3)
 drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625), end=(3.5+4.75, 0.25+0.625+1), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1), end=(3.5+4.75, 0.25+0.625+1+1), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1), end=(3.5+4.75, 0.25+0.625+1+1), offset=-0.5)
 drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1), offset=1.3)
 drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5), offset=1.3)
 drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), offset=1.3)
 drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1+0.5), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), offset=-1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1+0.5), offset=-1.3)
 
 drawing1.add_dimension(start=(3.5, 7.75-2), end=(3.5, 7.75), offset=1.3)
 drawing1.add_dimension(start=(3.5, 7.75-2-1), end=(3.5, 7.75-2), offset=1.3)
-drawing1.add_dimension(start=(3.5, 0.25+2.3), end=(3.5, 7.75-2-1), offset=1.3)
+drawing1.add_dimension(start=(3.5, 0.25+2.3+0.15), end=(3.5, 7.75-2-1), offset=1.3)
+
+drawing1.add_room_annotation(
+    (1.1, 0.25+2.3+0.25+2.5),
+    identifier="0.01",
+    area=5.05*3,   # m²
+)
+drawing1.add_room_annotation(
+    (1.6, 0.25+1.15),
+    identifier="0.02",
+    area=2.3*3,   # m²
+)
+drawing1.add_room_annotation(
+    (3.5+1.4, 0.5+1.7+2.3),
+    identifier="0.03",
+    area=5.65*4.5,   # m²
+)
+drawing1.add_room_annotation(
+    (3.5+2.3, 0.5+0.8),
+    identifier="0.04",
+    area=1.7*4.5,   # m²
+)
+drawing1.add_room_annotation(
+    (3.5+4.25+2.1, 5+0.5),
+    identifier="0.05",
+    area=3*3.5-0.65*0.75,   # m²
+)
+drawing1.add_room_annotation(
+    (3.5+4.25+2.1, 5-1.3),
+    identifier="0.06",
+    area=4.4*3.5-0.9*0.55,   # m²
+)
 
 # The Rockwool occupies the right side of each wall axis.  These annotations
 # belong only to Drawing 1 and follow the Rockwool centre lines.

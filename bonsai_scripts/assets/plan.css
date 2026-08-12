@@ -152,6 +152,29 @@ tspan.DIMENSION {
     font-size: 2px !important;
 }
 
+/* Manual room identifier, separator, and area. */
+text.room-annotation,
+tspan.room-annotation {
+    fill: black !important;
+    stroke: none !important;
+}
+
+text.room-identifier,
+tspan.room-identifier {
+    font-size: 3px !important;
+}
+
+text.room-area,
+tspan.room-area {
+    font-size: 2px !important;
+}
+
+.PredefinedType-LINEWORK.room-annotation-separator {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+}
+
 /* Doors: light plan swing, both overhead wall faces, and size labels. */
 .IfcDoor.projection,
 .IfcDoor.cut {

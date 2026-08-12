@@ -233,6 +233,18 @@ drawing = house.add_drawing(
 drawing.add_door_annotation(kitchen_door, offset=0.05)
 ```
 
+Room labels are deliberately manual: provide the separator centre, room
+identifier, and area in square metres. The helper formats the area with two
+decimal places and does not attempt to infer room boundaries:
+
+```python
+drawing.add_room_annotation(
+    (4.5, 3.2),
+    identifier="P.01",
+    area=8.30,
+)
+```
+
 The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
 metres in both X and Y, so the example cuts the model at 1.6 m and covers a
 10 m by 10 m area. `png=True` additionally creates `house.png` through

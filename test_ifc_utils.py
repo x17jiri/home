@@ -2523,7 +2523,8 @@ class HouseTests(unittest.TestCase):
                 reversed_lining.Points.CoordList,
             )
 
-        closed_leaf_y = wall.body_offset + wall.thickness
+        positive_wall_face_y = wall.body_offset + wall.thickness
+        negative_wall_face_y = wall.body_offset
         normal_leaf = normal_plan.Items[-1]
         reversed_leaf = reversed_plan.Items[-1]
         self.assertEqual(
@@ -2532,11 +2533,17 @@ class HouseTests(unittest.TestCase):
         )
         self.assertGreater(
             max(point[1] for point in normal_leaf.Points.CoordList),
-            closed_leaf_y,
+            positive_wall_face_y,
         )
         self.assertLess(
             min(point[1] for point in reversed_leaf.Points.CoordList),
-            closed_leaf_y,
+            negative_wall_face_y,
+        )
+        self.assertAlmostEqual(
+            max(point[1] for point in normal_leaf.Points.CoordList)
+            - positive_wall_face_y,
+            negative_wall_face_y
+            - min(point[1] for point in reversed_leaf.Points.CoordList),
         )
         normal_arc = normal_plan.Items[-2]
         reversed_arc = reversed_plan.Items[-2]
@@ -2546,7 +2553,11 @@ class HouseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(
             normal_arc.BasisCurve.Position.Location.Coordinates[1],
+            positive_wall_face_y,
+        )
+        self.assertAlmostEqual(
             reversed_arc.BasisCurve.Position.Location.Coordinates[1],
+            negative_wall_face_y,
         )
 
     def test_adds_an_unfilled_semantic_wall_opening(self) -> None:
@@ -2768,6 +2779,71 @@ class HouseTests(unittest.TestCase):
                 ),
                 ["Millimeters"],
             )
+
+    def test_adds_a_manual_room_identifier_and_area_annotation(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.25)
+        drawing = house.add_drawing(
+            "Ground plan", 2, 3, 1.6, 5, storeys=[ground]
+        )
+        other_drawing = house.add_drawing(
+            "Other plan", 2, 3, 1.6, 5, storeys=[ground]
+        )
+
+        identifier = drawing.add_room_annotation(
+            (4.5, 3.2),
+            identifier="P.01",
+            area=8.3,
+        )
+
+        self.assertEqual(identifier.Name, "Ground plan Room P.01")
+        self.assertEqual(identifier.ObjectType, "TEXT")
+        self.assertEqual(
+            identifier.Representation.Representations[0].Items[0].Literal,
+            "P.01",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                identifier, "EPset_Annotation", "Classes"
+            ),
+            "room-annotation room-identifier",
+        )
+        metadata = ifcopenshell.util.element.get_pset(
+            identifier, "EPset_RoomAnnotation"
+        )
+        self.assertEqual(metadata["Identifier"], "P.01")
+        self.assertAlmostEqual(metadata["Area"], 8.3)
+
+        members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
+        area = next(member for member in members if member.Name.endswith(" Area"))
+        self.assertEqual(
+            area.Representation.Representations[0].Items[0].Literal,
+            "8,30 m²",
+        )
+        separator = next(
+            member for member in members if member.Name.endswith(" Separator")
+        )
+        self.assertEqual(separator.ObjectType, "LINEWORK")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                separator, "EPset_Annotation", "Classes"
+            ),
+            "room-annotation-separator",
+        )
+        np.testing.assert_allclose(
+            separator.Representation.Representations[0].Items[0].Points.CoordList,
+            ((4.125, 3.2), (4.875, 3.2)),
+            atol=1e-9,
+        )
+        self.assertEqual(
+            set(other_drawing.group.IsGroupedBy[0].RelatedObjects),
+            {other_drawing.element},
+        )
+
+        with self.assertRaisesRegex(ValueError, "area must be greater than zero"):
+            drawing.add_room_annotation((1, 1), identifier="P.02", area=0)
+        with self.assertRaisesRegex(ValueError, "identifier must not be empty"):
+            drawing.add_room_annotation((1, 1), identifier=" ", area=5)
 
     def test_automatically_adds_door_dimensions_to_included_drawings(self) -> None:
         house = House("My house")

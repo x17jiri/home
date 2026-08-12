@@ -1934,6 +1934,169 @@ class Drawing:
         )
         return dimension
 
+    def add_room_annotation(
+        self,
+        position: Point,
+        *,
+        identifier: str,
+        area: Number,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a manual room identifier and area label to this drawing.
+
+        ``position`` is the global model XY coordinate at the centre of the
+        separator line.  ``area`` is supplied in square metres and displayed
+        with two decimal places and a square-metre suffix.  This helper does
+        not create an ``IfcSpace`` or calculate area from room boundaries.
+        """
+        x, y = _point(position, "position")
+        identifier = _name(identifier, "identifier")
+        area = _number(area, "area")
+        if area <= 0:
+            raise ValueError("area must be greater than zero")
+
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} Room {identifier}"
+        )
+        selected_storeys_below = [
+            storey for storey in self.storeys if storey.elevation <= self.z
+        ]
+        annotation_z = (
+            max(
+                selected_storeys_below,
+                key=lambda storey: storey.elevation,
+            ).elevation
+            if selected_storeys_below
+            else 0.0
+        )
+        model = self.house.model
+
+        def create_text_annotation(
+            text_name: str,
+            literal_value: str,
+            vertical_offset: float,
+            classes: str,
+        ) -> ifcopenshell.entity_instance:
+            annotation = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcAnnotation",
+                name=text_name,
+                predefined_type="TEXT",
+            )
+            placement = np.eye(4)
+            placement[:3, 3] = (x, y + vertical_offset, annotation_z)
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=annotation,
+                matrix=placement,
+                is_si=True,
+            )
+            literal_origin = model.createIfcAxis2Placement3D(
+                model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+                model.createIfcDirection((0.0, 0.0, 1.0)),
+                model.createIfcDirection((1.0, 0.0, 0.0)),
+            )
+            literal = model.createIfcTextLiteralWithExtent(
+                literal_value,
+                literal_origin,
+                "RIGHT",
+                model.createIfcPlanarExtent(1.0, 1.0),
+                "center",
+            )
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context,
+                "Annotation",
+                "Annotation2D",
+                [literal],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=annotation,
+                representation=representation,
+            )
+            pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=annotation,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=pset,
+                properties={"Classes": classes},
+            )
+            return annotation
+
+        identifier_annotation = create_text_annotation(
+            annotation_name,
+            identifier,
+            0.18,
+            "room-annotation room-identifier",
+        )
+        area_text = f"{area:.2f}".replace(".", ",") + " m²"
+        area_annotation = create_text_annotation(
+            f"{annotation_name} Area",
+            area_text,
+            -0.15,
+            "room-annotation room-area",
+        )
+        metadata = ifcopenshell.api.pset.add_pset(
+            model,
+            product=identifier_annotation,
+            name="EPset_RoomAnnotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=metadata,
+            properties={"Identifier": identifier, "Area": area},
+        )
+
+        line_width = max(0.75, len(identifier) * 0.18)
+        separator = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{annotation_name} Separator",
+            predefined_type="LINEWORK",
+        )
+        separator_representation = ifcopenshell.api.geometry.add_axis_representation(
+            model,
+            context=self.house._annotation_context,
+            axis=[
+                (x - line_width / 2, y),
+                (x + line_width / 2, y),
+            ],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=separator,
+            representation=separator_representation,
+        )
+        separator_placement = np.eye(4)
+        separator_placement[2, 3] = annotation_z
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=separator,
+            matrix=separator_placement,
+            is_si=True,
+        )
+        separator_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=separator,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=separator_pset,
+            properties={"Classes": "room-annotation-separator"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[identifier_annotation, area_annotation, separator],
+        )
+        return identifier_annotation
+
     def add_door_annotation(
         self,
         door: ifcopenshell.entity_instance,
@@ -3509,14 +3672,14 @@ class Wall(ifcopenshell.entity_instance):
         self,
         representation: ifcopenshell.entity_instance,
     ) -> None:
-        """Mirror plan-only leaf and arc geometry across the closed leaf."""
+        """Mirror the plan swing onto the opposite room-side wall face."""
         items = list(representation.Items)
         if len(items) < 3:
             raise RuntimeError("unexpected door plan representation structure")
         ShapeBuilder(self.storey.house.model).mirror(
             items[2:],
             mirror_axes=(0.0, 1.0),
-            mirror_point=(0.0, self.body_offset + self.thickness),
+            mirror_point=(0.0, self.body_offset + self.thickness / 2),
         )
 
     def add_opening(
