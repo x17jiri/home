@@ -2186,6 +2186,7 @@ class HouseTests(unittest.TestCase):
             at=0.5,
             width=0.9,
             height=2.1,
+            clear_height=1.97,
             sill_height=0.2,
             opening_width=1.1,
             opening_height=2.2,
@@ -2202,6 +2203,12 @@ class HouseTests(unittest.TestCase):
         self.assertTrue(door.is_a("IfcDoor"))
         self.assertEqual(door.OverallWidth, 0.9)
         self.assertEqual(door.OverallHeight, 2.1)
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                door, "EPset_Door", "ClearHeight"
+            ),
+            1.97,
+        )
         self.assertEqual(door.OperationType, "SINGLE_SWING_RIGHT")
         self.assertTrue(window.is_a("IfcWindow"))
         self.assertEqual(window.OverallWidth, 1.2)
@@ -2380,6 +2387,20 @@ class HouseTests(unittest.TestCase):
                 width=0.9,
                 height=2.1,
                 opening_height=2,
+            )
+        with self.assertRaisesRegex(ValueError, "clear_height"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                clear_height=0,
+            )
+        with self.assertRaisesRegex(ValueError, "clear_height"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                clear_height=2.2,
             )
         with self.assertRaisesRegex(TypeError, "show_overhead"):
             wall.add_door(
@@ -2748,6 +2769,100 @@ class HouseTests(unittest.TestCase):
                 ["Millimeters"],
             )
 
+    def test_automatically_adds_door_dimensions_to_included_drawings(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        upper = house.storey("Upper floor", elevation=3)
+        ground_wall = ground.wall((0, 0), (5, 0), thickness=0.2, height=2.8)
+        upper_wall = upper.wall((0, 0), (5, 0), thickness=0.2, height=2.8)
+        first_door = ground_wall.add_door(
+            at=0.5,
+            width=0.8,
+            height=2.1,
+            clear_height=1.97,
+        )
+        upper_wall.add_door(at=0.5, width=0.9, height=2.1)
+
+        drawing = house.add_drawing(
+            "Ground plan",
+            2.5,
+            2,
+            1.6,
+            4,
+            storeys=[ground],
+            door_annotation_offset=0.05,
+        )
+        second_door = ground_wall.add_door(at=2, width=0.9, height=2.1)
+
+        labels = [
+            annotation
+            for annotation in drawing.group.IsGroupedBy[0].RelatedObjects
+            if "door-dimension"
+            in (
+                ifcopenshell.util.element.get_pset(
+                    annotation, "EPset_Annotation", "Classes"
+                )
+                or ""
+            ).split()
+        ]
+        values_by_door = {}
+        for label in labels:
+            related_door = next(
+                relation.RelatingProduct
+                for relation in label.HasAssignments
+                if relation.is_a("IfcRelAssignsToProduct")
+            )
+            values_by_door.setdefault(related_door, set()).add(
+                label.Representation.Representations[0].Items[0].Literal
+            )
+        self.assertEqual(
+            values_by_door,
+            {
+                first_door: {"800", "1970"},
+                second_door: {"900", "2100"},
+            },
+        )
+        separators = [
+            annotation
+            for annotation in drawing.group.IsGroupedBy[0].RelatedObjects
+            if ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"
+            )
+            == "door-dimension-separator"
+        ]
+        self.assertEqual(len(separators), 2)
+
+        manual_drawing = house.add_drawing(
+            "Manual plan",
+            2.5,
+            2,
+            1.6,
+            4,
+            storeys=[ground],
+            door_annotations=False,
+        )
+        self.assertFalse(
+            any(
+                "door-dimension"
+                in (
+                    ifcopenshell.util.element.get_pset(
+                        annotation, "EPset_Annotation", "Classes"
+                    )
+                    or ""
+                ).split()
+                for annotation in manual_drawing.group.IsGroupedBy[0].RelatedObjects
+            )
+        )
+        with self.assertRaisesRegex(TypeError, "door_annotations must be a boolean"):
+            house.add_drawing(
+                "Invalid plan",
+                2.5,
+                2,
+                1.6,
+                4,
+                door_annotations="yes",
+            )
+
     def test_adds_a_scoped_door_width_height_annotation(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0.25)
@@ -2764,10 +2879,22 @@ class HouseTests(unittest.TestCase):
             (1, 2), (5, 2), thickness=0.25, height=3
         ).add_door(at=1, width=0.8, height=1.97)
         drawing = house.add_drawing(
-            "Ground plan", 3, 2, 1.6, 4, storeys=[ground]
+            "Ground plan",
+            3,
+            2,
+            1.6,
+            4,
+            storeys=[ground],
+            door_annotations=False,
         )
         other_drawing = house.add_drawing(
-            "Other plan", 3, 2, 1.6, 4, storeys=[ground]
+            "Other plan",
+            3,
+            2,
+            1.6,
+            4,
+            storeys=[ground],
+            door_annotations=False,
         )
 
         annotation = drawing.add_door_annotation(
@@ -2778,15 +2905,15 @@ class HouseTests(unittest.TestCase):
 
         self.assertEqual(annotation.ObjectType, "TEXT")
         self.assertEqual(annotation.Name, "Kitchen door dimensions")
-        literal = annotation.Representation.Representations[0].Items[0]
-        self.assertTrue(literal.is_a("IfcTextLiteralWithExtent"))
-        self.assertEqual(literal.Literal, "900\n2100")
-        self.assertEqual(literal.BoxAlignment, "center")
+        width_literal = annotation.Representation.Representations[0].Items[0]
+        self.assertTrue(width_literal.is_a("IfcTextLiteralWithExtent"))
+        self.assertEqual(width_literal.Literal, "900")
+        self.assertEqual(width_literal.BoxAlignment, "center")
         self.assertEqual(
             ifcopenshell.util.element.get_pset(
                 annotation, "EPset_Annotation", "Classes"
             ),
-            "door-dimension small",
+            "door-dimension door-dimension-width small",
         )
         assignment = next(
             relation
@@ -2804,13 +2931,77 @@ class HouseTests(unittest.TestCase):
         local_annotation_point = np.linalg.inv(door_placement) @ np.append(
             annotation_placement[:3, 3], 1
         )
-        self.assertAlmostEqual(local_annotation_point[0], 0.45)
+        self.assertAlmostEqual(abs(local_annotation_point[0] - 0.45), 0.12)
         self.assertGreater(abs(local_annotation_point[1]), 0.2)
         self.assertAlmostEqual(
             abs(np.dot(annotation_placement[:3, 0], door_placement[:3, 1])),
             1,
         )
+        self.assertTrue(
+            annotation_placement[0, 0] > -1e-9
+            and (
+                abs(annotation_placement[0, 0]) > 1e-9
+                or annotation_placement[1, 0] >= 0
+            )
+        )
         self.assertIn(annotation, drawing.group.IsGroupedBy[0].RelatedObjects)
+        height_annotation = next(
+            candidate
+            for candidate in drawing.group.IsGroupedBy[0].RelatedObjects
+            if candidate.Name == "Kitchen door dimensions Height"
+        )
+        height_literal = height_annotation.Representation.Representations[0].Items[0]
+        self.assertEqual(height_literal.Literal, "2100")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                height_annotation, "EPset_Annotation", "Classes"
+            ),
+            "door-dimension door-dimension-height small",
+        )
+        separator = next(
+            candidate
+            for candidate in drawing.group.IsGroupedBy[0].RelatedObjects
+            if candidate.Name == "Kitchen door dimensions Separator"
+        )
+        self.assertEqual(separator.ObjectType, "LINEWORK")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                separator, "EPset_Annotation", "Classes"
+            ),
+            "door-dimension-separator",
+        )
+        separator_representation = ifcopenshell.util.representation.get_representation(
+            separator, "Plan", "Annotation", "PLAN_VIEW"
+        )
+        np.testing.assert_allclose(
+            separator_representation.Items[0].Points.CoordList,
+            ((-0.71125, 0.0), (0.38875, 0.0)),
+            atol=1e-9,
+        )
+        separator_placement = ifcopenshell.util.placement.get_local_placement(
+            separator.ObjectPlacement
+        )
+        local_separator_point = np.linalg.inv(door_placement) @ np.append(
+            separator_placement[:3, 3], 1
+        )
+        self.assertAlmostEqual(local_separator_point[0], 0.45)
+        height_placement = ifcopenshell.util.placement.get_local_placement(
+            height_annotation.ObjectPlacement
+        )
+        self.assertAlmostEqual(
+            np.dot(
+                annotation_placement[:2, 3] - separator_placement[:2, 3],
+                annotation_placement[:2, 1],
+            ),
+            0.12,
+        )
+        self.assertAlmostEqual(
+            np.dot(
+                height_placement[:2, 3] - separator_placement[:2, 3],
+                annotation_placement[:2, 1],
+            ),
+            -0.15,
+        )
         self.assertNotIn(
             annotation,
             other_drawing.group.IsGroupedBy[0].RelatedObjects,
@@ -2827,12 +3018,15 @@ class HouseTests(unittest.TestCase):
             output = Path(directory) / "door-annotation.ifc"
             house.write(output)
             reopened = ifcopenshell.open(output)
-            reopened_literal = next(
+            reopened_literals = [
                 literal
                 for literal in reopened.by_type("IfcTextLiteralWithExtent")
-                if literal.Literal == "900\n2100"
+                if literal.Literal in {"900", "2100"}
+            ]
+            self.assertEqual(
+                {literal.Literal for literal in reopened_literals},
+                {"900", "2100"},
             )
-            self.assertEqual(reopened_literal.Literal, "900\n2100")
 
     def test_stores_drawing_camera_and_scoped_batting_in_ifc(self) -> None:
         house = House("My house")
@@ -2892,11 +3086,25 @@ class HouseTests(unittest.TestCase):
 
         # Exercise annotations created after their drawings.
         ground_drawing = house.add_drawing(
-            "Ground plan", 2.5, 2, 1.6, 4, storeys=[ground]
+            "Ground plan",
+            2.5,
+            2,
+            1.6,
+            4,
+            storeys=[ground],
+            door_annotations=False,
         )
-        all_storeys_drawing = house.add_drawing("All storeys", 2.5, 2, 1.6, 4)
+        all_storeys_drawing = house.add_drawing(
+            "All storeys", 2.5, 2, 1.6, 4, door_annotations=False
+        )
         empty_drawing = house.add_drawing(
-            "No storeys", 2.5, 2, 1.6, 4, storeys=[]
+            "No storeys",
+            2.5,
+            2,
+            1.6,
+            4,
+            storeys=[],
+            door_annotations=False,
         )
         ground_wall.add_door(at=0.5, width=0.9, height=2.1)
         upper_wall.add_door(at=2, width=0.9, height=2.1)
@@ -3062,6 +3270,7 @@ class HouseTests(unittest.TestCase):
   <g id="product-table" class="IfcFurniture material-null projection"><path/></g>
   <g id="product-basin" class="IfcSanitaryTerminal material-null cut"><path/></g>
   <g id="product-cooker" class="IfcElectricAppliance material-null projection"><path/></g>
+  <line class="GlobalId-dimension IfcAnnotation PredefinedType-LINEWORK door-dimension-separator" x1="5" x2="20" y1="31" y2="31"/>
   <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK door-overhead dashed" x1="10" x2="20" y1="30" y2="30"/>
   <text>unrelated annotation</text>
   <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK door-overhead dashed" x1="10" x2="20" y1="32" y2="32"/>
@@ -3087,6 +3296,16 @@ class HouseTests(unittest.TestCase):
             )
             self.assertEqual(svg.count(overlay), 1)
             self.assertGreater(svg.index(overlay), svg.rindex("door-overhead dashed"))
+            dimension_overlay = '<g class="door-dimension-overlays">'
+            separator = (
+                '<line class="GlobalId-dimension IfcAnnotation '
+                'PredefinedType-LINEWORK door-dimension-separator" '
+                'x1="5" x2="20" y1="31" y2="31"/>'
+            )
+            self.assertEqual(svg.count(dimension_overlay), 1)
+            self.assertEqual(svg.count(separator), 2)
+            self.assertGreater(svg.index(dimension_overlay), svg.index(polygon))
+            self.assertLess(svg.index(dimension_overlay), svg.index(overlay))
             furniture_overlay = '<g class="furniture-symbol-overlays">'
             self.assertEqual(svg.count(furniture_overlay), 1)
             for product_id in (
@@ -3108,6 +3327,37 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(svg.count(label_overlay), 1)
             self.assertGreater(svg.index(label_overlay), svg.index(furniture_overlay))
             self.assertEqual(svg.count("TABLE"), 2)
+
+    def test_centers_short_dimension_labels_during_svg_postprocessing(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "plan.svg"
+            svg_path.write_text(
+                """<svg>
+  <line class="GlobalId-short IfcAnnotation PredefinedType-DIMENSION" x1="92.5" x2="92.5" y1="81.25" y2="76.25"/>
+  <text dominant-baseline="baseline" text-anchor="middle" transform="translate(91.5, 73.25) rotate(-90.0)">
+    <tspan class="DIMENSION">500</tspan>
+  </text>
+  <line class="GlobalId-long IfcAnnotation PredefinedType-DIMENSION" x1="92.5" x2="92.5" y1="101.25" y2="91.25"/>
+  <text dominant-baseline="baseline" text-anchor="middle" transform="translate(91.5, 96.25) rotate(-90.0)">
+    <tspan class="DIMENSION">1000</tspan>
+  </text>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_door_overheads(svg_path)
+            _postprocess_door_overheads(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertIn(
+                'transform="translate(91.5, 78.75) rotate(-90.0)"',
+                svg,
+            )
+            self.assertIn(
+                'transform="translate(91.5, 96.25) rotate(-90.0)"',
+                svg,
+            )
 
     def test_generates_svg_and_optional_png_from_an_ifc_file(self) -> None:
         house = House("My house")

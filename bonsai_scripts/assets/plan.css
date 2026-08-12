@@ -135,7 +135,7 @@ text.furniture-label,
 tspan.furniture-label {
     fill: #6FB9D6 !important;
     stroke: none !important;
-    font-size: 2px !important;
+    font-size: 1.7px !important;
 }
 
 /* Compact plan dimensions: thinner linework, ticks, and labels. */
@@ -178,4 +178,10 @@ tspan.door-dimension {
     fill: black !important;
     stroke: none !important;
     font-size: 2px !important;
+}
+
+.PredefinedType-LINEWORK.door-dimension-separator {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
 }

@@ -56,6 +56,7 @@ facade_insulation = house.wall_type(
 wall2_x = 0.25 + 3 + 0.25;
 wall3_x = wall2_x + 4.5 + 0.25;
 ground_floor_height = 0.25+2.75
+door_clear_height = 2.1
 stair_height = 3.0-0.2+0.25+0.11
 step_count = 17
 
@@ -86,6 +87,7 @@ wall_front.add_door(
 	at=wall3_x+0.25,
 	opening_width=1.125, width=0.9,
 	height=0.25+2.125,
+	clear_height=door_clear_height,
 	sill_height=0.2,
 	operation="SINGLE_SWING_RIGHT"
 )
@@ -114,39 +116,39 @@ wall_bathroom = ground.wall(
 	(0.25, 0.25+2.3), (0.25+3, 0.25+2.3),
 	wall_type=partition_wall, height=ground_floor_height)
 ground.furniture(
-    "LG",
+    "TČ",
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
     center=(0.25+2.5, 0-0.25),
 )
 ground.furniture(
-    "LG",
+    "TČ",
     kind="USERDEFINED",
     size=(0.5, 0.4, 0.9),
     color="#ffffff",
     center=(0.25+2.7, 0.25+0.2),
 )
 ground.furniture(
-    "TUV",
+    "Zásobník\nTUV",
     kind="USERDEFINED",
     size=(0.7, 0.7, 2.0),
     color="#ffffff",
     center=(0.25+0.4, 0.25+0.35),
 )
-#ground.furniture(
-#    "Pracka",
-#    kind="USERDEFINED",
-#    size=(0.7, 0.7, 2.0),
-#    color="#ffffff",
-#    center=(0.25+1.2, 0.25+0.35),
-#)
-ground.asset(
+ground.furniture(
     "Pracka",
-    asset="washing_machine",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 2.0),
+    color="#ffffff",
     center=(0.25+1.2, 0.25+0.35),
-	rotation=90,
 )
+#ground.asset(
+#    "Pracka",
+#    asset="washing_machine",
+#    center=(0.25+1.2, 0.25+0.35),
+#	rotation=90,
+#)
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
 	center=(0.25+3+0.25+1.1, 7.2),
@@ -205,7 +207,7 @@ kitchen_door = wall_3.add_door(
 	at=0.25+0.625+1+1,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
-	sill_height=0.2,
+	clear_height=door_clear_height,
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True,
 )
@@ -215,7 +217,7 @@ wall_2.add_door(
 	at=8.0-0.25-3.0,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
-	sill_height=0.2,
+	clear_height=door_clear_height,
 	operation="SINGLE_SWING_LEFT",
 #	reverse_swing=True,
 )
@@ -224,8 +226,8 @@ wall_2.add_door(
 wall_2.add_door(
     at=0.25+0.625,
     opening_width=1.0, width=0.9,
-    height=2.125,
-    sill_height=0.2,
+    height=0.25+2.125,
+	clear_height=door_clear_height,
 	reverse_swing=True,
 )
 
@@ -295,8 +297,8 @@ w1 = ground.wall(
 wall_3.add_door(
     at=8-0.25-1.5,
     opening_width=1.0, width=0.9,
-    height=2.125,
-    sill_height=0.2,
+    height=0.25+2.125,
+    clear_height=door_clear_height,
     name="Bedroom door",
 	operation="SINGLE_SWING_RIGHT"
 )
@@ -374,7 +376,8 @@ bed = ground.furniture(
     kind="BED",
     size=(1.6, 2.0, 0.5),
     color="#8B5A2B",
-    center=(0.25+3+0.25+4.5+0.25+3.5/2, 8-0.25-1),
+    center=(11.75-1, 7.75-3.1/2),
+	rotation=-90
 )
 
 # Opening from main to side hallway
@@ -538,6 +541,7 @@ wall_pracovna.add_door(
 	at=2.2,
 	opening_width=1, width=0.9,
 	height=2.25,
+	clear_height=door_clear_height,
 	sill_height=0.11,
 	operation="SINGLE_SWING_RIGHT")
 upper.furniture(
@@ -616,6 +620,7 @@ wall_3.add_door(
 	at=4.43+0.07+0.125,
 	opening_width=1, width=0.9,
 	height=2.25,
+	clear_height=door_clear_height,
 	sill_height=0.11,
 	operation="SINGLE_SWING_RIGHT")
 # Dvere pokojik nahore
@@ -623,12 +628,14 @@ wall_2.add_door(
 	at=2.75,
 	opening_width=1, width=0.9,
 	height=2.25,
+	clear_height=door_clear_height,
 	sill_height=0.11,
 	operation="SINGLE_SWING_RIGHT")
 wall_2.add_door(
 	at=4.25,
 	opening_width=1, width=0.9,
 	height=2.25,
+	clear_height=door_clear_height,
 	sill_height=0.11,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik nahore
@@ -1073,6 +1080,20 @@ drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
 drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
 drawing1.add_dimension(start=(11.5, 4.65), end=(11.5, 7.75), offset=-1)
 drawing1.add_dimension(start=(5, 0.25), end=(5, 0.25+1.7), offset=0)
+
+drawing1.add_dimension(start=(3.5+4.75, 0.25), end=(3.5+4.75, 0.25+0.625), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625), end=(3.5+4.75, 0.25+0.625+1), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1), end=(3.5+4.75, 0.25+0.625+1+1), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), offset=1.3)
+drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1+0.5), offset=1.3)
+
+drawing1.add_dimension(start=(3.5, 7.75-2), end=(3.5, 7.75), offset=1.3)
+drawing1.add_dimension(start=(3.5, 7.75-2-1), end=(3.5, 7.75-2), offset=1.3)
+drawing1.add_dimension(start=(3.5, 0.25+2.3), end=(3.5, 7.75-2-1), offset=1.3)
 
 # The Rockwool occupies the right side of each wall axis.  These annotations
 # belong only to Drawing 1 and follow the Rockwool centre lines.

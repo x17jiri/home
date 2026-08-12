@@ -192,6 +192,47 @@ house.generate_plan(
 )
 ```
 
+Plan drawings automatically label every included door with its width and
+height in millimetres, separated by a line. The label sits inside the door
+swing. Use `clear_height` when the usable passage is lower than the door's
+construction height; it changes the annotation without changing the opening
+or door geometry:
+
+```python
+kitchen_door = wall.add_door(
+    at=1.0,
+    width=0.9,
+    height=2.375,
+    clear_height=2.1,
+)
+```
+
+A common offset can move all labels farther into the room:
+
+```python
+drawing = house.add_drawing(
+    "Ground plan",
+    x=6,
+    y=4,
+    z=1.6,
+    radius=8,
+    storeys=[ground],
+    door_annotation_offset=0.05,
+)
+```
+
+For manual control, disable the automatic labels and add selected doors with
+individual offsets:
+
+```python
+drawing = house.add_drawing(
+    "Ground plan", 6, 4, 1.6, 8,
+    storeys=[ground],
+    door_annotations=False,
+)
+drawing.add_door_annotation(kitchen_door, offset=0.05)
+```
+
 The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
 metres in both X and Y, so the example cuts the model at 1.6 m and covers a
 10 m by 10 m area. `png=True` additionally creates `house.png` through

@@ -453,11 +453,55 @@ _DOOR_OVERHEAD_LINE = re.compile(
     re.MULTILINE,
 )
 
+_SVG_NUMBER = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+_DIMENSION_LABEL = re.compile(
+    rf'(?P<prefix><line\b(?P<line_attrs>[^>\n]*\bPredefinedType-DIMENSION\b[^>\n]*)/>'
+    rf'\s*<text\b[^>\n]*\btransform="translate\()'
+    rf'(?P<text_x>{_SVG_NUMBER}),\s*(?P<text_y>{_SVG_NUMBER})'
+    rf'(?P<suffix>\)\s*rotate\([^"\n]+\)"[^>\n]*>)'
+)
+
 
 def _postprocess_door_overheads(svg_path: Path) -> None:
     """Apply the final wall, door, furniture, and label drawing order."""
     svg = svg_path.read_text(encoding="utf-8")
     changed = False
+
+    def center_dimension_label(match: re.Match[str]) -> str:
+        nonlocal changed
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', match["line_attrs"])
+        )
+        try:
+            start_x, start_y, end_x, end_y = (
+                float(attributes[name]) for name in ("x1", "y1", "x2", "y2")
+            )
+        except (KeyError, ValueError):
+            return match.group(0)
+        delta_x = end_x - start_x
+        delta_y = end_y - start_y
+        squared_length = delta_x * delta_x + delta_y * delta_y
+        if squared_length == 0:
+            return match.group(0)
+        midpoint_x = (start_x + end_x) / 2
+        midpoint_y = (start_y + end_y) / 2
+        text_x = float(match["text_x"])
+        text_y = float(match["text_y"])
+        along_line = (
+            (text_x - midpoint_x) * delta_x
+            + (text_y - midpoint_y) * delta_y
+        ) / squared_length
+        if abs(along_line) <= 1e-12:
+            return match.group(0)
+        centered_x = text_x - along_line * delta_x
+        centered_y = text_y - along_line * delta_y
+        changed = True
+        return (
+            f'{match["prefix"]}{centered_x:.12g}, {centered_y:.12g}'
+            f'{match["suffix"]}'
+        )
+
+    svg = _DIMENSION_LABEL.sub(center_dimension_label, svg)
 
     if '<polygon class="door-overhead-mask"' not in svg:
         line_groups: dict[str, list[re.Match[str]]] = {}
@@ -502,7 +546,27 @@ def _postprocess_door_overheads(svg_path: Path) -> None:
 
         for offset, polygon in reversed(insertions):
             svg = f"{svg[:offset]}{polygon}{svg[offset:]}"
-        changed = bool(insertions)
+        changed = changed or bool(insertions)
+
+    if '<g class="door-dimension-overlays">' not in svg:
+        separators = [
+            match.group(0).strip()
+            for match in re.finditer(
+                r"^[ \t]*<line\b[^>\n]*\bdoor-dimension-separator\b[^>\n]*/>[ \t]*$",
+                svg,
+                re.MULTILINE,
+            )
+        ]
+        closing_svg = svg.rfind("</svg>")
+        if separators and closing_svg >= 0:
+            lines = "\n".join(f"    {separator}" for separator in separators)
+            overlays = (
+                '  <g class="door-dimension-overlays">\n'
+                f"{lines}\n"
+                "  </g>\n"
+            )
+            svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+            changed = True
 
     if '<g class="door-symbol-overlays">' not in svg:
         door_ids = []
@@ -1384,12 +1448,18 @@ class House:
         radius: Number,
         *,
         storeys: Sequence[Storey] | None = None,
+        door_annotations: bool = True,
+        door_annotation_offset: Number = 0,
     ) -> Drawing:
         """Add a persisted square plan drawing to this IFC model.
 
         ``storeys`` limits both model geometry and automatic plan annotations
         to the supplied building storeys.  When omitted, all storeys are
         included.  Drawing-specific annotations are always included.
+        ``door_annotations`` automatically adds a width-over-height label to
+        every included door; disable it to place selected labels manually with
+        :meth:`Drawing.add_door_annotation`.  ``door_annotation_offset`` moves
+        every automatic label farther into the door swing in metres.
         """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
@@ -1402,6 +1472,8 @@ class House:
             z=z,
             radius=radius,
             storeys=storeys,
+            door_annotations=door_annotations,
+            door_annotation_offset=door_annotation_offset,
         )
         self._drawings.append(drawing)
         return drawing
@@ -1462,6 +1534,8 @@ class Drawing:
         z: Number,
         radius: Number,
         storeys: Sequence[Storey] | None,
+        door_annotations: bool,
+        door_annotation_offset: Number,
     ) -> None:
         self.house = house
         self.name = name
@@ -1476,6 +1550,12 @@ class Drawing:
         self._annotated_stairs: set[int] = set()
         self._annotated_chimneys: set[int] = set()
         self._annotated_doors: set[int] = set()
+        if not isinstance(door_annotations, bool):
+            raise TypeError("door_annotations must be a boolean")
+        self._automatic_door_annotations = door_annotations
+        self._door_annotation_offset = _number(
+            door_annotation_offset, "door_annotation_offset"
+        )
         self._includes_all_storeys = storeys is None
         if storeys is None:
             self._storeys: tuple[Storey, ...] = ()
@@ -1647,6 +1727,15 @@ class Drawing:
             products=[self.element],
             document=self.document,
         )
+
+        if self._automatic_door_annotations:
+            for door in model.by_type("IfcDoor"):
+                storey = ifcopenshell.util.element.get_container(door)
+                if self._includes_storey_element(storey):
+                    self.add_door_annotation(
+                        door,
+                        offset=self._door_annotation_offset,
+                    )
 
     @property
     def storeys(self) -> tuple[Storey, ...]:
@@ -1855,10 +1944,10 @@ class Drawing:
         """Add a drawing-specific ``width/height`` label for ``door``.
 
         The values come from ``IfcDoor.OverallWidth`` and ``OverallHeight``
-        and are displayed in millimetres on two lines.  The label is placed
-        inside the plan swing and oriented across the wall.  ``offset`` moves
-        it farther into the swing, in model metres; a negative value moves it
-        toward the wall.
+        and are displayed in millimetres on two lines with a separator between
+        them.  The label is placed inside the plan swing and oriented across
+        the wall.  ``offset`` moves it farther into the swing, in model metres;
+        a negative value moves it toward the wall.
         """
         if not isinstance(door, ifcopenshell.entity_instance) or not door.is_a(
             "IfcDoor"
@@ -1877,7 +1966,14 @@ class Drawing:
         if door.OverallWidth is None or door.OverallHeight is None:
             raise ValueError("door must define OverallWidth and OverallHeight")
         width = float(door.OverallWidth)
-        height = float(door.OverallHeight)
+        clear_height = ifcopenshell.util.element.get_pset(
+            door,
+            "EPset_Door",
+            "ClearHeight",
+        )
+        height = float(
+            door.OverallHeight if clear_height is None else clear_height
+        )
         offset = _number(offset, "offset")
 
         plan = ifcopenshell.util.representation.get_representation(
@@ -1915,8 +2011,19 @@ class Drawing:
         placement = np.eye(4)
         placement[:3, 0] = swing_sign * door_placement[:3, 1]
         placement[:3, 1] = -swing_sign * door_placement[:3, 0]
+        # Keep labels readable when the host wall was drawn in the opposite
+        # direction: horizontal text runs left-to-right and vertical text uses
+        # a consistent bottom-to-top orientation in the finished plan.
+        if (
+            placement[0, 0] < -1e-9
+            or abs(placement[0, 0]) <= 1e-9
+            and placement[1, 0] < 0
+        ):
+            placement[:3, 0] *= -1
+            placement[:3, 1] *= -1
         placement[:3, 2] = door_placement[:3, 2]
         placement[:3, 3] = label_point[:3]
+        separator_placement = placement.copy()
 
         model = self.house.model
         annotation_name = (
@@ -1924,60 +2031,141 @@ class Drawing:
             if name is not None
             else f"{self.name} {door.Name or 'Door'} Dimensions"
         )
-        annotation = ifcopenshell.api.root.create_entity(
+        text_extent = max(width, 0.5)
+
+        def create_text_annotation(
+            text_name: str,
+            value: int,
+            text_placement: np.ndarray,
+            classes: str,
+        ) -> ifcopenshell.entity_instance:
+            text_annotation = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcAnnotation",
+                name=text_name,
+                predefined_type="TEXT",
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=text_annotation,
+                matrix=text_placement,
+                is_si=True,
+            )
+            literal_origin = model.createIfcAxis2Placement3D(
+                model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+                model.createIfcDirection((0.0, 0.0, 1.0)),
+                model.createIfcDirection((1.0, 0.0, 0.0)),
+            )
+            literal = model.createIfcTextLiteralWithExtent(
+                str(value),
+                literal_origin,
+                "RIGHT",
+                model.createIfcPlanarExtent(text_extent, text_extent),
+                "center",
+            )
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context,
+                "Annotation",
+                "Annotation2D",
+                [literal],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=text_annotation,
+                representation=representation,
+            )
+            pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=text_annotation,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=pset,
+                properties={"Classes": classes},
+            )
+            return text_annotation
+
+        # Separate products are necessary because Bonsai intentionally lays
+        # multiple text literals out at a fixed one-em spacing.
+        width_placement = placement.copy()
+        width_placement[:3, 3] += placement[:3, 1] * 0.12
+        height_placement = placement.copy()
+        height_placement[:3, 3] -= placement[:3, 1] * 0.15
+        annotation = create_text_annotation(
+            annotation_name,
+            round(width * 1000),
+            width_placement,
+            "door-dimension door-dimension-width small",
+        )
+        height_annotation = create_text_annotation(
+            f"{annotation_name} Height",
+            round(height * 1000),
+            height_placement,
+            "door-dimension door-dimension-height small",
+        )
+
+        separator = ifcopenshell.api.root.create_entity(
             model,
             ifc_class="IfcAnnotation",
-            name=annotation_name,
-            predefined_type="TEXT",
+            name=f"{annotation_name} Separator",
+            predefined_type="LINEWORK",
         )
-        ifcopenshell.api.geometry.edit_object_placement(
+        separator_direction = float(
+            np.dot(placement[:3, 0], door_placement[:3, 1])
+        )
+        separator_start, separator_end = sorted(
+            separator_direction * (y - label_y)
+            for y in (min(y_coordinates), max(y_coordinates))
+        )
+        separator_representation = ifcopenshell.api.geometry.add_axis_representation(
             model,
-            product=annotation,
-            matrix=placement,
-            is_si=True,
-        )
-        literal_origin = model.createIfcAxis2Placement3D(
-            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
-            model.createIfcDirection((0.0, 0.0, 1.0)),
-            model.createIfcDirection((1.0, 0.0, 0.0)),
-        )
-        literal = model.createIfcTextLiteralWithExtent(
-            f"{round(width * 1000)}\n{round(height * 1000)}",
-            literal_origin,
-            "RIGHT",
-            model.createIfcPlanarExtent(max(width, 0.5), max(width, 0.5)),
-            "center",
-        )
-        representation = model.createIfcShapeRepresentation(
-            self.house._annotation_context,
-            "Annotation",
-            "Annotation2D",
-            [literal],
+            context=self.house._annotation_context,
+            axis=[
+                (separator_start, 0.0),
+                (separator_end, 0.0),
+            ],
         )
         ifcopenshell.api.geometry.assign_representation(
             model,
-            product=annotation,
-            representation=representation,
+            product=separator,
+            representation=separator_representation,
         )
-        pset = ifcopenshell.api.pset.add_pset(
+        ifcopenshell.api.geometry.edit_object_placement(
             model,
-            product=annotation,
+            product=separator,
+            matrix=separator_placement,
+            is_si=True,
+        )
+        separator_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=separator,
             name="EPset_Annotation",
         )
         ifcopenshell.api.pset.edit_pset(
             model,
-            pset=pset,
-            properties={"Classes": "door-dimension small"},
+            pset=separator_pset,
+            properties={"Classes": "door-dimension-separator"},
         )
         ifcopenshell.api.drawing.assign_product(
             model,
             relating_product=door,
             related_object=annotation,
         )
+        ifcopenshell.api.drawing.assign_product(
+            model,
+            relating_product=door,
+            related_object=height_annotation,
+        )
+        ifcopenshell.api.drawing.assign_product(
+            model,
+            relating_product=door,
+            related_object=separator,
+        )
         ifcopenshell.api.group.assign_group(
             model,
             group=self.group,
-            products=[annotation],
+            products=[annotation, height_annotation, separator],
         )
         self._annotated_doors.add(door.id())
         return annotation
@@ -3393,6 +3581,7 @@ class Wall(ifcopenshell.entity_instance):
         at: Number,
         width: Number,
         height: Number,
+        clear_height: Number | None = None,
         sill_height: Number = 0,
         opening_width: Number | None = None,
         opening_height: Number | None = None,
@@ -3409,11 +3598,14 @@ class Wall(ifcopenshell.entity_instance):
         ``at`` is the start of the rough opening measured from the wall start.
         The actual door is centred horizontally in ``opening_width`` and its
         bottom is ``sill_height`` metres above the storey elevation.  Opening
-        dimensions default to the door dimensions.  ``open_angle`` rotates
-        only the 3D leaf.  ``reverse_swing`` opens the leaf on the opposite
-        side of the wall without changing its hinge end, in both 3D and plan.
-        ``show_overhead`` adds dashed plan-only wall linework across the rough
-        opening.  ``color`` and ``transparency`` affect only the 3D body.
+        dimensions default to the door dimensions.  ``clear_height`` records
+        the usable walking height for plan annotations without changing the
+        construction geometry; it defaults to ``height``.  ``open_angle``
+        rotates only the 3D leaf.  ``reverse_swing`` opens the leaf on the
+        opposite side of the wall without changing its hinge end, in both 3D
+        and plan.  ``show_overhead`` adds dashed plan-only wall linework across
+        the rough opening.  ``color`` and ``transparency`` affect only the 3D
+        body.
         """
         operation = _enum(operation, "operation", _DOOR_OPERATIONS)
         open_angle = _number(open_angle, "open_angle")
@@ -3438,6 +3630,15 @@ class Wall(ifcopenshell.entity_instance):
             raise ValueError("width must be greater than zero")
         if height <= 0:
             raise ValueError("height must be greater than zero")
+        clear_height = (
+            height
+            if clear_height is None
+            else _number(clear_height, "clear_height")
+        )
+        if clear_height <= 0:
+            raise ValueError("clear_height must be greater than zero")
+        if clear_height > height + 1e-9:
+            raise ValueError("clear_height must not be greater than height")
         opening_width = (
             width
             if opening_width is None
@@ -3487,6 +3688,16 @@ class Wall(ifcopenshell.entity_instance):
         door.OverallWidth = width
         door.OverallHeight = height
         door.OperationType = operation
+        door_properties = ifcopenshell.api.pset.add_pset(
+            model,
+            product=door,
+            name="EPset_Door",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=door_properties,
+            properties={"ClearHeight": clear_height},
+        )
         panel_offset_x = min(0.025, width / 4)
         panel_offset_y = min(0.025, self.thickness / 4)
         lining_properties = {
@@ -3558,6 +3769,15 @@ class Wall(ifcopenshell.entity_instance):
                 opening_width=opening_width,
                 wall_faces=True,
             )
+        for drawing in self.storey.house._drawings:
+            if (
+                drawing._automatic_door_annotations
+                and drawing._includes_storey(self.storey)
+            ):
+                drawing.add_door_annotation(
+                    door,
+                    offset=drawing._door_annotation_offset,
+                )
         return door
 
     def _align_window_panel_to_axis(
