@@ -462,7 +462,46 @@ _DIMENSION_LABEL = re.compile(
 )
 
 
-def _postprocess_door_overheads(svg_path: Path) -> None:
+def _overhead_mask_global_ids(
+    model: ifcopenshell.file,
+    cut_z: float,
+) -> set[str]:
+    """Return overhead annotations whose openings intersect the plan cut."""
+    result = set()
+    tolerance = 1e-9
+    for annotation in model.by_type("IfcAnnotation"):
+        properties = ifcopenshell.util.element.get_pset(
+            annotation, "EPset_Annotation"
+        )
+        classes = properties.get("Classes", "") if properties else ""
+        if "door-overhead" not in classes.split():
+            continue
+        bottom = properties.get("OpeningBottom")
+        top = properties.get("OpeningTop")
+        if bottom is None or top is None:
+            # Preserve the masking behaviour of IFC files created before the
+            # opening elevations were recorded on their annotations.
+            result.add(annotation.GlobalId)
+            continue
+        placement = ifcopenshell.util.placement.get_local_placement(
+            annotation.ObjectPlacement
+        )
+        opening_bottom = float(placement[2, 3]) + float(bottom)
+        opening_top = float(placement[2, 3]) + float(top)
+        if (
+            opening_bottom - tolerance
+            <= cut_z
+            <= opening_top + tolerance
+        ):
+            result.add(annotation.GlobalId)
+    return result
+
+
+def _postprocess_door_overheads(
+    svg_path: Path,
+    *,
+    mask_global_ids: set[str] | None = None,
+) -> None:
     """Apply the final wall, door, furniture, and label drawing order."""
     svg = svg_path.read_text(encoding="utf-8")
     changed = False
@@ -516,6 +555,11 @@ def _postprocess_door_overheads(svg_path: Path) -> None:
                 None,
             )
             if global_id is not None:
+                if (
+                    mask_global_ids is not None
+                    and global_id.removeprefix("GlobalId-") not in mask_global_ids
+                ):
+                    continue
                 line_groups.setdefault(global_id, []).append(match)
 
         insertions = []
@@ -1038,7 +1082,11 @@ def generate_plan(
 
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG plan: {absolute_output}")
-    _postprocess_door_overheads(absolute_output)
+    model = ifcopenshell.open(str(ifc_path))
+    _postprocess_door_overheads(
+        absolute_output,
+        mask_global_ids=_overhead_mask_global_ids(model, z),
+    )
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -1119,7 +1167,17 @@ def _render_existing_drawing(
     )
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
-    _postprocess_door_overheads(absolute_output)
+    model = ifcopenshell.open(str(ifc))
+    drawing = model.by_guid(drawing_guid)
+    cut_z = float(
+        ifcopenshell.util.placement.get_local_placement(
+            drawing.ObjectPlacement
+        )[2, 3]
+    )
+    _postprocess_door_overheads(
+        absolute_output,
+        mask_global_ids=_overhead_mask_global_ids(model, cut_z),
+    )
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -1547,6 +1605,7 @@ class Drawing:
             raise ValueError("radius must be greater than zero")
         self._batting_count = 0
         self._dimension_count = 0
+        self._entrance_arrow_count = 0
         self._annotated_stairs: set[int] = set()
         self._annotated_chimneys: set[int] = set()
         self._annotated_doors: set[int] = set()
@@ -1758,6 +1817,30 @@ class Drawing:
     ) -> bool:
         return self._includes_all_storeys or any(
             selected.element == storey for selected in self._storeys
+        )
+
+    def _include_model_element(
+        self,
+        element: ifcopenshell.entity_instance,
+    ) -> None:
+        """Add one model element to an explicitly filtered drawing."""
+        if self._includes_all_storeys:
+            return
+        include = ifcopenshell.util.element.get_pset(
+            self.element,
+            "EPset_Drawing",
+            "Include",
+        )
+        if include is None:
+            include = element.GlobalId
+        elif element.GlobalId in include.split("+"):
+            return
+        else:
+            include = f"{include}+{element.GlobalId}"
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model,
+            pset=self._drawing_pset,
+            properties={"Include": include},
         )
 
     def add_dimension(
@@ -2097,6 +2180,114 @@ class Drawing:
         )
         return identifier_annotation
 
+    def add_entrance_arrow(
+        self,
+        position: Point,
+        *,
+        rotation: Number = 0,
+        size: Number = 0.6,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a drawing-specific arrow marking the building entrance.
+
+        ``position`` is the arrow centre in global model XY coordinates.
+        ``rotation`` is measured counter-clockwise in degrees; zero points
+        right and 180 points left.  ``size`` is the arrow length in metres.
+        """
+        x, y = _point(position, "position")
+        rotation = _number(rotation, "rotation")
+        size = _number(size, "size")
+        if size <= 0:
+            raise ValueError("size must be greater than zero")
+
+        self._entrance_arrow_count += 1
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else (
+                f"{self.name} Entrance Arrow "
+                f"{self._entrance_arrow_count}"
+            )
+        )
+        selected_storeys_below = [
+            storey for storey in self.storeys if storey.elevation <= self.z
+        ]
+        annotation_z = (
+            max(
+                selected_storeys_below,
+                key=lambda storey: storey.elevation,
+            ).elevation
+            if selected_storeys_below
+            else 0.0
+        )
+
+        model = self.house.model
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=annotation_name,
+            predefined_type="LINEWORK",
+        )
+        half_length = size / 2
+        arrow_curves = [
+            model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(
+                    [(-half_length, 0.0), (half_length, 0.0)]
+                ),
+                None,
+                False,
+            ),
+            model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(
+                    [
+                        (size * 0.15, -size * 0.35),
+                        (half_length, 0.0),
+                        (size * 0.15, size * 0.35),
+                    ]
+                ),
+                None,
+                False,
+            ),
+        ]
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet(arrow_curves)],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        angle = radians(rotation)
+        placement = np.eye(4)
+        placement[:3, 0] = (cos(angle), sin(angle), 0.0)
+        placement[:3, 1] = (-sin(angle), cos(angle), 0.0)
+        placement[:3, 3] = (x, y, annotation_z)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={"Classes": "entrance-arrow"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        return annotation
+
     def add_door_annotation(
         self,
         door: ifcopenshell.entity_instance,
@@ -2421,13 +2612,22 @@ class Drawing:
         *,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
-        """Add a circle with a diagonal half-fill for ``chimney`` to this drawing."""
+        """Add the chimney body and its flue symbol to this drawing.
+
+        If the chimney is spatially contained in a different storey, its
+        GlobalId is added to this drawing's inclusion selector.  This lets one
+        continuous multistorey chimney be cut in every annotated floor plan.
+        """
         if not isinstance(chimney, Chimney):
             raise TypeError("chimney must be a Chimney created by Storey.chimney")
         if chimney.file is not self.house.model:
             raise ValueError("chimney must belong to this house")
         if chimney.id() in self._annotated_chimneys:
             raise ValueError("chimney already has an annotation in this drawing")
+
+        chimney_storey = ifcopenshell.util.element.get_container(chimney)
+        if not self._includes_storey_element(chimney_storey):
+            self._include_model_element(chimney)
 
         annotation_name = (
             _name(name, "name")
@@ -2547,8 +2747,8 @@ class Drawing:
         """Add a conventional plan symbol for ``stair`` to this drawing only.
 
         The annotation contains the stair outline, tread lines, an upward
-        walking-direction arrow, and a break line at this drawing's cut
-        elevation.  It does not alter the stair's 3D representation.
+        walking-direction arrow.  It does not alter the stair's 3D
+        representation.
         """
         if not isinstance(stair, Stair):
             raise TypeError("stair must be a Stair created by Storey.stair")
@@ -2602,24 +2802,6 @@ class Drawing:
                     (arrow_end, 0.0),
                     (arrow_end - arrow_size, arrow_size),
                 ],
-            ]
-        )
-
-        relative_cut_height = self.z - (
-            stair.storey.elevation + stair.start_height
-        )
-        if 0 < relative_cut_height < stair.height:
-            break_x = stair.length * relative_cut_height / stair.height
-        else:
-            break_x = stair.length * 0.55
-        break_x = min(max(break_x, stair.length * 0.2), stair.length * 0.8)
-        break_offset = min(stair.width * 0.12, stair.length * 0.04)
-        polylines.append(
-            [
-                (break_x - break_offset, -half_width),
-                (break_x + break_offset, -half_width / 3),
-                (break_x - break_offset, half_width / 3),
-                (break_x + break_offset, half_width),
             ]
         )
 
@@ -3513,6 +3695,8 @@ class Wall(ifcopenshell.entity_instance):
         name: str,
         opening_start: float,
         opening_width: float,
+        opening_bottom: float,
+        opening_top: float,
         wall_faces: bool = False,
     ) -> ifcopenshell.entity_instance:
         """Add plan-only dashed linework for the wall above an opening."""
@@ -3572,7 +3756,11 @@ class Wall(ifcopenshell.entity_instance):
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=pset,
-            properties={"Classes": classes},
+            properties={
+                "Classes": classes,
+                "OpeningBottom": opening_bottom,
+                "OpeningTop": opening_top,
+            },
         )
         house = self.storey.house
         house._plan_annotations.append(annotation)
@@ -3734,6 +3922,8 @@ class Wall(ifcopenshell.entity_instance):
                 name=opening_name,
                 opening_start=opening_start,
                 opening_width=width,
+                opening_bottom=sill_height,
+                opening_top=sill_height + height,
                 wall_faces=True,
             )
         return opening
@@ -3930,6 +4120,8 @@ class Wall(ifcopenshell.entity_instance):
                 name=door_name,
                 opening_start=opening_start,
                 opening_width=opening_width,
+                opening_bottom=sill_height,
+                opening_top=sill_height + opening_height,
                 wall_faces=True,
             )
         for drawing in self.storey.house._drawings:

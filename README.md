@@ -245,6 +245,16 @@ drawing.add_room_annotation(
 )
 ```
 
+Mark the building entrance with a drawing-scoped direction arrow. Rotation is
+counter-clockwise in degrees: zero points right and 180 points left.
+
+```python
+drawing.add_entrance_arrow(
+    (9.0, -0.5),
+    rotation=180,
+)
+```
+
 The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
 metres in both X and Y, so the example cuts the model at 1.6 m and covers a
 10 m by 10 m area. `png=True` additionally creates `house.png` through

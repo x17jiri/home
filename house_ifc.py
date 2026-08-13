@@ -7,6 +7,7 @@
 #	Tepelné čerpadlo LG Therma V Split 12kW HN1636M+HU123MA (model 2023)
 #	https://www.vzduchotechnika1.cz/lg-therma-v-split-12kw-hn1636m-hu123ma
 
+import sys
 from ifc_utils import *
 
 house = House(
@@ -36,8 +37,8 @@ partition_wall = house.wall_type(
         "axis",
     ],
 )
-sdk_wall = house.wall_type(
-    "SDK wall - 100 mm",
+dry_wall = house.wall_type(
+    "drywall - 100 mm",
     layers=[
         ("SDK", 0.100),
         "axis",
@@ -537,7 +538,7 @@ wall_4.add_opening(at=7.75, width=0.25, height=0.25, sill_height=1.25)
 wall_pracovna = upper.wall(
 	start=(0.25+3+0.25+4.5, 2.7),
 	end=(0.25+3+0.25, 2.7),
-	wall_type=sdk_wall, height=4, cuts=wall_cuts_2_3)
+	wall_type=dry_wall, height=4, cuts=wall_cuts_2_3)
 wall_pracovna.add_door(
 	at=2.2,
 	opening_width=1, width=0.9,
@@ -608,6 +609,17 @@ beam_dormer = upper.beam(
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
+)
+
+# Chodba nahore
+upper.furniture(
+    "Rekuperace",
+    kind="USERDEFINED",
+    size=(1, 0.5, 2.5),
+    color="#ffff00",
+    center=(11.75-0.3, 7.75-2),
+	rotation=90,
+	start_height=0.11,
 )
 
 # Okna obyvak
@@ -1064,75 +1076,120 @@ for i, rafter_x in enumerate(rafter_positions):
 			)
 			roof_layer_storeys["Counter-battens"].add(counter_batten)
 
-# Drawing 1
-drawing1 = house.add_drawing(
-	"Drawing 1", x=6, y=4, z=0.25+2, radius=8, storeys=[ground]
-)
+# Drawing 1 - ground floor
+if "ground" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Drawing 1", x=6, y=4, z=0.25+2, radius=8, storeys=[ground]
+	)
 
-drawing1.add_stair_annotation(stairs1)
-drawing1.add_stair_annotation(stairs2)
-drawing1.add_chimney_annotation(chimney)
+	drawing1.add_stair_annotation(stairs1)
+	drawing1.add_stair_annotation(stairs2)
+	drawing1.add_chimney_annotation(chimney)
 
-drawing1.add_dimension(start=(0.5, 0.25), end=(0.5, 0.25+2.3), offset=1.5)
-drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
-drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
-drawing1.add_dimension(start=(8.25, 7.5), end=(11.75, 7.5), offset=1.5)
-drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
-drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
-drawing1.add_dimension(start=(11.5, 4.65), end=(11.5, 7.75), offset=-1)
-drawing1.add_dimension(start=(5, 0.25), end=(5, 0.25+1.7), offset=0)
+	drawing1.add_dimension(start=(0.5, 0.25), end=(0.5, 0.25+2.3), offset=1.5)
+	drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(8.25, 7.5), end=(11.75, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
+	drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
+	drawing1.add_dimension(start=(11.5, 4.65), end=(11.5, 7.75), offset=-1)
+	drawing1.add_dimension(start=(5, 0.25), end=(5, 0.25+1.7), offset=0)
 
-drawing1.add_dimension(start=(3.5+4.75, 0.25), end=(3.5+4.75, 0.25+0.625), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625), end=(3.5+4.75, 0.25+0.625+1), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1), end=(3.5+4.75, 0.25+0.625+1+1), offset=-0.5)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), offset=1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), offset=-1.3)
-drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1+0.5), offset=-1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25), end=(3.5+4.75, 0.25+0.625), offset=1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625), end=(3.5+4.75, 0.25+0.625+1), offset=1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1), end=(3.5+4.75, 0.25+0.625+1+1), offset=-0.5)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1), offset=1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5), offset=1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), offset=1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), offset=1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), offset=-1.3)
+	drawing1.add_dimension(start=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1), end=(3.5+4.75, 0.25+0.625+1+1+1+0.5+1+0.875+1+0.5), offset=-1.3)
 
-drawing1.add_dimension(start=(3.5, 7.75-2), end=(3.5, 7.75), offset=1.3)
-drawing1.add_dimension(start=(3.5, 7.75-2-1), end=(3.5, 7.75-2), offset=1.3)
-drawing1.add_dimension(start=(3.5, 0.25+2.3+0.15), end=(3.5, 7.75-2-1), offset=1.3)
+	drawing1.add_dimension(start=(3.5, 7.75-2), end=(3.5, 7.75), offset=1.3)
+	drawing1.add_dimension(start=(3.5, 7.75-2-1), end=(3.5, 7.75-2), offset=1.3)
+	drawing1.add_dimension(start=(3.5, 0.25+2.3+0.15), end=(3.5, 7.75-2-1), offset=1.3)
 
-drawing1.add_room_annotation(
-    (1.1, 0.25+2.3+0.25+2.5),
-    identifier="0.01",
-    area=5.05*3,   # m²
-)
-drawing1.add_room_annotation(
-    (1.6, 0.25+1.15),
-    identifier="0.02",
-    area=2.3*3,   # m²
-)
-drawing1.add_room_annotation(
-    (3.5+1.4, 0.5+1.7+2.3),
-    identifier="0.03",
-    area=5.65*4.5,   # m²
-)
-drawing1.add_room_annotation(
-    (3.5+2.3, 0.5+0.8),
-    identifier="0.04",
-    area=1.7*4.5,   # m²
-)
-drawing1.add_room_annotation(
-    (3.5+4.25+2.1, 5+0.5),
-    identifier="0.05",
-    area=3*3.5-0.65*0.75,   # m²
-)
-drawing1.add_room_annotation(
-    (3.5+4.25+2.1, 5-1.3),
-    identifier="0.06",
-    area=4.4*3.5-0.9*0.55,   # m²
-)
+	drawing1.add_entrance_arrow(
+		(3.5+4.5+1.1, -0.5),
+		rotation=90,  # points left
+		size=0.6,      # metres
+	)
 
-# The Rockwool occupies the right side of each wall axis.  These annotations
-# belong only to Drawing 1 and follow the Rockwool centre lines.
-#drawing1.add_batting((-0.10, -0.10), (12.10, -0.10), thickness=0.12)
-#drawing1.add_batting((12.10, -0.10), (12.10, 8.10), thickness=0.12)
-#drawing1.add_batting((12.10, 8.10), (-0.10, 8.10), thickness=0.12)
-#drawing1.add_batting((-0.10, 8.10), (-0.10, -0.10), thickness=0.12)
+	drawing1.add_room_annotation(
+		(1.1, 0.25+2.3+0.25+2.5),
+		identifier="0.01",
+		area=5.05*3,   # m²
+	)
+	drawing1.add_room_annotation(
+		(1.6, 0.25+1.15),
+		identifier="0.02",
+		area=2.3*3,   # m²
+	)
+	drawing1.add_room_annotation(
+		(3.5+1.4, 0.5+1.7+2.3),
+		identifier="0.03",
+		area=5.65*4.5,   # m²
+	)
+	drawing1.add_room_annotation(
+		(3.5+2.3, 0.5+0.8),
+		identifier="0.04",
+		area=1.7*4.5,   # m²
+	)
+	drawing1.add_room_annotation(
+		(3.5+4.25+2.1, 5+0.5),
+		identifier="0.05",
+		area=3*3.5-0.65*0.75,   # m²
+	)
+	drawing1.add_room_annotation(
+		(3.5+4.25+2.1, 5-1.3),
+		identifier="0.06",
+		area=4.4*3.5-0.9*0.55,   # m²
+	)
 
-house.write("house.ifc")
-drawing1.render("house.svg", png=True, png_dpi=600)
+	# The Rockwool occupies the right side of each wall axis.  These annotations
+	# belong only to Drawing 1 and follow the Rockwool centre lines.
+	#drawing1.add_batting((-0.10, -0.10), (12.10, -0.10), thickness=0.12)
+	#drawing1.add_batting((12.10, -0.10), (12.10, 8.10), thickness=0.12)
+	#drawing1.add_batting((12.10, 8.10), (-0.10, 8.10), thickness=0.12)
+	#drawing1.add_batting((-0.10, 8.10), (-0.10, -0.10), thickness=0.12)
+
+	house.write("ground.ifc")
+	drawing1.render("ground.svg", png=True, png_dpi=600)
+
+# Drawing 2 - upper floor
+if "upper" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Drawing 2", x=6, y=4, z=0.25+2.75+2, radius=8, storeys=[upper]
+	)
+
+	drawing1.add_stair_annotation(stairs1)
+	drawing1.add_stair_annotation(stairs2)
+	drawing1.add_chimney_annotation(chimney)
+
+	drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(8.25, 7.5), end=(11.75, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
+	drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
+
+	house.write("upper.ifc")
+	drawing1.render("upper.svg", png=True, png_dpi=600)
+
+# Drawing - wall3
+if "wall3" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Drawing 2", x=6, y=4, z=0.25+2.75+2, radius=8, storeys=[upper]
+	)
+
+	drawing1.add_stair_annotation(stairs1)
+	drawing1.add_stair_annotation(stairs2)
+	drawing1.add_chimney_annotation(chimney)
+
+	drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(8.25, 7.5), end=(11.75, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
+	drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
+
+	house.write("upper.ifc")
+	drawing1.render("upper.svg", png=True, png_dpi=600)

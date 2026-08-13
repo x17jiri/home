@@ -85,6 +85,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+.cut.layer-material-SDK {
+    fill: url(#sand-dense) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
 .cut.layer-material-Rockwool {
     fill: yellow !important;
     stroke: black;
@@ -173,6 +179,15 @@ tspan.room-area {
     fill: none !important;
     stroke: black !important;
     stroke-width: 0.1 !important;
+}
+
+/* Building entrance direction. */
+.PredefinedType-LINEWORK.entrance-arrow {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.5 !important;
+    stroke-linecap: square !important;
+    stroke-linejoin: miter !important;
 }
 
 /* Doors: light plan swing, both overhead wall faces, and size labels. */

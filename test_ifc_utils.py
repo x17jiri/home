@@ -17,6 +17,7 @@ import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.representation
+import ifcopenshell.util.selector
 import ifcopenshell.util.shape
 import numpy as np
 
@@ -30,6 +31,7 @@ from ifc_utils import (
     RoofPlane,
     Stair,
     Wall,
+    _overhead_mask_global_ids,
     _postprocess_door_overheads,
     generate_plan,
 )
@@ -1240,7 +1242,9 @@ class HouseTests(unittest.TestCase):
             "GeometricCurveSet",
         )
         curve_set = annotation_representation.Items[0]
-        self.assertGreater(len(curve_set.Elements), stair.treads)
+        # Outline + one line per internal tread + shaft + arrowhead. There is
+        # deliberately no zigzag stair break symbol.
+        self.assertEqual(len(curve_set.Elements), stair.treads + 2)
         drawing_members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
         other_members = set(other_drawing.group.IsGroupedBy[0].RelatedObjects)
         self.assertIn(annotation, drawing_members)
@@ -1347,6 +1351,28 @@ class HouseTests(unittest.TestCase):
             set(other_drawing.group.IsGroupedBy[0].RelatedObjects),
             {other_drawing.element},
         )
+
+        upper = house.storey("Upper floor", elevation=3.25)
+        upper_wall = upper.wall((0, 0), (1, 0), thickness=0.2, height=2.8)
+        upper_drawing = house.add_drawing(
+            "Upper plan", 2, 3, 4.25, 3, storeys=[upper]
+        )
+        upper_drawing.add_chimney_annotation(chimney)
+        upper_include = ifcopenshell.util.element.get_pset(
+            upper_drawing.element,
+            "EPset_Drawing",
+            "Include",
+        )
+        self.assertEqual(
+            upper_include,
+            f'location="{upper.element.GlobalId}"+{chimney.GlobalId}',
+        )
+        selected_elements = ifcopenshell.util.selector.filter_elements(
+            house.model,
+            upper_include,
+        )
+        self.assertIn(chimney, selected_elements)
+        self.assertIn(upper_wall, selected_elements)
 
         with TemporaryDirectory() as directory:
             output = Path(directory) / "chimney.ifc"
@@ -2262,6 +2288,26 @@ class HouseTests(unittest.TestCase):
             ),
             "door-overhead dashed",
         )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                overhead, "EPset_Annotation", "OpeningBottom"
+            ),
+            0.2,
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                overhead, "EPset_Annotation", "OpeningTop"
+            ),
+            2.4,
+        )
+        self.assertNotIn(
+            overhead.GlobalId,
+            _overhead_mask_global_ids(house.model, 0.1),
+        )
+        self.assertIn(
+            overhead.GlobalId,
+            _overhead_mask_global_ids(house.model, 1.5),
+        )
         overhead_representation = ifcopenshell.util.representation.get_representation(
             overhead, "Plan", "Annotation", "PLAN_VIEW"
         )
@@ -2606,6 +2652,26 @@ class HouseTests(unittest.TestCase):
             ),
             "door-overhead dashed",
         )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                overhead, "EPset_Annotation", "OpeningBottom"
+            ),
+            0.2,
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                overhead, "EPset_Annotation", "OpeningTop"
+            ),
+            2.2,
+        )
+        self.assertNotIn(
+            overhead.GlobalId,
+            _overhead_mask_global_ids(house.model, 0.3),
+        )
+        self.assertIn(
+            overhead.GlobalId,
+            _overhead_mask_global_ids(house.model, 1.5),
+        )
         overhead_representation = ifcopenshell.util.representation.get_representation(
             overhead, "Plan", "Annotation", "PLAN_VIEW"
         )
@@ -2844,6 +2910,67 @@ class HouseTests(unittest.TestCase):
             drawing.add_room_annotation((1, 1), identifier="P.02", area=0)
         with self.assertRaisesRegex(ValueError, "identifier must not be empty"):
             drawing.add_room_annotation((1, 1), identifier=" ", area=5)
+
+    def test_adds_a_rotated_drawing_scoped_entrance_arrow(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.25)
+        drawing = house.add_drawing(
+            "Ground plan", 2, 3, 1.6, 5, storeys=[ground]
+        )
+        other_drawing = house.add_drawing(
+            "Other plan", 2, 3, 1.6, 5, storeys=[ground]
+        )
+
+        arrow = drawing.add_entrance_arrow(
+            (4.5, 3.2),
+            rotation=180,
+            size=0.8,
+            name="Main entrance",
+        )
+
+        self.assertEqual(arrow.Name, "Main entrance")
+        self.assertEqual(arrow.ObjectType, "LINEWORK")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                arrow, "EPset_Annotation", "Classes"
+            ),
+            "entrance-arrow",
+        )
+        representation = ifcopenshell.util.representation.get_representation(
+            arrow, "Plan", "Annotation", "PLAN_VIEW"
+        )
+        self.assertEqual(representation.RepresentationType, "GeometricCurveSet")
+        curves = representation.Items[0].Elements
+        np.testing.assert_allclose(
+            curves[0].Points.CoordList,
+            ((-0.4, 0.0), (0.4, 0.0)),
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            curves[1].Points.CoordList,
+            ((0.12, -0.28), (0.4, 0.0), (0.12, 0.28)),
+            atol=1e-9,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            arrow.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            placement[:3, 3],
+            (4.5, 3.2, ground.elevation),
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            placement[:2, 0],
+            (-1.0, 0.0),
+            atol=1e-9,
+        )
+        self.assertIn(arrow, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(arrow, other_drawing.group.IsGroupedBy[0].RelatedObjects)
+
+        with self.assertRaisesRegex(ValueError, "size must be greater than zero"):
+            drawing.add_entrance_arrow((1, 1), size=0)
+        with self.assertRaisesRegex(TypeError, "rotation must be a number"):
+            drawing.add_entrance_arrow((1, 1), rotation="left")
 
     def test_automatically_adds_door_dimensions_to_included_drawings(self) -> None:
         house = House("My house")
