@@ -3,10 +3,45 @@
 from __future__ import annotations
 
 import argparse
+import faulthandler
+import os
 from pathlib import Path
 import sys
+from time import monotonic
 
 import bpy
+
+
+_STARTED_AT = monotonic()
+_LAST_STAGE_AT = _STARTED_AT
+_HANG_DIAGNOSTIC_SECONDS = 30
+
+
+def report_stage(message: str) -> None:
+    """Print an elapsed-time marker that remains visible during Blender hangs."""
+    global _LAST_STAGE_AT
+    now = monotonic()
+    elapsed = now - _STARTED_AT
+    stage_elapsed = now - _LAST_STAGE_AT
+    print(
+        f"[drawing pid={os.getpid()} +{elapsed:.2f}s; previous stage "
+        f"{stage_elapsed:.2f}s] {message}",
+        flush=True,
+    )
+    _LAST_STAGE_AT = now
+
+
+def enable_hang_diagnostics() -> None:
+    """Dump the Python stack repeatedly if a Blender operation stops returning."""
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(
+        _HANG_DIAGNOSTIC_SECONDS,
+        repeat=True,
+    )
+    report_stage(
+        f"Renderer started; Python stack watchdog armed for "
+        f"{_HANG_DIAGNOSTIC_SECONDS}s"
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,6 +76,7 @@ def clear_startup_scene() -> None:
 
 
 def render_drawing(args: argparse.Namespace) -> Path:
+    report_stage("Checking Bonsai availability")
     require_bonsai()
     from bonsai import tool
 
@@ -50,8 +86,9 @@ def render_drawing(args: argparse.Namespace) -> Path:
         raise FileNotFoundError(f"IFC file not found: {ifc_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    report_stage("Clearing the Blender startup scene")
     clear_startup_scene()
-    print("Loading persisted IFC drawing...", flush=True)
+    report_stage(f"Loading persisted IFC drawing from {ifc_path}")
     require_finished(
         bpy.ops.bim.load_project(
             filepath=str(ifc_path),
@@ -62,7 +99,7 @@ def render_drawing(args: argparse.Namespace) -> Path:
         ),
         "loading the IFC project",
     )
-    print("IFC project loaded.", flush=True)
+    report_stage("IFC project loaded")
 
     model = tool.Ifc.get()
     if model is None:
@@ -73,7 +110,7 @@ def render_drawing(args: argparse.Namespace) -> Path:
         raise RuntimeError(f"drawing not found: {args.drawing_guid}") from error
     if not drawing.is_a("IfcAnnotation") or drawing.ObjectType != "DRAWING":
         raise RuntimeError(f"IFC entity is not a drawing: {args.drawing_guid}")
-    print(f'Found drawing "{drawing.Name}".', flush=True)
+    report_stage(f'Found drawing "{drawing.Name}" ({drawing.GlobalId})')
 
     drawing_document = tool.Drawing.get_drawing_document(drawing)
     if drawing_document is None:
@@ -89,7 +126,7 @@ def render_drawing(args: argparse.Namespace) -> Path:
     document_props.should_use_linework_cache = False
     document_props.should_use_annotation_cache = False
 
-    print("Activating persisted drawing camera...", flush=True)
+    report_stage("Activating persisted drawing camera")
     require_finished(
         bpy.ops.bim.activate_drawing(
             drawing=drawing.id(),
@@ -98,8 +135,8 @@ def render_drawing(args: argparse.Namespace) -> Path:
         ),
         "activating the drawing",
     )
-    print("Drawing camera activated.", flush=True)
-    print("Creating SVG...", flush=True)
+    report_stage("Drawing camera activated")
+    report_stage(f"Creating SVG at {output_path}")
     require_finished(
         bpy.ops.bim.create_drawing(
             print_all=False,
@@ -110,12 +147,17 @@ def render_drawing(args: argparse.Namespace) -> Path:
     )
     if not output_path.is_file() or output_path.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG: {output_path}")
-    print(f"Bonsai SVG created: {output_path}", flush=True)
+    report_stage(f"Bonsai SVG created: {output_path}")
     return output_path
 
 
 def main() -> None:
-    render_drawing(parse_args())
+    enable_hang_diagnostics()
+    try:
+        render_drawing(parse_args())
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+    report_stage("Requesting Blender shutdown")
     bpy.ops.wm.quit_blender()
 
 

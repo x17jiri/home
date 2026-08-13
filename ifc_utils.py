@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from time import monotonic
 from typing import Literal, Sequence, TypeAlias
 
 import ifcopenshell
@@ -65,6 +66,7 @@ __all__ = [
 Number: TypeAlias = int | float
 Point: TypeAlias = tuple[Number, Number]
 Point3D: TypeAlias = tuple[Number, Number, Number]
+DrawingView: TypeAlias = Literal["plan", "elevation"]
 PlaneCut: TypeAlias = tuple[Point3D, Point3D, Point3D]
 WallCut: TypeAlias = PlaneCut
 Layer: TypeAlias = tuple[str, Number]
@@ -1148,36 +1150,59 @@ def _render_existing_drawing(
             raise IsADirectoryError(f"drawing output is not a file: {absolute_output}")
         absolute_output.unlink()
 
-    subprocess.run(
-        [
-            blender_command,
-            "--python-exit-code",
-            "1",
-            "--python",
-            str(script_path),
-            "--",
-            "--ifc",
-            str(ifc),
-            "--drawing-guid",
-            drawing_guid,
-            "--output",
-            str(absolute_output),
-        ],
-        check=True,
+    command = [
+        blender_command,
+        "--python-exit-code",
+        "1",
+        "--python",
+        str(script_path),
+        "--",
+        "--ifc",
+        str(ifc),
+        "--drawing-guid",
+        drawing_guid,
+        "--output",
+        str(absolute_output),
+    ]
+    print(
+        f"[drawing render] Launching Blender/Bonsai for {drawing_guid}; "
+        f"output={absolute_output}",
+        flush=True,
+    )
+    render_started_at = monotonic()
+    try:
+        result = subprocess.run(command, check=True)
+    except BaseException:
+        print(
+            f"[drawing render] Blender/Bonsai aborted after "
+            f"{monotonic() - render_started_at:.2f}s",
+            flush=True,
+        )
+        raise
+    print(
+        f"[drawing render] Blender/Bonsai exited with code "
+        f"{result.returncode} after {monotonic() - render_started_at:.2f}s",
+        flush=True,
     )
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
     model = ifcopenshell.open(str(ifc))
     drawing = model.by_guid(drawing_guid)
-    cut_z = float(
-        ifcopenshell.util.placement.get_local_placement(
-            drawing.ObjectPlacement
-        )[2, 3]
+    target_view = ifcopenshell.util.element.get_pset(
+        drawing,
+        "EPset_Drawing",
+        "TargetView",
     )
-    _postprocess_door_overheads(
-        absolute_output,
-        mask_global_ids=_overhead_mask_global_ids(model, cut_z),
-    )
+    if target_view == "PLAN_VIEW":
+        cut_z = float(
+            ifcopenshell.util.placement.get_local_placement(
+                drawing.ObjectPlacement
+            )[2, 3]
+        )
+        _postprocess_door_overheads(
+            absolute_output,
+            mask_global_ids=_overhead_mask_global_ids(model, cut_z),
+        )
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -1505,12 +1530,19 @@ class House:
         z: Number,
         radius: Number,
         *,
+        view: DrawingView = "plan",
+        direction: Point3D | None = None,
         storeys: Sequence[Storey] | None = None,
         door_annotations: bool = True,
         door_annotation_offset: Number = 0,
     ) -> Drawing:
-        """Add a persisted square plan drawing to this IFC model.
+        """Add a persisted square plan or elevation drawing to this IFC model.
 
+        ``view="plan"`` preserves the existing downward-looking plan.  For a
+        basic side view, use ``view="elevation"`` and supply a horizontal
+        ``direction`` pointing from the camera toward the building, such as
+        ``(0, 1, 0)``.  Elevations currently contain projected model geometry
+        only; plan annotations and automatic door labels are omitted.
         ``storeys`` limits both model geometry and automatic plan annotations
         to the supplied building storeys.  When omitted, all storeys are
         included.  Drawing-specific annotations are always included.
@@ -1529,6 +1561,8 @@ class House:
             y=y,
             z=z,
             radius=radius,
+            view=view,
+            direction=direction,
             storeys=storeys,
             door_annotations=door_annotations,
             door_annotation_offset=door_annotation_offset,
@@ -1580,7 +1614,7 @@ class House:
 
 
 class Drawing:
-    """A persisted Bonsai plan drawing belonging to a :class:`House`."""
+    """A persisted Bonsai plan or elevation drawing belonging to a House."""
 
     def __init__(
         self,
@@ -1591,6 +1625,8 @@ class Drawing:
         y: Number,
         z: Number,
         radius: Number,
+        view: DrawingView,
+        direction: Point3D | None,
         storeys: Sequence[Storey] | None,
         door_annotations: bool,
         door_annotation_offset: Number,
@@ -1603,6 +1639,27 @@ class Drawing:
         self.radius = _number(radius, "radius")
         if self.radius <= 0:
             raise ValueError("radius must be greater than zero")
+        self.view = _enum(view, "view", {"PLAN", "ELEVATION"}).lower()
+        if self.view == "plan":
+            if direction is not None:
+                raise ValueError("direction is only supported for elevation drawings")
+            self.direction = (0.0, 0.0, -1.0)
+        else:
+            if direction is None:
+                raise ValueError("direction is required for elevation drawings")
+            direction_x, direction_y, direction_z = _point_3d(
+                direction, "direction"
+            )
+            if abs(direction_z) > 1e-9:
+                raise ValueError("elevation direction must be horizontal")
+            direction_length = hypot(direction_x, direction_y)
+            if direction_length == 0:
+                raise ValueError("elevation direction must not be zero")
+            self.direction = (
+                direction_x / direction_length,
+                direction_y / direction_length,
+                0.0,
+            )
         self._batting_count = 0
         self._dimension_count = 0
         self._entrance_arrow_count = 0
@@ -1611,7 +1668,9 @@ class Drawing:
         self._annotated_doors: set[int] = set()
         if not isinstance(door_annotations, bool):
             raise TypeError("door_annotations must be a boolean")
-        self._automatic_door_annotations = door_annotations
+        self._automatic_door_annotations = (
+            door_annotations and self.view == "plan"
+        )
         self._door_annotation_offset = _number(
             door_annotation_offset, "door_annotation_offset"
         )
@@ -1649,6 +1708,14 @@ class Drawing:
         )
 
         placement = np.eye(4)
+        if self.view == "elevation":
+            direction_vector = np.array(self.direction)
+            camera_z = -direction_vector
+            camera_y = np.array((0.0, 0.0, 1.0))
+            camera_x = np.cross(camera_y, camera_z)
+            placement[:3, 0] = camera_x
+            placement[:3, 1] = camera_y
+            placement[:3, 2] = camera_z
         placement[0, 3] = self.x
         placement[1, 3] = self.y
         placement[2, 3] = self.z
@@ -1663,7 +1730,11 @@ class Drawing:
         # the local X/Y extents are its frame and local negative Z is its view
         # depth.  Loader.create_camera reconstructs the Blender camera from it.
         r = self.radius
-        depth = max(10.0, abs(self.z) + 10.0)
+        depth = (
+            max(10.0, hypot(self.x, self.y) + 2 * self.radius)
+            if self.view == "elevation"
+            else max(10.0, abs(self.z) + 10.0)
+        )
         vertices = [
             (-r, -r, -depth),
             (-r, -r, 0.0),
@@ -1705,13 +1776,17 @@ class Drawing:
             group=self.group,
             products=[self.element],
         )
-        plan_annotations = [
-            annotation
-            for annotation in house._plan_annotations
-            if self._includes_storey_element(
-                ifcopenshell.util.element.get_container(annotation)
-            )
-        ]
+        plan_annotations = (
+            [
+                annotation
+                for annotation in house._plan_annotations
+                if self._includes_storey_element(
+                    ifcopenshell.util.element.get_container(annotation)
+                )
+            ]
+            if self.view == "plan"
+            else []
+        )
         if plan_annotations:
             ifcopenshell.api.group.assign_group(
                 model,
@@ -1727,22 +1802,36 @@ class Drawing:
             name="EPset_Drawing",
         )
         drawing_properties = {
-            "TargetView": "PLAN_VIEW",
+            "TargetView": (
+                "PLAN_VIEW" if self.view == "plan" else "ELEVATION_VIEW"
+            ),
             "Scale": "1/100",
             "HumanScale": "1:100",
             "HasUnderlay": False,
             "HasLinework": True,
-            "HasAnnotation": True,
+            "HasAnnotation": self.view == "plan",
             "GlobalReferencing": True,
             "DPI": 96,
             "LineworkMode": "OPENCASCADE",
-            "FillMode": "NONE",
+            # Elevations need closed projected surfaces so material styling
+            # can fill elements which lie behind the section plane.  Plans
+            # retain their existing linework-only projection behaviour.
+            "FillMode": "SHAPELY" if self.view == "elevation" else "NONE",
             "CutMode": "BISECT",
             "Stylesheet": str(project_dir / "bonsai_scripts" / "assets" / "plan.css"),
             "Markers": str(drawing_assets / "markers.svg"),
             "Symbols": str(drawing_assets / "symbols.svg"),
             "Patterns": str(drawing_assets / "patterns.svg"),
-            "ShadingStyles": str(drawing_assets / "shading_styles.json"),
+            # These drawings use OpenCascade linework without a raster
+            # underlay.  Avoid applying Bonsai's stock viewport style: its
+            # many Blender render-property assignments are unnecessary here
+            # and can occasionally deadlock while activating the camera.
+            "ShadingStyles": str(
+                project_dir
+                / "bonsai_scripts"
+                / "assets"
+                / "linework_shading_styles.json"
+            ),
             "CurrentShadingStyle": "Technical",
         }
         if not self._includes_all_storeys:
@@ -1819,6 +1908,10 @@ class Drawing:
             selected.element == storey for selected in self._storeys
         )
 
+    def _require_plan_view(self, operation: str) -> None:
+        if self.view != "plan":
+            raise ValueError(f"{operation} is only supported for plan drawings")
+
     def _include_model_element(
         self,
         element: ifcopenshell.entity_instance,
@@ -1860,6 +1953,7 @@ class Drawing:
         measured value in millimetres.  A non-zero offset adds extension lines
         from the measured points to 1 mm beyond the dimension line at 1:100.
         """
+        self._require_plan_view("add_dimension")
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
         offset = _number(offset, "offset")
@@ -2032,6 +2126,7 @@ class Drawing:
         with two decimal places and a square-metre suffix.  This helper does
         not create an ``IfcSpace`` or calculate area from room boundaries.
         """
+        self._require_plan_view("add_room_annotation")
         x, y = _point(position, "position")
         identifier = _name(identifier, "identifier")
         area = _number(area, "area")
@@ -2194,6 +2289,7 @@ class Drawing:
         ``rotation`` is measured counter-clockwise in degrees; zero points
         right and 180 points left.  ``size`` is the arrow length in metres.
         """
+        self._require_plan_view("add_entrance_arrow")
         x, y = _point(position, "position")
         rotation = _number(rotation, "rotation")
         size = _number(size, "size")
@@ -2303,6 +2399,7 @@ class Drawing:
         the wall.  ``offset`` moves it farther into the swing, in model metres;
         a negative value moves it toward the wall.
         """
+        self._require_plan_view("add_door_annotation")
         if not isinstance(door, ifcopenshell.entity_instance) or not door.is_a(
             "IfcDoor"
         ):
@@ -2533,6 +2630,7 @@ class Drawing:
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add a batting annotation scoped only to this drawing."""
+        self._require_plan_view("add_batting")
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
         thickness = _number(thickness, "thickness")
@@ -2618,6 +2716,7 @@ class Drawing:
         GlobalId is added to this drawing's inclusion selector.  This lets one
         continuous multistorey chimney be cut in every annotated floor plan.
         """
+        self._require_plan_view("add_chimney_annotation")
         if not isinstance(chimney, Chimney):
             raise TypeError("chimney must be a Chimney created by Storey.chimney")
         if chimney.file is not self.house.model:
@@ -2750,6 +2849,7 @@ class Drawing:
         walking-direction arrow.  It does not alter the stair's 3D
         representation.
         """
+        self._require_plan_view("add_stair_annotation")
         if not isinstance(stair, Stair):
             raise TypeError("stair must be a Stair created by Storey.stair")
         if stair.file is not self.house.model:
@@ -3765,7 +3865,10 @@ class Wall(ifcopenshell.entity_instance):
         house = self.storey.house
         house._plan_annotations.append(annotation)
         for drawing in house._drawings:
-            if drawing._includes_storey(self.storey):
+            if (
+                drawing.view == "plan"
+                and drawing._includes_storey(self.storey)
+            ):
                 ifcopenshell.api.group.assign_group(
                     model,
                     group=drawing.group,
@@ -4875,7 +4978,7 @@ class Storey:
         )
         self.house._plan_annotations.append(annotation)
         for drawing in self.house._drawings:
-            if drawing._includes_storey(self):
+            if drawing.view == "plan" and drawing._includes_storey(self):
                 ifcopenshell.api.group.assign_group(
                     model,
                     group=drawing.group,

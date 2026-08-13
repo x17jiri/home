@@ -260,6 +260,28 @@ metres in both X and Y, so the example cuts the model at 1.6 m and covers a
 10 m by 10 m area. `png=True` additionally creates `house.png` through
 Inkscape.
 
+A basic side elevation uses the same persisted drawing interface.  Place the
+camera outside the building and point ``direction`` toward it:
+
+```python
+elevation = house.add_drawing(
+    "South elevation",
+    x=6,
+    y=-1,
+    z=3.5,
+    radius=8,
+    view="elevation",
+    direction=(0, 1, 0),
+    storeys=[ground, upper],
+)
+house.write("south.ifc")
+elevation.render("south.svg", png=True, png_dpi=600)
+```
+
+Elevation directions must currently be horizontal.  Elevations project the
+existing 3D model bodies and deliberately omit plan-only annotations such as
+door dimensions, room labels, stair arrows, and furniture labels.
+
 The Blender-side implementation is in `bonsai_scripts/generate_plan.py`.
 Parameters are passed directly after Blender's `--` command separator instead
 of through a shared parameter file, preventing stale settings and allowing

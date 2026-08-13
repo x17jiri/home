@@ -3278,6 +3278,92 @@ class HouseTests(unittest.TestCase):
             ]
             self.assertEqual({drawing.Name for drawing in drawings}, {"Ground plan", "Other plan"})
 
+    def test_stores_a_basic_elevation_camera_without_plan_annotations(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.2, height=2.8)
+        wall.add_door(at=0.5, width=0.9, height=2.1)
+        ground.furniture(
+            "Table",
+            kind="TABLE",
+            size=(1, 1, 0.75),
+            center=(2, 2),
+        )
+
+        drawing = house.add_drawing(
+            "South elevation",
+            2.5,
+            -1,
+            2,
+            5,
+            view="elevation",
+            direction=(0, 2, 0),
+            storeys=[ground],
+        )
+
+        self.assertEqual(drawing.view, "elevation")
+        self.assertEqual(drawing.direction, (0.0, 1.0, 0.0))
+        placement = ifcopenshell.util.placement.get_local_placement(
+            drawing.element.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            placement,
+            np.array(
+                (
+                    (1, 0, 0, 2.5),
+                    (0, 0, -1, -1),
+                    (0, 1, 0, 2),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-12,
+        )
+        drawing_pset = ifcopenshell.util.element.get_pset(
+            drawing.element, "EPset_Drawing"
+        )
+        self.assertEqual(drawing_pset["TargetView"], "ELEVATION_VIEW")
+        self.assertEqual(drawing_pset["FillMode"], "SHAPELY")
+        self.assertEqual(drawing_pset["HasAnnotation"], False)
+        self.assertEqual(
+            set(drawing.group.IsGroupedBy[0].RelatedObjects),
+            {drawing.element},
+        )
+        self.assertFalse(drawing._automatic_door_annotations)
+        with self.assertRaisesRegex(ValueError, "only supported for plan"):
+            drawing.add_dimension((0, 0), (1, 0))
+
+        with self.assertRaisesRegex(ValueError, "direction is required"):
+            house.add_drawing("Missing direction", 0, 0, 0, 1, view="elevation")
+        with self.assertRaisesRegex(ValueError, "must be horizontal"):
+            house.add_drawing(
+                "Sloped direction",
+                0,
+                0,
+                0,
+                1,
+                view="elevation",
+                direction=(0, 1, 1),
+            )
+        with self.assertRaisesRegex(ValueError, "must not be zero"):
+            house.add_drawing(
+                "Zero direction",
+                0,
+                0,
+                0,
+                1,
+                view="elevation",
+                direction=(0, 0, 0),
+            )
+        with self.assertRaisesRegex(ValueError, "only supported for elevation"):
+            house.add_drawing(
+                "Directed plan",
+                0,
+                0,
+                1,
+                1,
+                direction=(0, 1, 0),
+            )
+
     def test_scopes_drawing_geometry_and_automatic_annotations_by_storey(
         self,
     ) -> None:

@@ -1178,18 +1178,15 @@ if "upper" in sys.argv:
 # Drawing - wall3
 if "wall3" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 2", x=6, y=4, z=0.25+2.75+2, radius=8, storeys=[upper]
+		"Wall3",
+		x=7.5,
+		y=4,
+		z=3.5,
+		radius=8,
+		view="elevation",
+		direction=(-1, 0, 0),
+		storeys=None,
 	)
 
-	drawing1.add_stair_annotation(stairs1)
-	drawing1.add_stair_annotation(stairs2)
-	drawing1.add_chimney_annotation(chimney)
-
-	drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(3.5, 7.5), end=(8.0, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(8.25, 7.5), end=(11.75, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
-	drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
-
-	house.write("upper.ifc")
-	drawing1.render("upper.svg", png=True, png_dpi=600)
+	house.write("wall3.ifc")
+	drawing1.render("wall3.svg", png=True, png_dpi=600)
