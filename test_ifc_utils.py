@@ -1653,8 +1653,10 @@ class HouseTests(unittest.TestCase):
         )
 
         self.assertEqual(len(slab.beams), 2)
+        self.assertEqual(len(slab.beam_shells), 2)
+        self.assertEqual(len(slab.reinforcements), 2)
         self.assertEqual(len(slab.blocks), 64)
-        self.assertEqual(len(slab.components), 67)
+        self.assertEqual(len(slab.components), 71)
         decomposition = slab.IsDecomposedBy[0]
         self.assertTrue(decomposition.is_a("IfcRelAggregates"))
         self.assertEqual(set(decomposition.RelatedObjects), set(slab.components))
@@ -1691,10 +1693,10 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_x(beam_shape.geometry), 8
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_y(beam_shape.geometry), 0.17
+            ifcopenshell.util.shape.get_y(beam_shape.geometry), 0.13
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_z(beam_shape.geometry), 0.19
+            ifcopenshell.util.shape.get_z(beam_shape.geometry), 0.06 - 0.02
         )
 
         def mapped_rgb(
@@ -1718,7 +1720,51 @@ class HouseTests(unittest.TestCase):
                 shading.SurfaceColour.Blue,
             )
 
-        self.assertEqual(mapped_rgb(first_beam), (1, 0, 0))
+        self.assertEqual(
+            mapped_rgb(first_beam),
+            (191 / 255, 195 / 255, 197 / 255),
+        )
+
+        first_shell = slab.beam_shells[0]
+        first_reinforcement = slab.reinforcements[0]
+        shell_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), first_shell
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(shell_shape.geometry), 0.17
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(shell_shape.geometry), 0.06
+        )
+        self.assertEqual(
+            mapped_rgb(first_shell),
+            (217 / 255, 130 / 255, 69 / 255),
+        )
+        self.assertEqual(mapped_rgb(first_reinforcement), (0.2, 0.2, 0.2))
+        reinforcement_type = ifcopenshell.util.element.get_type(
+            first_reinforcement
+        )
+        reinforcement_body = ifcopenshell.util.representation.get_representation(
+            reinforcement_type, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(len(reinforcement_body.Items), 3)
+        wire_profile = (
+            reinforcement_body.Items[0].SweptArea.OuterCurve.Points.CoordList
+        )
+        self.assertIn((-0.082, 0.175), wire_profile)
+        self.assertIn((-0.08800000000000001, 0.175), wire_profile)
+        reinforcement_dots = [
+            item.SweptArea.OuterCurve
+            for item in reinforcement_body.Items[1:]
+        ]
+        self.assertTrue(
+            all(dot.is_a("IfcCircle") for dot in reinforcement_dots)
+        )
+        for dot, expected_y in zip(reinforcement_dots, (-0.055, -0.115)):
+            dot_y, dot_z = dot.Position.Location.Coordinates
+            self.assertAlmostEqual(dot_y, expected_y)
+            self.assertAlmostEqual(dot_z, 0.04)
+            self.assertAlmostEqual(dot.Radius, 0.006)
 
         wide_blocks = [
             block
@@ -1754,7 +1800,7 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_x(wide_shape.geometry), 0.25
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_y(wide_shape.geometry), 0.5
+            ifcopenshell.util.shape.get_y(wide_shape.geometry), 0.525
         )
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_z(wide_shape.geometry), 0.19
@@ -1766,29 +1812,28 @@ class HouseTests(unittest.TestCase):
         wide_profile = wide_type_body.Items[0].SweptArea.OuterCurve.Points.CoordList
         self.assertEqual(
             wide_profile[:3],
-            ((0.0, 0.0), (-0.455, 0.0), (-0.455, 0.03)),
+            ((0.0, 0.0), (-0.455, 0.0), (-0.455, 0.06)),
         )
-        self.assertIn((-0.47750000000000004, 0.03), wide_profile)
-        self.assertIn((-0.47750000000000004, 0.19), wide_profile)
-        self.assertIn((0.0225, 0.03), wide_profile)
-        self.assertIn((0.0225, 0.19), wide_profile)
+        self.assertIn((-0.49, 0.06), wide_profile)
+        self.assertIn((-0.49, 0.19), wide_profile)
+        self.assertIn((0.035, 0.06), wide_profile)
+        self.assertIn((0.035, 0.19), wide_profile)
         beam_type = ifcopenshell.util.element.get_type(first_beam)
         beam_type_body = ifcopenshell.util.representation.get_representation(
             beam_type, "Model", "Body", "MODEL_VIEW"
         )
         beam_profile = beam_type_body.Items[0].SweptArea.OuterCurve.Points.CoordList
-        self.assertIn((-0.14750000000000002, 0.03), beam_profile)
-        # The block lip and beam stem meet at the same global section edge;
-        # their horizontal bounds overlap, but their solid profiles do not.
-        self.assertAlmostEqual(
-            first_beam_placement[0, 3]
-            + abs(beam_profile[6][0]),
-            abs(wide_profile[3][0]),
+        self.assertEqual(
+            tuple(
+                tuple(round(coordinate, 9) for coordinate in point)
+                for point in beam_profile[:4]
+            ),
+            ((-0.02, 0.02), (-0.15, 0.02), (-0.15, 0.06), (-0.02, 0.06)),
         )
-        self.assertAlmostEqual(
-            first_beam_placement[0, 3]
-            + abs(beam_profile[5][0]),
-            abs(wide_profile[4][0]),
+        self.assertTrue(
+            beam_type_body.Items[0].SweptArea.is_a(
+                "IfcArbitraryClosedProfileDef"
+            )
         )
         self.assertEqual(mapped_rgb(wide_blocks[0]), (0, 0, 1))
         self.assertEqual(mapped_rgb(narrow_blocks[0]), (0, 128 / 255, 0))
@@ -1796,7 +1841,18 @@ class HouseTests(unittest.TestCase):
         topping_placement = ifcopenshell.util.placement.get_local_placement(
             slab.topping_element.ObjectPlacement
         )
-        self.assertAlmostEqual(topping_placement[2, 3], 2.94)
+        self.assertAlmostEqual(topping_placement[2, 3], 2.75)
+        topping_body = ifcopenshell.util.representation.get_representation(
+            slab.topping_element, "Model", "Body", "MODEL_VIEW"
+        )
+        topping_profile = (
+            topping_body.Items[0].SweptArea.OuterCurve.Points.CoordList
+        )
+        self.assertIn((-0.49, 0.19), topping_profile)
+        self.assertIn((-0.49, 0.06), topping_profile)
+        self.assertIn((-0.59, 0.06), topping_profile)
+        self.assertIn((-0.59, 0.19), topping_profile)
+        self.assertIn((-1.125, 0.25), topping_profile)
         topping_shape = ifcopenshell.geom.create_shape(
             ifcopenshell.geom.settings(), slab.topping_element
         )
@@ -1807,7 +1863,7 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_y(topping_shape.geometry), 1.125
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_z(topping_shape.geometry), 0.06
+            ifcopenshell.util.shape.get_z(topping_shape.geometry), 0.19
         )
         self.assertEqual(
             ifcopenshell.util.element.get_pset(
@@ -1821,6 +1877,12 @@ class HouseTests(unittest.TestCase):
             ),
             "wide,beam,narrow,beam",
         )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                slab, "BBIM_MiakoSlab", "ConcreteCoverRibDepth"
+            ),
+            0.19,
+        )
 
         with TemporaryDirectory() as directory:
             output = Path(directory) / "miako.ifc"
@@ -1828,10 +1890,10 @@ class HouseTests(unittest.TestCase):
             reopened = ifcopenshell.open(output)
             self.assertEqual(len(reopened.by_type("IfcSlab")), 1)
             self.assertEqual(len(reopened.by_type("IfcBeam")), 2)
-            self.assertEqual(len(reopened.by_type("IfcBuildingElementPart")), 65)
+            self.assertEqual(len(reopened.by_type("IfcBuildingElementPart")), 69)
             self.assertEqual(len(reopened.by_type("IfcBeamType")), 1)
             self.assertEqual(
-                len(reopened.by_type("IfcBuildingElementPartType")), 2
+                len(reopened.by_type("IfcBuildingElementPartType")), 4
             )
 
     def test_handles_partial_miako_blocks_and_validates_the_layout(self) -> None:
@@ -1844,7 +1906,9 @@ class HouseTests(unittest.TestCase):
             top=-0.1,
             direction=(-1, 0),
             structure=["wide", "beam", "narrow", "beam"],
-            beam_height=0.175,
+            block_height=0.15,
+            beam_height=0.06,
+            topping=0.06,
         )
 
         self.assertEqual(len(slab.blocks), 6)
@@ -1870,7 +1934,36 @@ class HouseTests(unittest.TestCase):
             slab.beams[0].ObjectPlacement
         )
         self.assertAlmostEqual(first_beam_placement[0, 3], -0.455)
-        self.assertAlmostEqual(first_beam_placement[2, 3], 2.665)
+        self.assertAlmostEqual(first_beam_placement[2, 3], 2.69)
+        self.assertAlmostEqual(slab.height, 0.21)
+        self.assertAlmostEqual(slab.beam_height, 0.06)
+        short_beam_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), slab.beams[0]
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(short_beam_shape.geometry), 0.04
+        )
+        short_shell_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), slab.beam_shells[0]
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(short_shell_shape.geometry), 0.06
+        )
+        short_reinforcement_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), slab.reinforcements[0]
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(short_reinforcement_shape.geometry),
+            0.175 - (0.04 - 0.006),
+            places=4,
+        )
+        self.assertGreater(0.175, slab.block_height)
+        short_cover_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), slab.topping_element
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(short_cover_shape.geometry), 0.15
+        )
 
         valid_arguments = {
             "start": (0, 0),
@@ -1923,6 +2016,14 @@ class HouseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "beam_height"):
             upper.miako_slab(
                 "Invalid", **valid_arguments, beam_height=0.2
+            )
+        with self.assertRaisesRegex(ValueError, "reinforcement apex"):
+            upper.miako_slab(
+                "Invalid",
+                **valid_arguments,
+                block_height=0.1,
+                topping=0.07,
+                beam_height=0.06,
             )
 
     def test_connects_and_mitres_two_layered_walls(self) -> None:
@@ -2105,14 +2206,14 @@ class HouseTests(unittest.TestCase):
                 at=0,
                 width=0.25,
                 sill_height=2.3,
-                height=0.1,
+                height=2.4,
             )
         with self.assertRaisesRegex(ValueError, "within the wall height"):
             raised.add_opening(
                 at=1.75,
                 width=0.25,
                 sill_height=3.5,
-                height=0.2,
+                height=3.7,
             )
 
         adjoining = upper.wall(
@@ -2243,11 +2344,11 @@ class HouseTests(unittest.TestCase):
         door = wall.add_door(
             at=0.5,
             width=0.9,
-            height=2.1,
+            height=2.3,
             clear_height=1.97,
             sill_height=0.2,
             opening_width=1.1,
-            opening_height=2.2,
+            opening_height=2.4,
             operation="SINGLE_SWING_RIGHT",
         )
         window = wall.add_window(
@@ -2260,7 +2361,7 @@ class HouseTests(unittest.TestCase):
 
         self.assertTrue(door.is_a("IfcDoor"))
         self.assertEqual(door.OverallWidth, 0.9)
-        self.assertEqual(door.OverallHeight, 2.1)
+        self.assertAlmostEqual(door.OverallHeight, 2.1)
         self.assertEqual(
             ifcopenshell.util.element.get_pset(
                 door, "EPset_Door", "ClearHeight"
@@ -2466,7 +2567,14 @@ class HouseTests(unittest.TestCase):
             wall.add_door(
                 at=1,
                 width=0.9,
-                height=2.1,
+                height=3.1,
+                sill_height=1,
+            )
+        with self.assertRaisesRegex(ValueError, "greater than sill_height"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=1,
                 sill_height=1,
             )
         with self.assertRaisesRegex(ValueError, "opening_width"):
@@ -2482,6 +2590,14 @@ class HouseTests(unittest.TestCase):
                 width=0.9,
                 height=2.1,
                 opening_height=2,
+            )
+        with self.assertRaisesRegex(ValueError, "opening_height"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                sill_height=1,
+                opening_height=1,
             )
         with self.assertRaisesRegex(ValueError, "clear_height"):
             wall.add_door(
@@ -2510,6 +2626,13 @@ class HouseTests(unittest.TestCase):
                 width=1,
                 height=2,
                 show_overhead="yes",
+            )
+        with self.assertRaisesRegex(ValueError, "greater than sill_height"):
+            wall.add_opening(
+                at=1,
+                width=1,
+                height=1,
+                sill_height=1,
             )
         with self.assertRaisesRegex(ValueError, "partition must be one of"):
             wall.add_window(
@@ -2662,7 +2785,7 @@ class HouseTests(unittest.TestCase):
         opening = wall.add_opening(
             at=0.5,
             width=1.2,
-            height=2,
+            height=2.2,
             sill_height=0.2,
             name="Kitchen passage",
         )
@@ -3611,6 +3734,16 @@ class HouseTests(unittest.TestCase):
             )
             self.assertNotIn("--x", blender_command)
             self.assertIn("--export-dpi=600", commands[1])
+            self.assertIn("--export-area-page", commands[1])
+            self.assertIn("--batch-process", commands[1])
+            exported_png = Path(
+                next(
+                    argument.split("=", 1)[1]
+                    for argument in commands[1]
+                    if argument.startswith("--export-filename=")
+                )
+            )
+            self.assertNotEqual(exported_png, output.with_suffix(".png"))
             self.assertTrue(output.with_suffix(".png").is_file())
             reopened = ifcopenshell.open(directory_path / "house.ifc")
             persisted = reopened.by_guid(drawing.element.GlobalId)
@@ -3630,6 +3763,9 @@ class HouseTests(unittest.TestCase):
   <g id="product-table" class="IfcFurniture material-null projection"><path/></g>
   <g id="product-basin" class="IfcSanitaryTerminal material-null cut"><path/></g>
   <g id="product-cooker" class="IfcElectricAppliance material-null projection"><path/></g>
+  <g id="product-reinforcement-projection" ifc:guid="reinforcement" class="IfcBuildingElementPart material-MIAKOreinforcement projection"><path/></g>
+  <g ifc:guid="reinforcement" class="IfcBuildingElementPart material-MIAKOreinforcement cut"><path/></g>
+  <g id="product-cover" class="IfcBuildingElementPart material-Concretetopping cut"><path/></g>
   <line class="GlobalId-dimension IfcAnnotation PredefinedType-LINEWORK door-dimension-separator" x1="5" x2="20" y1="31" y2="31"/>
   <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK door-overhead dashed" x1="10" x2="20" y1="30" y2="30"/>
   <text>unrelated annotation</text>
@@ -3687,6 +3823,30 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(svg.count(label_overlay), 1)
             self.assertGreater(svg.index(label_overlay), svg.index(furniture_overlay))
             self.assertEqual(svg.count("TABLE"), 2)
+            reinforcement_overlay = (
+                '<g class="miako-reinforcement-overlays '
+                'target-view-ELEVATIONVIEW">'
+            )
+            reinforcement_source = "miako-reinforcement-overlay-source-1"
+            reinforcement_use = (
+                f'<use href="#{reinforcement_source}" '
+                f'xlink:href="#{reinforcement_source}"/>'
+            )
+            self.assertEqual(svg.count(reinforcement_overlay), 1)
+            self.assertEqual(svg.count(f'id="{reinforcement_source}"'), 1)
+            self.assertEqual(svg.count(reinforcement_use), 1)
+            self.assertNotIn(
+                '<use href="#product-reinforcement-projection"',
+                svg,
+            )
+            self.assertGreater(
+                svg.index(reinforcement_overlay),
+                svg.index('id="product-cover"'),
+            )
+            self.assertLess(
+                svg.index(reinforcement_overlay),
+                svg.index(dimension_overlay),
+            )
 
     def test_centers_short_dimension_labels_during_svg_postprocessing(self) -> None:
         with TemporaryDirectory() as directory:

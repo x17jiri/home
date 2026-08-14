@@ -20,7 +20,7 @@ house = House(
 )
 
 ground = house.storey("Ground floor", elevation=0)
-upper = house.storey("Upper floor", elevation=3.0 + 0.25)
+upper = house.storey("Upper floor", elevation=3.0 + 0.21)
 
 load_bearing_wall = house.wall_type(
     "Load bearing wall - VPC 240 mm",
@@ -58,7 +58,8 @@ wall2_x = 0.25 + 3 + 0.25;
 wall3_x = wall2_x + 4.5 + 0.25;
 ground_floor_height = 0.25+2.75
 door_clear_height = 2.1
-stair_height = 3.0-0.2+0.25+0.11
+CEILING_THICKNESS = 0.21
+stair_height =  ground_floor_height - 0.2 + CEILING_THICKNESS + 0.11
 step_count = 17
 
 # Load-bearing walls
@@ -107,12 +108,12 @@ wall_back.add_window(
 	at=0.25+3.5+0.25+0.5+1+1,width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_door(
 	at=0.25+3.5+0.25+0.5,
-	width=0.8, sill_height=0.25+0.1, height=2.15, opening_width=1, clear_height=2)
+	width=0.8, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2)
 wall_back.add_window(
 	at=0.25+3.5+0.25+4.5+0.25+0.75,
 	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 
-# Bathroom
+# Bathroom, Koupelna
 wall_bathroom = ground.wall(
 	(0.25, 0.25+2.3), (0.25+3, 0.25+2.3),
 	wall_type=partition_wall, height=ground_floor_height)
@@ -316,7 +317,7 @@ w3 = ground.wall(
 wall_3.add_opening(
     at=0.25+0.625+1+1+1.5,
     width=1.0,
-    height=2.125,
+    height=0.25+2.125,
     sill_height=0.2,
     name="Fireplace opening",
 )
@@ -386,7 +387,7 @@ bed = ground.furniture(
 opening = wall_3.add_opening(
     at=0.25+0.625,
     width=1.0,
-    height=2.125,
+    height=0.25+2.125,
     sill_height=0.2,
     name="Hallway passage",
     show_overhead=True,
@@ -397,10 +398,10 @@ ceiling1 = upper.miako_slab(
     "Ceiling 1",
     start=(0.1, 8.0-0.25+0.04),
     end=(0.25+3.0+0.25-0.15, 8.0-0.25+0.04),
-    top=0.11,
-	topping=0.11,
-	beam_height=0.25,
-	block_height=0.25,
+    top=0,
+	topping=0.06,
+	beam_height=0.06,
+	block_height=0.15,
     direction=(0, -1),
     structure=[
 		"wide", "beam",
@@ -422,10 +423,10 @@ ceiling2 = upper.miako_slab(
     "Ceiling 2",
     start=(0.25+3.0+0.125, 8.0-0.25+0.04),
     end=(0.25+3.0+0.25+4.5+0.125, 8.0-0.25+0.04),
-    top=0.11,
-	topping=0.11,
-	beam_height=0.25,
-	block_height=0.25,
+    top=0,
+	topping=0.06,
+	beam_height=0.06,
+	block_height=0.15,
     direction=(0, -1),
     structure=[
 		"wide", "beam",
@@ -447,10 +448,10 @@ ceiling3 = upper.miako_slab(
     "Ceiling 3",
     start=(0.25+3.0+0.25+4.5+0.15, 8.0-0.25+0.04),
     end=(0.25+3.0+0.25+4.5+0.15+3.75, 8.0-0.25+0.04),
-    top=0.11,
-	topping=0.11,
-	beam_height=0.25,
-	block_height=0.25,
+    top=0,
+	topping=0.06,
+	beam_height=0.06,
+	block_height=0.15,
     direction=(0, -1),
     structure=[
 		"wide", "beam",
@@ -460,46 +461,46 @@ ceiling3 = upper.miako_slab(
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
-		"beam",
+#		"beam",
 		],
 )
 
 UNDER_HOLE = 2.80
-
+UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 # upper floor
 wall_cuts_1_4 = [
 	(
-		(0, 0.125-0.08, 3.25+1.25+0.12),
-		(5, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
-		(0, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
+		(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12),
+		(5, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
+		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
 	),
 	(
-		(0, 8.0-0.125+0.08, 3.25+1.25+0.12),
-		(0, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
-		(5, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
+		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+1.25+0.12),
+		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
+		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
 	),
 	(
-		(0, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25),
-		(0, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25),
-		(5, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25),
+		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
 wall_cuts_2_3 = [
 	(
-		(0, 0.125-0.08, 3.25+1.25+0.12),
-		(0, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
-		(5, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
+		(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12),
+		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
+		(5, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
 	),
 	(
-		(0, 8.0-0.125+0.08, 3.25+2.5+0.12),
-		(0, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
-		(5, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24),
+		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+2.5+0.12),
+		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
+		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
 	),
 	(
-		(0, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25),
-		(0, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25),
-		(5, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25),
+		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 	),
 ]
 
@@ -512,19 +513,21 @@ wall_1 = upper.wall(
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_1.add_opening(at=0, width=0.25, height=0.25, sill_height=1.25)
-wall_1.add_opening(at=7.75, width=0.25, height=0.25, sill_height=1.25)
+wall_1.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
+wall_1.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
 
 wall_2 = upper.wall(
 	(wall2_x, 0), (wall2_x, 8),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
-wall_2.add_opening(at=3.5, width=1, height=0.25, sill_height=UNDER_HOLE)
+wall_2.add_opening(
+	at=3.5, width=1, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 wall_3 = upper.wall(
 	(wall3_x, 0), (wall3_x, 8),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
-wall_3.add_opening(at=3.5, width=1, height=0.25, sill_height=UNDER_HOLE)
+wall_3.add_opening(
+	at=3.5, width=1, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_4 = upper.wall(
 	(12, 0), (12, 8),
@@ -532,8 +535,8 @@ wall_4 = upper.wall(
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_4.add_opening(at=0, width=0.25, height=0.25, sill_height=1.25)
-wall_4.add_opening(at=7.75, width=0.25, height=0.25, sill_height=1.25)
+wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
+wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
 
 wall_pracovna = upper.wall(
 	start=(0.25+3+0.25+4.5, 2.7),
@@ -572,40 +575,40 @@ upper.connect_wall(wall_4, wall_back)
 
 beam1 = upper.beam(
     "Beam",
-    start=(0, 4.0-0.8, 3.25+UNDER_HOLE+0.5+0.12),
-    end=(12, 4.0-0.8, 3.25+UNDER_HOLE+0.5+0.12),
+    start=(0, 4.0-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    end=(12, 4.0-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     size=(0.14, 0.24),
     material="Wood",
     kind="BEAM",
 )
 beam2 = upper.beam(
     "Beam",
-    start=(0, 4.0+0.8, 3.25+UNDER_HOLE+0.5+0.12),
-    end=(12, 4.0+0.8, 3.25+UNDER_HOLE+0.5+0.12),
+    start=(0, 4.0+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    end=(12, 4.0+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     size=(0.14, 0.24),
     material="Wood",
     kind="BEAM",
 )
 beam3 = upper.beam(
     "Beam",
-    start=(0, 0.125, 3.25+1.25+0.06),
-    end=(12, 0.125, 3.25+1.25+0.06),
+    start=(0, 0.125, UPPER_FLOOR_START+1.25+0.06),
+    end=(12, 0.125, UPPER_FLOOR_START+1.25+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
 )
 beam4 = upper.beam(
     "Beam",
-    start=(0, 8-0.125, 3.25+1.25+0.06),
-    end=(12, 8-0.125, 3.25+1.25+0.06),
+    start=(0, 8-0.125, UPPER_FLOOR_START+1.25+0.06),
+    end=(12, 8-0.125, UPPER_FLOOR_START+1.25+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
 )
 beam_dormer = upper.beam(
     "Beam",
-    start=(0.25+3+0.25+4.5+0.25+0.3, 8-0.125, 3.25+2.5+0.06),
-    end=(0.25+3-0.3, 8-0.125, 3.25+2.5+0.06),
+    start=(0.25+3+0.25+4.5+0.25+0.3, 8-0.125, UPPER_FLOOR_START+2.5+0.06),
+    end=(0.25+3-0.3, 8-0.125, UPPER_FLOOR_START+2.5+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
@@ -677,9 +680,9 @@ roof_inner_cuts = [
 street_roof = roof.plane(
     "Street slope",
     points=(
-		(0, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24), # origin
-		(10, 4.0-0.8-0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24), # +X direction
-		(0, 0.125-0.08, 3.25+1.25+0.12), # +Y direction
+		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # origin
+		(10, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # +X direction
+		(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12), # +Y direction
 	),
     cuts=[
 		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
@@ -689,9 +692,9 @@ street_roof = roof.plane(
 garden_roof = roof.plane(
     "Garden slope",
     points=(
-		(0, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24), # origin
-		(10, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24), # +X direction
-		(0, 8.0-0.125+0.08, 3.25+1.25+0.12), # +Y direction
+		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # origin
+		(10, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # +X direction
+		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+1.25+0.12), # +Y direction
 	),
     cuts=[
 		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
@@ -701,9 +704,9 @@ garden_roof = roof.plane(
 dormer_roof = roof.plane(
     "Dormer slope",
     points=(
-		(0, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24), # origin
-		(10, 4.0+0.8+0.07, 3.25+UNDER_HOLE+0.25+0.25+0.24), # +X direction
-		(0, 8.0-0.125+0.08, 3.25+2.5+0.12), # +Y direction
+		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # origin
+		(10, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # +X direction
+		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+2.5+0.12), # +Y direction
 	),
     cuts=[
 		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
@@ -1179,7 +1182,7 @@ if "upper" in sys.argv:
 if "wall3" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Wall3",
-		x=7.4,
+		x=11.275,
 		y=4,
 		z=3.5,
 		radius=8,

@@ -500,12 +500,80 @@ def _overhead_mask_global_ids(
     return result
 
 
+def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
+    """Draw cut MIAKO reinforcement above its filled concrete cover."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if '<g class="miako-reinforcement-overlays' in svg:
+        return
+
+    reinforcement_sources: dict[
+        str,
+        tuple[int, re.Match[str], dict[str, str]],
+    ] = {}
+    for match in re.finditer(r'<g\b(?P<attrs>[^>\n]*)>', svg):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"])
+        )
+        classes = set(attributes.get("class", "").split())
+        if "material-MIAKOreinforcement" not in classes:
+            continue
+        view_class = "cut" if "cut" in classes else "projection"
+        if view_class not in classes:
+            continue
+        source_key = (
+            attributes.get("ifc:guid")
+            or attributes.get("ifc:name")
+            or attributes.get("id")
+            or str(match.start())
+        )
+        priority = 2 if view_class == "cut" else 1
+        existing = reinforcement_sources.get(source_key)
+        if existing is None or priority > existing[0]:
+            reinforcement_sources[source_key] = (
+                priority,
+                match,
+                attributes,
+            )
+
+    reinforcement_ids = []
+    id_insertions = []
+    for index, (_, match, attributes) in enumerate(
+        reinforcement_sources.values(),
+        start=1,
+    ):
+        element_id = attributes.get("id")
+        if element_id is None:
+            element_id = f"miako-reinforcement-overlay-source-{index}"
+            id_insertions.append((match.end() - 1, f' id="{element_id}"'))
+        reinforcement_ids.append(element_id)
+
+    for offset, identifier in reversed(id_insertions):
+        svg = f"{svg[:offset]}{identifier}{svg[offset:]}"
+
+    closing_svg = svg.rfind("</svg>")
+    if not reinforcement_ids or closing_svg < 0:
+        return
+    uses = "\n".join(
+        f'    <use href="#{element_id}" xlink:href="#{element_id}"/>'
+        for element_id in reinforcement_ids
+    )
+    overlays = (
+        '<g class="miako-reinforcement-overlays '
+        'target-view-ELEVATIONVIEW">\n'
+        f"{uses}\n"
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
     mask_global_ids: set[str] | None = None,
 ) -> None:
-    """Apply the final wall, door, furniture, and label drawing order."""
+    """Apply the final wall, reinforcement, symbol, and label drawing order."""
+    _postprocess_miako_reinforcement_overlays(svg_path)
     svg = svg_path.read_text(encoding="utf-8")
     changed = False
 
@@ -1323,6 +1391,8 @@ def _render_existing_drawing(
             absolute_output,
             mask_global_ids=_overhead_mask_global_ids(model, cut_z),
         )
+    else:
+        _postprocess_miako_reinforcement_overlays(absolute_output)
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -1332,20 +1402,35 @@ def _render_existing_drawing(
         if png_output.exists():
             if not png_output.is_file():
                 raise IsADirectoryError(f"PNG output is not a file: {png_output}")
-            png_output.unlink()
-        subprocess.run(
-            [
-                inkscape_command,
-                str(absolute_output),
-                f"--export-filename={png_output}",
-                f"--export-dpi={png_dpi:g}",
-                "--export-background=white",
-                "--export-background-opacity=255",
-            ],
-            check=True,
+        with TemporaryDirectory(
+            prefix=f".{png_output.stem}-raster-",
+            dir=png_output.parent,
+        ) as raster_directory:
+            temporary_png = Path(raster_directory) / png_output.name
+            subprocess.run(
+                [
+                    inkscape_command,
+                    str(absolute_output),
+                    f"--export-filename={temporary_png}",
+                    f"--export-dpi={png_dpi:g}",
+                    "--export-area-page",
+                    "--batch-process",
+                    "--export-background=white",
+                    "--export-background-opacity=255",
+                ],
+                check=True,
+            )
+            if not temporary_png.is_file() or temporary_png.stat().st_size == 0:
+                raise RuntimeError(
+                    f"Inkscape did not create the PNG drawing: {png_output}"
+                )
+            png_size = temporary_png.stat().st_size
+            temporary_png.replace(png_output)
+        print(
+            f"[drawing render] Inkscape PNG created: {png_output} "
+            f"({png_size} bytes)",
+            flush=True,
         )
-        if not png_output.is_file() or png_output.stat().st_size == 0:
-            raise RuntimeError(f"Inkscape did not create the PNG drawing: {png_output}")
 
     return output_path
 
@@ -3697,6 +3782,8 @@ class MiakoSlab(ifcopenshell.entity_instance):
         topping: float,
         placement: np.ndarray,
         beams: tuple[ifcopenshell.entity_instance, ...],
+        beam_shells: tuple[ifcopenshell.entity_instance, ...],
+        reinforcements: tuple[ifcopenshell.entity_instance, ...],
         blocks: tuple[ifcopenshell.entity_instance, ...],
         topping_element: ifcopenshell.entity_instance,
     ) -> None:
@@ -3717,12 +3804,14 @@ class MiakoSlab(ifcopenshell.entity_instance):
         object.__setattr__(self, "bottom", top - (block_height + topping))
         object.__setattr__(self, "placement", placement)
         object.__setattr__(self, "beams", beams)
+        object.__setattr__(self, "beam_shells", beam_shells)
+        object.__setattr__(self, "reinforcements", reinforcements)
         object.__setattr__(self, "blocks", blocks)
         object.__setattr__(self, "topping_element", topping_element)
         object.__setattr__(
             self,
             "components",
-            (*beams, *blocks, topping_element),
+            (*beams, *beam_shells, *reinforcements, *blocks, topping_element),
         )
 
     @property
@@ -4081,17 +4170,25 @@ class Wall(ifcopenshell.entity_instance):
         """Cut an unfilled rectangular opening in this wall.
 
         ``at`` locates the start of the opening along the wall and
-        ``sill_height`` locates its bottom above the storey elevation.
-        ``height`` is the vertical size of the opening.  ``show_overhead``
-        adds dashed plan-only wall linework across it.
+        ``sill_height`` and ``height`` are the bottom and top coordinates
+        measured above the storey elevation, matching ``add_window`` and
+        ``add_door``.  ``show_overhead`` adds dashed plan-only wall linework
+        across it.
         """
         if not isinstance(show_overhead, bool):
             raise TypeError("show_overhead must be a boolean")
-        opening_start, width, height, sill_height = self._validate_opening(
-            opening_start=at,
-            width=width,
-            height=height,
-            sill_height=sill_height,
+        top_height = _number(height, "height")
+        sill_height = _number(sill_height, "sill_height")
+        if top_height <= sill_height:
+            raise ValueError("height must be greater than sill_height")
+        opening_height = top_height - sill_height
+        opening_start, width, opening_height, sill_height = (
+            self._validate_opening(
+                opening_start=at,
+                width=width,
+                height=opening_height,
+                sill_height=sill_height,
+            )
         )
 
         self.storey._opening_count += 1
@@ -4104,7 +4201,7 @@ class Wall(ifcopenshell.entity_instance):
             name=opening_name,
             opening_start=opening_start,
             width=width,
-            height=height,
+            height=opening_height,
             sill_height=sill_height,
         )
         self._openings.append(
@@ -4112,7 +4209,7 @@ class Wall(ifcopenshell.entity_instance):
                 opening_start,
                 opening_start + width,
                 sill_height,
-                sill_height + height,
+                sill_height + opening_height,
             )
         )
         if show_overhead:
@@ -4121,7 +4218,7 @@ class Wall(ifcopenshell.entity_instance):
                 opening_start=opening_start,
                 opening_width=width,
                 opening_bottom=sill_height,
-                opening_top=sill_height + height,
+                opening_top=sill_height + opening_height,
                 wall_faces=True,
             )
         return opening
@@ -4148,15 +4245,17 @@ class Wall(ifcopenshell.entity_instance):
 
         ``at`` is the start of the rough opening measured from the wall start.
         The actual door is centred horizontally in ``opening_width`` and its
-        bottom is ``sill_height`` metres above the storey elevation.  Opening
-        dimensions default to the door dimensions.  ``clear_height`` records
-        the usable walking height for plan annotations without changing the
-        construction geometry; it defaults to ``height``.  ``open_angle``
-        rotates only the 3D leaf.  ``reverse_swing`` opens the leaf on the
-        opposite side of the wall without changing its hinge end, in both 3D
-        and plan.  ``show_overhead`` adds dashed plan-only wall linework across
-        the rough opening.  ``color`` and ``transparency`` affect only the 3D
-        body.
+        bottom is ``sill_height`` metres above the storey elevation.  As with
+        ``add_window``, ``height`` is the door's top coordinate, not its
+        vertical size.  ``opening_height`` is likewise the rough opening's top
+        coordinate and defaults to ``height``.  ``clear_height`` remains a
+        physical size: it records the usable walking height for plan
+        annotations without changing the construction geometry and defaults
+        to ``height - sill_height``.  ``open_angle`` rotates only the 3D leaf.
+        ``reverse_swing`` opens the leaf on the opposite side of the wall
+        without changing its hinge end, in both 3D and plan.  ``show_overhead``
+        adds dashed plan-only wall linework across the rough opening.  ``color``
+        and ``transparency`` affect only the 3D body.
         """
         operation = _enum(operation, "operation", _DOOR_OPERATIONS)
         open_angle = _number(open_angle, "open_angle")
@@ -4175,41 +4274,47 @@ class Wall(ifcopenshell.entity_instance):
         )
         at = _number(at, "at")
         width = _number(width, "width")
-        height = _number(height, "height")
+        top_height = _number(height, "height")
         sill_height = _number(sill_height, "sill_height")
         if width <= 0:
             raise ValueError("width must be greater than zero")
-        if height <= 0:
-            raise ValueError("height must be greater than zero")
+        if top_height <= sill_height:
+            raise ValueError("height must be greater than sill_height")
+        door_height = top_height - sill_height
         clear_height = (
-            height
+            door_height
             if clear_height is None
             else _number(clear_height, "clear_height")
         )
         if clear_height <= 0:
             raise ValueError("clear_height must be greater than zero")
-        if clear_height > height + 1e-9:
-            raise ValueError("clear_height must not be greater than height")
+        if clear_height > door_height + 1e-9:
+            raise ValueError(
+                "clear_height must not be greater than height - sill_height"
+            )
         opening_width = (
             width
             if opening_width is None
             else _number(opening_width, "opening_width")
         )
-        opening_height = (
-            height
+        opening_top_height = (
+            top_height
             if opening_height is None
             else _number(opening_height, "opening_height")
         )
         tolerance = 1e-9
         if opening_width < width - tolerance:
             raise ValueError("opening_width must not be smaller than width")
-        if opening_height < height - tolerance:
+        if opening_top_height <= sill_height:
+            raise ValueError("opening_height must be greater than sill_height")
+        if opening_top_height < top_height - tolerance:
             raise ValueError("opening_height must not be smaller than height")
+        rough_opening_height = opening_top_height - sill_height
         opening_start, opening_width, opening_height, sill_height = (
             self._validate_opening(
                 opening_start=at,
                 width=opening_width,
-                height=opening_height,
+                height=rough_opening_height,
                 sill_height=sill_height,
             )
         )
@@ -4237,7 +4342,7 @@ class Wall(ifcopenshell.entity_instance):
             predefined_type="DOOR",
         )
         door.OverallWidth = width
-        door.OverallHeight = height
+        door.OverallHeight = door_height
         door.OperationType = operation
         panel_offset_x = min(0.025, width / 4)
         panel_offset_y = min(0.025, self.thickness / 4)
@@ -4267,7 +4372,7 @@ class Wall(ifcopenshell.entity_instance):
         body_representation = ifcopenshell.api.geometry.add_door_representation(
             model,
             context=self.storey.house._body_context,
-            overall_height=height,
+            overall_height=door_height,
             overall_width=width,
             operation_type=operation,
             lining_properties=lining_properties,
@@ -4297,7 +4402,7 @@ class Wall(ifcopenshell.entity_instance):
         plan_representation = ifcopenshell.api.geometry.add_door_representation(
             model,
             context=self.storey.house._plan_body_context,
-            overall_height=height,
+            overall_height=door_height,
             overall_width=width,
             operation_type=operation,
             lining_properties=lining_properties,
@@ -5227,7 +5332,9 @@ class Storey:
         block_height: Number = 0.19,
         topping: Number = 0.06,
         beam_height: Number | None = None,
-        beam_color: str | None = "red",
+        beam_color: str | None = "#bfc3c5",
+        beam_shell_color: str | None = "#d98245",
+        reinforcement_color: str | None = "#333333",
         wide_color: str | None = "blue",
         narrow_color: str | None = "green",
         concrete_color: str | None = None,
@@ -5243,15 +5350,22 @@ class Storey:
         wide bay plus a beam forms a 0.625 m module and a narrow bay plus a
         beam forms a 0.5 m module.
 
-        ``top`` is measured from this storey's elevation.  Blocks and beams
-        terminate beneath the concrete topping, so the whole assembly extends
-        downward by ``block_height + topping``.  Their interlocking polygonal
-        sections give beams a lower flange and blocks small bearing lips;
-        these profiles are extruded along the joist span.  Repeated components
-        use mapped type geometry and are decomposed beneath one semantic
-        ``IfcSlab`` contained by this storey.  Beams are red, wide blocks are
-        blue, and narrow blocks are green by default; their respective color
-        arguments may override these 3D styles.
+        ``top`` is measured from this storey's elevation.  The whole assembly
+        extends downward by ``block_height + topping``.  ``beam_height`` is
+        the height of the ceramic U-shell (60 mm by default), not the height
+        of the complete concrete rib.  The precast concrete beam body fills
+        the shell to that height.  Above it, one cast-in-place concrete cover
+        has a stepped underside: 60 mm thick over the blocks and dropped ribs
+        between them down to the beam bodies.  Its schematic reinforcement
+        can therefore cross the joint between the beam body and cover.  Blocks
+        use matching bearing lips at the shell top.  These profiles are
+        extruded along the joist span.  Repeated components use mapped type
+        geometry and are decomposed beneath one semantic ``IfcSlab`` contained
+        by this storey.  The standard beam shell is 170 mm wide and 60 mm high.
+        Its two lower reinforcement bars are centred 40 mm above the bottom
+        and anchor an A-shaped wire whose centred apex is 175 mm above the
+        bottom.  Their respective color arguments may override the default 3D
+        styles.
         """
         slab_name = _name(name, "name")
         start_x, start_y = _point(start, "start")
@@ -5262,7 +5376,7 @@ class Storey:
         block_height = _number(block_height, "block_height")
         topping = _number(topping, "topping")
         if beam_height is None:
-            beam_height = block_height
+            beam_height = 0.06
         else:
             beam_height = _number(beam_height, "beam_height")
         for value, argument in (
@@ -5275,6 +5389,16 @@ class Storey:
                 raise ValueError(f"{argument} must be greater than zero")
         if beam_height > block_height:
             raise ValueError("beam_height must not be greater than block_height")
+        if beam_height < 0.046:
+            raise ValueError(
+                "beam_height must be at least 0.046 m to contain the lower "
+                "reinforcement bars"
+            )
+        if block_height + topping < 0.175:
+            raise ValueError(
+                "block_height + topping must be at least 0.175 m to contain "
+                "the reinforcement apex"
+            )
 
         span_x = end_x - start_x
         span_y = end_y - start_y
@@ -5324,6 +5448,12 @@ class Storey:
 
         beam_style = self.house._surface_style(
             "beam", color=beam_color, transparency=transparency
+        )
+        beam_shell_style = self.house._surface_style(
+            "block", color=beam_shell_color, transparency=transparency
+        )
+        reinforcement_style = self.house._surface_style(
+            "beam", color=reinforcement_color, transparency=transparency
         )
         wide_style = self.house._surface_style(
             "block", color=wide_color, transparency=transparency
@@ -5416,6 +5546,10 @@ class Storey:
                 "BlockLength": block_length,
                 "BlockHeight": block_height,
                 "BeamHeight": beam_height,
+                "BeamShellHeight": beam_height,
+                "ConcreteRibHeight": block_height + topping,
+                "ConcreteCoverRibDepth": block_height + topping - beam_height,
+                "ReinforcementApexHeight": 0.175,
                 "ToppingThickness": topping,
             },
         )
@@ -5434,13 +5568,34 @@ class Storey:
                 self.house._materials[material_name] = material
             return material
 
-        beam_material = get_material("MIAKO ceramic concrete", "concrete")
+        beam_material = get_material("MIAKO concrete", "concrete")
         block_material = get_material("MIAKO ceramic", "ceramic")
+        reinforcement_material = get_material(
+            "MIAKO reinforcement", "steel"
+        )
         concrete_material = get_material("Concrete topping", "concrete")
+
+        beam_module_width = _MIAKO_WIDTHS["beam"]
+        beam_bearing = 0.035
+        beam_shell_thickness = 0.02
+        beam_shell_height = beam_height
+        reinforcement_thickness = 0.006
+        reinforcement_dot_z = 0.04
+        reinforcement_dot_radius = 0.006
+        reinforcement_base_inset = 0.055
+        reinforcement_apex_z = 0.175
+        reinforcement_apex_y = beam_module_width / 2
+        block_lip_bottom = beam_shell_height
 
         def get_component_type(
             *,
-            component: Literal["beam", "wide", "narrow"],
+            component: Literal[
+                "beam",
+                "beam_shell",
+                "beam_reinforcement",
+                "wide",
+                "narrow",
+            ],
             component_length: float,
             component_width: float,
             component_height: float,
@@ -5453,6 +5608,7 @@ class Storey:
                 round(component_length, 9),
                 round(component_width, 9),
                 round(component_height, 9),
+                round(block_lip_bottom, 9),
                 int(layout_sign),
                 style_id,
             )
@@ -5464,7 +5620,21 @@ class Storey:
                 type_class = "IfcBeamType"
                 predefined_type = "JOIST"
                 type_name = (
-                    f"MIAKO beam {component_width * 1000:.0f}x"
+                    f"MIAKO concrete beam core "
+                    f"{component_width * 1000:.0f}x"
+                    f"{component_height * 1000:.0f}, L={component_length:.3f} m"
+                )
+            elif component in {"beam_shell", "beam_reinforcement"}:
+                type_class = "IfcBuildingElementPartType"
+                predefined_type = "USERDEFINED"
+                detail_name = (
+                    "ceramic U-shell"
+                    if component == "beam_shell"
+                    else "reinforcement"
+                )
+                type_name = (
+                    f"MIAKO beam {detail_name} "
+                    f"{component_width * 1000:.0f}x"
                     f"{component_height * 1000:.0f}, L={component_length:.3f} m"
                 )
             else:
@@ -5482,41 +5652,166 @@ class Storey:
                 name=type_name,
                 predefined_type=predefined_type,
             )
-            if component != "beam":
+            if component in {"wide", "narrow"}:
                 component_type.ElementType = f"MIAKO {component} block"
+            elif component == "beam_shell":
+                component_type.ElementType = "MIAKO beam ceramic U-shell"
+            elif component == "beam_reinforcement":
+                component_type.ElementType = "MIAKO beam reinforcement"
             signed_component_width = layout_sign * component_width
+            builder = ShapeBuilder(model)
+
+            reinforcement_wire_base_z = (
+                reinforcement_dot_z + reinforcement_dot_radius
+            )
+
+            # One concave profile makes both legs a continuous A-shaped wire
+            # without overlapping voids where they meet at the apex.
+            reinforcement_profile_points = [
+                (
+                    layout_sign
+                    * (reinforcement_base_inset - reinforcement_thickness / 2),
+                    reinforcement_wire_base_z,
+                ),
+                (
+                    layout_sign
+                    * (reinforcement_apex_y - reinforcement_thickness / 2),
+                    reinforcement_apex_z,
+                ),
+                (
+                    layout_sign
+                    * (reinforcement_apex_y + reinforcement_thickness / 2),
+                    reinforcement_apex_z,
+                ),
+                (
+                    layout_sign
+                    * (
+                        component_width
+                        - reinforcement_base_inset
+                        + reinforcement_thickness / 2
+                    ),
+                    reinforcement_wire_base_z,
+                ),
+                (
+                    layout_sign
+                    * (
+                        component_width
+                        - reinforcement_base_inset
+                        - reinforcement_thickness / 2
+                    ),
+                    reinforcement_wire_base_z,
+                ),
+                (
+                    layout_sign * reinforcement_apex_y,
+                    reinforcement_apex_z - 2 * reinforcement_thickness,
+                ),
+                (
+                    layout_sign
+                    * (reinforcement_base_inset + reinforcement_thickness / 2),
+                    reinforcement_wire_base_z,
+                ),
+            ]
+            reinforcement_dot_centers = [
+                (
+                    layout_sign * reinforcement_base_inset,
+                    reinforcement_dot_z,
+                ),
+                (
+                    layout_sign
+                    * (component_width - reinforcement_base_inset),
+                    reinforcement_dot_z,
+                ),
+            ]
+
             if component == "beam":
-                # The lower flange occupies the full 170 mm module.  Above
-                # it, the narrower stem leaves a shoulder on either side for
-                # the adjacent ceramic blocks to bear on.
-                bearing = min(0.0225, component_width / 6)
-                flange_height = min(0.03, component_height / 4)
+                # The precast concrete beam body only fills the ceramic
+                # U-shell.  The cast-in-place cover supplies the narrower rib
+                # above it, leaving a real material boundary at shell height.
+                inner_start = layout_sign * beam_shell_thickness
+                inner_end = (
+                    signed_component_width
+                    - layout_sign * beam_shell_thickness
+                )
+                profile_points = [
+                    (inner_start, beam_shell_thickness),
+                    (inner_end, beam_shell_thickness),
+                    (inner_end, component_height),
+                    (inner_start, component_height),
+                ]
+                outer_curve = builder.polyline(profile_points, closed=True)
+                profile = builder.profile(outer_curve)
+                solids = [
+                    builder.extrude(
+                        profile,
+                        magnitude=component_length,
+                        position_z_axis=(1.0, 0.0, 0.0),
+                        position_x_axis=(0.0, 1.0, 0.0),
+                    )
+                ]
+            elif component == "beam_shell":
+                # A single concave polygon makes the orange precast ceramic
+                # base a true U rather than three overlapping rectangles.
+                inner_start = layout_sign * beam_shell_thickness
+                inner_end = (
+                    signed_component_width
+                    - layout_sign * beam_shell_thickness
+                )
                 profile_points = [
                     (0.0, 0.0),
                     (signed_component_width, 0.0),
-                    (signed_component_width, flange_height),
-                    (
-                        signed_component_width - layout_sign * bearing,
-                        flange_height,
-                    ),
-                    (
-                        signed_component_width - layout_sign * bearing,
-                        component_height,
-                    ),
-                    (layout_sign * bearing, component_height),
-                    (layout_sign * bearing, flange_height),
-                    (0.0, flange_height),
+                    (signed_component_width, beam_shell_height),
+                    (inner_end, beam_shell_height),
+                    (inner_end, beam_shell_thickness),
+                    (inner_start, beam_shell_thickness),
+                    (inner_start, beam_shell_height),
+                    (0.0, beam_shell_height),
                 ]
+                profile = builder.polyline(profile_points, closed=True)
+                solids = [
+                    builder.extrude(
+                        profile,
+                        magnitude=component_length,
+                        position_z_axis=(1.0, 0.0, 0.0),
+                        position_x_axis=(0.0, 1.0, 0.0),
+                    )
+                ]
+            elif component == "beam_reinforcement":
+                wire_profile = builder.polyline(
+                    reinforcement_profile_points,
+                    closed=True,
+                )
+                solids = [
+                    builder.extrude(
+                        wire_profile,
+                        magnitude=component_length,
+                        position_z_axis=(1.0, 0.0, 0.0),
+                        position_x_axis=(0.0, 1.0, 0.0),
+                    )
+                ]
+                solids.extend(
+                    builder.extrude(
+                        builder.circle(
+                            center=center,
+                            radius=reinforcement_dot_radius,
+                        ),
+                        magnitude=component_length,
+                        position_z_axis=(1.0, 0.0, 0.0),
+                        position_x_axis=(0.0, 1.0, 0.0),
+                    )
+                    for center in reinforcement_dot_centers
+                )
             else:
                 # Every block uses the same symmetric bearing profile,
-                # including blocks at slab boundaries.  This gives a 500 mm
-                # wide block in a 625 mm module (or 375 mm in a 500 mm
-                # module).  The rectangular underside rises beside the beam
-                # flange, then steps outward to the beam stem or edge support.
-                bearing = min(0.0225, 0.17 / 6)
-                lip_bottom = min(0.03, component_height / 4)
-                previous_edge = -layout_sign * bearing
-                next_edge = signed_component_width + layout_sign * bearing
+                # including blocks at slab boundaries.  The 455 and 330 mm
+                # bases extend 35 mm over each adjacent beam, giving upper
+                # widths of 525 and 400 mm.  The rectangular underside rises
+                # beside the beam shell, then steps outward to the concrete
+                # rib or edge support.
+                lip_bottom = min(block_lip_bottom, component_height)
+                previous_edge = -layout_sign * beam_bearing
+                next_edge = (
+                    signed_component_width + layout_sign * beam_bearing
+                )
                 profile_points = [
                     (0.0, 0.0),
                     (signed_component_width, 0.0),
@@ -5527,18 +5822,18 @@ class Storey:
                     (previous_edge, lip_bottom),
                     (0.0, lip_bottom),
                 ]
-
-            builder = ShapeBuilder(model)
-            profile = builder.polyline(profile_points, closed=True)
-            solid = builder.extrude(
-                profile,
-                magnitude=component_length,
-                position_z_axis=(1.0, 0.0, 0.0),
-                position_x_axis=(0.0, 1.0, 0.0),
-            )
+                profile = builder.polyline(profile_points, closed=True)
+                solids = [
+                    builder.extrude(
+                        profile,
+                        magnitude=component_length,
+                        position_z_axis=(1.0, 0.0, 0.0),
+                        position_x_axis=(0.0, 1.0, 0.0),
+                    )
+                ]
             representation = builder.get_representation(
                 self.house._body_context,
-                solid,
+                solids,
             )
             if style is not None:
                 ifcopenshell.api.style.assign_representation_styles(
@@ -5575,6 +5870,8 @@ class Storey:
         components: list[ifcopenshell.entity_instance] = []
         component_placements: list[np.ndarray] = []
         beams: list[ifcopenshell.entity_instance] = []
+        beam_shells: list[ifcopenshell.entity_instance] = []
+        reinforcements: list[ifcopenshell.entity_instance] = []
         blocks: list[ifcopenshell.entity_instance] = []
         offset = 0.0
         beam_number = 0
@@ -5612,13 +5909,60 @@ class Storey:
                     related_objects=[beam],
                     relating_type=beam_type,
                 )
+                beam_shell = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcBuildingElementPart",
+                    name=f"{slab_name} Beam {beam_number} Ceramic U-shell",
+                    predefined_type="USERDEFINED",
+                )
+                beam_shell.ObjectType = "MIAKO beam ceramic U-shell"
+                beam_shell_type = get_component_type(
+                    component="beam_shell",
+                    component_length=length,
+                    component_width=item_width,
+                    component_height=beam_height,
+                    style=beam_shell_style,
+                    material=block_material,
+                )
+                ifcopenshell.api.type.assign_type(
+                    model,
+                    related_objects=[beam_shell],
+                    relating_type=beam_shell_type,
+                )
+                reinforcement = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcBuildingElementPart",
+                    name=f"{slab_name} Beam {beam_number} Reinforcement",
+                    predefined_type="USERDEFINED",
+                )
+                reinforcement.ObjectType = "MIAKO beam reinforcement"
+                reinforcement_type = get_component_type(
+                    component="beam_reinforcement",
+                    component_length=length,
+                    component_width=item_width,
+                    component_height=reinforcement_apex_z,
+                    style=reinforcement_style,
+                    material=reinforcement_material,
+                )
+                ifcopenshell.api.type.assign_type(
+                    model,
+                    related_objects=[reinforcement],
+                    relating_type=reinforcement_type,
+                )
                 beams.append(beam)
-                components.append(beam)
-                component_placements.append(
-                    component_placement(
-                        0.0,
-                        signed_offset,
-                        block_height - beam_height,
+                beam_shells.append(beam_shell)
+                reinforcements.append(reinforcement)
+                beam_placement = component_placement(
+                    0.0,
+                    signed_offset,
+                    0.0,
+                )
+                components.extend((beam, beam_shell, reinforcement))
+                component_placements.extend(
+                    (
+                        beam_placement,
+                        beam_placement.copy(),
+                        beam_placement.copy(),
                     )
                 )
             else:
@@ -5665,20 +6009,53 @@ class Storey:
         topping_element = ifcopenshell.api.root.create_entity(
             model,
             ifc_class="IfcBuildingElementPart",
-            name=f"{slab_name} Concrete Topping",
+            name=f"{slab_name} Concrete Cover",
             predefined_type="USERDEFINED",
         )
-        topping_element.ObjectType = "Concrete topping"
-        topping_representation = ifcopenshell.api.geometry.add_slab_representation(
-            model,
-            context=self.house._body_context,
-            depth=topping,
-            polyline=[
-                (0.0, 0.0),
-                (length, 0.0),
-                (length, signed_width),
-                (0.0, signed_width),
-            ],
+        topping_element.ObjectType = "Concrete cover with ribs"
+
+        # Create the cover as one continuous comb-shaped section.  Its lower
+        # face is at block height over every ceramic bay, but drops to the top
+        # of each 60 mm beam body through the 100 mm concrete stem.  A single
+        # profile avoids an artificial horizontal joint at block height.
+        cover_bottom_points: list[tuple[float, float]] = [
+            (0.0, block_height)
+        ]
+        cover_offset = 0.0
+        for item in structure_tuple:
+            item_width = _MIAKO_WIDTHS[item]
+            if item == "beam":
+                stem_start = cover_offset + beam_bearing
+                stem_end = cover_offset + item_width - beam_bearing
+                cover_bottom_points.extend(
+                    (
+                        (layout_sign * stem_start, block_height),
+                        (layout_sign * stem_start, beam_height),
+                        (layout_sign * stem_end, beam_height),
+                        (layout_sign * stem_end, block_height),
+                    )
+                )
+            cover_offset += item_width
+        cover_bottom_points.append((signed_width, block_height))
+        cover_profile_points = [
+            *cover_bottom_points,
+            (signed_width, block_height + topping),
+            (0.0, block_height + topping),
+        ]
+        cover_builder = ShapeBuilder(model)
+        cover_profile = cover_builder.polyline(
+            cover_profile_points,
+            closed=True,
+        )
+        cover_solid = cover_builder.extrude(
+            cover_profile,
+            magnitude=length,
+            position_z_axis=(1.0, 0.0, 0.0),
+            position_x_axis=(0.0, 1.0, 0.0),
+        )
+        topping_representation = cover_builder.get_representation(
+            self.house._body_context,
+            cover_solid,
         )
         ifcopenshell.api.geometry.assign_representation(
             model,
@@ -5699,7 +6076,7 @@ class Storey:
         )
         components.append(topping_element)
         component_placements.append(
-            component_placement(0.0, 0.0, block_height)
+            component_placement(0.0, 0.0, 0.0)
         )
 
         ifcopenshell.api.aggregate.assign_object(
@@ -5734,6 +6111,8 @@ class Storey:
             topping=topping,
             placement=placement,
             beams=tuple(beams),
+            beam_shells=tuple(beam_shells),
+            reinforcements=tuple(reinforcements),
             blocks=tuple(blocks),
             topping_element=topping_element,
         )

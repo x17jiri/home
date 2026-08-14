@@ -75,11 +75,23 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: #f4d35e !important;
 }
 
-/* Keep MIAKO floor/ceiling sections readable instead of solid black. */
+/* Distinguish the concrete, ceramic, and steel in MIAKO sections. */
 .target-view-ELEVATIONVIEW .material-MIAKOceramicconcrete.cut,
-.target-view-ELEVATIONVIEW .material-MIAKOceramic.cut,
+.target-view-ELEVATIONVIEW .material-MIAKOconcrete.cut,
 .target-view-ELEVATIONVIEW .material-Concretetopping.cut {
-    fill: white !important;
+    fill: #c5c7c8 !important;
+    stroke-width: 0.04 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-MIAKOceramic.cut {
+    fill: #d98245 !important;
+    stroke-width: 0.04 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-MIAKOreinforcement.cut {
+    fill: #333 !important;
+    stroke: #333 !important;
+    stroke-width: 0.025 !important;
 }
 
 /* Reveal structure behind insulation in elevation and section drawings. */
@@ -111,11 +123,11 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 /* Lighter section/elevation outlines than Bonsai's drawing defaults. */
 .target-view-ELEVATIONVIEW .cut {
-    stroke-width: 0.15;
+    stroke-width: 0.08;
 }
 
 .target-view-ELEVATIONVIEW .projection {
-    stroke-width: 0.13;
+    stroke-width: 0.06;
 }
 .IfcSpace { fill: none; stroke: none; }
 .PredefinedType-STUD { stroke: black; stroke-width: 0.05; }
