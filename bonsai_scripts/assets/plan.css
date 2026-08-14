@@ -75,16 +75,54 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: #f4d35e !important;
 }
 
+/* Keep MIAKO floor/ceiling sections readable instead of solid black. */
+.target-view-ELEVATIONVIEW .material-MIAKOceramicconcrete.cut,
+.target-view-ELEVATIONVIEW .material-MIAKOceramic.cut,
+.target-view-ELEVATIONVIEW .material-Concretetopping.cut {
+    fill: white !important;
+}
+
 /* Reveal structure behind insulation in elevation and section drawings. */
 .target-view-ELEVATIONVIEW .material-Thermalinsulation {
     fill: none !important;
 }
+
+.target-view-ELEVATIONVIEW .material-Gypsumplasterboard {
+    fill: #e8e5de !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Gypsumplasterboard.cut,
+.target-view-ELEVATIONVIEW .material-Gypsumplasterboard.projection {
+    stroke: black;
+    stroke-width: 0.08;
+}
+
+.target-view-ELEVATIONVIEW .material-Vapourbarrier {
+    fill: none !important;
+    stroke: #4a90e2 !important;
+    stroke-width: 0.08 !important;
+    stroke-dasharray: 0.6 0.4;
+}
+
+.target-view-ELEVATIONVIEW .material-Rooftiles {
+    fill: #a64b35 !important;
+	stroke: none;
+}
+
+/* Lighter section/elevation outlines than Bonsai's drawing defaults. */
+.target-view-ELEVATIONVIEW .cut {
+    stroke-width: 0.15;
+}
+
+.target-view-ELEVATIONVIEW .projection {
+    stroke-width: 0.13;
+}
 .IfcSpace { fill: none; stroke: none; }
-.PredefinedType-STUD { stroke: black; stroke-width: 1; }
-.PredefinedType-WOOD { fill: url(#wood); stroke: black; stroke-width: 0.5; }
-.PredefinedType-STEEL { fill: url(#steel); stroke: black; stroke-width: 0.5; }
-.PredefinedType-CONCRETE { fill: url(#concrete); stroke: black; stroke-width: 0.5; }
-.PredefinedType-PLASTERBOARD { fill: url(#sand); stroke: black; stroke-width: 0.25; }
+.PredefinedType-STUD { stroke: black; stroke-width: 0.05; }
+.PredefinedType-WOOD { fill: url(#wood); stroke: black; stroke-width: 0.05; }
+.PredefinedType-STEEL { fill: url(#steel); stroke: black; stroke-width: 0.05; }
+.PredefinedType-CONCRETE { fill: url(#concrete); stroke: black; stroke-width: 0.05; }
+.PredefinedType-PLASTERBOARD { fill: url(#sand); stroke: black; stroke-width: 0.05; }
 
 /* Editable house material rules. */
 .cut.layer-material-Brick {

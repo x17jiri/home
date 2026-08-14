@@ -31,6 +31,7 @@ from ifc_utils import (
     RoofPlane,
     Stair,
     Wall,
+    _close_door_bodies,
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
     generate_plan,
@@ -1753,10 +1754,41 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_x(wide_shape.geometry), 0.25
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_y(wide_shape.geometry), 0.455
+            ifcopenshell.util.shape.get_y(wide_shape.geometry), 0.5
         )
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_z(wide_shape.geometry), 0.19
+        )
+        wide_type = ifcopenshell.util.element.get_type(wide_blocks[0])
+        wide_type_body = ifcopenshell.util.representation.get_representation(
+            wide_type, "Model", "Body", "MODEL_VIEW"
+        )
+        wide_profile = wide_type_body.Items[0].SweptArea.OuterCurve.Points.CoordList
+        self.assertEqual(
+            wide_profile[:3],
+            ((0.0, 0.0), (-0.455, 0.0), (-0.455, 0.03)),
+        )
+        self.assertIn((-0.47750000000000004, 0.03), wide_profile)
+        self.assertIn((-0.47750000000000004, 0.19), wide_profile)
+        self.assertIn((0.0225, 0.03), wide_profile)
+        self.assertIn((0.0225, 0.19), wide_profile)
+        beam_type = ifcopenshell.util.element.get_type(first_beam)
+        beam_type_body = ifcopenshell.util.representation.get_representation(
+            beam_type, "Model", "Body", "MODEL_VIEW"
+        )
+        beam_profile = beam_type_body.Items[0].SweptArea.OuterCurve.Points.CoordList
+        self.assertIn((-0.14750000000000002, 0.03), beam_profile)
+        # The block lip and beam stem meet at the same global section edge;
+        # their horizontal bounds overlap, but their solid profiles do not.
+        self.assertAlmostEqual(
+            first_beam_placement[0, 3]
+            + abs(beam_profile[6][0]),
+            abs(wide_profile[3][0]),
+        )
+        self.assertAlmostEqual(
+            first_beam_placement[0, 3]
+            + abs(beam_profile[5][0]),
+            abs(wide_profile[4][0]),
         )
         self.assertEqual(mapped_rgb(wide_blocks[0]), (0, 0, 1))
         self.assertEqual(mapped_rgb(narrow_blocks[0]), (0, 128 / 255, 0))
@@ -2235,6 +2267,17 @@ class HouseTests(unittest.TestCase):
             ),
             1.97,
         )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                door, "EPset_Door", "OpenAngle"
+            ),
+            45,
+        )
+        self.assertFalse(
+            ifcopenshell.util.element.get_pset(
+                door, "EPset_Door", "ReverseSwing"
+            )
+        )
         self.assertEqual(door.OperationType, "SINGLE_SWING_RIGHT")
         self.assertTrue(window.is_a("IfcWindow"))
         self.assertEqual(window.OverallWidth, 1.2)
@@ -2341,6 +2384,12 @@ class HouseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(door_panel_placement[0, 0], 2**-0.5)
         self.assertAlmostEqual(door_panel_placement[1, 0], -(2**-0.5))
+        self.assertEqual(_close_door_bodies(house.model), 1)
+        closed_panel_placement = ifcopenshell.util.placement.get_axis2placement(
+            framing_body.Items[0].Position
+        )
+        self.assertAlmostEqual(closed_panel_placement[0, 0], 1)
+        self.assertAlmostEqual(closed_panel_placement[1, 0], 0)
 
         plan = ifcopenshell.util.representation.get_representation(
             door, "Plan", "Body", "PLAN_VIEW"
@@ -3299,6 +3348,7 @@ class HouseTests(unittest.TestCase):
             view="elevation",
             direction=(0, 2, 0),
             storeys=[ground],
+            doors_closed=True,
         )
 
         self.assertEqual(drawing.view, "elevation")
@@ -3324,6 +3374,7 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(drawing_pset["TargetView"], "ELEVATION_VIEW")
         self.assertEqual(drawing_pset["FillMode"], "SHAPELY")
         self.assertEqual(drawing_pset["HasAnnotation"], False)
+        self.assertEqual(drawing_pset["DoorsClosed"], True)
         self.assertEqual(
             set(drawing.group.IsGroupedBy[0].RelatedObjects),
             {drawing.element},
@@ -3362,6 +3413,26 @@ class HouseTests(unittest.TestCase):
                 1,
                 1,
                 direction=(0, 1, 0),
+            )
+        with self.assertRaisesRegex(ValueError, "only supported for elevation"):
+            house.add_drawing(
+                "Closed plan",
+                0,
+                0,
+                1,
+                1,
+                doors_closed=True,
+            )
+        with self.assertRaisesRegex(TypeError, "doors_closed must be a boolean"):
+            house.add_drawing(
+                "Invalid closed doors",
+                0,
+                0,
+                1,
+                1,
+                view="elevation",
+                direction=(0, 1, 0),
+                doors_closed="yes",
             )
 
     def test_scopes_drawing_geometry_and_automatic_annotations_by_storey(

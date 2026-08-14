@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Literal, Sequence, TypeAlias
 
@@ -994,6 +995,107 @@ def _rotate_items_about_z(
         )
 
 
+def _rotate_door_framing(
+    model: ifcopenshell.file,
+    door: ifcopenshell.entity_instance,
+    *,
+    operation: str,
+    angle: float,
+    reverse_swing: bool,
+    width: float,
+    panel_offset_x: float,
+    pivot_y: float,
+) -> None:
+    """Rotate the movable 3D framing items of ``door`` around their hinges."""
+    if angle == 0 or "SLIDING" in operation:
+        return
+
+    framing = next(
+        (
+            aspect
+            for aspect in door.Representation.HasShapeAspects
+            if aspect.Name == "Framing"
+        ),
+        None,
+    )
+    if framing is None:
+        raise RuntimeError(f'door "{door.Name or door.GlobalId}" has no framing')
+    items = [
+        item
+        for representation in framing.ShapeRepresentations
+        if representation.ContextOfItems.ContextType == "Model"
+        and representation.ContextOfItems.ContextIdentifier == "Body"
+        and representation.ContextOfItems.TargetView == "MODEL_VIEW"
+        for item in representation.Items
+    ]
+    if not items:
+        raise RuntimeError(
+            f'door "{door.Name or door.GlobalId}" has no 3D framing geometry'
+        )
+
+    swing_sign = -1 if reverse_swing else 1
+    if operation.startswith("DOUBLE_DOOR"):
+        half = len(items) // 2
+        _rotate_items_about_z(
+            model,
+            items[:half],
+            angle=swing_sign * angle,
+            pivot=(panel_offset_x, pivot_y),
+        )
+        _rotate_items_about_z(
+            model,
+            items[half:],
+            angle=-swing_sign * angle,
+            pivot=(width - panel_offset_x, pivot_y),
+        )
+    else:
+        is_left_hinged = operation.endswith("LEFT")
+        _rotate_items_about_z(
+            model,
+            items,
+            angle=(
+                swing_sign * angle
+                if is_left_hinged
+                else -swing_sign * angle
+            ),
+            pivot=(
+                panel_offset_x if is_left_hinged else width - panel_offset_x,
+                pivot_y,
+            ),
+        )
+
+
+def _close_door_bodies(model: ifcopenshell.file) -> int:
+    """Undo stored door opening rotations and return the number closed."""
+    closed = 0
+    for door in model.by_type("IfcDoor"):
+        properties = ifcopenshell.util.element.get_pset(door, "EPset_Door")
+        if not properties:
+            continue
+        try:
+            open_angle = float(properties["OpenAngle"])
+            reverse_swing = bool(properties["ReverseSwing"])
+            panel_offset_x = float(properties["PanelOffsetX"])
+            pivot_y = float(properties["BodyPivotY"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        operation = door.OperationType or "NOTDEFINED"
+        if open_angle == 0 or "SLIDING" in operation:
+            continue
+        _rotate_door_framing(
+            model,
+            door,
+            operation=operation,
+            angle=-open_angle,
+            reverse_swing=reverse_swing,
+            width=float(door.OverallWidth),
+            panel_offset_x=panel_offset_x,
+            pivot_y=pivot_y,
+        )
+        closed += 1
+    return closed
+
+
 def generate_plan(
     ifc: str | PathLike[str],
     output: str | PathLike[str],
@@ -1150,6 +1252,28 @@ def _render_existing_drawing(
             raise IsADirectoryError(f"drawing output is not a file: {absolute_output}")
         absolute_output.unlink()
 
+    model = ifcopenshell.open(str(ifc))
+    drawing = model.by_guid(drawing_guid)
+    drawing_properties = ifcopenshell.util.element.get_pset(
+        drawing,
+        "EPset_Drawing",
+    )
+    target_view = drawing_properties.get("TargetView") if drawing_properties else None
+    render_ifc = Path(ifc).resolve()
+    temporary_directory: TemporaryDirectory[str] | None = None
+    if target_view == "ELEVATION_VIEW" and bool(
+        drawing_properties.get("DoorsClosed", False)
+    ):
+        temporary_directory = TemporaryDirectory(prefix="ifc-closed-doors-")
+        render_ifc = Path(temporary_directory.name) / Path(ifc).name
+        closed_doors = _close_door_bodies(model)
+        model.write(str(render_ifc))
+        print(
+            f"[drawing render] Closed {closed_doors} door bodies in temporary "
+            f"elevation model",
+            flush=True,
+        )
+
     command = [
         blender_command,
         "--python-exit-code",
@@ -1158,7 +1282,7 @@ def _render_existing_drawing(
         str(script_path),
         "--",
         "--ifc",
-        str(ifc),
+        str(render_ifc),
         "--drawing-guid",
         drawing_guid,
         "--output",
@@ -1179,6 +1303,9 @@ def _render_existing_drawing(
             flush=True,
         )
         raise
+    finally:
+        if temporary_directory is not None:
+            temporary_directory.cleanup()
     print(
         f"[drawing render] Blender/Bonsai exited with code "
         f"{result.returncode} after {monotonic() - render_started_at:.2f}s",
@@ -1186,13 +1313,6 @@ def _render_existing_drawing(
     )
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
-    model = ifcopenshell.open(str(ifc))
-    drawing = model.by_guid(drawing_guid)
-    target_view = ifcopenshell.util.element.get_pset(
-        drawing,
-        "EPset_Drawing",
-        "TargetView",
-    )
     if target_view == "PLAN_VIEW":
         cut_z = float(
             ifcopenshell.util.placement.get_local_placement(
@@ -1535,6 +1655,7 @@ class House:
         storeys: Sequence[Storey] | None = None,
         door_annotations: bool = True,
         door_annotation_offset: Number = 0,
+        doors_closed: bool = False,
     ) -> Drawing:
         """Add a persisted square plan or elevation drawing to this IFC model.
 
@@ -1550,6 +1671,8 @@ class House:
         every included door; disable it to place selected labels manually with
         :meth:`Drawing.add_door_annotation`.  ``door_annotation_offset`` moves
         every automatic label farther into the door swing in metres.
+        ``doors_closed`` renders the 3D door leaves closed in an elevation
+        without changing their model geometry or plan swing symbols.
         """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
@@ -1566,6 +1689,7 @@ class House:
             storeys=storeys,
             door_annotations=door_annotations,
             door_annotation_offset=door_annotation_offset,
+            doors_closed=doors_closed,
         )
         self._drawings.append(drawing)
         return drawing
@@ -1630,6 +1754,7 @@ class Drawing:
         storeys: Sequence[Storey] | None,
         door_annotations: bool,
         door_annotation_offset: Number,
+        doors_closed: bool,
     ) -> None:
         self.house = house
         self.name = name
@@ -1674,6 +1799,11 @@ class Drawing:
         self._door_annotation_offset = _number(
             door_annotation_offset, "door_annotation_offset"
         )
+        if not isinstance(doors_closed, bool):
+            raise TypeError("doors_closed must be a boolean")
+        if doors_closed and self.view != "elevation":
+            raise ValueError("doors_closed is only supported for elevation drawings")
+        self.doors_closed = doors_closed
         self._includes_all_storeys = storeys is None
         if storeys is None:
             self._storeys: tuple[Storey, ...] = ()
@@ -1833,6 +1963,7 @@ class Drawing:
                 / "linework_shading_styles.json"
             ),
             "CurrentShadingStyle": "Technical",
+            "DoorsClosed": self.doors_closed,
         }
         if not self._includes_all_storeys:
             drawing_properties["Include"] = (
@@ -3912,52 +4043,16 @@ class Wall(ifcopenshell.entity_instance):
         panel_offset_y: float,
     ) -> None:
         """Rotate only the movable items in a door's 3D body representation."""
-        if open_angle == 0 or "SLIDING" in operation:
-            return
-
-        framing = next(
-            aspect
-            for aspect in door.Representation.HasShapeAspects
-            if aspect.Name == "Framing"
+        _rotate_door_framing(
+            self.storey.house.model,
+            door,
+            operation=operation,
+            angle=open_angle,
+            reverse_swing=reverse_swing,
+            width=width,
+            panel_offset_x=panel_offset_x,
+            pivot_y=self.body_offset + panel_offset_y,
         )
-        items = [
-            item
-            for representation in framing.ShapeRepresentations
-            if representation.ContextOfItems == self.storey.house._body_context
-            for item in representation.Items
-        ]
-        pivot_y = self.body_offset + panel_offset_y
-        model = self.storey.house.model
-        swing_sign = -1 if reverse_swing else 1
-        if operation.startswith("DOUBLE_DOOR"):
-            half = len(items) // 2
-            _rotate_items_about_z(
-                model,
-                items[:half],
-                angle=swing_sign * open_angle,
-                pivot=(panel_offset_x, pivot_y),
-            )
-            _rotate_items_about_z(
-                model,
-                items[half:],
-                angle=-swing_sign * open_angle,
-                pivot=(width - panel_offset_x, pivot_y),
-            )
-        else:
-            is_left_hinged = operation.endswith("LEFT")
-            _rotate_items_about_z(
-                model,
-                items,
-                angle=(
-                    swing_sign * open_angle
-                    if is_left_hinged
-                    else -swing_sign * open_angle
-                ),
-                pivot=(
-                    panel_offset_x if is_left_hinged else width - panel_offset_x,
-                    pivot_y,
-                ),
-            )
 
     def _reverse_door_plan_swing(
         self,
@@ -4144,6 +4239,8 @@ class Wall(ifcopenshell.entity_instance):
         door.OverallWidth = width
         door.OverallHeight = height
         door.OperationType = operation
+        panel_offset_x = min(0.025, width / 4)
+        panel_offset_y = min(0.025, self.thickness / 4)
         door_properties = ifcopenshell.api.pset.add_pset(
             model,
             product=door,
@@ -4152,10 +4249,14 @@ class Wall(ifcopenshell.entity_instance):
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=door_properties,
-            properties={"ClearHeight": clear_height},
+            properties={
+                "ClearHeight": clear_height,
+                "OpenAngle": open_angle,
+                "ReverseSwing": reverse_swing,
+                "PanelOffsetX": panel_offset_x,
+                "BodyPivotY": self.body_offset + panel_offset_y,
+            },
         )
-        panel_offset_x = min(0.025, width / 4)
-        panel_offset_y = min(0.025, self.thickness / 4)
         lining_properties = {
             "LiningDepth": self.thickness,
             "LiningOffset": self.body_offset,
@@ -5144,8 +5245,10 @@ class Storey:
 
         ``top`` is measured from this storey's elevation.  Blocks and beams
         terminate beneath the concrete topping, so the whole assembly extends
-        downward by ``block_height + topping``.  Repeated components use
-        mapped type geometry and are decomposed beneath one semantic
+        downward by ``block_height + topping``.  Their interlocking polygonal
+        sections give beams a lower flange and blocks small bearing lips;
+        these profiles are extruded along the joist span.  Repeated components
+        use mapped type geometry and are decomposed beneath one semantic
         ``IfcSlab`` contained by this storey.  Beams are red, wide blocks are
         blue, and narrow blocks are green by default; their respective color
         arguments may override these 3D styles.
@@ -5382,16 +5485,60 @@ class Storey:
             if component != "beam":
                 component_type.ElementType = f"MIAKO {component} block"
             signed_component_width = layout_sign * component_width
-            representation = ifcopenshell.api.geometry.add_slab_representation(
-                model,
-                context=self.house._body_context,
-                depth=component_height,
-                polyline=[
+            if component == "beam":
+                # The lower flange occupies the full 170 mm module.  Above
+                # it, the narrower stem leaves a shoulder on either side for
+                # the adjacent ceramic blocks to bear on.
+                bearing = min(0.0225, component_width / 6)
+                flange_height = min(0.03, component_height / 4)
+                profile_points = [
                     (0.0, 0.0),
-                    (component_length, 0.0),
-                    (component_length, signed_component_width),
-                    (0.0, signed_component_width),
-                ],
+                    (signed_component_width, 0.0),
+                    (signed_component_width, flange_height),
+                    (
+                        signed_component_width - layout_sign * bearing,
+                        flange_height,
+                    ),
+                    (
+                        signed_component_width - layout_sign * bearing,
+                        component_height,
+                    ),
+                    (layout_sign * bearing, component_height),
+                    (layout_sign * bearing, flange_height),
+                    (0.0, flange_height),
+                ]
+            else:
+                # Every block uses the same symmetric bearing profile,
+                # including blocks at slab boundaries.  This gives a 500 mm
+                # wide block in a 625 mm module (or 375 mm in a 500 mm
+                # module).  The rectangular underside rises beside the beam
+                # flange, then steps outward to the beam stem or edge support.
+                bearing = min(0.0225, 0.17 / 6)
+                lip_bottom = min(0.03, component_height / 4)
+                previous_edge = -layout_sign * bearing
+                next_edge = signed_component_width + layout_sign * bearing
+                profile_points = [
+                    (0.0, 0.0),
+                    (signed_component_width, 0.0),
+                    (signed_component_width, lip_bottom),
+                    (next_edge, lip_bottom),
+                    (next_edge, component_height),
+                    (previous_edge, component_height),
+                    (previous_edge, lip_bottom),
+                    (0.0, lip_bottom),
+                ]
+
+            builder = ShapeBuilder(model)
+            profile = builder.polyline(profile_points, closed=True)
+            solid = builder.extrude(
+                profile,
+                magnitude=component_length,
+                position_z_axis=(1.0, 0.0, 0.0),
+                position_x_axis=(0.0, 1.0, 0.0),
+            )
+            representation = builder.get_representation(
+                self.house._body_context,
+                solid,
             )
             if style is not None:
                 ifcopenshell.api.style.assign_representation_styles(

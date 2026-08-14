@@ -1179,13 +1179,14 @@ if "upper" in sys.argv:
 if "wall3" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Wall3",
-		x=7.5,
+		x=7.4,
 		y=4,
 		z=3.5,
 		radius=8,
 		view="elevation",
 		direction=(-1, 0, 0),
 		storeys=None,
+		doors_closed=True,
 	)
 
 	house.write("wall3.ifc")
