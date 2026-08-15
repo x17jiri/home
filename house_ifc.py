@@ -1297,6 +1297,8 @@ for i, rafter_x in enumerate(rafter_positions):
 			)
 			roof_layer_storeys["Counter-battens"].add(counter_batten)
 
+house.write("house.ifc")
+
 # Drawing 1 - ground floor
 if "ground" in sys.argv:
 	drawing1 = house.add_drawing(
@@ -1374,7 +1376,6 @@ if "ground" in sys.argv:
 	#drawing1.add_batting((12.10, 8.10), (-0.10, 8.10), thickness=0.12)
 	#drawing1.add_batting((-0.10, 8.10), (-0.10, -0.10), thickness=0.12)
 
-	house.write("ground.ifc")
 	drawing1.render("ground.svg", png=True, png_dpi=600)
 
 # Drawing 2 - upper floor
@@ -1393,13 +1394,27 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
 
-	house.write("upper.ifc")
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 
-# Drawing - wall3
-if "wall3" in sys.argv:
+# Drawing - cut1
+if "cut1" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Wall3",
+		"Cut1",
+		x=2.775,
+		y=4,
+		z=3.5,
+		radius=8,
+		view="elevation",
+		direction=(-1, 0, 0),
+		storeys=None,
+		doors_closed=True,
+	)
+	drawing1.render("cut1.svg", png=True, png_dpi=600)
+
+# Drawing - cut1
+if "cut2" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Cut2",
 		x=7.275,
 		y=4,
 		z=3.5,
@@ -1409,6 +1424,19 @@ if "wall3" in sys.argv:
 		storeys=None,
 		doors_closed=True,
 	)
+	drawing1.render("cut2.svg", png=True, png_dpi=600)
 
-	house.write("wall3.ifc")
-	drawing1.render("wall3.svg", png=True, png_dpi=600)
+# Drawing - cut3
+if "cut3" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Cut3",
+		x=11.275,
+		y=4,
+		z=3.5,
+		radius=8,
+		view="elevation",
+		direction=(-1, 0, 0),
+		storeys=None,
+		doors_closed=True,
+	)
+	drawing1.render("cut3.svg", png=True, png_dpi=600)
