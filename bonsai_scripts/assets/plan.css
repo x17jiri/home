@@ -75,6 +75,17 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: #f4d35e !important;
 }
 
+/* Bonsai emits projected plan beams as separate open edge paths. */
+.target-view-PLANVIEW .projected-wood-fill {
+    fill: #f4d35e !important;
+    stroke: none !important;
+}
+
+/* Simplified insulation/heating/screed floor build-ups. */
+.material-Floorbuildup {
+    fill: white !important;
+}
+
 /* Distinguish the concrete, ceramic, and steel in MIAKO sections. */
 .target-view-ELEVATIONVIEW .material-MIAKOceramicconcrete.cut,
 .target-view-ELEVATIONVIEW .material-MIAKOconcrete.cut,
@@ -83,8 +94,13 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.04 !important;
 }
 
-.target-view-ELEVATIONVIEW .material-MIAKOceramic.cut {
+.target-view-ELEVATIONVIEW .material-MIAKObeamceramic.cut {
     fill: #d98245 !important;
+    stroke-width: 0.04 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-MIAKOblockceramic.cut {
+    fill: #e3b996 !important;
     stroke-width: 0.04 !important;
 }
 
@@ -113,7 +129,6 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: none !important;
     stroke: #4a90e2 !important;
     stroke-width: 0.08 !important;
-    stroke-dasharray: 0.6 0.4;
 }
 
 .target-view-ELEVATIONVIEW .material-Rooftiles {

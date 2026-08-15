@@ -10,6 +10,34 @@
 import sys
 from ifc_utils import *
 
+RAFTER_Z_OFFSET = -0.05
+RAFTER_SIZE = (0.06, 0.20)
+THERMAL_INSULATION_100_THICKNESS = 0.10
+VAPOUR_BARRIER_THICKNESS = 0.001
+THERMAL_INSULATION_50_THICKNESS = 0.05
+GYPSUM_PLASTERBOARD_THICKNESS = 0.025
+SHEATHING_THICKNESS = 0.025
+UNDERLAY_THICKNESS = 0.005
+COUNTER_BATTEN_SIZE = (0.04, 0.06)
+TILE_BATTEN_SIZE = (0.05, 0.04)
+TILE_BATTEN_SPACING = 0.32
+ROOF_TILE_THICKNESS = 0.03
+GROUND_FLOOR_THICKNESS = 0.22
+UPPER_FLOOR_THICKNESS = 0.11
+
+THERMAL_INSULATION_100_BOTTOM = (
+	RAFTER_Z_OFFSET - THERMAL_INSULATION_100_THICKNESS
+)
+VAPOUR_BARRIER_BOTTOM = (
+	THERMAL_INSULATION_100_BOTTOM - VAPOUR_BARRIER_THICKNESS
+)
+THERMAL_INSULATION_50_BOTTOM = (
+	VAPOUR_BARRIER_BOTTOM - THERMAL_INSULATION_50_THICKNESS
+)
+GYPSUM_PLASTERBOARD_BOTTOM = (
+	THERMAL_INSULATION_50_BOTTOM - GYPSUM_PLASTERBOARD_THICKNESS
+)
+
 house = House(
     "My house",
     colors={
@@ -59,8 +87,26 @@ wall3_x = wall2_x + 4.5 + 0.25;
 ground_floor_height = 0.25+2.75
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
-stair_height =  ground_floor_height - 0.2 + CEILING_THICKNESS + 0.11
+stair_height = (
+	ground_floor_height - GROUND_FLOOR_THICKNESS
+	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
 step_count = 17
+
+# For now each finished-floor build-up is one homogeneous interior slab.  It
+# can later be replaced with insulation, heating, and screed components without
+# changing the storey elevations or the existing sill-height coordinates.
+FLOOR_OUTLINE = (
+	(0.25, 0.25),
+	(11.75, 0.25),
+	(11.75, 7.75),
+	(0.25, 7.75),
+)
+ground_floor_layer = ground.floor_layer(
+	"Ground-floor build-up",
+	outline=FLOOR_OUTLINE,
+	thickness=GROUND_FLOOR_THICKNESS,
+	color="#ffffff",
+)
 
 # Load-bearing walls
 
@@ -90,7 +136,7 @@ wall_front.add_door(
 	opening_width=1.125, width=0.9,
 	height=0.25+2.125,
 	clear_height=door_clear_height,
-	sill_height=0.2,
+	sill_height=GROUND_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT"
 )
 wall_front.add_window(
@@ -128,6 +174,7 @@ ground.furniture(
     "TČ",
     kind="USERDEFINED",
     size=(0.5, 0.4, 0.9),
+	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
     center=(0.25+2.7, 0.25+0.2),
 )
@@ -135,12 +182,14 @@ ground.furniture(
     "Zásobník\nTUV",
     kind="USERDEFINED",
     size=(0.7, 0.7, 2.0),
+	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
     center=(0.25+0.4, 0.25+0.35),
 )
 ground.furniture(
     "Pračka",
     kind="USERDEFINED",
+	start_height=GROUND_FLOOR_THICKNESS,
     size=(0.7, 0.7, 2.0),
     color="#ffffff",
     center=(0.25+1.2, 0.25+0.35),
@@ -154,10 +203,12 @@ ground.furniture(
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
 	center=(0.25+3+0.25+1.1, 7.2),
+	start_height=GROUND_FLOOR_THICKNESS,
 )
 ground.asset(
 	"Gauc", asset="1_seater_sofa",
 	center=(0.25+3+0.25+0.5, 6.2),
+	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=90,
 )
 #ground.furniture(
@@ -171,6 +222,7 @@ ground.asset(
     "Umyv",
     asset="basin_large",
     center=(0.25+2, 0.25+0.35),
+	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=180,
 )
 #ground.furniture(
@@ -183,6 +235,7 @@ ground.asset(
 ground.asset(
     "Sprcha",
     asset="shower_90x90",
+	start_height=GROUND_FLOOR_THICKNESS,
     center=(0.25+0.5, 0.25+1.8),
 	rotation=90,
 )
@@ -196,6 +249,7 @@ ground.asset(
 ground.asset(
     "WC",
     asset="toilet_without_cistern",
+	start_height=GROUND_FLOOR_THICKNESS,
     center=(0.25+2.6, 0.25+1.8),
     rotation=-90,
 )
@@ -209,6 +263,7 @@ kitchen_door = wall_3.add_door(
 	at=0.25+0.625+1+1,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
+	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True,
@@ -219,6 +274,7 @@ wall_2.add_door(
 	at=8.0-0.25-3.0,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
+	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_LEFT",
 #	reverse_swing=True,
@@ -229,6 +285,7 @@ wall_2.add_door(
     at=0.25+0.625,
     opening_width=1.0, width=0.9,
     height=0.25+2.125,
+	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	reverse_swing=True,
 )
@@ -238,7 +295,7 @@ stairs1 = ground.stair(
     (12-0.25-0.5, 0.25+1+0.27*8),       # bottom centre
     (12-0.25-0.5, 0.25+1),       # upper landing edge centre
     width=1.0,
-	start_height=0.2,
+	start_height=GROUND_FLOOR_THICKNESS,
     height=stair_height/17*9,
     risers=9,
     name="Main stair",
@@ -272,6 +329,7 @@ ground.furniture(
     "vestavěná skříň",
     kind="USERDEFINED",
     size=(4.4, 0.5, 1.5),
+	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
     center=(0.25+3+0.25+4.5/2, 0.25+0.6/2),
 )
@@ -300,6 +358,7 @@ wall_3.add_door(
     at=8-0.25-1.5,
     opening_width=1.0, width=0.9,
     height=0.25+2.125,
+	sill_height=GROUND_FLOOR_THICKNESS,
     clear_height=door_clear_height,
     name="Bedroom door",
 	operation="SINGLE_SWING_RIGHT",
@@ -318,7 +377,7 @@ wall_3.add_opening(
     at=0.25+0.625+1+1+1.5,
     width=1.0,
     height=0.25+2.125,
-    sill_height=0.2,
+    sill_height=GROUND_FLOOR_THICKNESS,
     name="Fireplace opening",
 )
 ground.connect_wall(w1, w2)
@@ -330,7 +389,7 @@ ground.furniture(
     size=(0.5, 0.6, 1.5),
     color="#ffff2B",
     center=(0.25+3+0.25+4.5+0.2, 4.375+0.5),
-	start_height=0.2,
+	start_height=GROUND_FLOOR_THICKNESS,
 #    rotation=90,
 )
 
@@ -340,12 +399,14 @@ ground.furniture(
 	"Dřez",
     kind="USERDEFINED",
     size=(0.7, 0.95, 0.8),
+	start_height=GROUND_FLOOR_THICKNESS,
     center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+(0.95/2)),
 )
 ground.furniture(
 	"Myčka",
     kind="USERDEFINED",
     size=(0.7, 0.7, 0.8),
+	start_height=GROUND_FLOOR_THICKNESS,
     center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+0.35+0.95),
 )
 ground.furniture(
@@ -353,23 +414,27 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.7, 1, 2),
     center=(0.25+3+0.25+0.35, 4.75-0.5),
+	start_height=GROUND_FLOOR_THICKNESS,
 )
 ground.furniture(
 	"Sporák",
     kind="USERDEFINED",
     size=(0.7, 0.7, 0.8),
     center=(0.25+3+0.25+0.35+0.7, 0.25+1.7+0.15+0.35),
+	start_height=GROUND_FLOOR_THICKNESS,
 )
 ground.furniture(
 	"Kuchyňská Linka",
     kind="USERDEFINED",
     size=(3.1, 0.7, 0.8),
     center=(0.25+3+0.25+0.7+0.7+3.1/2, 0.25+1.7+0.15+0.35),
+	start_height=GROUND_FLOOR_THICKNESS,
 )
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
     center=(6, 4.5),
+	start_height=GROUND_FLOOR_THICKNESS,
 #	rotation=90,
 )
 
@@ -378,6 +443,7 @@ bed = ground.furniture(
     "Postel",
     kind="BED",
     size=(1.6, 2.0, 0.5),
+	start_height=GROUND_FLOOR_THICKNESS,
     color="#8B5A2B",
     center=(11.75-1, 7.75-3.1/2),
 	rotation=-90
@@ -388,7 +454,7 @@ opening = wall_3.add_opening(
     at=0.25+0.625,
     width=1.0,
     height=0.25+2.125,
-    sill_height=0.2,
+    sill_height=GROUND_FLOOR_THICKNESS,
     name="Hallway passage",
     show_overhead=True,
 )
@@ -463,6 +529,57 @@ ceiling3 = upper.miako_slab(
 		"wide", "beam",
 #		"beam",
 		],
+)
+
+
+def floor_bounds_over_miako(*ceilings):
+	"""Return an interior, axis-aligned floor rectangle over MIAKO slabs."""
+	points = [point for ceiling in ceilings for point in ceiling.footprint]
+	floor_x = [point[0] for point in FLOOR_OUTLINE]
+	floor_y = [point[1] for point in FLOOR_OUTLINE]
+	return [
+		max(min(floor_x), min(point[0] for point in points)),
+		max(min(floor_y), min(point[1] for point in points)),
+		min(max(floor_x), max(point[0] for point in points)),
+		min(max(floor_y), max(point[1] for point in points)),
+	]
+
+
+main_floor_bounds = floor_bounds_over_miako(ceiling1, ceiling2)
+stair_hall_floor_bounds = floor_bounds_over_miako(ceiling3)
+# The structural slabs stop on opposite sides of their bearing transition.
+# Split the narrow interval at its midpoint so the two simplified floor
+# layers meet without duplicating volume or leaving a crack.
+floor_split_x = (
+	main_floor_bounds[2] + stair_hall_floor_bounds[0]
+) / 2
+main_floor_bounds[2] = floor_split_x
+stair_hall_floor_bounds[0] = floor_split_x
+
+
+def rectangle_outline(bounds):
+	min_x, min_y, max_x, max_y = bounds
+	return (
+		(min_x, min_y),
+		(max_x, min_y),
+		(max_x, max_y),
+		(min_x, max_y),
+	)
+
+
+upper_floor_layers = (
+	upper.floor_layer(
+		"Upper-floor build-up - main",
+		outline=rectangle_outline(main_floor_bounds),
+		thickness=UPPER_FLOOR_THICKNESS,
+		color="#ffffff",
+	),
+	upper.floor_layer(
+		"Upper-floor build-up - stair hall",
+		outline=rectangle_outline(stair_hall_floor_bounds),
+		thickness=UPPER_FLOOR_THICKNESS,
+		color="#ffffff",
+	),
 )
 
 UNDER_HOLE = 2.80
@@ -541,13 +658,13 @@ wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
 wall_pracovna = upper.wall(
 	start=(0.25+3+0.25+4.5, 2.7),
 	end=(0.25+3+0.25, 2.7),
-	wall_type=dry_wall, height=4, cuts=wall_cuts_2_3)
+	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS)
 wall_pracovna.add_door(
 	at=2.2,
 	opening_width=1, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
-	sill_height=0.11,
+	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT")
 upper.furniture(
     "zachod nahore",
@@ -555,7 +672,7 @@ upper.furniture(
     size=(1.2, 1, 2.1),
     color="#ffff2B",
     center=(3.5+0.6, 0.25+2.35-0.5),
-	start_height=0.11,
+	start_height=UPPER_FLOOR_THICKNESS,
 )
 
 upper.connect_wall(wall_1, wall_front)
@@ -622,7 +739,7 @@ upper.furniture(
     color="#ffff00",
     center=(11.75-0.3, 7.75-2),
 	rotation=90,
-	start_height=0.11,
+	start_height=UPPER_FLOOR_THICKNESS,
 )
 
 # Okna obyvak
@@ -637,7 +754,7 @@ wall_3.add_door(
 	opening_width=1, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
-	sill_height=0.11,
+	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT")
 # Dvere pokojik nahore
 wall_2.add_door(
@@ -645,14 +762,14 @@ wall_2.add_door(
 	opening_width=1, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
-	sill_height=0.11,
+	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT")
 wall_2.add_door(
 	at=4.25,
 	opening_width=1, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
-	sill_height=0.11,
+	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik nahore
 wall_1.add_window(
@@ -677,11 +794,15 @@ roof_inner_cuts = [
 	((11.75, 0, 0), (11.75, 10, 0), (11.75, 0, 10)),
 ]
 
+STREET_ROOF_JOINT_Y = 4.0-0.8-0.07
+GARDEN_ROOF_JOINT_Y = 4.0+0.8+0.07
+ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24
+
 street_roof = roof.plane(
     "Street slope",
     points=(
-		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # origin
-		(10, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # +X direction
+		(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z), # origin
+		(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z), # +X direction
 		(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12), # +Y direction
 	),
     cuts=[
@@ -692,8 +813,8 @@ street_roof = roof.plane(
 garden_roof = roof.plane(
     "Garden slope",
     points=(
-		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # origin
-		(10, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # +X direction
+		(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # origin
+		(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # +X direction
 		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+1.25+0.12), # +Y direction
 	),
     cuts=[
@@ -704,14 +825,22 @@ garden_roof = roof.plane(
 dormer_roof = roof.plane(
     "Dormer slope",
     points=(
-		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # origin
-		(10, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24), # +X direction
+		(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # origin
+		(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # +X direction
 		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+2.5+0.12), # +Y direction
 	),
     cuts=[
 		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
 		((0, 8.4, 0), (10, 8.4, 0), (0, 8.4, 10)),
 	],
+)
+flat_ceiling_roof = roof.plane(
+	"Flat ceiling",
+	points=(
+		(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
+		(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
+		(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	),
 )
 
 # Bonsai creates Outliner collections from spatial containers, but flattens
@@ -737,31 +866,53 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.ObjectType = "ROOF_LAYER"
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
 
-RAFTER_Z_OFFSET = -0.05
-RAFTER_SIZE = (0.06, 0.20)
-THERMAL_INSULATION_100_THICKNESS = 0.10
-VAPOUR_BARRIER_THICKNESS = 0.001
-THERMAL_INSULATION_50_THICKNESS = 0.05
-GYPSUM_PLASTERBOARD_THICKNESS = 0.025
-SHEATHING_THICKNESS = 0.025
-UNDERLAY_THICKNESS = 0.005
-COUNTER_BATTEN_SIZE = (0.04, 0.06)
-TILE_BATTEN_SIZE = (0.05, 0.04)
-TILE_BATTEN_SPACING = 0.32
-ROOF_TILE_THICKNESS = 0.03
-
-THERMAL_INSULATION_100_BOTTOM = (
-	RAFTER_Z_OFFSET - THERMAL_INSULATION_100_THICKNESS
-)
-VAPOUR_BARRIER_BOTTOM = (
-	THERMAL_INSULATION_100_BOTTOM - VAPOUR_BARRIER_THICKNESS
-)
-THERMAL_INSULATION_50_BOTTOM = (
-	VAPOUR_BARRIER_BOTTOM - THERMAL_INSULATION_50_THICKNESS
-)
-GYPSUM_PLASTERBOARD_BOTTOM = (
-	THERMAL_INSULATION_50_BOTTOM - GYPSUM_PLASTERBOARD_THICKNESS
-)
+# Sloping layers remain a conventional contiguous build-up.  The horizontal
+# ceiling has an installation void, so describe that exceptional part with
+# readable storey-relative bottom/top heights instead of adding more roof
+# planes or special geometry types.
+SLOPED_INNER_LAYER_LAYOUT = {
+	"Thermal insulation 100 mm": (
+		THERMAL_INSULATION_100_BOTTOM,
+		THERMAL_INSULATION_100_THICKNESS,
+	),
+	"Vapour barrier": (VAPOUR_BARRIER_BOTTOM, VAPOUR_BARRIER_THICKNESS),
+	"Thermal insulation 50 mm": (
+		THERMAL_INSULATION_50_BOTTOM,
+		THERMAL_INSULATION_50_THICKNESS,
+	),
+	"Gypsum plasterboard": (
+		GYPSUM_PLASTERBOARD_BOTTOM,
+		GYPSUM_PLASTERBOARD_THICKNESS,
+	),
+}
+FLAT_CEILING_LAYER_HEIGHTS = {
+	# Values are (bottom, top), measured from the upper-storey floor.
+	"Thermal insulation 100 mm": (
+		UNDER_HOLE + 0.3,
+		UNDER_HOLE + 0.4,
+	),
+	"Vapour barrier": (
+		UNDER_HOLE + 0.3 - VAPOUR_BARRIER_THICKNESS,
+		UNDER_HOLE + 0.3,
+	),
+	"Thermal insulation 50 mm": (
+		UNDER_HOLE + 0.3
+		- VAPOUR_BARRIER_THICKNESS
+		- THERMAL_INSULATION_50_THICKNESS,
+		UNDER_HOLE + 0.3 - VAPOUR_BARRIER_THICKNESS,
+	),
+	"Gypsum plasterboard": (
+		UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS,
+		UNDER_HOLE - 0.05,
+	),
+}
+FLAT_CEILING_INNER_LAYER_LAYOUT = {
+	layer_name: (
+		UPPER_FLOOR_START + bottom - ROOF_JOINT_Z,
+		top - bottom,
+	)
+	for layer_name, (bottom, top) in FLAT_CEILING_LAYER_HEIGHTS.items()
+}
 SHEATHING_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
 UNDERLAY_BOTTOM = SHEATHING_BOTTOM + SHEATHING_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
@@ -799,95 +950,131 @@ dormer_rafter_indices = [
 ]
 dormer_x_min = min(rafter_positions[i] for i in dormer_rafter_indices) - RAFTER_SIZE[0] / 2
 dormer_x_max = max(rafter_positions[i] for i in dormer_rafter_indices) + RAFTER_SIZE[0] / 2
+roof_x_ranges = (
+	(0, dormer_x_min),
+	(dormer_x_min, dormer_x_max),
+	(dormer_x_max, 12),
+)
 
 
 def add_continuous_roof_layers(
-	plane, name, x_min, x_max, y_min, y_max, *, inner_cuts=[],
+	plane,
+	name,
+	x_min,
+	x_max,
+	y_min,
+	y_max,
+	*,
+	inner_cuts=(),
+	inner_connections=(),
+	inner_layout=SLOPED_INNER_LAYER_LAYOUT,
+	include_inner=True,
+	include_outer=True,
 ):
-	"""Add the roof build-up with optional global cuts keyed by layer name."""
-	allowed_layers = {
-		"thermal_insulation_100",
-		"vapour_barrier",
-		"thermal_insulation_50",
-		"gypsum_plasterboard",
-		"roof_sheathing",
-		"roofing_underlay",
-		"roof_tiles",
-	}
+	"""Add selected inner and outer parts of the roof build-up."""
 	outline = (
 		(x_min, y_min),
 		(x_max, y_min),
 		(x_max, y_max),
 		(x_min, y_max),
 	)
-	insulation_100 = plane.layer(
-		f"{name} 100 mm thermal insulation",
-		outline=outline,
-		z_offset=THERMAL_INSULATION_100_BOTTOM,
-		thickness=THERMAL_INSULATION_100_THICKNESS,
-		material="Thermal insulation",
-		color="#E8D36D",
-		extra_cuts=inner_cuts,
-	)
-	roof_layer_storeys["Thermal insulation 100 mm"].add(insulation_100)
-	vapour_barrier = plane.layer(
-		f"{name} vapour barrier",
-		outline=outline,
-		z_offset=VAPOUR_BARRIER_BOTTOM,
-		thickness=VAPOUR_BARRIER_THICKNESS,
-		material="Vapour barrier",
-		color="#4A90E2",
-		transparency=0.35,
-		extra_cuts=inner_cuts,
-	)
-	roof_layer_storeys["Vapour barrier"].add(vapour_barrier)
-	insulation_50 = plane.layer(
-		f"{name} 50 mm thermal insulation",
-		outline=outline,
-		z_offset=THERMAL_INSULATION_50_BOTTOM,
-		thickness=THERMAL_INSULATION_50_THICKNESS,
-		material="Thermal insulation",
-		color="#E8D36D",
-		extra_cuts=inner_cuts,
-	)
-	roof_layer_storeys["Thermal insulation 50 mm"].add(insulation_50)
-	gypsum_plasterboard = plane.layer(
-		f"{name} gypsum plasterboard",
-		outline=outline,
-		z_offset=GYPSUM_PLASTERBOARD_BOTTOM,
-		thickness=GYPSUM_PLASTERBOARD_THICKNESS,
-		material="Gypsum plasterboard",
-		color="#E8E5DE",
-		extra_cuts=inner_cuts,
-	)
-	roof_layer_storeys["Gypsum plasterboard"].add(gypsum_plasterboard)
-	sheathing = plane.layer(
-		f"{name} roof sheathing",
-		outline=outline,
-		z_offset=SHEATHING_BOTTOM,
-		thickness=SHEATHING_THICKNESS,
-		material="Wood",
-		color="#D1A46F",
-	)
-	roof_layer_storeys["Roof sheathing"].add(sheathing)
-	underlay = plane.layer(
-		f"{name} roofing underlay",
-		outline=outline,
-		z_offset=UNDERLAY_BOTTOM,
-		thickness=UNDERLAY_THICKNESS,
-		material="Roofing underlay",
-		color="#3B4148",
-	)
-	roof_layer_storeys["Roofing underlay"].add(underlay)
-	tiles = plane.layer(
-		f"{name} roof tiles",
-		outline=outline,
-		z_offset=ROOF_TILE_BOTTOM,
-		thickness=ROOF_TILE_THICKNESS,
-		material="Roof tiles",
-		color="#A64B35",
-	)
-	roof_layer_storeys["Roof tiles"].add(tiles)
+
+	def connections_for(layer_name):
+		connections = []
+		for connection in inner_connections:
+			if isinstance(connection, RoofPlane):
+				connections.append(connection)
+				continue
+			connected_plane, connected_layout = connection
+			connections.append(
+				(connected_plane, connected_layout[layer_name][0])
+			)
+		return connections
+
+	if include_inner:
+		insulation_100_bottom, insulation_100_thickness = inner_layout[
+			"Thermal insulation 100 mm"
+		]
+		insulation_100 = plane.layer(
+			f"{name} 100 mm thermal insulation",
+			outline=outline,
+			z_offset=insulation_100_bottom,
+			thickness=insulation_100_thickness,
+			material="Thermal insulation",
+			color="#E8D36D",
+			extra_cuts=inner_cuts,
+			connections=connections_for("Thermal insulation 100 mm"),
+		)
+		roof_layer_storeys["Thermal insulation 100 mm"].add(insulation_100)
+		vapour_barrier_bottom, vapour_barrier_thickness = inner_layout[
+			"Vapour barrier"
+		]
+		vapour_barrier = plane.layer(
+			f"{name} vapour barrier",
+			outline=outline,
+			z_offset=vapour_barrier_bottom,
+			thickness=vapour_barrier_thickness,
+			material="Vapour barrier",
+			color="#4A90E2",
+			transparency=0.35,
+			extra_cuts=inner_cuts,
+			connections=connections_for("Vapour barrier"),
+		)
+		roof_layer_storeys["Vapour barrier"].add(vapour_barrier)
+		insulation_50_bottom, insulation_50_thickness = inner_layout[
+			"Thermal insulation 50 mm"
+		]
+		insulation_50 = plane.layer(
+			f"{name} 50 mm thermal insulation",
+			outline=outline,
+			z_offset=insulation_50_bottom,
+			thickness=insulation_50_thickness,
+			material="Thermal insulation",
+			color="#E8D36D",
+			extra_cuts=inner_cuts,
+			connections=connections_for("Thermal insulation 50 mm"),
+		)
+		roof_layer_storeys["Thermal insulation 50 mm"].add(insulation_50)
+		gypsum_bottom, gypsum_thickness = inner_layout["Gypsum plasterboard"]
+		gypsum_plasterboard = plane.layer(
+			f"{name} gypsum plasterboard",
+			outline=outline,
+			z_offset=gypsum_bottom,
+			thickness=gypsum_thickness,
+			material="Gypsum plasterboard",
+			color="#E8E5DE",
+			extra_cuts=inner_cuts,
+			connections=connections_for("Gypsum plasterboard"),
+		)
+		roof_layer_storeys["Gypsum plasterboard"].add(gypsum_plasterboard)
+	if include_outer:
+		sheathing = plane.layer(
+			f"{name} roof sheathing",
+			outline=outline,
+			z_offset=SHEATHING_BOTTOM,
+			thickness=SHEATHING_THICKNESS,
+			material="Wood",
+			color="#D1A46F",
+		)
+		roof_layer_storeys["Roof sheathing"].add(sheathing)
+		underlay = plane.layer(
+			f"{name} roofing underlay",
+			outline=outline,
+			z_offset=UNDERLAY_BOTTOM,
+			thickness=UNDERLAY_THICKNESS,
+			material="Roofing underlay",
+			color="#3B4148",
+		)
+		roof_layer_storeys["Roofing underlay"].add(underlay)
+		tiles = plane.layer(
+			f"{name} roof tiles",
+			outline=outline,
+			z_offset=ROOF_TILE_BOTTOM,
+			thickness=ROOF_TILE_THICKNESS,
+			material="Roof tiles",
+			color="#A64B35",
+		)
+		roof_layer_storeys["Roof tiles"].add(tiles)
 
 
 def local_y_limits_from_cuts(plane, local_z=0):
@@ -927,33 +1114,64 @@ def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 		y += TILE_BATTEN_SPACING
 
 
-# The continuous layers deliberately overshoot in local Y.  The roof-plane
-# cuts trim them at the ridge and eaves.  Around the dormer, the normal garden
-# slope covers the ridge side and the dormer slope covers the eaves side.
+# The outer layers deliberately overshoot in local Y so the roof-plane cuts
+# trim them at the ridge and eaves.  The four inner layers instead terminate
+# at equal-offset mitres against the flat ceiling plane.
 roof_y_min = -1.5
 roof_y_max = 7
+for part_name, (x_min, x_max) in zip(
+	("Street left", "Street middle", "Street right"),
+	roof_x_ranges,
+):
+	add_continuous_roof_layers(
+		street_roof, part_name, x_min, x_max, roof_y_min, roof_y_max,
+		inner_cuts=roof_inner_cuts,
+		inner_connections=((
+			flat_ceiling_roof,
+			FLAT_CEILING_INNER_LAYER_LAYOUT,
+		),),
+	)
 add_continuous_roof_layers(
-	street_roof, "Street", 0, 12, roof_y_min, roof_y_max,
-	inner_cuts=roof_inner_cuts
+	garden_roof, "Garden left", *roof_x_ranges[0], roof_y_min, roof_y_max,
+	inner_cuts=roof_inner_cuts,
+	inner_connections=((flat_ceiling_roof, FLAT_CEILING_INNER_LAYER_LAYOUT),),
 )
 add_continuous_roof_layers(
-	garden_roof, "Garden left", 0, dormer_x_min, roof_y_min, roof_y_max,
-	inner_cuts=roof_inner_cuts
-)
-add_continuous_roof_layers(
-	garden_roof, "Garden right", dormer_x_max, 12, roof_y_min, roof_y_max,
-	inner_cuts=roof_inner_cuts
+	garden_roof, "Garden right", *roof_x_ranges[2], roof_y_min, roof_y_max,
+	inner_cuts=roof_inner_cuts,
+	inner_connections=((flat_ceiling_roof, FLAT_CEILING_INNER_LAYER_LAYOUT),),
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden above dormer",
-	dormer_x_min, dormer_x_max, roof_y_min, 0,
-	inner_cuts=roof_inner_cuts
+	*roof_x_ranges[1], roof_y_min, 0,
+	include_inner=False,
 )
 add_continuous_roof_layers(
-	dormer_roof, "Dormer", dormer_x_min, dormer_x_max, 0,
+	dormer_roof, "Dormer", *roof_x_ranges[1], 0,
 	roof_y_max-1, # overshoot a little less for the dormer so our cuts work properly
-	inner_cuts=roof_inner_cuts
+	inner_cuts=roof_inner_cuts,
+	inner_connections=((flat_ceiling_roof, FLAT_CEILING_INNER_LAYER_LAYOUT),),
 )
+for part_name, (x_min, x_max), garden_side_plane in zip(
+	("Flat ceiling left", "Flat ceiling middle", "Flat ceiling right"),
+	roof_x_ranges,
+	(garden_roof, dormer_roof, garden_roof),
+):
+	add_continuous_roof_layers(
+		flat_ceiling_roof,
+		part_name,
+		x_min,
+		x_max,
+		0.25 - STREET_ROOF_JOINT_Y,
+		7.75 - STREET_ROOF_JOINT_Y,
+		inner_cuts=roof_inner_cuts,
+		inner_connections=(
+			(street_roof, SLOPED_INNER_LAYER_LAYOUT),
+			(garden_side_plane, SLOPED_INNER_LAYER_LAYOUT),
+		),
+		inner_layout=FLAT_CEILING_INNER_LAYER_LAYOUT,
+		include_outer=False,
+	)
 
 # A batten whose centre lies completely beyond a cut would retain the wrong
 # half-space, so derive the first and last tile-batten rows from the cuts.  The
@@ -969,26 +1187,26 @@ dormer_y_min, dormer_y_max = local_y_limits_from_cuts(
 	dormer_roof, tile_batten_centerline_z
 )
 add_tile_battens(
-	street_roof, "Street", [(0, 12)], street_y_min, street_y_max
+	street_roof, "Street", roof_x_ranges, street_y_min, street_y_max
 )
 add_tile_battens(
 	garden_roof,
 	"Garden outer",
-	[(0, dormer_x_min), (dormer_x_max, 12)],
+	[roof_x_ranges[0], roof_x_ranges[2]],
 	garden_y_min,
 	garden_y_max,
 )
 add_tile_battens(
 	garden_roof,
 	"Garden above dormer",
-	[(dormer_x_min, dormer_x_max)],
+	[roof_x_ranges[1]],
 	garden_y_min,
 	0,
 )
 add_tile_battens(
 	dormer_roof,
 	"Dormer",
-	[(dormer_x_min, dormer_x_max)],
+	[roof_x_ranges[1]],
 	0,
 	dormer_y_max,
 )
@@ -1182,7 +1400,7 @@ if "upper" in sys.argv:
 if "wall3" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Wall3",
-		x=11.275,
+		x=7.275,
 		y=4,
 		z=3.5,
 		radius=8,

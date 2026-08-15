@@ -567,6 +567,142 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_vapour_barrier_overlays(svg_path: Path) -> None:
+    """Draw sectioned vapour barriers above coincident insulation edges."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if '<g class="vapour-barrier-overlays' in svg:
+        return
+
+    candidates = []
+    for match in re.finditer(r'<g\b(?P<attrs>[^>\n]*)>', svg):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"])
+        )
+        classes = set(attributes.get("class", "").split())
+        if "material-Vapourbarrier" not in classes:
+            continue
+        if "cut" in classes:
+            priority = 2
+        elif "projection" in classes:
+            priority = 1
+        else:
+            continue
+        candidates.append((priority, match, attributes))
+
+    if not candidates:
+        return
+    highest_priority = max(priority for priority, _, _ in candidates)
+    sources = [
+        (match, attributes)
+        for priority, match, attributes in candidates
+        if priority == highest_priority
+    ]
+    source_ids = []
+    id_insertions = []
+    for index, (match, attributes) in enumerate(sources, start=1):
+        element_id = attributes.get("id")
+        if element_id is None:
+            element_id = f"vapour-barrier-overlay-source-{index}"
+            id_insertions.append((match.end() - 1, f' id="{element_id}"'))
+        source_ids.append(element_id)
+
+    for offset, identifier in reversed(id_insertions):
+        svg = f"{svg[:offset]}{identifier}{svg[offset:]}"
+
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    uses = "\n".join(
+        f'    <use href="#{element_id}" xlink:href="#{element_id}"/>'
+        for element_id in source_ids
+    )
+    overlays = (
+        '<g class="vapour-barrier-overlays '
+        'target-view-ELEVATIONVIEW">\n'
+        f"{uses}\n"
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
+def _postprocess_projected_wood_fills(svg_path: Path) -> None:
+    """Add a filled hull behind open projected-wood edge paths in plans."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="projected-wood-fill"' in svg:
+        return
+
+    simple_group = re.compile(
+        r'(?P<open><g\b(?P<attrs>[^>]*)>)'
+        r'(?P<body>(?:(?!<g\b).)*?)'
+        r'(?P<close></g>)',
+        re.DOTALL,
+    )
+    coordinate = re.compile(rf'({_SVG_NUMBER})[,\s]+({_SVG_NUMBER})')
+
+    def convex_hull(
+        points: set[tuple[float, float]],
+    ) -> list[tuple[float, float]]:
+        ordered = sorted(points)
+        if len(ordered) < 3:
+            return []
+
+        def cross(
+            origin: tuple[float, float],
+            first: tuple[float, float],
+            second: tuple[float, float],
+        ) -> float:
+            return (
+                (first[0] - origin[0]) * (second[1] - origin[1])
+                - (first[1] - origin[1]) * (second[0] - origin[0])
+            )
+
+        lower: list[tuple[float, float]] = []
+        for point in ordered:
+            while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
+                lower.pop()
+            lower.append(point)
+        upper: list[tuple[float, float]] = []
+        for point in reversed(ordered):
+            while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
+                upper.pop()
+            upper.append(point)
+        return lower[:-1] + upper[:-1]
+
+    def add_fill(match: re.Match[str]) -> str:
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
+        classes = set(attributes.get("class", "").split())
+        if not {"IfcBeam", "material-Wood", "projection"} <= classes:
+            return match.group(0)
+        points: set[tuple[float, float]] = set()
+        for path_data in re.findall(
+            r'<path\b[^>]*\bd="([^"]+)"', match["body"]
+        ):
+            points.update(
+                (float(x), float(y))
+                for x, y in coordinate.findall(path_data)
+            )
+        hull = convex_hull(points)
+        if not hull:
+            return match.group(0)
+        point_text = " ".join(f"{x:g},{y:g}" for x, y in hull)
+        indentation = "  "
+        indentation_match = re.match(r'\n([ \t]+)', match["body"])
+        if indentation_match is not None:
+            indentation = indentation_match.group(1)
+        polygon = (
+            f'\n{indentation}<polygon class="projected-wood-fill" '
+            f'points="{point_text}"/>'
+        )
+        return (
+            f'{match["open"]}{polygon}{match["body"]}{match["close"]}'
+        )
+
+    processed_svg = simple_group.sub(add_fill, svg)
+    if processed_svg != svg:
+        svg_path.write_text(processed_svg, encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -1387,12 +1523,14 @@ def _render_existing_drawing(
                 drawing.ObjectPlacement
             )[2, 3]
         )
+        _postprocess_projected_wood_fills(absolute_output)
         _postprocess_door_overheads(
             absolute_output,
             mask_global_ids=_overhead_mask_global_ids(model, cut_z),
         )
     else:
         _postprocess_miako_reinforcement_overlays(absolute_output)
+        _postprocess_vapour_barrier_overlays(absolute_output)
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -3489,6 +3627,70 @@ class RoofPlane(ifcopenshell.entity_instance):
             relating_object=self,
         )
 
+    def _mitre_cut_to(
+        self,
+        other: RoofPlane,
+        *,
+        z_offset: Number = 0,
+        other_z_offset: Number | None = None,
+    ) -> PlaneCut:
+        """Return the common bisector between two offset roof planes."""
+        z_offset = _number(z_offset, "z_offset")
+        if other_z_offset is None:
+            other_z_offset = z_offset
+        else:
+            other_z_offset = _number(other_z_offset, "other_z_offset")
+        # Always calculate a connection in the same plane order.  Apart from
+        # making persisted cuts deterministic, this gives both connected
+        # solids byte-identical clipping planes instead of mathematically equal
+        # planes with reversed point order.  That lets drawing engines reliably
+        # fuse their cut polygons without leaving a visible internal seam.
+        (first, first_offset), (second, second_offset) = sorted(
+            ((self, z_offset), (other, other_z_offset)),
+            key=lambda item: item[0].GlobalId,
+        )
+        normal = np.array(first.z_axis, dtype=float)
+        other_normal = np.array(second.z_axis, dtype=float)
+        intersection_direction = np.cross(normal, other_normal)
+        direction_length = float(np.linalg.norm(intersection_direction))
+        if direction_length <= 1e-9:
+            raise ValueError("connected roof planes must not be parallel")
+        intersection_direction /= direction_length
+
+        origin = np.array(first.origin, dtype=float)
+        other_origin = np.array(second.origin, dtype=float)
+        first_surface_origin = origin + normal * first_offset
+        second_surface_origin = other_origin + other_normal * second_offset
+        line_anchor = (first_surface_origin + second_surface_origin) / 2
+        intersection_point = np.linalg.solve(
+            np.vstack((normal, other_normal, intersection_direction)),
+            np.array(
+                (
+                    np.dot(normal, first_surface_origin),
+                    np.dot(other_normal, second_surface_origin),
+                    np.dot(intersection_direction, line_anchor),
+                ),
+                dtype=float,
+            ),
+        )
+
+        # Both roof-plane normals point upwards.  Their difference describes
+        # the bisector containing the intersection of the selected layer
+        # faces.  The offsets may differ, which allows a flat ceiling layer to
+        # meet its sloping counterpart at a different height.
+        mitre_normal = normal - other_normal
+        mitre_normal /= np.linalg.norm(mitre_normal)
+        transverse = np.cross(mitre_normal, intersection_direction)
+        transverse /= np.linalg.norm(transverse)
+        return tuple(
+            tuple(float(value) for value in point)
+            for point in (
+                intersection_point,
+                intersection_point + intersection_direction,
+                intersection_point + transverse,
+            )
+        )
+
     def beam(
         self,
         name: str,
@@ -3563,14 +3765,32 @@ class RoofPlane(ifcopenshell.entity_instance):
         color: str | None = None,
         transparency: Number = 0,
         extra_cuts: Sequence[PlaneCut] | None = None,
+        connections: Sequence[
+            RoofPlane | tuple[RoofPlane, Number]
+        ] | None = None,
+        connection_tolerance: Number = 1e-4,
     ) -> RoofLayer:
-        """Create a roof layer, optionally appending global clipping planes."""
+        """Create a roof layer, optionally trimming it to connected planes.
+
+        ``connections`` contains other, non-parallel planes belonging to this
+        roof.  A plain plane assumes its connected layer has the same
+        ``z_offset``.  A ``(plane, z_offset)`` pair specifies the connected
+        layer's offset explicitly, allowing layers at different heights to
+        meet.  ``connection_tolerance`` adds a microscopic overlap at those
+        cuts so geometric and drawing engines do not mistake floating-point
+        noise for a gap.
+        """
         layer_name = _name(name, "name")
         material_name = _name(material, "material")
         z_offset = _number(z_offset, "z_offset")
         thickness = _number(thickness, "thickness")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
+        connection_tolerance = _number(
+            connection_tolerance, "connection_tolerance"
+        )
+        if connection_tolerance < 0:
+            raise ValueError("connection_tolerance must not be negative")
         if isinstance(outline, (str, bytes)):
             raise TypeError("outline must contain at least three points")
         try:
@@ -3605,7 +3825,73 @@ class RoofPlane(ifcopenshell.entity_instance):
             self.geometry_y_sign * centroid[1],
         )
         normalised_extra_cuts = _plane_cuts(extra_cuts)
-        effective_cuts = (*self.cuts, *normalised_extra_cuts)
+        if connections is None:
+            connection_specs = ()
+        else:
+            if isinstance(connections, (str, bytes)):
+                raise TypeError("connections must be a sequence of roof planes")
+            try:
+                supplied_connections = tuple(connections)
+            except TypeError as error:
+                raise TypeError(
+                    "connections must be a sequence of roof planes"
+                ) from error
+            normalised_specs = []
+            for index, connection in enumerate(supplied_connections, start=1):
+                if isinstance(connection, RoofPlane):
+                    normalised_specs.append((connection, z_offset))
+                    continue
+                if isinstance(connection, (str, bytes)):
+                    raise TypeError(f"connection {index} must be a RoofPlane")
+                try:
+                    connected_plane, connected_z_offset = connection
+                except (TypeError, ValueError) as error:
+                    raise TypeError(
+                        f"connection {index} must be a RoofPlane or "
+                        "(RoofPlane, z_offset) pair"
+                    ) from error
+                normalised_specs.append(
+                    (
+                        connected_plane,
+                        _number(
+                            connected_z_offset,
+                            f"connection {index} z_offset",
+                        ),
+                    )
+                )
+            connection_specs = tuple(normalised_specs)
+        normalised_connections = tuple(
+            connection for connection, _ in connection_specs
+        )
+        connection_z_offsets = tuple(
+            connected_z_offset for _, connected_z_offset in connection_specs
+        )
+        seen_connections = set()
+        for index, connection in enumerate(normalised_connections, start=1):
+            if not isinstance(connection, RoofPlane):
+                raise TypeError(f"connection {index} must be a RoofPlane")
+            if connection.file is not self.file or connection.roof != self.roof:
+                raise ValueError(
+                    f"connection {index} must belong to the same roof"
+                )
+            if connection == self:
+                raise ValueError("a roof plane cannot connect to itself")
+            if connection.GlobalId in seen_connections:
+                raise ValueError("connections must not contain duplicates")
+            seen_connections.add(connection.GlobalId)
+        connection_cuts = tuple(
+            self._mitre_cut_to(
+                connection,
+                z_offset=z_offset,
+                other_z_offset=connected_z_offset,
+            )
+            for connection, connected_z_offset in connection_specs
+        )
+        effective_cuts = (
+            *self.cuts,
+            *normalised_extra_cuts,
+            *connection_cuts,
+        )
 
         placement = self.placement.copy()
         placement[:3, 3] = np.array(self.to_world((0, 0, z_offset)))
@@ -3614,6 +3900,14 @@ class RoofPlane(ifcopenshell.entity_instance):
             placement,
             (geometry_centroid[0], geometry_centroid[1], thickness / 2),
         )
+        if connection_cuts and connection_tolerance:
+            for clipping in clippings[-len(connection_cuts) :]:
+                location = np.array(clipping["location"], dtype=float)
+                normal = np.array(clipping["normal"], dtype=float)
+                clipping["location"] = tuple(
+                    float(value)
+                    for value in location + normal * connection_tolerance
+                )
         model = self.file
         element = ifcopenshell.api.root.create_entity(
             model,
@@ -3631,6 +3925,10 @@ class RoofPlane(ifcopenshell.entity_instance):
             placement=placement,
             cuts=effective_cuts,
             extra_cuts=normalised_extra_cuts,
+            connections=normalised_connections,
+            connection_z_offsets=connection_z_offsets,
+            connection_cuts=connection_cuts,
+            connection_tolerance=connection_tolerance,
         )
         self.add(layer)
         ifcopenshell.api.geometry.edit_object_placement(
@@ -3691,6 +3989,12 @@ class RoofPlane(ifcopenshell.entity_instance):
                 "Thickness": thickness,
                 "Cuts": json.dumps(effective_cuts),
                 "ExtraCuts": json.dumps(normalised_extra_cuts),
+                "Connections": json.dumps(
+                    [connection.GlobalId for connection in normalised_connections]
+                ),
+                "ConnectionZOffsets": json.dumps(connection_z_offsets),
+                "ConnectionCuts": json.dumps(connection_cuts),
+                "ConnectionTolerance": connection_tolerance,
             },
         )
         return layer
@@ -3711,6 +4015,10 @@ class RoofLayer(ifcopenshell.entity_instance):
         placement: np.ndarray,
         cuts: tuple[PlaneCut, ...],
         extra_cuts: tuple[PlaneCut, ...],
+        connections: tuple[RoofPlane, ...],
+        connection_z_offsets: tuple[float, ...],
+        connection_cuts: tuple[PlaneCut, ...],
+        connection_tolerance: float,
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "plane", plane)
@@ -3723,6 +4031,10 @@ class RoofLayer(ifcopenshell.entity_instance):
         object.__setattr__(self, "placement", placement)
         object.__setattr__(self, "cuts", cuts)
         object.__setattr__(self, "extra_cuts", extra_cuts)
+        object.__setattr__(self, "connections", connections)
+        object.__setattr__(self, "connection_z_offsets", connection_z_offsets)
+        object.__setattr__(self, "connection_cuts", connection_cuts)
+        object.__setattr__(self, "connection_tolerance", connection_tolerance)
 
     @property
     def element(self) -> ifcopenshell.entity_instance:
@@ -3818,6 +4130,18 @@ class MiakoSlab(ifcopenshell.entity_instance):
     def element(self) -> ifcopenshell.entity_instance:
         """Return this MIAKO slab as its underlying IFC entity."""
         return self
+
+    @property
+    def footprint(self) -> tuple[tuple[float, float], ...]:
+        """Return the four global XY corners covered by this slab."""
+        offset_x = self.direction[0] * self.width
+        offset_y = self.direction[1] * self.width
+        return (
+            self.start,
+            self.end,
+            (self.end[0] + offset_x, self.end[1] + offset_y),
+            (self.start[0] + offset_x, self.start[1] + offset_y),
+        )
 
 
 class Stair(ifcopenshell.entity_instance):
@@ -4739,6 +5063,136 @@ class Storey:
         )
         return roof
 
+    def floor_layer(
+        self,
+        name: str,
+        *,
+        outline: Sequence[Point],
+        thickness: Number,
+        start_height: Number = 0,
+        material: str = "Floor build-up",
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> ifcopenshell.entity_instance:
+        """Create one simplified floor build-up above the storey elevation.
+
+        ``outline`` contains the floor polygon in global XY coordinates.
+        ``start_height`` locates its underside above this storey's elevation,
+        and the slab extends upward by ``thickness``.  A single material keeps
+        the representation simple until the build-up needs to be decomposed
+        into insulation, heating, and screed layers.
+        """
+        layer_name = _name(name, "name")
+        material_name = _name(material, "material")
+        thickness = _number(thickness, "thickness")
+        start_height = _number(start_height, "start_height")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if start_height < 0:
+            raise ValueError("start_height must be zero or greater")
+        if isinstance(outline, (str, bytes)):
+            raise TypeError("outline must contain at least three points")
+        try:
+            supplied_outline = list(outline)
+        except TypeError as error:
+            raise TypeError("outline must contain at least three points") from error
+        if len(supplied_outline) < 3:
+            raise ValueError("outline must contain at least three points")
+        points = tuple(
+            _point(point, f"outline point {index}")
+            for index, point in enumerate(supplied_outline, start=1)
+        )
+        twice_area = sum(
+            point[0] * next_point[1] - next_point[0] * point[1]
+            for point, next_point in zip(points, (*points[1:], points[0]))
+        )
+        if abs(twice_area) <= 1e-9:
+            raise ValueError("outline must enclose a non-zero area")
+
+        model = self.house.model
+        layer = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcSlab",
+            name=layer_name,
+            predefined_type="FLOOR",
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[layer],
+            relating_structure=self.element,
+        )
+        placement = np.eye(4)
+        placement[2, 3] = self.elevation + start_height
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=layer,
+            matrix=placement,
+            is_si=True,
+        )
+        body = ifcopenshell.api.geometry.add_slab_representation(
+            model,
+            context=self.house._body_context,
+            depth=thickness,
+            polyline=points,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=layer,
+            representation=body,
+        )
+        surface_style = self.house._surface_style(
+            "slab",
+            color=color,
+            transparency=transparency,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+
+        ifc_material = self.house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category="floor",
+            )
+            self.house._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[layer],
+            type="IfcMaterial",
+            material=ifc_material,
+        )
+        common_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=layer,
+            name="Pset_SlabCommon",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=common_pset,
+            properties={"LoadBearing": False},
+        )
+        layer_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=layer,
+            name="BBIM_FloorLayer",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=layer_pset,
+            properties={
+                "Outline": json.dumps(points),
+                "StartHeight": start_height,
+                "Thickness": thickness,
+                "Material": material_name,
+            },
+        )
+        return layer
+
     def batting(
         self,
         start: Point,
@@ -5569,7 +6023,10 @@ class Storey:
             return material
 
         beam_material = get_material("MIAKO concrete", "concrete")
-        block_material = get_material("MIAKO ceramic", "ceramic")
+        beam_shell_material = get_material(
+            "MIAKO beam ceramic", "ceramic"
+        )
+        block_material = get_material("MIAKO block ceramic", "ceramic")
         reinforcement_material = get_material(
             "MIAKO reinforcement", "steel"
         )
@@ -5922,7 +6379,7 @@ class Storey:
                     component_width=item_width,
                     component_height=beam_height,
                     style=beam_shell_style,
-                    material=block_material,
+                    material=beam_shell_material,
                 )
                 ifcopenshell.api.type.assign_type(
                     model,

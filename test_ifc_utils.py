@@ -34,6 +34,8 @@ from ifc_utils import (
     _close_door_bodies,
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
+    _postprocess_projected_wood_fills,
+    _postprocess_vapour_barrier_overlays,
     generate_plan,
 )
 
@@ -469,6 +471,173 @@ class HouseTests(unittest.TestCase):
                 thickness=0.1,
                 material="Wood",
                 extra_cuts=[((0, 0, 0), (1, 0, 0), (2, 0, 0))],
+            )
+
+    def test_mitres_layers_between_connected_roof_planes(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        slope = roof.plane(
+            "Slope",
+            points=((0, 0, 4), (6, 0, 4), (0, -4, 2)),
+        )
+        flat = roof.plane(
+            "Flat ceiling",
+            points=((0, 0, 4), (6, 0, 4), (0, 2, 4)),
+        )
+
+        slope_layer = slope.layer(
+            "Sloped plasterboard",
+            outline=((0, -0.5), (6, -0.5), (6, 5), (0, 5)),
+            z_offset=-0.2,
+            thickness=0.1,
+            material="Gypsum plasterboard",
+            connections=[flat],
+        )
+        flat_layer = flat.layer(
+            "Flat plasterboard",
+            outline=((0, 0), (6, 0), (6, 2), (0, 2)),
+            z_offset=-0.2,
+            thickness=0.1,
+            material="Gypsum plasterboard",
+            connections=[slope],
+        )
+
+        self.assertEqual(slope_layer.connections, (flat,))
+        self.assertEqual(slope_layer.connection_z_offsets, (-0.2,))
+        self.assertEqual(flat_layer.connections, (slope,))
+        self.assertEqual(len(slope_layer.connection_cuts), 1)
+        self.assertEqual(len(flat_layer.connection_cuts), 1)
+        self.assertEqual(slope_layer.connection_tolerance, 1e-4)
+        self.assertEqual(
+            slope_layer.connection_cuts,
+            flat_layer.connection_cuts,
+        )
+        self.assertEqual(slope_layer.cuts, slope_layer.connection_cuts)
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    slope_layer, "BBIM_RoofLayer", "Connections"
+                )
+            ),
+            [flat.GlobalId],
+        )
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    slope_layer, "BBIM_RoofLayer", "ConnectionZOffsets"
+                )
+            ),
+            [-0.2],
+        )
+
+        slope_cut = np.array(slope_layer.connection_cuts[0], dtype=float)
+        flat_cut = np.array(flat_layer.connection_cuts[0], dtype=float)
+        slope_cut_normal = np.cross(
+            slope_cut[1] - slope_cut[0], slope_cut[2] - slope_cut[0]
+        )
+        flat_cut_normal = np.cross(
+            flat_cut[1] - flat_cut[0], flat_cut[2] - flat_cut[0]
+        )
+        slope_cut_normal /= np.linalg.norm(slope_cut_normal)
+        flat_cut_normal /= np.linalg.norm(flat_cut_normal)
+        self.assertAlmostEqual(abs(np.dot(slope_cut_normal, flat_cut_normal)), 1)
+        self.assertAlmostEqual(
+            np.dot(slope_cut_normal, flat_cut[0] - slope_cut[0]), 0
+        )
+
+        # The joint plane contains the intersection of each pair of equally
+        # offset layer faces, which is what produces the common mitred edge.
+        slope_normal = np.array(slope.z_axis)
+        flat_normal = np.array(flat.z_axis)
+        line_direction = np.cross(slope_normal, flat_normal)
+        line_direction /= np.linalg.norm(line_direction)
+        equations = np.vstack((slope_normal, flat_normal, line_direction))
+        for offset in (-0.2, -0.1):
+            point = np.linalg.solve(
+                equations,
+                (
+                    np.dot(slope_normal, slope.origin) + offset,
+                    np.dot(flat_normal, flat.origin) + offset,
+                    0,
+                ),
+            )
+            self.assertAlmostEqual(
+                np.dot(slope_cut_normal, point - slope_cut[0]), 0
+            )
+
+        lowered_slope_layer = slope.layer(
+            "Sloped layer meeting lowered ceiling",
+            outline=((0, -0.5), (6, -0.5), (6, 5), (0, 5)),
+            z_offset=-0.2,
+            thickness=0.1,
+            material="Gypsum plasterboard",
+            connections=[(flat, -0.6)],
+        )
+        lowered_flat_layer = flat.layer(
+            "Lowered flat layer",
+            outline=((0, -2), (6, -2), (6, 2), (0, 2)),
+            z_offset=-0.6,
+            thickness=0.1,
+            material="Gypsum plasterboard",
+            connections=[(slope, -0.2)],
+        )
+        self.assertEqual(lowered_slope_layer.connection_z_offsets, (-0.6,))
+        self.assertEqual(lowered_flat_layer.connection_z_offsets, (-0.2,))
+        self.assertEqual(
+            lowered_slope_layer.connection_cuts,
+            lowered_flat_layer.connection_cuts,
+        )
+        lowered_cut = np.array(
+            lowered_slope_layer.connection_cuts[0], dtype=float
+        )
+        lowered_cut_normal = np.cross(
+            lowered_cut[1] - lowered_cut[0],
+            lowered_cut[2] - lowered_cut[0],
+        )
+        lowered_cut_normal /= np.linalg.norm(lowered_cut_normal)
+        lowered_intersection = np.linalg.solve(
+            equations,
+            (
+                np.dot(slope_normal, slope.origin) - 0.2,
+                np.dot(flat_normal, flat.origin) - 0.6,
+                0,
+            ),
+        )
+        self.assertAlmostEqual(
+            np.dot(
+                lowered_cut_normal,
+                lowered_intersection - lowered_cut[0],
+            ),
+            0,
+        )
+
+        for layer in (
+            slope_layer,
+            flat_layer,
+            lowered_slope_layer,
+            lowered_flat_layer,
+        ):
+            body = ifcopenshell.util.representation.get_representation(
+                layer, "Model", "Body", "MODEL_VIEW"
+            )
+            self.assertEqual(body.RepresentationType, "Clipping")
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), layer
+            )
+            self.assertGreater(ifcopenshell.util.shape.get_volume(shape.geometry), 0)
+
+        parallel = roof.plane(
+            "Parallel ceiling",
+            points=((0, 1, 4), (6, 1, 4), (0, 3, 4)),
+        )
+        with self.assertRaisesRegex(ValueError, "must not be parallel"):
+            flat.layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1), (0, 1)),
+                thickness=0.1,
+                material="Gypsum plasterboard",
+                connections=[parallel],
             )
 
     def test_adds_existing_elements_to_a_roof_and_validates_planes(self) -> None:
@@ -1624,6 +1793,10 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(slab.length, 8)
         self.assertAlmostEqual(slab.width, 1.125)
+        self.assertEqual(
+            slab.footprint,
+            ((0, 0), (0, 8), (1.125, 8.0), (1.125, 0.0)),
+        )
         self.assertAlmostEqual(slab.height, 0.25)
         self.assertAlmostEqual(slab.bottom, -0.25)
         self.assertEqual(
@@ -1740,6 +1913,10 @@ class HouseTests(unittest.TestCase):
             mapped_rgb(first_shell),
             (217 / 255, 130 / 255, 69 / 255),
         )
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(first_shell).Name,
+            "MIAKO beam ceramic",
+        )
         self.assertEqual(mapped_rgb(first_reinforcement), (0.2, 0.2, 0.2))
         reinforcement_type = ifcopenshell.util.element.get_type(
             first_reinforcement
@@ -1837,6 +2014,14 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(mapped_rgb(wide_blocks[0]), (0, 0, 1))
         self.assertEqual(mapped_rgb(narrow_blocks[0]), (0, 128 / 255, 0))
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(wide_blocks[0]).Name,
+            "MIAKO block ceramic",
+        )
+        self.assertNotEqual(
+            ifcopenshell.util.element.get_material(first_shell),
+            ifcopenshell.util.element.get_material(wide_blocks[0]),
+        )
 
         topping_placement = ifcopenshell.util.placement.get_local_placement(
             slab.topping_element.ObjectPlacement
@@ -2157,6 +2342,59 @@ class HouseTests(unittest.TestCase):
             },
             {"Axis", "Body"},
         )
+
+    def test_adds_a_simplified_floor_layer_above_a_storey(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3.21)
+        floor = upper.floor_layer(
+            "Upper-floor build-up",
+            outline=((0.25, 0.25), (11.75, 0.25), (11.75, 7.75), (0.25, 7.75)),
+            thickness=0.11,
+            material="Floor build-up",
+            color="#ffffff",
+        )
+
+        self.assertTrue(floor.is_a("IfcSlab"))
+        self.assertEqual(floor.PredefinedType, "FLOOR")
+        self.assertEqual(
+            floor.ContainedInStructure[0].RelatingStructure,
+            upper.element,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            floor.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[2, 3], 3.21)
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), floor
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 11.5)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_y(shape.geometry), 7.5)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_z(shape.geometry), 0.11)
+        self.assertEqual(ifcopenshell.util.element.get_material(floor).Name, "Floor build-up")
+        self.assertFalse(
+            ifcopenshell.util.element.get_pset(
+                floor, "Pset_SlabCommon", "LoadBearing"
+            )
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                floor, "BBIM_FloorLayer", "Thickness"
+            ),
+            0.11,
+        )
+
+        with self.assertRaisesRegex(ValueError, "thickness"):
+            upper.floor_layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1)),
+                thickness=0,
+            )
+        with self.assertRaisesRegex(ValueError, "non-zero area"):
+            upper.floor_layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (2, 0)),
+                thickness=0.1,
+            )
 
     def test_stacks_an_elevated_wall_part_above_a_lower_wall(self) -> None:
         house = House("My house")
@@ -3847,6 +4085,76 @@ class HouseTests(unittest.TestCase):
                 svg.index(reinforcement_overlay),
                 svg.index(dimension_overlay),
             )
+
+    def test_layers_cut_vapour_barriers_above_insulation_edges(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "elevation.svg"
+            svg_path.write_text(
+                """<svg>
+  <g id="vapour-projection" class="IfcSlab material-Vapourbarrier projection"><path/></g>
+  <g class="IfcSlab material-Vapourbarrier cut"><path/></g>
+  <g class="IfcSlab cut material-Vapourbarrier"><path/></g>
+  <g id="insulation" class="IfcSlab material-Thermalinsulation cut"><path/></g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_vapour_barrier_overlays(svg_path)
+            _postprocess_vapour_barrier_overlays(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            overlay = (
+                '<g class="vapour-barrier-overlays '
+                'target-view-ELEVATIONVIEW">'
+            )
+            self.assertEqual(svg.count(overlay), 1)
+            for index in (1, 2):
+                source = f"vapour-barrier-overlay-source-{index}"
+                self.assertEqual(svg.count(f'id="{source}"'), 1)
+                self.assertEqual(
+                    svg.count(
+                        f'<use href="#{source}" xlink:href="#{source}"/>'
+                    ),
+                    1,
+                )
+            self.assertNotIn(
+                '<use href="#vapour-projection"',
+                svg,
+            )
+            self.assertGreater(svg.index(overlay), svg.index('id="insulation"'))
+
+    def test_fills_open_projected_wood_edges_in_plan(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "plan.svg"
+            svg_path.write_text(
+                """<svg>
+  <g class="IfcBeam material-Wood projection">
+    <path d="M0,0 L1,0"/>
+    <path d="M3,0 L4,0"/>
+    <path d="M4,0 L4,1"/>
+    <path d="M4,1 L0,1"/>
+    <path d="M0,1 L0,0"/>
+  </g>
+  <g class="IfcBeam material-Steel projection">
+    <path d="M5,0 L6,0 L6,1 L5,1"/>
+  </g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_projected_wood_fills(svg_path)
+            _postprocess_projected_wood_fills(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            polygon = (
+                '<polygon class="projected-wood-fill" '
+                'points="0,0 4,0 4,1 0,1"/>'
+            )
+            self.assertEqual(svg.count(polygon), 1)
+            self.assertLess(svg.index(polygon), svg.index('<path d="M0,0 L1,0"'))
+            self.assertNotIn('points="5,0 6,0 6,1 5,1"', svg)
 
     def test_centers_short_dimension_labels_during_svg_postprocessing(self) -> None:
         with TemporaryDirectory() as directory:
