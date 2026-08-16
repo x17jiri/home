@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
+from html import escape
 import json
 from math import atan2, cos, hypot, isfinite, radians, sin
 from os import PathLike, environ
@@ -626,6 +627,222 @@ def _postprocess_vapour_barrier_overlays(svg_path: Path) -> None:
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _convex_hull_2d(
+    points: set[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    """Return the counter-clockwise convex hull of at least three 2D points."""
+    ordered = sorted(points)
+    if len(ordered) < 3:
+        return []
+
+    def cross(
+        origin: tuple[float, float],
+        first: tuple[float, float],
+        second: tuple[float, float],
+    ) -> float:
+        return (
+            (first[0] - origin[0]) * (second[1] - origin[1])
+            - (first[1] - origin[1]) * (second[0] - origin[0])
+        )
+
+    lower: list[tuple[float, float]] = []
+    for point in ordered:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
+            lower.pop()
+        lower.append(point)
+    upper: list[tuple[float, float]] = []
+    for point in reversed(ordered):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
+            upper.pop()
+        upper.append(point)
+    return lower[:-1] + upper[:-1]
+
+
+def _section_shape_points(
+    shape: object,
+    *,
+    plane_origin: np.ndarray,
+    plane_normal: np.ndarray,
+    world_to_camera: np.ndarray,
+) -> set[tuple[float, float]]:
+    """Intersect a triangulated IFC shape with a camera section plane."""
+    geometry = shape.geometry
+    vertices = [
+        np.array(geometry.verts[index : index + 3], dtype=float)
+        for index in range(0, len(geometry.verts), 3)
+    ]
+    faces = [
+        geometry.faces[index : index + 3]
+        for index in range(0, len(geometry.faces), 3)
+    ]
+    tolerance = 1e-7
+    points: set[tuple[float, float]] = set()
+    for face in faces:
+        triangle = [vertices[index] for index in face]
+        distances = [
+            float(np.dot(point - plane_origin, plane_normal))
+            for point in triangle
+        ]
+        for first_index, second_index in ((0, 1), (1, 2), (2, 0)):
+            first = triangle[first_index]
+            second = triangle[second_index]
+            first_distance = distances[first_index]
+            second_distance = distances[second_index]
+            intersections: list[np.ndarray] = []
+            if abs(first_distance) <= tolerance:
+                intersections.append(first)
+            if abs(second_distance) <= tolerance:
+                intersections.append(second)
+            if first_distance * second_distance < -(tolerance * tolerance):
+                fraction = first_distance / (first_distance - second_distance)
+                intersections.append(first + fraction * (second - first))
+            for intersection in intersections:
+                camera_point = world_to_camera @ np.array(
+                    (*intersection, 1.0), dtype=float
+                )
+                points.add(
+                    (
+                        round(float(camera_point[0]), 9),
+                        round(float(camera_point[1]), 9),
+                    )
+                )
+    return points
+
+
+def _postprocess_elevation_opening_overlays(
+    svg_path: Path,
+    model: ifcopenshell.file,
+    drawing: ifcopenshell.entity_instance,
+) -> None:
+    """Restore voids hidden by Bonsai's late elevation wall-layer fills."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if '<g class="section-opening-overlays' in svg:
+        return
+
+    root = re.search(r"<svg\b(?P<attrs>[^>]*)>", svg)
+    if root is None:
+        return
+    attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', root["attrs"]))
+    try:
+        view_box = tuple(
+            float(value)
+            for value in re.split(r"[,\s]+", attributes["viewBox"].strip())
+        )
+    except (KeyError, ValueError):
+        return
+    if len(view_box) != 4:
+        return
+    scale_match = re.fullmatch(
+        r"\s*1\s*[:/]\s*(?P<denominator>[0-9]+(?:\.[0-9]+)?)\s*",
+        attributes.get("data-scale", ""),
+    )
+    if scale_match is None:
+        return
+    scale_denominator = float(scale_match["denominator"])
+    if scale_denominator <= 0:
+        return
+    svg_units_per_metre = 1000.0 / scale_denominator
+    view_x, view_y, view_width, view_height = view_box
+    view_center_x = view_x + view_width / 2
+    view_center_y = view_y + view_height / 2
+
+    camera_to_world = ifcopenshell.util.placement.get_local_placement(
+        drawing.ObjectPlacement
+    )
+    world_to_camera = np.linalg.inv(camera_to_world)
+    plane_origin = camera_to_world[:3, 3]
+    plane_normal = camera_to_world[:3, 2]
+    geometry_settings = ifcopenshell.geom.settings()
+    geometry_settings.set(geometry_settings.USE_WORLD_COORDS, True)
+    wall_ranges: dict[int, tuple[float, float] | None] = {}
+    polygons: list[tuple[str, str, list[tuple[float, float]]]] = []
+    tolerance = 1e-7
+
+    for opening in model.by_type("IfcOpeningElement"):
+        void_relationships = list(opening.VoidsElements or ())
+        if not void_relationships:
+            continue
+        wall = void_relationships[0].RelatingBuildingElement
+        if not wall.is_a("IfcWall"):
+            continue
+        wall_range = wall_ranges.get(wall.id())
+        if wall.id() not in wall_ranges:
+            try:
+                wall_shape = ifcopenshell.geom.create_shape(
+                    geometry_settings, wall
+                )
+                wall_vertices = np.array(
+                    wall_shape.geometry.verts, dtype=float
+                ).reshape((-1, 3))
+                wall_distances = (
+                    (wall_vertices - plane_origin) @ plane_normal
+                )
+                wall_range = (
+                    float(np.min(wall_distances)),
+                    float(np.max(wall_distances)),
+                )
+            except (RuntimeError, ValueError):
+                wall_range = None
+            wall_ranges[wall.id()] = wall_range
+        if (
+            wall_range is None
+            or wall_range[0] >= -tolerance
+            or wall_range[1] <= tolerance
+        ):
+            # The wall is only projected, or the plane merely touches its face.
+            continue
+        try:
+            opening_shape = ifcopenshell.geom.create_shape(
+                geometry_settings, opening
+            )
+        except (RuntimeError, ValueError):
+            continue
+        section_points = _section_shape_points(
+            opening_shape,
+            plane_origin=plane_origin,
+            plane_normal=plane_normal,
+            world_to_camera=world_to_camera,
+        )
+        hull = _convex_hull_2d(section_points)
+        if not hull:
+            continue
+        svg_hull = [
+            (
+                view_center_x + x * svg_units_per_metre,
+                view_center_y - y * svg_units_per_metre,
+            )
+            for x, y in hull
+        ]
+        if (
+            max(x for x, _ in svg_hull) < view_x
+            or min(x for x, _ in svg_hull) > view_x + view_width
+            or max(y for _, y in svg_hull) < view_y
+            or min(y for _, y in svg_hull) > view_y + view_height
+        ):
+            continue
+        polygons.append((opening.GlobalId, opening.Name or "Opening", svg_hull))
+
+    closing_svg = svg.rfind("</svg>")
+    if not polygons or closing_svg < 0:
+        return
+    polygon_svg = "\n".join(
+        (
+            f'    <polygon class="section-opening-mask" '
+            f'ifc:guid="{global_id}" ifc:name="{escape(name, quote=True)}" points="'
+            + " ".join(f"{x:.6g},{y:.6g}" for x, y in points)
+            + '"/>'
+        )
+        for global_id, name, points in polygons
+    )
+    overlays = (
+        '<g class="section-opening-overlays target-view-ELEVATIONVIEW">\n'
+        f"{polygon_svg}\n"
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_projected_wood_fills(svg_path: Path) -> None:
     """Add a filled hull behind open projected-wood edge paths in plans."""
     svg = svg_path.read_text(encoding="utf-8")
@@ -640,35 +857,6 @@ def _postprocess_projected_wood_fills(svg_path: Path) -> None:
     )
     coordinate = re.compile(rf'({_SVG_NUMBER})[,\s]+({_SVG_NUMBER})')
 
-    def convex_hull(
-        points: set[tuple[float, float]],
-    ) -> list[tuple[float, float]]:
-        ordered = sorted(points)
-        if len(ordered) < 3:
-            return []
-
-        def cross(
-            origin: tuple[float, float],
-            first: tuple[float, float],
-            second: tuple[float, float],
-        ) -> float:
-            return (
-                (first[0] - origin[0]) * (second[1] - origin[1])
-                - (first[1] - origin[1]) * (second[0] - origin[0])
-            )
-
-        lower: list[tuple[float, float]] = []
-        for point in ordered:
-            while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
-                lower.pop()
-            lower.append(point)
-        upper: list[tuple[float, float]] = []
-        for point in reversed(ordered):
-            while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
-                upper.pop()
-            upper.append(point)
-        return lower[:-1] + upper[:-1]
-
     def add_fill(match: re.Match[str]) -> str:
         attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
         classes = set(attributes.get("class", "").split())
@@ -682,7 +870,7 @@ def _postprocess_projected_wood_fills(svg_path: Path) -> None:
                 (float(x), float(y))
                 for x, y in coordinate.findall(path_data)
             )
-        hull = convex_hull(points)
+        hull = _convex_hull_2d(points)
         if not hull:
             return match.group(0)
         point_text = " ".join(f"{x:g},{y:g}" for x, y in hull)
@@ -1529,6 +1717,11 @@ def _render_existing_drawing(
             mask_global_ids=_overhead_mask_global_ids(model, cut_z),
         )
     else:
+        _postprocess_elevation_opening_overlays(
+            absolute_output,
+            model,
+            drawing,
+        )
         _postprocess_miako_reinforcement_overlays(absolute_output)
         _postprocess_vapour_barrier_overlays(absolute_output)
 

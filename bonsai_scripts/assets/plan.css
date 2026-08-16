@@ -86,25 +86,25 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: white !important;
 }
 
-/* Distinguish the concrete, ceramic, and steel in MIAKO sections. */
-.target-view-ELEVATIONVIEW .material-MIAKOceramicconcrete.cut,
-.target-view-ELEVATIONVIEW .material-MIAKOconcrete.cut,
-.target-view-ELEVATIONVIEW .material-Concretetopping.cut {
+/* Distinguish the concrete, ceramic, and steel in every MIAKO section. */
+.material-MIAKOceramicconcrete.cut,
+.material-MIAKOconcrete.cut,
+.material-Concretetopping.cut {
     fill: #c5c7c8 !important;
     stroke-width: 0.04 !important;
 }
 
-.target-view-ELEVATIONVIEW .material-MIAKObeamceramic.cut {
+.material-MIAKObeamceramic.cut {
     fill: #d98245 !important;
     stroke-width: 0.04 !important;
 }
 
-.target-view-ELEVATIONVIEW .material-MIAKOblockceramic.cut {
+.material-MIAKOblockceramic.cut {
     fill: #e3b996 !important;
     stroke-width: 0.04 !important;
 }
 
-.target-view-ELEVATIONVIEW .material-MIAKOreinforcement.cut {
+.material-MIAKOreinforcement.cut {
     fill: #333 !important;
     stroke: #333 !important;
     stroke-width: 0.025 !important;
@@ -168,6 +168,15 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: yellow !important;
     stroke: black;
     stroke-width: 0.05 !important;
+}
+
+/* Restore voids which Bonsai's elevation material-layer fill paints over. */
+.section-opening-mask {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.05 !important;
+    stroke-linecap: square !important;
+    stroke-linejoin: miter !important;
 }
 
 /* Bonsai generates batting marker paths with an inline 0.18 stroke. */

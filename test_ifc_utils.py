@@ -34,6 +34,7 @@ from ifc_utils import (
     _close_door_bodies,
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
+    _postprocess_elevation_opening_overlays,
     _postprocess_projected_wood_fills,
     _postprocess_vapour_barrier_overlays,
     generate_plan,
@@ -4085,6 +4086,98 @@ class HouseTests(unittest.TestCase):
                 svg.index(reinforcement_overlay),
                 svg.index(dimension_overlay),
             )
+
+    def test_restores_openings_in_walls_cut_by_an_elevation(self) -> None:
+        house = House("Section openings")
+        storey = house.storey("Ground", elevation=0)
+        wall = storey.wall(
+            (0, 0),
+            (4, 0),
+            thickness=0.2,
+            height=3,
+        )
+        opening = wall.add_opening(
+            at=1,
+            width=1,
+            height=2,
+            show_overhead=False,
+            name='Hall & "door" opening',
+        )
+        section = house.add_drawing(
+            "Section",
+            x=2,
+            y=0,
+            z=1.5,
+            radius=3,
+            view="elevation",
+            direction=(0, 1, 0),
+        )
+
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "section.svg"
+            svg_path.write_text(
+                '<svg data-scale="1:100" viewBox="0 0 60 60" '
+                'xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>',
+                encoding="utf-8",
+            )
+
+            _postprocess_elevation_opening_overlays(
+                svg_path,
+                house.model,
+                section.element,
+            )
+            _postprocess_elevation_opening_overlays(
+                svg_path,
+                house.model,
+                section.element,
+            )
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('class="section-opening-mask"'), 1)
+            self.assertIn(f'ifc:guid="{opening.GlobalId}"', svg)
+            self.assertIn('ifc:name="Hall &amp; &quot;door&quot; opening"', svg)
+            self.assertIn('points="20,45 30,45 30,25 20,25"', svg)
+
+    def test_does_not_mask_openings_in_projected_walls(self) -> None:
+        house = House("Projected openings")
+        storey = house.storey("Ground", elevation=0)
+        wall = storey.wall(
+            (0, 0),
+            (4, 0),
+            thickness=0.2,
+            height=3,
+        )
+        wall.add_opening(
+            at=1,
+            width=1,
+            height=2,
+            show_overhead=False,
+        )
+        elevation = house.add_drawing(
+            "Elevation",
+            x=2,
+            y=-0.5,
+            z=1.5,
+            radius=3,
+            view="elevation",
+            direction=(0, 1, 0),
+        )
+
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "elevation.svg"
+            svg_path.write_text(
+                '<svg data-scale="1:100" viewBox="0 0 60 60"></svg>',
+                encoding="utf-8",
+            )
+
+            _postprocess_elevation_opening_overlays(
+                svg_path,
+                house.model,
+                elevation.element,
+            )
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertNotIn("section-opening-overlays", svg)
 
     def test_layers_cut_vapour_barriers_above_insulation_edges(self) -> None:
         with TemporaryDirectory() as directory:

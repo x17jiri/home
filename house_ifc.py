@@ -477,12 +477,12 @@ ceiling1 = upper.miako_slab(
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
 		"narrow", "beam",
 		"narrow", "beam",
-		"narrow",
+		"narrow", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide",
 		],
 )
 ceiling2 = upper.miako_slab(
@@ -502,12 +502,12 @@ ceiling2 = upper.miako_slab(
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
 		"narrow", "beam",
 		"narrow", "beam",
-		"narrow",
+		"narrow", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide",
 		],
 )
 ceiling3 = upper.miako_slab(
@@ -660,18 +660,18 @@ wall_pracovna = upper.wall(
 	end=(0.25+3+0.25, 2.7),
 	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS)
 wall_pracovna.add_door(
-	at=2.2,
-	opening_width=1, width=0.9,
+	at=0.05,
+	opening_width=0.9, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
-	operation="SINGLE_SWING_RIGHT")
+	operation="SLIDING_TO_RIGHT")
 upper.furniture(
     "zachod nahore",
     kind="USERDEFINED",
-    size=(1.2, 1, 2.1),
+    size=(1.2, 0.9, 2.1),
     color="#ffff2B",
-    center=(3.5+0.6, 0.25+2.35-0.5),
+    center=(3.5+0.6, 0.25+2.35-0.45),
 	start_height=UPPER_FLOOR_THICKNESS,
 )
 
@@ -750,12 +750,13 @@ wall_dormer.add_window(
 	width=1.5, sill_height=1.25, height=2.25)
 # Dvere obyvak
 wall_3.add_door(
-	at=4.43+0.07+0.125,
+	#at=4.43+0.07+0.25,
+	at=3.25,
 	opening_width=1, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
-	operation="SINGLE_SWING_RIGHT")
+	operation="SINGLE_SWING_LEFT")
 # Dvere pokojik nahore
 wall_2.add_door(
 	at=2.75,
@@ -1394,7 +1395,22 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
 
+	drawing1.add_dimension(start=(3.5+4.5, 5.75), end=(3.5+4.5, 7.75), offset=1)
+	drawing1.add_dimension(start=(3.5+4.5, 2.7), end=(3.5+4.5, 4.75), offset=1)
+	drawing1.add_dimension(start=(3.5+4.5, 4.75), end=(3.5+4.5, 5.75), offset=1.5)
+
 	drawing1.render("upper.svg", png=True, png_dpi=600)
+
+if "ceiling" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Drawing 2", x=6, y=4, z=0.25+2.75+0.1, radius=8, storeys=[upper]
+	)
+
+	drawing1.add_stair_annotation(stairs1)
+	drawing1.add_stair_annotation(stairs2)
+	drawing1.add_chimney_annotation(chimney)
+
+	drawing1.render("ceiling.svg", png=True, png_dpi=600)
 
 # Drawing - cut1
 if "cut1" in sys.argv:
@@ -1440,3 +1456,18 @@ if "cut3" in sys.argv:
 		doors_closed=True,
 	)
 	drawing1.render("cut3.svg", png=True, png_dpi=600)
+
+# Drawing - wall3
+if "wall3" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Wall3",
+		x=3.5+4.5+0.1,
+		y=4,
+		z=3.5,
+		radius=8,
+		view="elevation",
+		direction=(-1, 0, 0),
+		storeys=None,
+		doors_closed=True,
+	)
+	drawing1.render("wall3.svg", png=True, png_dpi=600)
