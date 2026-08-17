@@ -527,7 +527,7 @@ ceiling3 = upper.miako_slab(
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
-#		"beam",
+		"beam",
 		],
 )
 
@@ -655,17 +655,18 @@ wall_4 = upper.wall(
 wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
 wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
 
-wall_pracovna = upper.wall(
-	start=(0.25+3+0.25+4.5, 2.7),
-	end=(0.25+3+0.25, 2.7),
+wall_zachod_nahore = upper.wall(
+	start=(0.25+3+0.25, 2.75),
+	end=(0.25+3+0.25+4.5, 2.75),
 	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS)
-wall_pracovna.add_door(
-	at=0.05,
-	opening_width=0.9, width=0.9,
+wall_zachod_nahore.add_door(
+	at=3.5,
+	opening_width=0.8, width=0.7,
 	height=2.25,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
-	operation="SLIDING_TO_RIGHT")
+	operation="SINGLE_SWING_RIGHT",
+	reverse_swing=True)
 upper.furniture(
     "zachod nahore",
     kind="USERDEFINED",
@@ -759,14 +760,7 @@ wall_3.add_door(
 	operation="SINGLE_SWING_LEFT")
 # Dvere pokojik nahore
 wall_2.add_door(
-	at=2.75,
-	opening_width=1, width=0.9,
-	height=2.25,
-	clear_height=door_clear_height,
-	sill_height=UPPER_FLOOR_THICKNESS,
-	operation="SINGLE_SWING_RIGHT")
-wall_2.add_door(
-	at=4.25,
+	at=3,
 	opening_width=1, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
@@ -774,13 +768,8 @@ wall_2.add_door(
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik nahore
 wall_1.add_window(
-	at=2.75,
-	width=1,
-	height=2.25,
-	sill_height=1, partition="SINGLE_PANEL",)
-wall_1.add_window(
-	at=4.25,
-	width=1,
+	at=3.25,
+	width=1.5,
 	height=2.25,
 	sill_height=1, partition="SINGLE_PANEL",)
 
@@ -1399,6 +1388,10 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(3.5+4.5, 2.7), end=(3.5+4.5, 4.75), offset=1)
 	drawing1.add_dimension(start=(3.5+4.5, 4.75), end=(3.5+4.5, 5.75), offset=1.5)
 
+	drawing1.add_dimension(start=(3.5, 2.85), end=(3.5, 7.75), offset=1.3)
+
+	drawing1.add_dimension(start=(3.5+4.5+0.5, 4.23), end=(3.5+4.5+0.5, 3.2), offset=0)
+
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 
 if "ceiling" in sys.argv:
@@ -1456,6 +1449,21 @@ if "cut3" in sys.argv:
 		doors_closed=True,
 	)
 	drawing1.render("cut3.svg", png=True, png_dpi=600)
+
+# Drawing - wall2
+if "wall2" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Wall2",
+		x=0.25+3+0.1,
+		y=4,
+		z=3.5,
+		radius=8,
+		view="elevation",
+		direction=(-1, 0, 0),
+		storeys=None,
+		doors_closed=True,
+	)
+	drawing1.render("wall2.svg", png=True, png_dpi=600)
 
 # Drawing - wall3
 if "wall3" in sys.argv:
