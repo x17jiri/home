@@ -656,8 +656,8 @@ wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
 wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
 
 wall_zachod_nahore = upper.wall(
-	start=(0.25+3+0.25, 2.75),
-	end=(0.25+3+0.25+4.5, 2.75),
+	start=(0.25+3+0.25, 2.7),
+	end=(0.25+3+0.25+4.5, 2.7),
 	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS)
 wall_zachod_nahore.add_door(
 	at=3.5,
@@ -667,13 +667,10 @@ wall_zachod_nahore.add_door(
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True)
-upper.furniture(
-    "zachod nahore",
-    kind="USERDEFINED",
-    size=(1.2, 0.9, 2.1),
-    color="#ffff2B",
-    center=(3.5+0.6, 0.25+2.35-0.45),
-	start_height=UPPER_FLOOR_THICKNESS,
+upper.wall(
+	start=(3.5+1.2, 2.77),
+	end=(3.5+1.2, 0.25),
+	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS
 )
 
 upper.connect_wall(wall_1, wall_front)
@@ -1384,11 +1381,10 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(0, 0.5), end=(12, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(11.5, 0), end=(11.5, 8), offset=-1.5)
 
-	drawing1.add_dimension(start=(3.5+4.5, 5.75), end=(3.5+4.5, 7.75), offset=1)
-	drawing1.add_dimension(start=(3.5+4.5, 2.7), end=(3.5+4.5, 4.75), offset=1)
-	drawing1.add_dimension(start=(3.5+4.5, 4.75), end=(3.5+4.5, 5.75), offset=1.5)
+	drawing1.add_dimension(start=(3.5+4.5, 4.25), end=(3.5+4.5, 7.75), offset=1)
+	drawing1.add_dimension(start=(3.5+4.5, 3.25), end=(3.5+4.5, 4.25), offset=1)
 
-	drawing1.add_dimension(start=(3.5, 2.85), end=(3.5, 7.75), offset=1.3)
+	drawing1.add_dimension(start=(3.5+4.5, 2.8), end=(3.5+4.5, 7.75), offset=2)
 
 	drawing1.add_dimension(start=(3.5+4.5+0.5, 4.23), end=(3.5+4.5+0.5, 3.2), offset=0)
 
