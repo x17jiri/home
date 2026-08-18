@@ -1,4 +1,19 @@
 
+# Strecha:
+#   - nad krokve:
+#      - 8cm drevovlakno: https://www.dek.cz/produkty/detail/3010504176-pavatex-isolair-eco-80mm-610x1880
+#      - hydroizolace: https://www.nonstopstavebniny.cz/difuzni-folie-reflexni-membrana-sunflex-contact-pro-75m2/
+#      - kontra late
+#      - late
+#      - betonova taska
+# 	- mezi krokve:
+#      - 20 cm vata
+#      - Isover UNI: https://www.dek.cz/produkty/detail/1435541180-isover-uni-200mm-1-44m2-bal
+#   - pod krokve:
+#      - Chytrá parozábrana Isover Vario
+#      - 50mm kamenna vata
+#      - akusticky SDK
+
 # Kamna:
 #	ROMOTOP LUGO N04 AKUM krbová kamna 3-7,8kW, akumulační, pískovec
 #	https://www.kotelrychle.cz/romotop-lugo-n04-akum-krbova-kamna-3-7-8kw--akumulacni--piskovec/
@@ -12,11 +27,10 @@ from ifc_utils import *
 
 RAFTER_Z_OFFSET = -0.05
 RAFTER_SIZE = (0.06, 0.20)
-THERMAL_INSULATION_100_THICKNESS = 0.10
 VAPOUR_BARRIER_THICKNESS = 0.001
 THERMAL_INSULATION_50_THICKNESS = 0.05
-GYPSUM_PLASTERBOARD_THICKNESS = 0.025
-SHEATHING_THICKNESS = 0.025
+GYPSUM_PLASTERBOARD_THICKNESS = 0.03
+WOOD_FIBERBOARD_THICKNESS = 0.1
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.05, 0.04)
@@ -25,11 +39,8 @@ ROOF_TILE_THICKNESS = 0.03
 GROUND_FLOOR_THICKNESS = 0.22
 UPPER_FLOOR_THICKNESS = 0.11
 
-THERMAL_INSULATION_100_BOTTOM = (
-	RAFTER_Z_OFFSET - THERMAL_INSULATION_100_THICKNESS
-)
 VAPOUR_BARRIER_BOTTOM = (
-	THERMAL_INSULATION_100_BOTTOM - VAPOUR_BARRIER_THICKNESS
+	RAFTER_Z_OFFSET - VAPOUR_BARRIER_THICKNESS
 )
 THERMAL_INSULATION_50_BOTTOM = (
 	VAPOUR_BARRIER_BOTTOM - THERMAL_INSULATION_50_THICKNESS
@@ -584,6 +595,14 @@ upper_floor_layers = (
 
 UNDER_HOLE = 2.80
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
+COLLAR_TIE_SIZE = (0.06, 0.16)
+COLLAR_TIE_EXTENSION = 1.0
+COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
+# The collar-tie tops meet the underside of the two central purlins and the
+# wall below them.  The horizontal vapour barrier is derived from the tie
+# underside so the two cannot drift apart when the framing changes.
+COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + 0.5
+COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
 # upper floor
 wall_cuts_1_4 = [
 	(
@@ -834,16 +853,17 @@ flat_ceiling_roof = roof.plane(
 # ordinary IFC aggregation.  These intentionally artificial storeys provide
 # one portable visibility collection for each roof layer in shared IFC files.
 roof_layer_storeys = {
-	"Thermal insulation 100 mm": house.storey(
-		"Roof - -1: 100 mm thermal insulation", elevation=upper.elevation),
 	"Vapour barrier": house.storey(
-		"Roof - -2: Vapour barrier", elevation=upper.elevation),
+		"Roof - -1: Vapour barrier", elevation=upper.elevation),
 	"Thermal insulation 50 mm": house.storey(
-		"Roof - -3: 50 mm thermal insulation", elevation=upper.elevation),
+		"Roof - -2: 50 mm thermal insulation", elevation=upper.elevation),
 	"Gypsum plasterboard": house.storey(
-		"Roof - -4: Gypsum plasterboard", elevation=upper.elevation),
+		"Roof - -3: Gypsum plasterboard", elevation=upper.elevation),
 	"Rafters": house.storey("Roof - 0: Rafters", elevation=upper.elevation),
-	"Roof sheathing": house.storey("Roof - +1: Sheathing", elevation=upper.elevation),
+	"Collar ties": house.storey(
+		"Roof - 0a: Collar ties", elevation=upper.elevation),
+	"Wood fiberboard": house.storey(
+		"Roof - +1: 80 mm wood fiberboard", elevation=upper.elevation),
 	"Roofing underlay": house.storey("Roof - +2: Underlay", elevation=upper.elevation),
 	"Counter-battens": house.storey("Roof - +3: Counter-battens", elevation=upper.elevation),
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
@@ -858,10 +878,6 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 # readable storey-relative bottom/top heights instead of adding more roof
 # planes or special geometry types.
 SLOPED_INNER_LAYER_LAYOUT = {
-	"Thermal insulation 100 mm": (
-		THERMAL_INSULATION_100_BOTTOM,
-		THERMAL_INSULATION_100_THICKNESS,
-	),
 	"Vapour barrier": (VAPOUR_BARRIER_BOTTOM, VAPOUR_BARRIER_THICKNESS),
 	"Thermal insulation 50 mm": (
 		THERMAL_INSULATION_50_BOTTOM,
@@ -874,19 +890,15 @@ SLOPED_INNER_LAYER_LAYOUT = {
 }
 FLAT_CEILING_LAYER_HEIGHTS = {
 	# Values are (bottom, top), measured from the upper-storey floor.
-	"Thermal insulation 100 mm": (
-		UNDER_HOLE + 0.3,
-		UNDER_HOLE + 0.4,
-	),
 	"Vapour barrier": (
-		UNDER_HOLE + 0.3 - VAPOUR_BARRIER_THICKNESS,
-		UNDER_HOLE + 0.3,
+		COLLAR_TIE_BOTTOM_HEIGHT - VAPOUR_BARRIER_THICKNESS,
+		COLLAR_TIE_BOTTOM_HEIGHT,
 	),
 	"Thermal insulation 50 mm": (
-		UNDER_HOLE + 0.3
+		COLLAR_TIE_BOTTOM_HEIGHT
 		- VAPOUR_BARRIER_THICKNESS
 		- THERMAL_INSULATION_50_THICKNESS,
-		UNDER_HOLE + 0.3 - VAPOUR_BARRIER_THICKNESS,
+		COLLAR_TIE_BOTTOM_HEIGHT - VAPOUR_BARRIER_THICKNESS,
 	),
 	"Gypsum plasterboard": (
 		UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS,
@@ -900,28 +912,28 @@ FLAT_CEILING_INNER_LAYER_LAYOUT = {
 	)
 	for layer_name, (bottom, top) in FLAT_CEILING_LAYER_HEIGHTS.items()
 }
-SHEATHING_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
-UNDERLAY_BOTTOM = SHEATHING_BOTTOM + SHEATHING_THICKNESS
+WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
+UNDERLAY_BOTTOM = WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 
 rafters = [
-	0.03, 0.65, 0.65, 0.65,
-	0.89, ############################################
+	0.09, 0.64, 0.64, 0.64,
+	0.8, ############################################
 
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
+	0.06, 0.58,
+	0.06, 0.58,
+	0.06, 0.58,
+	0.06, 0.58,
+	0.06, 0.78, ###
+	0.06, 0.58,
+	0.06, 0.58,
+	0.06, 0.58,
 
 	0.06, 0.9,
-	0.65, 0.65, 0.65,
-	0.49 #############################################
+	0.64, 0.64, 0.64,
+	0.40 #############################################
 	]
 skip_street = [5, 7, 9, 11, 12, 14, 16, 18, 20]
 skip_garden = [6, 8, 10, 13, 15, 17, 19]
@@ -979,20 +991,6 @@ def add_continuous_roof_layers(
 		return connections
 
 	if include_inner:
-		insulation_100_bottom, insulation_100_thickness = inner_layout[
-			"Thermal insulation 100 mm"
-		]
-		insulation_100 = plane.layer(
-			f"{name} 100 mm thermal insulation",
-			outline=outline,
-			z_offset=insulation_100_bottom,
-			thickness=insulation_100_thickness,
-			material="Thermal insulation",
-			color="#E8D36D",
-			extra_cuts=inner_cuts,
-			connections=connections_for("Thermal insulation 100 mm"),
-		)
-		roof_layer_storeys["Thermal insulation 100 mm"].add(insulation_100)
 		vapour_barrier_bottom, vapour_barrier_thickness = inner_layout[
 			"Vapour barrier"
 		]
@@ -1035,15 +1033,15 @@ def add_continuous_roof_layers(
 		)
 		roof_layer_storeys["Gypsum plasterboard"].add(gypsum_plasterboard)
 	if include_outer:
-		sheathing = plane.layer(
-			f"{name} roof sheathing",
+		fiberboard = plane.layer(
+			f"{name} 80 mm wood fiberboard",
 			outline=outline,
-			z_offset=SHEATHING_BOTTOM,
-			thickness=SHEATHING_THICKNESS,
-			material="Wood",
-			color="#D1A46F",
+			z_offset=WOOD_FIBERBOARD_BOTTOM,
+			thickness=WOOD_FIBERBOARD_THICKNESS,
+			material="Wood fiberboard",
+			color="#C9B56D",
 		)
-		roof_layer_storeys["Roof sheathing"].add(sheathing)
+		roof_layer_storeys["Wood fiberboard"].add(fiberboard)
 		underlay = plane.layer(
 			f"{name} roofing underlay",
 			outline=outline,
@@ -1102,7 +1100,7 @@ def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 
 
 # The outer layers deliberately overshoot in local Y so the roof-plane cuts
-# trim them at the ridge and eaves.  The four inner layers instead terminate
+# trim them at the ridge and eaves.  The three inner layers instead terminate
 # at equal-offset mitres against the flat ceiling plane.
 roof_y_min = -1.5
 roof_y_max = 7
@@ -1201,6 +1199,31 @@ add_tile_battens(
 for i, rafter_x in enumerate(rafter_positions):
 	print("rafter_x = ", rafter_x)
 	if i not in skip_street:
+		for side, x_offset in (
+			("left", -COLLAR_TIE_X_OFFSET),
+			("right", COLLAR_TIE_X_OFFSET),
+		):
+			collar_tie = upper.beam(
+				f"Collar tie {i + 1} {side}",
+				start=(
+					rafter_x + x_offset,
+					STREET_ROOF_JOINT_Y - COLLAR_TIE_EXTENSION,
+					UPPER_FLOOR_START
+					+ COLLAR_TIE_BOTTOM_HEIGHT
+					+ COLLAR_TIE_SIZE[1] / 2,
+				),
+				end=(
+					rafter_x + x_offset,
+					GARDEN_ROOF_JOINT_Y + COLLAR_TIE_EXTENSION,
+					UPPER_FLOOR_START
+					+ COLLAR_TIE_BOTTOM_HEIGHT
+					+ COLLAR_TIE_SIZE[1] / 2,
+				),
+				size=COLLAR_TIE_SIZE,
+				material="Wood",
+				kind="BEAM",
+			)
+			roof_layer_storeys["Collar ties"].add(collar_tie)
 		rafter = street_roof.beam(
 			"Rafter 1",
 			start=(rafter_x, -2),

@@ -75,6 +75,10 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: #f4d35e !important;
 }
 
+.material-Woodfiberboard {
+    fill: #c9b56d !important;
+}
+
 /* Bonsai emits projected plan beams as separate open edge paths. */
 .target-view-PLANVIEW .projected-wood-fill {
     fill: #f4d35e !important;
