@@ -1,7 +1,7 @@
 
 # Strecha:
 #   - nad krokve:
-#      - 8cm drevovlakno: https://www.dek.cz/produkty/detail/3010504176-pavatex-isolair-eco-80mm-610x1880
+#      - 10cm drevovlakno: https://www.dek.cz/produkty/detail/3010504186-pavatex-isolair-multi-100mm-610x1880-pd
 #      - hydroizolace: https://www.nonstopstavebniny.cz/difuzni-folie-reflexni-membrana-sunflex-contact-pro-75m2/
 #      - kontra late
 #      - late
@@ -346,7 +346,7 @@ ground.furniture(
 )
 
 # Chimney
-CHIMNEY_DIST=0.5
+CHIMNEY_DIST=0.875-0.4
 chimney = ground.chimney(
     center=(0.25+3+0.25+4.5+0.25+CHIMNEY_DIST+0.2, 4.43),
     size=0.4,
@@ -674,9 +674,10 @@ wall_4 = upper.wall(
 wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
 wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
 
+#wall_2.add_opening(at=1.55, width=1, height=2.25)
 wall_zachod_nahore = upper.wall(
-	start=(0.25+3+0.25, 2.7),
-	end=(0.25+3+0.25+4.5, 2.7),
+	start=(0.25+3+0.25, 2.55),
+	end=(0.25+3+0.25+4.5, 2.55),
 	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS)
 wall_zachod_nahore.add_door(
 	at=3.5,
@@ -687,7 +688,7 @@ wall_zachod_nahore.add_door(
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True)
 upper.wall(
-	start=(3.5+1.2, 2.77),
+	start=(3.5+1.2, 2.55),
 	end=(3.5+1.2, 0.25),
 	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS
 )
@@ -919,24 +920,24 @@ TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 
 rafters = [
-	0.09, 0.64, 0.64, 0.64,
-	0.8, ############################################
+	0.09, 0.64, 0.64, 0.64, 0.64,
 
+	0.06, 0.84, ###################################
 	0.06, 0.58,
 	0.06, 0.58,
 	0.06, 0.58,
 	0.06, 0.58,
-	0.06, 0.78, ###
 	0.06, 0.58,
 	0.06, 0.58,
-	0.06, 0.58,
+	0.06, 0.83, ###################################
 
-	0.06, 0.9,
-	0.64, 0.64, 0.64,
-	0.40 #############################################
+	0.06, 0.67, ################################### komin
+	0.64,
+	0.48, #############################################
+	0.64, 0.64,
 	]
-skip_street = [5, 7, 9, 11, 12, 14, 16, 18, 20]
-skip_garden = [6, 8, 10, 13, 15, 17, 19]
+skip_street = [5, 7, 9, 11, 13, 14, 16, 18, 20]
+skip_garden = [6, 8, 10, 12, 15, 17, 19]
 rafter_positions = []
 rafter_x = 0.25
 for distance in rafters:
@@ -1407,7 +1408,7 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(3.5+4.5, 4.25), end=(3.5+4.5, 7.75), offset=1)
 	drawing1.add_dimension(start=(3.5+4.5, 3.25), end=(3.5+4.5, 4.25), offset=1)
 
-	drawing1.add_dimension(start=(3.5+4.5, 2.8), end=(3.5+4.5, 7.75), offset=2)
+	drawing1.add_dimension(start=(3.5+4.5, 2.55+0.1), end=(3.5+4.5, 7.75), offset=2)
 
 	drawing1.add_dimension(start=(3.5+4.5+0.5, 4.23), end=(3.5+4.5+0.5, 3.2), offset=0)
 
