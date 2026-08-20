@@ -755,8 +755,10 @@ def _postprocess_elevation_opening_overlays(
     geometry_settings = ifcopenshell.geom.settings()
     geometry_settings.set(geometry_settings.USE_WORLD_COORDS, True)
     wall_ranges: dict[int, tuple[float, float] | None] = {}
+    face_on_walls: dict[int, bool] = {}
     polygons: list[tuple[str, str, list[tuple[float, float]]]] = []
     tolerance = 1e-7
+    face_on_dot_tolerance = sin(radians(5))
 
     for opening in model.by_type("IfcOpeningElement"):
         void_relationships = list(opening.VoidsElements or ())
@@ -764,6 +766,25 @@ def _postprocess_elevation_opening_overlays(
             continue
         wall = void_relationships[0].RelatingBuildingElement
         if not wall.is_a("IfcWall"):
+            continue
+        wall_is_face_on = face_on_walls.get(wall.id())
+        if wall_is_face_on is None:
+            try:
+                wall_placement = ifcopenshell.util.placement.get_local_placement(
+                    wall.ObjectPlacement
+                )
+                wall_axis = wall_placement[:3, 0]
+                wall_axis /= np.linalg.norm(wall_axis)
+                wall_is_face_on = bool(
+                    abs(float(np.dot(wall_axis, plane_normal)))
+                    <= face_on_dot_tolerance
+                )
+            except (AttributeError, TypeError, ValueError):
+                # This overlay is only a drawing repair.  If the wall axis is
+                # unavailable, avoid risking a mask on an edge-on wall.
+                wall_is_face_on = False
+            face_on_walls[wall.id()] = wall_is_face_on
+        if not wall_is_face_on:
             continue
         wall_range = wall_ranges.get(wall.id())
         if wall.id() not in wall_ranges:
@@ -3820,70 +3841,6 @@ class RoofPlane(ifcopenshell.entity_instance):
             relating_object=self,
         )
 
-    def _mitre_cut_to(
-        self,
-        other: RoofPlane,
-        *,
-        z_offset: Number = 0,
-        other_z_offset: Number | None = None,
-    ) -> PlaneCut:
-        """Return the common bisector between two offset roof planes."""
-        z_offset = _number(z_offset, "z_offset")
-        if other_z_offset is None:
-            other_z_offset = z_offset
-        else:
-            other_z_offset = _number(other_z_offset, "other_z_offset")
-        # Always calculate a connection in the same plane order.  Apart from
-        # making persisted cuts deterministic, this gives both connected
-        # solids byte-identical clipping planes instead of mathematically equal
-        # planes with reversed point order.  That lets drawing engines reliably
-        # fuse their cut polygons without leaving a visible internal seam.
-        (first, first_offset), (second, second_offset) = sorted(
-            ((self, z_offset), (other, other_z_offset)),
-            key=lambda item: item[0].GlobalId,
-        )
-        normal = np.array(first.z_axis, dtype=float)
-        other_normal = np.array(second.z_axis, dtype=float)
-        intersection_direction = np.cross(normal, other_normal)
-        direction_length = float(np.linalg.norm(intersection_direction))
-        if direction_length <= 1e-9:
-            raise ValueError("connected roof planes must not be parallel")
-        intersection_direction /= direction_length
-
-        origin = np.array(first.origin, dtype=float)
-        other_origin = np.array(second.origin, dtype=float)
-        first_surface_origin = origin + normal * first_offset
-        second_surface_origin = other_origin + other_normal * second_offset
-        line_anchor = (first_surface_origin + second_surface_origin) / 2
-        intersection_point = np.linalg.solve(
-            np.vstack((normal, other_normal, intersection_direction)),
-            np.array(
-                (
-                    np.dot(normal, first_surface_origin),
-                    np.dot(other_normal, second_surface_origin),
-                    np.dot(intersection_direction, line_anchor),
-                ),
-                dtype=float,
-            ),
-        )
-
-        # Both roof-plane normals point upwards.  Their difference describes
-        # the bisector containing the intersection of the selected layer
-        # faces.  The offsets may differ, which allows a flat ceiling layer to
-        # meet its sloping counterpart at a different height.
-        mitre_normal = normal - other_normal
-        mitre_normal /= np.linalg.norm(mitre_normal)
-        transverse = np.cross(mitre_normal, intersection_direction)
-        transverse /= np.linalg.norm(transverse)
-        return tuple(
-            tuple(float(value) for value in point)
-            for point in (
-                intersection_point,
-                intersection_point + intersection_direction,
-                intersection_point + transverse,
-            )
-        )
-
     def beam(
         self,
         name: str,
@@ -3958,32 +3915,14 @@ class RoofPlane(ifcopenshell.entity_instance):
         color: str | None = None,
         transparency: Number = 0,
         extra_cuts: Sequence[PlaneCut] | None = None,
-        connections: Sequence[
-            RoofPlane | tuple[RoofPlane, Number]
-        ] | None = None,
-        connection_tolerance: Number = 1e-4,
     ) -> RoofLayer:
-        """Create a roof layer, optionally trimming it to connected planes.
-
-        ``connections`` contains other, non-parallel planes belonging to this
-        roof.  A plain plane assumes its connected layer has the same
-        ``z_offset``.  A ``(plane, z_offset)`` pair specifies the connected
-        layer's offset explicitly, allowing layers at different heights to
-        meet.  ``connection_tolerance`` adds a microscopic overlap at those
-        cuts so geometric and drawing engines do not mistake floating-point
-        noise for a gap.
-        """
+        """Create a roof layer, optionally trimmed by additional plane cuts."""
         layer_name = _name(name, "name")
         material_name = _name(material, "material")
         z_offset = _number(z_offset, "z_offset")
         thickness = _number(thickness, "thickness")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
-        connection_tolerance = _number(
-            connection_tolerance, "connection_tolerance"
-        )
-        if connection_tolerance < 0:
-            raise ValueError("connection_tolerance must not be negative")
         if isinstance(outline, (str, bytes)):
             raise TypeError("outline must contain at least three points")
         try:
@@ -4018,72 +3957,9 @@ class RoofPlane(ifcopenshell.entity_instance):
             self.geometry_y_sign * centroid[1],
         )
         normalised_extra_cuts = _plane_cuts(extra_cuts)
-        if connections is None:
-            connection_specs = ()
-        else:
-            if isinstance(connections, (str, bytes)):
-                raise TypeError("connections must be a sequence of roof planes")
-            try:
-                supplied_connections = tuple(connections)
-            except TypeError as error:
-                raise TypeError(
-                    "connections must be a sequence of roof planes"
-                ) from error
-            normalised_specs = []
-            for index, connection in enumerate(supplied_connections, start=1):
-                if isinstance(connection, RoofPlane):
-                    normalised_specs.append((connection, z_offset))
-                    continue
-                if isinstance(connection, (str, bytes)):
-                    raise TypeError(f"connection {index} must be a RoofPlane")
-                try:
-                    connected_plane, connected_z_offset = connection
-                except (TypeError, ValueError) as error:
-                    raise TypeError(
-                        f"connection {index} must be a RoofPlane or "
-                        "(RoofPlane, z_offset) pair"
-                    ) from error
-                normalised_specs.append(
-                    (
-                        connected_plane,
-                        _number(
-                            connected_z_offset,
-                            f"connection {index} z_offset",
-                        ),
-                    )
-                )
-            connection_specs = tuple(normalised_specs)
-        normalised_connections = tuple(
-            connection for connection, _ in connection_specs
-        )
-        connection_z_offsets = tuple(
-            connected_z_offset for _, connected_z_offset in connection_specs
-        )
-        seen_connections = set()
-        for index, connection in enumerate(normalised_connections, start=1):
-            if not isinstance(connection, RoofPlane):
-                raise TypeError(f"connection {index} must be a RoofPlane")
-            if connection.file is not self.file or connection.roof != self.roof:
-                raise ValueError(
-                    f"connection {index} must belong to the same roof"
-                )
-            if connection == self:
-                raise ValueError("a roof plane cannot connect to itself")
-            if connection.GlobalId in seen_connections:
-                raise ValueError("connections must not contain duplicates")
-            seen_connections.add(connection.GlobalId)
-        connection_cuts = tuple(
-            self._mitre_cut_to(
-                connection,
-                z_offset=z_offset,
-                other_z_offset=connected_z_offset,
-            )
-            for connection, connected_z_offset in connection_specs
-        )
         effective_cuts = (
             *self.cuts,
             *normalised_extra_cuts,
-            *connection_cuts,
         )
 
         placement = self.placement.copy()
@@ -4093,14 +3969,6 @@ class RoofPlane(ifcopenshell.entity_instance):
             placement,
             (geometry_centroid[0], geometry_centroid[1], thickness / 2),
         )
-        if connection_cuts and connection_tolerance:
-            for clipping in clippings[-len(connection_cuts) :]:
-                location = np.array(clipping["location"], dtype=float)
-                normal = np.array(clipping["normal"], dtype=float)
-                clipping["location"] = tuple(
-                    float(value)
-                    for value in location + normal * connection_tolerance
-                )
         model = self.file
         element = ifcopenshell.api.root.create_entity(
             model,
@@ -4118,10 +3986,6 @@ class RoofPlane(ifcopenshell.entity_instance):
             placement=placement,
             cuts=effective_cuts,
             extra_cuts=normalised_extra_cuts,
-            connections=normalised_connections,
-            connection_z_offsets=connection_z_offsets,
-            connection_cuts=connection_cuts,
-            connection_tolerance=connection_tolerance,
         )
         self.add(layer)
         ifcopenshell.api.geometry.edit_object_placement(
@@ -4182,12 +4046,6 @@ class RoofPlane(ifcopenshell.entity_instance):
                 "Thickness": thickness,
                 "Cuts": json.dumps(effective_cuts),
                 "ExtraCuts": json.dumps(normalised_extra_cuts),
-                "Connections": json.dumps(
-                    [connection.GlobalId for connection in normalised_connections]
-                ),
-                "ConnectionZOffsets": json.dumps(connection_z_offsets),
-                "ConnectionCuts": json.dumps(connection_cuts),
-                "ConnectionTolerance": connection_tolerance,
             },
         )
         return layer
@@ -4208,10 +4066,6 @@ class RoofLayer(ifcopenshell.entity_instance):
         placement: np.ndarray,
         cuts: tuple[PlaneCut, ...],
         extra_cuts: tuple[PlaneCut, ...],
-        connections: tuple[RoofPlane, ...],
-        connection_z_offsets: tuple[float, ...],
-        connection_cuts: tuple[PlaneCut, ...],
-        connection_tolerance: float,
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "plane", plane)
@@ -4224,10 +4078,6 @@ class RoofLayer(ifcopenshell.entity_instance):
         object.__setattr__(self, "placement", placement)
         object.__setattr__(self, "cuts", cuts)
         object.__setattr__(self, "extra_cuts", extra_cuts)
-        object.__setattr__(self, "connections", connections)
-        object.__setattr__(self, "connection_z_offsets", connection_z_offsets)
-        object.__setattr__(self, "connection_cuts", connection_cuts)
-        object.__setattr__(self, "connection_tolerance", connection_tolerance)
 
     @property
     def element(self) -> ifcopenshell.entity_instance:

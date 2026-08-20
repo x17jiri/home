@@ -1,18 +1,54 @@
 
 # Strecha:
-#   - nad krokve:
-#      - 10cm drevovlakno: https://www.dek.cz/produkty/detail/3010504186-pavatex-isolair-multi-100mm-610x1880-pd
-#      - hydroizolace: https://www.nonstopstavebniny.cz/difuzni-folie-reflexni-membrana-sunflex-contact-pro-75m2/
-#      - kontra late
-#      - late
-#      - betonova taska
-# 	- mezi krokve:
-#      - 20 cm vata
-#      - Isover UNI: https://www.dek.cz/produkty/detail/1435541180-isover-uni-200mm-1-44m2-bal
-#   - pod krokve:
-#      - Chytrá parozábrana Isover Vario
-#      - 50mm kamenna vata
-#      - akusticky SDK
+#    - taska:
+#        - KMB BETA Briliant cihlová
+#        - https://www.dek.cz/produkty/detail/1225121900-km-beta-briliant-t-zakladni-cc-252ks-pal
+#        - sklon od 22 stupnu, od 12 stupnu s opatrenimi
+#    - late 40x60 (40 na vysku)
+#    - kontra late 60x40 (60 na vysku)
+#    - hydroizolace
+#        - Sunflex Contact Pro
+#        - difuzne otevrena, reflexni
+#        - https://www.nonstopstavebniny.cz/difuzni-folie-reflexni-membrana-sunflex-contact-pro-75m2/
+#    - 100 mm drevovlakno
+#        - Pavatex Isolair Eco
+#        - https://www.ceskytesar.cz/variant/drevovlaknite-izolace/pavatex/isolair-eco/1051/25168
+# 	 - mezi krokve:
+#        - 20 cm vata
+#        - Isover UNI: https://www.dek.cz/produkty/detail/1435541180-isover-uni-200mm-1-44m2-bal
+#    - 40 mm kamenna vata
+#        - ISOVER ORSIK
+#        - https://www.dek.cz/produkty/detail/1435491200-isover-orsik-40mm-1200x625mm-9m2-bal
+#        - mezi late 40x30
+#    - Chytra parobrzda
+#        - Isover Vario
+#    - 50mm instalacni mezera s pruznymi zavesy
+#    - akusticky SDK
+
+# Podlaha dole:
+#    - 100 mm EPS 150
+#        - https://www.dek.cz/produkty/detail/1460405120-eps-150-100mm-500x1000-isover-2-5m2-bal
+#    - 50 mm PIR
+#        - https://www.dek.cz/produkty/detail/1421010680-dekpir-floor-022-50mm-1200x600-7-2m2-bal
+#    - 70 mm Cemflow + trubky topeni
+#    - finalni krytina - dlazdice / zamkove PVC
+
+# Podlaha dole chodba/posilovna:
+#    - 150 mm XPS (3x50mm)
+#        - https://www.dek.cz/produkty/detail/1420361060-fibran-xps-etics-gf-i-300kpa-50mm-dek-6m2-bal/28
+#    - 2x25 mm OSB
+#    - 30mm guma
+
+# Podlaha nahore:
+#    - krocejova izolace: ISOVER T-P 30 mm
+#        - https://www.dek.cz/produkty/detail/1435401015-isover-t-p-30mm-1200x600-5-04m2-bal
+#    - 70 mm Cemflow + trubky topeni
+#    - finalni krytina - dlazdice / zamkove PVC
+
+# Fasada:
+#    - 200mm mineralni vata
+#        - Rockwool Frontrock Plus 200 mm
+#        - https://www.dek.cz/produkty/detail/1440402620-frontrock-plus-200mm-600x1000-1-2m2-bal/175
 
 # Kamna:
 #	ROMOTOP LUGO N04 AKUM krbová kamna 3-7,8kW, akumulační, pískovec
@@ -28,25 +64,28 @@ from ifc_utils import *
 RAFTER_Z_OFFSET = -0.05
 RAFTER_SIZE = (0.06, 0.20)
 VAPOUR_BARRIER_THICKNESS = 0.001
-THERMAL_INSULATION_50_THICKNESS = 0.05
+THERMAL_INSULATION_40_THICKNESS = 0.04
+INSTALLATION_SPACE_THICKNESS = 0.05
 GYPSUM_PLASTERBOARD_THICKNESS = 0.03
 WOOD_FIBERBOARD_THICKNESS = 0.1
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.04, 0.06)
-TILE_BATTEN_SIZE = (0.05, 0.04)
+TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
-ROOF_TILE_THICKNESS = 0.03
-GROUND_FLOOR_THICKNESS = 0.22
+ROOF_TILE_THICKNESS = 0.05
+GROUND_FLOOR_THICKNESS = 0.23
 UPPER_FLOOR_THICKNESS = 0.11
 
-VAPOUR_BARRIER_BOTTOM = (
-	RAFTER_Z_OFFSET - VAPOUR_BARRIER_THICKNESS
+THERMAL_INSULATION_40_BOTTOM = (
+	RAFTER_Z_OFFSET - THERMAL_INSULATION_40_THICKNESS
 )
-THERMAL_INSULATION_50_BOTTOM = (
-	VAPOUR_BARRIER_BOTTOM - THERMAL_INSULATION_50_THICKNESS
+VAPOUR_BARRIER_BOTTOM = (
+	THERMAL_INSULATION_40_BOTTOM - VAPOUR_BARRIER_THICKNESS
 )
 GYPSUM_PLASTERBOARD_BOTTOM = (
-	THERMAL_INSULATION_50_BOTTOM - GYPSUM_PLASTERBOARD_THICKNESS
+	VAPOUR_BARRIER_BOTTOM
+	- INSTALLATION_SPACE_THICKNESS
+	- GYPSUM_PLASTERBOARD_THICKNESS
 )
 
 house = House(
@@ -674,11 +713,11 @@ wall_4 = upper.wall(
 wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
 wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
 
-#wall_2.add_opening(at=1.55, width=1, height=2.25)
+wall_2.add_opening(at=1.55, width=1, height=2.25)
 wall_zachod_nahore = upper.wall(
 	start=(0.25+3+0.25, 2.55),
 	end=(0.25+3+0.25+4.5, 2.55),
-	wall_type=dry_wall, height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS)
+	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
 wall_zachod_nahore.add_door(
 	at=3.5,
 	opening_width=0.8, width=0.7,
@@ -854,17 +893,17 @@ flat_ceiling_roof = roof.plane(
 # ordinary IFC aggregation.  These intentionally artificial storeys provide
 # one portable visibility collection for each roof layer in shared IFC files.
 roof_layer_storeys = {
+	"Thermal insulation 40 mm": house.storey(
+		"Roof - -1: 40 mm thermal insulation", elevation=upper.elevation),
 	"Vapour barrier": house.storey(
-		"Roof - -1: Vapour barrier", elevation=upper.elevation),
-	"Thermal insulation 50 mm": house.storey(
-		"Roof - -2: 50 mm thermal insulation", elevation=upper.elevation),
+		"Roof - -2: Vapour barrier", elevation=upper.elevation),
 	"Gypsum plasterboard": house.storey(
 		"Roof - -3: Gypsum plasterboard", elevation=upper.elevation),
 	"Rafters": house.storey("Roof - 0: Rafters", elevation=upper.elevation),
 	"Collar ties": house.storey(
 		"Roof - 0a: Collar ties", elevation=upper.elevation),
 	"Wood fiberboard": house.storey(
-		"Roof - +1: 80 mm wood fiberboard", elevation=upper.elevation),
+		"Roof - +1: Wood fiberboard", elevation=upper.elevation),
 	"Roofing underlay": house.storey("Roof - +2: Underlay", elevation=upper.elevation),
 	"Counter-battens": house.storey("Roof - +3: Counter-battens", elevation=upper.elevation),
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
@@ -879,11 +918,11 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 # readable storey-relative bottom/top heights instead of adding more roof
 # planes or special geometry types.
 SLOPED_INNER_LAYER_LAYOUT = {
-	"Vapour barrier": (VAPOUR_BARRIER_BOTTOM, VAPOUR_BARRIER_THICKNESS),
-	"Thermal insulation 50 mm": (
-		THERMAL_INSULATION_50_BOTTOM,
-		THERMAL_INSULATION_50_THICKNESS,
+	"Thermal insulation 40 mm": (
+		THERMAL_INSULATION_40_BOTTOM,
+		THERMAL_INSULATION_40_THICKNESS,
 	),
+	"Vapour barrier": (VAPOUR_BARRIER_BOTTOM, VAPOUR_BARRIER_THICKNESS),
 	"Gypsum plasterboard": (
 		GYPSUM_PLASTERBOARD_BOTTOM,
 		GYPSUM_PLASTERBOARD_THICKNESS,
@@ -891,16 +930,18 @@ SLOPED_INNER_LAYER_LAYOUT = {
 }
 FLAT_CEILING_LAYER_HEIGHTS = {
 	# Values are (bottom, top), measured from the upper-storey floor.
-	"Vapour barrier": (
-		COLLAR_TIE_BOTTOM_HEIGHT - VAPOUR_BARRIER_THICKNESS,
+	"Thermal insulation 40 mm": (
+		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_40_THICKNESS,
 		COLLAR_TIE_BOTTOM_HEIGHT,
 	),
-	"Thermal insulation 50 mm": (
+	"Vapour barrier": (
 		COLLAR_TIE_BOTTOM_HEIGHT
-		- VAPOUR_BARRIER_THICKNESS
-		- THERMAL_INSULATION_50_THICKNESS,
-		COLLAR_TIE_BOTTOM_HEIGHT - VAPOUR_BARRIER_THICKNESS,
+		- THERMAL_INSULATION_40_THICKNESS
+		- VAPOUR_BARRIER_THICKNESS,
+		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_40_THICKNESS,
 	),
+	# The first 50 mm below the vapour barrier is an empty installation
+	# space.  The horizontal plasterboard retains its lower ceiling height.
 	"Gypsum plasterboard": (
 		UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS,
 		UNDER_HOLE - 0.05,
@@ -966,77 +1007,74 @@ def add_continuous_roof_layers(
 	y_max,
 	*,
 	inner_cuts=(),
-	inner_connections=(),
+	inner_y_limits=None,
 	inner_layout=SLOPED_INNER_LAYER_LAYOUT,
 	include_inner=True,
 	include_outer=True,
 ):
 	"""Add selected inner and outer parts of the roof build-up."""
-	outline = (
+	outer_outline = (
 		(x_min, y_min),
 		(x_max, y_min),
 		(x_max, y_max),
 		(x_min, y_max),
 	)
 
-	def connections_for(layer_name):
-		connections = []
-		for connection in inner_connections:
-			if isinstance(connection, RoofPlane):
-				connections.append(connection)
-				continue
-			connected_plane, connected_layout = connection
-			connections.append(
-				(connected_plane, connected_layout[layer_name][0])
-			)
-		return connections
+	def inner_outline(layer_name):
+		if inner_y_limits is None:
+			layer_y_min, layer_y_max = y_min, y_max
+		else:
+			layer_y_min, layer_y_max = inner_y_limits[layer_name]
+		return (
+			(x_min, layer_y_min),
+			(x_max, layer_y_min),
+			(x_max, layer_y_max),
+			(x_min, layer_y_max),
+		)
 
 	if include_inner:
+		insulation_40_bottom, insulation_40_thickness = inner_layout[
+			"Thermal insulation 40 mm"
+		]
+		insulation_40 = plane.layer(
+			f"{name} 40 mm thermal insulation",
+			outline=inner_outline("Thermal insulation 40 mm"),
+			z_offset=insulation_40_bottom,
+			thickness=insulation_40_thickness,
+			material="Thermal insulation",
+			color="#E8D36D",
+			extra_cuts=inner_cuts,
+		)
+		roof_layer_storeys["Thermal insulation 40 mm"].add(insulation_40)
 		vapour_barrier_bottom, vapour_barrier_thickness = inner_layout[
 			"Vapour barrier"
 		]
 		vapour_barrier = plane.layer(
 			f"{name} vapour barrier",
-			outline=outline,
+			outline=inner_outline("Vapour barrier"),
 			z_offset=vapour_barrier_bottom,
 			thickness=vapour_barrier_thickness,
 			material="Vapour barrier",
 			color="#4A90E2",
 			transparency=0.35,
 			extra_cuts=inner_cuts,
-			connections=connections_for("Vapour barrier"),
 		)
 		roof_layer_storeys["Vapour barrier"].add(vapour_barrier)
-		insulation_50_bottom, insulation_50_thickness = inner_layout[
-			"Thermal insulation 50 mm"
-		]
-		insulation_50 = plane.layer(
-			f"{name} 50 mm thermal insulation",
-			outline=outline,
-			z_offset=insulation_50_bottom,
-			thickness=insulation_50_thickness,
-			material="Thermal insulation",
-			color="#E8D36D",
-			extra_cuts=inner_cuts,
-			connections=connections_for("Thermal insulation 50 mm"),
-		)
-		roof_layer_storeys["Thermal insulation 50 mm"].add(insulation_50)
 		gypsum_bottom, gypsum_thickness = inner_layout["Gypsum plasterboard"]
 		gypsum_plasterboard = plane.layer(
 			f"{name} gypsum plasterboard",
-			outline=outline,
+			outline=inner_outline("Gypsum plasterboard"),
 			z_offset=gypsum_bottom,
 			thickness=gypsum_thickness,
 			material="Gypsum plasterboard",
 			color="#E8E5DE",
 			extra_cuts=inner_cuts,
-			connections=connections_for("Gypsum plasterboard"),
 		)
 		roof_layer_storeys["Gypsum plasterboard"].add(gypsum_plasterboard)
 	if include_outer:
 		fiberboard = plane.layer(
-			f"{name} 80 mm wood fiberboard",
-			outline=outline,
+			f"{name} wood fiberboard",
+			outline=outer_outline,
 			z_offset=WOOD_FIBERBOARD_BOTTOM,
 			thickness=WOOD_FIBERBOARD_THICKNESS,
 			material="Wood fiberboard",
@@ -1045,7 +1083,7 @@ def add_continuous_roof_layers(
 		roof_layer_storeys["Wood fiberboard"].add(fiberboard)
 		underlay = plane.layer(
 			f"{name} roofing underlay",
-			outline=outline,
+			outline=outer_outline,
 			z_offset=UNDERLAY_BOTTOM,
 			thickness=UNDERLAY_THICKNESS,
 			material="Roofing underlay",
@@ -1054,13 +1092,27 @@ def add_continuous_roof_layers(
 		roof_layer_storeys["Roofing underlay"].add(underlay)
 		tiles = plane.layer(
 			f"{name} roof tiles",
-			outline=outline,
+			outline=outer_outline,
 			z_offset=ROOF_TILE_BOTTOM,
 			thickness=ROOF_TILE_THICKNESS,
 			material="Roof tiles",
 			color="#A64B35",
 		)
 		roof_layer_storeys["Roof tiles"].add(tiles)
+
+
+def independent_inner_layer_boundaries(slope_plane):
+	"""Return matching, unconnected slope/ceiling endpoints for each layer."""
+	boundaries = {}
+	for layer_name, (slope_bottom, _) in SLOPED_INNER_LAYER_LAYOUT.items():
+		flat_bottom = FLAT_CEILING_INNER_LAYER_LAYOUT[layer_name][0]
+		flat_z = flat_ceiling_roof.to_world((0, 0, flat_bottom))[2]
+		slope_origin_z = slope_plane.to_world((0, 0, slope_bottom))[2]
+		slope_y = (flat_z - slope_origin_z) / slope_plane.y_axis[2]
+		world_boundary = slope_plane.to_world((0, slope_y, slope_bottom))
+		flat_y = flat_ceiling_roof.to_local(world_boundary)[1]
+		boundaries[layer_name] = (slope_y, flat_y)
+	return boundaries
 
 
 def local_y_limits_from_cuts(plane, local_z=0):
@@ -1101,10 +1153,40 @@ def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 
 
 # The outer layers deliberately overshoot in local Y so the roof-plane cuts
-# trim them at the ridge and eaves.  The three inner layers instead terminate
-# at equal-offset mitres against the flat ceiling plane.
+# trim them at the ridge and eaves.  Inner sloped and horizontal layers are
+# separate solids whose outlines end where their bottom faces cross.  This is
+# symmetric and avoids cross-plane Boolean mitres in the IFC model.
 roof_y_min = -1.5
 roof_y_max = 7
+street_inner_boundaries = independent_inner_layer_boundaries(street_roof)
+garden_inner_boundaries = independent_inner_layer_boundaries(garden_roof)
+dormer_inner_boundaries = independent_inner_layer_boundaries(dormer_roof)
+
+
+def sloped_inner_y_limits(plane, boundaries, eave_y):
+	return {
+		layer_name: (
+			slope_y,
+			(
+				eave_y
+				- plane.origin[1]
+				- SLOPED_INNER_LAYER_LAYOUT[layer_name][0] * plane.z_axis[1]
+			) / plane.y_axis[1],
+		)
+		for layer_name, (slope_y, _) in boundaries.items()
+	}
+
+
+def flat_inner_y_limits(left_boundaries, right_boundaries):
+	return {
+		layer_name: (
+			left_boundaries[layer_name][1],
+			right_boundaries[layer_name][1],
+		)
+		for layer_name in SLOPED_INNER_LAYER_LAYOUT
+	}
+
+
 for part_name, (x_min, x_max) in zip(
 	("Street left", "Street middle", "Street right"),
 	roof_x_ranges,
@@ -1112,20 +1194,23 @@ for part_name, (x_min, x_max) in zip(
 	add_continuous_roof_layers(
 		street_roof, part_name, x_min, x_max, roof_y_min, roof_y_max,
 		inner_cuts=roof_inner_cuts,
-		inner_connections=((
-			flat_ceiling_roof,
-			FLAT_CEILING_INNER_LAYER_LAYOUT,
-		),),
+		inner_y_limits=sloped_inner_y_limits(
+			street_roof, street_inner_boundaries, 0.25
+		),
 	)
 add_continuous_roof_layers(
 	garden_roof, "Garden left", *roof_x_ranges[0], roof_y_min, roof_y_max,
 	inner_cuts=roof_inner_cuts,
-	inner_connections=((flat_ceiling_roof, FLAT_CEILING_INNER_LAYER_LAYOUT),),
+	inner_y_limits=sloped_inner_y_limits(
+		garden_roof, garden_inner_boundaries, 7.75
+	),
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden right", *roof_x_ranges[2], roof_y_min, roof_y_max,
 	inner_cuts=roof_inner_cuts,
-	inner_connections=((flat_ceiling_roof, FLAT_CEILING_INNER_LAYER_LAYOUT),),
+	inner_y_limits=sloped_inner_y_limits(
+		garden_roof, garden_inner_boundaries, 7.75
+	),
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden above dormer",
@@ -1136,7 +1221,9 @@ add_continuous_roof_layers(
 	dormer_roof, "Dormer", *roof_x_ranges[1], 0,
 	roof_y_max-1, # overshoot a little less for the dormer so our cuts work properly
 	inner_cuts=roof_inner_cuts,
-	inner_connections=((flat_ceiling_roof, FLAT_CEILING_INNER_LAYER_LAYOUT),),
+	inner_y_limits=sloped_inner_y_limits(
+		dormer_roof, dormer_inner_boundaries, 7.75
+	),
 )
 for part_name, (x_min, x_max), garden_side_plane in zip(
 	("Flat ceiling left", "Flat ceiling middle", "Flat ceiling right"),
@@ -1151,9 +1238,13 @@ for part_name, (x_min, x_max), garden_side_plane in zip(
 		0.25 - STREET_ROOF_JOINT_Y,
 		7.75 - STREET_ROOF_JOINT_Y,
 		inner_cuts=roof_inner_cuts,
-		inner_connections=(
-			(street_roof, SLOPED_INNER_LAYER_LAYOUT),
-			(garden_side_plane, SLOPED_INNER_LAYER_LAYOUT),
+		inner_y_limits=flat_inner_y_limits(
+			street_inner_boundaries,
+			(
+				dormer_inner_boundaries
+				if garden_side_plane is dormer_roof
+				else garden_inner_boundaries
+			),
 		),
 		inner_layout=FLAT_CEILING_INNER_LAYER_LAYOUT,
 		include_outer=False,
