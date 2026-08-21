@@ -6,22 +6,22 @@
 #        - sklon od 22 stupnu, od 12 stupnu s opatrenimi
 #    - late 40x60 (40 na vysku)
 #    - kontra late 60x40 (60 na vysku)
-#    - hydroizolace
+#    - pojistna hydroizolace
 #        - Sunflex Contact Pro
 #        - difuzne otevrena, reflexni
 #        - https://www.nonstopstavebniny.cz/difuzni-folie-reflexni-membrana-sunflex-contact-pro-75m2/
-#    - 100 mm drevovlakno
+#    - 80 mm drevovlakno
 #        - Pavatex Isolair Eco
 #        - https://www.ceskytesar.cz/variant/drevovlaknite-izolace/pavatex/isolair-eco/1051/25168
 # 	 - mezi krokve:
 #        - 20 cm vata
 #        - Isover UNI: https://www.dek.cz/produkty/detail/1435541180-isover-uni-200mm-1-44m2-bal
-#    - 40 mm kamenna vata
-#        - ISOVER ORSIK
-#        - https://www.dek.cz/produkty/detail/1435491200-isover-orsik-40mm-1200x625mm-9m2-bal
-#        - mezi late 40x30
-#    - Chytra parobrzda
-#        - Isover Vario
+#        - Rockton Super: https://www.dskstavebniny.cz/rockwool-rockton-super-tl-200-mm-bal-1-83-m2-0-035-p544923/
+#    - 40 mm PIR
+#        - TERMPIR AL
+#        - https://www.nonstopstavebniny.cz/izolacni-pir-deska-termpir-al-40-mm-600-x-1200-mm/
+#    - Parozabrana
+#        - Neni potreba - je soucast PIR
 #    - 50mm instalacni mezera s pruznymi zavesy
 #    - akusticky SDK
 
@@ -67,7 +67,7 @@ VAPOUR_BARRIER_THICKNESS = 0.001
 THERMAL_INSULATION_40_THICKNESS = 0.04
 INSTALLATION_SPACE_THICKNESS = 0.05
 GYPSUM_PLASTERBOARD_THICKNESS = 0.03
-WOOD_FIBERBOARD_THICKNESS = 0.1
+WOOD_FIBERBOARD_THICKNESS = 0.06
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
@@ -642,18 +642,35 @@ COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # underside so the two cannot drift apart when the framing changes.
 COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + 0.5
 COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
+
+STREET_ROOF_JOINT_Y = 4.0-0.8-0.07
+GARDEN_ROOF_JOINT_Y = 4.0+0.8+0.07
+ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24
+STREET_ROOF_PLANE_POINTS = (
+	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12),
+)
+GARDEN_ROOF_PLANE_POINTS = (
+	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(0, 8.0-0.125+0.08, UPPER_FLOOR_START+1.25+0.12),
+)
+DORMER_ROOF_PLANE_POINTS = (
+	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(0, 8.0-0.125+0.08, UPPER_FLOOR_START+2.5+0.12),
+)
+FLAT_CEILING_ROOF_PLANE_POINTS = (
+	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
+	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
+)
+
 # upper floor
 wall_cuts_1_4 = [
-	(
-		(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12),
-		(5, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-	),
-	(
-		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+1.25+0.12),
-		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-	),
+	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
+	offset_plane(*GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
 		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
@@ -662,16 +679,8 @@ wall_cuts_1_4 = [
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
 wall_cuts_2_3 = [
-	(
-		(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12),
-		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-		(5, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-	),
-	(
-		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+2.5+0.12),
-		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24),
-	),
+	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
+	offset_plane(*DORMER_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
 		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
@@ -840,17 +849,9 @@ roof_inner_cuts = [
 	((11.75, 0, 0), (11.75, 10, 0), (11.75, 0, 10)),
 ]
 
-STREET_ROOF_JOINT_Y = 4.0-0.8-0.07
-GARDEN_ROOF_JOINT_Y = 4.0+0.8+0.07
-ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24
-
 street_roof = roof.plane(
     "Street slope",
-    points=(
-		(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z), # origin
-		(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z), # +X direction
-		(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12), # +Y direction
-	),
+	points=STREET_ROOF_PLANE_POINTS,
     cuts=[
 		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
 		((0, -0.4, 0), (10, -0.4, 0), (0, -0.4, 10)),
@@ -858,11 +859,7 @@ street_roof = roof.plane(
 )
 garden_roof = roof.plane(
     "Garden slope",
-    points=(
-		(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # origin
-		(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # +X direction
-		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+1.25+0.12), # +Y direction
-	),
+	points=GARDEN_ROOF_PLANE_POINTS,
     cuts=[
 		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
 		((0, 8.4, 0), (10, 8.4, 0), (0, 8.4, 10)),
@@ -870,11 +867,7 @@ garden_roof = roof.plane(
 )
 dormer_roof = roof.plane(
     "Dormer slope",
-    points=(
-		(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # origin
-		(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z), # +X direction
-		(0, 8.0-0.125+0.08, UPPER_FLOOR_START+2.5+0.12), # +Y direction
-	),
+	points=DORMER_ROOF_PLANE_POINTS,
     cuts=[
 		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
 		((0, 8.4, 0), (10, 8.4, 0), (0, 8.4, 10)),
@@ -882,11 +875,7 @@ dormer_roof = roof.plane(
 )
 flat_ceiling_roof = roof.plane(
 	"Flat ceiling",
-	points=(
-		(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
-		(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
-		(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
-	),
+	points=FLAT_CEILING_ROOF_PLANE_POINTS,
 )
 
 # Bonsai creates Outliner collections from spatial containers, but flattens
@@ -961,21 +950,19 @@ TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 
 rafters = [
-	0.09, 0.64, 0.64, 0.64, 0.64,
+	0.09, 0.66, 0.66, 0.66, 0.66,
 
-	0.06, 0.84, ###################################
-	0.06, 0.58,
-	0.06, 0.58,
-	0.06, 0.58,
-	0.06, 0.58,
-	0.06, 0.58,
-	0.06, 0.58,
-	0.06, 0.83, ###################################
+	0.06, 0.70, ###################################
+	0.06, 0.60,
+	0.06, 0.60,
+	0.06, 0.60,
+	0.06, 0.60,
+	0.06, 0.60,
+	0.06, 0.60,
+	0.06, 0.70, ###################################
 
-	0.06, 0.67, ################################### komin
-	0.64,
-	0.48, #############################################
-	0.64, 0.64,
+	0.06, 0.80, ################################### komin
+	0.78, 0.78, 0.78
 	]
 skip_street = [5, 7, 9, 11, 13, 14, 16, 18, 20]
 skip_garden = [6, 8, 10, 12, 15, 17, 19]

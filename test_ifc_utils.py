@@ -38,10 +38,45 @@ from ifc_utils import (
     _postprocess_projected_wood_fills,
     _postprocess_vapour_barrier_overlays,
     generate_plan,
+    offset_plane,
 )
 
 
 class HouseTests(unittest.TestCase):
+    def test_offsets_plane_along_upward_normal_independent_of_point_order(
+        self,
+    ) -> None:
+        points = (
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 1, 1),
+        )
+        distance = 2**0.5
+        expected_shift = np.array((0, -1, 1), dtype=float)
+
+        shifted = offset_plane(*points, offset=distance)
+        reversed_shifted = offset_plane(
+            points[0], points[2], points[1], offset=distance
+        )
+
+        np.testing.assert_allclose(
+            np.array(shifted),
+            np.array(points, dtype=float) + expected_shift,
+        )
+        np.testing.assert_allclose(
+            np.array(reversed_shifted),
+            np.array((points[0], points[2], points[1]), dtype=float)
+            + expected_shift,
+        )
+
+    def test_validates_plane_offset_inputs(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must not be collinear"):
+            offset_plane((0, 0, 0), (1, 0, 0), (2, 0, 0), offset=1)
+        with self.assertRaisesRegex(ValueError, "must not be vertical"):
+            offset_plane((0, 0, 0), (0, 1, 0), (0, 0, 1), offset=1)
+        with self.assertRaisesRegex(TypeError, "offset must be a number"):
+            offset_plane((0, 0, 0), (1, 0, 0), (0, 1, 1), offset=True)
+
     def write_asset_library(self, path: Path) -> None:
         library = ifcopenshell.api.project.create_file(version="IFC4")
         project = ifcopenshell.api.root.create_entity(

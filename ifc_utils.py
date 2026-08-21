@@ -63,6 +63,7 @@ __all__ = [
     "Storey",
     "Wall",
     "generate_plan",
+    "offset_plane",
 ]
 
 Number: TypeAlias = int | float
@@ -1225,6 +1226,43 @@ def _point_3d(value: Point3D, argument: str) -> tuple[float, float, float]:
         _number(x, f"{argument} x"),
         _number(y, f"{argument} y"),
         _number(z, f"{argument} z"),
+    )
+
+
+def offset_plane(
+    point_1: Point3D,
+    point_2: Point3D,
+    point_3: Point3D,
+    offset: Number,
+) -> PlaneCut:
+    """Shift a three-point plane along its upward-facing unit normal.
+
+    Positive offsets move towards positive global Z and negative offsets move
+    in the opposite direction.  Vertical planes are rejected because neither
+    perpendicular direction points upwards.
+    """
+    points = np.array(
+        (
+            _point_3d(point_1, "point_1"),
+            _point_3d(point_2, "point_2"),
+            _point_3d(point_3, "point_3"),
+        ),
+        dtype=float,
+    )
+    offset = _number(offset, "offset")
+    normal = np.cross(points[1] - points[0], points[2] - points[0])
+    normal_length = float(np.linalg.norm(normal))
+    if normal_length <= 1e-9:
+        raise ValueError("plane points must not be collinear")
+    normal /= normal_length
+    if abs(float(normal[2])) <= 1e-9:
+        raise ValueError("plane must not be vertical")
+    if normal[2] < 0:
+        normal *= -1
+    shifted_points = points + normal * offset
+    return tuple(
+        tuple(float(coordinate) for coordinate in point)
+        for point in shifted_points
     )
 
 
