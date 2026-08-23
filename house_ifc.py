@@ -25,6 +25,10 @@
 #    - 50mm instalacni mezera s pruznymi zavesy
 #    - akusticky SDK
 
+# Fasada:
+#    - Cementovlakno
+#        - https://www.fasadnidesky.cz/produkty/cementovlaknita-deska-typ-20-250/
+
 # Podlaha dole:
 #    - 100 mm EPS 150
 #        - https://www.dek.cz/produkty/detail/1460405120-eps-150-100mm-500x1000-isover-2-5m2-bal
@@ -58,6 +62,7 @@
 #	Tepelné čerpadlo LG Therma V Split 12kW HN1636M+HU123MA (model 2023)
 #	https://www.vzduchotechnika1.cz/lg-therma-v-split-12kw-hn1636m-hu123ma
 
+from math import acos, degrees, isclose
 import sys
 from ifc_utils import *
 
@@ -87,6 +92,22 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 	- INSTALLATION_SPACE_THICKNESS
 	- GYPSUM_PLASTERBOARD_THICKNESS
 )
+
+ground_floor_height = 0.25+2.75
+door_clear_height = 2.1
+CEILING_THICKNESS = 0.21
+
+UNDER_HOLE = 2.80
+UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
+COLLAR_TIE_SIZE = (0.06, 0.16)
+COLLAR_TIE_EXTENSION = 1.0
+COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
+# The collar-tie tops meet the underside of the two central purlins and the
+# wall below them.  The horizontal vapour barrier is derived from the tie
+# underside so the two cannot drift apart when the framing changes.
+COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + 0.5
+COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
+NADEZDIVKA = 1.25
 
 house = House(
     "My house",
@@ -134,9 +155,6 @@ facade_insulation = house.wall_type(
 
 wall2_x = 0.25 + 3 + 0.25;
 wall3_x = wall2_x + 4.5 + 0.25;
-ground_floor_height = 0.25+2.75
-door_clear_height = 2.1
-CEILING_THICKNESS = 0.21
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
@@ -218,7 +236,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(0.25+2.5, 0-0.25),
+    center=(0.25+2.5, 0-0.5),
 )
 ground.furniture(
     "TČ",
@@ -509,6 +527,142 @@ opening = wall_3.add_opening(
     show_overhead=True,
 )
 
+# facade
+frame1_v = house.add_vertical_frame(
+    wall_front,
+    offset=0,
+    width=0.05,
+    depth=0.08,
+    start_height=0.2,
+    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+    gap=0.60,
+    lath_offsets=[0, wall_front.length - 0.05],
+)
+lath_width=0.05
+window_space=0.03
+frame2_v = house.add_vertical_frame(
+    wall_back,
+    offset=0,
+    width=lath_width,
+    depth=0.1,
+    start_height=0.2,
+    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+    gap=0.60,
+    lath_offsets=[
+		0,
+		2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
+		0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
+		0.25+3.5+0.25+0.5 + 1.5 + window_space,
+		0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
+		0.25+3.5+0.25+4.5+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+4.5+0.25+0.75 + 1.5 + window_space,
+		wall_back.length - lath_width
+	],
+	space_before_openings=window_space,
+	space_after_openings=window_space,
+	space_above_openings=window_space,
+	space_below_openings=window_space,
+	insulation_material="Rockwool",
+	insulation_color="#E8D36D",
+)
+lath_width=0.04
+frame2_h = house.add_horizontal_frame(
+    wall_back,
+    offset=0.1,
+    width=lath_width,
+    depth=0.06,
+    lath_offsets=[
+		0.2,
+		0.25+0.875-lath_width-window_space,
+		UPPER_FLOOR_START+NADEZDIVKA-lath_width-0.1
+	],
+    start_extension=0.1,
+    end_extension=0.1,
+	gap=0.6,
+	space_before_openings=window_space,
+	space_after_openings=window_space,
+	space_above_openings=window_space,
+	space_below_openings=window_space,
+	insulation_material="Rockwool",
+	insulation_color="#E8D36D",
+)
+lath_width=0.03
+frame2_v2 = house.add_vertical_frame(
+    wall_back,
+    offset=0.16,
+    width=lath_width,
+    depth=0.05,
+    start_height=0.2,
+    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+    gap=0.40,
+    lath_offsets=[
+		0,
+		2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
+		0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
+		0.25+3.5+0.25+0.5 + 1.5 + window_space,
+		0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
+		0.25+3.5+0.25+4.5+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+4.5+0.25+0.75 + 1.5 + window_space,
+		wall_back.length - lath_width
+	],
+	space_before_openings=window_space,
+	space_after_openings=window_space,
+	space_above_openings=window_space,
+	space_below_openings=window_space,
+)
+frame2_finish = house.add_facade_layer(
+	wall_back,
+	name="Cementovlaknita deska - garden facade",
+	offset=0.21,
+	thickness=0.01,
+	start_height=0.2,
+	height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+	color="#ffffff",
+)
+frame3_v = house.add_vertical_frame(
+    wall_4,
+    offset=0,
+    width=0.05,
+    depth=0.08,
+    start_height=0.2,
+    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+    gap=0.60,
+    lath_offsets=[0, wall_4.length - 0.05],
+)
+frame4_v = house.add_vertical_frame(
+    wall_1,
+    offset=0,
+    width=0.05,
+    depth=0.08,
+    start_height=0.2,
+    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+    gap=0.60,
+    lath_offsets=[0, wall_1.length - 0.05],
+)
+
+
+facade_1 = house.storey("Facade Layer 1", elevation=ground.elevation)
+facade_1.add(frame1_v)
+facade_1.add(frame2_v)
+facade_1.add(frame3_v)
+facade_1.add(frame4_v)
+
+facade_2 = house.storey("Facade Layer 2", elevation=ground.elevation)
+#facade_2.add(frame1_h)
+facade_2.add(frame2_h)
+#facade_2.add(frame3_h)
+#facade_2.add(frame4_h)
+
+facade_3 = house.storey("Facade Layer 3", elevation=ground.elevation)
+#facade_3.add(frame1_v)
+facade_3.add(frame2_v2)
+#facade_3.add(frame3_v)
+#facade_3.add(frame4_v)
+
+facade_4 = house.storey(
+	"Facade Layer 4 - Cementovlaknita deska",
+	elevation=ground.elevation,
+)
+facade_4.add(frame2_finish)
+
 # MIAKO
 ceiling1 = upper.miako_slab(
     "Ceiling 1",
@@ -632,29 +786,18 @@ upper_floor_layers = (
 	),
 )
 
-UNDER_HOLE = 2.80
-UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
-COLLAR_TIE_SIZE = (0.06, 0.16)
-COLLAR_TIE_EXTENSION = 1.0
-COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
-# The collar-tie tops meet the underside of the two central purlins and the
-# wall below them.  The horizontal vapour barrier is derived from the tie
-# underside so the two cannot drift apart when the framing changes.
-COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + 0.5
-COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
-
 STREET_ROOF_JOINT_Y = 4.0-0.8-0.07
 GARDEN_ROOF_JOINT_Y = 4.0+0.8+0.07
 ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24
 STREET_ROOF_PLANE_POINTS = (
 	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
-	(0, 0.125-0.08, UPPER_FLOOR_START+1.25+0.12),
+	(0, 0.125-0.08, UPPER_FLOOR_START+NADEZDIVKA+0.12),
 )
 GARDEN_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
-	(0, 8.0-0.125+0.08, UPPER_FLOOR_START+1.25+0.12),
+	(0, 8.0-0.125+0.08, UPPER_FLOOR_START+NADEZDIVKA+0.12),
 )
 DORMER_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -688,17 +831,17 @@ wall_cuts_2_3 = [
 	),
 ]
 
-wall_dormer = upper.wall((0.25+3+0.25+4.5+0.25, 8), (0.25+3, 8), wall_type=load_bearing_wall, height=1.25, start_height=1.25)
-wall_front = upper.wall((0, 0), (12, 0), wall_type=load_bearing_wall, height=1.25)
-wall_back = upper.wall((12, 8), (0, 8), wall_type=load_bearing_wall, height=1.25)
+wall_dormer = upper.wall((0.25+3+0.25+4.5+0.25, 8), (0.25+3, 8), wall_type=load_bearing_wall, height=1.25, start_height=NADEZDIVKA)
+wall_front = upper.wall((0, 0), (12, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
+wall_back = upper.wall((12, 8), (0, 8), wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_1 = upper.wall(
 	(0, 8), (0, 0),
 	wall_type=load_bearing_wall,
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_1.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
-wall_1.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
+wall_1.add_opening(at=0, width=0.25, height=1.5, sill_height=NADEZDIVKA)
+wall_1.add_opening(at=7.75, width=0.25, height=1.5, sill_height=NADEZDIVKA)
 
 wall_2 = upper.wall(
 	(wall2_x, 0), (wall2_x, 8),
@@ -719,8 +862,8 @@ wall_4 = upper.wall(
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=1.25)
-wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=1.25)
+wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=NADEZDIVKA)
+wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=NADEZDIVKA)
 
 wall_2.add_opening(at=1.55, width=1, height=2.25)
 wall_zachod_nahore = upper.wall(
@@ -774,16 +917,16 @@ beam2 = upper.beam(
 )
 beam3 = upper.beam(
     "Beam",
-    start=(0, 0.125, UPPER_FLOOR_START+1.25+0.06),
-    end=(12, 0.125, UPPER_FLOOR_START+1.25+0.06),
+    start=(0, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    end=(12, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
 )
 beam4 = upper.beam(
     "Beam",
-    start=(0, 8-0.125, UPPER_FLOOR_START+1.25+0.06),
-    end=(12, 8-0.125, UPPER_FLOOR_START+1.25+0.06),
+    start=(0, 8-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    end=(12, 8-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
@@ -810,10 +953,10 @@ upper.furniture(
 
 # Okna obyvak
 wall_dormer.add_window(
-	at=0.25+0.5,width=1.5, sill_height=1.25, height=2.25)
+	at=0.25+0.5,width=1.5, sill_height=NADEZDIVKA, height=2.25)
 wall_dormer.add_window(
 	at=0.25+2.5,
-	width=1.5, sill_height=1.25, height=2.25)
+	width=1.5, sill_height=NADEZDIVKA, height=2.25)
 # Dvere obyvak
 wall_3.add_door(
 	#at=4.43+0.07+0.25,
@@ -877,6 +1020,20 @@ flat_ceiling_roof = roof.plane(
 	"Flat ceiling",
 	points=FLAT_CEILING_ROOF_PLANE_POINTS,
 )
+
+
+def roof_angle_degrees(plane):
+	"""Return a roof plane's acute pitch angle above horizontal."""
+	normal_z = min(1.0, max(-1.0, abs(plane.z_axis[2])))
+	return degrees(acos(normal_z))
+
+
+street_roof_angle = roof_angle_degrees(street_roof)
+garden_roof_angle = roof_angle_degrees(garden_roof)
+if not isclose(street_roof_angle, garden_roof_angle, abs_tol=1e-9):
+	raise ValueError("street and garden roof angles must match")
+print(f"Main roof angle: {street_roof_angle:.2f}°")
+print(f"Dormer roof angle: {roof_angle_degrees(dormer_roof):.2f}°")
 
 # Bonsai creates Outliner collections from spatial containers, but flattens
 # ordinary IFC aggregation.  These intentionally artificial storeys provide
@@ -1391,7 +1548,7 @@ house.write("house.ifc")
 # Drawing 1 - ground floor
 if "ground" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 1", x=6, y=4, z=0.25+2, radius=8, storeys=[ground]
+		"Drawing 1", x=6, y=4, z=0.25+2, radius=8, storeys=[ground, facade_1, facade_2, facade_3, facade_4]
 	)
 
 	drawing1.add_stair_annotation(stairs1)

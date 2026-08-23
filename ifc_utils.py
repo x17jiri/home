@@ -54,6 +54,8 @@ __all__ = [
     "Beam",
     "Chimney",
     "Drawing",
+    "FacadeLayer",
+    "HorizontalFrame",
     "House",
     "MiakoSlab",
     "Roof",
@@ -61,6 +63,7 @@ __all__ = [
     "RoofPlane",
     "Stair",
     "Storey",
+    "VerticalFrame",
     "Wall",
     "generate_plan",
     "offset_plane",
@@ -70,6 +73,7 @@ Number: TypeAlias = int | float
 Point: TypeAlias = tuple[Number, Number]
 Point3D: TypeAlias = tuple[Number, Number, Number]
 DrawingView: TypeAlias = Literal["plan", "elevation"]
+WallSide: TypeAlias = Literal["left", "right"]
 PlaneCut: TypeAlias = tuple[Point3D, Point3D, Point3D]
 WallCut: TypeAlias = PlaneCut
 Layer: TypeAlias = tuple[str, Number]
@@ -1944,6 +1948,9 @@ class House:
         self._materials: dict[str, ifcopenshell.entity_instance] = {}
         self._wall_type_layouts: dict[int, tuple[float, float]] = {}
         self._wall_type_styles: dict[int, ifcopenshell.entity_instance | None] = {}
+        self._horizontal_frame_count = 0
+        self._vertical_frame_count = 0
+        self._facade_layer_count = 0
         self._surface_styles: dict[
             tuple[tuple[float, float, float], float],
             ifcopenshell.entity_instance,
@@ -2006,6 +2013,175 @@ class House:
         )
         self._surface_styles[key] = style
         return style
+
+    def _add_frame_insulation_blocks(
+        self,
+        *,
+        wall: Wall,
+        frame_name: str,
+        side: WallSide,
+        offset: float,
+        depth: float,
+        bays: Sequence[tuple[float, float, float, float]],
+        material_name: str,
+        color: str | None,
+        transparency: float,
+        trim_openings: bool,
+        space_before_openings: float = 0,
+        space_after_openings: float = 0,
+        space_below_openings: float = 0,
+        space_above_openings: float = 0,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Create one opening-aware insulation element for every frame bay."""
+        model = self.model
+        surface_style = self._surface_style(
+            "block",
+            color=color,
+            transparency=transparency,
+        )
+        ifc_material = self._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category="insulation",
+            )
+            self._materials[material_name] = ifc_material
+
+        if side == "left":
+            body_offset = wall.body_offset + wall.thickness + offset
+        else:
+            body_offset = wall.body_offset - offset - depth
+        opening_overlap = 0.01
+        blocks: list[ifcopenshell.entity_instance] = []
+        for bay_index, (bay_start, bay_end, bay_bottom, bay_top) in enumerate(
+            bays, start=1
+        ):
+            bay_width = bay_end - bay_start
+            bay_height = bay_top - bay_bottom
+            if bay_width <= 1e-9 or bay_height <= 1e-9:
+                continue
+            block_name = f"{frame_name} Insulation {bay_index}"
+            block = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcBuildingElementPart",
+                name=block_name,
+                predefined_type="USERDEFINED",
+            )
+            block.ObjectType = "FACADE_INSULATION"
+            ifcopenshell.api.spatial.assign_container(
+                model,
+                products=[block],
+                relating_structure=wall.storey.element,
+            )
+            placement = wall._placement(bay_start, bay_bottom)
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=block,
+                matrix=placement,
+                is_si=True,
+            )
+            body = ifcopenshell.api.geometry.add_wall_representation(
+                model,
+                context=self._body_context,
+                length=bay_width,
+                height=bay_height,
+                thickness=depth,
+                offset=body_offset,
+            )
+            clippings = _local_clippings(
+                wall.cuts,
+                placement,
+                (bay_width / 2, body_offset + depth / 2, bay_height / 2),
+            )
+            _clip_body_representation(model, block, body, clippings)
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=block,
+                representation=body,
+            )
+            if surface_style is not None:
+                ifcopenshell.api.style.assign_representation_styles(
+                    model,
+                    shape_representation=body,
+                    styles=[surface_style],
+                )
+            ifcopenshell.api.material.assign_material(
+                model,
+                products=[block],
+                type="IfcMaterial",
+                material=ifc_material,
+            )
+
+            if trim_openings:
+                for opening_index, (
+                    opening_start,
+                    opening_end,
+                    opening_bottom,
+                    opening_top,
+                ) in enumerate(wall._openings, start=1):
+                    cut_start = opening_start - space_before_openings
+                    cut_end = opening_end + space_after_openings
+                    cut_bottom = opening_bottom - space_below_openings
+                    cut_top = opening_top + space_above_openings
+                    if (
+                        bay_start >= cut_end - 1e-9
+                        or cut_start >= bay_end - 1e-9
+                        or bay_bottom >= cut_top - 1e-9
+                        or cut_bottom >= bay_top - 1e-9
+                    ):
+                        continue
+                    opening = ifcopenshell.api.root.create_entity(
+                        model,
+                        ifc_class="IfcOpeningElement",
+                        name=f"{block_name} Opening {opening_index}",
+                        predefined_type="OPENING",
+                    )
+                    opening_body = ifcopenshell.api.geometry.add_wall_representation(
+                        model,
+                        context=self._body_context,
+                        length=cut_end - cut_start,
+                        height=cut_top - cut_bottom,
+                        thickness=depth + 2 * opening_overlap,
+                        offset=body_offset - opening_overlap,
+                    )
+                    ifcopenshell.api.geometry.assign_representation(
+                        model,
+                        product=opening,
+                        representation=opening_body,
+                    )
+                    ifcopenshell.api.feature.add_feature(
+                        model,
+                        feature=opening,
+                        element=block,
+                    )
+                    opening_placement = wall._placement(cut_start, cut_bottom)
+                    ifcopenshell.api.geometry.edit_object_placement(
+                        model,
+                        product=opening,
+                        matrix=opening_placement,
+                        is_si=True,
+                    )
+
+            block_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=block,
+                name="BBIM_FrameInsulation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=block_pset,
+                properties={
+                    "BayIndex": bay_index,
+                    "BayStart": bay_start,
+                    "BayEnd": bay_end,
+                    "Bottom": bay_bottom,
+                    "Top": bay_top,
+                    "Depth": depth,
+                },
+            )
+            blocks.append(block)
+        return tuple(blocks)
 
     def wall_type(
         self,
@@ -2110,6 +2286,1261 @@ class House:
             transparency=transparency,
         )
         return wall_type
+
+    def add_vertical_frame(
+        self,
+        wall: Wall,
+        *,
+        offset: Number,
+        width: Number,
+        height: Number,
+        depth: Number,
+        gap: Number,
+        lath_offsets: Sequence[Number],
+        start_height: Number | None = None,
+        side: WallSide = "right",
+        material: str = "Wood",
+        name: str | None = None,
+        color: str | None = None,
+        transparency: Number = 0,
+        trim_openings: bool = True,
+        space_before_openings: Number = 0,
+        space_after_openings: Number = 0,
+        space_above_openings: Number = 0,
+        space_below_openings: Number = 0,
+        insulation_material: str | None = None,
+        insulation_color: str | None = None,
+        insulation_transparency: Number = 0,
+    ) -> VerticalFrame:
+        """Add a regularly spaced frame of vertical laths beside ``wall``.
+
+        ``side`` is viewed while looking from the wall's ``start`` towards
+        its ``end``.  ``offset`` is measured outwards from that finished wall
+        face to the inner face of every lath, and ``depth`` continues in the
+        same outward direction.  ``start_height`` is measured above the host
+        wall's storey elevation; when omitted it uses the wall's own bottom.
+
+        ``lath_offsets`` contains mandatory lath start positions measured from
+        the wall start.  Between each consecutive pair, additional laths are
+        inserted with ``gap`` clear space between their edges; the final space
+        before each mandatory position may be smaller.  Wall clipping planes
+        are inherited, and laths are split around existing openings unless
+        ``trim_openings`` is false.  ``space_before_openings``,
+        ``space_after_openings``, ``space_above_openings``, and
+        ``space_below_openings`` expand the clearance around each opening in
+        wall-relative directions.  When
+        ``insulation_material`` is supplied, one insulation block fills each
+        bay between consecutive laths and inherits the opening cuts.  Add the
+        returned assembly to an artificial visibility storey with
+        :meth:`Storey.add` when desired.
+        """
+        if not isinstance(wall, Wall):
+            raise TypeError("wall must be a Wall created by Storey.wall")
+        if wall.file is not self.model or wall.storey.house is not self:
+            raise ValueError("wall must belong to this house")
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        offset = _number(offset, "offset")
+        width = _number(width, "width")
+        height = _number(height, "height")
+        depth = _number(depth, "depth")
+        gap = _number(gap, "gap")
+        if offset < 0:
+            raise ValueError("offset must not be negative")
+        if width <= 0:
+            raise ValueError("width must be greater than zero")
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        if depth <= 0:
+            raise ValueError("depth must be greater than zero")
+        if gap <= 0:
+            raise ValueError("gap must be greater than zero")
+        if isinstance(lath_offsets, (str, bytes)):
+            raise TypeError("lath_offsets must be a sequence of numbers")
+        try:
+            supplied_lath_offsets = list(lath_offsets)
+        except TypeError as error:
+            raise TypeError(
+                "lath_offsets must be a sequence of numbers"
+            ) from error
+        if len(supplied_lath_offsets) < 2:
+            raise ValueError("lath_offsets must contain at least two positions")
+        normalised_lath_offsets = tuple(
+            _number(value, f"lath_offsets position {index}")
+            for index, value in enumerate(supplied_lath_offsets, start=1)
+        )
+        for index, lath_offset in enumerate(normalised_lath_offsets):
+            if (
+                lath_offset < -1e-9
+                or lath_offset + width > wall.length + 1e-9
+            ):
+                raise ValueError(
+                    f"lath_offsets position {index + 1} must be within the wall length"
+                )
+            if index and lath_offset <= normalised_lath_offsets[index - 1] + 1e-9:
+                raise ValueError("lath_offsets must be strictly increasing")
+        if start_height is None:
+            resolved_start_height = wall.start_height
+        else:
+            resolved_start_height = _number(start_height, "start_height")
+            if resolved_start_height < 0:
+                raise ValueError("start_height must not be negative")
+        space_before_openings = _number(
+            space_before_openings, "space_before_openings"
+        )
+        space_after_openings = _number(
+            space_after_openings, "space_after_openings"
+        )
+        space_above_openings = _number(
+            space_above_openings, "space_above_openings"
+        )
+        space_below_openings = _number(
+            space_below_openings, "space_below_openings"
+        )
+        if space_before_openings < 0:
+            raise ValueError("space_before_openings must not be negative")
+        if space_after_openings < 0:
+            raise ValueError("space_after_openings must not be negative")
+        if space_above_openings < 0:
+            raise ValueError("space_above_openings must not be negative")
+        if space_below_openings < 0:
+            raise ValueError("space_below_openings must not be negative")
+        if not isinstance(trim_openings, bool):
+            raise TypeError("trim_openings must be a boolean")
+        material_name = _name(material, "material")
+        resolved_insulation_material = (
+            _name(insulation_material, "insulation_material")
+            if insulation_material is not None
+            else None
+        )
+        insulation_transparency = _number(
+            insulation_transparency, "insulation_transparency"
+        )
+        if not 0 <= insulation_transparency <= 1:
+            raise ValueError("insulation_transparency must be between 0 and 1")
+        transparency = _number(transparency, "transparency")
+        if not 0 <= transparency <= 1:
+            raise ValueError("transparency must be between 0 and 1")
+
+        lath_positions: list[float] = [normalised_lath_offsets[0]]
+        lath_pitch = width + gap
+        for segment_start, segment_end in zip(
+            normalised_lath_offsets, normalised_lath_offsets[1:]
+        ):
+            position = segment_start + lath_pitch
+            while position < segment_end - 1e-9:
+                lath_positions.append(round(position, 12))
+                position += lath_pitch
+            lath_positions.append(segment_end)
+        tangent = np.array(
+            (
+                (wall.end[0] - wall.start[0]) / wall.length,
+                (wall.end[1] - wall.start[1]) / wall.length,
+                0.0,
+            ),
+            dtype=float,
+        )
+        left_normal = np.array((-tangent[1], tangent[0], 0.0), dtype=float)
+        if side == "left":
+            outward = left_normal
+            wall_face = wall.body_offset + wall.thickness
+        else:
+            outward = -left_normal
+            wall_face = wall.body_offset
+        wall_face_origin = np.array(
+            (wall.start[0], wall.start[1], 0.0), dtype=float
+        ) + wall_face * left_normal
+
+        self._vertical_frame_count += 1
+        frame_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Vertical Frame {self._vertical_frame_count}"
+        )
+        model = self.model
+        assembly_element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcElementAssembly",
+            name=frame_name,
+            predefined_type="USERDEFINED",
+        )
+        assembly_element.ObjectType = "FACADE_VERTICAL_FRAME"
+        assembly_element.AssemblyPlace = "SITE"
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[assembly_element],
+            relating_structure=wall.storey.element,
+        )
+        assembly_placement = np.eye(4)
+        assembly_placement[2, 3] = wall.storey.elevation
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=assembly_element,
+            matrix=assembly_placement,
+            is_si=True,
+        )
+
+        resolved_color = color
+        if (
+            resolved_color is None
+            and "beam" not in self._default_colors
+            and material_name.casefold() == "wood"
+        ):
+            resolved_color = "#8B5A2B"
+        surface_style = self._surface_style(
+            "beam",
+            color=resolved_color,
+            transparency=transparency,
+        )
+        ifc_material = self._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category=material_name.casefold(),
+            )
+            self._materials[material_name] = ifc_material
+
+        frame_bottom = resolved_start_height
+        frame_top = resolved_start_height + height
+        members: list[ifcopenshell.entity_instance] = []
+        for lath_index, lath_start in enumerate(lath_positions):
+            segments: list[tuple[float, float]] = [(frame_bottom, frame_top)]
+            if trim_openings:
+                lath_end = lath_start + width
+                removed_intervals = sorted(
+                    (
+                        max(
+                            frame_bottom,
+                            opening_bottom - space_below_openings,
+                        ),
+                        min(
+                            frame_top,
+                            opening_top + space_above_openings,
+                        ),
+                    )
+                    for (
+                        opening_start,
+                        opening_end,
+                        opening_bottom,
+                        opening_top,
+                    ) in wall._openings
+                    if lath_start
+                    < opening_end + space_after_openings - 1e-9
+                    and opening_start - space_before_openings
+                    < lath_end - 1e-9
+                    and frame_bottom
+                    < opening_top + space_above_openings - 1e-9
+                    and opening_bottom - space_below_openings
+                    < frame_top - 1e-9
+                )
+                if removed_intervals:
+                    merged_intervals: list[list[float]] = []
+                    for interval_start, interval_end in removed_intervals:
+                        if (
+                            not merged_intervals
+                            or interval_start > merged_intervals[-1][1] + 1e-9
+                        ):
+                            merged_intervals.append([interval_start, interval_end])
+                        else:
+                            merged_intervals[-1][1] = max(
+                                merged_intervals[-1][1], interval_end
+                            )
+                    segments = []
+                    cursor = frame_bottom
+                    for interval_start, interval_end in merged_intervals:
+                        if interval_start > cursor + 1e-9:
+                            segments.append((cursor, interval_start))
+                        cursor = max(cursor, interval_end)
+                    if cursor < frame_top - 1e-9:
+                        segments.append((cursor, frame_top))
+
+            for segment_index, (segment_bottom, segment_top) in enumerate(
+                segments, start=1
+            ):
+                segment_height = segment_top - segment_bottom
+                member_name = f"{frame_name} Lath {lath_index + 1}"
+                if len(segments) > 1:
+                    member_name += f".{segment_index}"
+                member = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcMember",
+                    name=member_name,
+                    predefined_type="STUD",
+                )
+                member.ObjectType = "FACADE_LATH"
+
+                centre = (
+                    wall_face_origin
+                    + (lath_start + width / 2) * tangent
+                    + (offset + depth / 2) * outward
+                )
+                placement = np.eye(4)
+                placement[:3, 0] = (0.0, 0.0, 1.0)
+                placement[:3, 2] = outward
+                placement[:3, 1] = np.cross(
+                    placement[:3, 2], placement[:3, 0]
+                )
+                placement[:2, 3] = centre[:2]
+                placement[2, 3] = wall.storey.elevation + segment_bottom
+                ifcopenshell.api.spatial.assign_container(
+                    model,
+                    products=[member],
+                    relating_structure=wall.storey.element,
+                )
+                ifcopenshell.api.geometry.edit_object_placement(
+                    model,
+                    product=member,
+                    matrix=placement,
+                    is_si=True,
+                )
+
+                profile = model.createIfcRectangleProfileDef(
+                    "AREA",
+                    f"{member_name} Profile",
+                    None,
+                    width,
+                    depth,
+                )
+                body = ifcopenshell.api.geometry.add_profile_representation(
+                    model,
+                    context=self._body_context,
+                    profile=profile,
+                    depth=segment_height,
+                    cardinal_point="mid-depth centre",
+                    placement_zx_axes=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+                )
+                clippings = _local_clippings(
+                    wall.cuts,
+                    placement,
+                    (segment_height / 2, 0.0, 0.0),
+                )
+                _clip_body_representation(model, member, body, clippings)
+                ifcopenshell.api.geometry.assign_representation(
+                    model,
+                    product=member,
+                    representation=body,
+                )
+                if surface_style is not None:
+                    ifcopenshell.api.style.assign_representation_styles(
+                        model,
+                        shape_representation=body,
+                        styles=[surface_style],
+                    )
+                ifcopenshell.api.material.assign_material(
+                    model,
+                    products=[member],
+                    type="IfcMaterial",
+                    material=ifc_material,
+                )
+                common_pset = ifcopenshell.api.pset.add_pset(
+                    model,
+                    product=member,
+                    name="Pset_MemberCommon",
+                )
+                ifcopenshell.api.pset.edit_pset(
+                    model,
+                    pset=common_pset,
+                    properties={"LoadBearing": False},
+                )
+                members.append(member)
+
+        insulation_blocks: tuple[ifcopenshell.entity_instance, ...] = ()
+        if resolved_insulation_material is not None:
+            insulation_bays = tuple(
+                (
+                    first_lath + width,
+                    second_lath,
+                    frame_bottom,
+                    frame_top,
+                )
+                for first_lath, second_lath in zip(
+                    lath_positions, lath_positions[1:]
+                )
+            )
+            insulation_blocks = self._add_frame_insulation_blocks(
+                wall=wall,
+                frame_name=frame_name,
+                side=side,
+                offset=offset,
+                depth=depth,
+                bays=insulation_bays,
+                material_name=resolved_insulation_material,
+                color=insulation_color,
+                transparency=insulation_transparency,
+                trim_openings=trim_openings,
+                space_before_openings=space_before_openings,
+                space_after_openings=space_after_openings,
+                space_below_openings=space_below_openings,
+                space_above_openings=space_above_openings,
+            )
+        frame_elements = (*members, *insulation_blocks)
+        if frame_elements:
+            ifcopenshell.api.aggregate.assign_object(
+                model,
+                products=frame_elements,
+                relating_object=assembly_element,
+            )
+        frame_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=assembly_element,
+            name="BBIM_VerticalFrame",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=frame_pset,
+            properties={
+                "HostWall": wall.GlobalId,
+                "Side": side,
+                "Offset": offset,
+                "Width": width,
+                "Depth": depth,
+                "StartHeight": resolved_start_height,
+                "Height": height,
+                "Gap": gap,
+                "LathOffsets": json.dumps(normalised_lath_offsets),
+                "LathPositions": json.dumps(lath_positions),
+                "TrimOpenings": trim_openings,
+                "SpaceBeforeOpenings": space_before_openings,
+                "SpaceAfterOpenings": space_after_openings,
+                "SpaceAboveOpenings": space_above_openings,
+                "SpaceBelowOpenings": space_below_openings,
+                "InsulationMaterial": resolved_insulation_material,
+                "InsulationBlocks": json.dumps(
+                    [block.GlobalId for block in insulation_blocks]
+                ),
+            },
+        )
+        return VerticalFrame(
+            assembly_element,
+            wall,
+            side=side,
+            offset=offset,
+            width=width,
+            depth=depth,
+            start_height=resolved_start_height,
+            height=height,
+            gap=gap,
+            lath_offsets=normalised_lath_offsets,
+            lath_positions=tuple(lath_positions),
+            space_before_openings=space_before_openings,
+            space_after_openings=space_after_openings,
+            space_above_openings=space_above_openings,
+            space_below_openings=space_below_openings,
+            insulation_material=resolved_insulation_material,
+            insulation_blocks=insulation_blocks,
+            members=tuple(members),
+        )
+
+    def add_horizontal_frame(
+        self,
+        wall: Wall,
+        *,
+        offset: Number,
+        width: Number,
+        depth: Number,
+        gap: Number,
+        lath_offsets: Sequence[Number],
+        start_extension: Number = 0,
+        end_extension: Number = 0,
+        side: WallSide = "right",
+        material: str = "Wood",
+        name: str | None = None,
+        color: str | None = None,
+        transparency: Number = 0,
+        trim_openings: bool = True,
+        space_before_openings: Number = 0,
+        space_after_openings: Number = 0,
+        space_above_openings: Number = 0,
+        space_below_openings: Number = 0,
+        insulation_material: str | None = None,
+        insulation_color: str | None = None,
+        insulation_transparency: Number = 0,
+    ) -> HorizontalFrame:
+        """Add explicitly positioned horizontal laths beside ``wall``.
+
+        ``side`` is viewed while looking from the wall's ``start`` towards
+        its ``end``.  ``offset`` is measured outwards from that finished wall
+        face to the inner face of every lath, and ``depth`` continues in the
+        same outward direction.
+
+        Each value in ``lath_offsets`` is the mandatory bottom of a lath,
+        measured above the host wall's storey elevation.  Between each
+        consecutive pair, additional laths are inserted with ``gap`` clear
+        space between their edges; the final space before each mandatory
+        position may be smaller.  ``width`` is the lath's vertical dimension.
+        Every lath spans the wall from start to end, extended by
+        ``start_extension`` before the start and ``end_extension`` beyond the
+        end.  Laths are split around existing wall openings unless
+        ``trim_openings`` is false.  ``space_before_openings``,
+        ``space_after_openings``, ``space_above_openings``, and
+        ``space_below_openings`` expand the clearance around each opening in
+        wall-relative directions.  When ``insulation_material`` is supplied, one
+        insulation block fills each bay between consecutive laths and inherits
+        the opening cuts.  Add the returned assembly to an artificial
+        visibility storey with :meth:`Storey.add` when desired.
+        """
+        if not isinstance(wall, Wall):
+            raise TypeError("wall must be a Wall created by Storey.wall")
+        if wall.file is not self.model or wall.storey.house is not self:
+            raise ValueError("wall must belong to this house")
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        offset = _number(offset, "offset")
+        width = _number(width, "width")
+        depth = _number(depth, "depth")
+        gap = _number(gap, "gap")
+        start_extension = _number(start_extension, "start_extension")
+        end_extension = _number(end_extension, "end_extension")
+        space_before_openings = _number(
+            space_before_openings, "space_before_openings"
+        )
+        space_after_openings = _number(
+            space_after_openings, "space_after_openings"
+        )
+        space_above_openings = _number(
+            space_above_openings, "space_above_openings"
+        )
+        space_below_openings = _number(
+            space_below_openings, "space_below_openings"
+        )
+        if offset < 0:
+            raise ValueError("offset must not be negative")
+        if width <= 0:
+            raise ValueError("width must be greater than zero")
+        if depth <= 0:
+            raise ValueError("depth must be greater than zero")
+        if gap <= 0:
+            raise ValueError("gap must be greater than zero")
+        if start_extension < 0:
+            raise ValueError("start_extension must not be negative")
+        if end_extension < 0:
+            raise ValueError("end_extension must not be negative")
+        if space_before_openings < 0:
+            raise ValueError("space_before_openings must not be negative")
+        if space_after_openings < 0:
+            raise ValueError("space_after_openings must not be negative")
+        if space_above_openings < 0:
+            raise ValueError("space_above_openings must not be negative")
+        if space_below_openings < 0:
+            raise ValueError("space_below_openings must not be negative")
+        if isinstance(lath_offsets, (str, bytes)):
+            raise TypeError("lath_offsets must be a sequence of numbers")
+        try:
+            supplied_lath_offsets = list(lath_offsets)
+        except TypeError as error:
+            raise TypeError(
+                "lath_offsets must be a sequence of numbers"
+            ) from error
+        if len(supplied_lath_offsets) < 2:
+            raise ValueError("lath_offsets must contain at least two positions")
+        normalised_lath_offsets = tuple(
+            _number(value, f"lath_offsets position {index}")
+            for index, value in enumerate(supplied_lath_offsets, start=1)
+        )
+        for index, lath_offset in enumerate(normalised_lath_offsets):
+            if lath_offset < 0:
+                raise ValueError("lath_offsets must not contain negative positions")
+            if index and lath_offset <= normalised_lath_offsets[index - 1] + 1e-9:
+                raise ValueError("lath_offsets must be strictly increasing")
+        if not isinstance(trim_openings, bool):
+            raise TypeError("trim_openings must be a boolean")
+        material_name = _name(material, "material")
+        resolved_insulation_material = (
+            _name(insulation_material, "insulation_material")
+            if insulation_material is not None
+            else None
+        )
+        insulation_transparency = _number(
+            insulation_transparency, "insulation_transparency"
+        )
+        if not 0 <= insulation_transparency <= 1:
+            raise ValueError("insulation_transparency must be between 0 and 1")
+        transparency = _number(transparency, "transparency")
+        if not 0 <= transparency <= 1:
+            raise ValueError("transparency must be between 0 and 1")
+
+        lath_positions: list[float] = [normalised_lath_offsets[0]]
+        lath_pitch = width + gap
+        for segment_start, segment_end in zip(
+            normalised_lath_offsets, normalised_lath_offsets[1:]
+        ):
+            position = segment_start + lath_pitch
+            while position < segment_end - 1e-9:
+                lath_positions.append(round(position, 12))
+                position += lath_pitch
+            lath_positions.append(segment_end)
+
+        tangent = np.array(
+            (
+                (wall.end[0] - wall.start[0]) / wall.length,
+                (wall.end[1] - wall.start[1]) / wall.length,
+                0.0,
+            ),
+            dtype=float,
+        )
+        left_normal = np.array((-tangent[1], tangent[0], 0.0), dtype=float)
+        if side == "left":
+            outward = left_normal
+            wall_face = wall.body_offset + wall.thickness
+        else:
+            outward = -left_normal
+            wall_face = wall.body_offset
+        wall_face_origin = np.array(
+            (wall.start[0], wall.start[1], 0.0), dtype=float
+        ) + wall_face * left_normal
+        lath_length = wall.length + start_extension + end_extension
+
+        self._horizontal_frame_count += 1
+        frame_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Horizontal Frame {self._horizontal_frame_count}"
+        )
+        model = self.model
+        assembly_element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcElementAssembly",
+            name=frame_name,
+            predefined_type="USERDEFINED",
+        )
+        assembly_element.ObjectType = "FACADE_HORIZONTAL_FRAME"
+        assembly_element.AssemblyPlace = "SITE"
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[assembly_element],
+            relating_structure=wall.storey.element,
+        )
+        assembly_placement = np.eye(4)
+        assembly_placement[2, 3] = wall.storey.elevation
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=assembly_element,
+            matrix=assembly_placement,
+            is_si=True,
+        )
+
+        resolved_color = color
+        if (
+            resolved_color is None
+            and "beam" not in self._default_colors
+            and material_name.casefold() == "wood"
+        ):
+            resolved_color = "#8B5A2B"
+        surface_style = self._surface_style(
+            "beam",
+            color=resolved_color,
+            transparency=transparency,
+        )
+        ifc_material = self._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category=material_name.casefold(),
+            )
+            self._materials[material_name] = ifc_material
+
+        frame_start = -start_extension
+        frame_end = wall.length + end_extension
+        members: list[ifcopenshell.entity_instance] = []
+        for lath_index, lath_offset in enumerate(lath_positions, start=1):
+            lath_top = lath_offset + width
+            segments: list[tuple[float, float]] = [(frame_start, frame_end)]
+            if trim_openings:
+                removed_intervals = sorted(
+                    (
+                        max(
+                            frame_start,
+                            opening_start - space_before_openings,
+                        ),
+                        min(
+                            frame_end,
+                            opening_end + space_after_openings,
+                        ),
+                    )
+                    for (
+                        opening_start,
+                        opening_end,
+                        opening_bottom,
+                        opening_top,
+                    ) in wall._openings
+                    if frame_start
+                    < opening_end + space_after_openings - 1e-9
+                    and opening_start - space_before_openings
+                    < frame_end - 1e-9
+                    and lath_offset
+                    < opening_top + space_above_openings - 1e-9
+                    and opening_bottom - space_below_openings
+                    < lath_top - 1e-9
+                )
+                if removed_intervals:
+                    merged_intervals: list[list[float]] = []
+                    for interval_start, interval_end in removed_intervals:
+                        if (
+                            not merged_intervals
+                            or interval_start > merged_intervals[-1][1] + 1e-9
+                        ):
+                            merged_intervals.append([interval_start, interval_end])
+                        else:
+                            merged_intervals[-1][1] = max(
+                                merged_intervals[-1][1], interval_end
+                            )
+                    segments = []
+                    cursor = frame_start
+                    for interval_start, interval_end in merged_intervals:
+                        if interval_start > cursor + 1e-9:
+                            segments.append((cursor, interval_start))
+                        cursor = max(cursor, interval_end)
+                    if cursor < frame_end - 1e-9:
+                        segments.append((cursor, frame_end))
+
+            for segment_index, (segment_start, segment_end) in enumerate(
+                segments, start=1
+            ):
+                segment_length = segment_end - segment_start
+                member_name = f"{frame_name} Lath {lath_index}"
+                if len(segments) > 1:
+                    member_name += f".{segment_index}"
+                member = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcMember",
+                    name=member_name,
+                    predefined_type="MEMBER",
+                )
+                member.ObjectType = "FACADE_LATH"
+
+                member_start = (
+                    wall_face_origin
+                    + segment_start * tangent
+                    + (offset + depth / 2) * outward
+                )
+                placement = np.eye(4)
+                placement[:3, 0] = tangent
+                placement[:3, 1] = left_normal
+                placement[:3, 2] = (0.0, 0.0, 1.0)
+                placement[:2, 3] = member_start[:2]
+                placement[2, 3] = (
+                    wall.storey.elevation + lath_offset + width / 2
+                )
+                ifcopenshell.api.spatial.assign_container(
+                    model,
+                    products=[member],
+                    relating_structure=wall.storey.element,
+                )
+                ifcopenshell.api.geometry.edit_object_placement(
+                    model,
+                    product=member,
+                    matrix=placement,
+                    is_si=True,
+                )
+
+                profile = model.createIfcRectangleProfileDef(
+                    "AREA",
+                    f"{member_name} Profile",
+                    None,
+                    depth,
+                    width,
+                )
+                body = ifcopenshell.api.geometry.add_profile_representation(
+                    model,
+                    context=self._body_context,
+                    profile=profile,
+                    depth=segment_length,
+                    cardinal_point="mid-depth centre",
+                    placement_zx_axes=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+                )
+                ifcopenshell.api.geometry.assign_representation(
+                    model,
+                    product=member,
+                    representation=body,
+                )
+                if surface_style is not None:
+                    ifcopenshell.api.style.assign_representation_styles(
+                        model,
+                        shape_representation=body,
+                        styles=[surface_style],
+                    )
+                ifcopenshell.api.material.assign_material(
+                    model,
+                    products=[member],
+                    type="IfcMaterial",
+                    material=ifc_material,
+                )
+                common_pset = ifcopenshell.api.pset.add_pset(
+                    model,
+                    product=member,
+                    name="Pset_MemberCommon",
+                )
+                ifcopenshell.api.pset.edit_pset(
+                    model,
+                    pset=common_pset,
+                    properties={"LoadBearing": False},
+                )
+                members.append(member)
+
+        insulation_blocks: tuple[ifcopenshell.entity_instance, ...] = ()
+        if resolved_insulation_material is not None:
+            insulation_bays = tuple(
+                (
+                    frame_start,
+                    frame_end,
+                    first_lath + width,
+                    second_lath,
+                )
+                for first_lath, second_lath in zip(
+                    lath_positions, lath_positions[1:]
+                )
+            )
+            insulation_blocks = self._add_frame_insulation_blocks(
+                wall=wall,
+                frame_name=frame_name,
+                side=side,
+                offset=offset,
+                depth=depth,
+                bays=insulation_bays,
+                material_name=resolved_insulation_material,
+                color=insulation_color,
+                transparency=insulation_transparency,
+                trim_openings=trim_openings,
+                space_before_openings=space_before_openings,
+                space_after_openings=space_after_openings,
+                space_above_openings=space_above_openings,
+                space_below_openings=space_below_openings,
+            )
+        frame_elements = (*members, *insulation_blocks)
+        if frame_elements:
+            ifcopenshell.api.aggregate.assign_object(
+                model,
+                products=frame_elements,
+                relating_object=assembly_element,
+            )
+        frame_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=assembly_element,
+            name="BBIM_HorizontalFrame",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=frame_pset,
+            properties={
+                "HostWall": wall.GlobalId,
+                "Side": side,
+                "Offset": offset,
+                "Width": width,
+                "Depth": depth,
+                "Gap": gap,
+                "Length": lath_length,
+                "LathOffsets": json.dumps(normalised_lath_offsets),
+                "LathPositions": json.dumps(lath_positions),
+                "StartExtension": start_extension,
+                "EndExtension": end_extension,
+                "TrimOpenings": trim_openings,
+                "SpaceBeforeOpenings": space_before_openings,
+                "SpaceAfterOpenings": space_after_openings,
+                "SpaceAboveOpenings": space_above_openings,
+                "SpaceBelowOpenings": space_below_openings,
+                "InsulationMaterial": resolved_insulation_material,
+                "InsulationBlocks": json.dumps(
+                    [block.GlobalId for block in insulation_blocks]
+                ),
+            },
+        )
+        return HorizontalFrame(
+            assembly_element,
+            wall,
+            side=side,
+            offset=offset,
+            width=width,
+            depth=depth,
+            gap=gap,
+            length=lath_length,
+            lath_offsets=normalised_lath_offsets,
+            lath_positions=tuple(lath_positions),
+            start_extension=start_extension,
+            end_extension=end_extension,
+            trim_openings=trim_openings,
+            space_before_openings=space_before_openings,
+            space_after_openings=space_after_openings,
+            space_above_openings=space_above_openings,
+            space_below_openings=space_below_openings,
+            insulation_material=resolved_insulation_material,
+            insulation_blocks=insulation_blocks,
+            members=tuple(members),
+        )
+
+    def add_facade_layer(
+        self,
+        wall: Wall,
+        *,
+        offset: Number,
+        thickness: Number,
+        side: WallSide = "right",
+        start_height: Number | None = None,
+        height: Number | None = None,
+        start_extension: Number = 0,
+        end_extension: Number = 0,
+        material: str = "Cementovlaknita deska",
+        name: str | None = None,
+        color: str | None = "#ffffff",
+        transparency: Number = 0,
+        trim_openings: bool = True,
+        opening_walls: Sequence[Wall] | None = None,
+        space_before_openings: Number = 0,
+        space_after_openings: Number = 0,
+        space_above_openings: Number = 0,
+        space_below_openings: Number = 0,
+    ) -> FacadeLayer:
+        """Add one solid façade covering beside ``wall``.
+
+        The covering spans the wall plus the optional end extensions and is a
+        single ``IfcCovering`` with type ``CLADDING``.  Existing wall openings
+        are represented as real IFC voids instead of splitting the covering
+        into panels.  ``opening_walls`` may contain aligned walls from other
+        storeys; their openings are projected onto the host wall, which makes
+        one tall covering capable of cutting upper-storey windows too.
+
+        ``offset`` is measured from the selected finished wall face to the
+        covering's inner face.  The four opening-space parameters expand each
+        void in wall-relative and vertical directions.
+        """
+        if not isinstance(wall, Wall):
+            raise TypeError("wall must be a Wall created by Storey.wall")
+        if wall.file is not self.model or wall.storey.house is not self:
+            raise ValueError("wall must belong to this house")
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        offset = _number(offset, "offset")
+        thickness = _number(thickness, "thickness")
+        start_extension = _number(start_extension, "start_extension")
+        end_extension = _number(end_extension, "end_extension")
+        if offset < 0:
+            raise ValueError("offset must not be negative")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if start_extension < 0:
+            raise ValueError("start_extension must not be negative")
+        if end_extension < 0:
+            raise ValueError("end_extension must not be negative")
+
+        resolved_start_height = (
+            wall.start_height
+            if start_height is None
+            else _number(start_height, "start_height")
+        )
+        if resolved_start_height < 0:
+            raise ValueError("start_height must not be negative")
+        resolved_height = (
+            wall.end_height - resolved_start_height
+            if height is None
+            else _number(height, "height")
+        )
+        if resolved_height <= 0:
+            raise ValueError("height must be greater than zero")
+
+        space_before_openings = _number(
+            space_before_openings, "space_before_openings"
+        )
+        space_after_openings = _number(
+            space_after_openings, "space_after_openings"
+        )
+        space_above_openings = _number(
+            space_above_openings, "space_above_openings"
+        )
+        space_below_openings = _number(
+            space_below_openings, "space_below_openings"
+        )
+        for parameter_name, value in (
+            ("space_before_openings", space_before_openings),
+            ("space_after_openings", space_after_openings),
+            ("space_above_openings", space_above_openings),
+            ("space_below_openings", space_below_openings),
+        ):
+            if value < 0:
+                raise ValueError(f"{parameter_name} must not be negative")
+        if not isinstance(trim_openings, bool):
+            raise TypeError("trim_openings must be a boolean")
+        transparency = _number(transparency, "transparency")
+        if not 0 <= transparency <= 1:
+            raise ValueError("transparency must be between 0 and 1")
+        material_name = _name(material, "material")
+
+        if opening_walls is None:
+            supplied_opening_walls: list[Wall] = []
+        else:
+            if isinstance(opening_walls, (str, bytes)):
+                raise TypeError("opening_walls must be a sequence of Wall objects")
+            try:
+                supplied_opening_walls = list(opening_walls)
+            except TypeError as error:
+                raise TypeError(
+                    "opening_walls must be a sequence of Wall objects"
+                ) from error
+        resolved_opening_walls = [wall]
+        seen_walls = {wall.id()}
+        host_tangent = np.array(
+            (
+                (wall.end[0] - wall.start[0]) / wall.length,
+                (wall.end[1] - wall.start[1]) / wall.length,
+            ),
+            dtype=float,
+        )
+        host_normal = np.array((-host_tangent[1], host_tangent[0]), dtype=float)
+        host_start = np.array(wall.start, dtype=float)
+        for index, opening_wall in enumerate(supplied_opening_walls, start=1):
+            if not isinstance(opening_wall, Wall):
+                raise TypeError(f"opening_walls item {index} must be a Wall")
+            if (
+                opening_wall.file is not self.model
+                or opening_wall.storey.house is not self
+            ):
+                raise ValueError(
+                    f"opening_walls item {index} must belong to this house"
+                )
+            source_tangent = np.array(
+                (
+                    (opening_wall.end[0] - opening_wall.start[0])
+                    / opening_wall.length,
+                    (opening_wall.end[1] - opening_wall.start[1])
+                    / opening_wall.length,
+                ),
+                dtype=float,
+            )
+            if abs(abs(float(np.dot(source_tangent, host_tangent))) - 1) > 1e-9:
+                raise ValueError(
+                    f"opening_walls item {index} must be parallel to the host wall"
+                )
+            line_distance = abs(
+                float(
+                    np.dot(
+                        np.array(opening_wall.start, dtype=float) - host_start,
+                        host_normal,
+                    )
+                )
+            )
+            if line_distance > 1e-9:
+                raise ValueError(
+                    f"opening_walls item {index} must be aligned with the host wall"
+                )
+            if opening_wall.id() not in seen_walls:
+                resolved_opening_walls.append(opening_wall)
+                seen_walls.add(opening_wall.id())
+
+        projected_openings: list[tuple[float, float, float, float]] = []
+        if trim_openings:
+            for opening_wall in resolved_opening_walls:
+                source_tangent = np.array(
+                    (
+                        (opening_wall.end[0] - opening_wall.start[0])
+                        / opening_wall.length,
+                        (opening_wall.end[1] - opening_wall.start[1])
+                        / opening_wall.length,
+                    ),
+                    dtype=float,
+                )
+                source_start = np.array(opening_wall.start, dtype=float)
+                elevation_delta = (
+                    opening_wall.storey.elevation - wall.storey.elevation
+                )
+                for opening_start, opening_end, opening_bottom, opening_top in (
+                    opening_wall._openings
+                ):
+                    world_start = source_start + opening_start * source_tangent
+                    world_end = source_start + opening_end * source_tangent
+                    projected_start = float(
+                        np.dot(world_start - host_start, host_tangent)
+                    )
+                    projected_end = float(
+                        np.dot(world_end - host_start, host_tangent)
+                    )
+                    projected_openings.append(
+                        (
+                            min(projected_start, projected_end)
+                            - space_before_openings,
+                            max(projected_start, projected_end)
+                            + space_after_openings,
+                            elevation_delta
+                            + opening_bottom
+                            - space_below_openings,
+                            elevation_delta
+                            + opening_top
+                            + space_above_openings,
+                        )
+                    )
+
+        self._facade_layer_count += 1
+        layer_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Facade Layer {self._facade_layer_count}"
+        )
+        model = self.model
+        element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcCovering",
+            name=layer_name,
+            predefined_type="CLADDING",
+        )
+        element.ObjectType = "FACADE_CLADDING"
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[element],
+            relating_structure=wall.storey.element,
+        )
+
+        layer_start = -start_extension
+        layer_length = wall.length + start_extension + end_extension
+        placement = wall._placement(layer_start, resolved_start_height)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=element,
+            matrix=placement,
+            is_si=True,
+        )
+        if side == "left":
+            body_offset = wall.body_offset + wall.thickness + offset
+        else:
+            body_offset = wall.body_offset - offset - thickness
+        body = ifcopenshell.api.geometry.add_wall_representation(
+            model,
+            context=self._body_context,
+            length=layer_length,
+            height=resolved_height,
+            thickness=thickness,
+            offset=body_offset,
+        )
+        clippings = _local_clippings(
+            wall.cuts,
+            placement,
+            (layer_length / 2, body_offset + thickness / 2, resolved_height / 2),
+        )
+        _clip_body_representation(model, element, body, clippings)
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=element,
+            representation=body,
+        )
+        surface_style = self._surface_style(
+            "wall", color=color, transparency=transparency
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+        ifc_material = self._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category="cladding",
+            )
+            self._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[element],
+            type="IfcMaterial",
+            material=ifc_material,
+        )
+
+        opening_overlap = 0.01
+        openings: list[ifcopenshell.entity_instance] = []
+        layer_end = wall.length + end_extension
+        layer_bottom = resolved_start_height
+        layer_top = resolved_start_height + resolved_height
+        for opening_index, (
+            opening_start,
+            opening_end,
+            opening_bottom,
+            opening_top,
+        ) in enumerate(projected_openings, start=1):
+            if (
+                opening_start >= layer_end - 1e-9
+                or layer_start >= opening_end - 1e-9
+                or opening_bottom >= layer_top - 1e-9
+                or layer_bottom >= opening_top - 1e-9
+            ):
+                continue
+            opening = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcOpeningElement",
+                name=f"{layer_name} Opening {opening_index}",
+                predefined_type="OPENING",
+            )
+            opening_body = ifcopenshell.api.geometry.add_wall_representation(
+                model,
+                context=self._body_context,
+                length=opening_end - opening_start,
+                height=opening_top - opening_bottom,
+                thickness=thickness + 2 * opening_overlap,
+                offset=body_offset - opening_overlap,
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=opening,
+                representation=opening_body,
+            )
+            ifcopenshell.api.feature.add_feature(
+                model,
+                feature=opening,
+                element=element,
+            )
+            opening_placement = wall._placement(opening_start, opening_bottom)
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=opening,
+                matrix=opening_placement,
+                is_si=True,
+            )
+            openings.append(opening)
+
+        layer_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=element,
+            name="BBIM_FacadeLayer",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=layer_pset,
+            properties={
+                "HostWall": wall.GlobalId,
+                "Side": side,
+                "Offset": offset,
+                "Thickness": thickness,
+                "StartHeight": resolved_start_height,
+                "Height": resolved_height,
+                "Length": layer_length,
+                "StartExtension": start_extension,
+                "EndExtension": end_extension,
+                "Material": material_name,
+                "TrimOpenings": trim_openings,
+                "OpeningWalls": json.dumps(
+                    [opening_wall.GlobalId for opening_wall in resolved_opening_walls]
+                ),
+                "SpaceBeforeOpenings": space_before_openings,
+                "SpaceAfterOpenings": space_after_openings,
+                "SpaceAboveOpenings": space_above_openings,
+                "SpaceBelowOpenings": space_below_openings,
+            },
+        )
+        return FacadeLayer(
+            element,
+            wall,
+            side=side,
+            offset=offset,
+            thickness=thickness,
+            start_height=resolved_start_height,
+            height=resolved_height,
+            length=layer_length,
+            start_extension=start_extension,
+            end_extension=end_extension,
+            material_name=material_name,
+            trim_openings=trim_openings,
+            opening_walls=tuple(resolved_opening_walls),
+            space_before_openings=space_before_openings,
+            space_after_openings=space_after_openings,
+            space_above_openings=space_above_openings,
+            space_below_openings=space_below_openings,
+            openings=tuple(openings),
+        )
 
     def storey(self, name: str, *, elevation: Number) -> Storey:
         """Create and return a building storey at ``elevation`` metres."""
@@ -3628,6 +5059,163 @@ class Beam(ifcopenshell.entity_instance):
     @property
     def element(self) -> ifcopenshell.entity_instance:
         """Return this beam as its underlying IFC entity."""
+        return self
+
+
+class FacadeLayer(ifcopenshell.entity_instance):
+    """One opening-aware ``IfcCovering`` used as exterior cladding."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        wall: Wall,
+        *,
+        side: str,
+        offset: float,
+        thickness: float,
+        start_height: float,
+        height: float,
+        length: float,
+        start_extension: float,
+        end_extension: float,
+        material_name: str,
+        trim_openings: bool,
+        opening_walls: tuple[Wall, ...],
+        space_before_openings: float,
+        space_after_openings: float,
+        space_above_openings: float,
+        space_below_openings: float,
+        openings: tuple[ifcopenshell.entity_instance, ...],
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "wall", wall)
+        object.__setattr__(self, "storey", wall.storey)
+        object.__setattr__(self, "side", side)
+        object.__setattr__(self, "offset", offset)
+        object.__setattr__(self, "thickness", thickness)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "height", height)
+        object.__setattr__(self, "length", length)
+        object.__setattr__(self, "start_extension", start_extension)
+        object.__setattr__(self, "end_extension", end_extension)
+        object.__setattr__(self, "material_name", material_name)
+        object.__setattr__(self, "trim_openings", trim_openings)
+        object.__setattr__(self, "opening_walls", opening_walls)
+        object.__setattr__(self, "space_before_openings", space_before_openings)
+        object.__setattr__(self, "space_after_openings", space_after_openings)
+        object.__setattr__(self, "space_above_openings", space_above_openings)
+        object.__setattr__(self, "space_below_openings", space_below_openings)
+        object.__setattr__(self, "openings", openings)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this layer as its underlying IFC covering."""
+        return self
+
+
+class HorizontalFrame(ifcopenshell.entity_instance):
+    """An ``IfcElementAssembly`` of horizontal wall-spanning laths."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        wall: Wall,
+        *,
+        side: str,
+        offset: float,
+        width: float,
+        depth: float,
+        gap: float,
+        length: float,
+        lath_offsets: tuple[float, ...],
+        lath_positions: tuple[float, ...],
+        start_extension: float,
+        end_extension: float,
+        trim_openings: bool,
+        space_before_openings: float,
+        space_after_openings: float,
+        space_above_openings: float,
+        space_below_openings: float,
+        insulation_material: str | None,
+        insulation_blocks: tuple[ifcopenshell.entity_instance, ...],
+        members: tuple[ifcopenshell.entity_instance, ...],
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "wall", wall)
+        object.__setattr__(self, "storey", wall.storey)
+        object.__setattr__(self, "side", side)
+        object.__setattr__(self, "offset", offset)
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "depth", depth)
+        object.__setattr__(self, "gap", gap)
+        object.__setattr__(self, "length", length)
+        object.__setattr__(self, "lath_offsets", lath_offsets)
+        object.__setattr__(self, "lath_positions", lath_positions)
+        object.__setattr__(self, "start_extension", start_extension)
+        object.__setattr__(self, "end_extension", end_extension)
+        object.__setattr__(self, "trim_openings", trim_openings)
+        object.__setattr__(self, "space_before_openings", space_before_openings)
+        object.__setattr__(self, "space_after_openings", space_after_openings)
+        object.__setattr__(self, "space_above_openings", space_above_openings)
+        object.__setattr__(self, "space_below_openings", space_below_openings)
+        object.__setattr__(self, "insulation_material", insulation_material)
+        object.__setattr__(self, "insulation_blocks", insulation_blocks)
+        object.__setattr__(self, "members", members)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this frame as its underlying IFC assembly."""
+        return self
+
+
+class VerticalFrame(ifcopenshell.entity_instance):
+    """An ``IfcElementAssembly`` of regularly spaced vertical laths."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        wall: Wall,
+        *,
+        side: str,
+        offset: float,
+        width: float,
+        depth: float,
+        start_height: float,
+        height: float,
+        gap: float,
+        lath_offsets: tuple[float, ...],
+        lath_positions: tuple[float, ...],
+        space_before_openings: float,
+        space_after_openings: float,
+        space_above_openings: float,
+        space_below_openings: float,
+        insulation_material: str | None,
+        insulation_blocks: tuple[ifcopenshell.entity_instance, ...],
+        members: tuple[ifcopenshell.entity_instance, ...],
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "wall", wall)
+        object.__setattr__(self, "storey", wall.storey)
+        object.__setattr__(self, "side", side)
+        object.__setattr__(self, "offset", offset)
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "depth", depth)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "height", height)
+        object.__setattr__(self, "gap", gap)
+        object.__setattr__(self, "lath_offsets", lath_offsets)
+        object.__setattr__(self, "lath_positions", lath_positions)
+        object.__setattr__(self, "space_before_openings", space_before_openings)
+        object.__setattr__(self, "space_after_openings", space_after_openings)
+        object.__setattr__(self, "space_above_openings", space_above_openings)
+        object.__setattr__(self, "space_below_openings", space_below_openings)
+        object.__setattr__(self, "insulation_material", insulation_material)
+        object.__setattr__(self, "insulation_blocks", insulation_blocks)
+        object.__setattr__(self, "members", members)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this frame as its underlying IFC assembly."""
         return self
 
 

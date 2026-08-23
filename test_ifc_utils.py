@@ -24,12 +24,15 @@ import numpy as np
 from ifc_utils import (
     Beam,
     Chimney,
+    FacadeLayer,
     House,
+    HorizontalFrame,
     MiakoSlab,
     Roof,
     RoofLayer,
     RoofPlane,
     Stair,
+    VerticalFrame,
     Wall,
     _close_door_bodies,
     _overhead_mask_global_ids,
@@ -2079,6 +2082,780 @@ class HouseTests(unittest.TestCase):
                 topping=0.07,
                 beam_height=0.06,
             )
+
+    def test_adds_a_regular_vertical_frame_from_a_storey_relative_height(
+        self,
+    ) -> None:
+        house = House("My house")
+        wall_type = house.wall_type(
+            "Exterior wall", layers=[("Brick", 0.25), "axis"]
+        )
+        ground = house.storey("Ground floor", elevation=0.5)
+        wall = ground.wall(
+            (1, 2),
+            (6, 2),
+            wall_type=wall_type,
+            start_height=0.25,
+            height=3,
+        )
+
+        frame = house.add_vertical_frame(
+            wall,
+            side="right",
+            offset=0.1,
+            width=0.04,
+            depth=0.06,
+            start_height=0.75,
+            height=2,
+            gap=0.4,
+            lath_offsets=[1, 2, 3],
+        )
+
+        self.assertIsInstance(frame, VerticalFrame)
+        self.assertTrue(frame.is_a("IfcElementAssembly"))
+        self.assertEqual(frame.ObjectType, "FACADE_VERTICAL_FRAME")
+        self.assertEqual(frame.start_height, 0.75)
+        self.assertEqual(frame.gap, 0.4)
+        self.assertEqual(frame.lath_offsets, (1, 2, 3))
+        np.testing.assert_allclose(
+            frame.lath_positions,
+            (1, 1.44, 1.88, 2, 2.44, 2.88, 3),
+            atol=1e-9,
+        )
+        self.assertEqual(len(frame.members), 7)
+        self.assertEqual(
+            frame.ContainedInStructure[0].RelatingStructure, ground.element
+        )
+        self.assertEqual(
+            set(frame.IsDecomposedBy[0].RelatedObjects), set(frame.members)
+        )
+
+        expected_x = (2.02, 2.46, 2.9, 3.02, 3.46, 3.9, 4.02)
+        for member, x in zip(frame.members, expected_x):
+            self.assertTrue(member.is_a("IfcMember"))
+            self.assertEqual(member.PredefinedType, "STUD")
+            self.assertEqual(member.ObjectType, "FACADE_LATH")
+            placement = ifcopenshell.util.placement.get_local_placement(
+                member.ObjectPlacement
+            )
+            np.testing.assert_allclose(
+                placement[:3, 3], (x, 1.87, 1.25), atol=1e-9
+            )
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), member
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_volume(shape.geometry),
+                2 * 0.04 * 0.06,
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_material(member).Name, "Wood"
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    member, "Pset_MemberCommon", "LoadBearing"
+                ),
+                False,
+            )
+
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_VerticalFrame", "StartHeight"
+            ),
+            0.75,
+        )
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    frame, "BBIM_VerticalFrame", "LathPositions"
+                )
+            ),
+            [1, 1.44, 1.88, 2, 2.44, 2.88, 3],
+        )
+        facade_storey = house.storey("Facade - +0: Frame", elevation=0)
+        facade_storey.element.ObjectType = "FACADE_LAYER"
+        facade_storey.add(frame)
+        self.assertEqual(
+            frame.ContainedInStructure[0].RelatingStructure,
+            facade_storey.element,
+        )
+        self.assertEqual(frame.members[0].Decomposes[0].RelatingObject, frame)
+
+    def test_adds_one_opening_aware_facade_covering(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.5)
+        wall = ground.wall(
+            (1, 2),
+            (5, 2),
+            thickness=0.2,
+            start_height=0.25,
+            height=3,
+        )
+        wall.add_opening(at=0.8, width=0.5, sill_height=0.5, height=2.5)
+
+        layer = house.add_facade_layer(
+            wall,
+            offset=0.1,
+            thickness=0.01,
+            start_extension=0.2,
+            end_extension=0.3,
+            space_before_openings=0.1,
+            space_after_openings=0.2,
+            space_above_openings=0.3,
+            space_below_openings=0.4,
+        )
+
+        self.assertIsInstance(layer, FacadeLayer)
+        self.assertTrue(layer.is_a("IfcCovering"))
+        self.assertEqual(layer.PredefinedType, "CLADDING")
+        self.assertEqual(layer.ObjectType, "FACADE_CLADDING")
+        self.assertEqual(layer.material_name, "Cementovlaknita deska")
+        self.assertEqual(layer.length, 4.5)
+        self.assertEqual(layer.start_height, 0.25)
+        self.assertEqual(layer.height, 3)
+        self.assertEqual(len(layer.openings), 1)
+        self.assertEqual(len(layer.HasOpenings), 1)
+        self.assertEqual(layer.openings[0].VoidsElements[0].RelatingBuildingElement, layer)
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(layer).Name,
+            "Cementovlaknita deska",
+        )
+        self.assertEqual(
+            layer.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), layer)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            (4.5 * 3 - 0.8 * 2.55) * 0.01,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                layer, "BBIM_FacadeLayer", "SpaceBeforeOpenings"
+            ),
+            0.1,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                layer, "BBIM_FacadeLayer", "SpaceAfterOpenings"
+            ),
+            0.2,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                layer, "BBIM_FacadeLayer", "SpaceAboveOpenings"
+            ),
+            0.3,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                layer, "BBIM_FacadeLayer", "SpaceBelowOpenings"
+            ),
+            0.4,
+        )
+
+    def test_projects_aligned_upper_wall_openings_into_one_facade_layer(
+        self,
+    ) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        upper = house.storey("Upper floor", elevation=3)
+        host = ground.wall((0, 0), (4, 0), thickness=0.2, height=6)
+        source = upper.wall((4, 0), (0, 0), thickness=0.2, height=3)
+        source.add_window(at=1, width=1, sill_height=0.5, height=1.5)
+
+        layer = house.add_facade_layer(
+            host,
+            offset=0,
+            thickness=0.01,
+            opening_walls=[source],
+        )
+
+        self.assertEqual(layer.opening_walls, (host, source))
+        self.assertEqual(len(layer.openings), 1)
+        placement = ifcopenshell.util.placement.get_local_placement(
+            layer.openings[0].ObjectPlacement
+        )
+        np.testing.assert_allclose(placement[:3, 3], (2, 0, 3.5), atol=1e-9)
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), layer)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            (4 * 6 - 1) * 0.01,
+        )
+
+    def test_validates_facade_layer_arguments(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (4, 0), thickness=0.2, height=3)
+        perpendicular = ground.wall((0, 0), (0, 4), thickness=0.2, height=3)
+        shifted = ground.wall((0, 1), (4, 1), thickness=0.2, height=3)
+
+        with self.assertRaisesRegex(ValueError, "offset"):
+            house.add_facade_layer(wall, offset=-0.1, thickness=0.01)
+        with self.assertRaisesRegex(ValueError, "thickness"):
+            house.add_facade_layer(wall, offset=0, thickness=0)
+        with self.assertRaisesRegex(TypeError, "trim_openings"):
+            house.add_facade_layer(
+                wall, offset=0, thickness=0.01, trim_openings="yes"
+            )
+        with self.assertRaisesRegex(ValueError, "parallel"):
+            house.add_facade_layer(
+                wall,
+                offset=0,
+                thickness=0.01,
+                opening_walls=[perpendicular],
+            )
+        with self.assertRaisesRegex(ValueError, "aligned"):
+            house.add_facade_layer(
+                wall,
+                offset=0,
+                thickness=0.01,
+                opening_walls=[shifted],
+            )
+
+    def test_adds_horizontal_frame_spanning_wall_with_extensions(self) -> None:
+        house = House("My house")
+        wall_type = house.wall_type(
+            "Exterior wall", layers=[("Brick", 0.25), "axis"]
+        )
+        ground = house.storey("Ground floor", elevation=0.5)
+        wall = ground.wall(
+            (1, 2),
+            (6, 2),
+            wall_type=wall_type,
+            start_height=0.25,
+            height=3,
+        )
+
+        frame = house.add_horizontal_frame(
+            wall,
+            side="right",
+            offset=0.1,
+            width=0.04,
+            depth=0.06,
+            gap=0.4,
+            lath_offsets=[0.25, 1, 2.5],
+            start_extension=0.2,
+            end_extension=0.3,
+            insulation_material="Rockwool",
+            insulation_color="#E8D36D",
+        )
+
+        self.assertIsInstance(frame, HorizontalFrame)
+        self.assertTrue(frame.is_a("IfcElementAssembly"))
+        self.assertEqual(frame.ObjectType, "FACADE_HORIZONTAL_FRAME")
+        self.assertEqual(frame.gap, 0.4)
+        self.assertEqual(frame.lath_offsets, (0.25, 1, 2.5))
+        np.testing.assert_allclose(
+            frame.lath_positions,
+            (0.25, 0.69, 1, 1.44, 1.88, 2.32, 2.5),
+            atol=1e-9,
+        )
+        self.assertEqual(frame.start_extension, 0.2)
+        self.assertEqual(frame.end_extension, 0.3)
+        self.assertAlmostEqual(frame.length, 5.5)
+        self.assertEqual(len(frame.members), 7)
+        self.assertEqual(frame.insulation_material, "Rockwool")
+        self.assertEqual(len(frame.insulation_blocks), 6)
+        self.assertEqual(
+            frame.ContainedInStructure[0].RelatingStructure, ground.element
+        )
+        self.assertEqual(
+            set(frame.IsDecomposedBy[0].RelatedObjects),
+            {*frame.members, *frame.insulation_blocks},
+        )
+        first_insulation = frame.insulation_blocks[0]
+        self.assertTrue(first_insulation.is_a("IfcBuildingElementPart"))
+        self.assertEqual(first_insulation.ObjectType, "FACADE_INSULATION")
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(first_insulation).Name,
+            "Rockwool",
+        )
+        insulation_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), first_insulation
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(insulation_shape.geometry),
+            5.5 * 0.4 * 0.06,
+        )
+
+        expected_z = (0.77, 1.21, 1.52, 1.96, 2.4, 2.84, 3.02)
+        for member, z in zip(frame.members, expected_z):
+            self.assertTrue(member.is_a("IfcMember"))
+            self.assertEqual(member.PredefinedType, "MEMBER")
+            self.assertEqual(member.ObjectType, "FACADE_LATH")
+            placement = ifcopenshell.util.placement.get_local_placement(
+                member.ObjectPlacement
+            )
+            np.testing.assert_allclose(
+                placement[:3, 3], (0.8, 1.87, z), atol=1e-9
+            )
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), member
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_volume(shape.geometry),
+                5.5 * 0.04 * 0.06,
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_material(member).Name, "Wood"
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    member, "Pset_MemberCommon", "LoadBearing"
+                ),
+                False,
+            )
+
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        first_shape = ifcopenshell.geom.create_shape(settings, frame.members[0])
+        vertices = ifcopenshell.util.shape.get_vertices(first_shape.geometry)
+        self.assertAlmostEqual(min(vertex[0] for vertex in vertices), 0.8)
+        self.assertAlmostEqual(max(vertex[0] for vertex in vertices), 6.3)
+        self.assertAlmostEqual(min(vertex[2] for vertex in vertices), 0.75)
+        self.assertAlmostEqual(max(vertex[2] for vertex in vertices), 0.79)
+
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    frame, "BBIM_HorizontalFrame", "LathOffsets"
+                )
+            ),
+            [0.25, 1, 2.5],
+        )
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    frame, "BBIM_HorizontalFrame", "LathPositions"
+                )
+            ),
+            [0.25, 0.69, 1, 1.44, 1.88, 2.32, 2.5],
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_HorizontalFrame", "StartExtension"
+            ),
+            0.2,
+        )
+
+    def test_splits_horizontal_frame_laths_around_openings(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (4, 0), thickness=0.2, height=3)
+        wall.add_opening(at=0.8, width=0.5, sill_height=0.5, height=2)
+
+        frame = house.add_horizontal_frame(
+            wall,
+            offset=0,
+            width=0.1,
+            depth=0.06,
+            gap=10,
+            lath_offsets=[0, 1, 2.5],
+            start_extension=0.2,
+            end_extension=0.3,
+            space_before_openings=0.1,
+            space_after_openings=0.2,
+            space_above_openings=0.6,
+            space_below_openings=0.6,
+            insulation_material="Rockwool",
+        )
+
+        self.assertTrue(frame.trim_openings)
+        self.assertEqual(frame.space_before_openings, 0.1)
+        self.assertEqual(frame.space_after_openings, 0.2)
+        self.assertEqual(frame.space_above_openings, 0.6)
+        self.assertEqual(frame.space_below_openings, 0.6)
+        self.assertEqual(len(frame.members), 6)
+        split_members = [
+            member for member in frame.members if "Lath 2." in member.Name
+        ]
+        self.assertEqual(len(split_members), 2)
+        split_lengths = []
+        split_starts = []
+        for member in split_members:
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), member
+            )
+            split_lengths.append(
+                ifcopenshell.util.shape.get_volume(shape.geometry) / (0.1 * 0.06)
+            )
+            placement = ifcopenshell.util.placement.get_local_placement(
+                member.ObjectPlacement
+            )
+            split_starts.append(placement[0, 3])
+        np.testing.assert_allclose(sorted(split_lengths), (0.9, 2.8), atol=1e-9)
+        np.testing.assert_allclose(sorted(split_starts), (-0.2, 1.5), atol=1e-9)
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_HorizontalFrame", "TrimOpenings"
+            ),
+            True,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_HorizontalFrame", "SpaceBeforeOpenings"
+            ),
+            0.1,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_HorizontalFrame", "SpaceAfterOpenings"
+            ),
+            0.2,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_HorizontalFrame", "SpaceAboveOpenings"
+            ),
+            0.6,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_HorizontalFrame", "SpaceBelowOpenings"
+            ),
+            0.6,
+        )
+        self.assertEqual(len(frame.insulation_blocks), 2)
+        insulation_volumes = []
+        for block in frame.insulation_blocks:
+            self.assertEqual(len(block.HasOpenings), 1)
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), block
+            )
+            insulation_volumes.append(
+                ifcopenshell.util.shape.get_volume(shape.geometry)
+            )
+        np.testing.assert_allclose(
+            insulation_volumes,
+            (
+                (4.5 - 0.8) * 0.9 * 0.06,
+                (4.5 - 0.8) * 1.4 * 0.06,
+            ),
+            atol=1e-9,
+        )
+
+        untrimmed = house.add_horizontal_frame(
+            wall,
+            offset=0,
+            width=0.1,
+            depth=0.06,
+            gap=10,
+            lath_offsets=[1, 2.5],
+            start_extension=0.2,
+            end_extension=0.3,
+            trim_openings=False,
+        )
+        self.assertFalse(untrimmed.trim_openings)
+        self.assertEqual(len(untrimmed.members), 2)
+        for member in untrimmed.members:
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), member
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_volume(shape.geometry),
+                4.5 * 0.1 * 0.06,
+            )
+
+    def test_validates_horizontal_frame_arguments(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (1, 0), thickness=0.2, height=3)
+        arguments = {
+            "wall": wall,
+            "offset": 0,
+            "width": 0.04,
+            "depth": 0.06,
+            "gap": 0.4,
+            "lath_offsets": [0, 1],
+        }
+
+        with self.assertRaisesRegex(ValueError, "offset"):
+            house.add_horizontal_frame(**(arguments | {"offset": -0.1}))
+        with self.assertRaisesRegex(ValueError, "width"):
+            house.add_horizontal_frame(**(arguments | {"width": 0}))
+        with self.assertRaisesRegex(ValueError, "depth"):
+            house.add_horizontal_frame(**(arguments | {"depth": 0}))
+        with self.assertRaisesRegex(ValueError, "gap"):
+            house.add_horizontal_frame(**(arguments | {"gap": 0}))
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            house.add_horizontal_frame(**(arguments | {"lath_offsets": [0]}))
+        with self.assertRaisesRegex(TypeError, "sequence"):
+            house.add_horizontal_frame(
+                **(arguments | {"lath_offsets": "0,1"})
+            )
+        with self.assertRaisesRegex(ValueError, "negative positions"):
+            house.add_horizontal_frame(
+                **(arguments | {"lath_offsets": [-0.1, 1]})
+            )
+        with self.assertRaisesRegex(ValueError, "strictly increasing"):
+            house.add_horizontal_frame(
+                **(arguments | {"lath_offsets": [1, 0.5]})
+            )
+        with self.assertRaisesRegex(ValueError, "start_extension"):
+            house.add_horizontal_frame(**arguments, start_extension=-0.1)
+        with self.assertRaisesRegex(ValueError, "end_extension"):
+            house.add_horizontal_frame(**arguments, end_extension=-0.1)
+        with self.assertRaisesRegex(TypeError, "trim_openings"):
+            house.add_horizontal_frame(**arguments, trim_openings="yes")
+        with self.assertRaisesRegex(ValueError, "space_before_openings"):
+            house.add_horizontal_frame(**arguments, space_before_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "space_after_openings"):
+            house.add_horizontal_frame(**arguments, space_after_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "space_above_openings"):
+            house.add_horizontal_frame(**arguments, space_above_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "space_below_openings"):
+            house.add_horizontal_frame(**arguments, space_below_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "insulation_transparency"):
+            house.add_horizontal_frame(
+                **arguments, insulation_transparency=1.1
+            )
+        with self.assertRaisesRegex(ValueError, "must be one of"):
+            house.add_horizontal_frame(**arguments, side="outside")
+
+    def test_splits_vertical_frame_laths_around_existing_openings(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (4, 0), thickness=0.2, height=3)
+        wall.add_opening(at=0.8, width=0.5, sill_height=0.5, height=2)
+
+        frame = house.add_vertical_frame(
+            wall,
+            offset=0,
+            width=0.1,
+            depth=0.06,
+            start_height=0,
+            height=3,
+            gap=0.875,
+            lath_offsets=[0, 3.9],
+        )
+
+        self.assertEqual(len(frame.members), 6)
+        split_members = [
+            member for member in frame.members if "Lath 2." in member.Name
+        ]
+        self.assertEqual(len(split_members), 2)
+        split_heights = []
+        for member in split_members:
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), member
+            )
+            split_heights.append(
+                ifcopenshell.util.shape.get_volume(shape.geometry) / (0.1 * 0.06)
+            )
+        np.testing.assert_allclose(sorted(split_heights), (0.5, 1.0), atol=1e-9)
+
+    def test_adds_one_insulation_block_per_vertical_frame_bay(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (2, 0), thickness=0.2, height=3)
+        wall.add_opening(at=0.8, width=0.5, sill_height=0.5, height=2)
+
+        frame = house.add_vertical_frame(
+            wall,
+            offset=0,
+            width=0.1,
+            depth=0.06,
+            start_height=0,
+            height=3,
+            gap=10,
+            lath_offsets=[0, 1.9],
+            insulation_material="Rockwool",
+            insulation_color="#E8D36D",
+        )
+
+        self.assertEqual(frame.insulation_material, "Rockwool")
+        self.assertEqual(len(frame.insulation_blocks), 1)
+        block = frame.insulation_blocks[0]
+        self.assertTrue(block.is_a("IfcBuildingElementPart"))
+        self.assertEqual(block.ObjectType, "FACADE_INSULATION")
+        self.assertEqual(len(block.HasOpenings), 1)
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(block).Name, "Rockwool"
+        )
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), block
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            (1.8 * 3 - 0.5 * 1.5) * 0.06,
+        )
+        self.assertEqual(
+            set(frame.IsDecomposedBy[0].RelatedObjects),
+            {*frame.members, block},
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                block, "BBIM_FrameInsulation", "BayIndex"
+            ),
+            1,
+        )
+
+    def test_leaves_space_above_and_below_openings(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (4, 0), thickness=0.2, height=3)
+        wall.add_opening(at=0.8, width=0.5, sill_height=0.5, height=2)
+
+        frame = house.add_vertical_frame(
+            wall,
+            offset=0,
+            width=0.1,
+            depth=0.06,
+            start_height=0,
+            height=3,
+            gap=0.875,
+            lath_offsets=[0, 3.9],
+            space_before_openings=0.1,
+            space_after_openings=0.2,
+            space_above_openings=0.1,
+            space_below_openings=0.2,
+        )
+
+        self.assertEqual(frame.space_before_openings, 0.1)
+        self.assertEqual(frame.space_after_openings, 0.2)
+        self.assertEqual(frame.space_above_openings, 0.1)
+        self.assertEqual(frame.space_below_openings, 0.2)
+        split_members = [
+            member for member in frame.members if "Lath 2." in member.Name
+        ]
+        split_heights = []
+        for member in split_members:
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), member
+            )
+            split_heights.append(
+                ifcopenshell.util.shape.get_volume(shape.geometry) / (0.1 * 0.06)
+            )
+        np.testing.assert_allclose(sorted(split_heights), (0.3, 0.9), atol=1e-9)
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_VerticalFrame", "SpaceBeforeOpenings"
+            ),
+            0.1,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_VerticalFrame", "SpaceAfterOpenings"
+            ),
+            0.2,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_VerticalFrame", "SpaceAboveOpenings"
+            ),
+            0.1,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                frame, "BBIM_VerticalFrame", "SpaceBelowOpenings"
+            ),
+            0.2,
+        )
+
+    def test_uses_lath_start_offsets_at_opening_edges(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (2, 0), thickness=0.2, height=3)
+        wall.add_opening(at=0.8, width=0.5, sill_height=0.5, height=2)
+
+        frame = house.add_vertical_frame(
+            wall,
+            offset=0,
+            width=0.1,
+            depth=0.06,
+            height=3,
+            gap=1,
+            lath_offsets=[0.7, 1.3],
+        )
+
+        self.assertEqual(frame.lath_positions, (0.7, 1.3))
+        self.assertEqual(len(frame.members), 2)
+        for member, expected_x in zip(frame.members, (0.75, 1.35)):
+            placement = ifcopenshell.util.placement.get_local_placement(
+                member.ObjectPlacement
+            )
+            self.assertAlmostEqual(placement[0, 3], expected_x)
+
+    def test_applies_all_opening_spaces_to_vertical_frame(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (2, 0), thickness=0.2, height=3)
+        wall.add_opening(at=0.8, width=0.5, sill_height=0.5, height=2)
+
+        frame = house.add_vertical_frame(
+            wall,
+            offset=0,
+            width=0.1,
+            depth=0.06,
+            height=3,
+            gap=10,
+            lath_offsets=[0.65, 1.35],
+            space_before_openings=0.1,
+            space_after_openings=0.1,
+            space_above_openings=0.2,
+            space_below_openings=0.1,
+        )
+
+        self.assertEqual(len(frame.members), 4)
+        segment_heights = []
+        for member in frame.members:
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), member
+            )
+            segment_heights.append(
+                ifcopenshell.util.shape.get_volume(shape.geometry) / (0.1 * 0.06)
+            )
+        np.testing.assert_allclose(
+            sorted(segment_heights), (0.4, 0.4, 0.8, 0.8), atol=1e-9
+        )
+
+    def test_validates_vertical_frame_arguments(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (1, 0), thickness=0.2, height=3)
+        arguments = {
+            "wall": wall,
+            "offset": 0,
+            "width": 0.04,
+            "depth": 0.06,
+            "height": 3,
+            "gap": 0.4,
+            "lath_offsets": [0, 0.96],
+        }
+
+        with self.assertRaisesRegex(ValueError, "gap"):
+            house.add_vertical_frame(**(arguments | {"gap": 0}))
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            house.add_vertical_frame(**(arguments | {"lath_offsets": [0]}))
+        with self.assertRaisesRegex(TypeError, "sequence"):
+            house.add_vertical_frame(**(arguments | {"lath_offsets": "0,1"}))
+        with self.assertRaisesRegex(ValueError, "strictly increasing"):
+            house.add_vertical_frame(
+                **(arguments | {"lath_offsets": [0.5, 0.4]})
+            )
+        with self.assertRaisesRegex(ValueError, "within the wall"):
+            house.add_vertical_frame(
+                **(arguments | {"lath_offsets": [0, 0.97]})
+            )
+        with self.assertRaisesRegex(ValueError, "start_height"):
+            house.add_vertical_frame(**arguments, start_height=-0.1)
+        with self.assertRaisesRegex(ValueError, "offset"):
+            house.add_vertical_frame(**(arguments | {"offset": -0.1}))
+        with self.assertRaisesRegex(ValueError, "space_before_openings"):
+            house.add_vertical_frame(**arguments, space_before_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "space_after_openings"):
+            house.add_vertical_frame(**arguments, space_after_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "space_above_openings"):
+            house.add_vertical_frame(**arguments, space_above_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "space_below_openings"):
+            house.add_vertical_frame(**arguments, space_below_openings=-0.1)
+        with self.assertRaisesRegex(ValueError, "insulation_transparency"):
+            house.add_vertical_frame(
+                **arguments, insulation_transparency=1.1
+            )
+        with self.assertRaisesRegex(ValueError, "must be one of"):
+            house.add_vertical_frame(**arguments, side="outside")
 
     def test_connects_and_mitres_two_layered_walls(self) -> None:
         house = House("My house")
@@ -4157,6 +4934,29 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(svg.count(polygon), 1)
             self.assertLess(svg.index(polygon), svg.index('<path d="M0,0 L1,0"'))
             self.assertNotIn('points="5,0 6,0 6,1 5,1"', svg)
+
+    def test_styles_facade_laths_with_fine_plan_lines(self) -> None:
+        stylesheet = (
+            Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(".target-view-PLANVIEW .IfcMember.cut", stylesheet)
+        self.assertIn(".target-view-PLANVIEW .IfcMember.projection", stylesheet)
+        lath_rule = stylesheet.split(
+            ".target-view-PLANVIEW .IfcMember.cut", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("stroke-width: 0.06 !important", lath_rule)
+
+        self.assertIn(
+            ".target-view-PLANVIEW "
+            ".IfcBuildingElementPart.material-Rockwool.cut",
+            stylesheet,
+        )
+        insulation_rule = stylesheet.split(
+            ".IfcBuildingElementPart.material-Rockwool.cut", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", insulation_rule)
+        self.assertIn("stroke-width: 0.06 !important", insulation_rule)
 
     def test_centers_short_dimension_labels_during_svg_postprocessing(self) -> None:
         with TemporaryDirectory() as directory:

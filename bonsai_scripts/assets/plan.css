@@ -85,6 +85,21 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke: none !important;
 }
 
+/* Façade-frame laths are IfcMembers. Keep their plan outlines as light as
+ * the roof-batten outlines used in sections, without changing their 3D form. */
+.target-view-PLANVIEW .IfcMember.cut,
+.target-view-PLANVIEW .IfcMember.projection {
+    stroke-width: 0.06 !important;
+}
+
+/* Rockwool building-element parts are the blocks between façade laths. */
+.target-view-PLANVIEW .IfcBuildingElementPart.material-Rockwool.cut,
+.target-view-PLANVIEW .IfcBuildingElementPart.material-Rockwool.projection {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
 /* Simplified insulation/heating/screed floor build-ups. */
 .material-Floorbuildup {
     fill: white !important;
