@@ -62,7 +62,7 @@
 #	Tepelné čerpadlo LG Therma V Split 12kW HN1636M+HU123MA (model 2023)
 #	https://www.vzduchotechnika1.cz/lg-therma-v-split-12kw-hn1636m-hu123ma
 
-from math import acos, degrees, isclose
+from math import acos, degrees, isclose, floor
 import sys
 from ifc_utils import *
 
@@ -78,7 +78,7 @@ COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.05
-GROUND_FLOOR_THICKNESS = 0.23
+GROUND_FLOOR_THICKNESS = 0.20
 UPPER_FLOOR_THICKNESS = 0.11
 
 THERMAL_INSULATION_40_BOTTOM = (
@@ -97,7 +97,7 @@ ground_floor_height = 0.25+2.75
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.80
+UNDER_HOLE = 3.0
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_SIZE = (0.06, 0.16)
 COLLAR_TIE_EXTENSION = 1.0
@@ -178,12 +178,15 @@ ground_floor_layer = ground.floor_layer(
 
 # Load-bearing walls
 
+HOUSE_DEPTH = 8.5
+HALF_DEPTH = HOUSE_DEPTH / 2.0
+
 wall_front = ground.wall((0, 0), (12, 0), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_4 = ground.wall((12, 0), (12, 8), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_back = ground.wall((12, 8), (0, 8), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1 = ground.wall((0, 8), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_2 = ground.wall((wall2_x, 0), (wall2_x, 8), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_3 = ground.wall((wall3_x, 0), (wall3_x, 8), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_4 = ground.wall((12, 0), (12, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_back = ground.wall((12, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1 = ground.wall((0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_2 = ground.wall((wall2_x, 0), (wall2_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
 ground.connect_wall(wall_1, wall_front)
 ground.connect_wall(wall_1, wall_back)
@@ -339,7 +342,7 @@ kitchen_door = wall_3.add_door(
 
 # Pokoj Risanek
 wall_2.add_door(
-	at=8.0-0.25-3.0,
+	at=HOUSE_DEPTH-0.25-3.0,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -403,9 +406,19 @@ ground.furniture(
 )
 
 # Chimney
-CHIMNEY_DIST=0.875-0.4
+CHIMNEY_DIST=0.47
+CHIMNEY_Y_START = HALF_DEPTH + 0.8 - 0.07 - 0.05 - 0.4
+CHIMNEY_Y_START = 0.125*floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
+CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025
+CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
+CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
+
+print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
+print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
+print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
+
 chimney = ground.chimney(
-    center=(0.25+3+0.25+4.5+0.25+CHIMNEY_DIST+0.2, 4.43),
+    center=(0.25+3+0.25+4.5+0.25+CHIMNEY_DIST+0.2, CHIMNEY_Y_MID),
     size=0.4,
     height=8.8,
     flue_diameter=0.18,
@@ -423,7 +436,7 @@ w1 = ground.wall(
 	(0.25+3+0.25+4.5+0.25+3.5, 4.65),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_3.add_door(
-    at=8-0.25-1.5,
+    at=HOUSE_DEPTH-0.25-1.5,
     opening_width=1.0, width=0.9,
     height=0.25+2.125,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -666,8 +679,8 @@ facade_4.add(frame2_finish)
 # MIAKO
 ceiling1 = upper.miako_slab(
     "Ceiling 1",
-    start=(0.1, 8.0-0.25+0.04),
-    end=(0.25+3.0+0.25-0.15, 8.0-0.25+0.04),
+    start=(0.1, HOUSE_DEPTH-0.25+0.04),
+    end=(0.25+3.0+0.25-0.15, HOUSE_DEPTH-0.25+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
@@ -691,8 +704,8 @@ ceiling1 = upper.miako_slab(
 )
 ceiling2 = upper.miako_slab(
     "Ceiling 2",
-    start=(0.25+3.0+0.125, 8.0-0.25+0.04),
-    end=(0.25+3.0+0.25+4.5+0.125, 8.0-0.25+0.04),
+    start=(0.25+3.0+0.125, HOUSE_DEPTH-0.25+0.04),
+    end=(0.25+3.0+0.25+4.5+0.125, HOUSE_DEPTH-0.25+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
@@ -716,8 +729,8 @@ ceiling2 = upper.miako_slab(
 )
 ceiling3 = upper.miako_slab(
     "Ceiling 3",
-    start=(0.25+3.0+0.25+4.5+0.15, 8.0-0.25+0.04),
-    end=(0.25+3.0+0.25+4.5+0.15+3.75, 8.0-0.25+0.04),
+    start=(0.25+3.0+0.25+4.5+0.15, HOUSE_DEPTH-0.25+0.04),
+    end=(0.25+3.0+0.25+4.5+0.15+3.75, HOUSE_DEPTH-0.25+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
@@ -786,8 +799,8 @@ upper_floor_layers = (
 	),
 )
 
-STREET_ROOF_JOINT_Y = 4.0-0.8-0.07
-GARDEN_ROOF_JOINT_Y = 4.0+0.8+0.07
+STREET_ROOF_JOINT_Y = HALF_DEPTH-0.8-0.07
+GARDEN_ROOF_JOINT_Y = HALF_DEPTH+0.8+0.07
 ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24
 STREET_ROOF_PLANE_POINTS = (
 	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -797,12 +810,12 @@ STREET_ROOF_PLANE_POINTS = (
 GARDEN_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
-	(0, 8.0-0.125+0.08, UPPER_FLOOR_START+NADEZDIVKA+0.12),
+	(0, HOUSE_DEPTH-0.125+0.08, UPPER_FLOOR_START+NADEZDIVKA+0.12),
 )
 DORMER_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
-	(0, 8.0-0.125+0.08, UPPER_FLOOR_START+2.5+0.12),
+	(0, HOUSE_DEPTH-0.125+0.08, UPPER_FLOOR_START+2.5+0.12),
 )
 FLAT_CEILING_ROOF_PLANE_POINTS = (
 	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -815,9 +828,9 @@ wall_cuts_1_4 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(5, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
@@ -825,17 +838,21 @@ wall_cuts_2_3 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*DORMER_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, 4.0-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(0, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(5, 4.0+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(5, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 	),
 ]
 
-wall_dormer = upper.wall((0.25+3+0.25+4.5+0.25, 8), (0.25+3, 8), wall_type=load_bearing_wall, height=1.25, start_height=NADEZDIVKA)
+wall_dormer = upper.wall(
+	(0.25+3+0.25+4.5+0.25, HOUSE_DEPTH), (0.25+3, HOUSE_DEPTH),
+	wall_type=load_bearing_wall, height=1.25, start_height=NADEZDIVKA)
 wall_front = upper.wall((0, 0), (12, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_back = upper.wall((12, 8), (0, 8), wall_type=load_bearing_wall, height=NADEZDIVKA)
+wall_back = upper.wall(
+	(12, HOUSE_DEPTH), (0, HOUSE_DEPTH),
+	wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_1 = upper.wall(
-	(0, 8), (0, 0),
+	(0, HOUSE_DEPTH), (0, 0),
 	wall_type=load_bearing_wall,
 	height=4,
 	cuts=wall_cuts_1_4,
@@ -844,20 +861,20 @@ wall_1.add_opening(at=0, width=0.25, height=1.5, sill_height=NADEZDIVKA)
 wall_1.add_opening(at=7.75, width=0.25, height=1.5, sill_height=NADEZDIVKA)
 
 wall_2 = upper.wall(
-	(wall2_x, 0), (wall2_x, 8),
+	(wall2_x, 0), (wall2_x, HOUSE_DEPTH),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_2.add_opening(
 	at=3.5, width=1, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 wall_3 = upper.wall(
-	(wall3_x, 0), (wall3_x, 8),
+	(wall3_x, 0), (wall3_x, HOUSE_DEPTH),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_3.add_opening(
 	at=3.5, width=1, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_4 = upper.wall(
-	(12, 0), (12, 8),
+	(12, 0), (12, HOUSE_DEPTH),
 	wall_type=load_bearing_wall,
 	height=4,
 	cuts=wall_cuts_1_4,
@@ -901,16 +918,16 @@ upper.connect_wall(wall_4, wall_back)
 
 beam1 = upper.beam(
     "Beam",
-    start=(0, 4.0-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
-    end=(12, 4.0-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    start=(0, HALF_DEPTH-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    end=(12, HALF_DEPTH-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     size=(0.14, 0.24),
     material="Wood",
     kind="BEAM",
 )
 beam2 = upper.beam(
     "Beam",
-    start=(0, 4.0+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
-    end=(12, 4.0+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    start=(0, HALF_DEPTH+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    end=(12, HALF_DEPTH+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     size=(0.14, 0.24),
     material="Wood",
     kind="BEAM",
@@ -925,16 +942,16 @@ beam3 = upper.beam(
 )
 beam4 = upper.beam(
     "Beam",
-    start=(0, 8-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    end=(12, 8-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    start=(0, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    end=(12, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
 )
 beam_dormer = upper.beam(
     "Beam",
-    start=(0.25+3+0.25+4.5+0.25+0.3, 8-0.125, UPPER_FLOOR_START+2.5+0.06),
-    end=(0.25+3-0.3, 8-0.125, UPPER_FLOOR_START+2.5+0.06),
+    start=(0.25+3+0.25+4.5+0.25+0.3, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+2.5+0.06),
+    end=(0.25+3-0.3, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+2.5+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
@@ -959,7 +976,7 @@ wall_dormer.add_window(
 	width=1.5, sill_height=NADEZDIVKA, height=2.25)
 # Dvere obyvak
 wall_3.add_door(
-	#at=4.43+0.07+0.25,
+	#at=CHIMNEY_Y_MID+0.07+0.25,
 	at=3.25,
 	opening_width=1, width=0.9,
 	height=2.25,
@@ -996,24 +1013,24 @@ street_roof = roof.plane(
     "Street slope",
 	points=STREET_ROOF_PLANE_POINTS,
     cuts=[
-		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
-		((0, -0.4, 0), (10, -0.4, 0), (0, -0.4, 10)),
+		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
+		((0, -0.5, 0), (10, -0.5, 0), (0, -0.5, 10)),
 	],
 )
 garden_roof = roof.plane(
     "Garden slope",
 	points=GARDEN_ROOF_PLANE_POINTS,
     cuts=[
-		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
-		((0, 8.4, 0), (10, 8.4, 0), (0, 8.4, 10)),
+		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
+		((0, HOUSE_DEPTH+0.5, 0), (10, HOUSE_DEPTH+0.5, 0), (0, HOUSE_DEPTH+0.5, 10)),
 	],
 )
 dormer_roof = roof.plane(
     "Dormer slope",
 	points=DORMER_ROOF_PLANE_POINTS,
     cuts=[
-		((0, 4, 0), (10, 4, 0), (0, 4, 10)),
-		((0, 8.4, 0), (10, 8.4, 0), (0, 8.4, 10)),
+		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
+		((0, HOUSE_DEPTH+0.5, 0), (10, HOUSE_DEPTH+0.5, 0), (0, HOUSE_DEPTH+0.5, 10)),
 	],
 )
 flat_ceiling_roof = roof.plane(
@@ -1645,7 +1662,7 @@ if "upper" in sys.argv:
 
 	drawing1.add_dimension(start=(3.5+4.5, 2.55+0.1), end=(3.5+4.5, 7.75), offset=2)
 
-	drawing1.add_dimension(start=(3.5+4.5+0.5, 4.23), end=(3.5+4.5+0.5, 3.2), offset=0)
+	drawing1.add_dimension(start=(3.5+4.5+0.5, CHIMNEY_Y_MID), end=(3.5+4.5+0.5, 3.2), offset=0)
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 
