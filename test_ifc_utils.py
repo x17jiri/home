@@ -39,6 +39,7 @@ from ifc_utils import (
     _postprocess_door_overheads,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_wood_fills,
+    _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
     generate_plan,
     offset_plane,
@@ -4427,6 +4428,163 @@ class HouseTests(unittest.TestCase):
                 if annotation.ObjectType == "DRAWING"
             ]
             self.assertEqual({drawing.Name for drawing in drawings}, {"Ground plan", "Other plan"})
+
+    def test_persists_material_legend_in_an_optional_right_panel(self) -> None:
+        house = House("My house")
+        drawing = house.add_drawing(
+            "Ground plan",
+            2,
+            3,
+            1.6,
+            5,
+            right_panel_width=90,
+        )
+
+        result = drawing.add_material_legend(
+            [
+                (
+                    "diagonal1",
+                    "OBVODOVÉ ZDIVO Z BROUŠENÝCH KERAMICKÝCH TVÁRNIC",
+                ),
+                (
+                    "crosshatch1",
+                    "ZTRACENÉ BEDNĚNÍ\nPROLITÉ BETONEM C 20/25",
+                ),
+            ],
+            title="LEGENDA MATERIÁLŮ",
+        )
+
+        self.assertIs(result, drawing)
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertEqual(properties["RightPanelWidth"], 90)
+        self.assertEqual(
+            json.loads(properties["RightPanelTables"]),
+            [
+                {
+                    "kind": "material_legend",
+                    "title": "LEGENDA MATERIÁLŮ",
+                    "items": [
+                        {
+                            "pattern": "diagonal1",
+                            "description": (
+                                "OBVODOVÉ ZDIVO Z BROUŠENÝCH "
+                                "KERAMICKÝCH TVÁRNIC"
+                            ),
+                        },
+                        {
+                            "pattern": "crosshatch1",
+                            "description": (
+                                "ZTRACENÉ BEDNĚNÍ\nPROLITÉ BETONEM C 20/25"
+                            ),
+                        },
+                    ],
+                }
+            ],
+        )
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "legend.ifc"
+            house.write(path)
+            reopened = ifcopenshell.open(path)
+            reopened_drawing = reopened.by_guid(drawing.element.GlobalId)
+            reopened_properties = ifcopenshell.util.element.get_pset(
+                reopened_drawing,
+                "EPset_Drawing",
+            )
+            self.assertIn(
+                "LEGENDA MATERIÁLŮ",
+                reopened_properties["RightPanelTables"],
+            )
+
+        no_panel = house.add_drawing("No panel", 2, 3, 1.6, 5)
+        with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
+            no_panel.add_material_legend([("brick", "Masonry")])
+        narrow_panel = house.add_drawing(
+            "Narrow panel", 2, 3, 1.6, 5, right_panel_width=30
+        )
+        with self.assertRaisesRegex(ValueError, "at least 40 mm"):
+            narrow_panel.add_material_legend([("brick", "Masonry")])
+        with self.assertRaisesRegex(ValueError, "is not available"):
+            drawing.add_material_legend([("unknown", "Masonry")])
+        with self.assertRaisesRegex(ValueError, "at least one material"):
+            drawing.add_material_legend([])
+        with self.assertRaisesRegex(ValueError, "must not be negative"):
+            house.add_drawing(
+                "Invalid panel",
+                2,
+                3,
+                1.6,
+                5,
+                right_panel_width=-1,
+            )
+
+    def test_appends_material_legend_and_expands_svg_sheet(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg width="160mm" height="160mm" '
+                'viewBox="0 0 160 160">\n'
+                "  <defs>"
+                '<pattern id="diagonal1" width="2" height="2"/>'
+                "</defs>\n"
+                '  <g id="model-view"/>\n'
+                "</svg>\n",
+                encoding="utf-8",
+            )
+            properties = {
+                "RightPanelWidth": 40,
+                "RightPanelTables": json.dumps(
+                    [
+                        {
+                            "kind": "material_legend",
+                            "title": "LEGENDA & MATERIÁLY",
+                            "items": [
+                                {
+                                    "pattern": "diagonal1",
+                                    "description": (
+                                        "A very long material description that "
+                                        "must wrap over multiple lines in the table"
+                                    ),
+                                },
+                                {
+                                    "pattern": "crosshatch1",
+                                    "description": "Concrete blocks",
+                                },
+                            ],
+                        }
+                    ],
+                ),
+            }
+
+            _postprocess_right_panel(svg_path, properties)
+            _postprocess_right_panel(svg_path, properties)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertIn('width="200mm"', svg)
+            self.assertIn('height="160mm"', svg)
+            self.assertIn('viewBox="0 0 200 160"', svg)
+            self.assertEqual(svg.count('class="right-side-panel"'), 1)
+            self.assertIn('x="160"', svg)
+            self.assertIn('width="40"', svg)
+            self.assertIn('style="font-size:1.83333px"', svg)
+            self.assertGreaterEqual(
+                svg.count('style="font-size:1.06667px"'),
+                4,
+            )
+            self.assertIn('fill="url(#diagonal1)"', svg)
+            self.assertIn('fill="url(#crosshatch1)"', svg)
+            self.assertIn("LEGENDA &amp; MATERIÁLY", svg)
+            self.assertGreaterEqual(
+                svg.count('<tspan x="'),
+                3,
+            )
+            self.assertGreater(
+                svg.index('class="right-side-panel"'),
+                svg.index('id="model-view"'),
+            )
 
     def test_stores_a_basic_elevation_camera_without_plan_annotations(self) -> None:
         house = House("My house")

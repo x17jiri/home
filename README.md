@@ -301,6 +301,47 @@ Elevation directions must currently be horizontal.  Elevations project the
 existing 3D model bodies and deliberately omit plan-only annotations such as
 door dimensions, room labels, stair arrows, and furniture labels.
 
+Persisted plan and elevation drawings may reserve additional paper space on
+their right side without changing the camera framing.  The width is expressed
+in printed millimetres.  Optional tables are stacked from the top of this
+panel; the first supported table is a material-pattern legend:
+
+```python
+drawing = house.add_drawing(
+    "Ground plan",
+    x=6,
+    y=4,
+    z=1.6,
+    radius=8,
+    storeys=[ground],
+    right_panel_width=100,
+)
+drawing.add_material_legend(
+    [
+        (
+            "brick",
+            "OBVODOVÉ ZDIVO Z BROUŠENÝCH KERAMICKÝCH TVÁRNIC, "
+            "TLOUŠŤKY 440 MM",
+        ),
+        (
+            "diagonal1",
+            "VNITŘNÍ NENOSNÉ ZDIVO Z BROUŠENÝCH KERAMICKÝCH CIHEL",
+        ),
+        (
+            "crosshatch1",
+            "TVÁRNICE ZTRACENÉHO BEDNĚNÍ PROLITÉ BETONEM C 20/25",
+        ),
+    ],
+    title="LEGENDA MATERIÁLŮ",
+)
+```
+
+Descriptions wrap automatically and may also contain explicit newlines.
+Available pattern names are defined in `drawings/assets/patterns.svg`, including
+`diagonal1`, `diagonal2`, `crosshatch1`, `brick`, `concrete`, `sand`, and
+`wood`.  A zero `right_panel_width` (the default) keeps the original square
+drawing sheet.
+
 The Blender-side implementation is in `bonsai_scripts/generate_plan.py`.
 Parameters are passed directly after Blender's `--` command separator instead
 of through a shared parameter file, preventing stale settings and allowing

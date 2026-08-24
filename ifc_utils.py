@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
+from textwrap import wrap
 from time import monotonic
 from typing import Literal, Sequence, TypeAlias
 
@@ -917,6 +918,288 @@ def _postprocess_projected_wood_fills(svg_path: Path) -> None:
         svg_path.write_text(processed_svg, encoding="utf-8")
 
 
+_DRAWING_PATTERN_IDS: frozenset[str] | None = None
+
+
+def _drawing_pattern_ids() -> frozenset[str]:
+    """Return pattern identifiers available to drawing material legends."""
+    global _DRAWING_PATTERN_IDS
+    if _DRAWING_PATTERN_IDS is None:
+        patterns_path = (
+            Path(__file__).resolve().parent
+            / "drawings"
+            / "assets"
+            / "patterns.svg"
+        )
+        patterns = patterns_path.read_text(encoding="utf-8")
+        _DRAWING_PATTERN_IDS = frozenset(
+            re.findall(r'<pattern\s+id="([^"]+)"', patterns)
+        )
+    return _DRAWING_PATTERN_IDS
+
+
+def _material_legend_lines(
+    description: str,
+    width_mm: float,
+    layout_scale: float,
+) -> list[str]:
+    """Wrap one legend description to an approximate printed width."""
+    # Legend descriptions are commonly uppercase and contain wide accented
+    # glyphs.  Reserve about 2.6 mm per character at the configured 3.2 mm
+    # text height; conservative wrapping is preferable to crossing the cell.
+    characters = max(8, int(width_mm / (2.6 * layout_scale)))
+    lines: list[str] = []
+    for paragraph in description.splitlines() or [description]:
+        lines.extend(
+            wrap(
+                paragraph,
+                width=characters,
+                break_long_words=True,
+                break_on_hyphens=True,
+            )
+            or [""]
+        )
+    return lines
+
+
+def _material_legend_svg(
+    table: Mapping[str, object],
+    *,
+    x: float,
+    y: float,
+    width: float,
+    units_per_mm: float,
+) -> tuple[str, float]:
+    """Return one material-legend SVG table and its height in SVG units."""
+    title = str(table.get("title", "MATERIAL LEGEND"))
+    supplied_items = table.get("items", [])
+    items = supplied_items if isinstance(supplied_items, list) else []
+    width_mm = width / units_per_mm
+    # A 90 mm-wide table is the reference size.  Narrower panels scale the
+    # whole legend uniformly instead of squeezing full-size text into them.
+    layout_scale = min(1.0, width_mm / 90.0)
+    swatch_width_mm = min(
+        20.0 * layout_scale,
+        max(14.0 * layout_scale, width_mm * 0.2),
+    )
+    padding_mm = 2.0 * layout_scale
+    header_height_mm = 12.0 * layout_scale
+    line_height_mm = 4.2 * layout_scale
+    minimum_row_height_mm = 12.0 * layout_scale
+    text_width_mm = max(
+        8.0,
+        width_mm - swatch_width_mm - 3 * padding_mm,
+    )
+    normalised_items: list[tuple[str, list[str], float]] = []
+    for supplied_item in items:
+        if not isinstance(supplied_item, dict):
+            continue
+        pattern = str(supplied_item.get("pattern", ""))
+        description = str(supplied_item.get("description", ""))
+        lines = _material_legend_lines(
+            description,
+            text_width_mm,
+            layout_scale,
+        )
+        row_height_mm = max(
+            minimum_row_height_mm,
+            2 * padding_mm + len(lines) * line_height_mm,
+        )
+        normalised_items.append((pattern, lines, row_height_mm))
+
+    u = units_per_mm
+    header_height = header_height_mm * u
+    swatch_width = swatch_width_mm * u
+    padding = padding_mm * u
+    line_height = line_height_mm * u
+    row_heights = [row_height_mm * u for _, _, row_height_mm in normalised_items]
+    height = header_height + sum(row_heights)
+    right = x + width
+    header_bottom = y + header_height
+    parts = [
+        '<g class="right-panel-table material-legend">',
+        (
+            f'<rect class="right-panel-table-outline" x="{x:.6g}" '
+            f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
+        ),
+        (
+            f'<text class="right-panel-table-title" x="{x + width / 2:.6g}" '
+            f'y="{y + header_height / 2:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{5.5 * layout_scale:.6g}px">'
+            f'{escape(title)}</text>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{header_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{header_bottom:.6g}"/>'
+        ),
+    ]
+    if normalised_items:
+        swatch_right = x + swatch_width
+        parts.append(
+            f'<line class="right-panel-table-grid" x1="{swatch_right:.6g}" '
+            f'y1="{header_bottom:.6g}" x2="{swatch_right:.6g}" '
+            f'y2="{y + height:.6g}"/>'
+        )
+
+    row_y = header_bottom
+    available_patterns = _drawing_pattern_ids()
+    for (pattern, lines, _), row_height in zip(normalised_items, row_heights):
+        fill = f"url(#{pattern})" if pattern in available_patterns else "white"
+        parts.append(
+            f'<rect class="material-legend-swatch" x="{x:.6g}" '
+            f'y="{row_y:.6g}" width="{swatch_width:.6g}" '
+            f'height="{row_height:.6g}" fill="{fill}"/>'
+        )
+        text_x = x + swatch_width + padding
+        text_block_height = (len(lines) - 1) * line_height
+        first_baseline = (
+            row_y
+            + (row_height - text_block_height) / 2
+            + 1.0 * layout_scale * u
+        )
+        description_font_size = 3.2 * layout_scale
+        tspans = "".join(
+            (
+                f'<tspan x="{text_x:.6g}" '
+                f'y="{first_baseline + index * line_height:.6g}" '
+                f'style="font-size:{description_font_size:.6g}px">'
+                f'{escape(line)}</tspan>'
+            )
+            for index, line in enumerate(lines)
+        )
+        parts.append(
+            f'<text class="material-legend-description" '
+            f'style="font-size:{description_font_size:.6g}px">'
+            f'{tspans}</text>'
+        )
+        row_y += row_height
+        if row_y < y + height - 1e-9:
+            parts.append(
+                f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+                f'y1="{row_y:.6g}" x2="{right:.6g}" y2="{row_y:.6g}"/>'
+            )
+    parts.append("</g>")
+    return "\n    ".join(parts), height
+
+
+def _postprocess_right_panel(
+    svg_path: Path,
+    drawing_properties: Mapping[str, object],
+) -> None:
+    """Expand a drawing sheet and append its persisted right-side tables."""
+    try:
+        panel_width_mm = float(drawing_properties.get("RightPanelWidth", 0))
+    except (TypeError, ValueError):
+        return
+    if panel_width_mm <= 0:
+        return
+
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="right-side-panel"' in svg:
+        return
+    root = re.search(r"<svg\b(?P<attrs>[^>]*)>", svg)
+    if root is None:
+        return
+    attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', root["attrs"]))
+    try:
+        view_x, view_y, view_width, view_height = (
+            float(value)
+            for value in re.split(r"[,\s]+", attributes["viewBox"].strip())
+        )
+    except (KeyError, TypeError, ValueError):
+        return
+    width_match = re.fullmatch(
+        rf"\s*(?P<value>{_SVG_NUMBER})mm\s*",
+        attributes.get("width", ""),
+    )
+    if width_match is None:
+        return
+    physical_width_mm = float(width_match["value"])
+    if physical_width_mm <= 0 or view_width <= 0:
+        return
+    units_per_mm = view_width / physical_width_mm
+    panel_width = panel_width_mm * units_per_mm
+    margin = 5.0 * units_per_mm
+    table_gap = 5.0 * units_per_mm
+    panel_x = view_x + view_width
+    table_x = panel_x + margin
+    table_width = panel_width - 2 * margin
+
+    try:
+        tables = json.loads(
+            str(drawing_properties.get("RightPanelTables", "[]"))
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        tables = []
+    if not isinstance(tables, list):
+        tables = []
+    table_y = view_y + margin
+    table_parts = []
+    for table in tables:
+        if not isinstance(table, dict) or table.get("kind") != "material_legend":
+            continue
+        table_svg, table_height = _material_legend_svg(
+            table,
+            x=table_x,
+            y=table_y,
+            width=table_width,
+            units_per_mm=units_per_mm,
+        )
+        table_parts.append(table_svg)
+        table_y += table_height + table_gap
+
+    required_height = (
+        table_y - table_gap + margin
+        if table_parts
+        else view_y + view_height
+    )
+    new_view_height = max(view_height, required_height - view_y)
+    new_physical_height_mm = new_view_height / units_per_mm
+    new_physical_width_mm = physical_width_mm + panel_width_mm
+    new_view_width = view_width + panel_width
+
+    updated_root = root.group(0)
+    updated_root = re.sub(
+        r'\bwidth="[^"]*"',
+        f'width="{new_physical_width_mm:g}mm"',
+        updated_root,
+        count=1,
+    )
+    updated_root = re.sub(
+        r'\bheight="[^"]*"',
+        f'height="{new_physical_height_mm:g}mm"',
+        updated_root,
+        count=1,
+    )
+    updated_root = re.sub(
+        r'\bviewBox="[^"]*"',
+        f'viewBox="{view_x:g} {view_y:g} {new_view_width:g} {new_view_height:g}"',
+        updated_root,
+        count=1,
+    )
+    svg = f"{svg[:root.start()]}{updated_root}{svg[root.end():]}"
+
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    tables_svg = "\n    ".join(table_parts)
+    panel = (
+        '  <g class="right-side-panel">\n'
+        f'    <rect class="right-side-panel-background" x="{panel_x:.6g}" '
+        f'y="{view_y:.6g}" width="{panel_width:.6g}" '
+        f'height="{new_view_height:.6g}"/>\n'
+        f'    <line class="right-side-panel-separator" x1="{panel_x:.6g}" '
+        f'y1="{view_y:.6g}" x2="{panel_x:.6g}" '
+        f'y2="{view_y + new_view_height:.6g}"/>\n'
+        f'    {tables_svg}\n'
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{panel}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -1787,6 +2070,10 @@ def _render_existing_drawing(
         )
         _postprocess_miako_reinforcement_overlays(absolute_output)
         _postprocess_vapour_barrier_overlays(absolute_output)
+    _postprocess_right_panel(
+        absolute_output,
+        drawing_properties or {},
+    )
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -3562,6 +3849,7 @@ class House:
         door_annotations: bool = True,
         door_annotation_offset: Number = 0,
         doors_closed: bool = False,
+        right_panel_width: Number = 0,
     ) -> Drawing:
         """Add a persisted square plan or elevation drawing to this IFC model.
 
@@ -3579,6 +3867,10 @@ class House:
         every automatic label farther into the door swing in metres.
         ``doors_closed`` renders the 3D door leaves closed in an elevation
         without changing their model geometry or plan swing symbols.
+        ``right_panel_width`` adds paper space to the right of the camera view,
+        measured in printed millimetres.  It does not resize or move the model
+        view.  Use :meth:`Drawing.add_material_legend` to add the first
+        supported optional table to that panel.
         """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
@@ -3596,6 +3888,7 @@ class House:
             door_annotations=door_annotations,
             door_annotation_offset=door_annotation_offset,
             doors_closed=doors_closed,
+            right_panel_width=right_panel_width,
         )
         self._drawings.append(drawing)
         return drawing
@@ -3661,6 +3954,7 @@ class Drawing:
         door_annotations: bool,
         door_annotation_offset: Number,
         doors_closed: bool,
+        right_panel_width: Number,
     ) -> None:
         self.house = house
         self.name = name
@@ -3710,6 +4004,13 @@ class Drawing:
         if doors_closed and self.view != "elevation":
             raise ValueError("doors_closed is only supported for elevation drawings")
         self.doors_closed = doors_closed
+        self.right_panel_width = _number(
+            right_panel_width,
+            "right_panel_width",
+        )
+        if self.right_panel_width < 0:
+            raise ValueError("right_panel_width must not be negative")
+        self._right_panel_tables: list[dict[str, object]] = []
         self._includes_all_storeys = storeys is None
         if storeys is None:
             self._storeys: tuple[Storey, ...] = ()
@@ -3870,6 +4171,8 @@ class Drawing:
             ),
             "CurrentShadingStyle": "Technical",
             "DoorsClosed": self.doors_closed,
+            "RightPanelWidth": self.right_panel_width,
+            "RightPanelTables": "[]",
         }
         if not self._includes_all_storeys:
             drawing_properties["Include"] = (
@@ -3972,6 +4275,86 @@ class Drawing:
             pset=self._drawing_pset,
             properties={"Include": include},
         )
+
+    def add_material_legend(
+        self,
+        items: Sequence[tuple[str, str]],
+        *,
+        title: str = "LEGENDA MATERIÁLŮ",
+    ) -> Drawing:
+        """Add a pattern-and-description table to the right-side panel.
+
+        ``items`` contains ``(pattern, description)`` pairs.  Pattern names
+        come from ``drawings/assets/patterns.svg``, for example
+        ``"diagonal1"``, ``"crosshatch1"``, ``"brick"``, ``"concrete"``,
+        or ``"wood"``.  Descriptions may contain explicit newlines and are
+        otherwise wrapped automatically.  Tables are stacked from the top of
+        the panel in call order and are persisted in ``EPset_Drawing``.
+        """
+        if self.right_panel_width <= 0:
+            raise ValueError(
+                "add_material_legend requires right_panel_width on the drawing"
+            )
+        if self.right_panel_width < 40:
+            raise ValueError(
+                "right_panel_width must be at least 40 mm for a material legend"
+            )
+        title = _name(title, "title")
+        if isinstance(items, (str, bytes)):
+            raise TypeError(
+                "items must be a sequence of pattern-description pairs"
+            )
+        try:
+            supplied_items = list(items)
+        except TypeError as error:
+            raise TypeError(
+                "items must be a sequence of pattern-description pairs"
+            ) from error
+        if not supplied_items:
+            raise ValueError("items must contain at least one material")
+
+        available_patterns = _drawing_pattern_ids()
+        normalised_items = []
+        for index, supplied_item in enumerate(supplied_items, start=1):
+            if isinstance(supplied_item, (str, bytes)):
+                raise TypeError(
+                    f"item {index} must contain a pattern and description"
+                )
+            try:
+                pattern, description = supplied_item
+            except (TypeError, ValueError) as error:
+                raise TypeError(
+                    f"item {index} must contain a pattern and description"
+                ) from error
+            pattern = _name(pattern, f"item {index} pattern")
+            description = _name(description, f"item {index} description")
+            if pattern not in available_patterns:
+                raise ValueError(
+                    f'item {index} pattern "{pattern}" is not available; '
+                    f"choose one of: {', '.join(sorted(available_patterns))}"
+                )
+            normalised_items.append(
+                {"pattern": pattern, "description": description}
+            )
+
+        self._right_panel_tables.append(
+            {
+                "kind": "material_legend",
+                "title": title,
+                "items": normalised_items,
+            }
+        )
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model,
+            pset=self._drawing_pset,
+            properties={
+                "RightPanelTables": json.dumps(
+                    self._right_panel_tables,
+                    ensure_ascii=False,
+                )
+            },
+        )
+        return self
 
     def add_dimension(
         self,

@@ -324,3 +324,41 @@ tspan.door-dimension {
     stroke: black !important;
     stroke-width: 0.1 !important;
 }
+
+/* Paper-space tables appended to the optional right-side drawing panel. */
+.right-side-panel-background {
+    fill: white;
+    stroke: none;
+}
+
+.right-side-panel-separator,
+.right-panel-table-outline,
+.right-panel-table-grid,
+.material-legend-swatch {
+    stroke: black;
+    stroke-width: 0.18;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+}
+
+.right-side-panel-separator,
+.right-panel-table-grid {
+    fill: none;
+}
+
+.right-panel-table-outline {
+    fill: white;
+}
+
+.right-panel-table-title {
+    fill: black;
+    stroke: none;
+    font-size: 5.5px;
+    font-weight: 500;
+}
+
+.material-legend-description {
+    fill: black;
+    stroke: none;
+    font-size: 3.2px;
+}

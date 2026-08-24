@@ -1577,8 +1577,18 @@ house.write("house.ifc")
 # Drawing 1 - ground floor
 if "ground" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 1", x=6, y=4, z=0.25+2, radius=8, storeys=[ground, facade_1, facade_2, facade_3, facade_4]
+		"Drawing 1",
+		x=6,
+		y=4,
+		z=0.25+2,
+		radius=8,
+		storeys=[ground],
+		right_panel_width=40,
 	)
+	drawing1.add_material_legend([
+		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("diagonal1", "Příčka - VPC Cihla 115 mm"),
+	])
 
 	drawing1.add_stair_annotation(stairs1)
 	drawing1.add_stair_annotation(stairs2)
