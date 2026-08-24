@@ -207,6 +207,25 @@ kitchen_door = wall.add_door(
 )
 ```
 
+Use `opening_width` and `opening_height` for the larger construction opening.
+The door casing automatically bridges that clearance on both wall faces and,
+by default, continues 25 mm over the surrounding wall with a 5 mm projection.
+Both dimensions are configurable in metres:
+
+```python
+wall.add_door(
+    at=1.0,
+    width=0.9,
+    height=2.1,
+    opening_width=1.0,
+    opening_height=2.15,
+    casing_overlap=0.03,
+    casing_depth=0.008,
+)
+```
+
+Set `casing_depth=0` when a door should have no casing.
+
 A common offset can move all labels farther into the room:
 
 ```python

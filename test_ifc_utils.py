@@ -1796,23 +1796,40 @@ class HouseTests(unittest.TestCase):
         reinforcement_body = ifcopenshell.util.representation.get_representation(
             reinforcement_type, "Model", "Body", "MODEL_VIEW"
         )
-        self.assertEqual(len(reinforcement_body.Items), 3)
-        wire_profile = (
-            reinforcement_body.Items[0].SweptArea.OuterCurve.Points.CoordList
-        )
-        self.assertIn((-0.082, 0.175), wire_profile)
-        self.assertIn((-0.08800000000000001, 0.175), wire_profile)
+        self.assertEqual(len(reinforcement_body.Items), 5)
+        wire_profiles = [
+            item.SweptArea.OuterCurve.Points.CoordList
+            for item in reinforcement_body.Items[:2]
+        ]
+        for wire_profile, expected_bottom, expected_top in zip(
+            wire_profiles,
+            ((-0.061, 0.04), (-0.109, 0.04)),
+            ((-0.079, 0.175), (-0.091, 0.175)),
+        ):
+            np.testing.assert_allclose(
+                np.mean((wire_profile[0], wire_profile[3]), axis=0),
+                expected_bottom,
+                atol=1e-9,
+            )
+            np.testing.assert_allclose(
+                np.mean((wire_profile[1], wire_profile[2]), axis=0),
+                expected_top,
+                atol=1e-9,
+            )
         reinforcement_dots = [
             item.SweptArea.OuterCurve
-            for item in reinforcement_body.Items[1:]
+            for item in reinforcement_body.Items[2:]
         ]
         self.assertTrue(
             all(dot.is_a("IfcCircle") for dot in reinforcement_dots)
         )
-        for dot, expected_y in zip(reinforcement_dots, (-0.055, -0.115)):
+        for dot, (expected_y, expected_z) in zip(
+            reinforcement_dots,
+            ((-0.055, 0.04), (-0.115, 0.04), (-0.085, 0.175)),
+        ):
             dot_y, dot_z = dot.Position.Location.Coordinates
             self.assertAlmostEqual(dot_y, expected_y)
-            self.assertAlmostEqual(dot_z, 0.04)
+            self.assertAlmostEqual(dot_z, expected_z)
             self.assertAlmostEqual(dot.Radius, 0.006)
 
         wide_blocks = [
@@ -2011,8 +2028,8 @@ class HouseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_z(short_reinforcement_shape.geometry),
-            0.175 - (0.04 - 0.006),
-            places=4,
+            0.175 + 0.006 - (0.04 - 0.006),
+            places=3,
         )
         self.assertGreater(0.175, slab.block_height)
         short_cover_shape = ifcopenshell.geom.create_shape(
@@ -2074,7 +2091,7 @@ class HouseTests(unittest.TestCase):
             upper.miako_slab(
                 "Invalid", **valid_arguments, beam_height=0.2
             )
-        with self.assertRaisesRegex(ValueError, "reinforcement apex"):
+        with self.assertRaisesRegex(ValueError, "upper reinforcement bar"):
             upper.miako_slab(
                 "Invalid",
                 **valid_arguments,
@@ -3359,6 +3376,45 @@ class HouseTests(unittest.TestCase):
             for aspect in door.Representation.HasShapeAspects
             if aspect.Name == "Framing"
         )
+        casing = next(
+            aspect
+            for aspect in door.Representation.HasShapeAspects
+            if aspect.Name == "Casing"
+        )
+        casing_body = casing.ShapeRepresentations[0]
+        self.assertEqual(len(casing_body.Items), 2)
+        casing_profile = (
+            casing_body.Items[0].SweptArea.OuterCurve.Points.CoordList
+        )
+        np.testing.assert_allclose(
+            casing_profile,
+            (
+                (-0.125, 0.0),
+                (-0.125, 2.225),
+                (1.0250000000000001, 2.225),
+                (1.0250000000000001, 0.0),
+                (0.85, 0.0),
+                (0.85, 2.0500000000000003),
+                (0.05, 2.0500000000000003),
+                (0.05, 0.0),
+            ),
+            atol=1e-9,
+        )
+        casing_positions = [
+            ifcopenshell.util.placement.get_axis2placement(item.Position)
+            for item in casing_body.Items
+        ]
+        self.assertAlmostEqual(casing_positions[0][1, 3], -0.13)
+        self.assertAlmostEqual(casing_positions[1][1, 3], 0.125)
+        self.assertTrue(
+            all(item.Depth == 0.005 for item in casing_body.Items)
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                door, "EPset_Door", "CasingOverlap"
+            ),
+            0.025,
+        )
         framing_body = next(
             representation
             for representation in framing.ShapeRepresentations
@@ -3405,6 +3461,30 @@ class HouseTests(unittest.TestCase):
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_volume(shape.geometry),
             expected_volume,
+        )
+
+    def test_can_omit_door_casings(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.25, height=3)
+
+        door = wall.add_door(
+            at=1,
+            width=0.9,
+            height=2.1,
+            opening_width=1.0,
+            casing_depth=0,
+        )
+
+        self.assertNotIn(
+            "Casing",
+            {aspect.Name for aspect in door.Representation.HasShapeAspects},
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                door, "EPset_Door", "CasingDepth"
+            ),
+            0,
         )
 
     def test_rejects_invalid_or_overlapping_wall_openings(self) -> None:
@@ -3503,6 +3583,20 @@ class HouseTests(unittest.TestCase):
                 width=0.9,
                 height=2.1,
                 show_overhead="yes",
+            )
+        with self.assertRaisesRegex(ValueError, "casing_overlap"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                casing_overlap=-0.01,
+            )
+        with self.assertRaisesRegex(ValueError, "casing_depth"):
+            wall.add_door(
+                at=1,
+                width=0.9,
+                height=2.1,
+                casing_depth=-0.01,
             )
         with self.assertRaisesRegex(TypeError, "show_overhead"):
             wall.add_opening(

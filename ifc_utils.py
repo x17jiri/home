@@ -6136,6 +6136,69 @@ class Wall(ifcopenshell.entity_instance):
             pivot_y=self.body_offset + panel_offset_y,
         )
 
+    def _add_door_casings(
+        self,
+        door: ifcopenshell.entity_instance,
+        body_representation: ifcopenshell.entity_instance,
+        *,
+        width: float,
+        height: float,
+        opening_width: float,
+        opening_height: float,
+        lining_thickness: float,
+        casing_overlap: float,
+        casing_depth: float,
+    ) -> None:
+        """Cover the rough-opening clearance on both wall faces."""
+        if casing_depth == 0:
+            return
+
+        side_clearance = (opening_width - width) / 2
+        head_clearance = opening_height - height
+        outer_left = -side_clearance - casing_overlap
+        outer_right = width + side_clearance + casing_overlap
+        outer_top = height + head_clearance + casing_overlap
+        inner_left = lining_thickness
+        inner_right = width - lining_thickness
+        inner_top = height - lining_thickness
+        profile_points = [
+            (outer_left, 0.0),
+            (outer_left, outer_top),
+            (outer_right, outer_top),
+            (outer_right, 0.0),
+            (inner_right, 0.0),
+            (inner_right, inner_top),
+            (inner_left, inner_top),
+            (inner_left, 0.0),
+        ]
+
+        builder = ShapeBuilder(self.storey.house.model)
+        profile = builder.polyline(profile_points, closed=True)
+        casings = [
+            builder.extrude(
+                profile,
+                magnitude=casing_depth,
+                **builder.extrude_kwargs("Y"),
+            )
+            for _ in range(2)
+        ]
+        builder.translate(
+            casings[0],
+            (0.0, self.body_offset - casing_depth, 0.0),
+        )
+        builder.translate(
+            casings[1],
+            (0.0, self.body_offset + self.thickness, 0.0),
+        )
+        body_representation.Items = [*body_representation.Items, *casings]
+        ifcopenshell.api.geometry.add_shape_aspect(
+            self.storey.house.model,
+            "Casing",
+            items=casings,
+            representation=body_representation,
+            part_of_product=door.Representation,
+        )
+
     def _reverse_door_plan_swing(
         self,
         representation: ifcopenshell.entity_instance,
@@ -6230,6 +6293,8 @@ class Wall(ifcopenshell.entity_instance):
         open_angle: Number = 45,
         reverse_swing: bool = False,
         show_overhead: bool = True,
+        casing_overlap: Number = 0.025,
+        casing_depth: Number = 0.005,
         color: str | None = None,
         transparency: Number = 0,
         name: str | None = None,
@@ -6247,7 +6312,11 @@ class Wall(ifcopenshell.entity_instance):
         to ``height - sill_height``.  ``open_angle`` rotates only the 3D leaf.
         ``reverse_swing`` opens the leaf on the opposite side of the wall
         without changing its hinge end, in both 3D and plan.  ``show_overhead``
-        adds dashed plan-only wall linework across the rough opening.  ``color``
+        adds dashed plan-only wall linework across the rough opening.  Casings
+        on both wall faces bridge any clearance between the door and rough
+        opening; ``casing_overlap`` is how far they continue over the wall
+        beyond the rough opening and ``casing_depth`` is their projection from
+        each wall face.  Set ``casing_depth`` to zero to omit them.  ``color``
         and ``transparency`` affect only the 3D body.
         """
         operation = _enum(operation, "operation", _DOOR_OPERATIONS)
@@ -6260,6 +6329,12 @@ class Wall(ifcopenshell.entity_instance):
             raise ValueError("reverse_swing is not supported for sliding doors")
         if not isinstance(show_overhead, bool):
             raise TypeError("show_overhead must be a boolean")
+        casing_overlap = _number(casing_overlap, "casing_overlap")
+        casing_depth = _number(casing_depth, "casing_depth")
+        if casing_overlap < 0:
+            raise ValueError("casing_overlap must not be negative")
+        if casing_depth < 0:
+            raise ValueError("casing_depth must not be negative")
         surface_style = self.storey.house._surface_style(
             "door",
             color=color,
@@ -6339,6 +6414,7 @@ class Wall(ifcopenshell.entity_instance):
         door.OperationType = operation
         panel_offset_x = min(0.025, width / 4)
         panel_offset_y = min(0.025, self.thickness / 4)
+        lining_thickness = min(0.05, width / 4, door_height / 4)
         door_properties = ifcopenshell.api.pset.add_pset(
             model,
             product=door,
@@ -6353,13 +6429,21 @@ class Wall(ifcopenshell.entity_instance):
                 "ReverseSwing": reverse_swing,
                 "PanelOffsetX": panel_offset_x,
                 "BodyPivotY": self.body_offset + panel_offset_y,
+                "CasingOverlap": casing_overlap,
+                "CasingDepth": casing_depth,
             },
         )
         lining_properties = {
             "LiningDepth": self.thickness,
+            "LiningThickness": lining_thickness,
             "LiningOffset": self.body_offset,
             "LiningToPanelOffsetX": panel_offset_x,
             "LiningToPanelOffsetY": panel_offset_y,
+            # IfcOpenShell only creates its built-in casings when
+            # LiningOffset is zero.  Add consistently positioned casings below
+            # instead, including for centred and asymmetrically layered walls.
+            "CasingDepth": 0.0,
+            "CasingThickness": 0.0,
         }
         door.Representation = model.createIfcProductDefinitionShape()
         body_representation = ifcopenshell.api.geometry.add_door_representation(
@@ -6375,6 +6459,17 @@ class Wall(ifcopenshell.entity_instance):
             model,
             product=door,
             representation=body_representation,
+        )
+        self._add_door_casings(
+            door,
+            body_representation,
+            width=width,
+            height=door_height,
+            opening_width=opening_width,
+            opening_height=opening_height,
+            lining_thickness=lining_thickness,
+            casing_overlap=casing_overlap,
+            casing_depth=casing_depth,
         )
         if surface_style is not None:
             ifcopenshell.api.style.assign_representation_styles(
@@ -7485,10 +7580,10 @@ class Storey:
         extruded along the joist span.  Repeated components use mapped type
         geometry and are decomposed beneath one semantic ``IfcSlab`` contained
         by this storey.  The standard beam shell is 170 mm wide and 60 mm high.
-        Its two lower reinforcement bars are centred 40 mm above the bottom
-        and anchor an A-shaped wire whose centred apex is 175 mm above the
-        bottom.  Their respective color arguments may override the default 3D
-        styles.
+        Its two lower reinforcement bars are centred 40 mm above the bottom,
+        with a third bar centred at the 175 mm apex.  Two diagonal wires join
+        the inner sides of the lower bars to the outer sides of the upper bar.
+        Their respective color arguments may override the default 3D styles.
         """
         slab_name = _name(name, "name")
         start_x, start_y = _point(start, "start")
@@ -7517,10 +7612,10 @@ class Storey:
                 "beam_height must be at least 0.046 m to contain the lower "
                 "reinforcement bars"
             )
-        if block_height + topping < 0.175:
+        if block_height + topping < 0.181:
             raise ValueError(
-                "block_height + topping must be at least 0.175 m to contain "
-                "the reinforcement apex"
+                "block_height + topping must be at least 0.181 m to contain "
+                "the upper reinforcement bar"
             )
 
         span_x = end_x - start_x
@@ -7705,7 +7800,7 @@ class Storey:
         beam_bearing = 0.035
         beam_shell_thickness = 0.02
         beam_shell_height = beam_height
-        reinforcement_thickness = 0.006
+        reinforcement_wire_thickness = 0.003
         reinforcement_dot_z = 0.04
         reinforcement_dot_radius = 0.006
         reinforcement_base_inset = 0.055
@@ -7787,54 +7882,51 @@ class Storey:
             signed_component_width = layout_sign * component_width
             builder = ShapeBuilder(model)
 
-            reinforcement_wire_base_z = (
-                reinforcement_dot_z + reinforcement_dot_radius
-            )
+            def reinforcement_wire_profile(
+                start: tuple[float, float],
+                end: tuple[float, float],
+            ) -> list[tuple[float, float]]:
+                """Return a constant-width diagonal joining two bar sides."""
+                delta_y = end[0] - start[0]
+                delta_z = end[1] - start[1]
+                wire_length = hypot(delta_y, delta_z)
+                half_thickness = reinforcement_wire_thickness / 2
+                normal_y = -delta_z / wire_length * half_thickness
+                normal_z = delta_y / wire_length * half_thickness
+                unsigned_points = [
+                    (start[0] + normal_y, start[1] + normal_z),
+                    (end[0] + normal_y, end[1] + normal_z),
+                    (end[0] - normal_y, end[1] - normal_z),
+                    (start[0] - normal_y, start[1] - normal_z),
+                ]
+                return [
+                    (layout_sign * y, z) for y, z in unsigned_points
+                ]
 
-            # One concave profile makes both legs a continuous A-shaped wire
-            # without overlapping voids where they meet at the apex.
-            reinforcement_profile_points = [
-                (
-                    layout_sign
-                    * (reinforcement_base_inset - reinforcement_thickness / 2),
-                    reinforcement_wire_base_z,
+            # Each wire touches its lower bar on the side facing the centre
+            # and the apex bar on the corresponding outside face.
+            reinforcement_wire_profiles = [
+                reinforcement_wire_profile(
+                    (
+                        reinforcement_base_inset + reinforcement_dot_radius,
+                        reinforcement_dot_z,
+                    ),
+                    (
+                        reinforcement_apex_y - reinforcement_dot_radius,
+                        reinforcement_apex_z,
+                    ),
                 ),
-                (
-                    layout_sign
-                    * (reinforcement_apex_y - reinforcement_thickness / 2),
-                    reinforcement_apex_z,
-                ),
-                (
-                    layout_sign
-                    * (reinforcement_apex_y + reinforcement_thickness / 2),
-                    reinforcement_apex_z,
-                ),
-                (
-                    layout_sign
-                    * (
+                reinforcement_wire_profile(
+                    (
                         component_width
                         - reinforcement_base_inset
-                        + reinforcement_thickness / 2
+                        - reinforcement_dot_radius,
+                        reinforcement_dot_z,
                     ),
-                    reinforcement_wire_base_z,
-                ),
-                (
-                    layout_sign
-                    * (
-                        component_width
-                        - reinforcement_base_inset
-                        - reinforcement_thickness / 2
+                    (
+                        reinforcement_apex_y + reinforcement_dot_radius,
+                        reinforcement_apex_z,
                     ),
-                    reinforcement_wire_base_z,
-                ),
-                (
-                    layout_sign * reinforcement_apex_y,
-                    reinforcement_apex_z - 2 * reinforcement_thickness,
-                ),
-                (
-                    layout_sign
-                    * (reinforcement_base_inset + reinforcement_thickness / 2),
-                    reinforcement_wire_base_z,
                 ),
             ]
             reinforcement_dot_centers = [
@@ -7846,6 +7938,10 @@ class Storey:
                     layout_sign
                     * (component_width - reinforcement_base_inset),
                     reinforcement_dot_z,
+                ),
+                (
+                    layout_sign * reinforcement_apex_y,
+                    reinforcement_apex_z,
                 ),
             ]
 
@@ -7902,17 +7998,14 @@ class Storey:
                     )
                 ]
             elif component == "beam_reinforcement":
-                wire_profile = builder.polyline(
-                    reinforcement_profile_points,
-                    closed=True,
-                )
                 solids = [
                     builder.extrude(
-                        wire_profile,
+                        builder.polyline(wire_profile, closed=True),
                         magnitude=component_length,
                         position_z_axis=(1.0, 0.0, 0.0),
                         position_x_axis=(0.0, 1.0, 0.0),
                     )
+                    for wire_profile in reinforcement_wire_profiles
                 ]
                 solids.extend(
                     builder.extrude(
@@ -8066,7 +8159,9 @@ class Storey:
                     component="beam_reinforcement",
                     component_length=length,
                     component_width=item_width,
-                    component_height=reinforcement_apex_z,
+                    component_height=(
+                        reinforcement_apex_z + reinforcement_dot_radius
+                    ),
                     style=reinforcement_style,
                     material=reinforcement_material,
                 )

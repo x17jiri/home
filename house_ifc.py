@@ -97,10 +97,10 @@ ground_floor_height = 0.25+2.75
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 3.0
+UNDER_HOLE = 2.875
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_SIZE = (0.06, 0.16)
-COLLAR_TIE_EXTENSION = 1.0
+COLLAR_TIE_EXTENSION = 1.5
 COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # The collar-tie tops meet the underside of the two central purlins and the
 # wall below them.  The horizontal vapour barrier is derived from the tie
@@ -178,7 +178,7 @@ ground_floor_layer = ground.floor_layer(
 
 # Load-bearing walls
 
-HOUSE_DEPTH = 8.5
+HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
 
 wall_front = ground.wall((0, 0), (12, 0), wall_type=load_bearing_wall, height=ground_floor_height)
@@ -541,140 +541,141 @@ opening = wall_3.add_opening(
 )
 
 # facade
-frame1_v = house.add_vertical_frame(
-    wall_front,
-    offset=0,
-    width=0.05,
-    depth=0.08,
-    start_height=0.2,
-    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-    gap=0.60,
-    lath_offsets=[0, wall_front.length - 0.05],
-)
-lath_width=0.05
-window_space=0.03
-frame2_v = house.add_vertical_frame(
-    wall_back,
-    offset=0,
-    width=lath_width,
-    depth=0.1,
-    start_height=0.2,
-    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-    gap=0.60,
-    lath_offsets=[
-		0,
-		2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
-		0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
-		0.25+3.5+0.25+0.5 + 1.5 + window_space,
-		0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
-		0.25+3.5+0.25+4.5+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+4.5+0.25+0.75 + 1.5 + window_space,
-		wall_back.length - lath_width
-	],
-	space_before_openings=window_space,
-	space_after_openings=window_space,
-	space_above_openings=window_space,
-	space_below_openings=window_space,
-	insulation_material="Rockwool",
-	insulation_color="#E8D36D",
-)
-lath_width=0.04
-frame2_h = house.add_horizontal_frame(
-    wall_back,
-    offset=0.1,
-    width=lath_width,
-    depth=0.06,
-    lath_offsets=[
-		0.2,
-		0.25+0.875-lath_width-window_space,
-		UPPER_FLOOR_START+NADEZDIVKA-lath_width-0.1
-	],
-    start_extension=0.1,
-    end_extension=0.1,
-	gap=0.6,
-	space_before_openings=window_space,
-	space_after_openings=window_space,
-	space_above_openings=window_space,
-	space_below_openings=window_space,
-	insulation_material="Rockwool",
-	insulation_color="#E8D36D",
-)
-lath_width=0.03
-frame2_v2 = house.add_vertical_frame(
-    wall_back,
-    offset=0.16,
-    width=lath_width,
-    depth=0.05,
-    start_height=0.2,
-    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-    gap=0.40,
-    lath_offsets=[
-		0,
-		2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
-		0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
-		0.25+3.5+0.25+0.5 + 1.5 + window_space,
-		0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
-		0.25+3.5+0.25+4.5+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+4.5+0.25+0.75 + 1.5 + window_space,
-		wall_back.length - lath_width
-	],
-	space_before_openings=window_space,
-	space_after_openings=window_space,
-	space_above_openings=window_space,
-	space_below_openings=window_space,
-)
-frame2_finish = house.add_facade_layer(
-	wall_back,
-	name="Cementovlaknita deska - garden facade",
-	offset=0.21,
-	thickness=0.01,
-	start_height=0.2,
-	height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-	color="#ffffff",
-)
-frame3_v = house.add_vertical_frame(
-    wall_4,
-    offset=0,
-    width=0.05,
-    depth=0.08,
-    start_height=0.2,
-    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-    gap=0.60,
-    lath_offsets=[0, wall_4.length - 0.05],
-)
-frame4_v = house.add_vertical_frame(
-    wall_1,
-    offset=0,
-    width=0.05,
-    depth=0.08,
-    start_height=0.2,
-    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-    gap=0.60,
-    lath_offsets=[0, wall_1.length - 0.05],
-)
+if 0:
+	frame1_v = house.add_vertical_frame(
+	    wall_front,
+	    offset=0,
+	    width=0.05,
+	    depth=0.08,
+	    start_height=0.2,
+	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+	    gap=0.60,
+	    lath_offsets=[0, wall_front.length - 0.05],
+	)
+	lath_width=0.05
+	window_space=0.03
+	frame2_v = house.add_vertical_frame(
+	    wall_back,
+	    offset=0,
+	    width=lath_width,
+	    depth=0.1,
+	    start_height=0.2,
+	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+	    gap=0.60,
+	    lath_offsets=[
+			0,
+			2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
+			0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
+			0.25+3.5+0.25+0.5 + 1.5 + window_space,
+			0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
+			0.25+3.5+0.25+4.5+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+4.5+0.25+0.75 + 1.5 + window_space,
+			wall_back.length - lath_width
+		],
+		space_before_openings=window_space,
+		space_after_openings=window_space,
+		space_above_openings=window_space,
+		space_below_openings=window_space,
+		insulation_material="Rockwool",
+		insulation_color="#E8D36D",
+	)
+	lath_width=0.04
+	frame2_h = house.add_horizontal_frame(
+	    wall_back,
+	    offset=0.1,
+	    width=lath_width,
+	    depth=0.06,
+	    lath_offsets=[
+			0.2,
+			0.25+0.875-lath_width-window_space,
+			UPPER_FLOOR_START+NADEZDIVKA-lath_width-0.1
+		],
+	    start_extension=0.1,
+	    end_extension=0.1,
+		gap=0.6,
+		space_before_openings=window_space,
+		space_after_openings=window_space,
+		space_above_openings=window_space,
+		space_below_openings=window_space,
+		insulation_material="Rockwool",
+		insulation_color="#E8D36D",
+	)
+	lath_width=0.03
+	frame2_v2 = house.add_vertical_frame(
+	    wall_back,
+	    offset=0.16,
+	    width=lath_width,
+	    depth=0.05,
+	    start_height=0.2,
+	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+	    gap=0.40,
+	    lath_offsets=[
+			0,
+			2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
+			0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
+			0.25+3.5+0.25+0.5 + 1.5 + window_space,
+			0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
+			0.25+3.5+0.25+4.5+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+4.5+0.25+0.75 + 1.5 + window_space,
+			wall_back.length - lath_width
+		],
+		space_before_openings=window_space,
+		space_after_openings=window_space,
+		space_above_openings=window_space,
+		space_below_openings=window_space,
+	)
+	frame2_finish = house.add_facade_layer(
+		wall_back,
+		name="Cementovlaknita deska - garden facade",
+		offset=0.21,
+		thickness=0.01,
+		start_height=0.2,
+		height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+		color="#ffffff",
+	)
+	frame3_v = house.add_vertical_frame(
+	    wall_4,
+	    offset=0,
+	    width=0.05,
+	    depth=0.08,
+	    start_height=0.2,
+	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+	    gap=0.60,
+	    lath_offsets=[0, wall_4.length - 0.05],
+	)
+	frame4_v = house.add_vertical_frame(
+	    wall_1,
+	    offset=0,
+	    width=0.05,
+	    depth=0.08,
+	    start_height=0.2,
+	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
+	    gap=0.60,
+	    lath_offsets=[0, wall_1.length - 0.05],
+	)
 
 
-facade_1 = house.storey("Facade Layer 1", elevation=ground.elevation)
-facade_1.add(frame1_v)
-facade_1.add(frame2_v)
-facade_1.add(frame3_v)
-facade_1.add(frame4_v)
+	facade_1 = house.storey("Facade Layer 1", elevation=ground.elevation)
+	facade_1.add(frame1_v)
+	facade_1.add(frame2_v)
+	facade_1.add(frame3_v)
+	facade_1.add(frame4_v)
 
-facade_2 = house.storey("Facade Layer 2", elevation=ground.elevation)
-#facade_2.add(frame1_h)
-facade_2.add(frame2_h)
-#facade_2.add(frame3_h)
-#facade_2.add(frame4_h)
+	facade_2 = house.storey("Facade Layer 2", elevation=ground.elevation)
+	#facade_2.add(frame1_h)
+	facade_2.add(frame2_h)
+	#facade_2.add(frame3_h)
+	#facade_2.add(frame4_h)
 
-facade_3 = house.storey("Facade Layer 3", elevation=ground.elevation)
-#facade_3.add(frame1_v)
-facade_3.add(frame2_v2)
-#facade_3.add(frame3_v)
-#facade_3.add(frame4_v)
+	facade_3 = house.storey("Facade Layer 3", elevation=ground.elevation)
+	#facade_3.add(frame1_v)
+	facade_3.add(frame2_v2)
+	#facade_3.add(frame3_v)
+	#facade_3.add(frame4_v)
 
-facade_4 = house.storey(
-	"Facade Layer 4 - Cementovlaknita deska",
-	elevation=ground.elevation,
-)
-facade_4.add(frame2_finish)
+	facade_4 = house.storey(
+		"Facade Layer 4 - Cementovlaknita deska",
+		elevation=ground.elevation,
+	)
+	facade_4.add(frame2_finish)
 
 # MIAKO
 ceiling1 = upper.miako_slab(
@@ -811,6 +812,16 @@ GARDEN_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(0, HOUSE_DEPTH-0.125+0.08, UPPER_FLOOR_START+NADEZDIVKA+0.12),
+)
+COLLAR_TIE_CUTS = (
+	offset_plane(
+		*STREET_ROOF_PLANE_POINTS,
+		offset=RAFTER_Z_OFFSET + RAFTER_SIZE[1],
+	),
+	offset_plane(
+		*GARDEN_ROOF_PLANE_POINTS,
+		offset=RAFTER_Z_OFFSET + RAFTER_SIZE[1],
+	),
 )
 DORMER_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -1475,6 +1486,7 @@ for i, rafter_x in enumerate(rafter_positions):
 				size=COLLAR_TIE_SIZE,
 				material="Wood",
 				kind="BEAM",
+				cuts=COLLAR_TIE_CUTS,
 			)
 			roof_layer_storeys["Collar ties"].add(collar_tie)
 		rafter = street_roof.beam(
@@ -1502,7 +1514,7 @@ for i, rafter_x in enumerate(rafter_positions):
 			rafter = garden_roof.beam(
 				"Rafter 1",
 				start=(rafter_x, -2),
-				end=(rafter_x, 0.5),
+				end=(rafter_x, 0.9),
 				z_offset=RAFTER_Z_OFFSET,
 				size=RAFTER_SIZE,
 				kind="RAFTER",
@@ -1511,7 +1523,7 @@ for i, rafter_x in enumerate(rafter_positions):
 			counter_batten = garden_roof.beam(
 				f"Garden counter-batten {i + 1}",
 				start=(rafter_x, -2),
-				end=(rafter_x, 0.5),
+				end=(rafter_x, 0),
 				z_offset=COUNTER_BATTEN_BOTTOM,
 				size=COUNTER_BATTEN_SIZE,
 				material="Wood",
