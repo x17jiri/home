@@ -1155,41 +1155,48 @@ COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 
+def d_raft(x):
+	return ("dormer", x)
+
 rafters = [
-#	-0.09, 0.43,
-	0.25+0.09,
+	-0.09, 0.43,
 	0.66, 0.66, 0.66, 0.66,
 
-	0.06, 0.60, ###################################
-	0.06, 0.595,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.59,
-	0.06, 0.595,
-	0.06, 0.60, ###################################
+	d_raft(0.06), 0.60, ###################################
+	d_raft(0.06), 0.60,
+	d_raft(0.06), 0.60,
+	d_raft(0.06), 0.60,
+	d_raft(0.06), d_raft(0.55),
+	0.06, d_raft(0.60),
+	0.06, d_raft(0.60),
+	0.06, d_raft(0.60), ###################################
 
 	0.06, 0.80, ################################### komin
-	0.59, 0.70, 0.70
+	0.66, 0.66, 0.66,
+	0.54
 	]
-skip_street = [5, 7, 9, 11, 13, 14, 16, 18, 20]
-skip_garden = [6, 8, 10, 12, 15, 17, 19]
 rafter_positions = []
+rafter_keywords = []
 rafter_x = 0
-for distance in rafters:
+for rafter in rafters:
+	if isinstance(rafter, tuple):
+		keyword, distance = rafter
+	else:
+		keyword, distance = None, rafter
 	rafter_x += distance
 	rafter_positions.append(rafter_x)
+	rafter_keywords.append(keyword)
 
 dormer_rafter_indices = [
-	i for i in range(5, 21)
-	if i not in skip_garden
+	i for i, keyword in enumerate(rafter_keywords)
+	if keyword == "dormer"
 ]
-dormer_x_min = min(rafter_positions[i] for i in dormer_rafter_indices) - RAFTER_SIZE[0] / 2
-dormer_x_max = max(rafter_positions[i] for i in dormer_rafter_indices) + RAFTER_SIZE[0] / 2
+dormer_x_min = min(rafter_positions[i] for i in dormer_rafter_indices)
+dormer_x_max = max(rafter_positions[i] for i in dormer_rafter_indices)
 roof_x_ranges = (
-	(0, dormer_x_min),
+	(-0.25, dormer_x_min),
 	(dormer_x_min, dormer_x_max),
-	(dormer_x_max, HOUSE_WIDTH),
+	(dormer_x_max, HOUSE_WIDTH+0.25),
 )
 
 
@@ -1485,7 +1492,8 @@ add_tile_battens(
 
 for i, rafter_x in enumerate(rafter_positions):
 	print("rafter_x = ", rafter_x)
-	if i not in skip_street:
+	is_dormer_rafter = i in dormer_rafter_indices
+	if not is_dormer_rafter:
 		for side, x_offset in (
 			("left", -COLLAR_TIE_X_OFFSET),
 			("right", COLLAR_TIE_X_OFFSET),
@@ -1532,68 +1540,47 @@ for i, rafter_x in enumerate(rafter_positions):
 		)
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
 
-	if i > 4 and i < 21:
-		if i in skip_garden:
-			rafter = garden_roof.beam(
-				"Rafter 1",
-				start=(rafter_x, -2),
-				end=(rafter_x, 0.7),
-				z_offset=RAFTER_Z_OFFSET,
-				size=RAFTER_SIZE,
-				kind="RAFTER",
-			)
-			roof_layer_storeys["Rafters"].add(rafter)
-			counter_batten = garden_roof.beam(
-				f"Garden counter-batten {i + 1}",
-				start=(rafter_x, -2),
-				end=(rafter_x, 0),
-				z_offset=COUNTER_BATTEN_BOTTOM,
-				size=COUNTER_BATTEN_SIZE,
-				material="Wood",
-				kind="BEAM",
-			)
-			roof_layer_storeys["Counter-battens"].add(counter_batten)
-		else:
-			rafter = dormer_roof.beam(
-				"Rafter 1",
-				start=(rafter_x, -0.5),
-				end=(rafter_x, 5),
-				z_offset=RAFTER_Z_OFFSET,
-				size=RAFTER_SIZE,
-				kind="RAFTER",
-			)
-			roof_layer_storeys["Rafters"].add(rafter)
-			counter_batten = dormer_roof.beam(
-				f"Dormer counter-batten {i + 1}",
-				start=(rafter_x, -0.5),
-				end=(rafter_x, 5),
-				z_offset=COUNTER_BATTEN_BOTTOM,
-				size=COUNTER_BATTEN_SIZE,
-				material="Wood",
-				kind="BEAM",
-			)
-			roof_layer_storeys["Counter-battens"].add(counter_batten)
+	if is_dormer_rafter:
+		rafter = dormer_roof.beam(
+			"Rafter 1",
+			start=(rafter_x, -0.5),
+			end=(rafter_x, 5),
+			z_offset=RAFTER_Z_OFFSET,
+			size=RAFTER_SIZE,
+			kind="RAFTER",
+		)
+		roof_layer_storeys["Rafters"].add(rafter)
+		counter_batten = dormer_roof.beam(
+			f"Dormer counter-batten {i + 1}",
+			start=(rafter_x, -0.5),
+			end=(rafter_x, 5),
+			z_offset=COUNTER_BATTEN_BOTTOM,
+			size=COUNTER_BATTEN_SIZE,
+			material="Wood",
+			kind="BEAM",
+		)
+		roof_layer_storeys["Counter-battens"].add(counter_batten)
 	else:
-		if i not in skip_garden:
-			rafter = garden_roof.beam(
-				"Rafter 1",
-				start=(rafter_x, -2),
-				end=(rafter_x, 5),
-				z_offset=RAFTER_Z_OFFSET,
-				size=RAFTER_SIZE,
-				kind="RAFTER",
-			)
-			roof_layer_storeys["Rafters"].add(rafter)
-			counter_batten = garden_roof.beam(
-				f"Garden counter-batten {i + 1}",
-				start=(rafter_x, -2),
-				end=(rafter_x, 5),
-				z_offset=COUNTER_BATTEN_BOTTOM,
-				size=COUNTER_BATTEN_SIZE,
-				material="Wood",
-				kind="BEAM",
-			)
-			roof_layer_storeys["Counter-battens"].add(counter_batten)
+		under_dormer = dormer_x_min < rafter_x < dormer_x_max
+		rafter = garden_roof.beam(
+			"Rafter 1",
+			start=(rafter_x, -2),
+			end=(rafter_x, 0.7 if under_dormer else 5),
+			z_offset=RAFTER_Z_OFFSET,
+			size=RAFTER_SIZE,
+			kind="RAFTER",
+		)
+		roof_layer_storeys["Rafters"].add(rafter)
+		counter_batten = garden_roof.beam(
+			f"Garden counter-batten {i + 1}",
+			start=(rafter_x, -2),
+			end=(rafter_x, 0 if under_dormer else 5),
+			z_offset=COUNTER_BATTEN_BOTTOM,
+			size=COUNTER_BATTEN_SIZE,
+			material="Wood",
+			kind="BEAM",
+		)
+		roof_layer_storeys["Counter-battens"].add(counter_batten)
 
 house.write("house.ifc")
 
