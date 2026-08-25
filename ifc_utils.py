@@ -20,7 +20,6 @@ import re
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
-from textwrap import wrap
 from time import monotonic
 from typing import Literal, Sequence, TypeAlias
 
@@ -938,30 +937,6 @@ def _drawing_pattern_ids() -> frozenset[str]:
     return _DRAWING_PATTERN_IDS
 
 
-def _material_legend_lines(
-    description: str,
-    width_mm: float,
-    layout_scale: float,
-) -> list[str]:
-    """Wrap one legend description to an approximate printed width."""
-    # Legend descriptions are commonly uppercase and contain wide accented
-    # glyphs.  Reserve about 2.6 mm per character at the configured 3.2 mm
-    # text height; conservative wrapping is preferable to crossing the cell.
-    characters = max(8, int(width_mm / (2.6 * layout_scale)))
-    lines: list[str] = []
-    for paragraph in description.splitlines() or [description]:
-        lines.extend(
-            wrap(
-                paragraph,
-                width=characters,
-                break_long_words=True,
-                break_on_hyphens=True,
-            )
-            or [""]
-        )
-    return lines
-
-
 def _material_legend_svg(
     table: Mapping[str, object],
     *,
@@ -969,6 +944,7 @@ def _material_legend_svg(
     y: float,
     width: float,
     units_per_mm: float,
+    layout_scale: float | None = None,
 ) -> tuple[str, float]:
     """Return one material-legend SVG table and its height in SVG units."""
     title = str(table.get("title", "MATERIAL LEGEND"))
@@ -977,30 +953,21 @@ def _material_legend_svg(
     width_mm = width / units_per_mm
     # A 90 mm-wide table is the reference size.  Narrower panels scale the
     # whole legend uniformly instead of squeezing full-size text into them.
-    layout_scale = min(1.0, width_mm / 90.0)
-    swatch_width_mm = min(
-        20.0 * layout_scale,
-        max(14.0 * layout_scale, width_mm * 0.2),
-    )
+    if layout_scale is None:
+        layout_scale = min(1.0, width_mm / 90.0)
+    description_font_size_mm = 4.4 * layout_scale
+    swatch_width_mm = 18.0 * layout_scale
     padding_mm = 2.0 * layout_scale
     header_height_mm = 12.0 * layout_scale
-    line_height_mm = 4.2 * layout_scale
+    line_height_mm = 5.4 * layout_scale
     minimum_row_height_mm = 12.0 * layout_scale
-    text_width_mm = max(
-        8.0,
-        width_mm - swatch_width_mm - 3 * padding_mm,
-    )
     normalised_items: list[tuple[str, list[str], float]] = []
     for supplied_item in items:
         if not isinstance(supplied_item, dict):
             continue
         pattern = str(supplied_item.get("pattern", ""))
         description = str(supplied_item.get("description", ""))
-        lines = _material_legend_lines(
-            description,
-            text_width_mm,
-            layout_scale,
-        )
+        lines = description.splitlines() or [""]
         row_height_mm = max(
             minimum_row_height_mm,
             2 * padding_mm + len(lines) * line_height_mm,
@@ -1057,9 +1024,9 @@ def _material_legend_svg(
         first_baseline = (
             row_y
             + (row_height - text_block_height) / 2
-            + 1.0 * layout_scale * u
+            + 1.35 * layout_scale * u
         )
-        description_font_size = 3.2 * layout_scale
+        description_font_size = description_font_size_mm
         tspans = "".join(
             (
                 f'<tspan x="{text_x:.6g}" '
@@ -1121,11 +1088,18 @@ def _postprocess_right_panel(
         return
     units_per_mm = view_width / physical_width_mm
     panel_width = panel_width_mm * units_per_mm
-    margin = 5.0 * units_per_mm
+    horizontal_margin_mm = 2.0
+    vertical_margin_mm = 5.0
+    horizontal_margin = horizontal_margin_mm * units_per_mm
+    vertical_margin = vertical_margin_mm * units_per_mm
     table_gap = 5.0 * units_per_mm
     panel_x = view_x + view_width
-    table_x = panel_x + margin
-    table_width = panel_width - 2 * margin
+    table_x = panel_x + horizontal_margin
+    table_width = panel_width - 2 * horizontal_margin
+    legend_scale = min(
+        1.0,
+        max(0.0, (panel_width_mm - 10.0) / 90.0),
+    )
 
     try:
         tables = json.loads(
@@ -1135,7 +1109,7 @@ def _postprocess_right_panel(
         tables = []
     if not isinstance(tables, list):
         tables = []
-    table_y = view_y + margin
+    table_y = view_y + vertical_margin
     table_parts = []
     for table in tables:
         if not isinstance(table, dict) or table.get("kind") != "material_legend":
@@ -1146,12 +1120,13 @@ def _postprocess_right_panel(
             y=table_y,
             width=table_width,
             units_per_mm=units_per_mm,
+            layout_scale=legend_scale,
         )
         table_parts.append(table_svg)
         table_y += table_height + table_gap
 
     required_height = (
-        table_y - table_gap + margin
+        table_y - table_gap + vertical_margin
         if table_parts
         else view_y + view_height
     )
@@ -4287,9 +4262,9 @@ class Drawing:
         ``items`` contains ``(pattern, description)`` pairs.  Pattern names
         come from ``drawings/assets/patterns.svg``, for example
         ``"diagonal1"``, ``"crosshatch1"``, ``"brick"``, ``"concrete"``,
-        or ``"wood"``.  Descriptions may contain explicit newlines and are
-        otherwise wrapped automatically.  Tables are stacked from the top of
-        the panel in call order and are persisted in ``EPset_Drawing``.
+        or ``"wood"``.  Use explicit newlines in descriptions to control line
+        wrapping.  Tables are stacked from the top of the panel in call order
+        and are persisted in ``EPset_Drawing``.
         """
         if self.right_panel_width <= 0:
             raise ValueError(

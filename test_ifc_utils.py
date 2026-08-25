@@ -4545,13 +4545,15 @@ class HouseTests(unittest.TestCase):
                                 {
                                     "pattern": "diagonal1",
                                     "description": (
-                                        "A very long material description that "
-                                        "must wrap over multiple lines in the table"
+                                        "A manually wrapped description\n"
+                                        "continues on the next line"
                                     ),
                                 },
                                 {
                                     "pattern": "crosshatch1",
-                                    "description": "Concrete blocks",
+                                    "description": (
+                                        "Nosná zeď - VPC Cihla 240 mm"
+                                    ),
                                 },
                             ],
                         }
@@ -4569,9 +4571,14 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(svg.count('class="right-side-panel"'), 1)
             self.assertIn('x="160"', svg)
             self.assertIn('width="40"', svg)
+            self.assertIn(
+                'class="right-panel-table-outline" x="162" '
+                'y="5" width="36"',
+                svg,
+            )
             self.assertIn('style="font-size:1.83333px"', svg)
             self.assertGreaterEqual(
-                svg.count('style="font-size:1.06667px"'),
+                svg.count('style="font-size:1.46667px"'),
                 4,
             )
             self.assertIn('fill="url(#diagonal1)"', svg)
@@ -4580,6 +4587,14 @@ class HouseTests(unittest.TestCase):
             self.assertGreaterEqual(
                 svg.count('<tspan x="'),
                 3,
+            )
+            self.assertRegex(
+                svg,
+                r'<tspan[^>]*>Nosná zeď - VPC Cihla 240 mm</tspan>',
+            )
+            self.assertRegex(
+                svg,
+                r'<tspan[^>]*>continues on the next line</tspan>',
             )
             self.assertGreater(
                 svg.index('class="right-side-panel"'),
