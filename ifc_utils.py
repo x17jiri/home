@@ -869,10 +869,15 @@ def _postprocess_elevation_opening_overlays(
     svg_path.write_text(svg, encoding="utf-8")
 
 
-def _postprocess_projected_wood_fills(svg_path: Path) -> None:
-    """Add a filled hull behind open projected-wood edge paths in plans."""
+def _postprocess_projection_hull_fills(
+    svg_path: Path,
+    *,
+    required_classes: set[str],
+    fill_class: str,
+) -> None:
+    """Add a filled hull behind matching groups of open projection paths."""
     svg = svg_path.read_text(encoding="utf-8")
-    if 'class="projected-wood-fill"' in svg:
+    if f'class="{fill_class}"' in svg:
         return
 
     simple_group = re.compile(
@@ -886,7 +891,7 @@ def _postprocess_projected_wood_fills(svg_path: Path) -> None:
     def add_fill(match: re.Match[str]) -> str:
         attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
         classes = set(attributes.get("class", "").split())
-        if not {"IfcBeam", "material-Wood", "projection"} <= classes:
+        if not required_classes <= classes:
             return match.group(0)
         points: set[tuple[float, float]] = set()
         for path_data in re.findall(
@@ -905,7 +910,7 @@ def _postprocess_projected_wood_fills(svg_path: Path) -> None:
         if indentation_match is not None:
             indentation = indentation_match.group(1)
         polygon = (
-            f'\n{indentation}<polygon class="projected-wood-fill" '
+            f'\n{indentation}<polygon class="{fill_class}" '
             f'points="{point_text}"/>'
         )
         return (
@@ -915,6 +920,24 @@ def _postprocess_projected_wood_fills(svg_path: Path) -> None:
     processed_svg = simple_group.sub(add_fill, svg)
     if processed_svg != svg:
         svg_path.write_text(processed_svg, encoding="utf-8")
+
+
+def _postprocess_projected_wood_fills(svg_path: Path) -> None:
+    """Add a filled hull behind open projected-wood edge paths in plans."""
+    _postprocess_projection_hull_fills(
+        svg_path,
+        required_classes={"IfcBeam", "material-Wood", "projection"},
+        fill_class="projected-wood-fill",
+    )
+
+
+def _postprocess_projected_chimney_fills(svg_path: Path) -> None:
+    """Mask merged elevation surfaces behind projected chimney outlines."""
+    _postprocess_projection_hull_fills(
+        svg_path,
+        required_classes={"IfcChimney", "projection"},
+        fill_class="projected-chimney-fill",
+    )
 
 
 _DRAWING_PATTERN_IDS: frozenset[str] | None = None
@@ -2038,6 +2061,7 @@ def _render_existing_drawing(
             mask_global_ids=_overhead_mask_global_ids(model, cut_z),
         )
     else:
+        _postprocess_projected_chimney_fills(absolute_output)
         _postprocess_elevation_opening_overlays(
             absolute_output,
             model,
@@ -8704,6 +8728,7 @@ class Storey:
         height: Number,
         flue_diameter: Number,
         start_height: Number = 0,
+        material: str = "Chimney",
         name: str | None = None,
         color: str | None = None,
         transparency: Number = 0,
@@ -8712,14 +8737,16 @@ class Storey:
 
         ``center`` locates the stack in plan, ``size`` is its outside side
         length, and ``height`` is its vertical extent.  ``start_height`` is
-        measured above this storey's elevation.  ``color`` and
-        ``transparency`` affect only the 3D body.
+        measured above this storey's elevation.  ``material`` is persisted as
+        an IFC material and supplies the drawing material class.  ``color``
+        and ``transparency`` affect only the 3D body.
         """
         center_x, center_y = _point(center, "center")
         size = _number(size, "size")
         height = _number(height, "height")
         flue_diameter = _number(flue_diameter, "flue_diameter")
         start_height = _number(start_height, "start_height")
+        material_name = _name(material, "material")
         if size <= 0:
             raise ValueError("size must be greater than zero")
         if height <= 0:
@@ -8817,6 +8844,20 @@ class Storey:
                 shape_representation=body,
                 styles=[surface_style],
             )
+        ifc_material = self.house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category="masonry",
+            )
+            self.house._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[chimney],
+            type="IfcMaterial",
+            material=ifc_material,
+        )
 
         pset = ifcopenshell.api.pset.add_pset(
             model,

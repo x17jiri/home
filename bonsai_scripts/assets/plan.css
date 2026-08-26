@@ -155,6 +155,22 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 	stroke: none;
 }
 
+.target-view-ELEVATIONVIEW .material-Chimney.surface {
+    fill: white !important;
+    stroke: none !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Chimney.projection {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+.target-view-ELEVATIONVIEW .projected-chimney-fill {
+    fill: white !important;
+    stroke: none !important;
+}
+
 /* Lighter section/elevation outlines than Bonsai's drawing defaults. */
 .target-view-ELEVATIONVIEW .cut {
     stroke-width: 0.08;

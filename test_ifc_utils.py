@@ -38,6 +38,7 @@ from ifc_utils import (
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
     _postprocess_elevation_opening_overlays,
+    _postprocess_projected_chimney_fills,
     _postprocess_projected_wood_fills,
     _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
@@ -1315,6 +1316,7 @@ class HouseTests(unittest.TestCase):
             height=6.5,
             flue_diameter=0.18,
             start_height=0.1,
+            material="Chimney masonry",
             name="Main chimney",
         )
 
@@ -1324,6 +1326,10 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(chimney.PredefinedType, "NOTDEFINED")
         self.assertEqual(chimney.center, (2, 3))
         self.assertEqual(chimney.end_height, 6.6)
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(chimney).Name,
+            "Chimney masonry",
+        )
         self.assertEqual(
             chimney.ContainedInStructure[0].RelatingStructure,
             ground.element,
@@ -1422,6 +1428,12 @@ class HouseTests(unittest.TestCase):
             house.write(output)
             reopened = ifcopenshell.open(output)
             self.assertEqual(len(reopened.by_type("IfcChimney")), 1)
+            self.assertEqual(
+                ifcopenshell.util.element.get_material(
+                    reopened.by_type("IfcChimney")[0]
+                ).Name,
+                "Chimney masonry",
+            )
 
     def test_rejects_invalid_chimneys_and_duplicate_symbols(self) -> None:
         house = House("My house")
@@ -1435,6 +1447,14 @@ class HouseTests(unittest.TestCase):
             ground.chimney((0, 0), size=0.5, height=5, flue_diameter=0)
         with self.assertRaisesRegex(ValueError, "smaller than size"):
             ground.chimney((0, 0), size=0.5, height=5, flue_diameter=0.5)
+        with self.assertRaisesRegex(ValueError, "material must not be empty"):
+            ground.chimney(
+                (0, 0),
+                size=0.5,
+                height=5,
+                flue_diameter=0.18,
+                material="",
+            )
 
         chimney = ground.chimney(
             (0, 0), size=0.5, height=5, flue_diameter=0.18
@@ -5224,6 +5244,64 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: white !important", insulation_rule)
         self.assertIn("stroke-width: 0.06 !important", insulation_rule)
+
+    def test_fills_projected_chimney_outline_above_elevation_surfaces(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "elevation.svg"
+            svg_path.write_text(
+                """<svg>
+  <path class="IfcSlab material-Rooftiles surface" d="M0,0 L10,0 L10,10 L0,10"/>
+  <g class="IfcChimney material-Chimney projection">
+    <path d="M3,1 L7,1"/>
+    <path d="M3,1 L3,6"/>
+    <path d="M7,1 L7,6"/>
+  </g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_projected_chimney_fills(svg_path)
+            _postprocess_projected_chimney_fills(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            polygon = (
+                '<polygon class="projected-chimney-fill" '
+                'points="3,1 7,1 7,6 3,6"/>'
+            )
+            self.assertEqual(svg.count(polygon), 1)
+            self.assertGreater(
+                svg.index(polygon),
+                svg.index('class="IfcSlab material-Rooftiles surface"'),
+            )
+            self.assertLess(svg.index(polygon), svg.index('<path d="M3,1 L7,1"'))
+
+        stylesheet = (
+            Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+        chimney_rule = stylesheet.split(
+            ".target-view-ELEVATIONVIEW .projected-chimney-fill",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", chimney_rule)
+        self.assertIn("stroke: none !important", chimney_rule)
+
+        chimney_surface_rule = stylesheet.split(
+            ".target-view-ELEVATIONVIEW .material-Chimney.surface",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", chimney_surface_rule)
+        self.assertIn("stroke: none !important", chimney_surface_rule)
+
+        chimney_projection_rule = stylesheet.split(
+            ".target-view-ELEVATIONVIEW .material-Chimney.projection",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", chimney_projection_rule)
+        self.assertIn("stroke: black !important", chimney_projection_rule)
+        self.assertIn("stroke-width: 0.06 !important", chimney_projection_rule)
 
     def test_centers_short_dimension_labels_during_svg_postprocessing(self) -> None:
         with TemporaryDirectory() as directory:

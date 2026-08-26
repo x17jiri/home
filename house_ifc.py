@@ -407,7 +407,7 @@ stair_landing2 = ground.stair_landing(
 ground.furniture(
     "vestavěná skříň",
     kind="USERDEFINED",
-    size=(4.4, 0.5, 1.5),
+    size=(KITCHEN_WIDTH-0.1, 0.5, 1.5),
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
     center=(0.25+3+0.25+KITCHEN_WIDTH/2, 0.25+0.6/2),
@@ -432,6 +432,7 @@ chimney = ground.chimney(
     flue_diameter=0.18,
     start_height=0,
     name="Main chimney",
+    material="Chimney",
     color="#B8A99A",
 )
 # zed loznice
@@ -515,8 +516,8 @@ ground.furniture(
 ground.furniture(
 	"Kuchyňská Linka",
     kind="USERDEFINED",
-    size=(3.1, 0.7, 0.8),
-    center=(0.25+3+0.25+0.7+0.7+3.1/2, 0.25+1.7+0.15+0.35),
+    size=(2.85, 0.7, 0.8),
+    center=(0.25+3+0.25+0.7+0.7+2.85/2, 0.25+1.7+0.15+0.35),
 	start_height=GROUND_FLOOR_THICKNESS,
 )
 ground.asset(
@@ -888,13 +889,13 @@ wall_2 = upper.wall(
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_2.add_opening(
-	at=3.5, width=1, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
+	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 wall_3 = upper.wall(
 	(wall3_x, 0), (wall3_x, HOUSE_DEPTH),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_3.add_opening(
-	at=3.5, width=1, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
+	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_4 = upper.wall(
 	(HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH),
@@ -1656,12 +1657,12 @@ if "ground" in sys.argv:
 	drawing1.add_room_annotation(
 		(3.5+4.25+2.1, 5+0.5),
 		identifier="0.05",
-		area=3*3.5-0.65*0.75,   # m²
+		area=3*3.25-0.65*0.75,   # m²
 	)
 	drawing1.add_room_annotation(
 		(3.5+4.25+2.1, 5-1.3),
 		identifier="0.06",
-		area=4.4*3.5-0.9*0.55,   # m²
+		area=4.4*3.25-0.9*0.55,   # m²
 	)
 
 	# The Rockwool occupies the right side of each wall axis.  These annotations
@@ -1743,7 +1744,7 @@ if "cut2" in sys.argv:
 if "cut3" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Cut3",
-		x=11.275,
+		x=11.275-0.5,
 		y=4,
 		z=3.5,
 		radius=8,
@@ -1783,3 +1784,18 @@ if "wall3" in sys.argv:
 		doors_closed=True,
 	)
 	drawing1.render("wall3.svg", png=True, png_dpi=600)
+
+# Drawing - wall_back
+if "wall_back" in sys.argv:
+	drawing1 = house.add_drawing(
+		"wall_back",
+		x=HOUSE_WIDTH/2,
+		y=7.75+0.1,
+		z=3.5,
+		radius=8,
+		view="elevation",
+		direction=(0, -1, 0),
+		storeys=None,
+		doors_closed=True,
+	)
+	drawing1.render("wall_back.svg", png=True, png_dpi=600)
