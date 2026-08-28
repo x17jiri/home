@@ -26,8 +26,11 @@
 #    - akusticky SDK
 
 # Fasada:
-#    - Cementovlakno
-#        - https://www.fasadnidesky.cz/produkty/cementovlaknita-deska-typ-20-250/
+#    - Centris Basic s bilym naterem
+#        - tloustka 12mm (je nutna pro roztec rostu 600mm)
+#        - https://www.dek.cz/produkty/detail/3025110040-cetris-basic-12mm-3350x1250mm-40ks-paleta-a2
+#    - Rost delany pomoci OSB prilozek
+#        - https://www.pasivnidomy.cz/detaily/napojeni-obvodovych-sten-v-miste-narozi-133
 
 # Podlaha dole:
 #    - 100 mm EPS 150
@@ -155,7 +158,7 @@ facade_insulation = house.wall_type(
 
 HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.25
+KITCHEN_WIDTH = 5
 HOUSE_WIDTH = 11.5
 
 wall2_x = 0.25 + 3 + 0.25;
@@ -204,7 +207,7 @@ ground.connect_wall(wall_4, wall_back)
 # Front door/window
 
 wall_front.add_door(
-	at=wall3_x+0.125,
+	at=wall3_x-0.125-0.25-1.125,
 	opening_width=1.125, width=0.9,
 	height=0.25+2.125,
 	clear_height=door_clear_height,
@@ -221,26 +224,34 @@ wall_front.add_window(
 
 # Back windows
 wall_back.add_window(
-	at=2.5, width=0.5, sill_height=0.25+0.875, height=0.25+2.25)
+	at=0.25+3+0.25+0.5, width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=0.25+3.25+0.25+KITCHEN_WIDTH-0.375-1.5,width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
-wall_back.add_door(
-	at=0.25+3.25+0.25+0.5,
-	width=0.8, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2)
+	at=0.25+3+0.25+0.5+1.5+0.5, width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=0.25+3.25+0.25+KITCHEN_WIDTH+0.25+0.75,
+	at=0.25+3+0.25+KITCHEN_WIDTH+0.25+0.75,
 	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
+wall_back.add_door(
+	at=0.25+3-0.25-1,
+	width=0.8, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2,
+	operation="SINGLE_SWING_RIGHT",)
+
+
+# Posilovna, Gym
+wall_bathroom = ground.wall(
+	(0.25, 0.25+2), (0.25+3, 0.25+2),
+	wall_type=partition_wall, height=ground_floor_height)
+
 
 # Bathroom, Koupelna
 wall_bathroom = ground.wall(
-	(0.25, 0.25+2.3), (0.25+3, 0.25+2.3),
+	(wall3_x, 0.25+2.3), (HOUSE_WIDTH-0.25, 0.25+2.3),
 	wall_type=partition_wall, height=ground_floor_height)
 ground.furniture(
     "TČ",
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(0.25+2.5, 0-0.5),
+    center=(HOUSE_WIDTH-(0.25+2.5), 0-0.5),
 )
 ground.furniture(
     "TČ",
@@ -248,7 +259,7 @@ ground.furniture(
     size=(0.5, 0.4, 0.9),
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
-    center=(0.25+2.7, 0.25+0.2),
+    center=(HOUSE_WIDTH-(0.25+2.7), 0.25+0.2),
 )
 ground.furniture(
     "Zásobník\nTUV",
@@ -256,7 +267,7 @@ ground.furniture(
     size=(0.7, 0.7, 2.0),
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
-    center=(0.25+0.4, 0.25+0.35),
+    center=(HOUSE_WIDTH-(0.25+0.4), 0.25+0.35),
 )
 ground.furniture(
     "Pračka",
@@ -264,14 +275,8 @@ ground.furniture(
 	start_height=GROUND_FLOOR_THICKNESS,
     size=(0.7, 0.7, 2.0),
     color="#ffffff",
-    center=(0.25+1.2, 0.25+0.35),
+    center=(HOUSE_WIDTH-(0.25+1.2), 0.25+0.35),
 )
-#ground.asset(
-#    "Pracka",
-#    asset="washing_machine",
-#    center=(0.25+1.2, 0.25+0.35),
-#	rotation=90,
-#)
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
 	center=(0.25+3+0.25+1.1, 7.2),
@@ -283,67 +288,45 @@ ground.asset(
 	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=90,
 )
-#ground.furniture(
-#    "Umyv",
-#    kind="USERDEFINED",
-#    size=(0.7, 0.7, 2.0),
-#    color="#ffffff",
-#    center=(0.25+2, 0.25+0.35),
-#)
 ground.asset(
     "Umyv",
     asset="basin_large",
-    center=(0.25+2, 0.25+0.35),
+    center=(HOUSE_WIDTH-(0.25+2), 0.25+0.35),
 	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=180,
 )
-#ground.furniture(
-#    "Sprcha",
-#    kind="USERDEFINED",
-#    size=(1, 1, 2.0),
-#    color="#ffffff",
-#    center=(0.25+0.5, 0.25+1.8),
-#)
 ground.asset(
     "Sprcha",
     asset="shower_90x90",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(0.25+0.5, 0.25+1.8),
+    center=(HOUSE_WIDTH-(0.25+0.5), 0.25+1.8),
 	rotation=90,
 )
-#ground.furniture(
-#    "WC",
-#    kind="USERDEFINED",
-#    size=(0.7, 0.4, 1.0),
-#    color="#ffffff",
-#    center=(0.25+2.6, 0.25+1.8),
-#)
 ground.asset(
     "WC",
     asset="toilet_without_cistern",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(0.25+2.6, 0.25+1.8),
-    rotation=-90,
+    center=(HOUSE_WIDTH-(0.25+2.6), 0.25+1.8),
+    rotation=90,
 )
 
 # Kitchen, Kuchyn
 wall_kitchen = ground.wall(
-	(0.25+3+0.25, 0.25+1.7),
-	(0.25+3+0.25+KITCHEN_WIDTH, 0.25+1.7),
+	(0.25+3+0.25, 0.25+2.625+0.04),
+	(0.25+3+0.25+KITCHEN_WIDTH, 0.25+2.625+0.04),
 	wall_type=partition_wall, height=ground_floor_height)
-kitchen_door = wall_3.add_door(
-	at=0.25+0.625+1+1,
+wall_kitchen.add_door(
+	at=KITCHEN_WIDTH-1.25,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_RIGHT",
-	reverse_swing=True,
 )
 
 # Pokoj Risanek
 wall_2.add_door(
-	at=HOUSE_DEPTH-0.25-3.0,
+	at=0.25+2.75+0.25+1,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -352,8 +335,17 @@ wall_2.add_door(
 #	reverse_swing=True,
 )
 
+# Oblouk
+wall_3.add_opening(
+	at=0.25+2.75+1,
+	width=1.5,
+    height=0.25+2.125,
+    sill_height=GROUND_FLOOR_THICKNESS,
+	name="Oblouk"
+)
+
 # Bathroom
-wall_2.add_door(
+wall_3.add_door(
     at=0.25+0.625,
     opening_width=1.0, width=0.9,
     height=0.25+2.125,
@@ -364,60 +356,62 @@ wall_2.add_door(
 
 # Main hallway
 stairs1 = ground.stair(
-    (HOUSE_WIDTH-0.25-1.5, 0.25+1+0.27*4),       # bottom centre
-    (HOUSE_WIDTH-0.25-1.5, 0.25+1),       # upper landing edge centre
+    (0.25+3+0.25+1+4*0.27, 0.25+0.5),       # bottom centre
+    (0.25+3+0.25+1, 0.25+0.5),       # upper landing edge centre
     width=1.0,
 	start_height=GROUND_FLOOR_THICKNESS,
-    height=stair_height/17*5,
+    height=stair_height/17*4,
     risers=5,
     name="Main stair",
     color="#C8B090",
     underside="sloped",
     waist_thickness=0.15,)
-stair_landing1 = ground.stair_landing(
-    (HOUSE_WIDTH-0.25-2.0, 0.25),
-    (HOUSE_WIDTH-0.25-1.0, 0.25+1.0),
+
+stairs2 = ground.stair(
+    (0.25+3+0.25+1, 0.25+2),
+    (0.25+3+0.25+1+9*0.27, 0.25+2),
+    width=1.0,
+    height=stair_height/17*9,
+    risers=10,
+    start_height=stairs1.end_height+(2*stair_height/17),
+    name="Main stair",
+    color="#C8B090",
+    underside="sloped",
+    waist_thickness=0.15,)
+
+ground.stair_landing(
+    (0.25+3+0.25, 0.25),
+    (0.25+3+0.25+1, 0.25+1),
     height=stairs1.end_height,
     thickness=0.20,
     name="Main stair landing",
     color="#C8B090",
 )
-
-stairs2 = ground.stair(
-    (HOUSE_WIDTH-0.25-0.5, 0.25+1),       # bottom centre
-    (HOUSE_WIDTH-0.25-0.5, 0.25+1+0.27*10),       # upper landing edge centre
-    width=1.0,
-    height=stair_height/17*11,
-    risers=11,
-    start_height=stairs1.end_height+(stair_height/17),
-    name="Main stair",
+ground.stair_landing(
+    (0.25+3+0.25, 0.25+1.5),
+    (0.25+3+0.25+1, 0.25+1),
+    height=stairs1.end_height+(1*stair_height/17),
+    thickness=0.20,
+    name="Main stair landing",
     color="#C8B090",
-    underside="sloped",
-    waist_thickness=0.15,)
-stair_landing2 = ground.stair_landing(
-    (HOUSE_WIDTH-0.25-1.0, 0.25),
-    (HOUSE_WIDTH-0.25, 0.25+1.0),
-    height=stairs1.end_height+(stair_height/17),
+)
+ground.stair_landing(
+    (0.25+3+0.25, 0.25+1.5),
+    (0.25+3+0.25+1, 0.25+2.5),
+    height=stairs1.end_height+(2*stair_height/17),
     thickness=0.20,
     name="Main stair landing",
     color="#C8B090",
 )
 
-# Vedlejsi chodba
-ground.furniture(
-    "vestavěná skříň",
-    kind="USERDEFINED",
-    size=(KITCHEN_WIDTH-0.1, 0.5, 1.5),
-	start_height=GROUND_FLOOR_THICKNESS,
-    color="#ffffff",
-    center=(0.25+3+0.25+KITCHEN_WIDTH/2, 0.25+0.6/2),
-)
-
 # Chimney
 CHIMNEY_DIST=0.47
-CHIMNEY_Y_START = HALF_DEPTH + 0.8 - 0.07 - 0.05 - 0.4
+CHIMNEY_Y_START = HALF_DEPTH - 0.8 - 0.07 - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
-CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025
+CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
+
+CHIMNEY_Y_START = 0.25 + 2.625 + 0.04 - 0.45 # override
+
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
@@ -426,7 +420,7 @@ print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
 chimney = ground.chimney(
-    center=(0.25+3+0.25+KITCHEN_WIDTH+0.25+CHIMNEY_DIST+0.2, CHIMNEY_Y_MID),
+    center=(0.25+3+0.25+0.05+0.2, CHIMNEY_Y_MID),
     size=0.4,
     height=8.8,
     flue_diameter=0.18,
@@ -435,119 +429,61 @@ chimney = ground.chimney(
     material="Chimney",
     color="#B8A99A",
 )
-# zed loznice
-w0 = ground.wall(
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25+(CHIMNEY_DIST+0.4), 4.21),
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25, 4.21),
-	wall_type=partition_wall, height=ground_floor_height)
-w1 = ground.wall(
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25+(CHIMNEY_DIST+0.4), 4.65),
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25+3.5, 4.65),
-	wall_type=partition_wall, height=ground_floor_height)
-wall_3.add_door(
-    at=HOUSE_DEPTH-0.25-1.5,
-    opening_width=1.0, width=0.9,
-    height=0.25+2.125,
-	sill_height=GROUND_FLOOR_THICKNESS,
-    clear_height=door_clear_height,
-    name="Bedroom door",
-	operation="SINGLE_SWING_RIGHT",
-	reverse_swing=True,
-)
-# Vyklenek Krb
-w2 = ground.wall(
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25+CHIMNEY_DIST, 5.25),
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25+CHIMNEY_DIST, 4.65),
-	wall_type=partition_wall, height=ground_floor_height)
-w3 = ground.wall(
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25, 4.375+1.0),
-	(0.25+3+0.25+KITCHEN_WIDTH+0.25+0.4, 4.375+1.0),
-	wall_type=partition_wall, height=ground_floor_height)
-wall_3.add_opening(
-    at=0.25+0.625+1+1+1.5,
-    width=1.0,
-    height=0.25+2.125,
-    sill_height=GROUND_FLOOR_THICKNESS,
-    name="Fireplace opening",
-)
-ground.connect_wall(w1, w2)
-ground.connect_wall(w2, w3)
 
 ground.furniture(
     "Kamna",
     kind="USERDEFINED",
     size=(0.5, 0.6, 1.5),
     color="#ffff2B",
-    center=(0.25+3+0.25+KITCHEN_WIDTH+0.2, 4.375+0.5),
+    center=(0.25+3+0.25+0.5, 0.25+2.75+0.25+0.4),
 	start_height=GROUND_FLOOR_THICKNESS,
-#    rotation=90,
+    rotation=45,
 )
 
 # Kuchyn
-print("SEARCH: ", "\n".join(str(x) for x in house.assets.search("table")))
-ground.furniture(
-	"Dřez",
-    kind="USERDEFINED",
-    size=(0.7, 0.95, 0.8),
-	start_height=GROUND_FLOOR_THICKNESS,
-    center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+(0.95/2)),
-)
-ground.furniture(
-	"Myčka",
-    kind="USERDEFINED",
-    size=(0.7, 0.7, 0.8),
-	start_height=GROUND_FLOOR_THICKNESS,
-    center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+0.35+0.95),
-)
-ground.furniture(
-	"Lednice",
-    kind="USERDEFINED",
-    size=(0.7, 1, 2),
-    center=(0.25+3+0.25+0.35, 4.75-0.5),
-	start_height=GROUND_FLOOR_THICKNESS,
-)
-ground.furniture(
-	"Sporák",
-    kind="USERDEFINED",
-    size=(0.7, 0.7, 0.8),
-    center=(0.25+3+0.25+0.35+0.7, 0.25+1.7+0.15+0.35),
-	start_height=GROUND_FLOOR_THICKNESS,
-)
-ground.furniture(
-	"Kuchyňská Linka",
-    kind="USERDEFINED",
-    size=(2.85, 0.7, 0.8),
-    center=(0.25+3+0.25+0.7+0.7+2.85/2, 0.25+1.7+0.15+0.35),
-	start_height=GROUND_FLOOR_THICKNESS,
-)
-ground.asset(
-    "Stul",
-    asset="retail_4_seater_rectangular_table",
-    center=(6, 4.5),
-	start_height=GROUND_FLOOR_THICKNESS,
-#	rotation=90,
-)
-
-# Loznice
-bed = ground.furniture(
-    "Postel",
-    kind="BED",
-    size=(1.6, 2.0, 0.5),
-	start_height=GROUND_FLOOR_THICKNESS,
-    color="#8B5A2B",
-    center=(HOUSE_WIDTH-0.25-1, 7.75-3.1/2),
-	rotation=-90
-)
-
-# Opening from main to side hallway
-opening = wall_3.add_opening(
-    at=0.25+0.625,
-    width=1.0,
-    height=0.25+2.125,
-    sill_height=GROUND_FLOOR_THICKNESS,
-    name="Hallway passage",
-    show_overhead=True,
-)
+#print("SEARCH: ", "\n".join(str(x) for x in house.assets.search("table")))
+#ground.furniture(
+#	"Dřez",
+#    kind="USERDEFINED",
+#    size=(0.7, 0.95, 0.8),
+#	start_height=GROUND_FLOOR_THICKNESS,
+#    center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+(0.95/2)),
+#)
+#ground.furniture(
+#	"Myčka",
+#    kind="USERDEFINED",
+#    size=(0.7, 0.7, 0.8),
+#	start_height=GROUND_FLOOR_THICKNESS,
+#    center=(0.25+3+0.25+0.35, 0.25+1.7+0.15+0.35+0.95),
+#)
+#ground.furniture(
+#	"Lednice",
+#    kind="USERDEFINED",
+#    size=(0.7, 1, 2),
+#    center=(0.25+3+0.25+0.35, 4.75-0.5),
+#	start_height=GROUND_FLOOR_THICKNESS,
+#)
+#ground.furniture(
+#	"Sporák",
+#    kind="USERDEFINED",
+#    size=(0.7, 0.7, 0.8),
+#    center=(0.25+3+0.25+0.35+0.7, 0.25+1.7+0.15+0.35),
+#	start_height=GROUND_FLOOR_THICKNESS,
+#)
+#ground.furniture(
+#	"Kuchyňská Linka",
+#    kind="USERDEFINED",
+#    size=(2.85, 0.7, 0.8),
+#    center=(0.25+3+0.25+0.7+0.7+2.85/2, 0.25+1.7+0.15+0.35),
+#	start_height=GROUND_FLOOR_THICKNESS,
+#)
+#ground.asset(
+#    "Stul",
+#    asset="retail_4_seater_rectangular_table",
+#    center=(6, 4.5),
+#	start_height=GROUND_FLOOR_THICKNESS,
+##	rotation=90,
+#)
 
 # facade
 if 0:
@@ -897,6 +833,12 @@ wall_3 = upper.wall(
 wall_3.add_opening(
 	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
+wall_3.add_opening(
+    at=0.25+1.75,
+    width=2,
+    height=2.25,
+)
+
 wall_4 = upper.wall(
 	(HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH),
 	wall_type=load_bearing_wall,
@@ -1009,13 +951,13 @@ wall_dormer.add_window(
 	at=0.25+0.375+1.5+0.5,
 	width=1.5, sill_height=NADEZDIVKA, height=2.25)
 # Dvere obyvak
-wall_3.add_door(
-	at=math.ceil(CHIMNEY_Y_END/0.125)*0.125,
-	opening_width=1, width=0.9,
-	height=2.25,
-	clear_height=door_clear_height,
-	sill_height=UPPER_FLOOR_THICKNESS,
-	operation="SINGLE_SWING_LEFT")
+#wall_3.add_door(
+#	at=math.ceil(CHIMNEY_Y_END/0.125)*0.125,
+#	opening_width=1, width=0.9,
+#	height=2.25,
+#	clear_height=door_clear_height,
+#	sill_height=UPPER_FLOOR_THICKNESS,
+#	operation="SINGLE_SWING_LEFT")
 # Dvere pokojik nahore
 wall_2.add_door(
 	at=3,
@@ -1605,28 +1547,11 @@ if "ground" in sys.argv:
 	drawing1.add_stair_annotation(stairs2)
 	drawing1.add_chimney_annotation(chimney)
 
-	drawing1.add_dimension(start=(0.5, 0.25), end=(0.5, 0.25+2.3), offset=1.5)
 	drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(3.5, 7.5), end=(3.5+KITCHEN_WIDTH, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 7.5), end=(HOUSE_WIDTH-0.25, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(0, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
-	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 4.65), end=(HOUSE_WIDTH-0.5, 7.75), offset=-1)
-	drawing1.add_dimension(start=(5, 0.25), end=(5, 0.25+1.7), offset=0)
-
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625), offset=1.3)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1), offset=1.3)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1), offset=-0.5)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1), offset=1.3)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5), offset=1.3)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5+1), offset=1.3)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5+1), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5+1+0.875), offset=1.3)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5+1+0.875), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5+1+0.875+1), offset=-1.3)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5+1+0.875+1), end=(3.5+KITCHEN_WIDTH+0.25, 0.25+0.625+1+1+1+0.5+1+0.875+1+0.5), offset=-1.3)
-
-	drawing1.add_dimension(start=(3.5, 7.75-2), end=(3.5, 7.75), offset=1.3)
-	drawing1.add_dimension(start=(3.5, 7.75-2-1), end=(3.5, 7.75-2), offset=1.3)
-	drawing1.add_dimension(start=(3.5, 0.25+2.3+0.15), end=(3.5, 7.75-2-1), offset=1.3)
 
 	drawing1.add_entrance_arrow(
 		(3.5+KITCHEN_WIDTH+1.1, -0.5),
@@ -1640,7 +1565,7 @@ if "ground" in sys.argv:
 		area=5.05*3,   # m²
 	)
 	drawing1.add_room_annotation(
-		(1.6, 0.25+1.15),
+		(HOUSE_WIDTH-1.6, 0.25+1.15),
 		identifier="0.02",
 		area=2.3*3,   # m²
 	)
