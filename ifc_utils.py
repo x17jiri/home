@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from difflib import get_close_matches
 from html import escape
 import json
-from math import atan2, cos, hypot, isfinite, radians, sin
+from math import atan2, cos, hypot, isclose, isfinite, radians, sin
 from os import PathLike, environ
 from pathlib import Path
 import re
@@ -553,7 +553,10 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
             id_insertions.append((match.end() - 1, f' id="{element_id}"'))
         reinforcement_ids.append(element_id)
 
-    for offset, identifier in reversed(id_insertions):
+    # A later cut group may replace an earlier projection in the dictionary
+    # without changing that key's insertion order.  Sort by the actual SVG
+    # offsets so every insertion remains valid as the string grows.
+    for offset, identifier in sorted(id_insertions, reverse=True):
         svg = f"{svg[:offset]}{identifier}{svg[offset:]}"
 
     closing_svg = svg.rfind("</svg>")
@@ -3988,6 +3991,7 @@ class Drawing:
         self._dimension_count = 0
         self._entrance_arrow_count = 0
         self._annotated_stairs: set[int] = set()
+        self._annotated_stair_landings: set[int] = set()
         self._annotated_chimneys: set[int] = set()
         self._annotated_doors: set[int] = set()
         if not isinstance(door_annotations, bool):
@@ -5347,7 +5351,7 @@ class Drawing:
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=annotation_pset,
-            properties={"Classes": "stair"},
+            properties={"Classes": "stair dashed"},
         )
 
         ifcopenshell.api.group.assign_group(
@@ -5356,6 +5360,108 @@ class Drawing:
             products=[annotation],
         )
         self._annotated_stairs.add(stair.id())
+        return annotation
+
+    def add_stair_landing_annotation(
+        self,
+        landing: ifcopenshell.entity_instance,
+        *,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a dashed plan outline of an existing stair landing.
+
+        The annotation copies the rectangular footprint created by
+        :meth:`Storey.stair_landing` and belongs only to this drawing.  It
+        does not move the landing from its original spatial storey.
+        """
+        self._require_plan_view("add_stair_landing_annotation")
+        if (
+            not isinstance(landing, ifcopenshell.entity_instance)
+            or not landing.is_a("IfcSlab")
+            or landing.PredefinedType != "LANDING"
+        ):
+            raise TypeError(
+                "landing must be an IfcSlab created by Storey.stair_landing"
+            )
+        if landing.file is not self.house.model:
+            raise ValueError("landing must belong to this house")
+        if landing.id() in self._annotated_stair_landings:
+            raise ValueError(
+                "stair landing already has an annotation in this drawing"
+            )
+
+        body = ifcopenshell.util.representation.get_representation(
+            landing,
+            "Model",
+            "Body",
+            "MODEL_VIEW",
+        )
+        solid = next(
+            (item for item in body.Items if item.is_a("IfcExtrudedAreaSolid")),
+            None,
+        ) if body is not None else None
+        outer_curve = (
+            getattr(getattr(solid, "SweptArea", None), "OuterCurve", None)
+            if solid is not None
+            else None
+        )
+        point_list = getattr(outer_curve, "Points", None)
+        coordinates = getattr(point_list, "CoordList", None)
+        if coordinates is None or len(coordinates) < 3:
+            raise ValueError("stair landing must have a polygonal body footprint")
+
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} {landing.Name} Plan Symbol"
+        )
+        model = self.house.model
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=annotation_name,
+            predefined_type="LINEWORK",
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            landing.ObjectPlacement
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+
+        outline_points = [*coordinates, coordinates[0]]
+        annotation_points = model.createIfcCartesianPointList2D(outline_points)
+        outline = model.createIfcIndexedPolyCurve(annotation_points, None, False)
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet([outline])],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={"Classes": "stair-landing dashed"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        self._annotated_stair_landings.add(landing.id())
         return annotation
 
     def render(
@@ -6149,6 +6255,7 @@ class MiakoSlab(ifcopenshell.entity_instance):
         reinforcements: tuple[ifcopenshell.entity_instance, ...],
         blocks: tuple[ifcopenshell.entity_instance, ...],
         topping_element: ifcopenshell.entity_instance,
+        expected_width: float | None = None,
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "storey", storey)
@@ -6158,6 +6265,7 @@ class MiakoSlab(ifcopenshell.entity_instance):
         object.__setattr__(self, "structure", structure)
         object.__setattr__(self, "length", length)
         object.__setattr__(self, "width", width)
+        object.__setattr__(self, "expected_width", expected_width)
         object.__setattr__(self, "top", top)
         object.__setattr__(self, "block_length", block_length)
         object.__setattr__(self, "block_height", block_height)
@@ -7928,6 +8036,7 @@ class Storey:
         top: Number,
         direction: Point,
         structure: Sequence[MiakoStructureItem],
+        expected_width: Number | None = None,
         block_length: Number = 0.25,
         block_height: Number = 0.19,
         topping: Number = 0.06,
@@ -7948,7 +8057,8 @@ class Storey:
         that direction: ``"beam"`` is 0.17 m wide, ``"wide"`` is a 0.455 m
         block bay, and ``"narrow"`` is a 0.33 m block bay.  Consequently a
         wide bay plus a beam forms a 0.625 m module and a narrow bay plus a
-        beam forms a 0.5 m module.
+        beam forms a 0.5 m module.  When ``expected_width`` is supplied, a
+        warning is printed if the sum of those items does not match it.
 
         ``top`` is measured from this storey's elevation.  The whole assembly
         extends downward by ``block_height + topping``.  ``beam_height`` is
@@ -7975,6 +8085,10 @@ class Storey:
         block_length = _number(block_length, "block_length")
         block_height = _number(block_height, "block_height")
         topping = _number(topping, "topping")
+        if expected_width is not None:
+            expected_width = _number(expected_width, "expected_width")
+            if expected_width <= 0:
+                raise ValueError("expected_width must be greater than zero")
         if beam_height is None:
             beam_height = 0.06
         else:
@@ -8045,6 +8159,16 @@ class Storey:
             raise ValueError("structure must contain at least one block bay")
         structure_tuple = tuple(normalised_structure)
         width = sum(_MIAKO_WIDTHS[item] for item in structure_tuple)
+        if expected_width is not None and not isclose(
+            width,
+            expected_width,
+            rel_tol=0,
+            abs_tol=1e-9,
+        ):
+            print(
+                f"WARNING: MIAKO slab {slab_name!r} width is {width:g} m; "
+                f"expected {expected_width:g} m"
+            )
 
         beam_style = self.house._surface_style(
             "beam", color=beam_color, transparency=transparency
@@ -8707,6 +8831,7 @@ class Storey:
             structure=structure_tuple,
             length=length,
             width=width,
+            expected_width=expected_width,
             top=top,
             block_length=block_length,
             block_height=block_height,

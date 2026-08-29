@@ -1289,6 +1289,12 @@ class HouseTests(unittest.TestCase):
         # Outline + one line per internal tread + shaft + arrowhead. There is
         # deliberately no zigzag stair break symbol.
         self.assertEqual(len(curve_set.Elements), stair.treads + 2)
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"
+            ),
+            "stair dashed",
+        )
         drawing_members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
         other_members = set(other_drawing.group.IsGroupedBy[0].RelatedObjects)
         self.assertIn(annotation, drawing_members)
@@ -1653,6 +1659,38 @@ class HouseTests(unittest.TestCase):
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_y(landing_shape.geometry), 1
         )
+
+        drawing = house.add_drawing("Upper plan", 0, 0, 3.5, 5)
+        other_drawing = house.add_drawing("Other plan", 0, 0, 3.5, 5)
+        annotation = drawing.add_stair_landing_annotation(landing)
+        self.assertEqual(annotation.ObjectType, "LINEWORK")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"
+            ),
+            "stair-landing dashed",
+        )
+        outline = annotation.Representation.Representations[0].Items[0].Elements[0]
+        self.assertEqual(
+            outline.Points.CoordList,
+            ((0.0, 0.0), (2.0, 0.0), (2.0, 1.0), (0.0, 1.0), (0.0, 0.0)),
+        )
+        annotation_placement = ifcopenshell.util.placement.get_local_placement(
+            annotation.ObjectPlacement
+        )
+        np.testing.assert_allclose(annotation_placement, landing_placement)
+        self.assertIn(
+            annotation,
+            drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+        self.assertEqual(
+            set(other_drawing.group.IsGroupedBy[0].RelatedObjects),
+            {other_drawing.element},
+        )
+        with self.assertRaisesRegex(ValueError, "already has"):
+            drawing.add_stair_landing_annotation(landing)
+        with self.assertRaisesRegex(TypeError, "IfcSlab"):
+            drawing.add_stair_landing_annotation(lower)
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_z(landing_shape.geometry), 0.2
         )
@@ -1664,14 +1702,17 @@ class HouseTests(unittest.TestCase):
             colors={"slab": "#AAAAAA"},
         )
         upper = house.storey("Upper floor", elevation=3)
-        slab = upper.miako_slab(
-            "Ground-floor ceiling",
-            start=(0, 0),
-            end=(0, 8),
-            top=0,
-            direction=(1, 0),
-            structure=["wide", "beam", "narrow", "beam"],
-        )
+        with patch("builtins.print") as print_mock:
+            slab = upper.miako_slab(
+                "Ground-floor ceiling",
+                start=(0, 0),
+                end=(0, 8),
+                top=0,
+                direction=(1, 0),
+                structure=["wide", "beam", "narrow", "beam"],
+                expected_width=1.125,
+            )
+        print_mock.assert_not_called()
 
         self.assertIsInstance(slab, MiakoSlab)
         self.assertTrue(slab.is_a("IfcSlab"))
@@ -1686,6 +1727,7 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(slab.length, 8)
         self.assertAlmostEqual(slab.width, 1.125)
+        self.assertAlmostEqual(slab.expected_width, 1.125)
         self.assertEqual(
             slab.footprint,
             ((0, 0), (0, 8), (1.125, 8.0), (1.125, 0.0)),
@@ -2067,6 +2109,22 @@ class HouseTests(unittest.TestCase):
             "direction": (1, 0),
             "structure": ["wide", "beam"],
         }
+        with patch("builtins.print") as print_mock:
+            mismatched = upper.miako_slab(
+                "Unexpected width",
+                **valid_arguments,
+                expected_width=1,
+            )
+        self.assertAlmostEqual(mismatched.width, 0.625)
+        self.assertEqual(mismatched.expected_width, 1)
+        print_mock.assert_called_once_with(
+            "WARNING: MIAKO slab 'Unexpected width' width is 0.625 m; "
+            "expected 1 m"
+        )
+        with self.assertRaisesRegex(ValueError, "expected_width"):
+            upper.miako_slab(
+                "Invalid", **valid_arguments, expected_width=0
+            )
         with self.assertRaisesRegex(ValueError, "different points"):
             upper.miako_slab(
                 "Invalid", **(valid_arguments | {"end": (0, 0)})
@@ -4935,6 +4993,7 @@ class HouseTests(unittest.TestCase):
   <g id="product-basin" class="IfcSanitaryTerminal material-null cut"><path/></g>
   <g id="product-cooker" class="IfcElectricAppliance material-null projection"><path/></g>
   <g id="product-reinforcement-projection" ifc:guid="reinforcement" class="IfcBuildingElementPart material-MIAKOreinforcement projection"><path/></g>
+  <g ifc:guid="reinforcement-second" class="IfcBuildingElementPart material-MIAKOreinforcement cut"><path/></g>
   <g ifc:guid="reinforcement" class="IfcBuildingElementPart material-MIAKOreinforcement cut"><path/></g>
   <g id="product-cover" class="IfcBuildingElementPart material-Concretetopping cut"><path/></g>
   <line class="GlobalId-dimension IfcAnnotation PredefinedType-LINEWORK door-dimension-separator" x1="5" x2="20" y1="31" y2="31"/>
@@ -4999,13 +5058,37 @@ class HouseTests(unittest.TestCase):
                 'target-view-ELEVATIONVIEW">'
             )
             reinforcement_source = "miako-reinforcement-overlay-source-1"
+            second_reinforcement_source = (
+                "miako-reinforcement-overlay-source-2"
+            )
             reinforcement_use = (
                 f'<use href="#{reinforcement_source}" '
                 f'xlink:href="#{reinforcement_source}"/>'
             )
+            second_reinforcement_use = (
+                f'<use href="#{second_reinforcement_source}" '
+                f'xlink:href="#{second_reinforcement_source}"/>'
+            )
             self.assertEqual(svg.count(reinforcement_overlay), 1)
             self.assertEqual(svg.count(f'id="{reinforcement_source}"'), 1)
+            self.assertEqual(
+                svg.count(f'id="{second_reinforcement_source}"'),
+                1,
+            )
             self.assertEqual(svg.count(reinforcement_use), 1)
+            self.assertEqual(svg.count(second_reinforcement_use), 1)
+            self.assertIn(
+                'ifc:guid="reinforcement" '
+                'class="IfcBuildingElementPart material-MIAKOreinforcement cut" '
+                f'id="{reinforcement_source}">',
+                svg,
+            )
+            self.assertIn(
+                'ifc:guid="reinforcement-second" '
+                'class="IfcBuildingElementPart material-MIAKOreinforcement cut" '
+                f'id="{second_reinforcement_source}">',
+                svg,
+            )
             self.assertNotIn(
                 '<use href="#product-reinforcement-projection"',
                 svg,
@@ -5244,6 +5327,23 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: white !important", insulation_rule)
         self.assertIn("stroke-width: 0.06 !important", insulation_rule)
+
+    def test_styles_stair_annotations_with_short_fine_dashes(self) -> None:
+        stylesheet = (
+            Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        stair_rule = stylesheet.split(
+            ".PredefinedType-LINEWORK.stair.dashed,",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(".PredefinedType-LINEWORK.stair-landing.dashed", stair_rule)
+        self.assertIn("stroke-width: 0.08", stair_rule)
+        self.assertIn("stroke-dasharray: 1, 0.67", stair_rule)
+        self.assertIn(
+            ".PredefinedType-LINEWORK.dashed { stroke-dasharray: 3, 2; }",
+            stylesheet,
+        )
 
     def test_fills_projected_chimney_outline_above_elevation_surfaces(
         self,
