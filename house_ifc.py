@@ -98,7 +98,7 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 
 BWT = 0.24 # Basic wall thickness
 
-ground_floor_height = 0.25+2.75
+ground_floor_height = 2.875
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
@@ -161,15 +161,15 @@ facade_insulation = house.wall_type(
 HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
 KITCHEN_WIDTH = 4.75 - 0.03
-HOUSE_WIDTH = 11.375
-KK_WIDTH = HOUSE_WIDTH - 4*BWT - (3.25 - 0.03) - KITCHEN_WIDTH
+HOUSE_WIDTH = 11.125
 
-wall2_x = BWT + 3.25 - 0.03 + BWT;
+wall2_x = BWT + 3 - 0.03 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
 step_count = 17
+KK_WIDTH = HOUSE_WIDTH - wall3_x - BWT
 
 # For now each finished-floor build-up is one homogeneous interior slab.  It
 # can later be replaced with insulation, heating, and screed components without
@@ -187,15 +187,22 @@ ground_floor_layer = ground.floor_layer(
 	color="#ffffff",
 )
 
+HOUSE_EXT = 1.125
+EXT_DEPTH = HALF_DEPTH + 1.5
+
 # Load-bearing walls
-wall_front = ground.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_front = ground.wall((-HOUSE_EXT, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_4 = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_back = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1 = ground.wall((0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_0 = ground.wall((-HOUSE_EXT, EXT_DEPTH), (-HOUSE_EXT, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_0x = ground.wall((0, EXT_DEPTH), (-HOUSE_EXT, EXT_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1 = ground.wall((0, HOUSE_DEPTH), (0, EXT_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_2 = ground.wall((wall2_x, 0), (wall2_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
-ground.connect_wall(wall_1, wall_front)
+ground.connect_wall(wall_0, wall_front)
+ground.connect_wall(wall_0, wall_0x)
+ground.connect_wall(wall_1, wall_0x)
 ground.connect_wall(wall_1, wall_back)
 
 ground.connect_wall(wall_2, wall_front, is_atpath=True)
@@ -210,7 +217,7 @@ ground.connect_wall(wall_4, wall_back)
 # Front door/window
 
 wall_front.add_door(
-	at=wall3_x-0.125-0.25-1.125,
+	at=HOUSE_EXT+HOUSE_WIDTH-3-1.125,
 	opening_width=1.125, width=0.9,
 	height=0.25+2.125,
 	clear_height=door_clear_height,
@@ -226,10 +233,11 @@ wall_front.add_window(
 )
 
 # Back windows
+print("KK_WIDTH=", KK_WIDTH)
 wall_back.add_window(
-	at=3+0.5, width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
+	at=2*BWT+KK_WIDTH+0.5, width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=3+0.5+1.5+0.75, width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
+	at=2*BWT+KK_WIDTH+KITCHEN_WIDTH-0.5-1.5, width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
 	at=3+KITCHEN_WIDTH+BWT+0.75,
 	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
@@ -241,8 +249,16 @@ wall_back.add_door(
 
 # Posilovna, Gym
 wall_gym = ground.wall(
-	(BWT, BWT+2), (wall2_x-BWT, BWT+2),
+	(-HOUSE_EXT+BWT, BWT+2.25), (wall2_x-BWT, BWT+2.25),
 	wall_type=partition_wall, height=ground_floor_height)
+wall_2.add_opening(
+	at=BWT+0.625,
+	width=1, sill_height=0.25+0.1, height=0.25+2.25)
+wall_gym.add_door(
+	at=HOUSE_EXT+wall2_x-2*BWT-1-0.125,
+	width=0.9, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2,
+	operation="SINGLE_SWING_RIGHT",
+	reverse_swing=True)
 
 
 # Bathroom, Koupelna
@@ -283,12 +299,12 @@ ground.furniture(
 )
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
-	center=(wall2_x+1.1, 7.2),
+	center=(wall2_x+1.2, 7.2),
 	start_height=GROUND_FLOOR_THICKNESS,
 )
 ground.asset(
 	"Gauc", asset="1_seater_sofa",
-	center=(wall2_x+0.5, 6.2),
+	center=(wall2_x+0.6, 6.2),
 	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=90,
 )
@@ -321,7 +337,7 @@ wall_kitchen = ground.wall(
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen.add_door(
-	at=KITCHEN_WIDTH-1.375,
+	at=KITCHEN_WIDTH-1.125,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -452,7 +468,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.5, 0.6, 1.5),
     color="#ffff2B",
-    center=(wall2_x+0.5, BWT+2.75+BWT+0.4),
+    center=(wall2_x+0.5, BWT+2.6+BWT+0.4),
 	start_height=GROUND_FLOOR_THICKNESS,
     rotation=45,
 )
@@ -1554,7 +1570,7 @@ house.write("house.ifc")
 if "ground" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Drawing 1",
-		x=6,
+		x=5,
 		y=4,
 		z=0.25+2,
 		radius=8,
@@ -1572,7 +1588,10 @@ if "ground" in sys.argv:
 	drawing1.add_chimney_annotation(chimney)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(BWT, BWT+2+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1.5)
+	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1.5+HOUSE_EXT)
+	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, EXT_DEPTH-BWT), offset=1+HOUSE_EXT)
+	# Risankuv pokoj extense
+	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, 4), end=(BWT, 4), offset=0)
 	# Kuchyn, stredni cast, pokoj hloubka
 	drawing1.add_dimension(start=(wall2_x, BWT+CHODBA_DEPTH+0.15), end=(wall2_x, HOUSE_DEPTH-BWT), offset=-1.5)
 
@@ -1589,9 +1608,9 @@ if "ground" in sys.argv:
 	)
 
 	drawing1.add_room_annotation(
-		(1.1, BWT+2.3+BWT+2.5),
+		(1.5, 6),
 		identifier="0.01",
-		area=5.35*3.25,   # m²
+		area=5.12*2.97 + 1.125*2.62,   # m²
 	)
 	drawing1.add_room_annotation(
 		(wall3_x - 1.5, HOUSE_DEPTH - 1.5),
@@ -1606,19 +1625,14 @@ if "ground" in sys.argv:
 		area=KK_WIDTH*BATHROOM_DEPTH,   # m²
 	)
 	drawing1.add_room_annotation(
-		(3.5+2.3, 0.5+0.8),
+		(7, 0.5+0.8),
 		identifier="0.04",
-		area=1.7*KITCHEN_WIDTH,   # m²
+		area=CHODBA_DEPTH*KITCHEN_WIDTH,   # m²
 	)
 	drawing1.add_room_annotation(
-		(3.5+4.25+2.1, 5+0.5),
-		identifier="0.05x",
-		area=3*3.25-0.65*0.75,   # m²
-	)
-	drawing1.add_room_annotation(
-		(3.5+4.25+2.1, 5-1.3),
-		identifier="0.06",
-		area=4.4*3.25-0.9*0.55,   # m²
+		(1, 1),
+		identifier="0.03",
+		area=(2.97+1.125)*2.25,   # m²
 	)
 
 	# The Rockwool occupies the right side of each wall axis.  These annotations
