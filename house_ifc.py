@@ -96,6 +96,8 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 	- GYPSUM_PLASTERBOARD_THICKNESS
 )
 
+BWT = 0.24 # Basic wall thickness
+
 ground_floor_height = 0.25+2.75
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
@@ -127,7 +129,7 @@ upper = house.storey("Upper floor", elevation=3.0 + 0.21)
 load_bearing_wall = house.wall_type(
     "Load bearing wall - VPC 240 mm",
     layers=[
-        ("Brick", 0.25),
+        ("Brick", BWT),
         "axis",
     ],
 )
@@ -158,11 +160,12 @@ facade_insulation = house.wall_type(
 
 HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.75
-HOUSE_WIDTH = 11.5
+KITCHEN_WIDTH = 4.75 - 0.03
+HOUSE_WIDTH = 11.375
+KK_WIDTH = HOUSE_WIDTH - 4*BWT - (3.25 - 0.03) - KITCHEN_WIDTH
 
-wall2_x = 0.25 + 3.25 + 0.25;
-wall3_x = wall2_x + KITCHEN_WIDTH + 0.25;
+wall2_x = BWT + 3.25 - 0.03 + BWT;
+wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
@@ -172,10 +175,10 @@ step_count = 17
 # can later be replaced with insulation, heating, and screed components without
 # changing the storey elevations or the existing sill-height coordinates.
 FLOOR_OUTLINE = (
-	(0.25, 0.25),
-	(HOUSE_WIDTH-0.25, 0.25),
-	(HOUSE_WIDTH-0.25, 7.75),
-	(0.25, 7.75),
+	(BWT, BWT),
+	(HOUSE_WIDTH-BWT, BWT),
+	(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
+	(BWT, HOUSE_DEPTH-BWT),
 )
 ground_floor_layer = ground.floor_layer(
 	"Ground-floor build-up",
@@ -228,30 +231,31 @@ wall_back.add_window(
 wall_back.add_window(
 	at=3+0.5+1.5+0.75, width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=3+KITCHEN_WIDTH+0.25+0.75,
+	at=3+KITCHEN_WIDTH+BWT+0.75,
 	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_door(
-	at=0.25+2.5-0.25-1,
+	at=BWT+2.5-BWT-1,
 	width=0.8, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",)
 
 
 # Posilovna, Gym
 wall_gym = ground.wall(
-	(0.25, 0.25+2), (wall2_x-0.25, 0.25+2),
+	(BWT, BWT+2), (wall2_x-BWT, BWT+2),
 	wall_type=partition_wall, height=ground_floor_height)
 
 
 # Bathroom, Koupelna
+BATHROOM_DEPTH = 2.6
 wall_bathroom = ground.wall(
-	(wall3_x, 0.25+2.6), (HOUSE_WIDTH-0.25, 0.25+2.6),
+	(wall3_x, BWT+BATHROOM_DEPTH), (HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 ground.furniture(
     "TČ",
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(HOUSE_WIDTH-(0.25+2.5), 0-0.5),
+    center=(HOUSE_WIDTH-(BWT+2.5), 0-0.5),
 )
 ground.furniture(
     "TČ",
@@ -259,7 +263,7 @@ ground.furniture(
     size=(0.5, 0.4, 0.9),
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
-    center=(HOUSE_WIDTH-(0.25+2.7), 0.25+0.2),
+    center=(HOUSE_WIDTH-(BWT+1.6)-0.4, BWT+0.25),
 )
 ground.furniture(
     "Zásobník\nTUV",
@@ -267,7 +271,7 @@ ground.furniture(
     size=(0.7, 0.7, 2.0),
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
-    center=(HOUSE_WIDTH-(0.25+0.4), 0.25+0.35),
+    center=(HOUSE_WIDTH-(BWT+0.4), BWT+0.4),
 )
 ground.furniture(
     "Pračka",
@@ -275,7 +279,7 @@ ground.furniture(
 	start_height=GROUND_FLOOR_THICKNESS,
     size=(0.7, 0.7, 2.0),
     color="#ffffff",
-    center=(HOUSE_WIDTH-(0.25+1.2), 0.25+0.35),
+    center=(HOUSE_WIDTH-BWT-0.4, BWT+0.8+0.4),
 )
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
@@ -291,7 +295,7 @@ ground.asset(
 ground.asset(
     "Umyv",
     asset="basin_large",
-    center=(HOUSE_WIDTH-(0.25+2), 0.25+0.35),
+    center=(HOUSE_WIDTH-(BWT+0.8)-0.4, BWT+0.35),
 	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=180,
 )
@@ -299,22 +303,22 @@ ground.asset(
     "Sprcha",
     asset="shower_90x90",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-(0.25+0.5), 0.25+1.8),
-	rotation=90,
+    center=(HOUSE_WIDTH-(BWT+0.5), BWT+BATHROOM_DEPTH-0.5),
+	rotation=0,
 )
 ground.asset(
     "WC",
     asset="toilet_without_cistern",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-(0.25+2.6), 0.25+1.8),
+    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, BWT+BATHROOM_DEPTH-0.5),
     rotation=90,
 )
 
 # Kitchen, Kuchyn
-CHODBA_DEPTH = 2.625+0.04
+CHODBA_DEPTH = 2.6
 wall_kitchen = ground.wall(
-	(wall2_x, 0.25+CHODBA_DEPTH),
-	(wall2_x+KITCHEN_WIDTH, 0.25+CHODBA_DEPTH),
+	(wall2_x, BWT+CHODBA_DEPTH),
+	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen.add_door(
 	at=KITCHEN_WIDTH-1.375,
@@ -327,7 +331,7 @@ wall_kitchen.add_door(
 
 # Pokoj Risanek
 wall_2.add_door(
-	at=0.25+2.75+0.25+1,
+	at=BWT+2.75+BWT+1,
 	opening_width=1.0, width=0.9,
 	height=0.25+2.125,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -338,7 +342,7 @@ wall_2.add_door(
 
 # Oblouk
 wall_3.add_opening(
-	at=0.25+2.75+1,
+	at=BWT+2.75+1,
 	width=1.5,
     height=0.25+2.125,
     sill_height=GROUND_FLOOR_THICKNESS,
@@ -347,7 +351,7 @@ wall_3.add_opening(
 
 # Bathroom
 wall_3.add_door(
-    at=0.25+0.625,
+    at=BWT+0.75,
     opening_width=1.0, width=0.9,
     height=0.25+2.125,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -357,8 +361,8 @@ wall_3.add_door(
 
 # Main hallway
 stairs1 = ground.stair(
-    (wall2_x+1.5+4*0.27, 0.25+0.5),       # bottom centre
-    (wall2_x+1.5, 0.25+0.5),       # upper landing edge centre
+    (wall2_x+1.5+4*0.27, BWT+0.5),       # bottom centre
+    (wall2_x+1.5, BWT+0.5),       # upper landing edge centre
     width=1.0,
 	start_height=GROUND_FLOOR_THICKNESS,
     height=stair_height/17*5,
@@ -369,8 +373,8 @@ stairs1 = ground.stair(
     waist_thickness=0.15,)
 
 stairs2 = ground.stair(
-    (wall2_x+1, 0.25+CHODBA_DEPTH-1-2*0.27),
-    (wall2_x+1, 0.25+CHODBA_DEPTH-1),
+    (wall2_x+1, BWT+CHODBA_DEPTH-1-2*0.27),
+    (wall2_x+1, BWT+CHODBA_DEPTH-1),
     width=1.0,
     height=stair_height/17*3,
     risers=3,
@@ -381,8 +385,8 @@ stairs2 = ground.stair(
     waist_thickness=0.15,)
 
 stairs3 = ground.stair(
-    (wall2_x+1.5, 0.25+CHODBA_DEPTH-0.5),
-    (wall2_x+1.5+8*0.27, 0.25+CHODBA_DEPTH-0.5),
+    (wall2_x+1.5, BWT+CHODBA_DEPTH-0.5),
+    (wall2_x+1.5+8*0.27, BWT+CHODBA_DEPTH-0.5),
     width=1.0,
     height=stair_height/17*9,
     risers=9,
@@ -393,24 +397,24 @@ stairs3 = ground.stair(
     waist_thickness=0.15,)
 
 stairs_landing1 = ground.stair_landing(
-    (wall2_x+0.5, 0.25),
-    (wall2_x+1.5, 0.25+CHODBA_DEPTH-1-2*0.27),
+    (wall2_x+0.5, BWT),
+    (wall2_x+1.5, BWT+CHODBA_DEPTH-1-2*0.27),
     height=stairs1.end_height,
     thickness=0.20,
     name="Main stair landing",
     color="#C8B090",
 )
 stairs_landing2 = ground.stair_landing(
-    (wall2_x+0.5, 0.25+CHODBA_DEPTH-1),
-    (wall2_x+1.5, 0.25+CHODBA_DEPTH),
+    (wall2_x+0.5, BWT+CHODBA_DEPTH-1),
+    (wall2_x+1.5, BWT+CHODBA_DEPTH),
     height=stairs2.end_height,
     thickness=0.20,
     name="Main stair landing",
     color="#C8B090",
 )
 stairs_landing3 = ground.stair_landing(
-    (wall2_x+1.5+8*0.27, 0.25+CHODBA_DEPTH-1),
-    (wall3_x-0.25, 0.25+CHODBA_DEPTH),
+    (wall2_x+1.5+8*0.27, BWT+CHODBA_DEPTH-1),
+    (wall3_x-BWT, BWT+CHODBA_DEPTH),
     height=stairs3.end_height,
     thickness=0.20,
     name="Main stair landing",
@@ -423,7 +427,7 @@ CHIMNEY_Y_START = HALF_DEPTH - 0.8 - 0.07 - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
-CHIMNEY_Y_START = 0.25 + CHODBA_DEPTH - 0.45 # override
+CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
@@ -448,55 +452,64 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.5, 0.6, 1.5),
     color="#ffff2B",
-    center=(wall2_x+0.5, 0.25+2.75+0.25+0.4),
+    center=(wall2_x+0.5, BWT+2.75+BWT+0.4),
 	start_height=GROUND_FLOOR_THICKNESS,
     rotation=45,
 )
 
 # Kuchyn
 #print("SEARCH: ", "\n".join(str(x) for x in house.assets.search("table")))
-#ground.furniture(
-#	"Dřez",
-#    kind="USERDEFINED",
-#    size=(0.7, 0.95, 0.8),
-#	start_height=GROUND_FLOOR_THICKNESS,
-#    center=(wall2_x+0.35, 0.25+1.7+0.15+(0.95/2)),
-#)
-#ground.furniture(
-#	"Myčka",
-#    kind="USERDEFINED",
-#    size=(0.7, 0.7, 0.8),
-#	start_height=GROUND_FLOOR_THICKNESS,
-#    center=(wall2_x+0.35, 0.25+1.7+0.15+0.35+0.95),
-#)
-#ground.furniture(
-#	"Lednice",
-#    kind="USERDEFINED",
-#    size=(0.7, 1, 2),
-#    center=(wall2_x+0.35, 4.75-0.5),
-#	start_height=GROUND_FLOOR_THICKNESS,
-#)
-#ground.furniture(
-#	"Sporák",
-#    kind="USERDEFINED",
-#    size=(0.7, 0.7, 0.8),
-#    center=(wall2_x+0.35+0.7, 0.25+1.7+0.15+0.35),
-#	start_height=GROUND_FLOOR_THICKNESS,
-#)
-#ground.furniture(
-#	"Kuchyňská Linka",
-#    kind="USERDEFINED",
-#    size=(2.85, 0.7, 0.8),
-#    center=(wall2_x+0.7+0.7+2.85/2, 0.25+1.7+0.15+0.35),
-#	start_height=GROUND_FLOOR_THICKNESS,
-#)
-#ground.asset(
-#    "Stul",
-#    asset="retail_4_seater_rectangular_table",
-#    center=(6, 4.5),
-#	start_height=GROUND_FLOOR_THICKNESS,
-##	rotation=90,
-#)
+ground.furniture(
+	"Dřez",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 0.8),
+	start_height=GROUND_FLOOR_THICKNESS,
+    center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.15+0.35),
+)
+ground.furniture(
+	"Myčka",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 0.8),
+	start_height=GROUND_FLOOR_THICKNESS,
+    center=(HOUSE_WIDTH-BWT-0.35-0.7, BWT+BATHROOM_DEPTH+0.15+0.35),
+)
+ground.furniture(
+	"Lednice",
+    kind="USERDEFINED",
+    size=(0.7, 1, 2),
+    center=(HOUSE_WIDTH-BWT-0.35, HOUSE_DEPTH-BWT-0.5),
+	start_height=GROUND_FLOOR_THICKNESS,
+)
+ground.furniture(
+	"Sporák",
+    kind="USERDEFINED",
+    size=(0.7, 0.7, 0.8),
+    center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.15+0.35+0.7),
+	start_height=GROUND_FLOOR_THICKNESS,
+)
+KUCH_LINKA_LEN = HOUSE_DEPTH-2*BWT-0.15-BATHROOM_DEPTH-2.4
+ground.furniture(
+	"Kuch.\nLinka",
+    kind="USERDEFINED",
+    size=(0.7, KUCH_LINKA_LEN, 0.8),
+    center=(HOUSE_WIDTH-BWT-0.35, HOUSE_DEPTH-BWT-1-KUCH_LINKA_LEN/2),
+	start_height=GROUND_FLOOR_THICKNESS,
+)
+KUCH_LINKA_LEN = KK_WIDTH-1.4
+ground.furniture(
+	"Kuch.\nLinka",
+    kind="USERDEFINED",
+    size=(KUCH_LINKA_LEN, 0.7, 0.8),
+    center=(HOUSE_WIDTH-BWT-1.4-KUCH_LINKA_LEN/2, BWT+BATHROOM_DEPTH+0.15+0.35),
+	start_height=GROUND_FLOOR_THICKNESS,
+)
+ground.asset(
+    "Stul",
+    asset="retail_4_seater_rectangular_table",
+    center=(6, 4.2),
+	start_height=GROUND_FLOOR_THICKNESS,
+#	rotation=90,
+)
 
 # facade
 if 0:
@@ -523,10 +536,10 @@ if 0:
 	    lath_offsets=[
 			0,
 			2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
-			0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
-			0.25+3.5+0.25+0.5 + 1.5 + window_space,
-			0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
-			0.25+3.5+0.25+KITCHEN_WIDTH+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+KITCHEN_WIDTH+0.25+0.75 + 1.5 + window_space,
+			BWT+3.5+BWT+0.5 - lath_width-window_space, BWT+3.5+BWT+0.5 + 1 + window_space,
+			BWT+3.5+BWT+0.5 + 1.5 + window_space,
+			BWT+3.5+BWT+0.5+1+1 - lath_width-window_space, BWT+3.5+BWT+0.5+1+1 + 1.5 + window_space,
+			BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 - lath_width-window_space, BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 + 1.5 + window_space,
 			wall_back.length - lath_width
 		],
 		space_before_openings=window_space,
@@ -544,7 +557,7 @@ if 0:
 	    depth=0.06,
 	    lath_offsets=[
 			0.2,
-			0.25+0.875-lath_width-window_space,
+			BWT+0.875-lath_width-window_space,
 			UPPER_FLOOR_START+NADEZDIVKA-lath_width-0.1
 		],
 	    start_extension=0.1,
@@ -569,10 +582,10 @@ if 0:
 	    lath_offsets=[
 			0,
 			2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
-			0.25+3.5+0.25+0.5 - lath_width-window_space, 0.25+3.5+0.25+0.5 + 1 + window_space,
-			0.25+3.5+0.25+0.5 + 1.5 + window_space,
-			0.25+3.5+0.25+0.5+1+1 - lath_width-window_space, 0.25+3.5+0.25+0.5+1+1 + 1.5 + window_space,
-			0.25+3.5+0.25+KITCHEN_WIDTH+0.25+0.75 - lath_width-window_space, 0.25+3.5+0.25+KITCHEN_WIDTH+0.25+0.75 + 1.5 + window_space,
+			BWT+3.5+BWT+0.5 - lath_width-window_space, BWT+3.5+BWT+0.5 + 1 + window_space,
+			BWT+3.5+BWT+0.5 + 1.5 + window_space,
+			BWT+3.5+BWT+0.5+1+1 - lath_width-window_space, BWT+3.5+BWT+0.5+1+1 + 1.5 + window_space,
+			BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 - lath_width-window_space, BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 + 1.5 + window_space,
 			wall_back.length - lath_width
 		],
 		space_before_openings=window_space,
@@ -638,8 +651,8 @@ if 0:
 # MIAKO
 ceiling1 = upper.miako_slab(
     "Ceiling 1",
-    start=(0.1, HOUSE_DEPTH-0.25+0.04),
-    end=(wall2_x-0.15, HOUSE_DEPTH-0.25+0.04),
+    start=(0.1, HOUSE_DEPTH-BWT+0.04),
+    end=(wall2_x-0.15, HOUSE_DEPTH-BWT+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
@@ -661,8 +674,8 @@ ceiling1 = upper.miako_slab(
 )
 ceiling2 = upper.miako_slab(
     "Ceiling 2",
-    start=(wall2_x-0.125, HOUSE_DEPTH-0.25+0.04),
-    end=(wall3_x-0.125, HOUSE_DEPTH-0.25+0.04),
+    start=(wall2_x-0.125, HOUSE_DEPTH-BWT+0.04),
+    end=(wall3_x-0.125, HOUSE_DEPTH-BWT+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
@@ -681,8 +694,8 @@ ceiling2 = upper.miako_slab(
 )
 ceiling3 = upper.miako_slab(
     "Ceiling 3",
-    start=(wall3_x-0.1, HOUSE_DEPTH-0.25+0.04),
-    end=(HOUSE_WIDTH-0.1, HOUSE_DEPTH-0.25+0.04),
+    start=(wall3_x-0.1, HOUSE_DEPTH-BWT+0.04),
+    end=(HOUSE_WIDTH-0.1, HOUSE_DEPTH-BWT+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
@@ -815,7 +828,7 @@ wall_cuts_2_3 = [
 ]
 
 wall_dormer = upper.wall(
-	(wall3_x, HOUSE_DEPTH), (0.25+3, HOUSE_DEPTH),
+	(wall3_x, HOUSE_DEPTH), (BWT+3, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=1.25, start_height=NADEZDIVKA)
 wall_front = upper.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_back = upper.wall(
@@ -827,8 +840,8 @@ wall_1 = upper.wall(
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_1.add_opening(at=0, width=0.25, height=1.5, sill_height=NADEZDIVKA)
-wall_1.add_opening(at=7.75, width=0.25, height=1.5, sill_height=NADEZDIVKA)
+wall_1.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
+wall_1.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_2 = upper.wall(
 	(wall2_x, 0), (wall2_x, HOUSE_DEPTH),
@@ -844,7 +857,7 @@ wall_3.add_opening(
 	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_3.add_opening(
-    at=0.25+1.75,
+    at=BWT+1.75,
     width=2,
     height=2.25,
 )
@@ -855,13 +868,13 @@ wall_4 = upper.wall(
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_4.add_opening(at=0, width=0.25, height=1.5, sill_height=NADEZDIVKA)
-wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=NADEZDIVKA)
+wall_4.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
+wall_4.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 #wall_2.add_opening(at=1.55, width=1, height=2.25)
 #wall_zachod_nahore = upper.wall(
 #	start=(wall2_x, 2.55),
-#	end=(wall3_x-0.25, 2.55),
+#	end=(wall3_x-BWT, 2.55),
 #	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
 #wall_zachod_nahore.add_door(
 #	at=KITCHEN_WIDTH-1,
@@ -873,7 +886,7 @@ wall_4.add_opening(at=7.75, width=0.25, height=1.5, sill_height=NADEZDIVKA)
 #	reverse_swing=True)
 #wall_zachod_nahore_2 = upper.wall(
 #	start=(3.5+1.2, 2.55),
-#	end=(3.5+1.2, 0.25),
+#	end=(3.5+1.2, BWT),
 #	wall_type=dry_wall,
 #	height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS,
 #	cuts=[STREET_GYPSUM_PLASTERBOARD_CUT],
@@ -937,7 +950,7 @@ beam4_b = upper.beam(
 beam_dormer = upper.beam(
     "Beam",
     start=(wall3_x+0.3, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+2.5+0.06),
-    end=(0.25+3-0.3, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+2.5+0.06),
+    end=(BWT+3-0.3, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+2.5+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
@@ -949,16 +962,16 @@ upper.furniture(
     kind="USERDEFINED",
     size=(1, 0.5, 2.5),
     color="#ffff00",
-    center=(HOUSE_WIDTH-0.25-0.3, 7.75-2),
+    center=(HOUSE_WIDTH-BWT-0.3, 7.75-2),
 	rotation=90,
 	start_height=UPPER_FLOOR_THICKNESS,
 )
 
 # Okna obyvak
 wall_dormer.add_window(
-	at=0.25+0.375,width=1.5, sill_height=NADEZDIVKA, height=2.25)
+	at=BWT+0.375,width=1.5, sill_height=NADEZDIVKA, height=2.25)
 wall_dormer.add_window(
-	at=0.25+0.375+1.5+0.5,
+	at=BWT+0.375+1.5+0.5,
 	width=1.5, sill_height=NADEZDIVKA, height=2.25)
 # Dvere obyvak
 #wall_3.add_door(
@@ -988,10 +1001,10 @@ wall_1.add_window(
 roof = upper.roof("Main roof")
 
 roof_inner_cuts = [
-	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
+	((0, BWT, 0), (10, BWT, 0), (0, BWT, 10)),
 	((0, 7.75, 0), (10, 7.75, 0), (0, 7.75, 10)),
-	((0.25, 0, 0), (0.25, 10, 0), (0.25, 0, 10)),
-	((HOUSE_WIDTH-0.25, 0, 0), (HOUSE_WIDTH-0.25, 10, 0), (HOUSE_WIDTH-0.25, 0, 10)),
+	((BWT, 0, 0), (BWT, 10, 0), (BWT, 0, 10)),
+	((HOUSE_WIDTH-BWT, 0, 0), (HOUSE_WIDTH-BWT, 10, 0), (HOUSE_WIDTH-BWT, 0, 10)),
 ]
 
 street_roof = roof.plane(
@@ -1390,8 +1403,8 @@ for part_name, (x_min, x_max), garden_side_plane in zip(
 		part_name,
 		x_min,
 		x_max,
-		0.25 - STREET_ROOF_JOINT_Y,
-		7.75 - STREET_ROOF_JOINT_Y,
+		BWT - STREET_ROOF_JOINT_Y,
+		HOUSE_DEPTH-BWT - STREET_ROOF_JOINT_Y,
 		inner_cuts=roof_inner_cuts,
 		inner_y_limits=flat_inner_y_limits(
 			street_inner_boundaries,
@@ -1559,13 +1572,13 @@ if "ground" in sys.argv:
 	drawing1.add_chimney_annotation(chimney)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(0.25, 0.25+2+0.15), end=(0.25, HOUSE_DEPTH-0.25), offset=1.5)
+	drawing1.add_dimension(start=(BWT, BWT+2+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1.5)
 	# Kuchyn, stredni cast, pokoj hloubka
-	drawing1.add_dimension(start=(wall2_x, 0.25+CHODBA_DEPTH+0.15), end=(wall2_x, HOUSE_DEPTH-0.25), offset=-1.5)
+	drawing1.add_dimension(start=(wall2_x, BWT+CHODBA_DEPTH+0.15), end=(wall2_x, HOUSE_DEPTH-BWT), offset=-1.5)
 
-	drawing1.add_dimension(start=(0.25, 7.5), end=(wall2_x-0.25, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(wall2_x, 7.5), end=(wall3_x-0.25, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(wall3_x, 7.5), end=(HOUSE_WIDTH-0.25, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(BWT, 7.5), end=(wall2_x-BWT, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(wall2_x, 7.5), end=(wall3_x-BWT, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(wall3_x, 7.5), end=(HOUSE_WIDTH-BWT, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(0, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
 
@@ -1576,19 +1589,21 @@ if "ground" in sys.argv:
 	)
 
 	drawing1.add_room_annotation(
-		(1.1, 0.25+2.3+0.25+2.5),
+		(1.1, BWT+2.3+BWT+2.5),
 		identifier="0.01",
 		area=5.35*3.25,   # m²
 	)
 	drawing1.add_room_annotation(
-		(3.5+2.3, 0.5+1.7+2.3),
+		(wall3_x - 1.5, HOUSE_DEPTH - 1.5),
 		identifier="0.02",
-		area=4.68*(KITCHEN_WIDTH+2.5),   # m²
+		area=
+			(HOUSE_DEPTH-2*BWT-0.15-CHODBA_DEPTH)*KITCHEN_WIDTH
+			+ (HOUSE_DEPTH-2*BWT-0.15-BATHROOM_DEPTH)*KK_WIDTH,   # m²
 	)
 	drawing1.add_room_annotation(
-		(HOUSE_WIDTH-1.4, 0.25+1.25),
+		(HOUSE_WIDTH-1.4, BWT+1.25),
 		identifier="0.05",
-		area=2.5*2.6,   # m²
+		area=KK_WIDTH*BATHROOM_DEPTH,   # m²
 	)
 	drawing1.add_room_annotation(
 		(3.5+2.3, 0.5+0.8),
@@ -1618,7 +1633,7 @@ if "ground" in sys.argv:
 # Drawing 2 - upper floor
 if "upper" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 2", x=6, y=4, z=0.25+2.75+2, radius=8, storeys=[upper]
+		"Drawing 2", x=6, y=4, z=BWT+2.75+2, radius=8, storeys=[upper]
 	)
 
 	drawing1.add_stair_annotation(stairs1)
@@ -1629,9 +1644,9 @@ if "upper" in sys.argv:
 	drawing1.add_stair_landing_annotation(stairs_landing3)
 	drawing1.add_chimney_annotation(chimney)
 
-	drawing1.add_dimension(start=(0.25, 7.5), end=(3.25, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(BWT, 7.5), end=(3.25, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(3.5, 7.5), end=(3.5+KITCHEN_WIDTH, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.25, 7.5), end=(HOUSE_WIDTH-0.25, 7.5), offset=1.5)
+	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+BWT, 7.5), end=(HOUSE_WIDTH-BWT, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(0, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
 
@@ -1646,7 +1661,7 @@ if "upper" in sys.argv:
 
 if "ceiling" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 2", x=6, y=4, z=0.25+2.75+0.1, radius=8, storeys=[upper]
+		"Drawing 2", x=6, y=4, z=BWT+2.75+0.1, radius=8, storeys=[upper]
 	)
 
 	drawing1.add_stair_annotation(stairs1)
@@ -1708,7 +1723,7 @@ if "cut3" in sys.argv:
 if "wall2" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Wall2",
-		x=0.25+3+0.1,
+		x=BWT+3+0.1,
 		y=4,
 		z=3.5,
 		radius=8,
