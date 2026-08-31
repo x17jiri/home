@@ -124,7 +124,7 @@ house = House(
 )
 
 ground = house.storey("Ground floor", elevation=0)
-upper = house.storey("Upper floor", elevation=3.0 + 0.21)
+upper = house.storey("Upper floor", elevation=UPPER_FLOOR_START)
 
 load_bearing_wall = house.wall_type(
     "Load bearing wall - VPC 240 mm",
@@ -161,9 +161,9 @@ facade_insulation = house.wall_type(
 HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
 KITCHEN_WIDTH = 4.75 - 0.03
-HOUSE_WIDTH = 11.125
+HOUSE_WIDTH = 11.25
 
-wall2_x = BWT + 3 - 0.03 + BWT;
+wall2_x = BWT + 3.125 - 0.03 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
@@ -187,32 +187,33 @@ ground_floor_layer = ground.floor_layer(
 	color="#ffffff",
 )
 
-HOUSE_EXT = 1.125
-EXT_DEPTH = HALF_DEPTH + 1.5
+HOUSE_EXT = 1
+EXT_DIST_FROM_HALF = 1.5
+EXT_DEPTH = HALF_DEPTH + EXT_DIST_FROM_HALF
 
 # Load-bearing walls
 wall_front = ground.wall((-HOUSE_EXT, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_4 = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_back = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_0 = ground.wall((-HOUSE_EXT, EXT_DEPTH), (-HOUSE_EXT, 0), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_0x = ground.wall((0, EXT_DEPTH), (-HOUSE_EXT, EXT_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1 = ground.wall((0, HOUSE_DEPTH), (0, EXT_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_0x = ground.wall((BWT, EXT_DEPTH), (-HOUSE_EXT, EXT_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1 = ground.wall((0, HOUSE_DEPTH), (0, EXT_DEPTH-BWT), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_2 = ground.wall((wall2_x, 0), (wall2_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
-ground.connect_wall(wall_0, wall_front)
-ground.connect_wall(wall_0, wall_0x)
-ground.connect_wall(wall_1, wall_0x)
-ground.connect_wall(wall_1, wall_back)
-
-ground.connect_wall(wall_2, wall_front, is_atpath=True)
-ground.connect_wall(wall_2, wall_back, is_atpath=True)
-
-ground.connect_wall(wall_3, wall_front, is_atpath=True)
-ground.connect_wall(wall_3, wall_back, is_atpath=True)
-
-ground.connect_wall(wall_4, wall_front)
-ground.connect_wall(wall_4, wall_back)
+#ground.connect_wall(wall_0, wall_front)
+#ground.connect_wall(wall_0, wall_0x)
+#ground.connect_wall(wall_1, wall_0x)
+#ground.connect_wall(wall_1, wall_back)
+#
+#ground.connect_wall(wall_2, wall_front, is_atpath=True)
+#ground.connect_wall(wall_2, wall_back, is_atpath=True)
+#
+#ground.connect_wall(wall_3, wall_front, is_atpath=True)
+#ground.connect_wall(wall_3, wall_back, is_atpath=True)
+#
+#ground.connect_wall(wall_4, wall_front)
+#ground.connect_wall(wall_4, wall_back)
 
 # Front door/window
 
@@ -844,20 +845,26 @@ wall_cuts_2_3 = [
 ]
 
 wall_dormer = upper.wall(
-	(wall3_x, HOUSE_DEPTH), (BWT+3, HOUSE_DEPTH),
+	(wall3_x, HOUSE_DEPTH), (wall2_x-BWT, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=1.25, start_height=NADEZDIVKA)
-wall_front = upper.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
+wall_front = upper.wall((-HOUSE_EXT, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_back = upper.wall(
 	(HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_1 = upper.wall(
-	(0, HOUSE_DEPTH), (0, 0),
+wall_0 = upper.wall(
+	(-HOUSE_EXT, EXT_DEPTH-BWT), (-HOUSE_EXT, BWT),
 	wall_type=load_bearing_wall,
-	height=4,
-	cuts=wall_cuts_1_4,
-)
-wall_1.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
-wall_1.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
+	height=4, cuts=wall_cuts_1_4, )
+wall_0x = upper.wall(
+	(BWT, EXT_DEPTH), (-HOUSE_EXT, EXT_DEPTH),
+	wall_type=load_bearing_wall,
+	height=COLLAR_TIE_BOTTOM_HEIGHT-0.12, cuts=wall_cuts_1_4, )
+wall_1 = upper.wall(
+	(0, HOUSE_DEPTH-BWT), (0, EXT_DEPTH),
+	wall_type=load_bearing_wall,
+	height=4, cuts=wall_cuts_1_4, )
+#wall_1.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
+#wall_0.add_opening(at=HOUSE_DEPTH-EXT_DEPTH-BWT, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_2 = upper.wall(
 	(wall2_x, 0), (wall2_x, HOUSE_DEPTH),
@@ -908,24 +915,26 @@ wall_4.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 #	cuts=[STREET_GYPSUM_PLASTERBOARD_CUT],
 #)
 
-upper.connect_wall(wall_1, wall_front)
-upper.connect_wall(wall_1, wall_back)
-
-upper.connect_wall(wall_2, wall_front, is_atpath=True)
-upper.connect_wall(wall_2, wall_back, is_atpath=True)
-upper.connect_wall(wall_2, wall_dormer)
-
-upper.connect_wall(wall_3, wall_front, is_atpath=True)
-upper.connect_wall(wall_3, wall_back, is_atpath=True)
-upper.connect_wall(wall_3, wall_dormer)
-
-upper.connect_wall(wall_4, wall_front)
-upper.connect_wall(wall_4, wall_back)
+#upper.connect_wall(wall_0, wall_front)
+#upper.connect_wall(wall_0, wall_0x)
+#upper.connect_wall(wall_1, wall_0x)
+#upper.connect_wall(wall_1, wall_back)
+#
+#upper.connect_wall(wall_2, wall_front, is_atpath=True)
+#upper.connect_wall(wall_2, wall_back, is_atpath=True)
+#upper.connect_wall(wall_2, wall_dormer)
+#
+#upper.connect_wall(wall_3, wall_front, is_atpath=True)
+#upper.connect_wall(wall_3, wall_back, is_atpath=True)
+#upper.connect_wall(wall_3, wall_dormer)
+#
+#upper.connect_wall(wall_4, wall_front)
+#upper.connect_wall(wall_4, wall_back)
 
 
 beam1 = upper.beam(
     "Beam",
-    start=(0, HALF_DEPTH-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    start=(-HOUSE_EXT, HALF_DEPTH-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     end=(HOUSE_WIDTH, HALF_DEPTH-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     size=(0.14, 0.24),
     material="Wood",
@@ -933,7 +942,7 @@ beam1 = upper.beam(
 )
 beam2 = upper.beam(
     "Beam",
-    start=(0, HALF_DEPTH+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
+    start=(-HOUSE_EXT, HALF_DEPTH+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     end=(HOUSE_WIDTH, HALF_DEPTH+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
     size=(0.14, 0.24),
     material="Wood",
@@ -941,7 +950,7 @@ beam2 = upper.beam(
 )
 beam3 = upper.beam(
     "Beam",
-    start=(0, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    start=(-HOUSE_EXT, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     end=(HOUSE_WIDTH, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     size=(0.16, 0.12),
     material="Wood",
@@ -950,15 +959,23 @@ beam3 = upper.beam(
 beam4_a = upper.beam(
     "Beam",
     start=(0, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    end=(3.5, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    end=(wall2_x-BWT, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
 )
 beam4_b = upper.beam(
     "Beam",
-    start=(3.5+KITCHEN_WIDTH, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    start=(wall3_x, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     end=(HOUSE_WIDTH, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    size=(0.16, 0.12),
+    material="Wood",
+    kind="BEAM",
+)
+beam4_c = upper.beam(
+    "Beam",
+    start=(-HOUSE_EXT, EXT_DEPTH-0.125, UPPER_FLOOR_START+COLLAR_TIE_BOTTOM_HEIGHT-0.06),
+    end=(BWT, EXT_DEPTH-0.125, UPPER_FLOOR_START+COLLAR_TIE_BOTTOM_HEIGHT-0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
@@ -1006,8 +1023,8 @@ wall_2.add_door(
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik nahore
-wall_1.add_window(
-	at=3.25,
+wall_0.add_window(
+	at=EXT_DIST_FROM_HALF-BWT-0.75,
 	width=1.5,
 	height=2.25,
 	sill_height=1, partition="SINGLE_PANEL",)
