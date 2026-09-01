@@ -25,6 +25,7 @@ from ifc_utils import (
     Beam,
     Chimney,
     FacadeLayer,
+    FloorLayer,
     House,
     HorizontalFrame,
     MiakoSlab,
@@ -3097,7 +3098,14 @@ class HouseTests(unittest.TestCase):
         )
 
         self.assertTrue(floor.is_a("IfcSlab"))
+        self.assertIsInstance(floor, FloorLayer)
+        self.assertIs(floor.element, floor)
         self.assertEqual(floor.PredefinedType, "FLOOR")
+        self.assertEqual(
+            floor.outline,
+            ((0.25, 0.25), (11.75, 0.25), (11.75, 7.75), (0.25, 7.75)),
+        )
+        self.assertAlmostEqual(floor.area, 86.25)
         self.assertEqual(
             floor.ContainedInStructure[0].RelatingStructure,
             upper.element,
@@ -3124,6 +3132,19 @@ class HouseTests(unittest.TestCase):
             ),
             0.11,
         )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                floor, "BBIM_FloorLayer", "Area"
+            ),
+            86.25,
+        )
+
+        irregular_floor = upper.floor_layer(
+            "Irregular floor",
+            outline=((0, 0), (3, 0), (3, 1), (1, 1), (1, 3), (0, 3)),
+            thickness=0.1,
+        )
+        self.assertAlmostEqual(irregular_floor.area, 5)
 
         with self.assertRaisesRegex(ValueError, "thickness"):
             upper.floor_layer(

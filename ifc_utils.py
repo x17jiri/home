@@ -55,6 +55,7 @@ __all__ = [
     "Chimney",
     "Drawing",
     "FacadeLayer",
+    "FloorLayer",
     "HorizontalFrame",
     "House",
     "MiakoSlab",
@@ -6199,6 +6200,36 @@ class RoofLayer(ifcopenshell.entity_instance):
         return self
 
 
+class FloorLayer(ifcopenshell.entity_instance):
+    """A simplified ``IfcSlab/FLOOR`` with its source polygon and area."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+        *,
+        outline: tuple[tuple[float, float], ...],
+        area: float,
+        thickness: float,
+        start_height: float,
+        material_name: str,
+        placement: np.ndarray,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "outline", outline)
+        object.__setattr__(self, "area", area)
+        object.__setattr__(self, "thickness", thickness)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "material_name", material_name)
+        object.__setattr__(self, "placement", placement)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this floor layer as its underlying IFC entity."""
+        return self
+
+
 class Chimney(ifcopenshell.entity_instance):
     """An ``IfcChimney`` with a square stack and central circular flue."""
 
@@ -7327,14 +7358,15 @@ class Storey:
         material: str = "Floor build-up",
         color: str | None = None,
         transparency: Number = 0,
-    ) -> ifcopenshell.entity_instance:
+    ) -> FloorLayer:
         """Create one simplified floor build-up above the storey elevation.
 
         ``outline`` contains the floor polygon in global XY coordinates.
         ``start_height`` locates its underside above this storey's elevation,
         and the slab extends upward by ``thickness``.  A single material keeps
         the representation simple until the build-up needs to be decomposed
-        into insulation, heating, and screed layers.
+        into insulation, heating, and screed layers.  The returned layer's
+        ``area`` is the polygon area in square metres.
         """
         layer_name = _name(name, "name")
         material_name = _name(material, "material")
@@ -7362,21 +7394,32 @@ class Storey:
         )
         if abs(twice_area) <= 1e-9:
             raise ValueError("outline must enclose a non-zero area")
+        area = abs(twice_area) / 2
 
         model = self.house.model
-        layer = ifcopenshell.api.root.create_entity(
+        element = ifcopenshell.api.root.create_entity(
             model,
             ifc_class="IfcSlab",
             name=layer_name,
             predefined_type="FLOOR",
+        )
+        placement = np.eye(4)
+        placement[2, 3] = self.elevation + start_height
+        layer = FloorLayer(
+            element,
+            self,
+            outline=points,
+            area=area,
+            thickness=thickness,
+            start_height=start_height,
+            material_name=material_name,
+            placement=placement,
         )
         ifcopenshell.api.spatial.assign_container(
             model,
             products=[layer],
             relating_structure=self.element,
         )
-        placement = np.eye(4)
-        placement[2, 3] = self.elevation + start_height
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=layer,
@@ -7440,6 +7483,7 @@ class Storey:
             pset=layer_pset,
             properties={
                 "Outline": json.dumps(points),
+                "Area": area,
                 "StartHeight": start_height,
                 "Thickness": thickness,
                 "Material": material_name,
