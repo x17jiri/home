@@ -240,10 +240,10 @@ print("KK_WIDTH=", KK_WIDTH)
 wall_back.add_window(
 	at=2*BWT+KK_WIDTH+math.floor((KITCHEN_WIDTH-2.5)/0.125)*0.125/2, width=2.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_window(
-	at=3+KITCHEN_WIDTH+BWT+0.75,
+	at=3+KITCHEN_WIDTH+BWT+0.75-0.125,
 	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
 wall_back.add_door(
-	at=BWT+2.5-BWT-1,
+	at=BWT+KK_WIDTH-0.125-1,
 	width=0.8, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",)
 
@@ -710,8 +710,8 @@ ceiling2 = upper.miako_slab(
 		"beam",
 		"beam",
 
-		"wide", "beam",
-		"wide", "beam",
+		"wide", "beam", "beam",
+		"narrow", "beam",
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
@@ -897,11 +897,40 @@ wall_4 = upper.wall(
 wall_4.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 wall_4.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
-#wall_2.add_opening(at=1.55, width=1, height=2.25)
+wall_pokoj1 = upper.wall(
+	start=(-HOUSE_EXT+BWT, ceiling1_a.start[1]),
+	end=(wall2_x-BWT, ceiling1_a.start[1]),
+	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
 wall_pokoj2 = upper.wall(
 	start=(wall2_x, BWT+CHODBA_DEPTH+1.0),
 	end=(wall3_x-BWT, BWT+CHODBA_DEPTH+1.0),
 	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
+wall_zachod_nahore = upper.wall(
+	start=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH),
+	end=(wall3_x, BWT+CHODBA_DEPTH),
+	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
+wall_zachod_nahore.add_door(
+	at=0.8,
+	opening_width=0.8, width=0.7,
+	height=2.25,
+	clear_height=door_clear_height,
+	sill_height=UPPER_FLOOR_THICKNESS,
+	operation="SINGLE_SWING_LEFT",
+	reverse_swing=True)
+upper.asset(
+    "WC",
+    asset="toilet_without_cistern",
+	start_height=GROUND_FLOOR_THICKNESS,
+    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, BWT+BATHROOM_DEPTH-0.5),
+    rotation=90,
+)
+upper.asset(
+    "Umyv",
+    asset="basin_large",
+    center=(HOUSE_WIDTH-BWT-0.4, BWT+CHODBA_DEPTH+0.35),
+	start_height=GROUND_FLOOR_THICKNESS,
+	rotation=180,
+)
 #wall_zachod_nahore.add_door(
 #	at=KITCHEN_WIDTH-1,
 #	opening_width=0.8, width=0.7,
@@ -1027,10 +1056,21 @@ wall_2.add_door(
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik nahore
 wall_0.add_window(
-	at=EXT_DIST_FROM_HALF-BWT-0.75,
+	at=1,
 	width=1.5,
 	height=2.25,
 	sill_height=1, partition="SINGLE_PANEL",)
+wall_0x.add_window(
+	at=BWT,
+	width=HOUSE_EXT-BWT,
+	height=2.25,
+	sill_height=1, partition="SINGLE_PANEL",)
+# Okno k sousedum nahore
+wall_4.add_window(
+	at=HALF_DEPTH-0.75,
+	width=1.5,
+	height=2.25,
+	sill_height=NADEZDIVKA, partition="SINGLE_PANEL",)
 
 # Roof
 
@@ -1763,25 +1803,11 @@ if "upper" in sys.argv:
 	drawing1.add_stair_landing_annotation(stairs_landing2)
 	drawing1.add_chimney_annotation(chimney)
 
-	drawing1.add_dimension(start=(BWT, 7.5), end=(3.25, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(3.5, 7.5), end=(3.5+KITCHEN_WIDTH, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+BWT, 7.5), end=(HOUSE_WIDTH-BWT, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(0, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
-	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
-
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH, 4.25), end=(3.5+KITCHEN_WIDTH, 7.75), offset=1)
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH, 3.25), end=(3.5+KITCHEN_WIDTH, 4.25), offset=1)
-
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH, 2.55+0.1), end=(3.5+KITCHEN_WIDTH, 7.75), offset=2)
-
-	drawing1.add_dimension(start=(3.5+KITCHEN_WIDTH+0.5, CHIMNEY_Y_MID), end=(3.5+KITCHEN_WIDTH+0.5, 3.2), offset=0)
-
 	drawing1.add_room_annotation(
 		(1.5, 6),
 		identifier="P.01",
 		area=upper_pokoj_1.area
 	)
-
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 
