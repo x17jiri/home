@@ -187,7 +187,7 @@ posilovna = ground.floor_layer(
 	color="#ffff80",
 )
 pokoj_dole = ground.floor_layer(
-	"Pokoj dole",
+	"Pokoj",
 	outline=(
 		(-HOUSE_EXT+BWT, BWT+2.25+0.15),
 		(wall2_x-BWT, BWT+2.25+0.15),
@@ -1833,7 +1833,7 @@ if "ground" in sys.argv:
 	drawing1.add_room_annotation(
 		(1.5, 6),
 		identifier="0.01",
-		description="Přízemí, pokoj",
+		description="Pokoj",
 		area=pokoj_dole.area,
 	)
 	drawing1.add_room_annotation(
@@ -1857,7 +1857,7 @@ if "ground" in sys.argv:
 	drawing1.add_room_annotation(
 		(1, 1),
 		identifier="0.03",
-		description="Skladovací prostor",
+		description="Posilovna",
 		area=posilovna.area,
 	)
 	drawing1.add_room_legend()
@@ -1893,14 +1893,14 @@ if "upper" in sys.argv:
 	drawing1.add_room_annotation(
 		(1.5, 6),
 		identifier="P.01",
-		description="Podkroví, pokoj 1",
+		description="Pokoj 1",
 		area=upper_pokoj_1.area
 	)
 
 	drawing1.add_room_annotation(
 		(6, 6),
 		identifier="P.02",
-		description="Podkroví, pokoj 2",
+		description="Pokoj 2",
 		area=upper_pokoj_2.area
 	)
 
