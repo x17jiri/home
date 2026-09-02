@@ -110,6 +110,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: white !important;
 }
 
+/* A floor build-up masks the MIAKO slab below it in plan.  Bonsai may retain
+ * a concrete-cover perimeter where the two solids touch at the same height. */
+.target-view-PLANVIEW .material-Concretetopping.projection {
+    stroke: none !important;
+}
+
 /* Distinguish the concrete, ceramic, and steel in every MIAKO section. */
 .material-MIAKOceramicconcrete.cut,
 .material-MIAKOconcrete.cut,
@@ -378,8 +384,14 @@ tspan.door-dimension {
     font-weight: 500;
 }
 
-.material-legend-description {
+.material-legend-description,
+.room-legend-heading,
+.room-legend-text {
     fill: black;
     stroke: none;
     font-size: 3.2px;
+}
+
+.room-legend-heading {
+    font-weight: 500;
 }

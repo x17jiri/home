@@ -175,22 +175,74 @@ HOUSE_EXT = 1
 EXT_DIST_FROM_HALF = 1.5
 EXT_DEPTH = HALF_DEPTH + EXT_DIST_FROM_HALF
 
-# For now each finished-floor build-up is one homogeneous interior slab.  It
-# can later be replaced with insulation, heating, and screed components without
-# changing the storey elevations or the existing sill-height coordinates.
-FLOOR_OUTLINE = (
-	(-HOUSE_EXT+BWT, BWT),
-	(HOUSE_WIDTH-BWT, BWT),
-	(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
-	(BWT, HOUSE_DEPTH-BWT),
-	(BWT, EXT_DEPTH-BWT),
-	(-HOUSE_EXT+BWT, EXT_DEPTH-BWT),
-)
-ground_floor_layer = ground.floor_layer(
-	"Ground-floor build-up",
-	outline=FLOOR_OUTLINE,
+posilovna = ground.floor_layer(
+	"Prizemi, posilovna",
+	outline=(
+		(-HOUSE_EXT+BWT, BWT),
+		(wall2_x-BWT, BWT),
+		(wall2_x-BWT, BWT+2.25),
+		(-HOUSE_EXT+BWT, BWT+2.25),
+	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	color="#ffffff",
+	color="#ffff80",
+)
+pokoj_dole = ground.floor_layer(
+	"Pokoj dole",
+	outline=(
+		(-HOUSE_EXT+BWT, BWT+2.25+0.15),
+		(wall2_x-BWT, BWT+2.25+0.15),
+		(wall2_x-BWT, HOUSE_DEPTH-BWT),
+		(BWT, HOUSE_DEPTH-BWT),
+		(BWT, EXT_DEPTH-BWT),
+		(-HOUSE_EXT+BWT, EXT_DEPTH-BWT),
+	),
+	thickness=GROUND_FLOOR_THICKNESS,
+	color="#ffff80",
+)
+CHODBA_DEPTH = 2.6
+GALERY_DEPTH = 2.625 + 1.05 - 2.6
+wall_zachod_nahore_y = BWT+math.ceil(CHODBA_DEPTH/0.125)*0.125
+oblouk_at=math.floor((0.25+CHODBA_DEPTH+0.15+1)/0.125)*0.125
+kuchyn  = ground.floor_layer(
+	"Kuchyn",
+	outline=(
+		(wall2_x, BWT+CHODBA_DEPTH+0.15),
+		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
+		(wall3_x-BWT, oblouk_at),
+		(wall3_x, oblouk_at),
+		(wall3_x, BWT+CHODBA_DEPTH+0.15),
+		(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH+0.15),
+		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
+		(wall3_x, HOUSE_DEPTH-BWT),
+		(wall3_x, oblouk_at+2),
+		(wall3_x-BWT, oblouk_at+2),
+		(wall3_x-BWT, HOUSE_DEPTH-BWT),
+		(wall2_x, HOUSE_DEPTH-BWT),
+	),
+	thickness=GROUND_FLOOR_THICKNESS,
+	color="#ffff80",
+)
+chodba  = ground.floor_layer(
+	"Chodba",
+	outline=(
+		(wall2_x, BWT),
+		(wall3_x-BWT, BWT),
+		(wall3_x-BWT, BWT+CHODBA_DEPTH),
+		(wall2_x, BWT+CHODBA_DEPTH),
+	),
+	thickness=GROUND_FLOOR_THICKNESS,
+	color="#ffff80",
+)
+koupelna = ground.floor_layer(
+	"Koupelna",
+	outline=(
+		(wall3_x, BWT),
+		(HOUSE_WIDTH-BWT, BWT),
+		(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH),
+		(wall3_x, BWT+CHODBA_DEPTH),
+	),
+	thickness=GROUND_FLOOR_THICKNESS,
+	color="#ffff80",
 )
 
 # Load-bearing walls
@@ -332,7 +384,6 @@ ground.asset(
 )
 
 # Kitchen, Kuchyn
-CHODBA_DEPTH = 2.6
 wall_kitchen = ground.wall(
 	(wall2_x, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
@@ -360,10 +411,10 @@ wall_2.add_door(
 
 # Oblouk
 wall_3.add_opening(
-	at=math.floor((0.25+CHODBA_DEPTH+0.15+1)/0.125)*0.125,
+	at=oblouk_at,
 	width=2,
     height=0.25+2.125,
-    sill_height=GROUND_FLOOR_THICKNESS,
+#    sill_height=GROUND_FLOOR_THICKNESS,
 	name="Oblouk"
 )
 
@@ -775,12 +826,54 @@ upper_pokoj_1 = upper.floor_layer(
 			(-HOUSE_EXT+BWT, EXT_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		color="#ffffff",
+		color="#ffff80",
 	)
-
-upper_floor_layers = (
-	upper_pokoj_1
-)
+upper_pokoj_2 = upper.floor_layer(
+		f"Upper Pokoj 2",
+		outline=(
+			(wall2_x, BWT+CHODBA_DEPTH+GALERY_DEPTH+0.1),
+			(wall3_x-BWT, BWT+CHODBA_DEPTH+GALERY_DEPTH+0.1),
+			(wall3_x-BWT, HOUSE_DEPTH-BWT),
+			(wall2_x, HOUSE_DEPTH-BWT),
+		),
+		thickness=UPPER_FLOOR_THICKNESS,
+		color="#ffff80",
+	)
+galerie = upper.floor_layer(
+		f"Galerie",
+		outline=(
+			(wall2_x, BWT+CHODBA_DEPTH),
+			(wall2_x+1+8*0.27, BWT+CHODBA_DEPTH),
+			(wall2_x+1+8*0.27, BWT),
+			(wall3_x-BWT, BWT),
+			(wall3_x-BWT, BWT+CHODBA_DEPTH+GALERY_DEPTH),
+			(wall2_x, BWT+CHODBA_DEPTH+GALERY_DEPTH),
+		),
+		thickness=UPPER_FLOOR_THICKNESS,
+		color="#ffff80",
+	)
+upper_sklad = upper.floor_layer(
+		f"Sklad",
+		outline=(
+			(wall3_x, wall_zachod_nahore_y),
+			(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
+			(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
+			(wall3_x, HOUSE_DEPTH-BWT),
+		),
+		thickness=UPPER_FLOOR_THICKNESS,
+		color="#ffff80",
+	)
+zachod_nahore = upper.floor_layer(
+		f"Zachod",
+		outline=(
+			(wall3_x, wall_zachod_nahore_y-0.1),
+			(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1),
+			(HOUSE_WIDTH-BWT, BWT),
+			(wall3_x, BWT),
+		),
+		thickness=UPPER_FLOOR_THICKNESS,
+		color="#ffff80",
+	)
 
 STREET_ROOF_JOINT_Y = HALF_DEPTH-0.8-0.07
 GARDEN_ROOF_JOINT_Y = HALF_DEPTH+0.8+0.07
@@ -872,8 +965,8 @@ wall_2.add_opening(
 	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 # okno ninja gym
 wall_2.add_opening(
-	at=BWT+0.625,
-	width=1, height=1.25)
+	at=BWT+0.875,
+	width=1, height=1.375)
 
 wall_3 = upper.wall(
 	(wall3_x, 0.002), (wall3_x, HOUSE_DEPTH-BWT),
@@ -883,7 +976,7 @@ wall_3.add_opening(
 	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_3.add_opening(
-    at=BWT+CHODBA_DEPTH,
+    at=BWT+math.ceil(CHODBA_DEPTH/0.125)*0.125,
     width=1,
     height=2.25,
 )
@@ -902,12 +995,19 @@ wall_pokoj1 = upper.wall(
 	end=(wall2_x-BWT, ceiling1_a.start[1]),
 	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
 wall_pokoj2 = upper.wall(
-	start=(wall2_x, BWT+CHODBA_DEPTH+1.0),
-	end=(wall3_x-BWT, BWT+CHODBA_DEPTH+1.0),
+	start=(wall2_x, BWT+CHODBA_DEPTH+GALERY_DEPTH),
+	end=(wall3_x-BWT, BWT+CHODBA_DEPTH+GALERY_DEPTH),
 	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
+wall_pokoj2.add_door(
+	at=KITCHEN_WIDTH-1.25,
+	opening_width=1, width=0.9,
+	height=2.25,
+	clear_height=door_clear_height,
+	sill_height=UPPER_FLOOR_THICKNESS,
+	operation="SINGLE_SWING_RIGHT")
 wall_zachod_nahore = upper.wall(
-	start=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH),
-	end=(wall3_x, BWT+CHODBA_DEPTH),
+	start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
+	end=(wall3_x, wall_zachod_nahore_y),
 	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
 wall_zachod_nahore.add_door(
 	at=0.8,
@@ -927,25 +1027,10 @@ upper.asset(
 upper.asset(
     "Umyv",
     asset="basin_large",
-    center=(HOUSE_WIDTH-BWT-0.4, BWT+CHODBA_DEPTH+0.35),
+    center=(HOUSE_WIDTH-BWT-0.4, wall_zachod_nahore_y+0.35),
 	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=180,
 )
-#wall_zachod_nahore.add_door(
-#	at=KITCHEN_WIDTH-1,
-#	opening_width=0.8, width=0.7,
-#	height=2.25,
-#	clear_height=door_clear_height,
-#	sill_height=UPPER_FLOOR_THICKNESS,
-#	operation="SINGLE_SWING_RIGHT",
-#	reverse_swing=True)
-#wall_zachod_nahore_2 = upper.wall(
-#	start=(3.5+1.2, 2.55),
-#	end=(3.5+1.2, BWT),
-#	wall_type=dry_wall,
-#	height=UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS,
-#	cuts=[STREET_GYPSUM_PLASTERBOARD_CUT],
-#)
 
 #upper.connect_wall(wall_0, wall_front)
 #upper.connect_wall(wall_0, wall_0x)
@@ -1038,17 +1123,9 @@ wall_dormer.add_window(
 wall_dormer.add_window(
 	at=BWT+KITCHEN_WIDTH-0.5-1.5,
 	width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
-# Dvere obyvak
-#wall_3.add_door(
-#	at=math.ceil(CHIMNEY_Y_END/0.125)*0.125,
-#	opening_width=1, width=0.9,
-#	height=2.25,
-#	clear_height=door_clear_height,
-#	sill_height=UPPER_FLOOR_THICKNESS,
-#	operation="SINGLE_SWING_LEFT")
 # Dvere pokojik nahore
 wall_2.add_door(
-	at=BWT+CHODBA_DEPTH,
+	at=wall_zachod_nahore_y,
 	opening_width=1, width=0.9,
 	height=2.25,
 	clear_height=door_clear_height,
@@ -1756,30 +1833,34 @@ if "ground" in sys.argv:
 	drawing1.add_room_annotation(
 		(1.5, 6),
 		identifier="0.01",
-		area=5.12*2.97 + 1.125*2.62,   # m²
+		description="Přízemí, pokoj",
+		area=pokoj_dole.area,
 	)
 	drawing1.add_room_annotation(
 		(wall3_x - 1.5, HOUSE_DEPTH - 1.5),
 		identifier="0.02",
-		area=
-			(HOUSE_DEPTH-2*BWT-0.15-CHODBA_DEPTH)*KITCHEN_WIDTH
-			+ (HOUSE_DEPTH-2*BWT-0.15-BATHROOM_DEPTH)*KK_WIDTH,   # m²
+		description="Obývak s KK",
+		area=kuchyn.area,
 	)
 	drawing1.add_room_annotation(
 		(HOUSE_WIDTH-1.4, BWT+1.25),
 		identifier="0.05",
-		area=KK_WIDTH*BATHROOM_DEPTH,   # m²
+		description="Koupelna",
+		area=koupelna.area,
 	)
 	drawing1.add_room_annotation(
 		(7, 0.5+0.9),
 		identifier="0.04",
-		area=CHODBA_DEPTH*KITCHEN_WIDTH,   # m²
+		description="Chodba",
+		area=chodba.area,
 	)
 	drawing1.add_room_annotation(
 		(1, 1),
 		identifier="0.03",
-		area=(2.97+1.125)*2.25,   # m²
+		description="Skladovací prostor",
+		area=posilovna.area,
 	)
+	drawing1.add_room_legend()
 
 	# The Rockwool occupies the right side of each wall axis.  These annotations
 	# belong only to Drawing 1 and follow the Rockwool centre lines.
@@ -1793,7 +1874,13 @@ if "ground" in sys.argv:
 # Drawing 2 - upper floor
 if "upper" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 2", x=6, y=4, z=BWT+2.75+2, radius=8, storeys=[upper]
+		"Drawing 2",
+		x=6,
+		y=4,
+		z=BWT+2.75+2,
+		radius=8,
+		storeys=[upper],
+		right_panel_width=40,
 	)
 
 	drawing1.add_stair_annotation(stairs1)
@@ -1806,8 +1893,38 @@ if "upper" in sys.argv:
 	drawing1.add_room_annotation(
 		(1.5, 6),
 		identifier="P.01",
+		description="Podkroví, pokoj 1",
 		area=upper_pokoj_1.area
 	)
+
+	drawing1.add_room_annotation(
+		(6, 6),
+		identifier="P.02",
+		description="Podkroví, pokoj 2",
+		area=upper_pokoj_2.area
+	)
+
+	drawing1.add_room_annotation(
+		(9.5, 5),
+		identifier="P.03",
+		description="Skladovací prostor",
+		area=upper_sklad.area
+	)
+
+	drawing1.add_room_annotation(
+		(7.1, 3),
+		description="Galerie",
+		identifier="P.04",
+		area=galerie.area
+	)
+
+	drawing1.add_room_annotation(
+		(9.5, 1.5),
+		identifier="P.05",
+		description="Záchod",
+		area=zachod_nahore.area
+	)
+	drawing1.add_room_legend()
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 

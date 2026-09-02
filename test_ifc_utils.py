@@ -4109,6 +4109,7 @@ class HouseTests(unittest.TestCase):
         identifier = drawing.add_room_annotation(
             (4.5, 3.2),
             identifier="P.01",
+            description="Bedroom",
             area=8.3,
         )
 
@@ -4128,6 +4129,7 @@ class HouseTests(unittest.TestCase):
             identifier, "EPset_RoomAnnotation"
         )
         self.assertEqual(metadata["Identifier"], "P.01")
+        self.assertEqual(metadata["Description"], "Bedroom")
         self.assertAlmostEqual(metadata["Area"], 8.3)
 
         members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
@@ -4160,6 +4162,82 @@ class HouseTests(unittest.TestCase):
             drawing.add_room_annotation((1, 1), identifier="P.02", area=0)
         with self.assertRaisesRegex(ValueError, "identifier must not be empty"):
             drawing.add_room_annotation((1, 1), identifier=" ", area=5)
+        with self.assertRaisesRegex(ValueError, "duplicated"):
+            drawing.add_room_annotation((1, 1), identifier="P.01", area=5)
+
+    def test_persists_room_legend_from_room_annotations(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        drawing = house.add_drawing(
+            "Ground plan",
+            2,
+            3,
+            1.6,
+            5,
+            storeys=[ground],
+            right_panel_width=40,
+        )
+        drawing.add_room_annotation(
+            (2, 2),
+            identifier="0.02",
+            description="Living room",
+            area=18.25,
+        )
+        drawing.add_room_annotation(
+            (1, 1),
+            identifier="0.01",
+            description="Bedroom",
+            area=12.5,
+        )
+
+        result = drawing.add_room_legend()
+
+        self.assertIs(result, drawing)
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertEqual(
+            json.loads(properties["RightPanelTables"]),
+            [
+                {
+                    "kind": "room_legend",
+                    "title": "LEGENDA MÍSTNOSTÍ",
+                    "items": [
+                        {
+                            "identifier": "0.01",
+                            "description": "Bedroom",
+                            "area": 12.5,
+                        },
+                        {
+                            "identifier": "0.02",
+                            "description": "Living room",
+                            "area": 18.25,
+                        },
+                    ],
+                }
+            ],
+        )
+
+        no_rooms = house.add_drawing(
+            "No rooms", 2, 3, 1.6, 5, right_panel_width=40
+        )
+        with self.assertRaisesRegex(ValueError, "at least one room annotation"):
+            no_rooms.add_room_legend()
+        missing_description = house.add_drawing(
+            "Missing description", 2, 3, 1.6, 5, right_panel_width=40
+        )
+        missing_description.add_room_annotation(
+            (1, 1), identifier="P.01", area=5
+        )
+        with self.assertRaisesRegex(ValueError, "must include descriptions"):
+            missing_description.add_room_legend()
+        no_panel = house.add_drawing("No panel", 2, 3, 1.6, 5)
+        no_panel.add_room_annotation(
+            (1, 1), identifier="P.01", description="Bedroom", area=5
+        )
+        with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
+            no_panel.add_room_legend()
 
     def test_adds_a_rotated_drawing_scoped_entrance_arrow(self) -> None:
         house = House("My house")
@@ -4699,6 +4777,54 @@ class HouseTests(unittest.TestCase):
                 svg.index('class="right-side-panel"'),
                 svg.index('id="model-view"'),
             )
+
+    def test_appends_room_legend_to_right_panel(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg width="160mm" height="160mm" '
+                'viewBox="0 0 160 160">\n'
+                '  <g id="model-view"/>\n'
+                "</svg>\n",
+                encoding="utf-8",
+            )
+            properties = {
+                "RightPanelWidth": 40,
+                "RightPanelTables": json.dumps(
+                    [
+                        {
+                            "kind": "room_legend",
+                            "title": "LEGENDA MÍSTNOSTÍ",
+                            "items": [
+                                {
+                                    "identifier": "P.01",
+                                    "description": "Pokoj & pracovna",
+                                    "area": 12.345,
+                                },
+                                {
+                                    "identifier": "P.02",
+                                    "description": "Galerie",
+                                    "area": 8,
+                                },
+                            ],
+                        }
+                    ]
+                ),
+            }
+
+            _postprocess_right_panel(svg_path, properties)
+            _postprocess_right_panel(svg_path, properties)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('class="right-side-panel"'), 1)
+            self.assertEqual(svg.count('class="right-panel-table room-legend"'), 1)
+            self.assertIn("LEGENDA MÍSTNOSTÍ", svg)
+            self.assertIn(">ČÍSLO</text>", svg)
+            self.assertIn(">POPIS</text>", svg)
+            self.assertIn(">PLOCHA</text>", svg)
+            self.assertIn("Pokoj &amp; pracovna", svg)
+            self.assertIn("12,35 m²", svg)
+            self.assertIn("8,00 m²", svg)
 
     def test_stores_a_basic_elevation_camera_without_plan_annotations(self) -> None:
         house = House("My house")
@@ -5348,6 +5474,18 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: white !important", insulation_rule)
         self.assertIn("stroke-width: 0.06 !important", insulation_rule)
+
+    def test_hides_miako_concrete_cover_seams_in_plan_only(self) -> None:
+        stylesheet = (
+            Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        plan_rule = stylesheet.split(
+            ".target-view-PLANVIEW .material-Concretetopping.projection",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("stroke: none !important", plan_rule)
+        self.assertIn(".material-Concretetopping.cut", stylesheet)
 
     def test_styles_stair_annotations_with_short_fine_dashes(self) -> None:
         stylesheet = (

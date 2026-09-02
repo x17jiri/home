@@ -1078,6 +1078,133 @@ def _material_legend_svg(
     return "\n    ".join(parts), height
 
 
+def _room_legend_svg(
+    table: Mapping[str, object],
+    *,
+    x: float,
+    y: float,
+    width: float,
+    units_per_mm: float,
+    layout_scale: float | None = None,
+) -> tuple[str, float]:
+    """Return one room-legend SVG table and its height in SVG units."""
+    title = str(table.get("title", "ROOM LEGEND"))
+    supplied_items = table.get("items", [])
+    items = supplied_items if isinstance(supplied_items, list) else []
+    width_mm = width / units_per_mm
+    if layout_scale is None:
+        layout_scale = min(1.0, width_mm / 90.0)
+    title_height_mm = 12.0 * layout_scale
+    heading_height_mm = 8.0 * layout_scale
+    row_height_mm = 10.0 * layout_scale
+    padding_mm = 2.0 * layout_scale
+    normalised_items: list[tuple[str, str, float]] = []
+    for supplied_item in items:
+        if not isinstance(supplied_item, dict):
+            continue
+        identifier = str(supplied_item.get("identifier", ""))
+        description = str(supplied_item.get("description", ""))
+        try:
+            area = float(supplied_item.get("area", 0))
+        except (TypeError, ValueError):
+            continue
+        normalised_items.append((identifier, description, area))
+
+    u = units_per_mm
+    title_height = title_height_mm * u
+    heading_height = heading_height_mm * u
+    row_height = row_height_mm * u
+    padding = padding_mm * u
+    height = title_height + heading_height + len(normalised_items) * row_height
+    right = x + width
+    title_bottom = y + title_height
+    heading_bottom = title_bottom + heading_height
+    identifier_right = x + width * 0.21
+    area_left = x + width * 0.75
+    parts = [
+        '<g class="right-panel-table room-legend">',
+        (
+            f'<rect class="right-panel-table-outline" x="{x:.6g}" '
+            f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
+        ),
+        (
+            f'<text class="right-panel-table-title" x="{x + width / 2:.6g}" '
+            f'y="{y + title_height / 2:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{5.5 * layout_scale:.6g}px">'
+            f'{escape(title)}</text>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{title_bottom:.6g}"/>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{heading_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{heading_bottom:.6g}"/>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{identifier_right:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{identifier_right:.6g}" '
+            f'y2="{y + height:.6g}"/>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{area_left:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{area_left:.6g}" '
+            f'y2="{y + height:.6g}"/>'
+        ),
+    ]
+
+    heading_y = title_bottom + heading_height / 2
+    heading_font_size = 3.2 * layout_scale
+    for text_value, text_x in (
+        ("ČÍSLO", (x + identifier_right) / 2),
+        ("POPIS", (identifier_right + area_left) / 2),
+        ("PLOCHA", (area_left + right) / 2),
+    ):
+        parts.append(
+            f'<text class="room-legend-heading" x="{text_x:.6g}" '
+            f'y="{heading_y:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{heading_font_size:.6g}px">'
+            f'{text_value}</text>'
+        )
+
+    body_font_size = 4.0 * layout_scale
+    row_y = heading_bottom
+    for identifier, description, area in normalised_items:
+        text_y = row_y + row_height / 2
+        area_text = f"{area:.2f}".replace(".", ",") + " m²"
+        parts.extend(
+            (
+                f'<text class="room-legend-text" '
+                f'x="{(x + identifier_right) / 2:.6g}" y="{text_y:.6g}" '
+                f'text-anchor="middle" dominant-baseline="middle" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{escape(identifier)}</text>',
+                f'<text class="room-legend-text" '
+                f'x="{identifier_right + padding:.6g}" y="{text_y:.6g}" '
+                f'dominant-baseline="middle" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{escape(description)}</text>',
+                f'<text class="room-legend-text" '
+                f'x="{(area_left + right) / 2:.6g}" y="{text_y:.6g}" '
+                f'text-anchor="middle" dominant-baseline="middle" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{area_text}</text>',
+            )
+        )
+        row_y += row_height
+        if row_y < y + height - 1e-9:
+            parts.append(
+                f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+                f'y1="{row_y:.6g}" x2="{right:.6g}" y2="{row_y:.6g}"/>'
+            )
+    parts.append("</g>")
+    return "\n    ".join(parts), height
+
+
 def _postprocess_right_panel(
     svg_path: Path,
     drawing_properties: Mapping[str, object],
@@ -1139,9 +1266,15 @@ def _postprocess_right_panel(
     table_y = view_y + vertical_margin
     table_parts = []
     for table in tables:
-        if not isinstance(table, dict) or table.get("kind") != "material_legend":
+        if not isinstance(table, dict):
             continue
-        table_svg, table_height = _material_legend_svg(
+        table_renderer = {
+            "material_legend": _material_legend_svg,
+            "room_legend": _room_legend_svg,
+        }.get(table.get("kind"))
+        if table_renderer is None:
+            continue
+        table_svg, table_height = table_renderer(
             table,
             x=table_x,
             y=table_y,
@@ -3872,8 +4005,8 @@ class House:
         without changing their model geometry or plan swing symbols.
         ``right_panel_width`` adds paper space to the right of the camera view,
         measured in printed millimetres.  It does not resize or move the model
-        view.  Use :meth:`Drawing.add_material_legend` to add the first
-        supported optional table to that panel.
+        view.  Use :meth:`Drawing.add_material_legend` and
+        :meth:`Drawing.add_room_legend` to add optional tables to that panel.
         """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
@@ -4015,6 +4148,7 @@ class Drawing:
         if self.right_panel_width < 0:
             raise ValueError("right_panel_width must not be negative")
         self._right_panel_tables: list[dict[str, object]] = []
+        self._room_annotations: list[dict[str, object]] = []
         self._includes_all_storeys = storeys is None
         if storeys is None:
             self._storeys: tuple[Storey, ...] = ()
@@ -4360,6 +4494,64 @@ class Drawing:
         )
         return self
 
+    def add_room_legend(
+        self,
+        *,
+        title: str = "LEGENDA MÍSTNOSTÍ",
+    ) -> Drawing:
+        """Add a table generated from this drawing's room annotations.
+
+        Call this after :meth:`add_room_annotation`.  Rows are sorted by room
+        identifier and use each annotation's description and area, avoiding a
+        separate room list.
+        """
+        self._require_plan_view("add_room_legend")
+        if self.right_panel_width <= 0:
+            raise ValueError(
+                "add_room_legend requires right_panel_width on the drawing"
+            )
+        if self.right_panel_width < 40:
+            raise ValueError(
+                "right_panel_width must be at least 40 mm for a room legend"
+            )
+        title = _name(title, "title")
+        if not self._room_annotations:
+            raise ValueError(
+                "add_room_legend requires at least one room annotation"
+            )
+        missing_descriptions = [
+            str(room["identifier"])
+            for room in self._room_annotations
+            if not room.get("description")
+        ]
+        if missing_descriptions:
+            raise ValueError(
+                "room annotations must include descriptions: "
+                + ", ".join(missing_descriptions)
+            )
+        items = sorted(
+            (dict(room) for room in self._room_annotations),
+            key=lambda room: str(room["identifier"]),
+        )
+        self._right_panel_tables.append(
+            {
+                "kind": "room_legend",
+                "title": title,
+                "items": items,
+            }
+        )
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model,
+            pset=self._drawing_pset,
+            properties={
+                "RightPanelTables": json.dumps(
+                    self._right_panel_tables,
+                    ensure_ascii=False,
+                )
+            },
+        )
+        return self
+
     def add_dimension(
         self,
         start: Point,
@@ -4541,18 +4733,28 @@ class Drawing:
         *,
         identifier: str,
         area: Number,
+        description: str | None = None,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add a manual room identifier and area label to this drawing.
 
         ``position`` is the global model XY coordinate at the centre of the
         separator line.  ``area`` is supplied in square metres and displayed
-        with two decimal places and a square-metre suffix.  This helper does
-        not create an ``IfcSpace`` or calculate area from room boundaries.
+        with two decimal places and a square-metre suffix.  ``description`` is
+        retained as metadata for :meth:`add_room_legend`, but is not displayed
+        in the in-room annotation.  This helper does not create an ``IfcSpace``
+        or calculate area from room boundaries.
         """
         self._require_plan_view("add_room_annotation")
         x, y = _point(position, "position")
         identifier = _name(identifier, "identifier")
+        if any(
+            room["identifier"] == identifier
+            for room in self._room_annotations
+        ):
+            raise ValueError(f'room identifier is duplicated: "{identifier}"')
+        if description is not None:
+            description = _name(description, "description")
         area = _number(area, "area")
         if area <= 0:
             raise ValueError("area must be greater than zero")
@@ -4651,7 +4853,11 @@ class Drawing:
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=metadata,
-            properties={"Identifier": identifier, "Area": area},
+            properties={
+                "Identifier": identifier,
+                "Description": description,
+                "Area": area,
+            },
         )
 
         line_width = max(0.75, len(identifier) * 0.18)
@@ -4696,6 +4902,13 @@ class Drawing:
             model,
             group=self.group,
             products=[identifier_annotation, area_annotation, separator],
+        )
+        self._room_annotations.append(
+            {
+                "identifier": identifier,
+                "description": description,
+                "area": area,
+            }
         )
         return identifier_annotation
 
