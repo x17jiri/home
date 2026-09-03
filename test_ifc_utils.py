@@ -2180,6 +2180,54 @@ class HouseTests(unittest.TestCase):
                 beam_height=0.06,
             )
 
+    def test_fills_concrete_cover_at_edge_and_consecutive_miako_beams(
+        self,
+    ) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        slab = upper.miako_slab(
+            "Ceiling with grouped beams",
+            start=(0, 0),
+            end=(4, 0),
+            top=0,
+            direction=(0, 1),
+            structure=[
+                "beam",
+                "wide",
+                "beam",
+                "beam",
+                "narrow",
+                "beam",
+            ],
+        )
+
+        topping_body = ifcopenshell.util.representation.get_representation(
+            slab.topping_element, "Model", "Body", "MODEL_VIEW"
+        )
+        profile = topping_body.Items[0].SweptArea.OuterCurve.Points.CoordList
+        np.testing.assert_allclose(
+            profile[:13],
+            (
+                (0.0, 0.19),
+                (0.0, 0.06),
+                (0.135, 0.06),
+                (0.135, 0.19),
+                (0.66, 0.19),
+                (0.66, 0.06),
+                (0.93, 0.06),
+                (0.93, 0.19),
+                (1.33, 0.19),
+                (1.33, 0.06),
+                (1.465, 0.06),
+                (1.465, 0.19),
+                (1.465, 0.25),
+            ),
+            atol=1e-9,
+        )
+        self.assertNotIn((0.035, 0.06), profile)
+        self.assertNotIn((0.795, 0.19), profile)
+        self.assertNotIn((1.43, 0.06), profile)
+
     def test_adds_a_regular_vertical_frame_from_a_storey_relative_height(
         self,
     ) -> None:
@@ -5140,6 +5188,7 @@ class HouseTests(unittest.TestCase):
   <g id="product-basin" class="IfcSanitaryTerminal material-null cut"><path/></g>
   <g id="product-cooker" class="IfcElectricAppliance material-null projection"><path/></g>
   <g id="product-reinforcement-projection" ifc:guid="reinforcement" class="IfcBuildingElementPart material-MIAKOreinforcement projection"><path/></g>
+  <g id="product-reinforcement-projection-only" ifc:guid="reinforcement-projection-only" class="IfcBuildingElementPart material-MIAKOreinforcement projection"><path/></g>
   <g ifc:guid="reinforcement-second" class="IfcBuildingElementPart material-MIAKOreinforcement cut"><path/></g>
   <g ifc:guid="reinforcement" class="IfcBuildingElementPart material-MIAKOreinforcement cut"><path/></g>
   <g id="product-cover" class="IfcBuildingElementPart material-Concretetopping cut"><path/></g>
@@ -5227,17 +5276,21 @@ class HouseTests(unittest.TestCase):
             self.assertIn(
                 'ifc:guid="reinforcement" '
                 'class="IfcBuildingElementPart material-MIAKOreinforcement cut" '
-                f'id="{reinforcement_source}">',
+                f'id="{second_reinforcement_source}">',
                 svg,
             )
             self.assertIn(
                 'ifc:guid="reinforcement-second" '
                 'class="IfcBuildingElementPart material-MIAKOreinforcement cut" '
-                f'id="{second_reinforcement_source}">',
+                f'id="{reinforcement_source}">',
                 svg,
             )
             self.assertNotIn(
                 '<use href="#product-reinforcement-projection"',
+                svg,
+            )
+            self.assertNotIn(
+                '<use href="#product-reinforcement-projection-only"',
                 svg,
             )
             self.assertGreater(

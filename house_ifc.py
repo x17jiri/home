@@ -83,6 +83,7 @@ TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.05
 GROUND_FLOOR_THICKNESS = 0.20
 UPPER_FLOOR_THICKNESS = 0.11
+VAZNICE_DIST = 0.8 # Vzdalenost vaznice od hrebene
 
 THERMAL_INSULATION_40_BOTTOM = (
 	RAFTER_Z_OFFSET - THERMAL_INSULATION_40_THICKNESS
@@ -199,8 +200,8 @@ pokoj_dole = ground.floor_layer(
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.6
-GALERY_DEPTH = 2.625 + 1.05 - 2.6
+CHODBA_DEPTH = 2.625
+GALERY_DEPTH = 1.05
 wall_zachod_nahore_y = BWT+math.ceil(CHODBA_DEPTH/0.125)*0.125
 oblouk_at=math.floor((0.25+CHODBA_DEPTH+0.15+1)/0.125)*0.125
 kuchyn  = ground.floor_layer(
@@ -271,10 +272,13 @@ ground.connect_wall(wall_4, wall_back)
 
 # Front door/window
 
+GROUND_DOOR_HEIGHT = 2.32
+GROUND_WINDOW_HEIGHT = 2.5
+GROUND_WINDOW_SILL_HEIGHT = 1.125
 wall_front.add_door(
-	at=HOUSE_EXT+wall3_x-BWT-0.5-1.125,
+	at=HOUSE_EXT+wall3_x-BWT-0.375-1.125,
 	opening_width=1.125, width=0.9,
-	height=0.25+2.125,
+	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT"
@@ -282,21 +286,25 @@ wall_front.add_door(
 wall_front.add_window(
     at=HOUSE_EXT+wall3_x+0.25,
     width=0.5,
-    height=0.25+2.125,
-    sill_height=0.25+2.125-0.375,
+    height=GROUND_DOOR_HEIGHT, # use door height so it is aligned with the front door
+    sill_height=GROUND_DOOR_HEIGHT-0.375,
     partition="SINGLE_PANEL",
 )
 
 # Back windows
 print("KK_WIDTH=", KK_WIDTH)
 wall_back.add_window(
-	at=2*BWT+KK_WIDTH+math.floor((KITCHEN_WIDTH-2.5)/0.125)*0.125/2, width=2.5, sill_height=0.25+0.875, height=0.25+2.25)
+	at=2*BWT+KK_WIDTH+math.floor((KITCHEN_WIDTH-2.5)/0.125)*0.125/2, width=2.5,
+	sill_height=GROUND_WINDOW_SILL_HEIGHT,
+	height=GROUND_WINDOW_HEIGHT)
 wall_back.add_window(
 	at=3+KITCHEN_WIDTH+BWT+0.75-0.125,
-	width=1.5, sill_height=0.25+0.875, height=0.25+2.25)
+	width=1.5, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
 wall_back.add_door(
 	at=BWT+KK_WIDTH-0.125-1,
-	width=0.8, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2,
+	width=0.8, sill_height=GROUND_WINDOW_HEIGHT-2.0,
+	height=GROUND_WINDOW_HEIGHT, # align height with windows even though this is door
+	opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",)
 
 
@@ -305,11 +313,17 @@ wall_gym = ground.wall(
 	(-HOUSE_EXT+BWT, BWT+2.25), (wall2_x-BWT, BWT+2.25),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_2.add_opening(
-	at=BWT+0.625,
-	width=1, sill_height=0.25+0.1, height=0.25+2.25)
+	at=BWT+1.25,
+	width=1,
+	height=ground_floor_height-0.5,
+	sill_height=GROUND_FLOOR_THICKNESS,
+)
 wall_gym.add_door(
 	at=HOUSE_EXT+wall2_x-2*BWT-1-0.125,
-	width=0.9, sill_height=0.25+0.1, height=0.25+2.25, opening_width=1, clear_height=2,
+	width=0.9,
+	height=GROUND_DOOR_HEIGHT,
+	sill_height=GROUND_FLOOR_THICKNESS,
+	opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True)
 
@@ -391,7 +405,7 @@ wall_kitchen = ground.wall(
 wall_kitchen.add_door(
 	at=KITCHEN_WIDTH-2.125,
 	opening_width=1.0, width=0.9,
-	height=0.25+2.125,
+	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_LEFT",
@@ -400,12 +414,12 @@ wall_kitchen.add_door(
 
 # Pokoj Risanek
 wall_2.add_door(
-	at=HOUSE_DEPTH-BWT-3.5,
+	at=HOUSE_DEPTH-BWT-3.25,
 	opening_width=1.0, width=0.9,
-	height=0.25+2.125,
+	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
-	operation="SINGLE_SWING_LEFT",
+	operation="SINGLE_SWING_RIGHT",
 #	reverse_swing=True,
 )
 
@@ -413,8 +427,8 @@ wall_2.add_door(
 wall_3.add_opening(
 	at=oblouk_at,
 	width=2,
-    height=0.25+2.125,
-#    sill_height=GROUND_FLOOR_THICKNESS,
+    height=ground_floor_height-0.5,
+    sill_height=GROUND_FLOOR_THICKNESS,
 	name="Oblouk"
 )
 
@@ -422,7 +436,7 @@ wall_3.add_opening(
 wall_3.add_door(
     at=BWT+0.625,
     opening_width=1.0, width=0.9,
-    height=0.25+2.125,
+    height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	reverse_swing=True,
@@ -484,7 +498,7 @@ stairs_landing2 = ground.stair_landing(
 
 # Chimney
 CHIMNEY_DIST=0.47
-CHIMNEY_Y_START = HALF_DEPTH - 0.8 - 0.07 - 0.05 - 0.4
+CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - 0.08 - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
@@ -772,8 +786,8 @@ ceiling2 = upper.miako_slab(
 )
 ceiling2_b =  upper.miako_slab(
     "Ceiling 2 b",
-    start=(wall3_x-BWT-0.5, BWT-0.15),
-    end=(wall3_x-BWT-0.5, BWT+CHODBA_DEPTH),
+    start=(wall3_x-BWT+0.14, BWT-0.15),
+    end=(wall3_x-BWT+0.14, BWT+CHODBA_DEPTH),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
@@ -784,7 +798,10 @@ ceiling2_b =  upper.miako_slab(
 		"beam",
 		"wide",
 		"beam",
-		"beam"
+		"beam",
+		"narrow",
+		"beam",
+		"beam",
 		],
 )
 
@@ -875,9 +892,9 @@ zachod_nahore = upper.floor_layer(
 		color="#ffff80",
 	)
 
-STREET_ROOF_JOINT_Y = HALF_DEPTH-0.8-0.07
-GARDEN_ROOF_JOINT_Y = HALF_DEPTH+0.8+0.07
-ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.24
+STREET_ROOF_JOINT_Y = HALF_DEPTH-VAZNICE_DIST-0.08
+GARDEN_ROOF_JOINT_Y = HALF_DEPTH+VAZNICE_DIST+0.08
+ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.28
 STREET_ROOF_PLANE_POINTS = (
 	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -919,9 +936,9 @@ wall_cuts_1_4 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, HALF_DEPTH-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(0, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(5, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH-VAZNICE_DIST-0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(5, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
@@ -929,9 +946,9 @@ wall_cuts_2_3 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*DORMER_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, HALF_DEPTH-0.8-0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(0, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(5, HALF_DEPTH+0.8+0.07, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH-VAZNICE_DIST-0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(5, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
 	),
 ]
 
@@ -998,10 +1015,11 @@ wall_pokoj2 = upper.wall(
 	start=(wall2_x, BWT+CHODBA_DEPTH+GALERY_DEPTH),
 	end=(wall3_x-BWT, BWT+CHODBA_DEPTH+GALERY_DEPTH),
 	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
+UPPER_DOOR_HEIGHT = 2.25
 wall_pokoj2.add_door(
 	at=KITCHEN_WIDTH-1.25,
 	opening_width=1, width=0.9,
-	height=2.25,
+	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT")
@@ -1012,7 +1030,7 @@ wall_zachod_nahore = upper.wall(
 wall_zachod_nahore.add_door(
 	at=0.8,
 	opening_width=0.8, width=0.7,
-	height=2.25,
+	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT",
@@ -1051,17 +1069,17 @@ upper.asset(
 
 beam1 = upper.beam(
     "Beam",
-    start=(-HOUSE_EXT, HALF_DEPTH-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
-    end=(HOUSE_WIDTH, HALF_DEPTH-0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
-    size=(0.14, 0.24),
+    start=(-HOUSE_EXT, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
+    end=(HOUSE_WIDTH, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
+    size=(0.16, 0.28),
     material="Wood",
     kind="BEAM",
 )
 beam2 = upper.beam(
     "Beam",
-    start=(-HOUSE_EXT, HALF_DEPTH+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
-    end=(HOUSE_WIDTH, HALF_DEPTH+0.8, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.12),
-    size=(0.14, 0.24),
+    start=(-HOUSE_EXT, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
+    end=(HOUSE_WIDTH, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
+    size=(0.16, 0.28),
     material="Wood",
     kind="BEAM",
 )
@@ -1127,26 +1145,26 @@ wall_dormer.add_window(
 wall_2.add_door(
 	at=wall_zachod_nahore_y,
 	opening_width=1, width=0.9,
-	height=2.25,
+	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik nahore
 wall_0.add_window(
-	at=1,
+	at=0.75,
 	width=1.5,
-	height=2.25,
+	height=2.375,
 	sill_height=1, partition="SINGLE_PANEL",)
-wall_0x.add_window(
-	at=BWT,
-	width=HOUSE_EXT-BWT,
-	height=2.25,
-	sill_height=1, partition="SINGLE_PANEL",)
+#wall_0x.add_window(
+#	at=BWT,
+#	width=HOUSE_EXT-BWT,
+#	height=2.25,
+#	sill_height=1, partition="SINGLE_PANEL",)
 # Okno k sousedum nahore
 wall_4.add_window(
 	at=HALF_DEPTH-0.75,
 	width=1.5,
-	height=2.25,
+	height=2.375,
 	sill_height=NADEZDIVKA, partition="SINGLE_PANEL",)
 
 # Roof
@@ -1821,7 +1839,7 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(BWT, 7.5), end=(wall2_x-BWT, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(wall2_x, 7.5), end=(wall3_x-BWT, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(wall3_x, 7.5), end=(HOUSE_WIDTH-BWT, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(0, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
+	drawing1.add_dimension(start=(-HOUSE_EXT, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
 
 	drawing1.add_entrance_arrow(

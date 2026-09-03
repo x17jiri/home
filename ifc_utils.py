@@ -515,7 +515,7 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
 
     reinforcement_sources: dict[
         str,
-        tuple[int, re.Match[str], dict[str, str]],
+        tuple[re.Match[str], dict[str, str]],
     ] = {}
     for match in re.finditer(r'<g\b(?P<attrs>[^>\n]*)>', svg):
         attributes = dict(
@@ -524,8 +524,11 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
         classes = set(attributes.get("class", "").split())
         if "material-MIAKOreinforcement" not in classes:
             continue
-        view_class = "cut" if "cut" in classes else "projection"
-        if view_class not in classes:
+        # Projected reinforcement must retain the SVG renderer's normal
+        # depth order so sectioned concrete in front of it can mask it.  Only
+        # section-cut reinforcement needs to be redrawn above its own filled
+        # concrete cover.
+        if "cut" not in classes:
             continue
         source_key = (
             attributes.get("ifc:guid")
@@ -533,18 +536,12 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
             or attributes.get("id")
             or str(match.start())
         )
-        priority = 2 if view_class == "cut" else 1
-        existing = reinforcement_sources.get(source_key)
-        if existing is None or priority > existing[0]:
-            reinforcement_sources[source_key] = (
-                priority,
-                match,
-                attributes,
-            )
+        if source_key not in reinforcement_sources:
+            reinforcement_sources[source_key] = (match, attributes)
 
     reinforcement_ids = []
     id_insertions = []
-    for index, (_, match, attributes) in enumerate(
+    for index, (match, attributes) in enumerate(
         reinforcement_sources.values(),
         start=1,
     ):
@@ -554,9 +551,8 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
             id_insertions.append((match.end() - 1, f' id="{element_id}"'))
         reinforcement_ids.append(element_id)
 
-    # A later cut group may replace an earlier projection in the dictionary
-    # without changing that key's insertion order.  Sort by the actual SVG
-    # offsets so every insertion remains valid as the string grows.
+    # Sort by the actual SVG offsets so every insertion remains valid as the
+    # string grows.
     for offset, identifier in sorted(id_insertions, reverse=True):
         svg = f"{svg[:offset]}{identifier}{svg[offset:]}"
 
@@ -9000,27 +8996,48 @@ class Storey:
 
         # Create the cover as one continuous comb-shaped section.  Its lower
         # face is at block height over every ceramic bay, but drops to the top
-        # of each 60 mm beam body through the 100 mm concrete stem.  A single
-        # profile avoids an artificial horizontal joint at block height.
-        cover_bottom_points: list[tuple[float, float]] = [
-            (0.0, block_height)
-        ]
+        # of each 60 mm beam body through the concrete stem.  Consecutive
+        # beams share one stem, and stems reach the slab boundary at exposed
+        # first/last beams; the 35 mm inset exists only beside a block bearing.
+        # A single profile avoids an artificial horizontal joint at block
+        # height.
+        cover_bottom_points: list[tuple[float, float]] = [(0.0, block_height)]
         cover_offset = 0.0
-        for item in structure_tuple:
-            item_width = _MIAKO_WIDTHS[item]
-            if item == "beam":
-                stem_start = cover_offset + beam_bearing
-                stem_end = cover_offset + item_width - beam_bearing
-                cover_bottom_points.extend(
-                    (
-                        (layout_sign * stem_start, block_height),
-                        (layout_sign * stem_start, beam_height),
-                        (layout_sign * stem_end, beam_height),
-                        (layout_sign * stem_end, block_height),
-                    )
-                )
-            cover_offset += item_width
-        cover_bottom_points.append((signed_width, block_height))
+        item_index = 0
+        while item_index < len(structure_tuple):
+            item = structure_tuple[item_index]
+            if item != "beam":
+                cover_offset += _MIAKO_WIDTHS[item]
+                item_index += 1
+                continue
+
+            run_start = cover_offset
+            run_starts_at_slab_edge = item_index == 0
+            while (
+                item_index < len(structure_tuple)
+                and structure_tuple[item_index] == "beam"
+            ):
+                cover_offset += _MIAKO_WIDTHS["beam"]
+                item_index += 1
+            run_end = cover_offset
+            run_ends_at_slab_edge = item_index == len(structure_tuple)
+            stem_start = run_start + (
+                0.0 if run_starts_at_slab_edge else beam_bearing
+            )
+            stem_end = run_end - (
+                0.0 if run_ends_at_slab_edge else beam_bearing
+            )
+            for point in (
+                (layout_sign * stem_start, block_height),
+                (layout_sign * stem_start, beam_height),
+                (layout_sign * stem_end, beam_height),
+                (layout_sign * stem_end, block_height),
+            ):
+                if point != cover_bottom_points[-1]:
+                    cover_bottom_points.append(point)
+        final_bottom_point = (signed_width, block_height)
+        if final_bottom_point != cover_bottom_points[-1]:
+            cover_bottom_points.append(final_bottom_point)
         cover_profile_points = [
             *cover_bottom_points,
             (signed_width, block_height + topping),
