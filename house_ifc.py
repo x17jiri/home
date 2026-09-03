@@ -69,13 +69,14 @@ from math import acos, degrees, isclose
 import sys, math
 from ifc_utils import *
 
-RAFTER_Z_OFFSET = -0.05
-RAFTER_SIZE = (0.06, 0.20)
+RAFTER_Z_OFFSET = -0.04
+RAFTER_THICKNESS = 0.1
+RAFTER_SIZE = (RAFTER_THICKNESS, 0.20)
 VAPOUR_BARRIER_THICKNESS = 0.001
-THERMAL_INSULATION_40_THICKNESS = 0.04
+THERMAL_INSULATION_UNDER_RAFTERS = 0
 INSTALLATION_SPACE_THICKNESS = 0.05
 GYPSUM_PLASTERBOARD_THICKNESS = 0.03
-WOOD_FIBERBOARD_THICKNESS = 0.06
+WOOD_FIBERBOARD_THICKNESS = 0.1
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
@@ -85,11 +86,11 @@ GROUND_FLOOR_THICKNESS = 0.20
 UPPER_FLOOR_THICKNESS = 0.11
 VAZNICE_DIST = 0.8 # Vzdalenost vaznice od hrebene
 
-THERMAL_INSULATION_40_BOTTOM = (
-	RAFTER_Z_OFFSET - THERMAL_INSULATION_40_THICKNESS
+THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
+	RAFTER_Z_OFFSET - THERMAL_INSULATION_UNDER_RAFTERS
 )
 VAPOUR_BARRIER_BOTTOM = (
-	THERMAL_INSULATION_40_BOTTOM - VAPOUR_BARRIER_THICKNESS
+	THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM - VAPOUR_BARRIER_THICKNESS
 )
 GYPSUM_PLASTERBOARD_BOTTOM = (
 	VAPOUR_BARRIER_BOTTOM
@@ -103,9 +104,10 @@ ground_floor_height = 2.875
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.875
+UNDER_HOLE = 2.80
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
-COLLAR_TIE_SIZE = (0.06, 0.16)
+COLLAR_TIE_THICKNESS = 0.06
+COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.16)
 COLLAR_TIE_EXTENSION = 1.5
 COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # The collar-tie tops meet the underside of the two central purlins and the
@@ -1010,11 +1012,11 @@ wall_4.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 wall_pokoj1 = upper.wall(
 	start=(-HOUSE_EXT+BWT, ceiling1_a.start[1]),
 	end=(wall2_x-BWT, ceiling1_a.start[1]),
-	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
+	wall_type=dry_wall, height=2.8)
 wall_pokoj2 = upper.wall(
 	start=(wall2_x, BWT+CHODBA_DEPTH+GALERY_DEPTH),
 	end=(wall3_x-BWT, BWT+CHODBA_DEPTH+GALERY_DEPTH),
-	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
+	wall_type=dry_wall, height=2.8)
 UPPER_DOOR_HEIGHT = 2.25
 wall_pokoj2.add_door(
 	at=KITCHEN_WIDTH-1.25,
@@ -1026,7 +1028,7 @@ wall_pokoj2.add_door(
 wall_zachod_nahore = upper.wall(
 	start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
 	end=(wall3_x, wall_zachod_nahore_y),
-	wall_type=dry_wall, height=UNDER_HOLE + 0.15)
+	wall_type=dry_wall, height=2.8)
 wall_zachod_nahore.add_door(
 	at=0.8,
 	opening_width=0.8, width=0.7,
@@ -1240,9 +1242,13 @@ print(f"Dormer roof angle: {roof_angle_degrees(dormer_roof):.2f}°")
 # Bonsai creates Outliner collections from spatial containers, but flattens
 # ordinary IFC aggregation.  These intentionally artificial storeys provide
 # one portable visibility collection for each roof layer in shared IFC files.
-roof_layer_storeys = {
-	"Thermal insulation 40 mm": house.storey(
-		"Roof - -1: 40 mm thermal insulation", elevation=upper.elevation),
+roof_layer_storeys = {}
+if THERMAL_INSULATION_UNDER_RAFTERS > 0:
+	roof_layer_storeys["Thermal insulation under rafters"] = house.storey(
+		"Roof - -1: Thermal insulation under rafters",
+		elevation=upper.elevation,
+	)
+roof_layer_storeys.update({
 	"Vapour barrier": house.storey(
 		"Roof - -2: Vapour barrier", elevation=upper.elevation),
 	"Gypsum plasterboard": house.storey(
@@ -1256,7 +1262,7 @@ roof_layer_storeys = {
 	"Counter-battens": house.storey("Roof - +3: Counter-battens", elevation=upper.elevation),
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
-}
+})
 for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.ObjectType = "ROOF_LAYER"
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
@@ -1266,9 +1272,9 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 # readable storey-relative bottom/top heights instead of adding more roof
 # planes or special geometry types.
 SLOPED_INNER_LAYER_LAYOUT = {
-	"Thermal insulation 40 mm": (
-		THERMAL_INSULATION_40_BOTTOM,
-		THERMAL_INSULATION_40_THICKNESS,
+	"Thermal insulation under rafters": (
+		THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM,
+		THERMAL_INSULATION_UNDER_RAFTERS,
 	),
 	"Vapour barrier": (VAPOUR_BARRIER_BOTTOM, VAPOUR_BARRIER_THICKNESS),
 	"Gypsum plasterboard": (
@@ -1278,15 +1284,15 @@ SLOPED_INNER_LAYER_LAYOUT = {
 }
 FLAT_CEILING_LAYER_HEIGHTS = {
 	# Values are (bottom, top), measured from the upper-storey floor.
-	"Thermal insulation 40 mm": (
-		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_40_THICKNESS,
+	"Thermal insulation under rafters": (
+		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_UNDER_RAFTERS,
 		COLLAR_TIE_BOTTOM_HEIGHT,
 	),
 	"Vapour barrier": (
 		COLLAR_TIE_BOTTOM_HEIGHT
-		- THERMAL_INSULATION_40_THICKNESS
+		- THERMAL_INSULATION_UNDER_RAFTERS
 		- VAPOUR_BARRIER_THICKNESS,
-		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_40_THICKNESS,
+		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_UNDER_RAFTERS,
 	),
 	# The first 50 mm below the vapour barrier is an empty installation
 	# space.  The horizontal plasterboard retains its lower ceiling height.
@@ -1308,44 +1314,72 @@ COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 
-def d_raft(x):
-	return ("dormer", x)
-
+# Each number is the absolute X coordinate of a main rafter centre.  A tuple
+# also creates a touching dormer rafter on the requested side.  "before" and
+# "after" shorten the main rafter on the garden side; "+before" and "+after"
+# leave it full-length.
 rafters = [
-	-0.09, 0.43,
-	0.66, 0.66, 0.66, 0.66,
-
-	d_raft(0.06), 0.60, ###################################
-	d_raft(0.06), 0.60,
-	d_raft(0.06), 0.60,
-	d_raft(0.06), 0.60,
-	d_raft(0.06), d_raft(0.55),
-	0.06, d_raft(0.60),
-	0.06, d_raft(0.60),
-	0.06, d_raft(0.60), ###################################
-
-	0.06, 0.80, ################################### komin
-	0.66, 0.66, 0.66,
-	0.54
+	-1.11,
+	-0.10,
+	0.89,
+	1.72,
+	2.41,
+	(3.1, "+before"),
+	(3.87, "before"),
+	(4.59, "after"),
+	(5.57, "after"),
+	(6.55, "after"),
+	(7.53, "after"),
+	(8.52, "+after"),
+	9.50,
+	10.48,
+	11.225,
 	]
-rafter_positions = []
-rafter_keywords = []
-rafter_x = 0
+rafter_layout = []
 for rafter in rafters:
-	if isinstance(rafter, tuple):
-		keyword, distance = rafter
-	else:
-		keyword, distance = None, rafter
-	rafter_x += distance
-	rafter_positions.append(rafter_x)
-	rafter_keywords.append(keyword)
+	if not isinstance(rafter, tuple):
+		rafter_layout.append((rafter, "main", False))
+		continue
 
-dormer_rafter_indices = [
-	i for i, keyword in enumerate(rafter_keywords)
-	if keyword == "dormer"
+	rafter_x, dormer_side = rafter
+	if dormer_side not in {"before", "after", "+before", "+after"}:
+		raise ValueError(
+			"paired rafter side must be 'before', 'after', "
+			"'+before', or '+after'"
+		)
+	shorten_garden_side = not dormer_side.startswith("+")
+	dormer_side = dormer_side.removeprefix("+")
+	dormer_offset = (
+		-RAFTER_THICKNESS if dormer_side == "before" else RAFTER_THICKNESS
+	)
+	rafter_layout.extend(
+		(
+			(rafter_x, "main", shorten_garden_side),
+			(rafter_x + dormer_offset, "dormer", False),
+		)
+	)
+
+rafter_layout.sort(key=lambda entry: entry[0])
+main_rafter_positions = [
+	x for x, kind, _ in rafter_layout if kind == "main"
 ]
-dormer_x_min = min(rafter_positions[i] for i in dormer_rafter_indices)
-dormer_x_max = max(rafter_positions[i] for i in dormer_rafter_indices)
+dormer_rafter_positions = [
+	x for x, kind, _ in rafter_layout if kind == "dormer"
+]
+dormer_x_min = min(dormer_rafter_positions)
+dormer_x_max = max(dormer_rafter_positions)
+
+def print_rafter_center_distances(label, positions):
+	print(f"{label} rafter center distances:")
+	for previous_x, current_x in zip(positions, positions[1:]):
+		print(
+			f"  {current_x - previous_x:.3f} m "
+			f"({previous_x:.3f} -> {current_x:.3f})"
+		)
+
+print_rafter_center_distances("Main", main_rafter_positions)
+print_rafter_center_distances("Dormer", dormer_rafter_positions)
+
 roof_x_ranges = (
 	(-HOUSE_EXT, 0),
 	(0, wall2_x-BWT),
@@ -1389,19 +1423,22 @@ def add_continuous_roof_layers(
 		)
 
 	if include_inner:
-		insulation_40_bottom, insulation_40_thickness = inner_layout[
-			"Thermal insulation 40 mm"
+		insulation_bottom, insulation_thickness = inner_layout[
+			"Thermal insulation under rafters"
 		]
-		insulation_40 = plane.layer(
-			f"{name} 40 mm thermal insulation",
-			outline=inner_outline("Thermal insulation 40 mm"),
-			z_offset=insulation_40_bottom,
-			thickness=insulation_40_thickness,
-			material="Thermal insulation",
-			color="#E8D36D",
-			extra_cuts=inner_cuts,
-		)
-		roof_layer_storeys["Thermal insulation 40 mm"].add(insulation_40)
+		if insulation_thickness > 0:
+			insulation = plane.layer(
+				f"{name} thermal insulation under rafters",
+				outline=inner_outline("Thermal insulation under rafters"),
+				z_offset=insulation_bottom,
+				thickness=insulation_thickness,
+				material="Thermal insulation",
+				color="#E8D36D",
+				extra_cuts=inner_cuts,
+			)
+			roof_layer_storeys["Thermal insulation under rafters"].add(
+				insulation
+			)
 		vapour_barrier_bottom, vapour_barrier_thickness = inner_layout[
 			"Vapour barrier"
 		]
@@ -1543,6 +1580,53 @@ def sloped_inner_y_limits(plane, boundaries, eave_y):
 		)
 		for layer_name, (slope_y, _) in boundaries.items()
 	}
+
+
+def roof_layer_height_at_y(plane, layer_offset, global_y, datum):
+	"""Return a roof-layer face height at global Y, relative to a datum."""
+	local_y = (
+		global_y
+		- plane.origin[1]
+		- layer_offset * plane.z_axis[1]
+	) / plane.y_axis[1]
+	return plane.to_world((0, local_y, layer_offset))[2] - datum
+
+
+normal_plasterboard_wall_height = roof_layer_height_at_y(
+	garden_roof,
+	GYPSUM_PLASTERBOARD_BOTTOM,
+	7.75,
+	upper.elevation,
+)
+dormer_plasterboard_wall_height = roof_layer_height_at_y(
+	dormer_roof,
+	GYPSUM_PLASTERBOARD_BOTTOM,
+	7.75,
+	upper.elevation,
+)
+print("Plasterboard inner-face height at wall, relative to upper floor:")
+print(f"  Normal roof: {normal_plasterboard_wall_height:.3f} m")
+print(f"  Dormer roof: {dormer_plasterboard_wall_height:.3f} m")
+
+roof_outer_face_offset = ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS
+total_house_height = max(
+	roof_layer_height_at_y(
+		plane,
+		roof_outer_face_offset,
+		HALF_DEPTH,
+		ground.elevation,
+	)
+	for plane in (
+		street_roof,
+		garden_roof,
+		extension_garden_roof,
+		dormer_roof,
+	)
+)
+print(
+	f"Total house height to top of roof, excluding chimney: "
+	f"{total_house_height:.3f} m"
+)
 
 
 def flat_inner_y_limits(left_boundaries, right_boundaries):
@@ -1700,9 +1784,8 @@ add_tile_battens(
 	dormer_y_max,
 )
 
-for i, rafter_x in enumerate(rafter_positions):
-	print("rafter_x = ", rafter_x)
-	is_dormer_rafter = i in dormer_rafter_indices
+for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
+	is_dormer_rafter = rafter_kind == "dormer"
 	if not is_dormer_rafter:
 		for side, x_offset in (
 			("left", -COLLAR_TIE_X_OFFSET),
@@ -1771,7 +1854,6 @@ for i, rafter_x in enumerate(rafter_positions):
 		)
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
 	else:
-		under_dormer = dormer_x_min < rafter_x < dormer_x_max
 		garden_side_plane = (
 			extension_garden_roof if rafter_x < 0 else garden_roof
 		)
@@ -1782,9 +1864,9 @@ for i, rafter_x in enumerate(rafter_positions):
 			counter_batten_y_max = extension_counter_batten_y_max + 0.25
 		else:
 			rafter_y_min = -2
-			rafter_y_max = 0.7 if under_dormer else 5
+			rafter_y_max = 0.7 if shorten_garden_side else 5
 			counter_batten_y_min = -2
-			counter_batten_y_max = 0 if under_dormer else 5
+			counter_batten_y_max = 0 if shorten_garden_side else 5
 		rafter = garden_side_plane.beam(
 			"Rafter 1",
 			start=(rafter_x, rafter_y_min),
