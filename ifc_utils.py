@@ -5479,8 +5479,10 @@ class Drawing:
         """Add a conventional plan symbol for ``stair`` to this drawing only.
 
         The annotation contains the stair outline, tread lines, an upward
-        walking-direction arrow.  It does not alter the stair's 3D
-        representation.
+        walking-direction arrow.  If the stair belongs to a different storey,
+        its flight body is explicitly included so its projected structural
+        outline remains visible behind the symbol.  This does not alter the
+        stair's 3D representation or spatial storey.
         """
         self._require_plan_view("add_stair_annotation")
         if not isinstance(stair, Stair):
@@ -5489,6 +5491,10 @@ class Drawing:
             raise ValueError("stair must belong to this house")
         if stair.id() in self._annotated_stairs:
             raise ValueError("stair already has an annotation in this drawing")
+
+        stair_storey = ifcopenshell.util.element.get_container(stair)
+        if not self._includes_storey_element(stair_storey):
+            self._include_model_element(stair.flight)
 
         annotation_name = (
             _name(name, "name")
@@ -5582,7 +5588,8 @@ class Drawing:
 
         The annotation copies the rectangular footprint created by
         :meth:`Storey.stair_landing` and belongs only to this drawing.  It
-        does not move the landing from its original spatial storey.
+        also includes the landing body when it belongs to another storey,
+        without moving it from its original spatial storey.
         """
         self._require_plan_view("add_stair_landing_annotation")
         if (
@@ -5599,6 +5606,10 @@ class Drawing:
             raise ValueError(
                 "stair landing already has an annotation in this drawing"
             )
+
+        landing_storey = ifcopenshell.util.element.get_container(landing)
+        if not self._includes_storey_element(landing_storey):
+            self._include_model_element(landing)
 
         body = ifcopenshell.util.representation.get_representation(
             landing,
@@ -6558,12 +6569,17 @@ class Stair(ifcopenshell.entity_instance):
         width: float,
         height: float,
         start_height: float,
+        slab_height: float,
         risers: int,
         treads: int,
         riser_height: float,
         tread_length: float,
-        underside: Literal["solid", "sloped"],
+        construction: Literal["monolithic", "timber"],
+        underside: Literal["solid", "sloped", "open"],
         waist_thickness: float | None,
+        tread_thickness: float | None,
+        stringer_thickness: float | None,
+        stringer_height: float | None,
         placement: np.ndarray,
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
@@ -6575,13 +6591,18 @@ class Stair(ifcopenshell.entity_instance):
         object.__setattr__(self, "width", width)
         object.__setattr__(self, "height", height)
         object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "slab_height", slab_height)
         object.__setattr__(self, "end_height", start_height + height)
         object.__setattr__(self, "risers", risers)
         object.__setattr__(self, "treads", treads)
         object.__setattr__(self, "riser_height", riser_height)
         object.__setattr__(self, "tread_length", tread_length)
+        object.__setattr__(self, "construction", construction)
         object.__setattr__(self, "underside", underside)
         object.__setattr__(self, "waist_thickness", waist_thickness)
+        object.__setattr__(self, "tread_thickness", tread_thickness)
+        object.__setattr__(self, "stringer_thickness", stringer_thickness)
+        object.__setattr__(self, "stringer_height", stringer_height)
         object.__setattr__(self, "placement", placement)
 
     @property
@@ -9366,8 +9387,13 @@ class Storey:
         height: Number,
         risers: int,
         start_height: Number = 0,
+        slab_height: Number | None = None,
+        construction: Literal["monolithic", "timber"] = "monolithic",
         underside: Literal["solid", "sloped"] = "solid",
         waist_thickness: Number = 0.15,
+        tread_thickness: Number = 0.04,
+        stringer_thickness: Number = 0.05,
+        stringer_height: Number = 0.30,
         name: str | None = None,
         color: str | None = None,
         transparency: Number = 0,
@@ -9376,31 +9402,54 @@ class Storey:
 
         The points define the centre line of the horizontal run, with ``start``
         at the bottom and ``end`` at the upper landing edge.  ``start_height``
-        is measured above this storey's elevation and defaults to zero.  The
-        stair is centred on its plan line.  Its tread count is one less than
-        ``risers``; riser height and tread length are calculated from the total
-        rise ``height`` and horizontal run.  The returned stair exposes its
-        calculated ``end_height`` for chaining another flight.  ``color`` and
-        ``transparency`` affect only its 3D flight body.  Set ``underside`` to
-        ``"sloped"`` to leave the space beneath the flight open;
-        ``waist_thickness`` is the perpendicular structural thickness between
-        the stair pitch line and its planar underside.
+        is measured above this storey's elevation and defaults to zero.
+        ``slab_height`` sets the lower clipping elevation of the timber side
+        stringers, also relative to the storey; it defaults to ``start_height``
+        and may be lowered so the stringers overlap a landing beneath the
+        flight.  The stair is centred on its plan line.  Its tread count is one
+        less than ``risers``; riser height and tread length are calculated from
+        the total rise ``height`` and horizontal run.  The returned stair
+        exposes its calculated ``end_height`` for chaining another flight.
+        ``color`` and ``transparency`` affect only its 3D flight body.  The
+        default ``"monolithic"`` construction creates the original stepped
+        mass.  Set
+        ``construction`` to ``"timber"`` for individual open-riser treads
+        spanning between two inclined side stringers.  ``tread_thickness``,
+        ``stringer_thickness``, and ``stringer_height`` configure that timber
+        assembly.  For a monolithic stair, set ``underside`` to ``"sloped"``
+        to leave the space beneath the flight open; ``waist_thickness`` is the
+        perpendicular structural thickness between the stair pitch line and
+        its planar underside.
         """
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
         width = _number(width, "width")
         height = _number(height, "height")
         start_height = _number(start_height, "start_height")
+        slab_height = (
+            start_height
+            if slab_height is None
+            else _number(slab_height, "slab_height")
+        )
+        if slab_height > start_height:
+            raise ValueError("slab_height must not be above start_height")
+        if not isinstance(construction, str):
+            raise TypeError("construction must be 'monolithic' or 'timber'")
+        if construction not in {"monolithic", "timber"}:
+            raise ValueError("construction must be 'monolithic' or 'timber'")
         if not isinstance(underside, str):
             raise TypeError("underside must be 'solid' or 'sloped'")
         if underside not in {"solid", "sloped"}:
             raise ValueError("underside must be 'solid' or 'sloped'")
         waist_thickness = _number(waist_thickness, "waist_thickness")
+        tread_thickness = _number(tread_thickness, "tread_thickness")
+        stringer_thickness = _number(stringer_thickness, "stringer_thickness")
+        stringer_height = _number(stringer_height, "stringer_height")
         if width <= 0:
             raise ValueError("width must be greater than zero")
         if height <= 0:
             raise ValueError("height must be greater than zero")
-        if waist_thickness <= 0:
+        if construction == "monolithic" and waist_thickness <= 0:
             raise ValueError("waist_thickness must be greater than zero")
         if isinstance(risers, bool) or not isinstance(risers, int):
             raise TypeError("risers must be an integer")
@@ -9418,8 +9467,25 @@ class Storey:
         stepped_rise = treads * riser_height
         pitch_cosine = length / hypot(length, stepped_rise)
         underside_vertical_offset = waist_thickness / pitch_cosine
-        if underside == "sloped" and underside_vertical_offset >= stepped_rise:
+        if (
+            construction == "monolithic"
+            and underside == "sloped"
+            and underside_vertical_offset >= stepped_rise
+        ):
             raise ValueError("waist_thickness is too large for the stair flight")
+        if construction == "timber":
+            if tread_thickness <= 0 or tread_thickness >= riser_height:
+                raise ValueError(
+                    "tread_thickness must be greater than zero and smaller "
+                    "than the riser height"
+                )
+            if stringer_thickness <= 0 or 2 * stringer_thickness >= width:
+                raise ValueError(
+                    "stringer_thickness must leave positive space between "
+                    "the two stringers"
+                )
+            if stringer_height <= 0:
+                raise ValueError("stringer_height must be greater than zero")
         surface_style = self.house._surface_style(
             "stair",
             color=color,
@@ -9469,13 +9535,26 @@ class Storey:
             width=width,
             height=height,
             start_height=start_height,
+            slab_height=slab_height,
             risers=risers,
             treads=treads,
             riser_height=riser_height,
             tread_length=tread_length,
-            underside=underside,
+            construction=construction,
+            underside=(underside if construction == "monolithic" else "open"),
             waist_thickness=(
-                waist_thickness if underside == "sloped" else None
+                waist_thickness
+                if construction == "monolithic" and underside == "sloped"
+                else None
+            ),
+            tread_thickness=(
+                tread_thickness if construction == "timber" else None
+            ),
+            stringer_thickness=(
+                stringer_thickness if construction == "timber" else None
+            ),
+            stringer_height=(
+                stringer_height if construction == "timber" else None
             ),
             placement=placement,
         )
@@ -9502,80 +9581,191 @@ class Storey:
             is_si=True,
         )
 
-        # Build one closed stepped solid.  A sloped underside is parallel to
-        # the stair pitch line and clipped at the flight's starting elevation,
-        # leaving a short solid bearing at the bottom.  The final riser is a
-        # separate face: the upper storey floor acts as the landing instead of
-        # another tread.
-        profile: list[tuple[float, float]] = [(0.0, 0.0)]
-        if underside == "sloped":
-            underside_end_z = stepped_rise - underside_vertical_offset
-            underside_start_x = (
-                underside_vertical_offset * length / stepped_rise
-            )
-            profile.extend(
+        half_width = width / 2
+        if construction == "monolithic":
+            # Build one closed stepped solid.  A sloped underside is parallel
+            # to the stair pitch line and clipped at the flight's starting
+            # elevation, leaving a short solid bearing at the bottom.  The
+            # final riser is separate because the upper floor is the landing.
+            profile: list[tuple[float, float]] = [(0.0, 0.0)]
+            if underside == "sloped":
+                underside_end_z = stepped_rise - underside_vertical_offset
+                underside_start_x = (
+                    underside_vertical_offset * length / stepped_rise
+                )
+                profile.extend(
+                    [
+                        (underside_start_x, 0.0),
+                        (length, underside_end_z),
+                    ]
+                )
+            else:
+                profile.append((length, 0.0))
+            profile.append((length, stepped_rise))
+            for tread in range(treads, 0, -1):
+                x = (tread - 1) * tread_length
+                profile.append((x, tread * riser_height))
+                if tread > 1:
+                    profile.append((x, (tread - 1) * riser_height))
+
+            vertices = [
+                (x, -half_width, z)
+                for x, z in profile
+            ] + [
+                (x, half_width, z)
+                for x, z in profile
+            ]
+            profile_size = len(profile)
+            faces: list[tuple[int, ...]] = [
+                tuple(reversed(range(profile_size))),
+                tuple(range(profile_size, 2 * profile_size)),
+            ]
+            for index in range(profile_size):
+                next_index = (index + 1) % profile_size
+                faces.append(
+                    (
+                        index,
+                        next_index,
+                        next_index + profile_size,
+                        index + profile_size,
+                    )
+                )
+            final_riser_depth = min(tread_length * 0.025, 0.005)
+            final_riser_x = length - final_riser_depth
+            final_riser_z = treads * riser_height
+            final_riser_vertices = [
+                (final_riser_x, -half_width, final_riser_z),
+                (length, -half_width, final_riser_z),
+                (length, half_width, final_riser_z),
+                (final_riser_x, half_width, final_riser_z),
+                (final_riser_x, -half_width, height),
+                (length, -half_width, height),
+                (length, half_width, height),
+                (final_riser_x, half_width, height),
+            ]
+            final_riser_start = len(vertices)
+            vertices.extend(final_riser_vertices)
+            faces.extend(
                 [
-                    (underside_start_x, 0.0),
-                    (length, underside_end_z),
+                    tuple(final_riser_start + index for index in (1, 2, 3, 0)),
+                    tuple(final_riser_start + index for index in (7, 6, 5, 4)),
+                    tuple(final_riser_start + index for index in (4, 5, 1, 0)),
+                    tuple(final_riser_start + index for index in (5, 6, 2, 1)),
+                    tuple(final_riser_start + index for index in (6, 7, 3, 2)),
+                    tuple(final_riser_start + index for index in (7, 4, 0, 3)),
                 ]
             )
         else:
-            profile.append((length, 0.0))
-        profile.append((length, stepped_rise))
-        for tread in range(treads, 0, -1):
-            x = (tread - 1) * tread_length
-            profile.append((x, tread * riser_height))
-            if tread > 1:
-                profile.append((x, (tread - 1) * riser_height))
+            # One mesh item may contain disconnected closed shells.  Use one
+            # shell for every tread and one for each inclined side stringer.
+            vertices = []
+            faces = []
 
-        half_width = width / 2
-        vertices = [
-            (x, -half_width, z)
-            for x, z in profile
-        ] + [
-            (x, half_width, z)
-            for x, z in profile
-        ]
-        profile_size = len(profile)
-        faces: list[tuple[int, ...]] = [
-            tuple(reversed(range(profile_size))),
-            tuple(range(profile_size, 2 * profile_size)),
-        ]
-        for index in range(profile_size):
-            next_index = (index + 1) % profile_size
-            faces.append(
-                (
-                    index,
-                    next_index,
-                    next_index + profile_size,
-                    index + profile_size,
+            def append_extruded_profile(
+                profile: list[tuple[float, float]],
+                y_min: float,
+                y_max: float,
+            ) -> None:
+                start_index = len(vertices)
+                profile_size = len(profile)
+                vertices.extend((x, y_min, z) for x, z in profile)
+                vertices.extend((x, y_max, z) for x, z in profile)
+                faces.append(
+                    tuple(
+                        start_index + index
+                        for index in reversed(range(profile_size))
+                    )
                 )
+                faces.append(
+                    tuple(
+                        start_index + profile_size + index
+                        for index in range(profile_size)
+                    )
+                )
+                for index in range(profile_size):
+                    next_index = (index + 1) % profile_size
+                    faces.append(
+                        (
+                            start_index + index,
+                            start_index + next_index,
+                            start_index + profile_size + next_index,
+                            start_index + profile_size + index,
+                        )
+                    )
+
+            tread_y_min = -half_width + stringer_thickness
+            tread_y_max = half_width - stringer_thickness
+            for tread in range(treads):
+                tread_x_min = tread * tread_length
+                tread_x_max = (tread + 1) * tread_length
+                tread_top = (tread + 1) * riser_height
+                append_extruded_profile(
+                    [
+                        (tread_x_min, tread_top - tread_thickness),
+                        (tread_x_max, tread_top - tread_thickness),
+                        (tread_x_max, tread_top),
+                        (tread_x_min, tread_top),
+                    ],
+                    tread_y_min,
+                    tread_y_max,
+                )
+
+            # The straight top edge passes through every tread's inner back
+            # corner and reaches the upper landing.  The nominal lower edge
+            # is parallel; its lower end is clipped or extended to
+            # slab_height so an upper flight overlaps the landing beneath it.
+            stringer_top_start = riser_height
+            stringer_top_end = height
+            stringer_bottom_start = stringer_top_start - stringer_height
+            stringer_bottom_end = stringer_top_end - stringer_height
+            slab_cut_z = slab_height - start_height
+            if slab_cut_z < stringer_bottom_start:
+                # Extend the lower end to the requested landing elevation.
+                # The underside remains one clean, straight edge and tapers
+                # back to the configured stringer height at the upper end.
+                stringer_profile = [
+                    (0.0, slab_cut_z),
+                    (length, stringer_bottom_end),
+                    (length, stringer_top_end),
+                    (0.0, stringer_top_start),
+                ]
+            elif stringer_bottom_end <= slab_cut_z:
+                stringer_profile = [
+                    (0.0, slab_cut_z),
+                    (length, slab_cut_z),
+                    (length, stringer_top_end),
+                    (0.0, stringer_top_start),
+                ]
+            elif stringer_bottom_start < slab_cut_z:
+                bottom_cut_x = (
+                    (slab_cut_z - stringer_bottom_start)
+                    * length
+                    / stepped_rise
+                )
+                stringer_profile = [
+                    (0.0, slab_cut_z),
+                    (bottom_cut_x, slab_cut_z),
+                    (length, stringer_bottom_end),
+                    (length, stringer_top_end),
+                    (0.0, stringer_top_start),
+                ]
+            else:
+                stringer_profile = [
+                    (0.0, stringer_bottom_start),
+                    (length, stringer_bottom_end),
+                    (length, stringer_top_end),
+                    (0.0, stringer_top_start),
+                ]
+            append_extruded_profile(
+                stringer_profile,
+                -half_width,
+                -half_width + stringer_thickness,
             )
-        final_riser_depth = min(tread_length * 0.025, 0.005)
-        final_riser_x = length - final_riser_depth
-        final_riser_z = treads * riser_height
-        final_riser_vertices = [
-            (final_riser_x, -half_width, final_riser_z),
-            (length, -half_width, final_riser_z),
-            (length, half_width, final_riser_z),
-            (final_riser_x, half_width, final_riser_z),
-            (final_riser_x, -half_width, height),
-            (length, -half_width, height),
-            (length, half_width, height),
-            (final_riser_x, half_width, height),
-        ]
-        final_riser_start = len(vertices)
-        vertices.extend(final_riser_vertices)
-        faces.extend(
-            [
-                tuple(final_riser_start + index for index in (1, 2, 3, 0)),
-                tuple(final_riser_start + index for index in (7, 6, 5, 4)),
-                tuple(final_riser_start + index for index in (4, 5, 1, 0)),
-                tuple(final_riser_start + index for index in (5, 6, 2, 1)),
-                tuple(final_riser_start + index for index in (6, 7, 3, 2)),
-                tuple(final_riser_start + index for index in (7, 4, 0, 3)),
-            ]
-        )
+            append_extruded_profile(
+                stringer_profile,
+                half_width - stringer_thickness,
+                half_width,
+            )
         body = ifcopenshell.api.geometry.add_mesh_representation(
             model,
             context=self.house._body_context,
@@ -9593,6 +9783,21 @@ class Storey:
                 shape_representation=body,
                 styles=[surface_style],
             )
+        if construction == "timber":
+            wood = self.house._materials.get("Wood")
+            if wood is None:
+                wood = ifcopenshell.api.material.add_material(
+                    model,
+                    name="Wood",
+                    category="wood",
+                )
+                self.house._materials["Wood"] = wood
+            ifcopenshell.api.material.assign_material(
+                model,
+                products=[flight],
+                type="IfcMaterial",
+                material=wood,
+            )
 
         pset = ifcopenshell.api.pset.add_pset(
             model,
@@ -9605,7 +9810,7 @@ class Storey:
             "RiserHeight": riser_height,
             "TreadLength": tread_length,
         }
-        if underside == "sloped":
+        if construction == "monolithic" and underside == "sloped":
             pset_properties["WaistThickness"] = waist_thickness
         ifcopenshell.api.pset.edit_pset(
             model,

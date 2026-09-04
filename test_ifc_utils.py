@@ -1254,6 +1254,12 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(flight.NumberOfTreads, 15)
         self.assertAlmostEqual(flight.RiserHeight, 2.75 / 16)
         self.assertAlmostEqual(flight.TreadLength, 3 / 15)
+        self.assertEqual(stair.construction, "monolithic")
+        self.assertEqual(stair.underside, "solid")
+        self.assertEqual(stair.slab_height, stair.start_height)
+        self.assertIsNone(stair.tread_thickness)
+        self.assertIsNone(stair.stringer_thickness)
+        self.assertIsNone(stair.stringer_height)
         common = ifcopenshell.util.element.get_pset(
             flight, "Pset_StairFlightCommon"
         )
@@ -1313,6 +1319,152 @@ class HouseTests(unittest.TestCase):
             reopened = ifcopenshell.open(output)
             self.assertEqual(len(reopened.by_type("IfcStair")), 1)
             self.assertEqual(len(reopened.by_type("IfcStairFlight")), 1)
+
+    def test_creates_open_timber_stair_between_side_stringers(self) -> None:
+        house = House("My house", colors={"stair": "#C8B090"})
+        ground = house.storey("Ground floor", elevation=0)
+        stair = ground.stair(
+            (0, 0),
+            (3, 0),
+            width=0.9,
+            height=2.75,
+            risers=16,
+            construction="timber",
+            tread_thickness=0.04,
+            stringer_thickness=0.05,
+            stringer_height=0.30,
+        )
+
+        self.assertEqual(stair.construction, "timber")
+        self.assertEqual(stair.underside, "open")
+        self.assertIsNone(stair.waist_thickness)
+        self.assertAlmostEqual(stair.tread_thickness, 0.04)
+        self.assertAlmostEqual(stair.stringer_thickness, 0.05)
+        self.assertAlmostEqual(stair.stringer_height, 0.30)
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(stair.flight).Name,
+            "Wood",
+        )
+
+        body = ifcopenshell.util.representation.get_representation(
+            stair.flight, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "Tessellation")
+        coordinates = body.Items[0].Coordinates.CoordList
+        y_coordinates = [coordinate[1] for coordinate in coordinates]
+        self.assertAlmostEqual(min(y_coordinates), -0.45)
+        self.assertAlmostEqual(max(y_coordinates), 0.45)
+        self.assertTrue(
+            any(abs(coordinate[1] + 0.40) < 1e-9 for coordinate in coordinates)
+        )
+        self.assertTrue(
+            any(abs(coordinate[1] - 0.40) < 1e-9 for coordinate in coordinates)
+        )
+
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), stair.flight
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 3)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_y(shape.geometry), 0.9)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(shape.geometry), 2.75
+        )
+
+        # The individual tread shells leave open risers, so the timber flight
+        # occupies much less material than its full bounding box.
+        bounding_box_volume = 3 * 0.9 * 2.75
+        self.assertLess(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            bounding_box_volume / 3,
+        )
+
+    def test_extends_timber_stringers_into_landing_slab(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        stair = ground.stair(
+            (0, 0),
+            (3, 0),
+            width=0.9,
+            height=2.75,
+            risers=16,
+            start_height=1.0,
+            slab_height=0.8,
+            construction="timber",
+            stringer_height=0.3,
+        )
+
+        self.assertAlmostEqual(stair.start_height, 1.0)
+        self.assertAlmostEqual(stair.slab_height, 0.8)
+        body = ifcopenshell.util.representation.get_representation(
+            stair.flight, "Model", "Body", "MODEL_VIEW"
+        )
+        coordinates = body.Items[0].Coordinates.CoordList
+        self.assertAlmostEqual(min(point[2] for point in coordinates), -0.2)
+
+        placement = ifcopenshell.util.placement.get_local_placement(
+            stair.flight.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[2, 3], 1.0)
+        self.assertAlmostEqual(
+            placement[2, 3] + min(point[2] for point in coordinates),
+            stair.slab_height,
+        )
+
+    def test_includes_cross_storey_stair_geometry_in_plan(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        upper = house.storey("Upper floor", elevation=3)
+        stair = ground.stair(
+            (0, 0),
+            (3, 0),
+            width=0.9,
+            height=3,
+            risers=16,
+            construction="timber",
+        )
+        landing = ground.stair_landing(
+            (3, -0.45),
+            (4, 0.45),
+            height=3,
+            thickness=0.2,
+        )
+        upper_wall = upper.wall(
+            (0, 1),
+            (1, 1),
+            thickness=0.2,
+            height=2.8,
+        )
+        drawing = house.add_drawing(
+            "Upper plan",
+            2,
+            0,
+            4.5,
+            4,
+            storeys=[upper],
+        )
+
+        drawing.add_stair_annotation(stair)
+        drawing.add_stair_landing_annotation(landing)
+
+        include = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+            "Include",
+        )
+        self.assertEqual(
+            include,
+            (
+                f'location="{upper.element.GlobalId}"'
+                f"+{stair.flight.GlobalId}+{landing.GlobalId}"
+            ),
+        )
+        selected_elements = ifcopenshell.util.selector.filter_elements(
+            house.model,
+            include,
+        )
+        self.assertIn(stair.flight, selected_elements)
+        self.assertIn(landing, selected_elements)
+        self.assertIn(upper_wall, selected_elements)
 
     def test_creates_chimney_with_flue_and_scoped_plan_symbol(self) -> None:
         house = House("My house", colors={"chimney": "#B8A99A"})
@@ -1475,6 +1627,26 @@ class HouseTests(unittest.TestCase):
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
 
+        with self.assertRaisesRegex(ValueError, "construction"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                construction="steel",
+            )
+        with self.assertRaisesRegex(ValueError, "slab_height"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                start_height=1.0,
+                slab_height=1.1,
+                construction="timber",
+            )
         with self.assertRaisesRegex(ValueError, "different points"):
             ground.stair((1, 1), (1, 1), width=0.9, height=2.75, risers=16)
         with self.assertRaisesRegex(ValueError, "width"):
@@ -1520,6 +1692,36 @@ class HouseTests(unittest.TestCase):
                 risers=16,
                 underside="sloped",
                 waist_thickness=3,
+            )
+        with self.assertRaisesRegex(ValueError, "tread_thickness"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                construction="timber",
+                tread_thickness=0,
+            )
+        with self.assertRaisesRegex(ValueError, "stringer_thickness"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                construction="timber",
+                stringer_thickness=0.45,
+            )
+        with self.assertRaisesRegex(ValueError, "stringer_height"):
+            ground.stair(
+                (0, 0),
+                (3, 0),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                construction="timber",
+                stringer_height=0,
             )
         with self.assertRaisesRegex(ValueError, "define a rectangle"):
             ground.stair_landing(

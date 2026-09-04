@@ -85,6 +85,7 @@ ROOF_TILE_THICKNESS = 0.05
 GROUND_FLOOR_THICKNESS = 0.20
 UPPER_FLOOR_THICKNESS = 0.11
 VAZNICE_DIST = 0.8 # Vzdalenost vaznice od hrebene
+VAZNICE_HEIGHT = 0.28
 
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
 	RAFTER_Z_OFFSET - THERMAL_INSULATION_UNDER_RAFTERS
@@ -104,7 +105,7 @@ ground_floor_height = 2.875
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.80
+UNDER_HOLE = 2.85
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.06
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.16)
@@ -172,6 +173,9 @@ stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
 step_count = 17
+STAIR_TREAD_THICKNESS = 0.04
+STAIR_STRINGER_THICKNESS = 0.05
+STAIR_STRINGER_HEIGHT = 0.30
 KK_WIDTH = HOUSE_WIDTH - wall3_x - BWT
 
 HOUSE_EXT = 1
@@ -204,7 +208,7 @@ pokoj_dole = ground.floor_layer(
 )
 CHODBA_DEPTH = 2.625
 GALERY_DEPTH = 1.05
-wall_zachod_nahore_y = BWT+math.ceil(CHODBA_DEPTH/0.125)*0.125
+wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at=math.floor((0.25+CHODBA_DEPTH+0.15+1)/0.125)*0.125
 kuchyn  = ground.floor_layer(
 	"Kuchyn",
@@ -340,7 +344,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(HOUSE_WIDTH-5.5, 0-0.5),
+    center=(HOUSE_WIDTH-6, 0-0.5),
 )
 ground.furniture(
     "TČ",
@@ -454,8 +458,11 @@ stairs1 = ground.stair(
     risers=5,
     name="Main stair",
     color="#C8B090",
-    underside="sloped",
-    waist_thickness=0.15,)
+    construction="timber",
+    tread_thickness=STAIR_TREAD_THICKNESS,
+    stringer_thickness=STAIR_STRINGER_THICKNESS,
+    stringer_height=STAIR_STRINGER_HEIGHT,
+)
 
 stairs2 = ground.stair(
     (wall2_x+0.5, BWT+CHODBA_DEPTH-1-2*0.27),
@@ -464,10 +471,14 @@ stairs2 = ground.stair(
     height=stair_height/17*3,
     risers=3,
     start_height=stairs1.end_height,
+    slab_height=stairs1.end_height - 0.2,
     name="Main stair",
     color="#C8B090",
-    underside="sloped",
-    waist_thickness=0.15,)
+    construction="timber",
+    tread_thickness=STAIR_TREAD_THICKNESS,
+    stringer_thickness=STAIR_STRINGER_THICKNESS,
+    stringer_height=STAIR_STRINGER_HEIGHT,
+)
 
 stairs3 = ground.stair(
     (wall2_x+1, BWT+CHODBA_DEPTH-0.5),
@@ -476,10 +487,14 @@ stairs3 = ground.stair(
     height=stair_height/17*9,
     risers=9,
     start_height=stairs2.end_height,
+    slab_height=stairs2.end_height - 0.2,
     name="Main stair",
     color="#C8B090",
-    underside="sloped",
-    waist_thickness=0.15,)
+    construction="timber",
+    tread_thickness=STAIR_TREAD_THICKNESS,
+    stringer_thickness=STAIR_STRINGER_THICKNESS,
+    stringer_height=STAIR_STRINGER_HEIGHT,
+)
 
 stairs_landing1 = ground.stair_landing(
     (wall2_x+0, BWT),
@@ -896,7 +911,7 @@ zachod_nahore = upper.floor_layer(
 
 STREET_ROOF_JOINT_Y = HALF_DEPTH-VAZNICE_DIST-0.08
 GARDEN_ROOF_JOINT_Y = HALF_DEPTH+VAZNICE_DIST+0.08
-ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+0.28
+ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+VAZNICE_HEIGHT
 STREET_ROOF_PLANE_POINTS = (
 	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -1012,11 +1027,11 @@ wall_4.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 wall_pokoj1 = upper.wall(
 	start=(-HOUSE_EXT+BWT, ceiling1_a.start[1]),
 	end=(wall2_x-BWT, ceiling1_a.start[1]),
-	wall_type=dry_wall, height=2.8)
+	wall_type=dry_wall, height=2.85)
 wall_pokoj2 = upper.wall(
 	start=(wall2_x, BWT+CHODBA_DEPTH+GALERY_DEPTH),
 	end=(wall3_x-BWT, BWT+CHODBA_DEPTH+GALERY_DEPTH),
-	wall_type=dry_wall, height=2.8)
+	wall_type=dry_wall, height=2.85)
 UPPER_DOOR_HEIGHT = 2.25
 wall_pokoj2.add_door(
 	at=KITCHEN_WIDTH-1.25,
@@ -1028,7 +1043,7 @@ wall_pokoj2.add_door(
 wall_zachod_nahore = upper.wall(
 	start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
 	end=(wall3_x, wall_zachod_nahore_y),
-	wall_type=dry_wall, height=2.8)
+	wall_type=dry_wall, height=2.85)
 wall_zachod_nahore.add_door(
 	at=0.8,
 	opening_width=0.8, width=0.7,
@@ -1041,7 +1056,7 @@ upper.asset(
     "WC",
     asset="toilet_without_cistern",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, BWT+BATHROOM_DEPTH-0.5),
+    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, wall_zachod_nahore_y-0.1-0.5),
     rotation=90,
 )
 upper.asset(
@@ -1071,17 +1086,17 @@ upper.asset(
 
 beam1 = upper.beam(
     "Beam",
-    start=(-HOUSE_EXT, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
-    end=(HOUSE_WIDTH, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
-    size=(0.16, 0.28),
+    start=(-HOUSE_EXT, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    end=(HOUSE_WIDTH, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
     kind="BEAM",
 )
 beam2 = upper.beam(
     "Beam",
-    start=(-HOUSE_EXT, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
-    end=(HOUSE_WIDTH, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+0.28/2),
-    size=(0.16, 0.28),
+    start=(-HOUSE_EXT, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    end=(HOUSE_WIDTH, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
     kind="BEAM",
 )
@@ -1234,10 +1249,17 @@ def roof_angle_degrees(plane):
 
 street_roof_angle = roof_angle_degrees(street_roof)
 garden_roof_angle = roof_angle_degrees(garden_roof)
+dormer_roof_angle = roof_angle_degrees(dormer_roof)
 if not isclose(street_roof_angle, garden_roof_angle, abs_tol=1e-9):
 	raise ValueError("street and garden roof angles must match")
-print(f"Main roof angle: {street_roof_angle:.2f}°")
-print(f"Dormer roof angle: {roof_angle_degrees(dormer_roof):.2f}°")
+print(
+	f"Main roof angle: {street_roof_angle:.2f}° "
+	f"({100 * math.tan(math.radians(street_roof_angle)):.2f}%)"
+)
+print(
+	f"Dormer roof angle: {dormer_roof_angle:.2f}° "
+	f"({100 * math.tan(math.radians(dormer_roof_angle)):.2f}%)"
+)
 
 # Bonsai creates Outliner collections from spatial containers, but flattens
 # ordinary IFC aggregation.  These intentionally artificial storeys provide
@@ -1297,8 +1319,8 @@ FLAT_CEILING_LAYER_HEIGHTS = {
 	# The first 50 mm below the vapour barrier is an empty installation
 	# space.  The horizontal plasterboard retains its lower ceiling height.
 	"Gypsum plasterboard": (
-		UNDER_HOLE - 0.05 - GYPSUM_PLASTERBOARD_THICKNESS,
-		UNDER_HOLE - 0.05,
+		UPPER_FLOOR_THICKNESS + 2.65,
+		UPPER_FLOOR_THICKNESS + 2.65 +  GYPSUM_PLASTERBOARD_THICKNESS,
 	),
 }
 FLAT_CEILING_INNER_LAYER_LAYOUT = {
@@ -1320,19 +1342,19 @@ ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 # leave it full-length.
 rafters = [
 	-1.11,
-	-0.10,
-	0.89,
-	1.72,
-	2.41,
+	-0.11,
+	0.8,
+	1.7,
+	2.4,
 	(3.1, "+before"),
-	(3.87, "before"),
-	(4.59, "after"),
-	(5.57, "after"),
-	(6.55, "after"),
-	(7.53, "after"),
+	(3.82, "before"),
+	(4.52, "after"),
+	(5.52, "after"),
+	(6.52, "after"),
+	(7.52, "after"),
 	(8.52, "+after"),
-	9.50,
-	10.48,
+	9.52,
+	10.52,
 	11.225,
 	]
 rafter_layout = []
@@ -1923,6 +1945,17 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(wall3_x, 7.5), end=(HOUSE_WIDTH-BWT, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(-HOUSE_EXT, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
+
+	# odstup schodu od vchodovych dveri
+	drawing1.add_dimension(start=(wall2_x+2.1, BWT), end=(wall2_x+3.1, BWT), offset=0.7)
+
+	# odstup kuchynskych dveri od komina
+	drawing1.add_dimension(
+		start=(wall2_x+KITCHEN_WIDTH-1.05, BWT+CHODBA_DEPTH),
+		end=(wall2_x+KITCHEN_WIDTH-0.45, BWT+CHODBA_DEPTH), offset=-0.7)
+	drawing1.add_dimension(
+		start=(wall3_x-BWT, BWT+CHODBA_DEPTH-0.45),
+		end=(wall3_x-BWT, BWT+1.5), offset=-0.7)
 
 	drawing1.add_entrance_arrow(
 		(3.5+KITCHEN_WIDTH+1.1, -0.5),
