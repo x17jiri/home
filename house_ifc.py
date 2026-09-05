@@ -74,17 +74,17 @@ RAFTER_THICKNESS = 0.1
 RAFTER_SIZE = (RAFTER_THICKNESS, 0.20)
 VAPOUR_BARRIER_THICKNESS = 0.001
 THERMAL_INSULATION_UNDER_RAFTERS = 0
-INSTALLATION_SPACE_THICKNESS = 0.05
-GYPSUM_PLASTERBOARD_THICKNESS = 0.03
+INSTALLATION_SPACE_THICKNESS = 0.08
+GYPSUM_PLASTERBOARD_THICKNESS = 0.015
 WOOD_FIBERBOARD_THICKNESS = 0.1
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.05
-GROUND_FLOOR_THICKNESS = 0.20
-UPPER_FLOOR_THICKNESS = 0.11
-VAZNICE_DIST = 0.8 # Vzdalenost vaznice od hrebene
+GROUND_FLOOR_THICKNESS = 0.17
+UPPER_FLOOR_THICKNESS = 0.10
+VAZNICE_DIST = 0.77 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
 
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
@@ -101,7 +101,7 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 
 BWT = 0.24 # Basic wall thickness
 
-ground_floor_height = 2.875
+ground_floor_height = 2.82
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
@@ -172,7 +172,7 @@ wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
-step_count = 17
+step_count = 16
 STAIR_TREAD_THICKNESS = 0.04
 STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
@@ -206,7 +206,7 @@ pokoj_dole = ground.floor_layer(
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.625
+CHODBA_DEPTH = 2.6
 GALERY_DEPTH = 1.05
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at=math.floor((0.25+CHODBA_DEPTH+0.15+1)/0.125)*0.125
@@ -300,7 +300,7 @@ wall_front.add_window(
 # Back windows
 print("KK_WIDTH=", KK_WIDTH)
 wall_back.add_window(
-	at=2*BWT+KK_WIDTH+math.floor((KITCHEN_WIDTH-2.5)/0.125)*0.125/2, width=2.5,
+	at=2*BWT+KK_WIDTH+1, width=2.5,
 	sill_height=GROUND_WINDOW_SILL_HEIGHT,
 	height=GROUND_WINDOW_HEIGHT)
 wall_back.add_window(
@@ -344,7 +344,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(HOUSE_WIDTH-6, 0-0.5),
+    center=(HOUSE_WIDTH-2.25, 0-0.5),
 )
 ground.furniture(
     "TČ",
@@ -450,12 +450,12 @@ wall_3.add_door(
 
 # Main hallway
 stairs1 = ground.stair(
-    (wall2_x+1+4*0.27, BWT+0.5),       # bottom centre
+    (wall2_x+1+3*0.27, BWT+0.5),       # bottom centre
     (wall2_x+1, BWT+0.5),       # upper landing edge centre
     width=1.0,
 	start_height=GROUND_FLOOR_THICKNESS,
-    height=stair_height/17*5,
-    risers=5,
+    height=stair_height/step_count*4,
+    risers=4,
     name="Main stair",
     color="#C8B090",
     construction="timber",
@@ -468,7 +468,7 @@ stairs2 = ground.stair(
     (wall2_x+0.5, BWT+CHODBA_DEPTH-1-2*0.27),
     (wall2_x+0.5, BWT+CHODBA_DEPTH-1),
     width=1.0,
-    height=stair_height/17*3,
+    height=stair_height/step_count*3,
     risers=3,
     start_height=stairs1.end_height,
     slab_height=stairs1.end_height - 0.2,
@@ -484,7 +484,7 @@ stairs3 = ground.stair(
     (wall2_x+1, BWT+CHODBA_DEPTH-0.5),
     (wall2_x+1+8*0.27, BWT+CHODBA_DEPTH-0.5),
     width=1.0,
-    height=stair_height/17*9,
+    height=stair_height/step_count*9,
     risers=9,
     start_height=stairs2.end_height,
     slab_height=stairs2.end_height - 0.2,
@@ -1319,8 +1319,8 @@ FLAT_CEILING_LAYER_HEIGHTS = {
 	# The first 50 mm below the vapour barrier is an empty installation
 	# space.  The horizontal plasterboard retains its lower ceiling height.
 	"Gypsum plasterboard": (
-		UPPER_FLOOR_THICKNESS + 2.65,
-		UPPER_FLOOR_THICKNESS + 2.65 +  GYPSUM_PLASTERBOARD_THICKNESS,
+		UPPER_FLOOR_THICKNESS + 2.63,
+		UPPER_FLOOR_THICKNESS + 2.63 +  GYPSUM_PLASTERBOARD_THICKNESS,
 	),
 }
 FLAT_CEILING_INNER_LAYER_LAYOUT = {
@@ -1933,12 +1933,12 @@ if "ground" in sys.argv:
 	drawing1.add_chimney_annotation(chimney)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1.5+HOUSE_EXT)
-	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, EXT_DEPTH-BWT), offset=1+HOUSE_EXT)
+	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT+HOUSE_EXT)
+	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, EXT_DEPTH-BWT), offset=0.5+BWT+HOUSE_EXT)
 	# Risankuv pokoj extense
-	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, 4), end=(BWT, 4), offset=0)
+	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, EXT_DEPTH), end=(BWT, EXT_DEPTH), offset=-1.25)
 	# Kuchyn, stredni cast, pokoj hloubka
-	drawing1.add_dimension(start=(wall2_x+2.55, BWT+CHODBA_DEPTH+0.15), end=(wall2_x+2.5, HOUSE_DEPTH-BWT), offset=0)
+	drawing1.add_dimension(start=(HOUSE_WIDTH, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=-0.5)
 
 	drawing1.add_dimension(start=(BWT, 7.5), end=(wall2_x-BWT, 7.5), offset=1.5)
 	drawing1.add_dimension(start=(wall2_x, 7.5), end=(wall3_x-BWT, 7.5), offset=1.5)
@@ -1946,16 +1946,19 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(-HOUSE_EXT, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
 
+	# koupelna hloubka
+	drawing1.add_dimension(start=(HOUSE_WIDTH, BWT), end=(HOUSE_WIDTH, BWT+CHODBA_DEPTH), offset=-0.5)
+
+	# gym hloubka
+	drawing1.add_dimension(start=(-HOUSE_EXT, BWT), end=(-HOUSE_EXT, BWT+2.25), offset=0.5)
+
 	# odstup schodu od vchodovych dveri
-	drawing1.add_dimension(start=(wall2_x+2.1, BWT), end=(wall2_x+3.1, BWT), offset=0.7)
+	drawing1.add_dimension(start=(wall2_x+1+3*0.27+0.02, BWT), end=(wall2_x+1+3*0.27+0.02+1, BWT), offset=0.7)
 
 	# odstup kuchynskych dveri od komina
 	drawing1.add_dimension(
 		start=(wall2_x+KITCHEN_WIDTH-1.05, BWT+CHODBA_DEPTH),
-		end=(wall2_x+KITCHEN_WIDTH-0.45, BWT+CHODBA_DEPTH), offset=-0.7)
-	drawing1.add_dimension(
-		start=(wall3_x-BWT, BWT+CHODBA_DEPTH-0.45),
-		end=(wall3_x-BWT, BWT+1.5), offset=-0.7)
+		end=(wall2_x+KITCHEN_WIDTH-0.45, BWT+CHODBA_DEPTH), offset=-0.4)
 
 	drawing1.add_entrance_arrow(
 		(3.5+KITCHEN_WIDTH+1.1, -0.5),
@@ -2015,6 +2018,10 @@ if "upper" in sys.argv:
 		storeys=[upper],
 		right_panel_width=40,
 	)
+	drawing1.add_material_legend([
+		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("sand-dense", "Příčka - Sádrokarton 100 mm"),
+	])
 
 	drawing1.add_stair_annotation(stairs1)
 	drawing1.add_stair_annotation(stairs2)
