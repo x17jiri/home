@@ -2022,6 +2022,7 @@ if "upper" in sys.argv:
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("sand-dense", "Příčka - Sádrokarton 100 mm"),
+		("wood-solid", "Dřevěné části krovu"),
 	])
 
 	drawing1.add_stair_annotation(stairs1)
