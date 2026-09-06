@@ -209,7 +209,7 @@ pokoj_dole = ground.floor_layer(
 CHODBA_DEPTH = 2.6
 GALERY_DEPTH = 1.05
 wall_zachod_nahore_y = BWT+1.2+1+0.1
-oblouk_at=math.floor((0.25+CHODBA_DEPTH+0.15+1)/0.125)*0.125
+oblouk_at = HOUSE_DEPTH-BWT-0.75-2
 kuchyn  = ground.floor_layer(
 	"Kuchyn",
 	outline=(
@@ -281,7 +281,7 @@ ground.connect_wall(wall_4, wall_back)
 GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
-wall_front.add_door(
+front_door = wall_front.add_door(
 	at=HOUSE_EXT+wall3_x-BWT-0.375-1.125,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
@@ -290,8 +290,8 @@ wall_front.add_door(
 	operation="SINGLE_SWING_RIGHT"
 )
 wall_front.add_window(
-    at=HOUSE_EXT+wall3_x+0.25,
-    width=0.5,
+    at=HOUSE_EXT+wall3_x+0.875,
+    width=0.75,
     height=GROUND_DOOR_HEIGHT, # use door height so it is aligned with the front door
     sill_height=GROUND_DOOR_HEIGHT-0.375,
     partition="SINGLE_PANEL",
@@ -340,16 +340,16 @@ wall_bathroom = ground.wall(
 	(wall3_x, BWT+BATHROOM_DEPTH), (HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 ground.furniture(
-    "TČ",
+    "Tepelné\nČerpadlo",
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
     center=(HOUSE_WIDTH-2.25, 0-0.5),
 )
 ground.furniture(
-    "TČ",
+    "Hydrobox",
     kind="USERDEFINED",
-    size=(0.5, 0.4, 0.9),
+    size=(0.8, 0.4, 0.9),
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
     center=(HOUSE_WIDTH-(BWT+1.6)-0.4, BWT+0.25),
@@ -368,7 +368,7 @@ ground.furniture(
 	start_height=GROUND_FLOOR_THICKNESS,
     size=(0.7, 0.7, 2.0),
     color="#ffffff",
-    center=(HOUSE_WIDTH-BWT-0.4, BWT+0.8+0.4),
+    center=(HOUSE_WIDTH-(BWT+0.8)-0.4, BWT+0.4),
 )
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
@@ -384,9 +384,9 @@ ground.asset(
 ground.asset(
     "Umyv",
     asset="basin_large",
-    center=(HOUSE_WIDTH-(BWT+0.8)-0.4, BWT+0.35),
+	center=(HOUSE_WIDTH-BWT-0.35, BWT+0.8+0.4),
 	start_height=GROUND_FLOOR_THICKNESS,
-	rotation=180,
+	rotation=-90,
 )
 ground.asset(
     "Sprcha",
@@ -481,8 +481,8 @@ stairs2 = ground.stair(
 )
 
 stairs3 = ground.stair(
-    (wall2_x+1, BWT+CHODBA_DEPTH-0.5),
-    (wall2_x+1+8*0.27, BWT+CHODBA_DEPTH-0.5),
+    (wall2_x+1.02, BWT+CHODBA_DEPTH-0.5),
+    (wall2_x+1.02+8*0.27, BWT+CHODBA_DEPTH-0.5),
     width=1.0,
     height=stair_height/step_count*9,
     risers=9,
@@ -506,7 +506,7 @@ stairs_landing1 = ground.stair_landing(
 )
 stairs_landing2 = ground.stair_landing(
     (wall2_x+0, BWT+CHODBA_DEPTH-1),
-    (wall2_x+1, BWT+CHODBA_DEPTH),
+    (stairs3.start[0], BWT+CHODBA_DEPTH),
     height=stairs2.end_height,
     thickness=0.20,
     name="Main stair landing",
@@ -877,8 +877,8 @@ galerie = upper.floor_layer(
 		f"Galerie",
 		outline=(
 			(wall2_x, BWT+CHODBA_DEPTH),
-			(wall2_x+1+8*0.27, BWT+CHODBA_DEPTH),
-			(wall2_x+1+8*0.27, BWT),
+			(stairs3.end[0], BWT+CHODBA_DEPTH),
+			(stairs3.end[0], BWT),
 			(wall3_x-BWT, BWT),
 			(wall3_x-BWT, BWT+CHODBA_DEPTH+GALERY_DEPTH),
 			(wall2_x, BWT+CHODBA_DEPTH+GALERY_DEPTH),
@@ -1158,15 +1158,15 @@ wall_dormer.add_window(
 wall_dormer.add_window(
 	at=BWT+KITCHEN_WIDTH-0.5-1.5,
 	width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
-# Dvere pokojik nahore
+# Dvere pokojik 1 nahore
 wall_2.add_door(
-	at=wall_zachod_nahore_y,
+	at=BWT+math.ceil(CHODBA_DEPTH/0.125)*0.125,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
-# Okna pokojik nahore
+# Okna pokojik 1 nahore
 wall_0.add_window(
 	at=0.75,
 	width=1.5,
@@ -1937,20 +1937,21 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, EXT_DEPTH-BWT), offset=0.5+BWT+HOUSE_EXT)
 	# Risankuv pokoj extense
 	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, EXT_DEPTH), end=(BWT, EXT_DEPTH), offset=-1.25)
-	# Kuchyn, stredni cast, pokoj hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=-0.5)
+	# Kuchyn hloubka
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
 
-	drawing1.add_dimension(start=(BWT, 7.5), end=(wall2_x-BWT, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(wall2_x, 7.5), end=(wall3_x-BWT, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(wall3_x, 7.5), end=(HOUSE_WIDTH-BWT, 7.5), offset=1.5)
-	drawing1.add_dimension(start=(-HOUSE_EXT, 0.5), end=(HOUSE_WIDTH, 0.5), offset=-1.5)
-	drawing1.add_dimension(start=(HOUSE_WIDTH-0.5, 0), end=(HOUSE_WIDTH-0.5, 8), offset=-1.5)
+	# Vnejsi rozmery
+	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
+	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
+	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=0.75)
+	drawing1.add_dimension(start=(-HOUSE_EXT, BWT), end=(HOUSE_WIDTH, BWT), offset=-1.25)
+	drawing1.add_dimension(start=(HOUSE_WIDTH, 0), end=(HOUSE_WIDTH, 8), offset=-1)
 
 	# koupelna hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH, BWT), end=(HOUSE_WIDTH, BWT+CHODBA_DEPTH), offset=-0.5)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH), offset=-0.75)
 
 	# gym hloubka
-	drawing1.add_dimension(start=(-HOUSE_EXT, BWT), end=(-HOUSE_EXT, BWT+2.25), offset=0.5)
+	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, BWT), end=(-HOUSE_EXT+BWT, BWT+2.25), offset=0.75)
 
 	# odstup schodu od vchodovych dveri
 	drawing1.add_dimension(start=(wall2_x+1+3*0.27+0.02, BWT), end=(wall2_x+1+3*0.27+0.02+1, BWT), offset=0.7)
@@ -1961,7 +1962,7 @@ if "ground" in sys.argv:
 		end=(wall2_x+KITCHEN_WIDTH-0.45, BWT+CHODBA_DEPTH), offset=-0.4)
 
 	drawing1.add_entrance_arrow(
-		(3.5+KITCHEN_WIDTH+1.1, -0.5),
+		(wall3_x-BWT-0.375-0.55, -0.5),
 		rotation=90,  # points left
 		size=0.6,      # metres
 	)
@@ -1987,7 +1988,7 @@ if "ground" in sys.argv:
 	drawing1.add_room_annotation(
 		(7, 0.5+0.9),
 		identifier="0.04",
-		description="Chodba",
+		description="Chodba a schody",
 		area=chodba.area,
 	)
 	drawing1.add_room_annotation(
@@ -2011,7 +2012,7 @@ if "ground" in sys.argv:
 if "upper" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Drawing 2",
-		x=6,
+		x=5,
 		y=4,
 		z=BWT+2.75+2,
 		radius=8,
@@ -2064,7 +2065,42 @@ if "upper" in sys.argv:
 		description="Záchod",
 		area=zachod_nahore.area
 	)
+	drawing1.add_room_annotation(
+		(1, 1),
+		identifier="0.03",
+		description="Posilovna (v přízemí)",
+		area=posilovna.area,
+	)
 	drawing1.add_room_legend()
+
+	# Pokoj 1, hloubka
+	drawing1.add_dimension(start=(BWT, BWT+2.06+0.1), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT+HOUSE_EXT)
+	drawing1.add_dimension(start=(BWT, BWT+2.06+0.1), end=(BWT, EXT_DEPTH-BWT), offset=0.5+BWT+HOUSE_EXT)
+	# Pokoj 1 extenze
+	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, EXT_DEPTH), end=(BWT, EXT_DEPTH), offset=-1.25)
+	# sklad nahore hloubka
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
+	# Pokoj 2, hloubka
+	drawing1.add_dimension(start=(4.5, BWT+CHODBA_DEPTH+GALERY_DEPTH+0.1), end=(4.5, HOUSE_DEPTH-BWT), offset=0)
+
+	# Vnejsi rozmery
+	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
+	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
+	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=0.75)
+	drawing1.add_dimension(start=(-HOUSE_EXT, BWT), end=(HOUSE_WIDTH, BWT), offset=-1.25)
+	drawing1.add_dimension(start=(HOUSE_WIDTH, 0), end=(HOUSE_WIDTH, 8), offset=-1)
+
+	# zachod nahire hloubka
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1), offset=-0.75)
+
+	# gym hloubka
+	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, BWT), end=(-HOUSE_EXT+BWT, BWT+2.06), offset=0.75)
+
+	# vzdalenost komina od schodu
+	drawing1.add_dimension(start=(stairs3.end[0], CHIMNEY_Y_START), end=(wall3_x-BWT-0.45, CHIMNEY_Y_START), offset=0)
+	# galerie
+	drawing1.add_dimension(start=(stairs3.end[0], 1), end=(wall3_x-BWT, 1), offset=0)
+	drawing1.add_dimension(start=(5, BWT+CHODBA_DEPTH), end=(5, BWT+CHODBA_DEPTH+GALERY_DEPTH), offset=0)
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 

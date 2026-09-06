@@ -4455,14 +4455,14 @@ class HouseTests(unittest.TestCase):
                     "title": "LEGENDA MÍSTNOSTÍ",
                     "items": [
                         {
-                            "identifier": "0.01",
-                            "description": "Bedroom",
-                            "area": 12.5,
-                        },
-                        {
                             "identifier": "0.02",
                             "description": "Living room",
                             "area": 18.25,
+                        },
+                        {
+                            "identifier": "0.01",
+                            "description": "Bedroom",
+                            "area": 12.5,
                         },
                     ],
                 }

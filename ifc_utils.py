@@ -4497,9 +4497,9 @@ class Drawing:
     ) -> Drawing:
         """Add a table generated from this drawing's room annotations.
 
-        Call this after :meth:`add_room_annotation`.  Rows are sorted by room
-        identifier and use each annotation's description and area, avoiding a
-        separate room list.
+        Call this after :meth:`add_room_annotation`.  Rows retain annotation
+        insertion order and use each annotation's description and area,
+        avoiding a separate room list.
         """
         self._require_plan_view("add_room_legend")
         if self.right_panel_width <= 0:
@@ -4525,10 +4525,7 @@ class Drawing:
                 "room annotations must include descriptions: "
                 + ", ".join(missing_descriptions)
             )
-        items = sorted(
-            (dict(room) for room in self._room_annotations),
-            key=lambda room: str(room["identifier"]),
-        )
+        items = [dict(room) for room in self._room_annotations]
         self._right_panel_tables.append(
             {
                 "kind": "room_legend",
