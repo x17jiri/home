@@ -5469,21 +5469,25 @@ class Drawing:
 
     def add_stair_annotation(
         self,
-        stair: Stair,
+        stair: Stair | CustomStair,
         *,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add a conventional plan symbol for ``stair`` to this drawing only.
 
-        The annotation contains the stair outline, tread lines, an upward
-        walking-direction arrow.  If the stair belongs to a different storey,
-        its flight body is explicitly included so its projected structural
+        A straight stair receives its outline, tread lines, and an upward
+        walking-direction arrow.  A custom stair receives the outline of each
+        explicitly supplied tread; no walking direction is inferred from an
+        arbitrary layout.  If the stair belongs to a different storey, its
+        model elements are explicitly included so their projected structural
         outline remains visible behind the symbol.  This does not alter the
         stair's 3D representation or spatial storey.
         """
         self._require_plan_view("add_stair_annotation")
-        if not isinstance(stair, Stair):
-            raise TypeError("stair must be a Stair created by Storey.stair")
+        if not isinstance(stair, (Stair, CustomStair)):
+            raise TypeError(
+                "stair must be created by Storey.stair or Storey.custom_stair"
+            )
         if stair.file is not self.house.model:
             raise ValueError("stair must belong to this house")
         if stair.id() in self._annotated_stairs:
@@ -5491,7 +5495,11 @@ class Drawing:
 
         stair_storey = ifcopenshell.util.element.get_container(stair)
         if not self._includes_storey_element(stair_storey):
-            self._include_model_element(stair.flight)
+            if isinstance(stair, CustomStair):
+                for tread in stair.tread_elements:
+                    self._include_model_element(tread)
+            else:
+                self._include_model_element(stair.flight)
 
         annotation_name = (
             _name(name, "name")
@@ -5512,34 +5520,40 @@ class Drawing:
             is_si=True,
         )
 
-        half_width = stair.width / 2
-        tread_length = stair.tread_length
-        polylines: list[list[tuple[float, float]]] = [
-            [
-                (0.0, -half_width),
-                (stair.length, -half_width),
-                (stair.length, half_width),
-                (0.0, half_width),
-                (0.0, -half_width),
+        if isinstance(stair, CustomStair):
+            polylines = [
+                [*polygon, polygon[0]]
+                for polygon in stair.step_polygons
             ]
-        ]
-        for tread in range(1, stair.treads):
-            x = tread * tread_length
-            polylines.append([(x, -half_width), (x, half_width)])
-
-        arrow_start = min(tread_length / 2, stair.length * 0.1)
-        arrow_end = stair.length * 0.85
-        arrow_size = min(stair.width * 0.18, stair.length * 0.06)
-        polylines.extend(
-            [
-                [(arrow_start, 0.0), (arrow_end, 0.0)],
+        else:
+            half_width = stair.width / 2
+            tread_length = stair.tread_length
+            polylines = [
                 [
-                    (arrow_end - arrow_size, -arrow_size),
-                    (arrow_end, 0.0),
-                    (arrow_end - arrow_size, arrow_size),
-                ],
+                    (0.0, -half_width),
+                    (stair.length, -half_width),
+                    (stair.length, half_width),
+                    (0.0, half_width),
+                    (0.0, -half_width),
+                ]
             ]
-        )
+            for tread in range(1, stair.treads):
+                x = tread * tread_length
+                polylines.append([(x, -half_width), (x, half_width)])
+
+            arrow_start = min(tread_length / 2, stair.length * 0.1)
+            arrow_end = stair.length * 0.85
+            arrow_size = min(stair.width * 0.18, stair.length * 0.06)
+            polylines.extend(
+                [
+                    [(arrow_start, 0.0), (arrow_end, 0.0)],
+                    [
+                        (arrow_end - arrow_size, -arrow_size),
+                        (arrow_end, 0.0),
+                        (arrow_end - arrow_size, arrow_size),
+                    ],
+                ]
+            )
 
         curves = []
         for points in polylines:
@@ -6605,6 +6619,48 @@ class Stair(ifcopenshell.entity_instance):
     @property
     def element(self) -> ifcopenshell.entity_instance:
         """Return this stair as its underlying IFC entity."""
+        return self
+
+
+class CustomStair(ifcopenshell.entity_instance):
+    """An ``IfcStair`` made from explicitly shaped horizontal treads."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+        *,
+        flight: ifcopenshell.entity_instance,
+        tread_elements: tuple[ifcopenshell.entity_instance, ...],
+        step_polygons: tuple[tuple[tuple[float, float], ...], ...],
+        height: float,
+        start_height: float,
+        step_height: float,
+        tread_thickness: float,
+        placement: np.ndarray,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "flight", flight)
+        object.__setattr__(self, "tread_elements", tread_elements)
+        object.__setattr__(self, "components", tread_elements)
+        object.__setattr__(self, "step_polygons", step_polygons)
+        object.__setattr__(self, "steps", len(step_polygons))
+        object.__setattr__(self, "risers", len(step_polygons))
+        object.__setattr__(self, "treads", len(step_polygons))
+        object.__setattr__(self, "height", height)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "end_height", start_height + height)
+        object.__setattr__(self, "step_height", step_height)
+        object.__setattr__(self, "riser_height", step_height)
+        object.__setattr__(self, "tread_thickness", tread_thickness)
+        object.__setattr__(self, "construction", "custom")
+        object.__setattr__(self, "underside", "open")
+        object.__setattr__(self, "placement", placement)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this custom stair as its underlying IFC entity."""
         return self
 
 
@@ -9817,6 +9873,264 @@ class Storey:
             model,
             pset=pset,
             properties=pset_properties,
+        )
+        return stair
+
+    def custom_stair(
+        self,
+        step_polygons: Sequence[Sequence[Point]],
+        *,
+        height: Number,
+        start_height: Number = 0,
+        tread_thickness: Number = 0.04,
+        name: str | None = None,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> CustomStair:
+        """Create an open stair from explicitly shaped tread polygons.
+
+        ``step_polygons`` contains one four-point XY polygon per tread.  Points
+        follow the polygon perimeter clockwise or counter-clockwise, and the
+        polygons are ordered from bottom to top.  The treads are distributed
+        evenly through ``height``: with N polygons and a final rise to the
+        upper landing, their top surfaces are at 1/(N+1), 2/(N+1), ...,
+        N/(N+1) of the total rise above ``start_height``.  Each polygon becomes
+        a separate horizontal wooden board of ``tread_thickness``.  No riser
+        boards or side stringers are generated.
+        """
+        if isinstance(step_polygons, (str, bytes)):
+            raise TypeError("step_polygons must be a sequence of polygons")
+        try:
+            supplied_polygons = list(step_polygons)
+        except TypeError as error:
+            raise TypeError(
+                "step_polygons must be a sequence of polygons"
+            ) from error
+        if not supplied_polygons:
+            raise ValueError("step_polygons must contain at least one step")
+
+        polygons: list[tuple[tuple[float, float], ...]] = []
+        for polygon_index, supplied_polygon in enumerate(
+            supplied_polygons,
+            start=1,
+        ):
+            if isinstance(supplied_polygon, (str, bytes)):
+                raise TypeError(
+                    f"step polygon {polygon_index} must contain four points"
+                )
+            try:
+                supplied_points = list(supplied_polygon)
+            except TypeError as error:
+                raise TypeError(
+                    f"step polygon {polygon_index} must contain four points"
+                ) from error
+            if len(supplied_points) != 4:
+                raise ValueError(
+                    f"step polygon {polygon_index} must contain exactly four points"
+                )
+            points = tuple(
+                _point(point, f"step polygon {polygon_index} point {point_index}")
+                for point_index, point in enumerate(supplied_points, start=1)
+            )
+            if len(set(points)) != 4:
+                raise ValueError(
+                    f"step polygon {polygon_index} must contain four distinct points"
+                )
+            twice_area = sum(
+                point[0] * next_point[1] - next_point[0] * point[1]
+                for point, next_point in zip(
+                    points,
+                    (*points[1:], points[0]),
+                )
+            )
+            if abs(twice_area) <= 1e-9:
+                raise ValueError(
+                    f"step polygon {polygon_index} must enclose a non-zero area"
+                )
+            # Normalise top-face winding for predictable closed mesh shells.
+            if twice_area < 0:
+                points = tuple(reversed(points))
+            polygons.append(points)
+
+        height = _number(height, "height")
+        start_height = _number(start_height, "start_height")
+        tread_thickness = _number(tread_thickness, "tread_thickness")
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        step_height = height / (len(polygons) + 1)
+        if tread_thickness <= 0 or tread_thickness >= step_height:
+            raise ValueError(
+                "tread_thickness must be greater than zero and smaller "
+                "than the step height"
+            )
+        surface_style = self.house._surface_style(
+            "stair",
+            color=color,
+            transparency=transparency,
+        )
+
+        self._stair_count += 1
+        stair_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Custom Stair {self._stair_count}"
+        )
+        print(
+            f"{stair_name} step height: {step_height:.3f} m "
+            f"({step_height * 100:.2f} cm)"
+        )
+        model = self.house.model
+        stair_element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcStair",
+            name=stair_name,
+            predefined_type="USERDEFINED",
+        )
+        stair_element.ObjectType = "CUSTOM_STAIR"
+        flight = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcStairFlight",
+            name=f"{stair_name} Flight",
+            predefined_type="USERDEFINED",
+        )
+        flight.ObjectType = "FREEFORM_TREADS"
+        flight.NumberOfRisers = len(polygons)
+        flight.NumberOfTreads = len(polygons)
+        flight.RiserHeight = step_height
+
+        placement = np.eye(4)
+        placement[2, 3] = self.elevation + start_height
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[stair_element],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.aggregate.assign_object(
+            model,
+            products=[flight],
+            relating_object=stair_element,
+        )
+        for product in (stair_element, flight):
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=product,
+                matrix=placement,
+                is_si=True,
+            )
+
+        wood = self.house._materials.get("Wood")
+        if wood is None:
+            wood = ifcopenshell.api.material.add_material(
+                model,
+                name="Wood",
+                category="wood",
+            )
+            self.house._materials["Wood"] = wood
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[flight],
+            type="IfcMaterial",
+            material=wood,
+        )
+
+        tread_elements: list[ifcopenshell.entity_instance] = []
+        for step_index, polygon in enumerate(polygons, start=1):
+            tread = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcBuildingElementPart",
+                name=f"{stair_name} Tread {step_index}",
+                predefined_type="USERDEFINED",
+            )
+            tread.ObjectType = "STAIR_TREAD"
+            vertices = [
+                *((x, y, 0.0) for x, y in polygon),
+                *((x, y, tread_thickness) for x, y in polygon),
+            ]
+            polygon_size = len(polygon)
+            faces = [
+                tuple(reversed(range(polygon_size))),
+                tuple(
+                    polygon_size + index
+                    for index in range(polygon_size)
+                ),
+            ]
+            for point_index in range(polygon_size):
+                next_index = (point_index + 1) % polygon_size
+                faces.append(
+                    (
+                        point_index,
+                        next_index,
+                        polygon_size + next_index,
+                        polygon_size + point_index,
+                    )
+                )
+            body = ifcopenshell.api.geometry.add_mesh_representation(
+                model,
+                context=self.house._body_context,
+                vertices=[vertices],
+                faces=[faces],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=tread,
+                representation=body,
+            )
+            if surface_style is not None:
+                ifcopenshell.api.style.assign_representation_styles(
+                    model,
+                    shape_representation=body,
+                    styles=[surface_style],
+                )
+            ifcopenshell.api.material.assign_material(
+                model,
+                products=[tread],
+                type="IfcMaterial",
+                material=wood,
+            )
+            tread_elements.append(tread)
+
+        ifcopenshell.api.aggregate.assign_object(
+            model,
+            products=tread_elements,
+            relating_object=flight,
+        )
+        for step_index, tread in enumerate(tread_elements, start=1):
+            tread_placement = placement.copy()
+            tread_placement[2, 3] += (
+                step_index * step_height - tread_thickness
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=tread,
+                matrix=tread_placement,
+                is_si=True,
+            )
+
+        stair = CustomStair(
+            stair_element,
+            self,
+            flight=flight,
+            tread_elements=tuple(tread_elements),
+            step_polygons=tuple(polygons),
+            height=height,
+            start_height=start_height,
+            step_height=step_height,
+            tread_thickness=tread_thickness,
+            placement=placement,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=flight,
+            name="Pset_StairFlightCommon",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={
+                "NumberOfRiser": len(polygons),
+                "NumberOfTreads": len(polygons),
+                "RiserHeight": step_height,
+            },
         )
         return stair
 

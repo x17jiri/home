@@ -24,6 +24,7 @@ import numpy as np
 from ifc_utils import (
     Beam,
     Chimney,
+    CustomStair,
     FacadeLayer,
     FloorLayer,
     House,
@@ -1377,6 +1378,161 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_volume(shape.geometry),
             bounding_box_volume / 3,
         )
+
+    def test_creates_custom_stair_from_explicit_step_polygons(self) -> None:
+        house = House("My house", colors={"stair": "#C8B090"})
+        ground = house.storey("Ground floor", elevation=0.1)
+        upper = house.storey("Upper floor", elevation=3)
+        step_polygons = (
+            ((0, 0), (1, 0), (1, 0.3), (0, 0.3)),
+            ((0, 0.3), (1, 0.3), (1, 0.6), (0, 0.6)),
+            ((0.7, 0.6), (1, 0.6), (1, 1.6), (0.7, 1.6)),
+        )
+        with patch("builtins.print") as print_mock:
+            stair = ground.custom_stair(
+                step_polygons,
+                start_height=0.25,
+                height=0.6,
+                tread_thickness=0.04,
+                name="Turning stair",
+            )
+
+        self.assertIsInstance(stair, CustomStair)
+        self.assertTrue(stair.is_a("IfcStair"))
+        self.assertIs(stair.element, stair)
+        self.assertEqual(stair.PredefinedType, "USERDEFINED")
+        self.assertEqual(stair.ObjectType, "CUSTOM_STAIR")
+        self.assertEqual(stair.steps, 3)
+        self.assertEqual(stair.risers, 3)
+        self.assertEqual(stair.treads, 3)
+        self.assertAlmostEqual(stair.start_height, 0.25)
+        self.assertAlmostEqual(stair.end_height, 0.85)
+        self.assertAlmostEqual(stair.step_height, 0.15)
+        self.assertAlmostEqual(stair.tread_thickness, 0.04)
+        self.assertEqual(stair.construction, "custom")
+        self.assertEqual(stair.underside, "open")
+        print_mock.assert_called_once_with(
+            "Turning stair step height: 0.150 m (15.00 cm)"
+        )
+
+        flight = stair.flight
+        self.assertEqual(flight.PredefinedType, "USERDEFINED")
+        self.assertEqual(flight.ObjectType, "FREEFORM_TREADS")
+        self.assertEqual(flight.NumberOfRisers, 3)
+        self.assertEqual(flight.NumberOfTreads, 3)
+        self.assertAlmostEqual(flight.RiserHeight, 0.15)
+        self.assertIsNone(flight.TreadLength)
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(flight).Name,
+            "Wood",
+        )
+        self.assertEqual(
+            flight.Decomposes[0].RelatingObject,
+            stair,
+        )
+
+        placement = ifcopenshell.util.placement.get_local_placement(
+            flight.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[2, 3], 0.35)
+        self.assertIsNone(flight.Representation)
+        self.assertEqual(len(stair.tread_elements), 3)
+        self.assertEqual(stair.components, stair.tread_elements)
+        expected_bottoms = (0.46, 0.61, 0.76)
+        total_volume = 0.0
+        for index, (tread, expected_bottom) in enumerate(
+            zip(stair.tread_elements, expected_bottoms),
+            start=1,
+        ):
+            self.assertTrue(tread.is_a("IfcBuildingElementPart"))
+            self.assertEqual(tread.Name, f"Turning stair Tread {index}")
+            self.assertEqual(tread.PredefinedType, "USERDEFINED")
+            self.assertEqual(tread.ObjectType, "STAIR_TREAD")
+            self.assertEqual(tread.Decomposes[0].RelatingObject, flight)
+            self.assertEqual(
+                ifcopenshell.util.element.get_material(tread).Name,
+                "Wood",
+            )
+            tread_placement = ifcopenshell.util.placement.get_local_placement(
+                tread.ObjectPlacement
+            )
+            self.assertAlmostEqual(tread_placement[2, 3], expected_bottom)
+            body = ifcopenshell.util.representation.get_representation(
+                tread,
+                "Model",
+                "Body",
+                "MODEL_VIEW",
+            )
+            self.assertEqual(body.RepresentationType, "Tessellation")
+            coordinates = body.Items[0].Coordinates.CoordList
+            self.assertEqual(len(coordinates), 8)
+            self.assertEqual(
+                {round(point[2], 9) for point in coordinates},
+                {0.0, 0.04},
+            )
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(),
+                tread,
+            )
+            total_volume += ifcopenshell.util.shape.get_volume(shape.geometry)
+            self.assert_surface_style(
+                tread,
+                (200 / 255, 176 / 255, 144 / 255),
+            )
+        self.assertAlmostEqual(total_volume, 3 * 0.3 * 0.04)
+
+        drawing = house.add_drawing(
+            "Upper plan",
+            0.5,
+            0.8,
+            4.5,
+            3,
+            storeys=[upper],
+        )
+        annotation = drawing.add_stair_annotation(stair)
+        curves = annotation.Representation.Representations[0].Items[0].Elements
+        self.assertEqual(len(curves), 3)
+        self.assertTrue(
+            all(len(curve.Points.CoordList) == 5 for curve in curves)
+        )
+        include = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+            "Include",
+        )
+        included_ids = set(include.split("+"))
+        self.assertTrue(
+            all(tread.GlobalId in included_ids for tread in stair.tread_elements)
+        )
+        self.assertNotIn(stair.flight.GlobalId, included_ids)
+
+    def test_rejects_invalid_custom_stairs(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        valid_step = ((0, 0), (1, 0), (1, 0.3), (0, 0.3))
+
+        with self.assertRaisesRegex(ValueError, "at least one step"):
+            ground.custom_stair((), height=1)
+        with self.assertRaisesRegex(ValueError, "exactly four points"):
+            ground.custom_stair((valid_step[:3],), height=1)
+        with self.assertRaisesRegex(ValueError, "distinct points"):
+            ground.custom_stair(
+                (((0, 0), (1, 0), (1, 0.3), (1, 0.3)),),
+                height=1,
+            )
+        with self.assertRaisesRegex(ValueError, "non-zero area"):
+            ground.custom_stair(
+                (((0, 0), (1, 0), (2, 0), (3, 0)),),
+                height=1,
+            )
+        with self.assertRaisesRegex(ValueError, "height"):
+            ground.custom_stair((valid_step,), height=0)
+        with self.assertRaisesRegex(ValueError, "tread_thickness"):
+            ground.custom_stair(
+                (valid_step, valid_step),
+                height=0.08,
+                tread_thickness=0.04,
+            )
 
     def test_extends_timber_stringers_into_landing_slab(self) -> None:
         house = House("My house")
