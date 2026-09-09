@@ -206,10 +206,7 @@ pokoj_dole = ground.floor_layer(
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.5
-GALERY_START = BWT+2.0
-GALERY_END = BWT + math.ceil((GALERY_START-BWT + 0.17+0.03+0.4+1.0)/0.125)*0.125
-GALERY_DEPTH = 1.05
+CHODBA_DEPTH = 2.6
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at = HOUSE_DEPTH-BWT-0.75-2
 kuchyn  = ground.floor_layer(
@@ -450,29 +447,94 @@ wall_3.add_door(
 )
 
 # stairs
-stairs_polygons = []
-for i in range(15):
-	a0 = 180+15*9.5-9.5*i
-	a1 = a0 - 9.5
-	a0 = a0 / 180 * math.pi
-	a1 = a1 / 180 * math.pi
-	stairs_polygons.append((
-		(wall2_x + 2 + 1*math.cos(a0), BWT + 2 + 1*math.sin(a0)),
-		(wall2_x + 2 + 1*math.cos(a1), BWT + 2 + 1*math.sin(a1)),
-		(wall2_x + 2 + 2*math.cos(a1), BWT + 2 + 2*math.sin(a1)),
-		(wall2_x + 2 + 2*math.cos(a0), BWT + 2 + 2*math.sin(a0)),
-	))
+GALERY_START = BWT+2.15
+#stairs_polygons = []
+#for i in range(15):
+#	a0 = 180+15*9.5-9.5*i
+#	a1 = a0 - 9.5
+#	a0 = a0 / 180 * math.pi
+#	a1 = a1 / 180 * math.pi
+#	stairs_polygons.append((
+#		(wall2_x + 2 + 1*math.cos(a0), BWT + 2 + 1*math.sin(a0)),
+#		(wall2_x + 2 + 1*math.cos(a1), BWT + 2 + 1*math.sin(a1)),
+#		(wall2_x + 2 + 2*math.cos(a1), BWT + 2 + 2*math.sin(a1)),
+#		(wall2_x + 2 + 2*math.cos(a0), BWT + 2 + 2*math.sin(a0)),
+#	))
+stairs_center = (wall2_x + 1, BWT + 1.6)
+stairs_radiuses = (2.6, 1.6)
+stairs_width = 1
+stairs_initial_angle = 270
+stairs_polygons = elliptic_stairs(
+	center=stairs_center,
+	radiuses=stairs_radiuses,
+	width=stairs_width,
+	initial_angle=stairs_initial_angle,
+	step_size=0.27
+)[:10]
+stairs_end = stairs_polygons[-1][1]
+stairs_end_angle = math.degrees(math.atan2(
+	(stairs_end[1] - stairs_center[1]) / (stairs_radiuses[1] - stairs_width),
+	(stairs_end[0] - stairs_center[0]) / (stairs_radiuses[0] - stairs_width),
+))
+stairs_final_angle = stairs_initial_angle + (
+	stairs_end_angle - stairs_initial_angle
+) % 360
+print(f"Elliptic stairs final angle: {stairs_final_angle:.2f}°")
+stairs_polygons.reverse()
 stairs_max_x = max(p[0] for p in stairs_polygons[0])
 stairs_max_y = max(p[1] for p in stairs_polygons[0])
 print("stairs <-> koupelna =", wall3_x-BWT-stairs_max_x)
 print("stairs <-> kuchyn =", BWT+CHODBA_DEPTH-stairs_max_y)
+stair_step_height = stair_height / step_count
 main_stairs = ground.custom_stair(
     stairs_polygons,
-    start_height=0,
-    height=stair_height,
+    start_height=GROUND_FLOOR_THICKNESS,
+    height=stair_step_height * (len(stairs_polygons) + 1),
     tread_thickness=0.04,
     name="Main stair",
     color="#C8B090",
+)
+
+# The final ellipse tread meets this landing at the initial-angle radial edge.
+previous_elliptic_tread = set(stairs_polygons[-2])
+elliptic_top_edge = tuple(
+	point
+	for point in stairs_polygons[-1]
+	if point not in previous_elliptic_tread
+)
+landing_right_x = sum(point[0] for point in elliptic_top_edge) / 2
+landing_y_min = min(point[1] for point in elliptic_top_edge)
+landing_y_max = max(point[1] for point in elliptic_top_edge)
+remaining_stair_count = step_count - 2 - len(stairs_polygons)
+straight_stair_step_size = 0.27
+straight_stair_start_y = (
+	GALERY_START - remaining_stair_count * straight_stair_step_size
+)
+middle_stair_landing = ground.stair_landing(
+	(landing_right_x - 1, landing_y_min),
+	(landing_right_x, straight_stair_start_y),
+	height=main_stairs.end_height,
+	thickness=STAIR_TREAD_THICKNESS,
+	name="Middle stair landing",
+	color="#C8B090",
+)
+
+straight_stair_polygons = [
+	(
+		(landing_right_x - 1, straight_stair_start_y + index * straight_stair_step_size),
+		(landing_right_x, straight_stair_start_y + index * straight_stair_step_size),
+		(landing_right_x, straight_stair_start_y + (index + 1) * straight_stair_step_size),
+		(landing_right_x - 1, straight_stair_start_y + (index + 1) * straight_stair_step_size),
+	)
+	for index in range(remaining_stair_count)
+]
+gallery_stairs = ground.custom_stair(
+	straight_stair_polygons,
+	start_height=main_stairs.end_height,
+	height=stair_step_height * (remaining_stair_count + 1),
+	tread_thickness=STAIR_TREAD_THICKNESS,
+	name="Gallery stair",
+	color="#C8B090",
 )
 
 # Chimney
@@ -481,7 +543,7 @@ CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - 0.08 - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
-CHIMNEY_Y_START = GALERY_START + 0.17 + 0.02 # override
+CHIMNEY_Y_START = BWT + 2.15 + 0.17 + 0.02 # override
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
@@ -491,7 +553,7 @@ print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
 chimney = ground.chimney(
-    center=(wall3_x-BWT-0.05-0.2, CHIMNEY_Y_MID),
+    center=(wall2_x + 1 + 0.25, CHIMNEY_Y_MID),
     size=0.4,
     height=8.8,
     flue_diameter=0.18,
@@ -500,6 +562,8 @@ chimney = ground.chimney(
     material="Chimney",
     color="#B8A99A",
 )
+
+GALERY_END = math.ceil(CHIMNEY_Y_END/0.125)*0.125 + 1
 
 ground.furniture(
     "Kamna",
@@ -948,7 +1012,7 @@ wall_3.add_opening(
 	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_3.add_opening(
-    at=GALERY_END-1,
+    at=wall_zachod_nahore_y,
     width=1,
     height=2.25,
 )
@@ -1098,7 +1162,7 @@ wall_dormer.add_window(
 	width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
 wall_2.add_door(
-	at=GALERY_START+0.375,
+	at=math.ceil((GALERY_START+0.7)/0.125)*0.125,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
@@ -1866,6 +1930,8 @@ if "ground" in sys.argv:
 	])
 
 	drawing1.add_stair_annotation(main_stairs)
+	drawing1.add_stair_landing_annotation(middle_stair_landing)
+	drawing1.add_stair_annotation(gallery_stairs)
 	drawing1.add_chimney_annotation(chimney)
 
 	# Risankuv pokoj hloubka
@@ -1954,6 +2020,8 @@ if "upper" in sys.argv:
 	])
 
 	drawing1.add_stair_annotation(main_stairs)
+	drawing1.add_stair_landing_annotation(middle_stair_landing)
+	drawing1.add_stair_annotation(gallery_stairs)
 	drawing1.add_chimney_annotation(chimney)
 
 	drawing1.add_room_annotation(
@@ -2032,6 +2100,8 @@ if "ceiling" in sys.argv:
 	)
 
 	drawing1.add_stair_annotation(main_stairs)
+	drawing1.add_stair_landing_annotation(middle_stair_landing)
+	drawing1.add_stair_annotation(gallery_stairs)
 	drawing1.add_chimney_annotation(chimney)
 
 	drawing1.render("ceiling.svg", png=True, png_dpi=600)

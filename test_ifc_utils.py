@@ -44,12 +44,66 @@ from ifc_utils import (
     _postprocess_projected_wood_fills,
     _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
+    elliptic_stairs,
     generate_plan,
     offset_plane,
 )
 
 
 class HouseTests(unittest.TestCase):
+    def test_creates_counter_clockwise_elliptic_stair_polygons(self) -> None:
+        polygons = elliptic_stairs(
+            center=(2, -1),
+            radiuses=(2, 2),
+            width=1,
+            initial_angle=0,
+            step_size=0.8 * np.pi,
+        )
+
+        self.assertEqual(len(polygons), 4)
+        np.testing.assert_allclose(
+            polygons[0],
+            (
+                (3, -1),
+                (2, 0),
+                (2, 1),
+                (4, -1),
+            ),
+            atol=1e-5,
+        )
+        np.testing.assert_allclose(polygons[-1][1], polygons[0][0])
+        np.testing.assert_allclose(polygons[-1][2], polygons[0][3])
+
+    def test_creates_elliptic_stairs_with_a_short_closing_step(self) -> None:
+        polygons = elliptic_stairs(
+            center=(1, 2),
+            radiuses=(3, 2),
+            width=0.8,
+            initial_angle=30,
+            step_size=0.7,
+        )
+
+        self.assertGreater(len(polygons), 1)
+        first_inner = polygons[0][0]
+        first_outer = polygons[0][3]
+        np.testing.assert_allclose(polygons[-1][1], first_inner, atol=1e-9)
+        np.testing.assert_allclose(polygons[-1][2], first_outer, atol=1e-9)
+        self.assertGreater(polygons[0][1][1], polygons[0][0][1])
+
+    def test_rejects_invalid_elliptic_stairs(self) -> None:
+        with self.assertRaisesRegex(ValueError, "radiuses"):
+            elliptic_stairs((0, 0), (0, 2), 1, 0, 0.2)
+        with self.assertRaisesRegex(ValueError, "width"):
+            elliptic_stairs((0, 0), (2, 2), 0, 0, 0.2)
+        with self.assertRaisesRegex(ValueError, "smaller than both radiuses"):
+            elliptic_stairs((0, 0), (2, 1), 1, 0, 0.2)
+        with self.assertRaisesRegex(ValueError, "0.4 metres"):
+            elliptic_stairs((0, 0), (0.4, 1), 0.1, 0, 0.2)
+        with self.assertRaisesRegex(ValueError, "step_size"):
+            elliptic_stairs((0, 0), (2, 2), 1, 0, 0)
+        with self.assertRaisesRegex(ValueError, "circumference"):
+            elliptic_stairs((0, 0), (2, 2), 1, 0, 20)
+
     def test_offsets_plane_along_upward_normal_independent_of_point_order(
         self,
     ) -> None:

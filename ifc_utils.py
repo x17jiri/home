@@ -66,6 +66,7 @@ __all__ = [
     "Storey",
     "VerticalFrame",
     "Wall",
+    "elliptic_stairs",
     "generate_plan",
     "offset_plane",
 ]
@@ -1645,6 +1646,121 @@ def _point_3d(value: Point3D, argument: str) -> tuple[float, float, float]:
         _number(y, f"{argument} y"),
         _number(z, f"{argument} z"),
     )
+
+
+def elliptic_stairs(
+    center: Point,
+    radiuses: Point,
+    width: Number,
+    initial_angle: Number,
+    step_size: Number,
+) -> list[tuple[tuple[float, float], ...]]:
+    """Return tread polygons arranged around an elliptical stair.
+
+    ``radiuses`` gives the outer X and Y radiuses and ``width`` offsets the
+    inner ellipse inwards along both axes.  Tread spacing is measured in metres
+    along a third ellipse whose radiuses are 0.4 m smaller than the outer
+    ellipse.  Starting at ``initial_angle`` in degrees, the polygons proceed
+    counter-clockwise for one complete revolution.  Every polygon spans
+    ``step_size`` along the spacing ellipse, except for a possibly shorter final
+    polygon which closes the revolution.
+
+    The returned four-point polygons are ordered from the inner starting point
+    to the inner ending point, then to the corresponding outer ending and
+    starting points.  They can be passed directly, or sliced first, into
+    :meth:`Storey.custom_stair`.
+    """
+    center_x, center_y = _point(center, "center")
+    outer_x, outer_y = _point(radiuses, "radiuses")
+    width = _number(width, "width")
+    initial_angle = _number(initial_angle, "initial_angle")
+    step_size = _number(step_size, "step_size")
+
+    if outer_x <= 0 or outer_y <= 0:
+        raise ValueError("radiuses must both be greater than zero")
+    if width <= 0:
+        raise ValueError("width must be greater than zero")
+    inner_x = outer_x - width
+    inner_y = outer_y - width
+    if inner_x <= 0 or inner_y <= 0:
+        raise ValueError("width must be smaller than both radiuses")
+    middle_x = outer_x - 0.4
+    middle_y = outer_y - 0.4
+    if middle_x <= 0 or middle_y <= 0:
+        raise ValueError("radiuses must both be greater than 0.4 metres")
+    if step_size <= 0:
+        raise ValueError("step_size must be greater than zero")
+
+    revolution = 2 * np.pi
+    start_angle = radians(initial_angle % 360.0)
+
+    # Ramanujan's second approximation determines a suitable lookup-table
+    # density.  The table itself uses chord lengths, with at least 4096 samples
+    # per revolution, to invert ellipse arc length without requiring SciPy.
+    h = ((middle_x - middle_y) / (middle_x + middle_y)) ** 2
+    circumference_estimate = (
+        np.pi
+        * (middle_x + middle_y)
+        * (1 + 3 * h / (10 + np.sqrt(4 - 3 * h)))
+    )
+    estimated_step_count = max(
+        1,
+        int(np.ceil(circumference_estimate / step_size)),
+    )
+    sample_count = max(4096, estimated_step_count * 32)
+    sample_angles = np.linspace(
+        start_angle,
+        start_angle + revolution,
+        sample_count + 1,
+    )
+    sample_x = middle_x * np.cos(sample_angles)
+    sample_y = middle_y * np.sin(sample_angles)
+    segment_lengths = np.hypot(np.diff(sample_x), np.diff(sample_y))
+    cumulative_lengths = np.concatenate(([0.0], np.cumsum(segment_lengths)))
+    circumference = float(cumulative_lengths[-1])
+    if step_size >= circumference:
+        raise ValueError(
+            "step_size must be smaller than the middle ellipse circumference"
+        )
+
+    complete_steps = int(circumference // step_size)
+    boundary_lengths = [
+        step_index * step_size
+        for step_index in range(complete_steps + 1)
+    ]
+    closing_length = circumference - boundary_lengths[-1]
+    length_tolerance = max(1e-9, circumference * 1e-12)
+    if closing_length <= length_tolerance:
+        boundary_lengths[-1] = circumference
+    else:
+        boundary_lengths.append(circumference)
+    boundary_angles = np.interp(
+        boundary_lengths,
+        cumulative_lengths,
+        sample_angles,
+    )
+
+    def ellipse_point(
+        angle: float,
+        radius_x: float,
+        radius_y: float,
+    ) -> tuple[float, float]:
+        return (
+            center_x + radius_x * cos(angle),
+            center_y + radius_y * sin(angle),
+        )
+
+    stairs_polygons = []
+    for start, end in zip(boundary_angles, boundary_angles[1:]):
+        stairs_polygons.append(
+            (
+                ellipse_point(start, inner_x, inner_y),
+                ellipse_point(end, inner_x, inner_y),
+                ellipse_point(end, outer_x, outer_y),
+                ellipse_point(start, outer_x, outer_y),
+            )
+        )
+    return stairs_polygons
 
 
 def offset_plane(
@@ -9894,9 +10010,11 @@ class Storey:
         polygons are ordered from bottom to top.  The treads are distributed
         evenly through ``height``: with N polygons and a final rise to the
         upper landing, their top surfaces are at 1/(N+1), 2/(N+1), ...,
-        N/(N+1) of the total rise above ``start_height``.  Each polygon becomes
-        a separate horizontal wooden board of ``tread_thickness``.  No riser
-        boards or side stringers are generated.
+        N/(N+1) of the total rise above ``start_height``.  Reverse
+        ``step_polygons`` before calling this method when the geometric first
+        tread should be the highest.  Each polygon becomes a separate
+        horizontal wooden board of ``tread_thickness``.  No riser boards or
+        side stringers are generated.
         """
         if isinstance(step_polygons, (str, bytes)):
             raise TypeError("step_polygons must be a sequence of polygons")
