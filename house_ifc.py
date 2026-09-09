@@ -209,10 +209,32 @@ pokoj_dole = ground.floor_layer(
 CHODBA_DEPTH = 2.6
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at = HOUSE_DEPTH-BWT-0.75-2
+
+# chimney
+CHIMNEY_DIST=0.47
+CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - 0.08 - 0.05 - 0.4
+CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
+CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
+
+CHIMNEY_Y_START = BWT + 2.15 + 0.17 + 0.02 # override
+
+CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
+CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
+
+CHIMNEY_X_START = wall2_x + 1.15 + 0.5
+CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
+CHIMNEY_X_END = CHIMNEY_X_START + 0.4
+
+print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
+print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
+print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
+
 kuchyn  = ground.floor_layer(
 	"Kuchyn",
 	outline=(
-		(wall2_x, BWT+CHODBA_DEPTH+0.15),
+		(wall2_x, BWT+2.25+0.25+1+0.15),
+		(wall2_x+1.15+0.15, BWT+2.25+0.25+1+0.15),
+		(wall2_x+1.15+0.15, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
@@ -234,7 +256,9 @@ chodba  = ground.floor_layer(
 		(wall2_x, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
-		(wall2_x, BWT+CHODBA_DEPTH),
+		(wall2_x+1.15, BWT+CHODBA_DEPTH),
+		(wall2_x+1.15, BWT+2.25+0.25+1+0.05),
+		(wall2_x, BWT+2.25+0.25+1+0.05),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
@@ -319,7 +343,7 @@ wall_gym = ground.wall(
 	(-HOUSE_EXT+BWT, BWT+2.25), (wall2_x-BWT, BWT+2.25),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_2.add_opening(
-	at=BWT+1.25,
+	at=BWT+1,
 	width=1,
 	height=ground_floor_height-0.5,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -403,22 +427,34 @@ ground.asset(
 
 # Kitchen, Kuchyn
 wall_kitchen = ground.wall(
-	(wall2_x, BWT+CHODBA_DEPTH),
+	(wall2_x+1.15, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen.add_door(
-	at=0.25,
+wall_kitchen2 = ground.wall(
+	(wall2_x+1.15, BWT+2.25+0.25+1+0.15),
+	(wall2_x+1.15, BWT+CHODBA_DEPTH),
+	wall_type=partition_wall, height=ground_floor_height)
+wall_kitchen4 = ground.wall(
+	(wall2_x+1.15+0.15+0.15+0.9+0.15, BWT+CHODBA_DEPTH+0.15),
+	(wall2_x+1.15+0.15+0.15+0.9+0.15, BWT+CHODBA_DEPTH+0.15+0.15+0.5),
+	wall_type=partition_wall, height=ground_floor_height)
+wall_kitchen3 = ground.wall(
+	(wall2_x, BWT+2.25+0.25+1+0.05),
+	(wall2_x+1.15, BWT+2.25+0.25+1+0.05),
+	wall_type=dry_wall, height=ground_floor_height)
+wall_kitchen3.add_door(
+	at=0.075,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_LEFT",
-	reverse_swing=True
+	reverse_swing=False
 )
 
 # Pokoj Risanek
 wall_2.add_door(
-	at=BWT+2.25+0.5,
+	at=BWT+2.25+0.25,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -538,22 +574,8 @@ gallery_stairs = ground.custom_stair(
 )
 
 # Chimney
-CHIMNEY_DIST=0.47
-CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - 0.08 - 0.05 - 0.4
-CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
-CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
-
-CHIMNEY_Y_START = BWT + 2.15 + 0.17 + 0.02 # override
-
-CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
-CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
-
-print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
-print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
-print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
-
 chimney = ground.chimney(
-    center=(wall2_x + 1 + 0.25, CHIMNEY_Y_MID),
+    center=(CHIMNEY_X_MID, CHIMNEY_Y_MID),
     size=0.4,
     height=8.8,
     flue_diameter=0.18,
@@ -563,16 +585,16 @@ chimney = ground.chimney(
     color="#B8A99A",
 )
 
-GALERY_END = math.ceil(CHIMNEY_Y_END/0.125)*0.125 + 1
+GALERY_END = GALERY_START + 0.17 + 0.03 + 0.4 + 0.95
 
 ground.furniture(
     "Kamna",
     kind="USERDEFINED",
-    size=(0.5, 0.6, 1.5),
+    size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall3_x-BWT-0.5, BWT+2.6+BWT+0.4),
+    center=(wall2_x + 1.15 + 0.15 + 0.5, BWT+CHODBA_DEPTH+0.15+0.15+0.25),
 	start_height=GROUND_FLOOR_THICKNESS,
-    rotation=-45,
+#    rotation=-45,
 )
 
 # Kuchyn
@@ -624,9 +646,9 @@ ground.furniture(
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
-    center=(wall3_x-2.5, 2*BWT+CHODBA_DEPTH+0.7),
+    center=(wall3_x-BWT-1.13, BWT+CHODBA_DEPTH+0.15+1.2),
 	start_height=GROUND_FLOOR_THICKNESS,
-	rotation=90,
+	#size=(1.3, 0.8*3),
 )
 
 # facade
@@ -1162,7 +1184,7 @@ wall_dormer.add_window(
 	width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
 wall_2.add_door(
-	at=math.ceil((GALERY_START+0.7)/0.125)*0.125,
+	at=math.floor(GALERY_END/0.125)*0.125 - 1,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
@@ -1927,6 +1949,7 @@ if "ground" in sys.argv:
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
+		("sand-dense", "Příčka - Sádrokarton 100 mm"),
 	])
 
 	drawing1.add_stair_annotation(main_stairs)
@@ -1980,7 +2003,7 @@ if "ground" in sys.argv:
 		area=koupelna.area,
 	)
 	drawing1.add_room_annotation(
-		(7, 0.5+1.2),
+		(7.5, 1+1.2),
 		identifier="0.04",
 		description="Chodba a schody",
 		area=chodba.area,
@@ -2074,7 +2097,7 @@ if "upper" in sys.argv:
 	# sklad nahore hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
 	# Pokoj 2, hloubka
-	drawing1.add_dimension(start=(4.5, GALERY_END+0.1), end=(4.5, HOUSE_DEPTH-BWT), offset=0)
+	drawing1.add_dimension(start=(5.5, GALERY_END+0.1), end=(5.5, HOUSE_DEPTH-BWT), offset=0)
 
 	# Vnejsi rozmery
 	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
@@ -2090,7 +2113,7 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, BWT), end=(-HOUSE_EXT+BWT, BWT+2.06), offset=0.75)
 
 	# galerie hloubka
-	drawing1.add_dimension(start=(5, GALERY_START), end=(5, GALERY_END), offset=0)
+	drawing1.add_dimension(start=(6, GALERY_START), end=(6, GALERY_END), offset=0)
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 

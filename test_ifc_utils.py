@@ -949,6 +949,13 @@ class HouseTests(unittest.TestCase):
                 asset="wc",
                 center=(3, 3),
             )
+            scaled_toilet = ground.asset(
+                "Scaled WC",
+                asset="wc",
+                center=(4, 3),
+                size=(0.8, 0.3),
+                rotation=90,
+            )
 
             self.assertTrue(toilet.is_a("IfcSanitaryTerminal"))
             self.assertEqual(
@@ -964,6 +971,10 @@ class HouseTests(unittest.TestCase):
             )
             self.assertEqual(
                 ifcopenshell.util.element.get_type(second_toilet),
+                ifcopenshell.util.element.get_type(toilet),
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_type(scaled_toilet),
                 ifcopenshell.util.element.get_type(toilet),
             )
             representations = {
@@ -999,6 +1010,50 @@ class HouseTests(unittest.TestCase):
                 3,
             )
             self.assertAlmostEqual(min(point[2] for point in points), 0.35)
+            scaled_shape = ifcopenshell.geom.create_shape(settings, scaled_toilet)
+            scaled_vertices = scaled_shape.geometry.verts
+            scaled_points = tuple(
+                zip(
+                    scaled_vertices[::3],
+                    scaled_vertices[1::3],
+                    scaled_vertices[2::3],
+                )
+            )
+            self.assertAlmostEqual(
+                max(point[0] for point in scaled_points)
+                - min(point[0] for point in scaled_points),
+                0.3,
+            )
+            self.assertAlmostEqual(
+                max(point[1] for point in scaled_points)
+                - min(point[1] for point in scaled_points),
+                0.8,
+            )
+            self.assertAlmostEqual(
+                max(point[2] for point in scaled_points)
+                - min(point[2] for point in scaled_points),
+                0.8,
+            )
+            scaled_targets = [
+                item.MappingTarget
+                for representation in scaled_toilet.Representation.Representations
+                for item in representation.Items
+                if item.is_a("IfcMappedItem")
+            ]
+            self.assertEqual(len(scaled_targets), 2)
+            self.assertTrue(
+                all(
+                    target.is_a(
+                        "IfcCartesianTransformationOperator3DnonUniform"
+                    )
+                    for target in scaled_targets
+                )
+            )
+            self.assertTrue(all(target.Scale == 2 for target in scaled_targets))
+            self.assertTrue(
+                all(target.Scale2 == 0.5 for target in scaled_targets)
+            )
+            self.assertTrue(all(target.Scale3 == 1 for target in scaled_targets))
             label = house.model.by_type("IfcTextLiteralWithExtent")[0]
             self.assertEqual(label.Literal, "WC")
 
@@ -1035,6 +1090,20 @@ class HouseTests(unittest.TestCase):
                     asset="toilet_with_cistern",
                     center=(0, 0),
                     start_height=-0.1,
+                )
+            with self.assertRaisesRegex(TypeError, "exactly two dimensions"):
+                ground.asset(
+                    "Bad size",
+                    asset="toilet_with_cistern",
+                    center=(0, 0),
+                    size=(1,),
+                )
+            with self.assertRaisesRegex(ValueError, "greater than zero"):
+                ground.asset(
+                    "Bad size",
+                    asset="toilet_with_cistern",
+                    center=(0, 0),
+                    size=(1, 0),
                 )
 
     def test_creates_semantic_box_furniture_with_a_labeled_plan_symbol(

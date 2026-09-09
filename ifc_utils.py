@@ -8183,6 +8183,7 @@ class Storey:
         asset: str | AssetInfo | None = None,
         type_name: str | None = None,
         center: Point,
+        size: Sequence[Number] | None = None,
         rotation: Number = 0,
         start_height: Number = 0,
         label: str | None = None,
@@ -8193,12 +8194,29 @@ class Storey:
         ``house.assets.search(...)`` or, as an advanced escape hatch, pass the
         library's exact ``type_name``.  ``center`` is the centre of the
         object's 3D bounding box in plan, independent of the library type's
-        original drawing origin.  ``rotation`` is counter-clockwise in
-        degrees, and ``start_height`` places the bottom of the object above
-        this storey's elevation.
+        original drawing origin.  Optional ``size`` is the desired
+        ``(width, depth)`` of the complete asset in its local axes; it scales
+        both its 3D body and plan symbol while preserving its original height.
+        ``rotation`` is counter-clockwise in degrees, and ``start_height``
+        places the bottom of the object above this storey's elevation.
         """
         object_name = _name(name, "name")
         center_x, center_y = _point(center, "center")
+        target_size = None
+        if size is not None:
+            if isinstance(size, (str, bytes)):
+                raise TypeError("size must contain exactly two dimensions")
+            try:
+                width, depth = size
+            except (TypeError, ValueError) as error:
+                raise TypeError(
+                    "size must contain exactly two dimensions"
+                ) from error
+            width = _number(width, "size width")
+            depth = _number(depth, "size depth")
+            if width <= 0 or depth <= 0:
+                raise ValueError("size dimensions must be greater than zero")
+            target_size = (width, depth)
         rotation = _number(rotation, "rotation")
         start_height = _number(start_height, "start_height")
         if start_height < 0:
@@ -8228,6 +8246,65 @@ class Storey:
         min_x, min_y, min_z, max_x, max_y, max_z = catalog._local_bounds(
             entry, occurrence
         )
+        if target_size is not None:
+            original_width = max_x - min_x
+            original_depth = max_y - min_y
+            if original_width <= 0 or original_depth <= 0:
+                raise RuntimeError(
+                    f'asset "{entry.alias}" has no usable plan footprint'
+                )
+            scale_x = target_size[0] / original_width
+            scale_y = target_size[1] / original_depth
+            for representation in occurrence.Representation.Representations:
+                for item in representation.Items:
+                    if not item.is_a("IfcMappedItem"):
+                        continue
+                    mapping_target = item.MappingTarget
+                    base_scale_x = mapping_target.Scale or 1.0
+                    base_scale_y = (
+                        mapping_target.Scale2
+                        if mapping_target.is_a(
+                            "IfcCartesianTransformationOperator2DnonUniform"
+                        )
+                        or mapping_target.is_a(
+                            "IfcCartesianTransformationOperator3DnonUniform"
+                        )
+                        else base_scale_x
+                    )
+                    base_scale_y = base_scale_y or base_scale_x
+                    if mapping_target.is_a(
+                        "IfcCartesianTransformationOperator3D"
+                    ):
+                        base_scale_z = (
+                            mapping_target.Scale3
+                            if mapping_target.is_a(
+                                "IfcCartesianTransformationOperator3DnonUniform"
+                            )
+                            else base_scale_x
+                        )
+                        item.MappingTarget = model.create_entity(
+                            "IfcCartesianTransformationOperator3DnonUniform",
+                            Axis1=mapping_target.Axis1,
+                            Axis2=mapping_target.Axis2,
+                            LocalOrigin=mapping_target.LocalOrigin,
+                            Scale=base_scale_x * scale_x,
+                            Axis3=mapping_target.Axis3,
+                            Scale2=base_scale_y * scale_y,
+                            Scale3=base_scale_z or base_scale_x,
+                        )
+                    else:
+                        item.MappingTarget = model.create_entity(
+                            "IfcCartesianTransformationOperator2DnonUniform",
+                            Axis1=mapping_target.Axis1,
+                            Axis2=mapping_target.Axis2,
+                            LocalOrigin=mapping_target.LocalOrigin,
+                            Scale=base_scale_x * scale_x,
+                            Scale2=base_scale_y * scale_y,
+                        )
+            min_x *= scale_x
+            max_x *= scale_x
+            min_y *= scale_y
+            max_y *= scale_y
         local_center_x = (min_x + max_x) / 2
         local_center_y = (min_y + max_y) / 2
         angle = radians(rotation)

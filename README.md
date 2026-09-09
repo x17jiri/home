@@ -141,6 +141,7 @@ ground.asset(
     "WC",
     asset="toilet_with_cistern",
     center=(2.85, 2.05),
+    size=(0.7, 1.1),
     rotation=90,
 )
 ground.asset("Basin", asset="basin_medium", center=(2.1, 1.2))
@@ -152,7 +153,9 @@ ground.asset("Shower", asset="shower_90x90", center=(0.8, 1.8))
 The object keeps its semantic IFC class and shares its imported IFC type with
 repeated instances. Its 3D body and purpose-made 2D plan symbol are both
 included. `center` consistently means the centre of the object in plan even
-when the source library uses a corner or wall face as its origin.
+when the source library uses a corner or wall face as its origin. Pass
+`size=(width, depth)` to resize the complete footprint, including surrounding
+parts such as the chairs in a dining-table asset. The original height is kept.
 
 Common search synonyms such as `wc`, `toilet`, `cooker`, `basin`, and `sink`
 also work directly as the `asset` value. To select a type outside the stable
