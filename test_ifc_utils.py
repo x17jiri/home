@@ -1106,6 +1106,87 @@ class HouseTests(unittest.TestCase):
                     size=(1, 0),
                 )
 
+    def test_creates_a_cylinder_with_body_geometry_and_material(self) -> None:
+        house = House("My house", colors={"cylinder": "#8090A0"})
+        ground = house.storey("Ground floor", elevation=0.25)
+        cylinder = ground.cylinder(
+            center=(2, 3),
+            radius=0.2,
+            height=1.4,
+            start_height=0.1,
+            material="Steel",
+            name="Round column",
+        )
+
+        self.assertTrue(cylinder.is_a("IfcBuildingElementProxy"))
+        self.assertEqual(cylinder.Name, "Round column")
+        self.assertEqual(cylinder.PredefinedType, "USERDEFINED")
+        self.assertEqual(cylinder.ObjectType, "CYLINDER")
+        self.assertEqual(
+            cylinder.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(cylinder).Name,
+            "Steel",
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            cylinder.ObjectPlacement
+        )
+        np.testing.assert_allclose(placement[:3, 3], (2, 3, 0.35))
+
+        body = ifcopenshell.util.representation.get_representation(
+            cylinder, "Model", "Body", "MODEL_VIEW"
+        )
+        self.assertEqual(body.RepresentationType, "SweptSolid")
+        self.assertTrue(body.Items[0].SweptArea.is_a("IfcCircleProfileDef"))
+        self.assertAlmostEqual(body.Items[0].SweptArea.Radius, 0.2)
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), cylinder
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(shape.geometry), 0.4, delta=0.001
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(shape.geometry), 0.4, delta=0.001
+        )
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_z(shape.geometry), 1.4)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            np.pi * 0.2**2 * 1.4,
+            delta=0.002,
+        )
+
+        self.assertIsNone(
+            ifcopenshell.util.representation.get_representation(
+                cylinder, "Plan", "Body", "PLAN_VIEW"
+            )
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                cylinder, "BBIM_Cylinder", "Radius"
+            ),
+            0.2,
+        )
+        self.assert_surface_style(cylinder, (128 / 255, 144 / 255, 160 / 255))
+
+    def test_rejects_invalid_cylinders(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+
+        with self.assertRaisesRegex(ValueError, "radius"):
+            ground.cylinder(center=(0, 0), radius=0, height=1)
+        with self.assertRaisesRegex(ValueError, "height"):
+            ground.cylinder(center=(0, 0), radius=1, height=0)
+        with self.assertRaisesRegex(ValueError, "start_height"):
+            ground.cylinder(
+                center=(0, 0), radius=1, height=1, start_height=-0.1
+            )
+        with self.assertRaisesRegex(ValueError, "material must not be empty"):
+            ground.cylinder(
+                center=(0, 0), radius=1, height=1, material=""
+            )
+
     def test_creates_semantic_box_furniture_with_a_labeled_plan_symbol(
         self,
     ) -> None:

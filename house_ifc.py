@@ -70,7 +70,7 @@ import sys, math
 from ifc_utils import *
 
 RAFTER_Z_OFFSET = -0.04
-RAFTER_THICKNESS = 0.1
+RAFTER_THICKNESS = 0.08
 RAFTER_SIZE = (RAFTER_THICKNESS, 0.20)
 VAPOUR_BARRIER_THICKNESS = 0.001
 THERMAL_INSULATION_UNDER_RAFTERS = 0
@@ -221,7 +221,7 @@ CHIMNEY_Y_START = BWT + 2.15 + 0.17 + 0.02 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1.15 + 0.5
+CHIMNEY_X_START = wall2_x + 1.15 + 0.3
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
 
@@ -394,14 +394,16 @@ ground.furniture(
 )
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
-	center=(wall2_x+1.2, 7.2),
+	center=(wall2_x+0.1+1.25, HOUSE_DEPTH-BWT-0.1-0.55),
 	start_height=GROUND_FLOOR_THICKNESS,
+	size=(2.5, 1.1),
 )
 ground.asset(
 	"Gauc", asset="1_seater_sofa",
-	center=(wall2_x+0.6, 6.2),
+	center=(wall2_x+0.1+0.55, HOUSE_DEPTH-BWT-0.1-1.1-0.1-0.55),
 	start_height=GROUND_FLOOR_THICKNESS,
 	rotation=90,
+	size=(1.1, 1.1)
 )
 ground.asset(
     "Umyv",
@@ -482,6 +484,27 @@ wall_3.add_door(
 	reverse_swing=True,
 )
 
+# kruhy kolem komina
+#ground.cylinder(
+#    center=(CHIMNEY_X_START, CHIMNEY_Y_START),
+#    radius=1,
+#    height=GROUND_FLOOR_THICKNESS+2.1,
+#    start_height=0,
+#    material="Concrete",
+#    color="#cccccc",
+#    transparency=0,
+#)
+#ground.cylinder(
+#    center=(CHIMNEY_X_END, CHIMNEY_Y_START),
+#    radius=1,
+#    height=GROUND_FLOOR_THICKNESS+2.1,
+#    start_height=0,
+#    material="Concrete",
+#    color="#cccccc",
+#    transparency=0,
+#)
+
+
 # stairs
 GALERY_START = BWT+2.15
 #stairs_polygons = []
@@ -555,20 +578,24 @@ middle_stair_landing = ground.stair_landing(
 	color="#C8B090",
 )
 
-straight_stair_polygons = [
+gallery_stairs = ground.stair(
 	(
-		(landing_right_x - 1, straight_stair_start_y + index * straight_stair_step_size),
-		(landing_right_x, straight_stair_start_y + index * straight_stair_step_size),
-		(landing_right_x, straight_stair_start_y + (index + 1) * straight_stair_step_size),
-		(landing_right_x - 1, straight_stair_start_y + (index + 1) * straight_stair_step_size),
-	)
-	for index in range(remaining_stair_count)
-]
-gallery_stairs = ground.custom_stair(
-	straight_stair_polygons,
+		landing_right_x - 0.5,
+		straight_stair_start_y,
+	),
+	(
+		landing_right_x - 0.5,
+		GALERY_START,
+	),
+	width=1,
 	start_height=main_stairs.end_height,
+	slab_height=main_stairs.end_height - STAIR_TREAD_THICKNESS,
 	height=stair_step_height * (remaining_stair_count + 1),
+	risers=remaining_stair_count + 1,
+	construction="timber",
 	tread_thickness=STAIR_TREAD_THICKNESS,
+	stringer_thickness=STAIR_STRINGER_THICKNESS,
+	stringer_height=STAIR_STRINGER_HEIGHT,
 	name="Gallery stair",
 	color="#C8B090",
 )
@@ -646,7 +673,7 @@ ground.furniture(
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
-    center=(wall3_x-BWT-1.13, BWT+CHODBA_DEPTH+0.15+1.2),
+    center=(wall3_x-BWT-1.1, BWT+CHODBA_DEPTH+0.15+1.2),
 	start_height=GROUND_FLOOR_THICKNESS,
 	#size=(1.3, 0.8*3),
 )
@@ -1365,21 +1392,21 @@ ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 # "after" shorten the main rafter on the garden side; "+before" and "+after"
 # leave it full-length.
 rafters = [
-	-1.11,
-	-0.11,
-	0.8,
-	1.7,
-	2.4,
-	(3.1, "+before"),
-	(3.82, "before"),
-	(4.52, "after"),
-	(5.52, "after"),
-	(6.52, "after"),
-	(7.52, "after"),
-	(8.52, "+after"),
-	9.52,
-	10.52,
-	11.225,
+	-1.12,
+	-0.12,
+	0.68,
+	1.48,
+	2.28,
+	(3.09, "+before"),
+	(3.77, "before"),
+	(4.77, "after"),
+	(5.81, "after"),
+	(6.85, "after"),
+	(7.85, "after"),
+	(8.53, "+after"),
+	9.53,
+	10.53,
+	11.245,
 	]
 rafter_layout = []
 for rafter in rafters:
@@ -1941,7 +1968,7 @@ if "ground" in sys.argv:
 		"Drawing 1",
 		x=5,
 		y=4,
-		z=0.25+2,
+		z=GROUND_FLOOR_THICKNESS+2.05,
 		radius=8,
 		storeys=[ground],
 		right_panel_width=40,

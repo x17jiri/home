@@ -157,6 +157,22 @@ when the source library uses a corner or wall face as its origin. Pass
 `size=(width, depth)` to resize the complete footprint, including surrounding
 parts such as the chairs in a dining-table asset. The original height is kept.
 
+For simple cylindrical objects, provide the centre of the circular footprint,
+its radius, and its vertical dimensions:
+
+```python
+ground.cylinder(
+    center=(3.0, 2.0),
+    radius=0.25,
+    height=1.0,
+    start_height=0.1,
+    material="Concrete",
+    color="#cccccc",
+)
+```
+
+The cylinder's 3D body is projected or cut as a circle in plan drawings.
+
 Common search synonyms such as `wc`, `toilet`, `cooker`, `basin`, and `sink`
 also work directly as the `asset` value. To select a type outside the stable
 aliases, use the exact name returned by a search:

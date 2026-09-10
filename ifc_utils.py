@@ -2375,6 +2375,7 @@ class House:
     ``"stair"``, and ``"window"`` elements using named colors or
     ``#RGB``/``#RRGGBB`` values.  ``asset_library`` may override the
     automatically discovered Bonsai furniture-library IFC path.
+    The ``"cylinder"`` color category controls generic cylinders.
     """
 
     def __init__(
@@ -2393,6 +2394,7 @@ class House:
             "beam",
             "block",
             "chimney",
+            "cylinder",
             "wall",
             "door",
             "furniture",
@@ -2502,6 +2504,7 @@ class House:
             "beam",
             "block",
             "chimney",
+            "cylinder",
             "wall",
             "door",
             "furniture",
@@ -7699,6 +7702,7 @@ class Storey:
         self._stair_count = 0
         self._landing_count = 0
         self._chimney_count = 0
+        self._cylinder_count = 0
 
     def add(
         self,
@@ -8546,6 +8550,129 @@ class Storey:
             depth=depth,
         )
         return furniture
+
+    def cylinder(
+        self,
+        center: Point,
+        *,
+        radius: Number,
+        height: Number,
+        start_height: Number = 0,
+        material: str = "Generic",
+        name: str | None = None,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> ifcopenshell.entity_instance:
+        """Create a vertical cylinder centred at ``center`` in plan.
+
+        ``radius`` and ``height`` define the cylinder's geometry, while
+        ``start_height`` places its bottom above this storey's elevation.
+        ``material`` is persisted as an IFC material.  ``color`` and
+        ``transparency`` affect only the 3D body.
+        """
+        center_x, center_y = _point(center, "center")
+        radius = _number(radius, "radius")
+        height = _number(height, "height")
+        start_height = _number(start_height, "start_height")
+        material_name = _name(material, "material")
+        if radius <= 0:
+            raise ValueError("radius must be greater than zero")
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        if start_height < 0:
+            raise ValueError("start_height must be zero or greater")
+        surface_style = self.house._surface_style(
+            "cylinder",
+            color=color,
+            transparency=transparency,
+        )
+
+        self._cylinder_count += 1
+        cylinder_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Cylinder {self._cylinder_count}"
+        )
+        model = self.house.model
+        cylinder = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcBuildingElementProxy",
+            name=cylinder_name,
+            predefined_type="USERDEFINED",
+        )
+        cylinder.ObjectType = "CYLINDER"
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[cylinder],
+            relating_structure=self.element,
+        )
+
+        placement = np.eye(4)
+        placement[0, 3] = center_x
+        placement[1, 3] = center_y
+        placement[2, 3] = self.elevation + start_height
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=cylinder,
+            matrix=placement,
+            is_si=True,
+        )
+
+        profile = model.createIfcCircleProfileDef(
+            "AREA",
+            f"{cylinder_name} Profile",
+            None,
+            radius,
+        )
+        body = ifcopenshell.api.geometry.add_profile_representation(
+            model,
+            context=self.house._body_context,
+            profile=profile,
+            depth=height,
+            cardinal_point=None,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=cylinder,
+            representation=body,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+
+        ifc_material = self.house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category=material_name.casefold(),
+            )
+            self.house._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model,
+            products=[cylinder],
+            type="IfcMaterial",
+            material=ifc_material,
+        )
+
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=cylinder,
+            name="BBIM_Cylinder",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={
+                "Radius": radius,
+                "Height": height,
+                "StartHeight": start_height,
+            },
+        )
+        return cylinder
 
     def miako_slab(
         self,
