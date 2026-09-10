@@ -2376,6 +2376,10 @@ class House:
     ``#RGB``/``#RRGGBB`` values.  ``asset_library`` may override the
     automatically discovered Bonsai furniture-library IFC path.
     The ``"cylinder"`` color category controls generic cylinders.
+    Set ``mirror_x=True`` to reflect exported IFC geometry and drawings across
+    the global ``x=0`` plane.  The live Python objects retain their original
+    coordinates, so geometry can continue to refer to values returned by
+    walls, roof planes, stairs, and other helpers without double reflection.
     """
 
     def __init__(
@@ -2384,8 +2388,12 @@ class House:
         *,
         colors: Mapping[str, str] | None = None,
         asset_library: str | PathLike[str] | None = None,
+        mirror_x: bool = False,
     ) -> None:
         self.name = _name(name, "name")
+        if not isinstance(mirror_x, bool):
+            raise TypeError("mirror_x must be a boolean")
+        self.mirror_x = mirror_x
         if colors is None:
             colors = {}
         elif not isinstance(colors, Mapping):
@@ -2497,6 +2505,188 @@ class House:
         ] = {}
         self._ifc_path: Path | None = None
         self.assets = AssetCatalog(self, asset_library)
+
+    @staticmethod
+    def _placement_depth(product: ifcopenshell.entity_instance) -> int:
+        """Return the number of parent placements above ``product``."""
+        placement = product.ObjectPlacement
+        depth = 0
+        while placement is not None and placement.is_a("IfcLocalPlacement"):
+            placement = placement.PlacementRelTo
+            if placement is not None:
+                depth += 1
+        return depth
+
+    @staticmethod
+    def _representation_contains_text(
+        representation: ifcopenshell.entity_instance,
+    ) -> bool:
+        """Return whether a representation directly contains readable text."""
+        return any(
+            item.is_a("IfcTextLiteral")
+            for item in representation.Items or ()
+        )
+
+    @staticmethod
+    def _swap_left_right(value: str | None) -> str | None:
+        """Swap LEFT and RIGHT tokens without disturbing other enum text."""
+        if value is None:
+            return None
+        return value.replace("LEFT", "__MIRROR_LEFT__").replace(
+            "RIGHT", "LEFT"
+        ).replace("__MIRROR_LEFT__", "RIGHT")
+
+    @staticmethod
+    def _orient_mirrored_dimension(
+        representation: ifcopenshell.entity_instance,
+        original_placement: np.ndarray,
+        world_reflection: np.ndarray,
+    ) -> None:
+        """Keep Bonsai's generated dimension text in a readable direction."""
+        for item in representation.Items or ():
+            if (
+                not item.is_a("IfcIndexedPolyCurve")
+                or item.Segments
+                or len(item.Points.CoordList) != 2
+            ):
+                continue
+            coordinates = item.Points.CoordList
+            world_points = []
+            for point in coordinates:
+                point_3d = (*point, 0.0) if len(point) == 2 else point
+                world_points.append(
+                    world_reflection
+                    @ original_placement
+                    @ np.array((*point_3d, 1.0), dtype=float)
+                )
+            delta = world_points[1] - world_points[0]
+            if delta[0] < -1e-9 or (
+                abs(float(delta[0])) <= 1e-9 and delta[1] < 0
+            ):
+                item.Points.CoordList = tuple(reversed(coordinates))
+
+    def _mirror_export_model_x(self, model: ifcopenshell.file) -> None:
+        """Reflect one disposable IFC model copy across global ``x=0``.
+
+        IFC local placements are necessarily right-handed.  Each exported
+        product therefore receives a right-handed reflected placement while
+        its representation receives the complementary local-X reflection.
+        Their product is the desired world-space reflection.  Text and the
+        symmetric drawing camera box deliberately omit the representation
+        reflection so lettering stays readable and camera loading stays
+        conventional.
+        """
+        world_reflection = np.diag((-1.0, 1.0, 1.0, 1.0))
+        local_reflection = np.diag((-1.0, 1.0, 1.0, 1.0))
+        placed_products = [
+            product
+            for product in model.by_type("IfcProduct")
+            if getattr(product, "ObjectPlacement", None) is not None
+        ]
+        original_placements = {
+            product.id(): ifcopenshell.util.placement.get_local_placement(
+                product.ObjectPlacement
+            )
+            for product in placed_products
+        }
+        for product in sorted(placed_products, key=self._placement_depth):
+            mirrored_placement = (
+                world_reflection
+                @ original_placements[product.id()]
+                @ local_reflection
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=product,
+                matrix=mirrored_placement,
+                is_si=True,
+                should_transform_children=True,
+            )
+
+        mirrored_product_shapes: set[int] = set()
+        for product in model.by_type("IfcProduct"):
+            product_shape = getattr(product, "Representation", None)
+            if (
+                product_shape is None
+                or product_shape.id() in mirrored_product_shapes
+            ):
+                continue
+            mirrored_product_shapes.add(product_shape.id())
+            is_drawing_camera = (
+                product.is_a("IfcAnnotation")
+                and getattr(product, "ObjectType", None) == "DRAWING"
+            )
+            is_dimension = (
+                product.is_a("IfcAnnotation")
+                and getattr(product, "ObjectType", None) == "DIMENSION"
+            )
+            mirrored_representations = []
+            for representation in product_shape.Representations or ():
+                if (
+                    is_drawing_camera
+                    or self._representation_contains_text(representation)
+                ):
+                    mirrored_representations.append(representation)
+                    continue
+                if is_dimension:
+                    self._orient_mirrored_dimension(
+                        representation,
+                        original_placements[product.id()],
+                        world_reflection,
+                    )
+                mapping_origin = model.createIfcAxis2Placement3D(
+                    model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+                    model.createIfcDirection((0.0, 0.0, 1.0)),
+                    model.createIfcDirection((1.0, 0.0, 0.0)),
+                )
+                representation_map = model.createIfcRepresentationMap(
+                    mapping_origin,
+                    representation,
+                )
+                mapping_target = model.createIfcCartesianTransformationOperator3D(
+                    model.createIfcDirection((-1.0, 0.0, 0.0)),
+                    model.createIfcDirection((0.0, 1.0, 0.0)),
+                    model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+                    1.0,
+                    model.createIfcDirection((0.0, 0.0, 1.0)),
+                )
+                mapped_item = model.createIfcMappedItem(
+                    representation_map,
+                    mapping_target,
+                )
+                mirrored_representations.append(
+                    model.createIfcShapeRepresentation(
+                        representation.ContextOfItems,
+                        representation.RepresentationIdentifier,
+                        "MappedRepresentation",
+                        [mapped_item],
+                    )
+                )
+            product_shape.Representations = mirrored_representations
+
+        for door in (*model.by_type("IfcDoor"), *model.by_type("IfcDoorType")):
+            operation = getattr(door, "OperationType", None)
+            if operation is not None:
+                door.OperationType = self._swap_left_right(operation)
+        for window in (
+            *model.by_type("IfcWindow"),
+            *model.by_type("IfcWindowType"),
+        ):
+            partition = getattr(window, "PartitioningType", None)
+            if partition is not None:
+                window.PartitioningType = self._swap_left_right(partition)
+
+    def _export_model(self) -> ifcopenshell.file:
+        """Return the live model or a disposable, transformed export copy."""
+        if not self.mirror_x:
+            return self.model
+        export_model = ifcopenshell.file.from_string(self.model.to_string())
+        self._mirror_export_model_x(export_model)
+        return export_model
+
+    def _write_model(self, path: str | PathLike[str]) -> None:
+        """Write current state, applying export-only transforms when enabled."""
+        self._export_model().write(str(path))
 
     def _surface_style(
         self,
@@ -4147,7 +4337,7 @@ class House:
     def write(self, path: str | PathLike[str]) -> Path:
         """Write the IFC model and return the output path."""
         output = Path(path)
-        self.model.write(str(output))
+        self._write_model(output)
         self._ifc_path = output.resolve()
         return output
 
@@ -4172,11 +4362,11 @@ class House:
         """
         if self._ifc_path is None:
             raise RuntimeError("write the IFC model before generating a plan")
-        self.model.write(str(self._ifc_path))
+        self._write_model(self._ifc_path)
         return generate_plan(
             self._ifc_path,
             output,
-            x=x,
+            x=-_number(x, "x") if self.mirror_x else x,
             y=y,
             z=z,
             radius=radius,
@@ -5849,7 +6039,7 @@ class Drawing:
             pset=self._drawing_pset,
             properties={"Stylesheet": str(stylesheet_path)},
         )
-        self.house.model.write(str(self.house._ifc_path))
+        self.house._write_model(self.house._ifc_path)
         return _render_existing_drawing(
             self.house._ifc_path,
             self.element.GlobalId,

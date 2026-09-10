@@ -4569,6 +4569,191 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(len(reopened.by_type("IfcWall")), 1)
             self.assertEqual(reopened.by_type("IfcProject")[0].Name, "My house")
 
+    def test_mirrors_exports_across_x_zero_without_changing_live_coordinates(
+        self,
+    ) -> None:
+        house = House("Mirrored house", mirror_x=True)
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((2, 3), (5, 3), thickness=0.2, height=2.8)
+        door = wall.add_door(
+            at=0.5,
+            opening_width=1.2,
+            width=1,
+            height=2.2,
+            operation="SINGLE_SWING_LEFT",
+        )
+        rafter = ground.beam(
+            "Sloped beam",
+            start=(1, 2, 4),
+            end=(5, 2, 7),
+            size=(0.12, 0.2),
+            kind="RAFTER",
+        )
+        drawing = house.add_drawing(
+            "Section",
+            4,
+            3,
+            2,
+            6,
+            view="elevation",
+            direction=(-1, 0, 0),
+            door_annotations=False,
+        )
+
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+
+        def bounds(
+            model: ifcopenshell.file,
+            global_id: str,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            shape = ifcopenshell.geom.create_shape(
+                settings,
+                model.by_guid(global_id),
+            )
+            vertices = np.asarray(shape.geometry.verts).reshape((-1, 3))
+            return vertices.min(axis=0), vertices.max(axis=0)
+
+        original_rafter_bounds = bounds(house.model, rafter.GlobalId)
+        original_wall_placement = ifcopenshell.util.placement.get_local_placement(
+            wall.ObjectPlacement
+        ).copy()
+
+        with TemporaryDirectory() as directory:
+            first_output = Path(directory) / "mirrored.ifc"
+            second_output = Path(directory) / "mirrored-again.ifc"
+            house.write(first_output)
+            house.write(second_output)
+            mirrored = ifcopenshell.open(first_output)
+            mirrored_again = ifcopenshell.open(second_output)
+
+            wall_minimum, wall_maximum = bounds(mirrored, wall.GlobalId)
+            np.testing.assert_allclose(wall_minimum, (-5, 2.9, 0), atol=1e-8)
+            np.testing.assert_allclose(wall_maximum, (-2, 3.1, 2.8), atol=1e-8)
+            repeated_minimum, repeated_maximum = bounds(
+                mirrored_again,
+                wall.GlobalId,
+            )
+            np.testing.assert_allclose(repeated_minimum, wall_minimum, atol=1e-8)
+            np.testing.assert_allclose(repeated_maximum, wall_maximum, atol=1e-8)
+
+            mirrored_rafter_bounds = bounds(mirrored, rafter.GlobalId)
+            np.testing.assert_allclose(
+                mirrored_rafter_bounds[0][0],
+                -original_rafter_bounds[1][0],
+                atol=1e-8,
+            )
+            np.testing.assert_allclose(
+                mirrored_rafter_bounds[1][0],
+                -original_rafter_bounds[0][0],
+                atol=1e-8,
+            )
+            np.testing.assert_allclose(
+                mirrored_rafter_bounds[0][1:],
+                original_rafter_bounds[0][1:],
+                atol=1e-8,
+            )
+            np.testing.assert_allclose(
+                mirrored_rafter_bounds[1][1:],
+                original_rafter_bounds[1][1:],
+                atol=1e-8,
+            )
+
+            mirrored_door = mirrored.by_guid(door.GlobalId)
+            self.assertEqual(mirrored_door.OperationType, "SINGLE_SWING_RIGHT")
+            mirrored_drawing = mirrored.by_guid(drawing.element.GlobalId)
+            drawing_placement = (
+                ifcopenshell.util.placement.get_local_placement(
+                    mirrored_drawing.ObjectPlacement
+                )
+            )
+            np.testing.assert_allclose(
+                drawing_placement[:3, 3],
+                (-4, 3, 2),
+                atol=1e-9,
+            )
+            np.testing.assert_allclose(
+                drawing_placement[:3, 2],
+                (-1, 0, 0),
+                atol=1e-9,
+            )
+            for product in mirrored.by_type("IfcProduct"):
+                if product.ObjectPlacement is None:
+                    continue
+                placement = ifcopenshell.util.placement.get_local_placement(
+                    product.ObjectPlacement
+                )
+                self.assertAlmostEqual(
+                    np.linalg.det(placement[:3, :3]),
+                    1,
+                )
+
+        np.testing.assert_allclose(
+            ifcopenshell.util.placement.get_local_placement(
+                wall.ObjectPlacement
+            ),
+            original_wall_placement,
+            atol=1e-9,
+        )
+        self.assertEqual(wall.start, (2, 3))
+        self.assertEqual(wall.end, (5, 3))
+        self.assertEqual(door.OperationType, "SINGLE_SWING_LEFT")
+        self.assertEqual(rafter.start, (1, 2, 4))
+        self.assertEqual(rafter.end, (5, 2, 7))
+
+    def test_keeps_mirrored_plan_text_readable_and_moves_it_to_negative_x(
+        self,
+    ) -> None:
+        house = House("Mirrored plan", mirror_x=True)
+        ground = house.storey("Ground floor", elevation=0)
+        drawing = house.add_drawing(
+            "Ground plan",
+            3,
+            4,
+            1.5,
+            6,
+            storeys=[ground],
+            door_annotations=False,
+        )
+        annotation = drawing.add_room_annotation(
+            (3.5, 4),
+            identifier="A",
+            description="Room",
+            area=10,
+        )
+        dimension = drawing.add_dimension((1, 2), (4, 2))
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "mirrored-plan.ifc"
+            house.write(output)
+            mirrored = ifcopenshell.open(output)
+            mirrored_annotation = mirrored.by_guid(annotation.GlobalId)
+            placement = ifcopenshell.util.placement.get_local_placement(
+                mirrored_annotation.ObjectPlacement
+            )
+            self.assertAlmostEqual(placement[0, 3], -3.5)
+            np.testing.assert_allclose(placement[:3, 0], (1, 0, 0), atol=1e-9)
+            representation = mirrored_annotation.Representation.Representations[0]
+            self.assertEqual(representation.RepresentationType, "Annotation2D")
+            self.assertTrue(
+                any(item.is_a("IfcTextLiteral") for item in representation.Items)
+            )
+            mirrored_dimension = mirrored.by_guid(dimension.GlobalId)
+            dimension_map = (
+                mirrored_dimension.Representation.Representations[0].Items[0]
+            )
+            source_curve = (
+                dimension_map.MappingSource.MappedRepresentation.Items[0]
+            )
+            self.assertEqual(
+                source_curve.Points.CoordList,
+                ((4.0, 2.0), (1.0, 2.0)),
+            )
+
+    def test_validates_mirror_x(self) -> None:
+        with self.assertRaisesRegex(TypeError, "mirror_x must be a boolean"):
+            House("Invalid", mirror_x=1)
+
     def test_stores_batting_annotation_and_thickness_in_ifc(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)

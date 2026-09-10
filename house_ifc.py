@@ -120,6 +120,7 @@ NADEZDIVKA = 1.25
 
 house = House(
     "My house",
+    mirror_x=True,
     colors={
         "wall": "#ffffff",
         "door": "#8B5A2B",
@@ -165,9 +166,9 @@ facade_insulation = house.wall_type(
 HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
 KITCHEN_WIDTH = 4.75 - 0.03
-HOUSE_WIDTH = 11.125
+HOUSE_WIDTH = 11.625
 
-wall2_x = BWT + 3.0 - 0.03 + BWT;
+wall2_x = BWT + 3.5 - 0.03 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
