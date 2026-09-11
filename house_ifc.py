@@ -183,17 +183,6 @@ EXT_DIST_FROM_HALF = 1.5
 CUT_DEPTH = 2.5
 CUT_WIDTH = 2
 
-posilovna = ground.floor_layer(
-	"Prizemi, posilovna",
-	outline=(
-		(BWT, BWT),
-		(wall2_x-BWT, BWT),
-		(wall2_x-BWT, BWT+2.25),
-		(BWT, BWT+2.25),
-	),
-	thickness=GROUND_FLOOR_THICKNESS,
-	color="#ffff80",
-)
 pokoj_dole = ground.floor_layer(
 	"Pokoj",
 	outline=(
@@ -207,7 +196,7 @@ pokoj_dole = ground.floor_layer(
 )
 CHODBA_DEPTH = 2.6
 wall_zachod_nahore_y = BWT+1.2+1+0.1
-oblouk_at = HOUSE_DEPTH-BWT-0.75-2
+oblouk_at = HOUSE_DEPTH-BWT-1-2
 
 # chimney
 CHIMNEY_DIST=0.47
@@ -220,7 +209,7 @@ CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1.15+0.15+0.6
+CHIMNEY_X_START = wall2_x + 1.6
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
 
@@ -231,9 +220,7 @@ print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 kuchyn  = ground.floor_layer(
 	"Kuchyn",
 	outline=(
-		(wall2_x, BWT+2.25+0.25+1+0.15),
-		(wall2_x+1.15+0.15, BWT+2.25+0.25+1+0.15),
-		(wall2_x+1.15+0.15, BWT+CHODBA_DEPTH+0.15),
+		(wall2_x, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
@@ -255,9 +242,7 @@ chodba  = ground.floor_layer(
 		(wall2_x, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
-		(wall2_x+1.15, BWT+CHODBA_DEPTH),
-		(wall2_x+1.15, BWT+2.25+0.25+1+0.05),
-		(wall2_x, BWT+2.25+0.25+1+0.05),
+		(wall2_x, BWT+CHODBA_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
@@ -339,12 +324,12 @@ wall_back.add_door(
 
 
 wall_front_cut = ground.wall(
-	(BWT, CUT_DEPTH), (wall2_x-BWT, CUT_DEPTH),
+	(0, CUT_DEPTH), (wall2_x-BWT, CUT_DEPTH),
 	wall_type=load_bearing_wall, height=ground_floor_height)
 # Cut walkthrough
 wall_2.add_opening(
-	at=BWT + (CUT_DEPTH/2) - 0.625,
-	width=1.25,
+	at=BWT+0.5,
+	width=1.75,
 	height=ground_floor_height-0.5,
 	sill_height=GROUND_FLOOR_THICKNESS,
 )
@@ -421,23 +406,11 @@ ground.asset(
 
 # Kitchen, Kuchyn
 wall_kitchen = ground.wall(
-	(wall2_x+1.15, BWT+CHODBA_DEPTH),
+	(wall2_x, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen2 = ground.wall(
-	(wall2_x+1.15, BWT+2.25+0.25+1+0.15),
-	(wall2_x+1.15, BWT+CHODBA_DEPTH),
-	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen4 = ground.wall(
-	(wall2_x+1.15+0.15+0.15+0.9+0.15, BWT+CHODBA_DEPTH+0.15),
-	(wall2_x+1.15+0.15+0.15+0.9+0.15, BWT+CHODBA_DEPTH+0.15+0.15+0.5),
-	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen3 = ground.wall(
-	(wall2_x, BWT+2.25+0.25+1+0.05),
-	(wall2_x+1.15, BWT+2.25+0.25+1+0.05),
-	wall_type=dry_wall, height=ground_floor_height)
-wall_kitchen3.add_door(
-	at=0.075,
+wall_kitchen.add_door(
+	at=0.125,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -447,13 +420,13 @@ wall_kitchen3.add_door(
 )
 
 # Pokoj Risanek
-wall_2.add_door(
-	at=CUT_DEPTH+0.25+0.125,
+wall_front_cut.add_door(
+	at=wall2_x-BWT-1-0.075,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
-	operation="SINGLE_SWING_LEFT",
+	operation="SINGLE_SWING_RIGHT",
 #	reverse_swing=True,
 )
 
@@ -580,7 +553,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall2_x + 1.15 + 0.15 + 0.5, BWT+CHODBA_DEPTH+0.15+0.15+0.25),
+    center=(wall2_x + 1.25 + 0.2 + 0.3, BWT+CHODBA_DEPTH+0.15+0.15+0.25),
 	start_height=GROUND_FLOOR_THICKNESS,
 #    rotation=-45,
 )
@@ -634,7 +607,7 @@ ground.furniture(
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
-    center=(wall3_x-BWT-1.1, BWT+CHODBA_DEPTH+0.15+1.2),
+    center=(wall3_x-BWT-1.1, HOUSE_DEPTH-BWT-1.2),
 	start_height=GROUND_FLOOR_THICKNESS,
 	#size=(1.3, 0.8*3),
 )
@@ -1984,12 +1957,6 @@ if "ground" in sys.argv:
 		description="Chodba a schody",
 		area=chodba.area,
 	)
-	drawing1.add_room_annotation(
-		(1, 1),
-		identifier="0.03",
-		description="Posilovna",
-		area=posilovna.area,
-	)
 	drawing1.add_room_legend()
 
 	# The Rockwool occupies the right side of each wall axis.  These annotations
@@ -2056,12 +2023,6 @@ if "upper" in sys.argv:
 		identifier="P.05",
 		description="Záchod",
 		area=zachod_nahore.area
-	)
-	drawing1.add_room_annotation(
-		(1, 1),
-		identifier="0.03",
-		description="Posilovna (v přízemí)",
-		area=posilovna.area,
 	)
 	drawing1.add_room_legend()
 
