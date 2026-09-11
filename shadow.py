@@ -19,8 +19,8 @@ POLYGON_ORIGIN = (-3.5, 4.5)
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
 POLYGON_POINTS: tuple[tuple[float, float], ...] = (
     (-5, 0),
-	(-2.25, 0),
-		(-2.25, 2.25), (0, 2.25), (0, 8.5-1.75), (-2, 8.5-1.75),
+	(-2, 0),
+		(-2, 2.25), (0, 2.25), (0, 8.5-1.75), (-2, 8.5-1.75),
 	(-2, 8.5),
 	(-5, 8.5)
 )
