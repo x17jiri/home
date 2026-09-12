@@ -10,19 +10,23 @@ from matplotlib.axes import Axes
 X_MIN, X_MAX = -20, 3
 Y_MIN, Y_MAX = -3, 20
 DX_PER_DY = 0.119
-DISTANCE_ALONG_LINE = 7.8
+DISTANCE_ALONG_LINE = 7.75
 SECOND_LINE_ANGLE = 70
+CENTER_HEIGHT = 8.25
+SLOPE = 0.7359
+WINDOW_HEIGHT = 1.5 + 0.75
 
 # Move the entire polygon by changing only this point.
-POLYGON_ORIGIN = (-3.5, 4.5)
+POLYGON_ORIGIN = (-3.45, 4.5+8.5/2)
 
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
 POLYGON_POINTS: tuple[tuple[float, float], ...] = (
-    (-5, 0),
-	(-2, 0),
-		(-2, 2), (0, 2), (0, 8.5-1.75), (-2, 8.5-1.75),
-	(-2, 8.5),
-	(-5, 8.5)
+    (-12, -9.5/2),
+	(-2, -9.5/2),
+	(-2, -9.5/2 + 2),
+	(0, -9.5/2 + 2),
+	(0, +9.5/2),
+	(-12, +9.5/2)
 )
 
 OUTPUT_FILE = Path(__file__).with_name("shadow.png")
@@ -69,13 +73,13 @@ def cross_product(
     return first[0] * second[1] - first[1] * second[0]
 
 
-def distance_to_polygon_on_ray(
+def polygon_intersection_on_ray(
     ray_origin: tuple[float, float],
     ray_direction: tuple[float, float],
     polygon_points: list[tuple[float, float]],
-) -> float | None:
-    """Return the nearest forward ray/polygon intersection distance."""
-    distances: list[float] = []
+) -> tuple[float, tuple[float, float]] | None:
+    """Return the nearest forward ray/polygon intersection."""
+    intersections: list[tuple[float, tuple[float, float]]] = []
     for segment_start, segment_end in zip(
         polygon_points,
         polygon_points[1:] + polygon_points[:1],
@@ -97,9 +101,13 @@ def distance_to_polygon_on_ray(
             cross_product(origin_to_segment, ray_direction) / denominator
         )
         if ray_distance >= 0 and 0 <= segment_fraction <= 1:
-            distances.append(ray_distance)
+            intersection = (
+                ray_origin[0] + ray_distance * ray_direction[0],
+                ray_origin[1] + ray_distance * ray_direction[1],
+            )
+            intersections.append((ray_distance, intersection))
 
-    return min(distances) if distances else None
+    return min(intersections, key=lambda item: item[0]) if intersections else None
 
 
 def main() -> None:
@@ -165,15 +173,69 @@ def main() -> None:
     )
 
     polygon_points = absolute_polygon_points(POLYGON_ORIGIN, POLYGON_POINTS)
-    perpendicular_distance = distance_to_polygon_on_ray(
+    perpendicular_intersection = polygon_intersection_on_ray(
         (branch_x, branch_y),
         (perpendicular_dx, perpendicular_dy),
         polygon_points,
     )
-    if perpendicular_distance is None:
+    if perpendicular_intersection is None:
         print("The perpendicular line does not intersect the polygon.")
     else:
+        perpendicular_distance, _ = perpendicular_intersection
         print(f"Perpendicular distance to polygon: {perpendicular_distance:.3f} m")
+
+    # Angle 0 points down along the original slope. Increasing the angle turns
+    # clockwise toward the polygon, one tenth of a degree at a time.
+    downward_angle = first_angle + math.pi
+    final_result: tuple[
+        float,
+        float,
+        tuple[float, float],
+        float,
+    ] | None = None
+    for angle_tenths in range(1801):
+        angle_degrees = angle_tenths / 10
+        test_angle = downward_angle - math.radians(angle_degrees)
+        test_direction = (math.cos(test_angle), math.sin(test_angle))
+        intersection_result = polygon_intersection_on_ray(
+            (branch_x, branch_y),
+            test_direction,
+            polygon_points,
+        )
+        if intersection_result is None:
+            continue
+
+        intersection_distance, intersection_point = intersection_result
+        local_y = intersection_point[1] - POLYGON_ORIGIN[1]
+        polygon_height = CENTER_HEIGHT - SLOPE * abs(local_y)
+        if polygon_height > WINDOW_HEIGHT + intersection_distance:
+            final_result = (
+                angle_degrees,
+                intersection_distance,
+                intersection_point,
+                polygon_height,
+            )
+            break
+
+    if final_result is None:
+        print("No angle from 0 to 180 degrees satisfies the height condition.")
+    else:
+        (
+            final_angle,
+            final_distance,
+            final_intersection,
+            final_polygon_height,
+        ) = final_result
+        ax.plot(
+            [branch_x, final_intersection[0]],
+            [branch_y, final_intersection[1]],
+            color="red",
+            linewidth=3,
+            zorder=4,
+        )
+        print(f"Final angle: {final_angle:.1f} degrees")
+        print(f"Final intersection distance: {final_distance:.3f} m")
+        print(f"Polygon height at intersection: {final_polygon_height:.3f} m")
 
     draw_relative_polygon(ax, POLYGON_ORIGIN, POLYGON_POINTS)
 
