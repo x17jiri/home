@@ -194,7 +194,7 @@ pokoj_dole = ground.floor_layer(
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.6
+CHODBA_DEPTH = 2.45
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at = HOUSE_DEPTH-BWT-1-2
 
@@ -204,12 +204,12 @@ CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - 0.08 - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
-CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
+CHIMNEY_Y_START = BWT+CHODBA_DEPTH - 0.45 # override
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1.6
+CHIMNEY_X_START = wall3_x - BWT - 2.2 - 0.4
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
 
@@ -268,7 +268,7 @@ wall_1 = ground.wall(
 	(0, HOUSE_DEPTH-BWT),
 	(0, CUT_DEPTH),
 	wall_type=load_bearing_wall, height=ground_floor_height)
-wall_2 = ground.wall((wall2_x, 0), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_2 = ground.wall((wall2_x, BWT+2), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
 #ground.connect_wall(wall_0, wall_front)
@@ -276,7 +276,7 @@ wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearin
 #ground.connect_wall(wall_1, wall_0x)
 ground.connect_wall(wall_1, wall_back)
 
-ground.connect_wall(wall_2, wall_front, is_atpath=True)
+#ground.connect_wall(wall_2, wall_front, is_atpath=True)
 ground.connect_wall(wall_2, wall_back, is_atpath=True)
 
 ground.connect_wall(wall_3, wall_front, is_atpath=True)
@@ -326,13 +326,6 @@ wall_back.add_door(
 wall_front_cut = ground.wall(
 	(0, CUT_DEPTH), (wall2_x-BWT, CUT_DEPTH),
 	wall_type=load_bearing_wall, height=ground_floor_height)
-# Cut walkthrough
-wall_2.add_opening(
-	at=BWT+0.5,
-	width=1.75,
-	height=ground_floor_height-0.5,
-	sill_height=GROUND_FLOOR_THICKNESS,
-)
 
 # Bathroom, Koupelna
 wall_bathroom = ground.wall(
@@ -406,7 +399,7 @@ ground.asset(
 
 # Kitchen, Kuchyn
 wall_kitchen = ground.wall(
-	(wall2_x, BWT+CHODBA_DEPTH),
+	(CHIMNEY_X_START, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen.add_door(
@@ -497,7 +490,6 @@ main_stairs = ground.stair(
 )
 
 
-# The final ellipse tread meets this landing at the initial-angle radial edge.
 landing_right_x = wall3_x - BWT
 landing_y_min = BWT
 remaining_stair_count = step_count - 2 - 9
@@ -507,7 +499,7 @@ middle_stair_landing = ground.stair_landing(
 	(landing_right_x - 1, landing_y_min),
 	(landing_right_x, straight_stair_start_y),
 	height=main_stairs.end_height,
-	thickness=STAIR_TREAD_THICKNESS,
+	thickness=0.2,
 	name="Middle stair landing",
 	color="#C8B090",
 )
@@ -523,7 +515,7 @@ gallery_stairs = ground.stair(
 	),
 	width=1,
 	start_height=main_stairs.end_height,
-	slab_height=main_stairs.end_height - STAIR_TREAD_THICKNESS,
+	slab_height=main_stairs.end_height - 0.2,
 	height=stair_step_height * (remaining_stair_count + 1),
 	risers=remaining_stair_count + 1,
 	construction="timber",
@@ -607,7 +599,7 @@ ground.furniture(
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
-    center=(wall3_x-BWT-1.1, HOUSE_DEPTH-BWT-1.2),
+    center=(wall3_x-BWT-1.1, 3 + 1.2),
 	start_height=GROUND_FLOOR_THICKNESS,
 	#size=(1.3, 0.8*3),
 )
@@ -968,7 +960,7 @@ wall_1 = upper.wall(
 #wall_0.add_opening(at=HOUSE_DEPTH-CUT_DEPTH-BWT, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_2 = upper.wall(
-	(wall2_x, 0.002), (wall2_x, HOUSE_DEPTH-BWT),
+	(wall2_x, BWT+2), (wall2_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_2.add_opening(
@@ -2112,7 +2104,7 @@ if "cut3" in sys.argv:
 if "wall2" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Wall2",
-		x=BWT+3+0.1,
+		x=BWT+3.5+0.1,
 		y=4,
 		z=3.5,
 		radius=8,

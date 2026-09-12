@@ -9,7 +9,7 @@ from matplotlib.axes import Axes
 
 X_MIN, X_MAX = -20, 3
 Y_MIN, Y_MAX = -3, 20
-DX_PER_DY = 0.12
+DX_PER_DY = 0.119
 DISTANCE_ALONG_LINE = 7.8
 SECOND_LINE_ANGLE = 70
 
@@ -20,7 +20,7 @@ POLYGON_ORIGIN = (-3.5, 4.5)
 POLYGON_POINTS: tuple[tuple[float, float], ...] = (
     (-5, 0),
 	(-2, 0),
-		(-2, 2.25), (0, 2.25), (0, 8.5-1.75), (-2, 8.5-1.75),
+		(-2, 2), (0, 2), (0, 8.5-1.75), (-2, 8.5-1.75),
 	(-2, 8.5),
 	(-5, 8.5)
 )
