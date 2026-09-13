@@ -165,9 +165,9 @@ facade_insulation = house.wall_type(
 HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
 KITCHEN_WIDTH = 4.75 - 0.03
-HOUSE_WIDTH = 11.125
+HOUSE_WIDTH = 11.375
 
-wall2_x = BWT + 3.0 - 0.03 + BWT;
+wall2_x = BWT + 3.25 - 0.03 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
@@ -178,17 +178,13 @@ STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
 KK_WIDTH = HOUSE_WIDTH - wall3_x - BWT
 
-HOUSE_EXT = 1
-EXT_DIST_FROM_HALF = 1.5
-EXT_DEPTH = HALF_DEPTH + EXT_DIST_FROM_HALF
-
 posilovna = ground.floor_layer(
 	"Prizemi, posilovna",
 	outline=(
-		(-HOUSE_EXT+BWT, BWT),
+		(BWT, BWT),
 		(wall2_x-BWT, BWT),
 		(wall2_x-BWT, BWT+2.25),
-		(-HOUSE_EXT+BWT, BWT+2.25),
+		(BWT, BWT+2.25),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
@@ -196,19 +192,17 @@ posilovna = ground.floor_layer(
 pokoj_dole = ground.floor_layer(
 	"Pokoj",
 	outline=(
-		(-HOUSE_EXT+BWT, BWT+2.25+0.15),
+		(BWT, BWT+2.25+0.15),
 		(wall2_x-BWT, BWT+2.25+0.15),
 		(wall2_x-BWT, HOUSE_DEPTH-BWT),
 		(BWT, HOUSE_DEPTH-BWT),
-		(BWT, EXT_DEPTH-BWT),
-		(-HOUSE_EXT+BWT, EXT_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
 CHODBA_DEPTH = 2.6
 wall_zachod_nahore_y = BWT+1.2+1+0.1
-oblouk_at = HOUSE_DEPTH-BWT-0.75-2
+oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 
 # chimney
 CHIMNEY_DIST=0.47
@@ -232,9 +226,7 @@ print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 kuchyn  = ground.floor_layer(
 	"Kuchyn",
 	outline=(
-		(wall2_x, BWT+2.25+0.25+1+0.15),
-		(wall2_x+1.15+0.15, BWT+2.25+0.25+1+0.15),
-		(wall2_x+1.15+0.15, BWT+CHODBA_DEPTH+0.15),
+		(wall2_x, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
@@ -242,8 +234,8 @@ kuchyn  = ground.floor_layer(
 		(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH+0.15),
 		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
 		(wall3_x, HOUSE_DEPTH-BWT),
-		(wall3_x, oblouk_at+2),
-		(wall3_x-BWT, oblouk_at+2),
+		(wall3_x, oblouk_at+2.5),
+		(wall3_x-BWT, oblouk_at+2.5),
 		(wall3_x-BWT, HOUSE_DEPTH-BWT),
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
@@ -256,9 +248,7 @@ chodba  = ground.floor_layer(
 		(wall2_x, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
-		(wall2_x+1.15, BWT+CHODBA_DEPTH),
-		(wall2_x+1.15, BWT+2.25+0.25+1+0.05),
-		(wall2_x, BWT+2.25+0.25+1+0.05),
+		(wall2_x, BWT+CHODBA_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
@@ -277,18 +267,13 @@ koupelna = ground.floor_layer(
 )
 
 # Load-bearing walls
-wall_front = ground.wall((-HOUSE_EXT, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_front = ground.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_4 = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_back = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_0 = ground.wall((-HOUSE_EXT, EXT_DEPTH), (-HOUSE_EXT, 0), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_0x = ground.wall((BWT, EXT_DEPTH), (-HOUSE_EXT, EXT_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1 = ground.wall((0, HOUSE_DEPTH), (0, EXT_DEPTH-BWT), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1 = ground.wall((0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_2 = ground.wall((wall2_x, 0), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
-ground.connect_wall(wall_0, wall_front)
-ground.connect_wall(wall_0, wall_0x)
-ground.connect_wall(wall_1, wall_0x)
 ground.connect_wall(wall_1, wall_back)
 
 ground.connect_wall(wall_2, wall_front, is_atpath=True)
@@ -306,7 +291,7 @@ GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
 front_door = wall_front.add_door(
-	at=HOUSE_EXT+wall3_x-BWT-0.125-1.125,
+	at=wall3_x-BWT-0.125-1.125,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
@@ -314,7 +299,7 @@ front_door = wall_front.add_door(
 	operation="SINGLE_SWING_RIGHT"
 )
 wall_front.add_window(
-    at=HOUSE_EXT+wall3_x+0.875,
+    at=wall3_x+0.875,
     width=0.75,
     height=GROUND_DOOR_HEIGHT, # use door height so it is aligned with the front door
     sill_height=GROUND_DOOR_HEIGHT-0.375,
@@ -328,8 +313,8 @@ wall_back.add_window(
 	sill_height=GROUND_WINDOW_SILL_HEIGHT,
 	height=GROUND_WINDOW_HEIGHT)
 wall_back.add_window(
-	at=3+KITCHEN_WIDTH+BWT+0.75-0.125,
-	width=1.5, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
+	at=HOUSE_WIDTH-wall2_x+BWT+0.625,
+	width=2, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
 wall_back.add_door(
 	at=BWT+KK_WIDTH-0.125-1,
 	width=0.8, sill_height=GROUND_WINDOW_HEIGHT-2.0,
@@ -340,10 +325,10 @@ wall_back.add_door(
 
 # Posilovna, Gym
 wall_gym = ground.wall(
-	(-HOUSE_EXT+BWT, BWT+2.25), (wall2_x-BWT, BWT+2.25),
+	(BWT, BWT+2.25), (wall2_x-BWT, BWT+2.25),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_2.add_opening(
-	at=BWT+1,
+	at=BWT+1.25,
 	width=1,
 	height=ground_floor_height-0.5,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -394,15 +379,16 @@ ground.furniture(
 )
 ground.asset(
 	"Gauc", asset="3_seater_sofa",
-	center=(wall2_x+0.1+1.25, HOUSE_DEPTH-BWT-0.1-0.55),
+	center=(wall2_x+0.1+0.55, HOUSE_DEPTH-BWT-0.1-1.25),
 	start_height=GROUND_FLOOR_THICKNESS,
 	size=(2.5, 1.1),
+	rotation=90,
 )
 ground.asset(
 	"Gauc", asset="1_seater_sofa",
-	center=(wall2_x+0.1+0.55, HOUSE_DEPTH-BWT-0.1-1.1-0.1-0.55),
+	center=(wall2_x+0.1+1.1+0.1+0.55, HOUSE_DEPTH-BWT-0.1-0.55),
 	start_height=GROUND_FLOOR_THICKNESS,
-	rotation=90,
+#	rotation=90,
 	size=(1.1, 1.1)
 )
 ground.asset(
@@ -429,23 +415,11 @@ ground.asset(
 
 # Kitchen, Kuchyn
 wall_kitchen = ground.wall(
-	(wall2_x+1.15, BWT+CHODBA_DEPTH),
+	(wall2_x, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen2 = ground.wall(
-	(wall2_x+1.15, BWT+2.25+0.25+1+0.15),
-	(wall2_x+1.15, BWT+CHODBA_DEPTH),
-	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen4 = ground.wall(
-	(wall2_x+1.15+0.15+0.15+0.9+0.15, BWT+CHODBA_DEPTH+0.15),
-	(wall2_x+1.15+0.15+0.15+0.9+0.15, BWT+CHODBA_DEPTH+0.15+0.15+0.5),
-	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen3 = ground.wall(
-	(wall2_x, BWT+2.25+0.25+1+0.05),
-	(wall2_x+1.15, BWT+2.25+0.25+1+0.05),
-	wall_type=dry_wall, height=ground_floor_height)
-wall_kitchen3.add_door(
-	at=0.075,
+wall_kitchen.add_door(
+	at=0.095,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -455,20 +429,20 @@ wall_kitchen3.add_door(
 )
 
 # Pokoj Risanek
-wall_2.add_door(
-	at=BWT+2.25+0.25,
+wall_gym.add_door(
+	at=2.125,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
-	operation="SINGLE_SWING_LEFT",
+	operation="SINGLE_SWING_RIGHT",
 #	reverse_swing=True,
 )
 
 # Oblouk
 wall_3.add_opening(
 	at=oblouk_at,
-	width=2,
+	width=2.5,
     height=ground_floor_height-0.5,
     sill_height=GROUND_FLOOR_THICKNESS,
 	name="Oblouk"
@@ -673,7 +647,7 @@ ground.furniture(
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
-    center=(wall3_x-BWT-1.1, BWT+CHODBA_DEPTH+0.15+1.2),
+    center=(wall3_x-BWT-1.1, HOUSE_DEPTH - BWT - 1.2),
 	start_height=GROUND_FLOOR_THICKNESS,
 	#size=(1.3, 0.8*3),
 )
@@ -818,7 +792,7 @@ if 0:
 # MIAKO
 ceiling1_a = upper.miako_slab(
     "Ceiling 1 a",
-    start=(0.1 - HOUSE_EXT, BWT+2.06),
+    start=(0.1, BWT+2.06),
     end=(wall2_x-0.15, BWT+2.06),
     top=0,
 	topping=0.06,
@@ -905,12 +879,10 @@ ceiling3 = upper.miako_slab(
 upper_pokoj_1 = upper.floor_layer(
 		f"Upper Pokoj 1",
 		outline=(
-			(-HOUSE_EXT+BWT, ceiling1_a.start[1]+0.1),
+			(BWT, ceiling1_a.start[1]+0.1),
 			(wall2_x-BWT, ceiling1_a.start[1]+0.1),
 			(wall2_x-BWT, HOUSE_DEPTH-BWT),
 			(BWT, HOUSE_DEPTH-BWT),
-			(BWT, EXT_DEPTH-BWT),
-			(-HOUSE_EXT+BWT, EXT_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
 		color="#ffff80",
@@ -1023,24 +995,14 @@ wall_cuts_2_3 = [
 wall_dormer = upper.wall(
 	(wall3_x, HOUSE_DEPTH), (wall2_x-BWT, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=DORMER_WALL_HEIGHT-NADEZDIVKA, start_height=NADEZDIVKA)
-wall_front = upper.wall((-HOUSE_EXT, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
+wall_front = upper.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_back = upper.wall(
 	(HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_0 = upper.wall(
-	(-HOUSE_EXT, EXT_DEPTH-BWT), (-HOUSE_EXT, BWT),
-	wall_type=load_bearing_wall,
-	height=4, cuts=wall_cuts_1_4, )
-wall_0x = upper.wall(
-	(BWT, EXT_DEPTH), (-HOUSE_EXT, EXT_DEPTH),
-	wall_type=load_bearing_wall,
-	height=COLLAR_TIE_BOTTOM_HEIGHT-0.12, cuts=wall_cuts_1_4, )
 wall_1 = upper.wall(
-	(0, HOUSE_DEPTH-BWT), (0, EXT_DEPTH),
+	(0, HOUSE_DEPTH), (0, 0),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
-#wall_1.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
-#wall_0.add_opening(at=HOUSE_DEPTH-EXT_DEPTH-BWT, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_2 = upper.wall(
 	(wall2_x, 0.002), (wall2_x, HOUSE_DEPTH-BWT),
@@ -1076,7 +1038,7 @@ wall_4.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 wall_4.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_pokoj1 = upper.wall(
-	start=(-HOUSE_EXT+BWT, ceiling1_a.start[1]),
+	start=(BWT, ceiling1_a.start[1]),
 	end=(wall2_x-BWT, ceiling1_a.start[1]),
 	wall_type=dry_wall, height=2.85)
 wall_pokoj2 = upper.wall(
@@ -1118,9 +1080,6 @@ upper.asset(
 	rotation=180,
 )
 
-#upper.connect_wall(wall_0, wall_front)
-#upper.connect_wall(wall_0, wall_0x)
-#upper.connect_wall(wall_1, wall_0x)
 #upper.connect_wall(wall_1, wall_back)
 #
 #upper.connect_wall(wall_2, wall_front, is_atpath=True)
@@ -1137,7 +1096,7 @@ upper.asset(
 
 beam1 = upper.beam(
     "Beam",
-    start=(-HOUSE_EXT, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    start=(0, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
     end=(HOUSE_WIDTH, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
     size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
@@ -1145,7 +1104,7 @@ beam1 = upper.beam(
 )
 beam2 = upper.beam(
     "Beam",
-    start=(-HOUSE_EXT, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    start=(0, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
     end=(HOUSE_WIDTH, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
     size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
@@ -1153,7 +1112,7 @@ beam2 = upper.beam(
 )
 beam3 = upper.beam(
     "Beam",
-    start=(-HOUSE_EXT, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
+    start=(0, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     end=(HOUSE_WIDTH, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     size=(0.16, 0.12),
     material="Wood",
@@ -1171,14 +1130,6 @@ beam4_b = upper.beam(
     "Beam",
     start=(wall3_x, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
     end=(HOUSE_WIDTH, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    size=(0.16, 0.12),
-    material="Wood",
-    kind="BEAM",
-)
-beam4_c = upper.beam(
-    "Beam",
-    start=(-HOUSE_EXT, EXT_DEPTH-0.125, UPPER_FLOOR_START+COLLAR_TIE_BOTTOM_HEIGHT-0.06),
-    end=(BWT, EXT_DEPTH-0.125, UPPER_FLOOR_START+COLLAR_TIE_BOTTOM_HEIGHT-0.06),
     size=(0.16, 0.12),
     material="Wood",
     kind="BEAM",
@@ -1218,20 +1169,15 @@ wall_2.add_door(
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik 1 nahore
-wall_0.add_window(
-	at=0.75,
-	width=1.5,
+wall_1.add_window(
+	at=HOUSE_DEPTH/2-1,
+	width=2,
 	height=2.375,
 	sill_height=1, partition="SINGLE_PANEL",)
-#wall_0x.add_window(
-#	at=BWT,
-#	width=HOUSE_EXT-BWT,
-#	height=2.25,
-#	sill_height=1, partition="SINGLE_PANEL",)
 # Okno k sousedum nahore
 wall_4.add_window(
-	at=HALF_DEPTH-0.75,
-	width=1.5,
+	at=HALF_DEPTH-0.5,
+	width=1,
 	height=2.375,
 	sill_height=NADEZDIVKA, partition="SINGLE_PANEL",)
 
@@ -1243,9 +1189,9 @@ roof_inner_cuts = [
 	((0, BWT, 0), (10, BWT, 0), (0, BWT, 10)),
 	((0, 7.75, 0), (10, 7.75, 0), (0, 7.75, 10)),
 	(
-		(-HOUSE_EXT+BWT, 0, 0),
-		(-HOUSE_EXT+BWT, 10, 0),
-		(-HOUSE_EXT+BWT, 0, 10),
+		(BWT, 0, 0),
+		(BWT, 10, 0),
+		(BWT, 0, 10),
 	),
 	((HOUSE_WIDTH-BWT, 0, 0), (HOUSE_WIDTH-BWT, 10, 0), (HOUSE_WIDTH-BWT, 0, 10)),
 ]
@@ -1264,18 +1210,6 @@ garden_roof = roof.plane(
     cuts=[
 		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
 		((0, HOUSE_DEPTH+0.5, 0), (10, HOUSE_DEPTH+0.5, 0), (0, HOUSE_DEPTH+0.5, 10)),
-	],
-)
-extension_garden_roof = roof.plane(
-	"Garden extension slope",
-	points=GARDEN_ROOF_PLANE_POINTS,
-	cuts=[
-		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
-		(
-			(0, EXT_DEPTH+0.5, 0),
-			(10, EXT_DEPTH+0.5, 0),
-			(0, EXT_DEPTH+0.5, 10),
-		),
 	],
 )
 dormer_roof = roof.plane(
@@ -1392,7 +1326,6 @@ ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 # "after" shorten the main rafter on the garden side; "+before" and "+after"
 # leave it full-length.
 rafters = [
-	-1.12,
 	-0.12,
 	0.68,
 	1.48,
@@ -1454,7 +1387,6 @@ print_rafter_center_distances("Main", main_rafter_positions)
 print_rafter_center_distances("Dormer", dormer_rafter_positions)
 
 roof_x_ranges = (
-	(-HOUSE_EXT, 0),
 	(0, wall2_x-BWT),
 	(wall2_x-BWT, wall3_x),
 	(wall3_x, HOUSE_WIDTH),
@@ -1626,19 +1558,7 @@ roof_y_min = -1.5
 roof_y_max = 7
 street_inner_boundaries = independent_inner_layer_boundaries(street_roof)
 garden_inner_boundaries = independent_inner_layer_boundaries(garden_roof)
-extension_garden_inner_boundaries = independent_inner_layer_boundaries(
-	extension_garden_roof
-)
 dormer_inner_boundaries = independent_inner_layer_boundaries(dormer_roof)
-extension_outer_y_min, extension_outer_y_max = local_y_limits_from_cuts(
-	extension_garden_roof,
-	ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS / 2,
-)
-# Keep the uncut solid's centroid between the two close extension cuts so the
-# half-spaces retain the ridge-to-eave portion.  A small overshoot leaves the
-# actual edges to the cut planes.
-extension_outer_y_min -= 0.25
-extension_outer_y_max += 0.25
 
 
 def sloped_inner_y_limits(plane, boundaries, eave_y):
@@ -1692,7 +1612,6 @@ total_house_height = max(
 	for plane in (
 		street_roof,
 		garden_roof,
-		extension_garden_roof,
 		dormer_roof,
 	)
 )
@@ -1714,7 +1633,6 @@ def flat_inner_y_limits(left_boundaries, right_boundaries):
 
 for part_name, (x_min, x_max) in zip(
 	(
-		"Street segment 0",
 		"Street segment 1",
 		"Street segment 2",
 		"Street segment 3",
@@ -1727,22 +1645,9 @@ for part_name, (x_min, x_max) in zip(
 		inner_y_limits=sloped_inner_y_limits(
 			street_roof, street_inner_boundaries, 0.25
 		),
-	)
-add_continuous_roof_layers(
-	extension_garden_roof,
-	"Garden segment 0",
-	*roof_x_ranges[0],
-	extension_outer_y_min,
-	extension_outer_y_max,
-	inner_cuts=roof_inner_cuts,
-	inner_y_limits=sloped_inner_y_limits(
-		extension_garden_roof,
-		extension_garden_inner_boundaries,
-		EXT_DEPTH-0.25,
-	),
 )
 add_continuous_roof_layers(
-	garden_roof, "Garden segment 1", *roof_x_ranges[1], roof_y_min, roof_y_max,
+	garden_roof, "Garden segment 1", *roof_x_ranges[0], roof_y_min, roof_y_max,
 	inner_cuts=roof_inner_cuts,
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
@@ -1750,11 +1655,11 @@ add_continuous_roof_layers(
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 2 above dormer",
-	*roof_x_ranges[2], roof_y_min, 0,
+	*roof_x_ranges[1], roof_y_min, 0,
 	include_inner=False,
 )
 add_continuous_roof_layers(
-	dormer_roof, "Dormer segment 2", *roof_x_ranges[2], 0,
+	dormer_roof, "Dormer segment 2", *roof_x_ranges[1], 0,
 	roof_y_max-1, # overshoot a little less for the dormer so our cuts work properly
 	inner_cuts=roof_inner_cuts,
 	inner_y_limits=sloped_inner_y_limits(
@@ -1762,7 +1667,7 @@ add_continuous_roof_layers(
 	),
 )
 add_continuous_roof_layers(
-	garden_roof, "Garden segment 3", *roof_x_ranges[3], roof_y_min, roof_y_max,
+	garden_roof, "Garden segment 3", *roof_x_ranges[2], roof_y_min, roof_y_max,
 	inner_cuts=roof_inner_cuts,
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
@@ -1770,13 +1675,12 @@ add_continuous_roof_layers(
 )
 for part_name, (x_min, x_max), garden_side_plane in zip(
 	(
-		"Flat ceiling segment 0",
 		"Flat ceiling segment 1",
 		"Flat ceiling segment 2",
 		"Flat ceiling segment 3",
 	),
 	roof_x_ranges,
-	(extension_garden_roof, garden_roof, dormer_roof, garden_roof),
+	(garden_roof, dormer_roof, garden_roof),
 ):
 	add_continuous_roof_layers(
 		flat_ceiling_roof,
@@ -1791,11 +1695,7 @@ for part_name, (x_min, x_max), garden_side_plane in zip(
 			(
 				dormer_inner_boundaries
 				if garden_side_plane is dormer_roof
-				else (
-					extension_garden_inner_boundaries
-					if garden_side_plane is extension_garden_roof
-					else garden_inner_boundaries
-				)
+				else garden_inner_boundaries
 			),
 		),
 		inner_layout=FLAT_CEILING_INNER_LAYER_LAYOUT,
@@ -1803,24 +1703,13 @@ for part_name, (x_min, x_max), garden_side_plane in zip(
 	)
 
 # A batten whose centre lies completely beyond a cut would retain the wrong
-# half-space, so derive the first and last tile-batten rows from the cuts.  The
-# shortened extension's rafters and counter-battens use the same approach.
+# half-space, so derive the first and last tile-batten rows from the cuts.
 tile_batten_centerline_z = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1] / 2
 street_y_min, street_y_max = local_y_limits_from_cuts(
 	street_roof, tile_batten_centerline_z
 )
 garden_y_min, garden_y_max = local_y_limits_from_cuts(
 	garden_roof, tile_batten_centerline_z
-)
-extension_garden_y_min, extension_garden_y_max = local_y_limits_from_cuts(
-	extension_garden_roof, tile_batten_centerline_z
-)
-extension_rafter_y_min, extension_rafter_y_max = local_y_limits_from_cuts(
-	extension_garden_roof, RAFTER_Z_OFFSET + RAFTER_SIZE[1] / 2
-)
-extension_counter_batten_y_min, extension_counter_batten_y_max = local_y_limits_from_cuts(
-	extension_garden_roof,
-	COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1] / 2,
 )
 dormer_y_min, dormer_y_max = local_y_limits_from_cuts(
 	dormer_roof, tile_batten_centerline_z
@@ -1829,30 +1718,23 @@ add_tile_battens(
 	street_roof, "Street", roof_x_ranges, street_y_min, street_y_max
 )
 add_tile_battens(
-	extension_garden_roof,
-	"Garden segment 0",
-	[roof_x_ranges[0]],
-	extension_garden_y_min,
-	extension_garden_y_max,
-)
-add_tile_battens(
 	garden_roof,
 	"Garden segments 1 and 3",
-	[roof_x_ranges[1], roof_x_ranges[3]],
+	[roof_x_ranges[0], roof_x_ranges[2]],
 	garden_y_min,
 	garden_y_max,
 )
 add_tile_battens(
 	garden_roof,
 	"Garden segment 2 above dormer",
-	[roof_x_ranges[2]],
+	[roof_x_ranges[1]],
 	garden_y_min,
 	0,
 )
 add_tile_battens(
 	dormer_roof,
 	"Dormer segment 2",
-	[roof_x_ranges[2]],
+	[roof_x_ranges[1]],
 	0,
 	dormer_y_max,
 )
@@ -1927,20 +1809,11 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 		)
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
 	else:
-		garden_side_plane = (
-			extension_garden_roof if rafter_x < 0 else garden_roof
-		)
-		if garden_side_plane is extension_garden_roof:
-			rafter_y_min = extension_rafter_y_min - 0.25
-			rafter_y_max = extension_rafter_y_max + 0.25
-			counter_batten_y_min = extension_counter_batten_y_min - 0.25
-			counter_batten_y_max = extension_counter_batten_y_max + 0.25
-		else:
-			rafter_y_min = -2
-			rafter_y_max = 0.7 if shorten_garden_side else 5
-			counter_batten_y_min = -2
-			counter_batten_y_max = 0 if shorten_garden_side else 5
-		rafter = garden_side_plane.beam(
+		rafter_y_min = -2
+		rafter_y_max = 0.7 if shorten_garden_side else 5
+		counter_batten_y_min = -2
+		counter_batten_y_max = 0 if shorten_garden_side else 5
+		rafter = garden_roof.beam(
 			"Rafter 1",
 			start=(rafter_x, rafter_y_min),
 			end=(rafter_x, rafter_y_max),
@@ -1949,7 +1822,7 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 			kind="RAFTER",
 		)
 		roof_layer_storeys["Rafters"].add(rafter)
-		counter_batten = garden_side_plane.beam(
+		counter_batten = garden_roof.beam(
 			f"Garden counter-batten {i + 1}",
 			start=(rafter_x, counter_batten_y_min),
 			end=(rafter_x, counter_batten_y_max),
@@ -1985,10 +1858,7 @@ if "ground" in sys.argv:
 	drawing1.add_chimney_annotation(chimney)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT+HOUSE_EXT)
-	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, EXT_DEPTH-BWT), offset=0.5+BWT+HOUSE_EXT)
-	# Risankuv pokoj extense
-	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, EXT_DEPTH), end=(BWT, EXT_DEPTH), offset=-1.25)
+	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
 	# Kuchyn hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
 
@@ -1996,14 +1866,13 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
 	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
 	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(-HOUSE_EXT, BWT), end=(HOUSE_WIDTH, BWT), offset=-1.25)
 	drawing1.add_dimension(start=(HOUSE_WIDTH, 0), end=(HOUSE_WIDTH, 8), offset=-1)
 
 	# koupelna hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH), offset=-0.75)
 
 	# gym hloubka
-	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, BWT), end=(-HOUSE_EXT+BWT, BWT+2.25), offset=0.75)
+	drawing1.add_dimension(start=(BWT, BWT), end=(BWT, BWT+2.25), offset=0.75)
 
 	drawing1.add_entrance_arrow(
 		(wall3_x-BWT-0.125-0.55, -0.5),
@@ -2018,7 +1887,7 @@ if "ground" in sys.argv:
 		area=pokoj_dole.area,
 	)
 	drawing1.add_room_annotation(
-		(wall3_x - 1.5, HOUSE_DEPTH - 1.5),
+		(wall3_x - 2.5, HOUSE_DEPTH - 2.5),
 		identifier="0.02",
 		description="Obývak s KK",
 		area=kuchyn.area,
@@ -2117,10 +1986,7 @@ if "upper" in sys.argv:
 	drawing1.add_room_legend()
 
 	# Pokoj 1, hloubka
-	drawing1.add_dimension(start=(BWT, BWT+2.06+0.1), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT+HOUSE_EXT)
-	drawing1.add_dimension(start=(BWT, BWT+2.06+0.1), end=(BWT, EXT_DEPTH-BWT), offset=0.5+BWT+HOUSE_EXT)
-	# Pokoj 1 extenze
-	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, EXT_DEPTH), end=(BWT, EXT_DEPTH), offset=-1.25)
+	drawing1.add_dimension(start=(BWT, BWT+2.06+0.1), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
 	# sklad nahore hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
 	# Pokoj 2, hloubka
@@ -2130,14 +1996,13 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
 	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
 	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(-HOUSE_EXT, BWT), end=(HOUSE_WIDTH, BWT), offset=-1.25)
 	drawing1.add_dimension(start=(HOUSE_WIDTH, 0), end=(HOUSE_WIDTH, 8), offset=-1)
 
 	# zachod nahire hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1), offset=-0.75)
 
 	# gym hloubka
-	drawing1.add_dimension(start=(-HOUSE_EXT+BWT, BWT), end=(-HOUSE_EXT+BWT, BWT+2.06), offset=0.75)
+	drawing1.add_dimension(start=(BWT, BWT), end=(BWT, BWT+2.06), offset=0.75)
 
 	# galerie hloubka
 	drawing1.add_dimension(start=(6, GALERY_START), end=(6, GALERY_END), offset=0)
