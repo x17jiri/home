@@ -178,13 +178,14 @@ STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
 KK_WIDTH = HOUSE_WIDTH - wall3_x - BWT
 
+GYM_DEPTH = 2
 posilovna = ground.floor_layer(
 	"Prizemi, posilovna",
 	outline=(
 		(BWT, BWT),
 		(wall2_x-BWT, BWT),
-		(wall2_x-BWT, BWT+2.25),
-		(BWT, BWT+2.25),
+		(wall2_x-BWT, BWT+GYM_DEPTH),
+		(BWT, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
@@ -192,15 +193,15 @@ posilovna = ground.floor_layer(
 pokoj_dole = ground.floor_layer(
 	"Pokoj",
 	outline=(
-		(BWT, BWT+2.25+0.15),
-		(wall2_x-BWT, BWT+2.25+0.15),
+		(BWT, BWT+GYM_DEPTH+0.15),
+		(wall2_x-BWT, BWT+GYM_DEPTH+0.15),
 		(wall2_x-BWT, HOUSE_DEPTH-BWT),
 		(BWT, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.6
+CHODBA_DEPTH = 2.65
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 
@@ -210,12 +211,12 @@ CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - 0.08 - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
-CHIMNEY_Y_START = BWT + 2.15 + 0.17 + 0.02 # override
+CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1.15 + 0.3
+CHIMNEY_X_START = wall2_x + 1
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
 
@@ -271,12 +272,12 @@ wall_front = ground.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, 
 wall_4 = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_back = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_1 = ground.wall((0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_2 = ground.wall((wall2_x, 0), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_2 = ground.wall((wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
 ground.connect_wall(wall_1, wall_back)
 
-ground.connect_wall(wall_2, wall_front, is_atpath=True)
+#ground.connect_wall(wall_2, wall_front, is_atpath=True)
 ground.connect_wall(wall_2, wall_back, is_atpath=True)
 
 ground.connect_wall(wall_3, wall_front, is_atpath=True)
@@ -287,16 +288,17 @@ ground.connect_wall(wall_4, wall_back)
 
 # Front door/window
 
+BOTTOM_STAIR_TREADS = 9
 GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
 front_door = wall_front.add_door(
-	at=wall3_x-BWT-0.125-1.125,
+	at=wall3_x-BWT-1-BOTTOM_STAIR_TREADS*0.27-1-1.125,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=GROUND_FLOOR_THICKNESS,
-	operation="SINGLE_SWING_RIGHT"
+	operation="SINGLE_SWING_LEFT"
 )
 wall_front.add_window(
     at=wall3_x+0.875,
@@ -325,14 +327,8 @@ wall_back.add_door(
 
 # Posilovna, Gym
 wall_gym = ground.wall(
-	(BWT, BWT+2.25), (wall2_x-BWT, BWT+2.25),
+	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_2.add_opening(
-	at=BWT+1.25,
-	width=1,
-	height=ground_floor_height-0.5,
-	sill_height=GROUND_FLOOR_THICKNESS,
-)
 #wall_gym.add_door(
 #	at=HOUSE_EXT+wall2_x-2*BWT-1-0.125,
 #	width=0.9,
@@ -409,17 +405,21 @@ ground.asset(
     "WC",
     asset="toilet_without_cistern",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, BWT+BATHROOM_DEPTH-0.5),
+    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, BWT+1.3),
     rotation=90,
 )
 
 # Kitchen, Kuchyn
-wall_kitchen = ground.wall(
-	(wall2_x, BWT+CHODBA_DEPTH),
+wall_kitchen_0 = ground.wall(
+	(wall2_x, BWT+GYM_DEPTH),
+	(wall2_x+1+0.4+1.125+0.15, BWT+GYM_DEPTH),
+	wall_type=partition_wall, height=ground_floor_height)
+wall_kitchen_1 = ground.wall(
+	(wall2_x+1+0.4+1.125, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen.add_door(
-	at=0.095,
+wall_kitchen_0.add_door(
+	at=1+0.5,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -450,11 +450,12 @@ wall_3.add_opening(
 
 # Bathroom
 wall_3.add_door(
-    at=BWT+0.625,
+    at=BWT+BATHROOM_DEPTH-1.125,
     opening_width=1.0, width=0.9,
     height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
+	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True,
 )
 
@@ -481,71 +482,35 @@ wall_3.add_door(
 
 # stairs
 GALERY_START = BWT+2.15
-#stairs_polygons = []
-#for i in range(15):
-#	a0 = 180+15*9.5-9.5*i
-#	a1 = a0 - 9.5
-#	a0 = a0 / 180 * math.pi
-#	a1 = a1 / 180 * math.pi
-#	stairs_polygons.append((
-#		(wall2_x + 2 + 1*math.cos(a0), BWT + 2 + 1*math.sin(a0)),
-#		(wall2_x + 2 + 1*math.cos(a1), BWT + 2 + 1*math.sin(a1)),
-#		(wall2_x + 2 + 2*math.cos(a1), BWT + 2 + 2*math.sin(a1)),
-#		(wall2_x + 2 + 2*math.cos(a0), BWT + 2 + 2*math.sin(a0)),
-#	))
-stairs_center = (wall2_x + 1, BWT + 1.6)
-stairs_radiuses = (2.6, 1.6)
 stairs_width = 1
-stairs_initial_angle = 270
-stairs_polygons = elliptic_stairs(
-	center=stairs_center,
-	radiuses=stairs_radiuses,
-	width=stairs_width,
-	initial_angle=stairs_initial_angle,
-	step_size=0.27
-)[:10]
-stairs_end = stairs_polygons[-1][1]
-stairs_end_angle = math.degrees(math.atan2(
-	(stairs_end[1] - stairs_center[1]) / (stairs_radiuses[1] - stairs_width),
-	(stairs_end[0] - stairs_center[0]) / (stairs_radiuses[0] - stairs_width),
-))
-stairs_final_angle = stairs_initial_angle + (
-	stairs_end_angle - stairs_initial_angle
-) % 360
-print(f"Elliptic stairs final angle: {stairs_final_angle:.2f}°")
-stairs_polygons.reverse()
-stairs_max_x = max(p[0] for p in stairs_polygons[0])
-stairs_max_y = max(p[1] for p in stairs_polygons[0])
-print("stairs <-> koupelna =", wall3_x-BWT-stairs_max_x)
-print("stairs <-> kuchyn =", BWT+CHODBA_DEPTH-stairs_max_y)
+straight_stair_step_size = 0.27
 stair_step_height = stair_height / step_count
-main_stairs = ground.custom_stair(
-    stairs_polygons,
-    start_height=GROUND_FLOOR_THICKNESS,
-    height=stair_step_height * (len(stairs_polygons) + 1),
-    tread_thickness=0.04,
-    name="Main stair",
-    color="#C8B090",
+landing_left_x = wall3_x - BWT - stairs_width
+remaining_stair_count = step_count - 2 - BOTTOM_STAIR_TREADS
+straight_stair_start_y = BWT + 1.02
+bottom_stair_start_x = (
+	landing_left_x - BOTTOM_STAIR_TREADS * straight_stair_step_size
+)
+bottom_stair_center_y = BWT + stairs_width / 2
+
+main_stairs = ground.stair(
+	(bottom_stair_start_x, bottom_stair_center_y),
+	(landing_left_x, bottom_stair_center_y),
+	width=stairs_width,
+	start_height=GROUND_FLOOR_THICKNESS,
+	height=stair_step_height * (BOTTOM_STAIR_TREADS + 1),
+	risers=BOTTOM_STAIR_TREADS + 1,
+	construction="timber",
+	tread_thickness=STAIR_TREAD_THICKNESS,
+	stringer_thickness=STAIR_STRINGER_THICKNESS,
+	stringer_height=STAIR_STRINGER_HEIGHT,
+	name="Main stair",
+	color="#C8B090",
 )
 
-# The final ellipse tread meets this landing at the initial-angle radial edge.
-previous_elliptic_tread = set(stairs_polygons[-2])
-elliptic_top_edge = tuple(
-	point
-	for point in stairs_polygons[-1]
-	if point not in previous_elliptic_tread
-)
-landing_right_x = sum(point[0] for point in elliptic_top_edge) / 2
-landing_y_min = min(point[1] for point in elliptic_top_edge)
-landing_y_max = max(point[1] for point in elliptic_top_edge)
-remaining_stair_count = step_count - 2 - len(stairs_polygons)
-straight_stair_step_size = 0.27
-straight_stair_start_y = (
-	GALERY_START - remaining_stair_count * straight_stair_step_size
-)
 middle_stair_landing = ground.stair_landing(
-	(landing_right_x - 1, landing_y_min),
-	(landing_right_x, straight_stair_start_y),
+	(landing_left_x, BWT),
+	(landing_left_x + 1, straight_stair_start_y),
 	height=main_stairs.end_height,
 	thickness=STAIR_TREAD_THICKNESS,
 	name="Middle stair landing",
@@ -554,11 +519,11 @@ middle_stair_landing = ground.stair_landing(
 
 gallery_stairs = ground.stair(
 	(
-		landing_right_x - 0.5,
+		landing_left_x + 0.5,
 		straight_stair_start_y,
 	),
 	(
-		landing_right_x - 0.5,
+		landing_left_x + 0.5,
 		GALERY_START,
 	),
 	width=1,
@@ -1005,7 +970,7 @@ wall_1 = upper.wall(
 	height=4, cuts=wall_cuts_1_4, )
 
 wall_2 = upper.wall(
-	(wall2_x, 0.002), (wall2_x, HOUSE_DEPTH-BWT),
+	(wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_2.add_opening(
@@ -1858,7 +1823,7 @@ if "ground" in sys.argv:
 	drawing1.add_chimney_annotation(chimney)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(BWT, BWT+2.25+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
+	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
 	# Kuchyn hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
 
@@ -1872,7 +1837,7 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH), offset=-0.75)
 
 	# gym hloubka
-	drawing1.add_dimension(start=(BWT, BWT), end=(BWT, BWT+2.25), offset=0.75)
+	drawing1.add_dimension(start=(BWT, BWT), end=(BWT, BWT+GYM_DEPTH), offset=0.75)
 
 	drawing1.add_entrance_arrow(
 		(wall3_x-BWT-0.125-0.55, -0.5),
