@@ -206,7 +206,7 @@ CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1.05
+CHIMNEY_X_START = wall2_x + 1.15 + 0.15 + 0.3
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
 
@@ -218,9 +218,7 @@ BATHROOM_DEPTH = 2.6
 kuchyn = ground.floor_layer(
 	"Kuchyn",
 	outline=(
-		(wall2_x, BWT+GYM_DEPTH+0.15),
-		(wall2_x+1, BWT+GYM_DEPTH+0.15),
-		(wall2_x+1, BWT+CHODBA_DEPTH+0.15),
+		(wall2_x, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
@@ -242,8 +240,8 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
-		(CHIMNEY_X_END, BWT+CHODBA_DEPTH),
-		(CHIMNEY_X_END, BWT+GYM_DEPTH),
+		(wall2_x, BWT+CHODBA_DEPTH),
+		(wall2_x, BWT+GYM_DEPTH),
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
@@ -283,7 +281,7 @@ ground.connect_wall(wall_4, wall_back)
 
 # Front door/window
 
-BOTTOM_STAIR_TREADS = 10
+BOTTOM_STAIR_TREADS = 9
 GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
@@ -391,31 +389,39 @@ ground.asset(
 
 # Kitchen, Kuchyn
 wall_kitchen_0 = ground.wall(
-	(wall2_x, BWT+GYM_DEPTH),
-	(wall2_x+1, BWT+GYM_DEPTH),
+	(wall2_x, BWT+CHODBA_DEPTH),
+	(wall2_x+1.15, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen_1 = ground.wall(
-	(wall2_x+1, BWT+CHODBA_DEPTH),
+	(wall2_x+1.15, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen_1.add_door(
-	at=KITCHEN_WIDTH-1-1-0.125,
-	opening_width=1.0, width=0.9,
-	height=GROUND_DOOR_HEIGHT,
-	sill_height=GROUND_FLOOR_THICKNESS,
-	clear_height=door_clear_height,
-	operation="SINGLE_SWING_RIGHT",
-	reverse_swing=False
-)
-
-# Pokoj Risanek
-wall_2.add_door(
-	at=0.375,
+wall_kitchen_2 = ground.wall(
+	(wall2_x+1.15, BWT+CHODBA_DEPTH+0.5),
+	(wall2_x+1.15, BWT+CHODBA_DEPTH),
+	wall_type=partition_wall, height=ground_floor_height)
+wall_kitchen_3 = ground.wall(
+	(wall2_x+1.15+0.15+1, BWT+CHODBA_DEPTH+0.5),
+	(wall2_x+1.15+0.15+1, BWT+CHODBA_DEPTH),
+	wall_type=partition_wall, height=ground_floor_height)
+wall_kitchen_0.add_door(
+	at=0.075,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_LEFT",
+	reverse_swing=False
+)
+
+# Pokoj Risanek
+wall_gym.add_door(
+	at=wall2_x-2*BWT-1.125,
+	opening_width=1.0, width=0.9,
+	height=GROUND_DOOR_HEIGHT,
+	sill_height=GROUND_FLOOR_THICKNESS,
+	clear_height=door_clear_height,
+	operation="SINGLE_SWING_RIGHT",
 #	reverse_swing=True,
 )
 
@@ -536,7 +542,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall2_x + 0.5, BWT+GYM_DEPTH+0.15+0.2+0.25),
+    center=(wall2_x + 1.15+0.15+0.2+0.3, BWT+CHODBA_DEPTH+0.15+0.2+0.25),
 	start_height=GROUND_FLOOR_THICKNESS,
 #    rotation=-45,
 )
