@@ -12,17 +12,19 @@ Y_MIN, Y_MAX = -3, 20
 DX_PER_DY = 0.119
 DISTANCE_ALONG_LINE = 7.75
 SECOND_LINE_ANGLE = 70
-CENTER_HEIGHT = 8.3
+CENTER_HEIGHT = 8.25
 SLOPE = 0.7359
 WINDOW_HEIGHT = 1.5 + 0.75
 
 # Move the entire polygon by changing only this point.
-POLYGON_ORIGIN = (-3.55, 4.5+8.5/2)
+POLYGON_ORIGIN = (-3.5, 4.5+8.5/2)
 
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
 POLYGON_POINTS: tuple[tuple[float, float], ...] = (
     (-12, -8.5/2),
-	(0, -8.5/2),
+	(-1.75, -8.5/2),
+	(-1.75, -8.5/2+2.125),
+	(0, -8.5/2+2.125),
 	(0, +8.5/2),
 	(-12, +8.5/2)
 )

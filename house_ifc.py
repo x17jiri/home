@@ -166,6 +166,7 @@ HOUSE_DEPTH = 8.0
 HALF_DEPTH = HOUSE_DEPTH / 2.0
 KITCHEN_WIDTH = 4.75 - 0.03
 HOUSE_WIDTH = 11.375
+CUT_WIDTH = 1.75
 
 wall2_x = BWT + 3.25 - 0.03 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
@@ -213,7 +214,8 @@ print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
 print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
-kuchyn  = ground.floor_layer(
+BATHROOM_DEPTH = 2.6
+kuchyn = ground.floor_layer(
 	"Kuchyn",
 	outline=(
 		(wall2_x, BWT+GYM_DEPTH+0.15),
@@ -222,8 +224,8 @@ kuchyn  = ground.floor_layer(
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
-		(wall3_x, BWT+CHODBA_DEPTH+0.15),
-		(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH+0.15),
+		(wall3_x, BWT+BATHROOM_DEPTH+0.15),
+		(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.15),
 		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
 		(wall3_x, HOUSE_DEPTH-BWT),
 		(wall3_x, oblouk_at+2.5),
@@ -234,20 +236,19 @@ kuchyn  = ground.floor_layer(
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-chodba  = ground.floor_layer(
+chodba = ground.floor_layer(
 	"Chodba",
 	outline=(
-		(BWT, BWT),
+		(BWT+CUT_WIDTH, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
 		(CHIMNEY_X_END, BWT+CHODBA_DEPTH),
 		(CHIMNEY_X_END, BWT+GYM_DEPTH),
-		(BWT, BWT+GYM_DEPTH),
+		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-BATHROOM_DEPTH = 2.6
 koupelna = ground.floor_layer(
 	"Koupelna",
 	outline=(
@@ -261,14 +262,15 @@ koupelna = ground.floor_layer(
 )
 
 # Load-bearing walls
-wall_front = ground.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_front = ground.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_4 = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_back = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1 = ground.wall((0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1a = ground.wall((0, HOUSE_DEPTH), (0, BWT+GYM_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1b = ground.wall((CUT_WIDTH, GYM_DEPTH+2*BWT), (CUT_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_2 = ground.wall((wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
-ground.connect_wall(wall_1, wall_back)
+ground.connect_wall(wall_1a, wall_back)
 
 #ground.connect_wall(wall_2, wall_front, is_atpath=True)
 ground.connect_wall(wall_2, wall_back, is_atpath=True)
@@ -285,20 +287,13 @@ BOTTOM_STAIR_TREADS = 10
 GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
-front_door = wall_front.add_door(
-	at=wall3_x-BWT-1.25,
+front_door = wall_1b.add_door(
+	at=BWT+GYM_DEPTH-1.5,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT"
-)
-wall_front.add_window(
-    at=wall3_x+0.875,
-    width=0.75,
-    height=GROUND_DOOR_HEIGHT, # use door height so it is aligned with the front door
-    sill_height=GROUND_DOOR_HEIGHT-0.375,
-    partition="SINGLE_PANEL",
 )
 
 # Back windows
@@ -321,15 +316,7 @@ wall_back.add_door(
 # Posilovna, Gym
 wall_gym = ground.wall(
 	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
-	wall_type=partition_wall, height=ground_floor_height)
-#wall_gym.add_door(
-#	at=HOUSE_EXT+wall2_x-2*BWT-1-0.125,
-#	width=0.9,
-#	height=GROUND_DOOR_HEIGHT,
-#	sill_height=GROUND_FLOOR_THICKNESS,
-#	opening_width=1, clear_height=2,
-#	operation="SINGLE_SWING_RIGHT",
-#	reverse_swing=True)
+	wall_type=load_bearing_wall, height=ground_floor_height)
 
 # Bathroom, Koupelna
 wall_bathroom = ground.wall(
@@ -412,7 +399,7 @@ wall_kitchen_1 = ground.wall(
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen_1.add_door(
-	at=KITCHEN_WIDTH-2.125,
+	at=KITCHEN_WIDTH-1-1-0.125,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -422,13 +409,13 @@ wall_kitchen_1.add_door(
 )
 
 # Pokoj Risanek
-wall_gym.add_door(
-	at=2.125,
+wall_2.add_door(
+	at=0.375,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
-	operation="SINGLE_SWING_RIGHT",
+	operation="SINGLE_SWING_LEFT",
 #	reverse_swing=True,
 )
 
@@ -710,14 +697,14 @@ if 0:
 	    lath_offsets=[0, wall_4.length - 0.05],
 	)
 	frame4_v = house.add_vertical_frame(
-	    wall_1,
+	    wall_1a,
 	    offset=0,
 	    width=0.05,
 	    depth=0.08,
 	    start_height=0.2,
 	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
 	    gap=0.60,
-	    lath_offsets=[0, wall_1.length - 0.05],
+	    lath_offsets=[0, wall_1a.length - 0.05],
 	)
 
 
@@ -951,12 +938,12 @@ wall_cuts_2_3 = [
 wall_dormer = upper.wall(
 	(wall3_x, HOUSE_DEPTH), (wall2_x-BWT, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=DORMER_WALL_HEIGHT-NADEZDIVKA, start_height=NADEZDIVKA)
-wall_front = upper.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
+wall_front = upper.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_back = upper.wall(
 	(HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_1 = upper.wall(
-	(0, HOUSE_DEPTH), (0, 0),
+wall_1a = upper.wall(
+	(0, HOUSE_DEPTH), (0, BWT+GYM_DEPTH),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
 
@@ -1125,7 +1112,7 @@ wall_2.add_door(
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik 1 nahore
-wall_1.add_window(
+wall_1a.add_window(
 	at=HOUSE_DEPTH/2-1,
 	width=2,
 	height=2.375,
