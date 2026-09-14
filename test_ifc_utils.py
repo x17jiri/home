@@ -4,7 +4,7 @@ from math import hypot
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import ifcopenshell
 import ifcopenshell.api.aggregate
@@ -1431,13 +1431,22 @@ class HouseTests(unittest.TestCase):
     def test_creates_semantic_straight_stair_and_scoped_plan_symbol(self) -> None:
         house = House("My house", colors={"stair": "#C8B090"})
         ground = house.storey("Ground floor", elevation=0)
-        stair = ground.stair(
-            (2, 1),
-            (5, 1),
-            width=0.9,
-            height=2.75,
-            risers=16,
-            name="Main stair",
+        with patch("builtins.print") as print_mock:
+            stair = ground.stair(
+                (2, 1),
+                (5, 1),
+                width=0.9,
+                height=2.75,
+                risers=16,
+                name="Main stair",
+            )
+
+        self.assertEqual(
+            print_mock.call_args_list,
+            [
+                call("Main stair step height: 0.172 m (17.19 cm)"),
+                call("Main stair step width: 0.200 m (20.00 cm)"),
+            ],
         )
 
         self.assertIsInstance(stair, Stair)

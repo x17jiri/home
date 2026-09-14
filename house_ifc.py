@@ -178,18 +178,7 @@ STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
 KK_WIDTH = HOUSE_WIDTH - wall3_x - BWT
 
-GYM_DEPTH = 2
-posilovna = ground.floor_layer(
-	"Prizemi, posilovna",
-	outline=(
-		(BWT, BWT),
-		(wall2_x-BWT, BWT),
-		(wall2_x-BWT, BWT+GYM_DEPTH),
-		(BWT, BWT+GYM_DEPTH),
-	),
-	thickness=GROUND_FLOOR_THICKNESS,
-	color="#ffff80",
-)
+GYM_DEPTH = 2.125
 pokoj_dole = ground.floor_layer(
 	"Pokoj",
 	outline=(
@@ -201,7 +190,7 @@ pokoj_dole = ground.floor_layer(
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.65
+CHODBA_DEPTH = 2.45
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 
@@ -216,7 +205,7 @@ CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1
+CHIMNEY_X_START = wall2_x + 1.05
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
 
@@ -227,7 +216,9 @@ print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 kuchyn  = ground.floor_layer(
 	"Kuchyn",
 	outline=(
-		(wall2_x, BWT+CHODBA_DEPTH+0.15),
+		(wall2_x, BWT+GYM_DEPTH+0.15),
+		(wall2_x+1, BWT+GYM_DEPTH+0.15),
+		(wall2_x+1, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
@@ -246,10 +237,12 @@ kuchyn  = ground.floor_layer(
 chodba  = ground.floor_layer(
 	"Chodba",
 	outline=(
-		(wall2_x, BWT),
+		(BWT, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
-		(wall2_x, BWT+CHODBA_DEPTH),
+		(CHIMNEY_X_END, BWT+CHODBA_DEPTH),
+		(CHIMNEY_X_END, BWT+GYM_DEPTH),
+		(BWT, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	color="#ffff80",
@@ -288,17 +281,17 @@ ground.connect_wall(wall_4, wall_back)
 
 # Front door/window
 
-BOTTOM_STAIR_TREADS = 9
+BOTTOM_STAIR_TREADS = 10
 GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
 front_door = wall_front.add_door(
-	at=wall3_x-BWT-1-BOTTOM_STAIR_TREADS*0.27-1-1.125,
+	at=wall3_x-BWT-1.25,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=GROUND_FLOOR_THICKNESS,
-	operation="SINGLE_SWING_LEFT"
+	operation="SINGLE_SWING_RIGHT"
 )
 wall_front.add_window(
     at=wall3_x+0.875,
@@ -412,19 +405,19 @@ ground.asset(
 # Kitchen, Kuchyn
 wall_kitchen_0 = ground.wall(
 	(wall2_x, BWT+GYM_DEPTH),
-	(wall2_x+1+0.4+1.125+0.15, BWT+GYM_DEPTH),
+	(wall2_x+1, BWT+GYM_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen_1 = ground.wall(
-	(wall2_x+1+0.4+1.125, BWT+CHODBA_DEPTH),
+	(wall2_x+1, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen_0.add_door(
-	at=1+0.5,
+wall_kitchen_1.add_door(
+	at=KITCHEN_WIDTH-2.125,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
-	operation="SINGLE_SWING_LEFT",
+	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=False
 )
 
@@ -450,7 +443,7 @@ wall_3.add_opening(
 
 # Bathroom
 wall_3.add_door(
-    at=BWT+BATHROOM_DEPTH-1.125,
+    at=BWT+math.floor((CHODBA_DEPTH-1)/0.125)*0.125,
     opening_width=1.0, width=0.9,
     height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -485,12 +478,10 @@ GALERY_START = BWT+2.15
 stairs_width = 1
 straight_stair_step_size = 0.27
 stair_step_height = stair_height / step_count
-landing_left_x = wall3_x - BWT - stairs_width
 remaining_stair_count = step_count - 2 - BOTTOM_STAIR_TREADS
 straight_stair_start_y = BWT + 1.02
-bottom_stair_start_x = (
-	landing_left_x - BOTTOM_STAIR_TREADS * straight_stair_step_size
-)
+landing_left_x = wall3_x - BWT - 1
+bottom_stair_start_x = landing_left_x - 0.27*BOTTOM_STAIR_TREADS
 bottom_stair_center_y = BWT + stairs_width / 2
 
 main_stairs = ground.stair(
@@ -524,7 +515,7 @@ gallery_stairs = ground.stair(
 	),
 	(
 		landing_left_x + 0.5,
-		GALERY_START,
+		straight_stair_start_y + 0.27 * remaining_stair_count,
 	),
 	width=1,
 	start_height=main_stairs.end_height,
@@ -558,7 +549,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall2_x + 1.15 + 0.15 + 0.5, BWT+CHODBA_DEPTH+0.15+0.15+0.25),
+    center=(wall2_x + 0.5, BWT+GYM_DEPTH+0.15+0.2+0.25),
 	start_height=GROUND_FLOOR_THICKNESS,
 #    rotation=-45,
 )
@@ -1869,12 +1860,6 @@ if "ground" in sys.argv:
 		description="Chodba a schody",
 		area=chodba.area,
 	)
-	drawing1.add_room_annotation(
-		(1, 1),
-		identifier="0.03",
-		description="Posilovna",
-		area=posilovna.area,
-	)
 	drawing1.add_room_legend()
 
 	# The Rockwool occupies the right side of each wall axis.  These annotations
@@ -1941,12 +1926,6 @@ if "upper" in sys.argv:
 		identifier="P.05",
 		description="Záchod",
 		area=zachod_nahore.area
-	)
-	drawing1.add_room_annotation(
-		(1, 1),
-		identifier="0.03",
-		description="Posilovna (v přízemí)",
-		area=posilovna.area,
 	)
 	drawing1.add_room_legend()
 

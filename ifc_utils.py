@@ -9875,6 +9875,10 @@ class Storey:
             f"{stair_name} step height: {riser_height:.3f} m "
             f"({riser_height * 100:.2f} cm)"
         )
+        print(
+            f"{stair_name} step width: {tread_length:.3f} m "
+            f"({tread_length * 100:.2f} cm)"
+        )
         model = self.house.model
         stair_element = ifcopenshell.api.root.create_entity(
             model,

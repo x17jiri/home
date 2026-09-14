@@ -17,7 +17,7 @@ SLOPE = 0.7359
 WINDOW_HEIGHT = 1.5 + 0.75
 
 # Move the entire polygon by changing only this point.
-POLYGON_ORIGIN = (-3.6, 4.5+8.5/2)
+POLYGON_ORIGIN = (-3.55, 4.5+8.5/2)
 
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
 POLYGON_POINTS: tuple[tuple[float, float], ...] = (
