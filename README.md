@@ -112,6 +112,17 @@ ground.connect_wall(wall_1, wall_2)
 house.write("house.ifc")
 ```
 
+Pass `mirror_x=True` to mirror the exported house and its drawings across the
+global `x=0` plane:
+
+```python
+house = House("My mirrored house", mirror_x=True)
+```
+
+The Python-side coordinates remain unchanged, including values returned by
+walls, stairs, and roof planes. Only written IFC files and rendered drawings
+are mirrored, so existing coordinate calculations need no special handling.
+
 The optional `"axis"` marker places the reference line at a boundary between
 layers. In this example, brick extends 120 mm to the left of the axis and rock
 wool extends 100 mm to the right. Without a marker, the wall construction is
