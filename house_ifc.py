@@ -120,7 +120,7 @@ NADEZDIVKA = 1.25
 
 house = House(
     "My house",
-    #mirror_x=True,
+    mirror_x=True,
     colors={
         "wall": "#ffffff",
         "door": "#8B5A2B",
@@ -207,8 +207,7 @@ CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1.15 + 0.15
-CHIMNEY_X_START = wall2_x + 1.15 + 0.5 # OVERRIDE
+CHIMNEY_X_START = wall2_x + 1.15 + 0.25
 
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
@@ -1304,11 +1303,12 @@ rafters = [
 	1.63,
 	2.63,
 	(3.34, "+before"),
-	(4.06, "before"),
-	(5.06, "after"),
-	(6.06, "after"),
-	(7.06, "after"),
-	(8.06, "after"),
+	(4.00, "before"),
+	(4.80, "before"),
+	(5.80, "before"),
+	(6.46, "after"),
+	(7.12, "after"),
+	(8.12, "after"),
 	(8.78, "+after"),
 	9.78,
 	10.78,
