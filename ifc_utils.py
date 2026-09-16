@@ -69,6 +69,8 @@ __all__ = [
     "elliptic_stairs",
     "generate_plan",
     "offset_plane",
+    "plane_height_at",
+    "window_area",
 ]
 
 Number: TypeAlias = int | float
@@ -1098,7 +1100,11 @@ def _room_legend_svg(
     heading_height_mm = 8.0 * layout_scale
     row_height_mm = 10.0 * layout_scale
     padding_mm = 2.0 * layout_scale
-    normalised_items: list[tuple[str, str, float]] = []
+    has_window_area = any(
+        isinstance(item, dict) and "window_area" in item
+        for item in items
+    )
+    normalised_items: list[tuple[str, str, float, float]] = []
     for supplied_item in items:
         if not isinstance(supplied_item, dict):
             continue
@@ -1106,9 +1112,12 @@ def _room_legend_svg(
         description = str(supplied_item.get("description", ""))
         try:
             area = float(supplied_item.get("area", 0))
+            item_window_area = float(supplied_item.get("window_area", 0))
         except (TypeError, ValueError):
             continue
-        normalised_items.append((identifier, description, area))
+        normalised_items.append(
+            (identifier, description, area, item_window_area)
+        )
 
     u = units_per_mm
     title_height = title_height_mm * u
@@ -1119,8 +1128,9 @@ def _room_legend_svg(
     right = x + width
     title_bottom = y + title_height
     heading_bottom = title_bottom + heading_height
-    identifier_right = x + width * 0.21
-    area_left = x + width * 0.75
+    identifier_right = x + width * (0.17 if has_window_area else 0.21)
+    description_right = x + width * (0.52 if has_window_area else 0.75)
+    floor_area_right = x + width * 0.72 if has_window_area else right
     parts = [
         '<g class="right-panel-table room-legend">',
         (
@@ -1150,19 +1160,28 @@ def _room_legend_svg(
             f'y2="{y + height:.6g}"/>'
         ),
         (
-            f'<line class="right-panel-table-grid" x1="{area_left:.6g}" '
-            f'y1="{title_bottom:.6g}" x2="{area_left:.6g}" '
+            f'<line class="right-panel-table-grid" x1="{description_right:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{description_right:.6g}" '
             f'y2="{y + height:.6g}"/>'
         ),
     ]
+    if has_window_area:
+        parts.append(
+            f'<line class="right-panel-table-grid" x1="{floor_area_right:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{floor_area_right:.6g}" '
+            f'y2="{y + height:.6g}"/>'
+        )
 
     heading_y = title_bottom + heading_height / 2
     heading_font_size = 3.2 * layout_scale
-    for text_value, text_x in (
+    headings = [
         ("ČÍSLO", (x + identifier_right) / 2),
-        ("POPIS", (identifier_right + area_left) / 2),
-        ("PLOCHA", (area_left + right) / 2),
-    ):
+        ("POPIS", (identifier_right + description_right) / 2),
+        ("PLOCHA", (description_right + floor_area_right) / 2),
+    ]
+    if has_window_area:
+        headings.append(("PLOCHA OKEN", (floor_area_right + right) / 2))
+    for text_value, text_x in headings:
         parts.append(
             f'<text class="room-legend-heading" x="{text_x:.6g}" '
             f'y="{heading_y:.6g}" text-anchor="middle" '
@@ -1173,11 +1192,10 @@ def _room_legend_svg(
 
     body_font_size = 4.0 * layout_scale
     row_y = heading_bottom
-    for identifier, description, area in normalised_items:
+    for identifier, description, area, item_window_area in normalised_items:
         text_y = row_y + row_height / 2
         area_text = f"{area:.2f}".replace(".", ",") + " m²"
-        parts.extend(
-            (
+        row_parts = [
                 f'<text class="room-legend-text" '
                 f'x="{(x + identifier_right) / 2:.6g}" y="{text_y:.6g}" '
                 f'text-anchor="middle" dominant-baseline="middle" '
@@ -1189,12 +1207,29 @@ def _room_legend_svg(
                 f'style="font-size:{body_font_size:.6g}px">'
                 f'{escape(description)}</text>',
                 f'<text class="room-legend-text" '
-                f'x="{(area_left + right) / 2:.6g}" y="{text_y:.6g}" '
+                f'x="{(description_right + floor_area_right) / 2:.6g}" '
+                f'y="{text_y:.6g}" '
                 f'text-anchor="middle" dominant-baseline="middle" '
                 f'style="font-size:{body_font_size:.6g}px">'
                 f'{area_text}</text>',
+        ]
+        if has_window_area:
+            percentage = 100 * item_window_area / area if area > 0 else 0
+            window_area_text = (
+                f"{item_window_area:.2f}".replace(".", ",")
+                + " m² ("
+                + f"{percentage:.1f}".replace(".", ",")
+                + " %)"
             )
-        )
+            row_parts.append(
+                f'<text class="room-legend-text room-window-area" '
+                f'x="{(floor_area_right + right) / 2:.6g}" '
+                f'y="{text_y:.6g}" text-anchor="middle" '
+                f'dominant-baseline="middle" '
+                f'style="font-size:{3.4 * layout_scale:.6g}px">'
+                f'{window_area_text}</text>'
+            )
+        parts.extend(row_parts)
         row_y += row_height
         if row_y < y + height - 1e-9:
             parts.append(
@@ -1651,6 +1686,22 @@ def _point_3d(value: Point3D, argument: str) -> tuple[float, float, float]:
     )
 
 
+def window_area(*windows: ifcopenshell.entity_instance) -> float:
+    """Return the combined nominal area of windows or glazed door objects."""
+    area = 0.0
+    for index, window in enumerate(windows, start=1):
+        if not isinstance(window, ifcopenshell.entity_instance) or not (
+            window.is_a("IfcWindow") or window.is_a("IfcDoor")
+        ):
+            raise TypeError(f"window {index} must be an IfcWindow or IfcDoor")
+        width = window.OverallWidth
+        height = window.OverallHeight
+        if width is None or height is None:
+            raise ValueError(f"window {index} must define its overall dimensions")
+        area += float(width) * float(height)
+    return area
+
+
 def elliptic_stairs(
     center: Point,
     radiuses: Point,
@@ -1800,6 +1851,41 @@ def offset_plane(
     return tuple(
         tuple(float(coordinate) for coordinate in point)
         for point in shifted_points
+    )
+
+
+def plane_height_at(
+    point_1: Point3D,
+    point_2: Point3D,
+    point_3: Point3D,
+    *,
+    x: Number,
+    y: Number,
+) -> float:
+    """Return the global Z coordinate of a non-vertical plane at ``x, y``."""
+    points = np.array(
+        (
+            _point_3d(point_1, "point_1"),
+            _point_3d(point_2, "point_2"),
+            _point_3d(point_3, "point_3"),
+        ),
+        dtype=float,
+    )
+    x = _number(x, "x")
+    y = _number(y, "y")
+    normal = np.cross(points[1] - points[0], points[2] - points[0])
+    normal_length = float(np.linalg.norm(normal))
+    if normal_length <= 1e-9:
+        raise ValueError("plane points must not be collinear")
+    if abs(float(normal[2])) <= 1e-9:
+        raise ValueError("plane must not be vertical")
+    return float(
+        points[0, 2]
+        - (
+            normal[0] * (x - points[0, 0])
+            + normal[1] * (y - points[0, 1])
+        )
+        / normal[2]
     )
 
 
@@ -5114,6 +5200,7 @@ class Drawing:
         *,
         identifier: str,
         area: Number,
+        window_area: Number | None = None,
         description: str | None = None,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
@@ -5123,8 +5210,9 @@ class Drawing:
         separator line.  ``area`` is supplied in square metres and displayed
         with two decimal places and a square-metre suffix.  ``description`` is
         retained as metadata for :meth:`add_room_legend`, but is not displayed
-        in the in-room annotation.  This helper does not create an ``IfcSpace``
-        or calculate area from room boundaries.
+        in the in-room annotation.  Supplying ``window_area`` adds it and its
+        percentage of floor area to the room legend.  This helper does not
+        create an ``IfcSpace`` or calculate area from room boundaries.
         """
         self._require_plan_view("add_room_annotation")
         x, y = _point(position, "position")
@@ -5139,6 +5227,10 @@ class Drawing:
         area = _number(area, "area")
         if area <= 0:
             raise ValueError("area must be greater than zero")
+        if window_area is not None:
+            window_area = _number(window_area, "window_area")
+            if window_area < 0:
+                raise ValueError("window_area must not be negative")
 
         annotation_name = (
             _name(name, "name")
@@ -5231,14 +5323,17 @@ class Drawing:
             product=identifier_annotation,
             name="EPset_RoomAnnotation",
         )
+        room_properties = {
+            "Identifier": identifier,
+            "Description": description,
+            "Area": area,
+        }
+        if window_area is not None:
+            room_properties["WindowArea"] = window_area
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=metadata,
-            properties={
-                "Identifier": identifier,
-                "Description": description,
-                "Area": area,
-            },
+            properties=room_properties,
         )
 
         line_width = max(0.75, len(identifier) * 0.18)
@@ -5284,13 +5379,14 @@ class Drawing:
             group=self.group,
             products=[identifier_annotation, area_annotation, separator],
         )
-        self._room_annotations.append(
-            {
-                "identifier": identifier,
-                "description": description,
-                "area": area,
-            }
-        )
+        room_data = {
+            "identifier": identifier,
+            "description": description,
+            "area": area,
+        }
+        if window_area is not None:
+            room_data["window_area"] = window_area
+        self._room_annotations.append(room_data)
         return identifier_annotation
 
     def add_entrance_arrow(

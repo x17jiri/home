@@ -47,6 +47,8 @@ from ifc_utils import (
     elliptic_stairs,
     generate_plan,
     offset_plane,
+    plane_height_at,
+    window_area,
 )
 
 
@@ -137,6 +139,35 @@ class HouseTests(unittest.TestCase):
             offset_plane((0, 0, 0), (0, 1, 0), (0, 0, 1), offset=1)
         with self.assertRaisesRegex(TypeError, "offset must be a number"):
             offset_plane((0, 0, 0), (1, 0, 0), (0, 1, 1), offset=True)
+
+    def test_calculates_plane_height_at_xy_independent_of_point_order(
+        self,
+    ) -> None:
+        points = (
+            (0, 0, 1),
+            (1, 0, 3),
+            (0, 1, 4),
+        )
+
+        self.assertAlmostEqual(plane_height_at(*points, x=2, y=4), 17)
+        self.assertAlmostEqual(
+            plane_height_at(points[0], points[2], points[1], x=2, y=4),
+            17,
+        )
+
+    def test_validates_plane_height_inputs(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must not be collinear"):
+            plane_height_at(
+                (0, 0, 0), (1, 0, 0), (2, 0, 0), x=0, y=0
+            )
+        with self.assertRaisesRegex(ValueError, "must not be vertical"):
+            plane_height_at(
+                (0, 0, 0), (0, 1, 0), (0, 0, 1), x=0, y=0
+            )
+        with self.assertRaisesRegex(TypeError, "x must be a number"):
+            plane_height_at(
+                (0, 0, 0), (1, 0, 0), (0, 1, 1), x=True, y=0
+            )
 
     def write_asset_library(self, path: Path) -> None:
         library = ifcopenshell.api.project.create_file(version="IFC4")
@@ -893,6 +924,31 @@ class HouseTests(unittest.TestCase):
                 filling, "Plan", "Body", "PLAN_VIEW"
             )
             self.assertTrue(all(not item.StyledByItem for item in plan.Items))
+
+    def test_calculates_combined_nominal_window_and_glazed_door_area(
+        self,
+    ) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.2, height=3)
+        window = wall.add_window(
+            at=0.5,
+            width=1.5,
+            sill_height=0.9,
+            height=2.4,
+        )
+        glazed_door = wall.add_door(
+            at=2.5,
+            width=0.8,
+            sill_height=0.5,
+            height=2.5,
+        )
+
+        self.assertAlmostEqual(window_area(window), 2.25)
+        self.assertAlmostEqual(window_area(window, glazed_door), 3.85)
+        self.assertEqual(window_area(), 0)
+        with self.assertRaisesRegex(TypeError, "must be an IfcWindow or IfcDoor"):
+            window_area(wall)
 
     def test_rejects_invalid_3d_colors_and_transparency(self) -> None:
         with self.assertRaisesRegex(TypeError, "colors must be a mapping"):
@@ -4970,6 +5026,7 @@ class HouseTests(unittest.TestCase):
             identifier="P.01",
             description="Bedroom",
             area=8.3,
+            window_area=1.8,
         )
 
         self.assertEqual(identifier.Name, "Ground plan Room P.01")
@@ -4990,6 +5047,7 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(metadata["Identifier"], "P.01")
         self.assertEqual(metadata["Description"], "Bedroom")
         self.assertAlmostEqual(metadata["Area"], 8.3)
+        self.assertAlmostEqual(metadata["WindowArea"], 1.8)
 
         members = set(drawing.group.IsGroupedBy[0].RelatedObjects)
         area = next(member for member in members if member.Name.endswith(" Area"))
@@ -5021,6 +5079,10 @@ class HouseTests(unittest.TestCase):
             drawing.add_room_annotation((1, 1), identifier="P.02", area=0)
         with self.assertRaisesRegex(ValueError, "identifier must not be empty"):
             drawing.add_room_annotation((1, 1), identifier=" ", area=5)
+        with self.assertRaisesRegex(ValueError, "window_area must not be negative"):
+            drawing.add_room_annotation(
+                (1, 1), identifier="P.03", area=5, window_area=-1
+            )
         with self.assertRaisesRegex(ValueError, "duplicated"):
             drawing.add_room_annotation((1, 1), identifier="P.01", area=5)
 
@@ -5041,6 +5103,7 @@ class HouseTests(unittest.TestCase):
             identifier="0.02",
             description="Living room",
             area=18.25,
+            window_area=3.5,
         )
         drawing.add_room_annotation(
             (1, 1),
@@ -5067,6 +5130,7 @@ class HouseTests(unittest.TestCase):
                             "identifier": "0.02",
                             "description": "Living room",
                             "area": 18.25,
+                            "window_area": 3.5,
                         },
                         {
                             "identifier": "0.01",
@@ -5681,9 +5745,54 @@ class HouseTests(unittest.TestCase):
             self.assertIn(">ČÍSLO</text>", svg)
             self.assertIn(">POPIS</text>", svg)
             self.assertIn(">PLOCHA</text>", svg)
+            self.assertNotIn(">PLOCHA OKEN</text>", svg)
             self.assertIn("Pokoj &amp; pracovna", svg)
             self.assertIn("12,35 m²", svg)
             self.assertIn("8,00 m²", svg)
+
+    def test_appends_window_area_and_floor_area_percentage_to_room_legend(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg width="160mm" height="160mm" '
+                'viewBox="0 0 160 160">\n'
+                '  <g id="model-view"/>\n'
+                "</svg>\n",
+                encoding="utf-8",
+            )
+            properties = {
+                "RightPanelWidth": 40,
+                "RightPanelTables": json.dumps(
+                    [
+                        {
+                            "kind": "room_legend",
+                            "title": "LEGENDA MÍSTNOSTÍ",
+                            "items": [
+                                {
+                                    "identifier": "P.01",
+                                    "description": "Pokoj",
+                                    "area": 12.5,
+                                    "window_area": 2.25,
+                                },
+                                {
+                                    "identifier": "P.02",
+                                    "description": "Galerie",
+                                    "area": 8,
+                                },
+                            ],
+                        }
+                    ]
+                ),
+            }
+
+            _postprocess_right_panel(svg_path, properties)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertIn(">PLOCHA OKEN</text>", svg)
+            self.assertIn("2,25 m² (18,0 %)", svg)
+            self.assertIn("0,00 m² (0,0 %)", svg)
 
     def test_stores_a_basic_elevation_camera_without_plan_annotations(self) -> None:
         house = House("My house")

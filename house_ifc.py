@@ -302,20 +302,25 @@ front_door = wall_1b.add_door(
 
 # Back windows
 print("KK_WIDTH=", KK_WIDTH)
-wall_back.add_window(
+window_obyvak = wall_back.add_window(
 	at=2*BWT+KK_WIDTH+1, width=2.5,
 	sill_height=GROUND_WINDOW_SILL_HEIGHT,
 	height=GROUND_WINDOW_HEIGHT)
-wall_back.add_window(
-	at=HOUSE_WIDTH-wall2_x+BWT+0.625,
-	width=2, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
-wall_back.add_door(
+window_pokoj_dole = wall_back.add_window(
+	at=HOUSE_WIDTH-wall2_x+BWT+0.875,
+	width=1.5, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
+window_kk = wall_back.add_door(
 	at=BWT+KK_WIDTH-0.125-1,
 	width=0.8, sill_height=GROUND_WINDOW_HEIGHT-2.0,
 	height=GROUND_WINDOW_HEIGHT, # align height with windows even though this is door
 	opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",)
 
+window_pokoj_dole_2 = wall_1a.add_window(
+	at=1,#HOUSE_DEPTH/2-0.75-BWT,
+	width=1,
+	sill_height=GROUND_WINDOW_HEIGHT-0.75,
+	height=GROUND_WINDOW_HEIGHT)
 
 # Posilovna, Gym
 wall_gym = ground.wall(
@@ -534,7 +539,7 @@ chimney = ground.chimney(
     color="#B8A99A",
 )
 
-GALERY_END = GALERY_START + 1
+GALERY_END = GALERY_START + 1.05
 
 ground.furniture(
     "Kamna",
@@ -738,40 +743,27 @@ if 0:
 	facade_4.add(frame2_finish)
 
 # MIAKO
-ceiling1_a = upper.miako_slab(
-    "Ceiling 1 a",
-    start=(0.1, BWT+2.06),
-    end=(wall2_x-0.15, BWT+2.06),
+ceiling1 = upper.miako_slab(
+    "Ceiling 1",
+    start=(0.1, BWT+GYM_DEPTH+BWT-0.04),
+    end=(wall2_x-0.15, BWT+GYM_DEPTH+BWT-0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
 	block_height=0.15,
     direction=(0, 1),
+	expected_width=HOUSE_DEPTH-3*BWT-GYM_DEPTH+0.08,
     structure=[
 		"beam",
 		"narrow", "beam",
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
-		"wide"
-		],
-)
-ceiling1_b = upper.miako_slab(
-    "Ceiling 1 b",
-    start=(0.1, BWT+2.06 + 3.0),
-    end=(wall2_x-0.15, BWT+2.06 + 3.0),
-    top=0,
-	topping=0.06,
-	beam_height=0.06,
-	block_height=0.15,
-    direction=(0, 1),
-	expected_width=HOUSE_DEPTH-2*BWT - 3.0 -2.06+0.04,
-    structure=[
-        "beam",
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
-		"wide",
+		"wide", "beam",
+		"narrow"
 		],
 )
 ceiling2 = upper.miako_slab(
@@ -792,7 +784,7 @@ ceiling2 = upper.miako_slab(
 		"beam", "wide",
 		"beam", "wide",
 		"beam", "wide",
-		"beam", "wide",
+		"beam", "narrow",
 		"beam"
 		],
 )
@@ -914,6 +906,53 @@ FLAT_CEILING_ROOF_PLANE_POINTS = (
 	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 )
+WALL_PLATE_SIZE = (0.16, 0.12)
+STREET_WALL_PLATE_Y = 0.125
+GARDEN_WALL_PLATE_Y = HOUSE_DEPTH - 0.125
+
+
+def wall_plate_center_z(roof_plane_points, center_y, *, side):
+	"""Return a wall plate centre Z with its outer top edge on the roof plane."""
+	if side not in {"street", "garden"}:
+		raise ValueError("wall plate side must be 'street' or 'garden'")
+	outside_direction = -1 if side == "street" else 1
+	roof_contact_y = (
+		center_y + outside_direction * WALL_PLATE_SIZE[0] / 2
+	)
+	return (
+		plane_height_at(*roof_plane_points, x=0, y=roof_contact_y)
+		- WALL_PLATE_SIZE[1] / 2
+	)
+
+
+STREET_WALL_PLATE_Z = wall_plate_center_z(
+	STREET_ROOF_PLANE_POINTS,
+	STREET_WALL_PLATE_Y,
+	side="street",
+)
+GARDEN_WALL_PLATE_Z = wall_plate_center_z(
+	GARDEN_ROOF_PLANE_POINTS,
+	GARDEN_WALL_PLATE_Y,
+	side="garden",
+)
+DORMER_WALL_PLATE_Z = wall_plate_center_z(
+	DORMER_ROOF_PLANE_POINTS,
+	GARDEN_WALL_PLATE_Y,
+	side="garden",
+)
+CUT_STREET_WALL_PLATE_Y = BWT + GYM_DEPTH + STREET_WALL_PLATE_Y
+CUT_STREET_WALL_PLATE_Z = wall_plate_center_z(
+	STREET_ROOF_PLANE_POINTS,
+	CUT_STREET_WALL_PLATE_Y,
+	side="street",
+)
+CUT_STREET_WALL_HEIGHT = (
+	CUT_STREET_WALL_PLATE_Z
+	- WALL_PLATE_SIZE[1] / 2
+	- UPPER_FLOOR_START
+)
+
+
 STREET_GYPSUM_PLASTERBOARD_CUT = offset_plane(
 	*STREET_ROOF_PLANE_POINTS,
 	offset=GYPSUM_PLASTERBOARD_BOTTOM,
@@ -948,33 +987,35 @@ wall_back = upper.wall(
 	(HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_1a = upper.wall(
-	(0, HOUSE_DEPTH-BWT), (0, BWT+GYM_DEPTH),
+	(0, HOUSE_DEPTH-BWT), (0, BWT+GYM_DEPTH+BWT),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
 wall_1b = upper.wall(
-	(CUT_WIDTH, GYM_DEPTH+2*BWT), (CUT_WIDTH, BWT),
+	(CUT_WIDTH, GYM_DEPTH+BWT), (CUT_WIDTH, BWT),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
 wall_gym = upper.wall(
-	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
+	(0, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
 	wall_type=load_bearing_wall,
-	height=4, cuts=wall_cuts_1_4, )
+	height=CUT_STREET_WALL_HEIGHT,
+	cuts=wall_cuts_1_4,
+)
 wall_2 = upper.wall(
 	(wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_2.add_opening(
-	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
+	at=3.625-BWT-GYM_DEPTH, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_3 = upper.wall(
 	(wall3_x, BWT), (wall3_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_3.add_opening(
-	at=3.625, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
+	at=3.625-BWT, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
 
 wall_3.add_opening(
-    at=GALERY_START,
+    at=GALERY_START-BWT,
     width=1,
     height=2.25,
 )
@@ -1043,49 +1084,57 @@ upper.asset(
 
 beam1 = upper.beam(
     "Beam",
-    start=(0, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
-    end=(HOUSE_WIDTH, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    start=(-0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    end=(HOUSE_WIDTH+0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
     size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
     kind="BEAM",
 )
 beam2 = upper.beam(
     "Beam",
-    start=(0, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
-    end=(HOUSE_WIDTH, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    start=(-0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    end=(HOUSE_WIDTH+0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
     size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
     kind="BEAM",
 )
 beam3 = upper.beam(
     "Beam",
-    start=(CUT_WIDTH, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    end=(HOUSE_WIDTH, 0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    size=(0.16, 0.12),
+	start=(CUT_WIDTH-0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
+	end=(HOUSE_WIDTH+0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
+    size=WALL_PLATE_SIZE,
     material="Wood",
     kind="BEAM",
 )
+beam_cut_street = upper.beam(
+	"Cut street wall plate",
+	start=(-0.2, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
+	end=(wall2_x-BWT, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
+	size=WALL_PLATE_SIZE,
+	material="Wood",
+	kind="BEAM",
+)
 beam4_a = upper.beam(
     "Beam",
-    start=(0, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    end=(wall2_x-BWT, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    size=(0.16, 0.12),
+	start=(-0.2, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
+	end=(wall2_x-BWT, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
+    size=WALL_PLATE_SIZE,
     material="Wood",
     kind="BEAM",
 )
 beam4_b = upper.beam(
     "Beam",
-    start=(wall3_x, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    end=(HOUSE_WIDTH, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+NADEZDIVKA+0.06),
-    size=(0.16, 0.12),
+	start=(wall3_x, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
+	end=(HOUSE_WIDTH+0.2, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
+    size=WALL_PLATE_SIZE,
     material="Wood",
     kind="BEAM",
 )
 beam_dormer = upper.beam(
     "Beam",
-    start=(wall3_x+0.3, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+DORMER_WALL_HEIGHT+0.06),
-    end=(BWT+3-0.3, HOUSE_DEPTH-0.125, UPPER_FLOOR_START+DORMER_WALL_HEIGHT+0.06),
-    size=(0.16, 0.12),
+	start=(wall3_x+0.3, GARDEN_WALL_PLATE_Y, DORMER_WALL_PLATE_Z),
+	end=(wall2_x-BWT-0.3, GARDEN_WALL_PLATE_Y, DORMER_WALL_PLATE_Z),
+    size=WALL_PLATE_SIZE,
     material="Wood",
     kind="BEAM",
 )
@@ -1110,31 +1159,31 @@ upper.furniture(
 )
 
 # Okna obyvak
-wall_dormer.add_window(
+window_dormer_1 = wall_dormer.add_window(
 	at=BWT+0.5,width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
-wall_dormer.add_window(
+window_dormer_2 = wall_dormer.add_window(
 	at=BWT+KITCHEN_WIDTH-0.5-1.5,
 	width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
 wall_2.add_door(
-	at=GALERY_START-BWT-GYM_DEPTH,
+	at=GALERY_START-GYM_DEPTH-BWT,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik 1 nahore
-wall_1a.add_window(
+window_pokoj_nahore_1 = wall_1a.add_window(
 	at=HOUSE_DEPTH/2-0.75-BWT,
 	width=1.5,
 	height=2.375,
-	sill_height=1.375, partition="SINGLE_PANEL",)
+	sill_height=2.375-0.875, partition="SINGLE_PANEL",)
 # okno do silnice
-wall_gym.add_window(
-	at=0,width=1.25, sill_height=NADEZDIVKA, height=2.375
+window_pokoj_nahore_2 = wall_gym.add_window(
+	at=BWT,width=1.25, sill_height=NADEZDIVKA, height=2.375
 )
 # Okno k sousedum nahore
-wall_4.add_window(
+window_sklad = wall_4.add_window(
 	at=HALF_DEPTH-0.5,
 	width=1,
 	height=2.375,
@@ -1970,12 +2019,14 @@ if "ground" in sys.argv:
 		identifier="0.01",
 		description="Pokoj",
 		area=pokoj_dole.area,
+		window_area=window_area(window_pokoj_dole, window_pokoj_dole_2),
 	)
 	drawing1.add_room_annotation(
 		(wall3_x - 2.5, HOUSE_DEPTH - 2.5),
 		identifier="0.02",
 		description="Obývak s KK",
 		area=kuchyn.area,
+		window_area=window_area(window_obyvak, window_kk),
 	)
 	drawing1.add_room_annotation(
 		(6, 1+1),
@@ -2027,21 +2078,27 @@ if "upper" in sys.argv:
 		(1.5, 6),
 		identifier="P.01",
 		description="Pokoj 1",
-		area=upper_pokoj_1.area
+		area=upper_pokoj_1.area,
+		window_area=window_area(
+			window_pokoj_nahore_1,
+			window_pokoj_nahore_2,
+		),
 	)
 
 	drawing1.add_room_annotation(
 		(6.5, 6),
 		identifier="P.02",
 		description="Pokoj 2",
-		area=upper_pokoj_2.area
+		area=upper_pokoj_2.area,
+		window_area=window_area(window_dormer_1, window_dormer_2),
 	)
 
 	drawing1.add_room_annotation(
 		(9.5, 5),
 		identifier="P.03",
 		description="Skladovací prostor",
-		area=upper_sklad.area
+		area=upper_sklad.area,
+		window_area=window_area(window_sklad),
 	)
 
 	drawing1.add_room_annotation(
@@ -2085,7 +2142,7 @@ if "upper" in sys.argv:
 
 if "ceiling" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 2", x=6, y=4, z=2.875+0.1, radius=8, storeys=[upper]
+		"Drawing 2", x=6, y=4, z=ground_floor_height+0.1, radius=8, storeys=[upper]
 	)
 
 	drawing1.add_stair_annotation(main_stairs)
