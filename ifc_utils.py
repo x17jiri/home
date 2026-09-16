@@ -1575,6 +1575,14 @@ BeamKind: TypeAlias = Literal[
     "USERDEFINED",
     "NOTDEFINED",
 ]
+SlabKind: TypeAlias = Literal[
+    "FLOOR",
+    "BASESLAB",
+    "ROOF",
+    "LANDING",
+    "USERDEFINED",
+    "NOTDEFINED",
+]
 MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow"]
 
 _COLOR_NAMES = {
@@ -1633,6 +1641,14 @@ _BEAM_KINDS = {
     "T_BEAM",
     "RAFTER",
     "PURLIN",
+    "USERDEFINED",
+    "NOTDEFINED",
+}
+_SLAB_KINDS = {
+    "FLOOR",
+    "BASESLAB",
+    "ROOF",
+    "LANDING",
     "USERDEFINED",
     "NOTDEFINED",
 }
@@ -8072,6 +8088,256 @@ class Storey:
         self._landing_count = 0
         self._chimney_count = 0
         self._cylinder_count = 0
+        self._footing_count = 0
+        self._walls: list[Wall] = []
+
+    @property
+    def walls(self) -> tuple[Wall, ...]:
+        """Return walls created in this storey, in insertion order."""
+        return tuple(self._walls)
+
+    def add_walls_from(
+        self,
+        source_storey: Storey,
+        *,
+        source_wall_type: ifcopenshell.entity_instance | None = None,
+        thickness: Number | None = None,
+        wall_type: ifcopenshell.entity_instance | None = None,
+        height: Number,
+        start_height: Number = 0,
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> tuple[Wall, ...]:
+        """Add walls along selected wall paths from another storey.
+
+        ``source_wall_type`` restricts the source paths to occurrences of one
+        reusable wall type.  The new walls use ``wall_type`` or ``thickness``;
+        when neither is supplied, each source wall's construction is reused.
+        Hosted openings, cuts, and wall connections are deliberately omitted.
+        """
+        if not isinstance(source_storey, Storey):
+            raise TypeError("source_storey must be a Storey")
+        if source_storey.house is not self.house:
+            raise ValueError("source_storey must belong to this house")
+        if source_wall_type is not None:
+            if not (
+                isinstance(source_wall_type, ifcopenshell.entity_instance)
+                and source_wall_type.is_a("IfcWallType")
+            ):
+                raise TypeError("source_wall_type must be an IfcWallType")
+            if source_wall_type.file is not self.house.model:
+                raise ValueError("source_wall_type must belong to this house")
+        if thickness is not None and wall_type is not None:
+            raise ValueError("thickness and wall_type must not both be supplied")
+
+        source_walls = (
+            wall
+            for wall in source_storey.walls
+            if source_wall_type is None
+            or ifcopenshell.util.element.get_type(wall) == source_wall_type
+        )
+        copied_walls = []
+        for source_wall in source_walls:
+            target_thickness = thickness
+            target_wall_type = wall_type
+            if target_thickness is None and target_wall_type is None:
+                target_wall_type = ifcopenshell.util.element.get_type(source_wall)
+                if target_wall_type is None:
+                    target_thickness = source_wall.thickness
+            copied_walls.append(
+                self.wall(
+                    source_wall.start,
+                    source_wall.end,
+                    thickness=target_thickness,
+                    wall_type=target_wall_type,
+                    height=height,
+                    start_height=start_height,
+                    color=color,
+                    transparency=transparency,
+                )
+            )
+        return tuple(copied_walls)
+
+    def add_strip_footings_from(
+        self,
+        source_storey: Storey,
+        *,
+        source_wall_type: ifcopenshell.entity_instance | None = None,
+        width: Number,
+        height: Number,
+        start_height: Number,
+        material: str = "Concrete",
+        color: str | None = None,
+        transparency: Number = 0,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Add strip footings centred beneath selected source-wall bodies.
+
+        Each footing projects past both wall ends by the same distance that it
+        projects beyond either wall face.  This makes perpendicular strips
+        meet cleanly at corners without extending past the footing outline.
+        """
+        if not isinstance(source_storey, Storey):
+            raise TypeError("source_storey must be a Storey")
+        if source_storey.house is not self.house:
+            raise ValueError("source_storey must belong to this house")
+        if source_wall_type is not None:
+            if not (
+                isinstance(source_wall_type, ifcopenshell.entity_instance)
+                and source_wall_type.is_a("IfcWallType")
+            ):
+                raise TypeError("source_wall_type must be an IfcWallType")
+            if source_wall_type.file is not self.house.model:
+                raise ValueError("source_wall_type must belong to this house")
+        width = _number(width, "width")
+        height = _number(height, "height")
+        start_height = _number(start_height, "start_height")
+        material_name = _name(material, "material")
+        transparency = _number(transparency, "transparency")
+        if width <= 0:
+            raise ValueError("width must be greater than zero")
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        if not 0 <= transparency <= 1:
+            raise ValueError("transparency must be between zero and one")
+
+        model = self.house.model
+        surface_style = self.house._surface_style(
+            "slab",
+            color=color,
+            transparency=transparency,
+        )
+        ifc_material = self.house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=material_name,
+                category="foundation",
+            )
+            self.house._materials[material_name] = ifc_material
+
+        footings = []
+        for source_wall in source_storey.walls:
+            if (
+                source_wall_type is not None
+                and ifcopenshell.util.element.get_type(source_wall)
+                != source_wall_type
+            ):
+                continue
+            delta_x = source_wall.end[0] - source_wall.start[0]
+            delta_y = source_wall.end[1] - source_wall.start[1]
+            normal_x = -delta_y / source_wall.length
+            normal_y = delta_x / source_wall.length
+            source_body_center_offset = (
+                source_wall.body_offset + source_wall.thickness / 2
+            )
+            end_extension = max(
+                (width - source_wall.thickness) / 2,
+                0.0,
+            )
+            tangent_x = delta_x / source_wall.length
+            tangent_y = delta_y / source_wall.length
+            start_x = (
+                source_wall.start[0]
+                + normal_x * source_body_center_offset
+                - tangent_x * end_extension
+            )
+            start_y = (
+                source_wall.start[1]
+                + normal_y * source_body_center_offset
+                - tangent_y * end_extension
+            )
+            footing_length = source_wall.length + 2 * end_extension
+
+            self._footing_count += 1
+            footing = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcFooting",
+                name=f"Strip footing {self._footing_count}",
+                predefined_type="STRIP_FOOTING",
+            )
+            ifcopenshell.api.spatial.assign_container(
+                model,
+                products=[footing],
+                relating_structure=self.element,
+            )
+            angle = atan2(delta_y, delta_x)
+            placement = np.eye(4)
+            placement[0, 0] = cos(angle)
+            placement[0, 1] = -sin(angle)
+            placement[1, 0] = sin(angle)
+            placement[1, 1] = cos(angle)
+            placement[0, 3] = start_x
+            placement[1, 3] = start_y
+            placement[2, 3] = self.elevation + start_height
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=footing,
+                matrix=placement,
+                is_si=True,
+            )
+            body = ifcopenshell.api.geometry.add_wall_representation(
+                model,
+                context=self.house._body_context,
+                length=footing_length,
+                height=height,
+                thickness=width,
+                offset=-width / 2,
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=footing,
+                representation=body,
+            )
+            if surface_style is not None:
+                ifcopenshell.api.style.assign_representation_styles(
+                    model,
+                    shape_representation=body,
+                    styles=[surface_style],
+                )
+            axis = ifcopenshell.api.geometry.add_axis_representation(
+                model,
+                context=self.house._axis_context,
+                axis=[(0.0, 0.0), (footing_length, 0.0)],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=footing,
+                representation=axis,
+            )
+            ifcopenshell.api.material.assign_material(
+                model,
+                products=[footing],
+                type="IfcMaterial",
+                material=ifc_material,
+            )
+            common_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=footing,
+                name="Pset_FootingCommon",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=common_pset,
+                properties={"LoadBearing": True},
+            )
+            footing_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=footing,
+                name="BBIM_StripFooting",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=footing_pset,
+                properties={
+                    "SourceWall": source_wall.GlobalId,
+                    "Width": width,
+                    "Height": height,
+                    "Length": footing_length,
+                    "StartHeight": start_height,
+                },
+            )
+            footings.append(footing)
+        return tuple(footings)
 
     def add(
         self,
@@ -8127,27 +8393,30 @@ class Storey:
         outline: Sequence[Point],
         thickness: Number,
         start_height: Number = 0,
+        kind: SlabKind = "FLOOR",
+        load_bearing: bool = False,
         material: str = "Floor build-up",
         color: str | None = None,
         transparency: Number = 0,
     ) -> FloorLayer:
-        """Create one simplified floor build-up above the storey elevation.
+        """Create one simplified slab layer relative to the storey elevation.
 
         ``outline`` contains the floor polygon in global XY coordinates.
-        ``start_height`` locates its underside above this storey's elevation,
-        and the slab extends upward by ``thickness``.  A single material keeps
-        the representation simple until the build-up needs to be decomposed
-        into insulation, heating, and screed layers.  The returned layer's
+        ``start_height`` locates its underside relative to this storey's
+        elevation and may be negative.  The slab extends upward by
+        ``thickness``.  ``kind`` controls its IFC slab type and
+        ``load_bearing`` records its structural role.  The returned layer's
         ``area`` is the polygon area in square metres.
         """
         layer_name = _name(name, "name")
         material_name = _name(material, "material")
         thickness = _number(thickness, "thickness")
         start_height = _number(start_height, "start_height")
+        kind = _enum(kind, "kind", _SLAB_KINDS)
+        if not isinstance(load_bearing, bool):
+            raise TypeError("load_bearing must be a boolean")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
-        if start_height < 0:
-            raise ValueError("start_height must be zero or greater")
         if isinstance(outline, (str, bytes)):
             raise TypeError("outline must contain at least three points")
         try:
@@ -8173,7 +8442,7 @@ class Storey:
             model,
             ifc_class="IfcSlab",
             name=layer_name,
-            predefined_type="FLOOR",
+            predefined_type=kind,
         )
         placement = np.eye(4)
         placement[2, 3] = self.elevation + start_height
@@ -8243,7 +8512,7 @@ class Storey:
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=common_pset,
-            properties={"LoadBearing": False},
+            properties={"LoadBearing": load_bearing},
         )
         layer_pset = ifcopenshell.api.pset.add_pset(
             model,
@@ -10841,9 +11110,10 @@ class Storey:
         """Create a straight wall whose axis runs from ``start`` to ``end``.
 
         Points, thickness and height are in metres.  ``start_height`` is the
-        wall bottom above this storey's elevation and ``height`` is its
-        vertical extent.  Supply either a direct ``thickness`` or a reusable
-        ``wall_type`` created by :meth:`House.wall_type`.  Direct-thickness
+        wall bottom relative to this storey's elevation and may be negative;
+        ``height`` is its vertical extent.  Supply either a direct thickness
+        or a reusable ``wall_type`` created by :meth:`House.wall_type`.
+        Direct-thickness
         walls are centred on their axis; layered walls use their type's
         optional ``"axis"`` marker.
         Each item in ``cuts`` contains three world-coordinate points defining
@@ -10885,8 +11155,6 @@ class Storey:
             raise ValueError("thickness must be greater than zero")
         if height <= 0:
             raise ValueError("height must be greater than zero")
-        if start_height < 0:
-            raise ValueError("start_height must be zero or greater")
         transparency = _number(transparency, "transparency")
         if not 0 <= transparency <= 1:
             raise ValueError("transparency must be between 0 and 1")
@@ -11088,6 +11356,7 @@ class Storey:
         ifcopenshell.api.geometry.assign_representation(
             self.house.model, product=wall, representation=axis
         )
+        self._walls.append(wall)
         return wall
 
     def connect_wall(

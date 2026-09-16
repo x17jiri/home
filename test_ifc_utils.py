@@ -3821,6 +3821,29 @@ class HouseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(irregular_floor.area, 5)
 
+        base_slab = upper.floor_layer(
+            "Base slab",
+            outline=((0, 0), (2, 0), (2, 2), (0, 2)),
+            thickness=0.2,
+            start_height=-0.2,
+            kind="BASESLAB",
+            load_bearing=True,
+            material="Concrete",
+        )
+        self.assertEqual(base_slab.PredefinedType, "BASESLAB")
+        self.assertEqual(base_slab.start_height, -0.2)
+        self.assertAlmostEqual(
+            ifcopenshell.util.placement.get_local_placement(
+                base_slab.ObjectPlacement
+            )[2, 3],
+            3.01,
+        )
+        self.assertTrue(
+            ifcopenshell.util.element.get_pset(
+                base_slab, "Pset_SlabCommon", "LoadBearing"
+            )
+        )
+
         with self.assertRaisesRegex(ValueError, "thickness"):
             upper.floor_layer(
                 "Invalid",
@@ -3832,6 +3855,20 @@ class HouseTests(unittest.TestCase):
                 "Invalid",
                 outline=((0, 0), (1, 0), (2, 0)),
                 thickness=0.1,
+            )
+        with self.assertRaisesRegex(ValueError, "kind must be one of"):
+            upper.floor_layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1)),
+                thickness=0.1,
+                kind="WALL",
+            )
+        with self.assertRaisesRegex(TypeError, "load_bearing must be a boolean"):
+            upper.floor_layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1)),
+                thickness=0.1,
+                load_bearing=1,
             )
 
     def test_stacks_an_elevated_wall_part_above_a_lower_wall(self) -> None:
@@ -6725,14 +6762,21 @@ class HouseTests(unittest.TestCase):
             ground.wall((0, 0), (1, 0), thickness=0, height=2.8)
         with self.assertRaisesRegex(ValueError, "height"):
             ground.wall((0, 0), (1, 0), thickness=0.12, height=-1)
-        with self.assertRaisesRegex(ValueError, "start_height"):
-            ground.wall(
-                (0, 0),
-                (1, 0),
-                thickness=0.12,
-                height=2.8,
-                start_height=-0.1,
-            )
+        below_storey_wall = ground.wall(
+            (0, 0),
+            (1, 0),
+            thickness=0.12,
+            height=2.8,
+            start_height=-0.1,
+        )
+        self.assertEqual(below_storey_wall.start_height, -0.1)
+        self.assertAlmostEqual(below_storey_wall.end_height, 2.7)
+        self.assertAlmostEqual(
+            ifcopenshell.util.placement.get_local_placement(
+                below_storey_wall.ObjectPlacement
+            )[2, 3],
+            -0.1,
+        )
         wall_arguments = {
             "start": (0, 0),
             "end": (2, 0),
@@ -6761,6 +6805,104 @@ class HouseTests(unittest.TestCase):
                 **wall_arguments,
                 cuts=[((0, 0, 1), (1, 0, 1), (0, 1, 1))],
             )
+
+    def test_adds_selected_wall_paths_to_another_storey(self) -> None:
+        house = House("My house")
+        foundation = house.storey("Foundations", elevation=0)
+        ground = house.storey("Ground floor", elevation=0)
+        load_bearing = house.wall_type(
+            "Load bearing", layers=[("Brick", 0.24), "axis"]
+        )
+        partition = house.wall_type(
+            "Partition", layers=[("Brick", 0.12)]
+        )
+        foundation_concrete = house.wall_type(
+            "Foundation concrete", layers=[("Concrete", 0.3)]
+        )
+        first = ground.wall(
+            (0, 0), (4, 0), wall_type=load_bearing, height=2.8
+        )
+        partition_wall = ground.wall(
+            (0, 1), (4, 1), wall_type=partition, height=2.8
+        )
+        second = ground.wall(
+            (4, 0), (4, 5), wall_type=load_bearing, height=2.8
+        )
+
+        copied = foundation.add_walls_from(
+            ground,
+            source_wall_type=load_bearing,
+            wall_type=foundation_concrete,
+            start_height=-0.8,
+            height=0.8,
+        )
+
+        self.assertEqual(ground.walls, (first, partition_wall, second))
+        self.assertEqual(len(copied), 2)
+        self.assertEqual(foundation.walls, copied)
+        self.assertEqual(
+            [(wall.start, wall.end) for wall in copied],
+            [(first.start, first.end), (second.start, second.end)],
+        )
+        for wall in copied:
+            self.assertEqual(wall.start_height, -0.8)
+            self.assertEqual(wall.end_height, 0)
+            self.assertEqual(
+                ifcopenshell.util.element.get_type(wall),
+                foundation_concrete,
+            )
+            self.assertFalse(wall.cuts)
+            self.assertFalse(wall._openings)
+
+        footings = foundation.add_strip_footings_from(
+            ground,
+            source_wall_type=load_bearing,
+            width=0.7,
+            height=0.5,
+            start_height=-1.3,
+        )
+        self.assertEqual(len(footings), 2)
+        for footing, expected_length in zip(
+            footings, (4.46, 5.46), strict=True
+        ):
+            self.assertTrue(footing.is_a("IfcFooting"))
+            self.assertEqual(footing.PredefinedType, "STRIP_FOOTING")
+            self.assertEqual(
+                footing.ContainedInStructure[0].RelatingStructure,
+                foundation.element,
+            )
+            shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), footing
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_y(shape.geometry), 0.7
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_x(shape.geometry),
+                expected_length,
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_z(shape.geometry), 0.5
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_material(footing).Name,
+                "Concrete",
+            )
+            self.assertTrue(
+                ifcopenshell.util.element.get_pset(
+                    footing, "Pset_FootingCommon", "LoadBearing"
+                )
+            )
+        first_footing_placement = (
+            ifcopenshell.util.placement.get_local_placement(
+                footings[0].ObjectPlacement
+            )
+        )
+        np.testing.assert_allclose(
+            first_footing_placement[:3, 3],
+            (-0.23, 0.12, -1.3),
+            atol=1e-9,
+        )
 
     def test_rejects_invalid_wall_layers_and_type_usage(self) -> None:
         house = House("My house")

@@ -84,6 +84,10 @@ TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.05
 GROUND_FLOOR_THICKNESS = 0.17
 UPPER_FLOOR_THICKNESS = 0.10
+FOUNDATION_BASE_PLATE_THICKNESS = 0.20
+FOUNDATION_WALL_HEIGHT = 0.80
+FOUNDATION_FOOTER_WIDTH = 0.70
+FOUNDATION_FOOTER_HEIGHT = 0.50
 VAZNICE_DIST = 0.77 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
 
@@ -128,6 +132,7 @@ house = House(
     },
 )
 
+foundation = house.storey("Foundations", elevation=0)
 ground = house.storey("Ground floor", elevation=0)
 upper = house.storey("Upper floor", elevation=UPPER_FLOOR_START)
 
@@ -137,6 +142,15 @@ load_bearing_wall = house.wall_type(
         ("Brick", BWT),
         "axis",
     ],
+)
+
+foundation_wall = house.wall_type(
+	"Foundation wall - Concrete 240 mm",
+	layers=[
+		("Concrete", BWT),
+		"axis",
+	],
+	color="#A9A9A9",
 )
 
 partition_wall = house.wall_type(
@@ -326,6 +340,46 @@ window_pokoj_dole_2 = wall_1a.add_window(
 wall_gym = ground.wall(
 	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
 	wall_type=load_bearing_wall, height=ground_floor_height)
+
+foundation_base_plate = foundation.floor_layer(
+	"Foundation base plate",
+	outline=(
+		(CUT_WIDTH, 0),
+		(HOUSE_WIDTH, 0),
+		(HOUSE_WIDTH, HOUSE_DEPTH),
+		(0, HOUSE_DEPTH),
+		(0, BWT + GYM_DEPTH),
+		(CUT_WIDTH, BWT + GYM_DEPTH),
+	),
+	thickness=FOUNDATION_BASE_PLATE_THICKNESS,
+	start_height=-FOUNDATION_BASE_PLATE_THICKNESS,
+	kind="BASESLAB",
+	load_bearing=True,
+	material="Concrete",
+	color="#B8B8B8",
+)
+foundation_walls = foundation.add_walls_from(
+	ground,
+	source_wall_type=load_bearing_wall,
+	wall_type=foundation_wall,
+	height=FOUNDATION_WALL_HEIGHT,
+	start_height=(
+		-FOUNDATION_BASE_PLATE_THICKNESS - FOUNDATION_WALL_HEIGHT
+	),
+)
+foundation_footers = foundation.add_strip_footings_from(
+	ground,
+	source_wall_type=load_bearing_wall,
+	width=FOUNDATION_FOOTER_WIDTH,
+	height=FOUNDATION_FOOTER_HEIGHT,
+	start_height=(
+		-FOUNDATION_BASE_PLATE_THICKNESS
+		- FOUNDATION_WALL_HEIGHT
+		- FOUNDATION_FOOTER_HEIGHT
+	),
+	material="Concrete",
+	color="#969696",
+)
 
 # Bathroom, Koupelna
 wall_bathroom = ground.wall(
@@ -777,14 +831,14 @@ ceiling2 = upper.miako_slab(
     direction=(0, 1),
 	expected_width=HOUSE_DEPTH-2*BWT-CHODBA_DEPTH,
     structure=[
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
 		"beam", "narrow",
+		"beam", "narrow",
+		"beam", "beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
 		"beam"
 		],
 )
@@ -1160,10 +1214,10 @@ upper.furniture(
 
 # Okna obyvak
 window_dormer_1 = wall_dormer.add_window(
-	at=BWT+0.5,width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
+	at=BWT+0.5,width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 window_dormer_2 = wall_dormer.add_window(
-	at=BWT+KITCHEN_WIDTH-0.5-1.5,
-	width=1.5, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
+	at=BWT+KITCHEN_WIDTH-0.5-1.375,
+	width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
 wall_2.add_door(
 	at=GALERY_START-GYM_DEPTH-BWT,
