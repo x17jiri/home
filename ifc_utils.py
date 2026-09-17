@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from difflib import get_close_matches
 from html import escape
 import json
-from math import atan2, cos, hypot, isclose, isfinite, radians, sin
+from math import atan2, cos, hypot, isclose, isfinite, pi, radians, sin
 from os import PathLike, environ
 from pathlib import Path
 import re
@@ -52,6 +52,7 @@ __all__ = [
     "AssetCatalog",
     "AssetInfo",
     "Beam",
+    "CeilingLayer",
     "Chimney",
     "Drawing",
     "FacadeLayer",
@@ -2606,6 +2607,9 @@ class House:
             ifcopenshell.entity_instance,
         ] = {}
         self._miako_component_types: dict[
+            tuple[object, ...], ifcopenshell.entity_instance
+        ] = {}
+        self._floor_layer_types: dict[
             tuple[object, ...], ifcopenshell.entity_instance
         ] = {}
         self._ifc_path: Path | None = None
@@ -6948,6 +6952,8 @@ class FloorLayer(ifcopenshell.entity_instance):
         thickness: float,
         start_height: float,
         material_name: str,
+        layers: tuple[tuple[str, float], ...],
+        insulation_thickness: float,
         placement: np.ndarray,
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
@@ -6957,11 +6963,49 @@ class FloorLayer(ifcopenshell.entity_instance):
         object.__setattr__(self, "thickness", thickness)
         object.__setattr__(self, "start_height", start_height)
         object.__setattr__(self, "material_name", material_name)
+        object.__setattr__(self, "layers", layers)
+        object.__setattr__(self, "insulation_thickness", insulation_thickness)
+        object.__setattr__(
+            self,
+            "buildup_thickness",
+            thickness - insulation_thickness,
+        )
         object.__setattr__(self, "placement", placement)
 
     @property
     def element(self) -> ifcopenshell.entity_instance:
         """Return this floor layer as its underlying IFC entity."""
+        return self
+
+
+class CeilingLayer(ifcopenshell.entity_instance):
+    """A simple ``IfcCovering/CEILING`` with its source polygon and area."""
+
+    def __init__(
+        self,
+        element: ifcopenshell.entity_instance,
+        storey: Storey,
+        *,
+        outline: tuple[tuple[float, float], ...],
+        area: float,
+        thickness: float,
+        start_height: float,
+        material_name: str,
+        placement: np.ndarray,
+    ) -> None:
+        super().__init__(element.wrapped_data, element.file)
+        object.__setattr__(self, "storey", storey)
+        object.__setattr__(self, "outline", outline)
+        object.__setattr__(self, "area", area)
+        object.__setattr__(self, "thickness", thickness)
+        object.__setattr__(self, "start_height", start_height)
+        object.__setattr__(self, "end_height", start_height + thickness)
+        object.__setattr__(self, "material_name", material_name)
+        object.__setattr__(self, "placement", placement)
+
+    @property
+    def element(self) -> ifcopenshell.entity_instance:
+        """Return this ceiling layer as its underlying IFC entity."""
         return self
 
 
@@ -7598,7 +7642,7 @@ class Wall(ifcopenshell.entity_instance):
         opening_width: Number | None = None,
         opening_height: Number | None = None,
         operation: DoorOperation = "SINGLE_SWING_LEFT",
-        open_angle: Number = 45,
+        open_angle: Number = 0,
         reverse_swing: bool = False,
         show_overhead: bool = True,
         casing_overlap: Number = 0.025,
@@ -7617,7 +7661,9 @@ class Wall(ifcopenshell.entity_instance):
         coordinate and defaults to ``height``.  ``clear_height`` remains a
         physical size: it records the usable walking height for plan
         annotations without changing the construction geometry and defaults
-        to ``height - sill_height``.  ``open_angle`` rotates only the 3D leaf.
+        to ``height - sill_height``.  ``open_angle`` rotates only the 3D leaf
+        and defaults to zero, so the door is closed in 3D while retaining its
+        normal plan swing symbol.
         ``reverse_swing`` opens the leaf on the opposite side of the wall
         without changing its hinge end, in both 3D and plan.  ``show_overhead``
         adds dashed plan-only wall linework across the rough opening.  Casings
@@ -8089,6 +8135,7 @@ class Storey:
         self._chimney_count = 0
         self._cylinder_count = 0
         self._footing_count = 0
+        self._ring_beam_count = 0
         self._walls: list[Wall] = []
 
     @property
@@ -8339,6 +8386,223 @@ class Storey:
             footings.append(footing)
         return tuple(footings)
 
+    def add_ring_beams_from(
+        self,
+        source_storey: Storey,
+        *,
+        source_wall_type: ifcopenshell.entity_instance | None = None,
+        height: Number,
+        start_height: Number,
+        concrete_material: str = "Concrete topping",
+        reinforcement_material: str = "Ring beam reinforcement",
+        bar_diameter: Number = 0.016,
+        concrete_cover: Number = 0.045,
+        concrete_color: str | None = "#bfc3c5",
+        reinforcement_color: str | None = "#333333",
+        transparency: Number = 0,
+    ) -> tuple[Beam, ...]:
+        """Add reinforced-concrete ring beams over selected wall bodies.
+
+        Every beam follows the centre of its source wall's physical body and
+        inherits that body's thickness.  Four longitudinal reinforcing bars
+        are placed behind ``concrete_cover`` at the section corners.  The
+        returned beams expose their source wall as ``source_wall`` and their
+        four :class:`IfcReinforcingBar` occurrences as ``reinforcement``.
+        """
+        if not isinstance(source_storey, Storey):
+            raise TypeError("source_storey must be a Storey")
+        if source_storey.house is not self.house:
+            raise ValueError("source_storey must belong to this house")
+        if source_wall_type is not None:
+            if not (
+                isinstance(source_wall_type, ifcopenshell.entity_instance)
+                and source_wall_type.is_a("IfcWallType")
+            ):
+                raise TypeError("source_wall_type must be an IfcWallType")
+            if source_wall_type.file is not self.house.model:
+                raise ValueError("source_wall_type must belong to this house")
+
+        height = _number(height, "height")
+        start_height = _number(start_height, "start_height")
+        bar_diameter = _number(bar_diameter, "bar_diameter")
+        concrete_cover = _number(concrete_cover, "concrete_cover")
+        transparency = _number(transparency, "transparency")
+        concrete_material_name = _name(
+            concrete_material, "concrete_material"
+        )
+        reinforcement_material_name = _name(
+            reinforcement_material, "reinforcement_material"
+        )
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        if bar_diameter <= 0:
+            raise ValueError("bar_diameter must be greater than zero")
+        if concrete_cover < 0:
+            raise ValueError("concrete_cover must not be negative")
+        if not 0 <= transparency <= 1:
+            raise ValueError("transparency must be between zero and one")
+
+        model = self.house.model
+        reinforcement_style = self.house._surface_style(
+            "beam",
+            color=reinforcement_color,
+            transparency=transparency,
+        )
+        reinforcement_ifc_material = self.house._materials.get(
+            reinforcement_material_name
+        )
+        if reinforcement_ifc_material is None:
+            reinforcement_ifc_material = ifcopenshell.api.material.add_material(
+                model,
+                name=reinforcement_material_name,
+                category="steel",
+            )
+            self.house._materials[reinforcement_material_name] = (
+                reinforcement_ifc_material
+            )
+
+        ring_beams = []
+        radius = bar_diameter / 2
+        for source_wall in source_storey.walls:
+            if (
+                source_wall_type is not None
+                and ifcopenshell.util.element.get_type(source_wall)
+                != source_wall_type
+            ):
+                continue
+            if 2 * (concrete_cover + bar_diameter) > min(
+                source_wall.thickness, height
+            ):
+                raise ValueError(
+                    "concrete_cover and bar_diameter do not fit inside "
+                    f"source wall {source_wall.Name!r}"
+                )
+
+            delta_x = source_wall.end[0] - source_wall.start[0]
+            delta_y = source_wall.end[1] - source_wall.start[1]
+            normal_x = -delta_y / source_wall.length
+            normal_y = delta_x / source_wall.length
+            body_center_offset = (
+                source_wall.body_offset + source_wall.thickness / 2
+            )
+            start_x = source_wall.start[0] + normal_x * body_center_offset
+            start_y = source_wall.start[1] + normal_y * body_center_offset
+            end_x = source_wall.end[0] + normal_x * body_center_offset
+            end_y = source_wall.end[1] + normal_y * body_center_offset
+            center_z = self.elevation + start_height + height / 2
+
+            self._ring_beam_count += 1
+            ring_beam = self.beam(
+                f"Ring beam {self._ring_beam_count}",
+                start=(start_x, start_y, center_z),
+                end=(end_x, end_y, center_z),
+                size=(source_wall.thickness, height),
+                material=concrete_material_name,
+                color=concrete_color,
+                transparency=transparency,
+            )
+            ring_beam.ObjectType = "Ring beam"
+
+            ring_beam_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=ring_beam,
+                name="BBIM_RingBeam",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=ring_beam_pset,
+                properties={
+                    "SourceWall": source_wall.GlobalId,
+                    "Width": source_wall.thickness,
+                    "Height": height,
+                    "Length": source_wall.length,
+                    "StartHeight": start_height,
+                    "BarDiameter": bar_diameter,
+                    "ConcreteCover": concrete_cover,
+                },
+            )
+
+            y_offset = source_wall.thickness / 2 - concrete_cover - radius
+            z_offset = height / 2 - concrete_cover - radius
+            reinforcement = []
+            for bar_number, (local_y, local_z) in enumerate(
+                (
+                    (-y_offset, -z_offset),
+                    (y_offset, -z_offset),
+                    (-y_offset, z_offset),
+                    (y_offset, z_offset),
+                ),
+                start=1,
+            ):
+                bar = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcReinforcingBar",
+                    name=(
+                        f"{ring_beam.Name} Reinforcement {bar_number}"
+                    ),
+                    predefined_type="MAIN",
+                )
+                bar.NominalDiameter = bar_diameter
+                bar.CrossSectionArea = pi * radius**2
+                bar.BarLength = source_wall.length
+                bar.BarSurface = "PLAIN"
+
+                bar_placement = ring_beam.placement.copy()
+                bar_placement[:3, 3] += (
+                    ring_beam.placement[:3, 1] * local_y
+                    + ring_beam.placement[:3, 2] * local_z
+                )
+                ifcopenshell.api.geometry.edit_object_placement(
+                    model,
+                    product=bar,
+                    matrix=bar_placement,
+                    is_si=True,
+                )
+
+                builder = ShapeBuilder(model)
+                bar_solid = builder.extrude(
+                    builder.circle(center=(0.0, 0.0), radius=radius),
+                    magnitude=source_wall.length,
+                    position_z_axis=(1.0, 0.0, 0.0),
+                    position_x_axis=(0.0, 1.0, 0.0),
+                )
+                bar_representation = builder.get_representation(
+                    self.house._body_context,
+                    bar_solid,
+                )
+                ifcopenshell.api.geometry.assign_representation(
+                    model,
+                    product=bar,
+                    representation=bar_representation,
+                )
+                if reinforcement_style is not None:
+                    ifcopenshell.api.style.assign_representation_styles(
+                        model,
+                        shape_representation=bar_representation,
+                        styles=[reinforcement_style],
+                    )
+                ifcopenshell.api.material.assign_material(
+                    model,
+                    products=[bar],
+                    type="IfcMaterial",
+                    material=reinforcement_ifc_material,
+                )
+                reinforcement.append(bar)
+
+            ifcopenshell.api.aggregate.assign_object(
+                model,
+                products=reinforcement,
+                relating_object=ring_beam,
+            )
+            object.__setattr__(ring_beam, "source_wall", source_wall)
+            object.__setattr__(
+                ring_beam, "reinforcement", tuple(reinforcement)
+            )
+            object.__setattr__(ring_beam, "start_height", start_height)
+            ring_beams.append(ring_beam)
+
+        return tuple(ring_beams)
+
     def add(
         self,
         *elements: ifcopenshell.entity_instance,
@@ -8392,14 +8656,16 @@ class Storey:
         *,
         outline: Sequence[Point],
         thickness: Number,
+        insulation_thickness: Number = 0,
+        insulation_material: str | None = None,
+        buildup_material: str = "Floor build-up",
         start_height: Number = 0,
         kind: SlabKind = "FLOOR",
         load_bearing: bool = False,
-        material: str = "Floor build-up",
         color: str | None = None,
         transparency: Number = 0,
     ) -> FloorLayer:
-        """Create one simplified slab layer relative to the storey elevation.
+        """Create a floor build-up relative to the storey elevation.
 
         ``outline`` contains the floor polygon in global XY coordinates.
         ``start_height`` locates its underside relative to this storey's
@@ -8407,16 +8673,44 @@ class Storey:
         ``thickness``.  ``kind`` controls its IFC slab type and
         ``load_bearing`` records its structural role.  The returned layer's
         ``area`` is the polygon area in square metres.
+
+        When ``insulation_thickness`` is greater than zero,
+        ``insulation_material`` is required and the slab receives two IFC
+        material layers: insulation at the bottom and ``buildup_material``
+        above it.  Their combined thickness remains equal to ``thickness``.
+        With no insulation, the slab consists only of ``buildup_material``.
         """
         layer_name = _name(name, "name")
-        material_name = _name(material, "material")
+        buildup_material_name = _name(
+            buildup_material, "buildup_material"
+        )
         thickness = _number(thickness, "thickness")
+        insulation_thickness = _number(
+            insulation_thickness, "insulation_thickness"
+        )
         start_height = _number(start_height, "start_height")
         kind = _enum(kind, "kind", _SLAB_KINDS)
         if not isinstance(load_bearing, bool):
             raise TypeError("load_bearing must be a boolean")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
+        if insulation_thickness < 0:
+            raise ValueError("insulation_thickness must not be negative")
+        if insulation_thickness >= thickness:
+            raise ValueError(
+                "insulation_thickness must be less than thickness"
+            )
+        if insulation_thickness:
+            if insulation_material is None:
+                raise ValueError(
+                    "insulation_material is required when "
+                    "insulation_thickness is greater than zero"
+                )
+            insulation_material_name = _name(
+                insulation_material, "insulation_material"
+            )
+        else:
+            insulation_material_name = None
         if isinstance(outline, (str, bytes)):
             raise TypeError("outline must contain at least three points")
         try:
@@ -8437,6 +8731,16 @@ class Storey:
             raise ValueError("outline must enclose a non-zero area")
         area = abs(twice_area) / 2
 
+        if insulation_thickness:
+            buildup_thickness = thickness - insulation_thickness
+            material_layers = (
+                (insulation_material_name, insulation_thickness),
+                (buildup_material_name, buildup_thickness),
+            )
+        else:
+            buildup_thickness = thickness
+            material_layers = ((buildup_material_name, thickness),)
+
         model = self.house.model
         element = ifcopenshell.api.root.create_entity(
             model,
@@ -8447,6 +8751,246 @@ class Storey:
         placement = np.eye(4)
         placement[2, 3] = self.elevation + start_height
         layer = FloorLayer(
+            element,
+            self,
+            outline=points,
+            area=area,
+            thickness=thickness,
+            start_height=start_height,
+            material_name=buildup_material_name,
+            layers=material_layers,
+            insulation_thickness=insulation_thickness,
+            placement=placement,
+        )
+        ifcopenshell.api.spatial.assign_container(
+            model,
+            products=[layer],
+            relating_structure=self.element,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=layer,
+            matrix=placement,
+            is_si=True,
+        )
+        body = ifcopenshell.api.geometry.add_slab_representation(
+            model,
+            context=self.house._body_context,
+            depth=thickness,
+            polyline=points,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=layer,
+            representation=body,
+        )
+        surface_style = self.house._surface_style(
+            "slab",
+            color=color,
+            transparency=transparency,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model,
+                shape_representation=body,
+                styles=[surface_style],
+            )
+
+        if insulation_thickness:
+            type_key = (
+                kind,
+                insulation_material_name,
+                insulation_thickness,
+                buildup_material_name,
+                buildup_thickness,
+            )
+            slab_type = self.house._floor_layer_types.get(type_key)
+            if slab_type is None:
+                slab_type = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcSlabType",
+                    name=(
+                        f"Floor build-up - {insulation_thickness:.3f} m "
+                        f"insulation + {buildup_thickness:.3f} m build-up"
+                    ),
+                    predefined_type=kind,
+                )
+                material_set = ifcopenshell.api.material.add_material_set(
+                    model,
+                    name=slab_type.Name,
+                    set_type="IfcMaterialLayerSet",
+                )
+                for layer_material_name, layer_thickness in material_layers:
+                    ifc_material = self.house._materials.get(
+                        layer_material_name
+                    )
+                    if ifc_material is None:
+                        ifc_material = ifcopenshell.api.material.add_material(
+                            model,
+                            name=layer_material_name,
+                            category=(
+                                "insulation"
+                                if layer_material_name
+                                == insulation_material_name
+                                else "floor"
+                            ),
+                        )
+                        self.house._materials[layer_material_name] = (
+                            ifc_material
+                        )
+                    material_layer = ifcopenshell.api.material.add_layer(
+                        model,
+                        layer_set=material_set,
+                        material=ifc_material,
+                        name=layer_material_name,
+                    )
+                    ifcopenshell.api.material.edit_layer(
+                        model,
+                        layer=material_layer,
+                        attributes={"LayerThickness": layer_thickness},
+                    )
+                ifcopenshell.api.material.assign_material(
+                    model,
+                    products=[slab_type],
+                    type="IfcMaterialLayerSet",
+                    material=material_set,
+                )
+                self.house._floor_layer_types[type_key] = slab_type
+            ifcopenshell.api.type.assign_type(
+                model,
+                related_objects=[layer],
+                relating_type=slab_type,
+            )
+            material_relationship = ifcopenshell.api.material.assign_material(
+                model,
+                products=[layer],
+                type="IfcMaterialLayerSetUsage",
+            )
+            usage = material_relationship.RelatingMaterial
+            ifcopenshell.api.material.edit_layer_usage(
+                model,
+                usage=usage,
+                attributes={
+                    "LayerSetDirection": "AXIS3",
+                    "DirectionSense": "POSITIVE",
+                    "OffsetFromReferenceLine": 0.0,
+                },
+            )
+        else:
+            ifc_material = self.house._materials.get(
+                buildup_material_name
+            )
+            if ifc_material is None:
+                ifc_material = ifcopenshell.api.material.add_material(
+                    model,
+                    name=buildup_material_name,
+                    category="floor",
+                )
+                self.house._materials[buildup_material_name] = ifc_material
+            ifcopenshell.api.material.assign_material(
+                model,
+                products=[layer],
+                type="IfcMaterial",
+                material=ifc_material,
+            )
+        common_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=layer,
+            name="Pset_SlabCommon",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=common_pset,
+            properties={"LoadBearing": load_bearing},
+        )
+        layer_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=layer,
+            name="BBIM_FloorLayer",
+        )
+        layer_properties = {
+            "Outline": json.dumps(points),
+            "Area": area,
+            "StartHeight": start_height,
+            "Thickness": thickness,
+            "Material": buildup_material_name,
+            "Layers": json.dumps(material_layers),
+            "InsulationThickness": insulation_thickness,
+            "BuildupMaterial": buildup_material_name,
+        }
+        if insulation_material_name is not None:
+            layer_properties["InsulationMaterial"] = (
+                insulation_material_name
+            )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=layer_pset,
+            properties=layer_properties,
+        )
+        return layer
+
+    def ceiling_layer(
+        self,
+        name: str,
+        *,
+        outline: Sequence[Point],
+        thickness: Number,
+        start_height: Number,
+        material: str = "Ceiling finish",
+        color: str | None = "#ffffff",
+        transparency: Number = 0,
+    ) -> CeilingLayer:
+        """Create a simple ceiling finish relative to the storey elevation.
+
+        ``outline`` contains the ceiling polygon in global XY coordinates.
+        ``start_height`` locates its underside relative to this storey, and
+        the covering extends upward by ``thickness``.  The returned object
+        retains the normalized ``outline`` and calculated ``area``.
+        """
+        layer_name = _name(name, "name")
+        material_name = _name(material, "material")
+        thickness = _number(thickness, "thickness")
+        start_height = _number(start_height, "start_height")
+        transparency = _number(transparency, "transparency")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if not 0 <= transparency <= 1:
+            raise ValueError("transparency must be between zero and one")
+        if isinstance(outline, (str, bytes)):
+            raise TypeError("outline must contain at least three points")
+        try:
+            supplied_outline = list(outline)
+        except TypeError as error:
+            raise TypeError(
+                "outline must contain at least three points"
+            ) from error
+        if len(supplied_outline) < 3:
+            raise ValueError("outline must contain at least three points")
+        points = tuple(
+            _point(point, f"outline point {index}")
+            for index, point in enumerate(supplied_outline, start=1)
+        )
+        twice_area = sum(
+            point[0] * next_point[1] - next_point[0] * point[1]
+            for point, next_point in zip(
+                points, (*points[1:], points[0])
+            )
+        )
+        if abs(twice_area) <= 1e-9:
+            raise ValueError("outline must enclose a non-zero area")
+        area = abs(twice_area) / 2
+
+        model = self.house.model
+        element = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcCovering",
+            name=layer_name,
+            predefined_type="CEILING",
+        )
+        element.ObjectType = "Ceiling layer"
+        placement = np.eye(4)
+        placement[2, 3] = self.elevation + start_height
+        layer = CeilingLayer(
             element,
             self,
             outline=points,
@@ -8495,7 +9039,7 @@ class Storey:
             ifc_material = ifcopenshell.api.material.add_material(
                 model,
                 name=material_name,
-                category="floor",
+                category="ceiling",
             )
             self.house._materials[material_name] = ifc_material
         ifcopenshell.api.material.assign_material(
@@ -8504,20 +9048,11 @@ class Storey:
             type="IfcMaterial",
             material=ifc_material,
         )
-        common_pset = ifcopenshell.api.pset.add_pset(
-            model,
-            product=layer,
-            name="Pset_SlabCommon",
-        )
-        ifcopenshell.api.pset.edit_pset(
-            model,
-            pset=common_pset,
-            properties={"LoadBearing": load_bearing},
-        )
+
         layer_pset = ifcopenshell.api.pset.add_pset(
             model,
             product=layer,
-            name="BBIM_FloorLayer",
+            name="BBIM_CeilingLayer",
         )
         ifcopenshell.api.pset.edit_pset(
             model,

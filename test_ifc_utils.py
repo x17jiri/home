@@ -23,6 +23,7 @@ import numpy as np
 
 from ifc_utils import (
     Beam,
+    CeilingLayer,
     Chimney,
     CustomStair,
     FacadeLayer,
@@ -3768,7 +3769,7 @@ class HouseTests(unittest.TestCase):
             "Upper-floor build-up",
             outline=((0.25, 0.25), (11.75, 0.25), (11.75, 7.75), (0.25, 7.75)),
             thickness=0.11,
-            material="Floor build-up",
+            buildup_material="Floor build-up",
             color="#ffffff",
         )
 
@@ -3828,7 +3829,7 @@ class HouseTests(unittest.TestCase):
             start_height=-0.2,
             kind="BASESLAB",
             load_bearing=True,
-            material="Concrete",
+            buildup_material="Concrete",
         )
         self.assertEqual(base_slab.PredefinedType, "BASESLAB")
         self.assertEqual(base_slab.start_height, -0.2)
@@ -3842,6 +3843,65 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.element.get_pset(
                 base_slab, "Pset_SlabCommon", "LoadBearing"
             )
+        )
+
+        insulated_floor = upper.floor_layer(
+            "Insulated floor",
+            outline=((3, 0), (5, 0), (5, 2), (3, 2)),
+            thickness=0.17,
+            insulation_thickness=0.10,
+            insulation_material="Test insulation",
+            buildup_material="Test build-up",
+        )
+        self.assertEqual(
+            insulated_floor.layers,
+            (
+                ("Test insulation", 0.10),
+                ("Test build-up", 0.07),
+            ),
+        )
+        self.assertAlmostEqual(insulated_floor.insulation_thickness, 0.10)
+        self.assertAlmostEqual(insulated_floor.buildup_thickness, 0.07)
+        insulated_usage = ifcopenshell.util.element.get_material(
+            insulated_floor
+        )
+        self.assertTrue(insulated_usage.is_a("IfcMaterialLayerSetUsage"))
+        self.assertEqual(insulated_usage.LayerSetDirection, "AXIS3")
+        self.assertEqual(insulated_usage.DirectionSense, "POSITIVE")
+        self.assertAlmostEqual(insulated_usage.OffsetFromReferenceLine, 0)
+        self.assertEqual(
+            [
+                layer.Material.Name
+                for layer in insulated_usage.ForLayerSet.MaterialLayers
+            ],
+            ["Test insulation", "Test build-up"],
+        )
+        self.assertEqual(
+            [
+                layer.LayerThickness
+                for layer in insulated_usage.ForLayerSet.MaterialLayers
+            ],
+            [0.10, 0.07],
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(
+                ifcopenshell.geom.create_shape(
+                    ifcopenshell.geom.settings(), insulated_floor
+                ).geometry
+            ),
+            0.17,
+        )
+        matching_floor = upper.floor_layer(
+            "Matching insulated floor",
+            outline=((6, 0), (8, 0), (8, 2), (6, 2)),
+            thickness=0.17,
+            insulation_thickness=0.10,
+            insulation_material="Test insulation",
+            buildup_material="Test build-up",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_type(matching_floor),
+            ifcopenshell.util.element.get_type(insulated_floor),
         )
 
         with self.assertRaisesRegex(ValueError, "thickness"):
@@ -3870,6 +3930,99 @@ class HouseTests(unittest.TestCase):
                 thickness=0.1,
                 load_bearing=1,
             )
+        with self.assertRaisesRegex(
+            ValueError, "insulation_thickness must not be negative"
+        ):
+            upper.floor_layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1)),
+                thickness=0.1,
+                insulation_thickness=-0.01,
+            )
+        with self.assertRaisesRegex(
+            ValueError, "insulation_thickness must be less than thickness"
+        ):
+            upper.floor_layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1)),
+                thickness=0.1,
+                insulation_thickness=0.1,
+            )
+        with self.assertRaisesRegex(
+            ValueError, "insulation_material is required"
+        ):
+            upper.floor_layer(
+                "Invalid",
+                outline=((0, 0), (1, 0), (1, 1)),
+                thickness=0.1,
+                insulation_thickness=0.05,
+            )
+
+    def test_adds_a_simple_ceiling_layer_below_a_storey_ceiling(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.5)
+        outline = (
+            (0.25, 0.25),
+            (4.25, 0.25),
+            (4.25, 3.25),
+            (0.25, 3.25),
+        )
+
+        ceiling = ground.ceiling_layer(
+            "Room ceiling",
+            outline=outline,
+            thickness=0.02,
+            start_height=2.78,
+        )
+
+        self.assertTrue(ceiling.is_a("IfcCovering"))
+        self.assertIsInstance(ceiling, CeilingLayer)
+        self.assertIs(ceiling.element, ceiling)
+        self.assertEqual(ceiling.PredefinedType, "CEILING")
+        self.assertEqual(ceiling.ObjectType, "Ceiling layer")
+        self.assertEqual(ceiling.outline, outline)
+        self.assertAlmostEqual(ceiling.area, 12)
+        self.assertEqual(ceiling.thickness, 0.02)
+        self.assertEqual(ceiling.start_height, 2.78)
+        self.assertEqual(ceiling.end_height, 2.8)
+        self.assertEqual(
+            ceiling.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            ceiling.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[2, 3], 3.28)
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), ceiling
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(shape.geometry), 4
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(shape.geometry), 3
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(shape.geometry), 0.02
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(ceiling).Name,
+            "Ceiling finish",
+        )
+        properties = ifcopenshell.util.element.get_pset(
+            ceiling, "BBIM_CeilingLayer"
+        )
+        self.assertEqual(
+            json.loads(properties["Outline"]),
+            [
+                [0.25, 0.25],
+                [4.25, 0.25],
+                [4.25, 3.25],
+                [0.25, 3.25],
+            ],
+        )
+        self.assertEqual(properties["Area"], 12)
+        self.assertEqual(properties["Thickness"], 0.02)
 
     def test_stacks_an_elevated_wall_part_above_a_lower_wall(self) -> None:
         house = House("My house")
@@ -4063,6 +4216,7 @@ class HouseTests(unittest.TestCase):
             opening_width=1.1,
             opening_height=2.4,
             operation="SINGLE_SWING_RIGHT",
+            open_angle=45,
         )
         window = wall.add_window(
             at=3,
@@ -4298,6 +4452,27 @@ class HouseTests(unittest.TestCase):
             ),
             0,
         )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                door, "EPset_Door", "OpenAngle"
+            ),
+            0,
+        )
+        framing = next(
+            aspect
+            for aspect in door.Representation.HasShapeAspects
+            if aspect.Name == "Framing"
+        )
+        framing_body = next(
+            representation
+            for representation in framing.ShapeRepresentations
+            if representation.ContextOfItems.ContextType == "Model"
+        )
+        panel_placement = ifcopenshell.util.placement.get_axis2placement(
+            framing_body.Items[0].Position
+        )
+        self.assertAlmostEqual(panel_placement[0, 0], 1)
+        self.assertAlmostEqual(panel_placement[1, 0], 0)
 
     def test_rejects_invalid_or_overlapping_wall_openings(self) -> None:
         house = House("My house")
@@ -6516,6 +6691,18 @@ class HouseTests(unittest.TestCase):
             self.assertLess(svg.index(polygon), svg.index('<path d="M0,0 L1,0"'))
             self.assertNotIn('points="5,0 6,0 6,1 5,1"', svg)
 
+        stylesheet = (
+            Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+        projected_rule = stylesheet.split(
+            ".target-view-PLANVIEW .projected-wood-fill", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        cut_rule = stylesheet.split(
+            ".material-Wood.cut", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", projected_rule)
+        self.assertIn("fill: #f4d35e !important", cut_rule)
+
     def test_styles_facade_laths_with_fine_plan_lines(self) -> None:
         stylesheet = (
             Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
@@ -6538,6 +6725,79 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: white !important", insulation_rule)
         self.assertIn("stroke-width: 0.06 !important", insulation_rule)
+
+    def test_styles_lost_formwork_foundation_walls(self) -> None:
+        project_dir = Path(__file__).parent
+        patterns = (
+            project_dir / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            project_dir / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('<pattern id="ztracene-bedneni"', patterns)
+        rule = stylesheet.split(
+            ".cut.layer-material-ztracenebedneni", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: url(#ztracene-bedneni) !important", rule)
+        self.assertIn("stroke-width: 0.05 !important", rule)
+
+    def test_styles_footing_cuts_with_cross_pattern(self) -> None:
+        project_dir = Path(__file__).parent
+        patterns = (
+            project_dir / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            project_dir / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('<pattern id="footing-cross"', patterns)
+        rule = stylesheet.split(
+            ".IfcFooting.cut", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: url(#footing-cross) !important", rule)
+        self.assertIn("stroke-width: 0.05 !important", rule)
+
+    def test_styles_base_plate_with_dash_dot_pattern(self) -> None:
+        project_dir = Path(__file__).parent
+        patterns = (
+            project_dir / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            project_dir / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('<pattern id="base-plate"', patterns)
+        self.assertIn('<circle cx="0.5" cy="0.65"', patterns)
+        rule = stylesheet.split(
+            ".IfcSlab.material-Baseplateconcrete.cut", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: url(#base-plate) !important", rule)
+        self.assertIn("stroke-width: 0.05 !important", rule)
+
+    def test_styles_floor_insulation_with_hexagon_pattern(self) -> None:
+        project_dir = Path(__file__).parent
+        patterns = (
+            project_dir / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            project_dir / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('<pattern id="thermal-impact-insulation"', patterns)
+        rule = stylesheet.split(
+            ".cut.layer-material-tepelnakrocejovaizolace", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(
+            "fill: url(#thermal-impact-insulation) !important", rule
+        )
+        self.assertIn("stroke-width: 0.05 !important", rule)
+        buildup_rule = stylesheet.split(
+            ".IfcSlab.cut.layer-material-Floorbuildup,", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(".IfcSlab.material-Floorbuildup.cut", buildup_rule)
+        self.assertIn("fill: white !important", buildup_rule)
+        self.assertNotIn("url(#", buildup_rule)
 
     def test_hides_miako_concrete_cover_seams_in_plan_only(self) -> None:
         stylesheet = (
@@ -6903,6 +7163,115 @@ class HouseTests(unittest.TestCase):
             (-0.23, 0.12, -1.3),
             atol=1e-9,
         )
+
+    def test_adds_reinforced_ring_beams_over_selected_wall_bodies(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        load_bearing = house.wall_type(
+            "Load bearing", layers=[("Brick", 0.24), "axis"]
+        )
+        partition = house.wall_type(
+            "Partition", layers=[("Brick", 0.12), "axis"]
+        )
+        source_wall = ground.wall(
+            (0, 0), (4, 0), wall_type=load_bearing, height=2.8
+        )
+        ground.wall(
+            (0, 1), (4, 1), wall_type=partition, height=2.8
+        )
+
+        ring_beams = ground.add_ring_beams_from(
+            ground,
+            source_wall_type=load_bearing,
+            height=0.21,
+            start_height=2.8,
+            bar_diameter=0.012,
+            concrete_cover=0.03,
+        )
+
+        self.assertEqual(len(ring_beams), 1)
+        ring_beam = ring_beams[0]
+        self.assertTrue(ring_beam.is_a("IfcBeam"))
+        self.assertEqual(ring_beam.PredefinedType, "BEAM")
+        self.assertEqual(ring_beam.ObjectType, "Ring beam")
+        self.assertEqual(ring_beam.source_wall, source_wall)
+        self.assertEqual(ring_beam.width, 0.24)
+        self.assertEqual(ring_beam.height, 0.21)
+        self.assertEqual(ring_beam.start_height, 2.8)
+        self.assertEqual(
+            ring_beam.ContainedInStructure[0].RelatingStructure,
+            ground.element,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_material(ring_beam).Name,
+            "Concrete topping",
+        )
+        np.testing.assert_allclose(
+            ring_beam.placement[:3, 3],
+            (0.0, 0.12, 2.905),
+            atol=1e-9,
+        )
+        ring_shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), ring_beam
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_x(ring_shape.geometry), 4.0
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_y(ring_shape.geometry), 0.24
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_z(ring_shape.geometry), 0.21
+        )
+
+        self.assertEqual(len(ring_beam.reinforcement), 4)
+        expected_positions = {
+            (0.0, 0.036, 2.836),
+            (0.0, 0.204, 2.836),
+            (0.0, 0.036, 2.974),
+            (0.0, 0.204, 2.974),
+        }
+        actual_positions = set()
+        for bar in ring_beam.reinforcement:
+            self.assertTrue(bar.is_a("IfcReinforcingBar"))
+            self.assertEqual(bar.PredefinedType, "MAIN")
+            self.assertEqual(bar.NominalDiameter, 0.012)
+            self.assertEqual(bar.BarLength, 4.0)
+            self.assertEqual(
+                ifcopenshell.util.element.get_material(bar).Name,
+                "Ring beam reinforcement",
+            )
+            self.assertEqual(bar.Decomposes[0].RelatingObject, ring_beam)
+            placement = ifcopenshell.util.placement.get_local_placement(
+                bar.ObjectPlacement
+            )
+            actual_positions.add(
+                tuple(round(float(value), 9) for value in placement[:3, 3])
+            )
+            bar_shape = ifcopenshell.geom.create_shape(
+                ifcopenshell.geom.settings(), bar
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_x(bar_shape.geometry), 4.0
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_y(bar_shape.geometry),
+                0.012,
+                delta=0.0002,
+            )
+            self.assertAlmostEqual(
+                ifcopenshell.util.shape.get_z(bar_shape.geometry),
+                0.012,
+                delta=0.0002,
+            )
+        self.assertEqual(actual_positions, expected_positions)
+
+        properties = ifcopenshell.util.element.get_pset(
+            ring_beam, "BBIM_RingBeam"
+        )
+        self.assertEqual(properties["SourceWall"], source_wall.GlobalId)
+        self.assertEqual(properties["BarDiameter"], 0.012)
+        self.assertEqual(properties["ConcreteCover"], 0.03)
 
     def test_rejects_invalid_wall_layers_and_type_usage(self) -> None:
         house = House("My house")

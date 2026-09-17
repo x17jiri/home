@@ -84,10 +84,16 @@ TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.05
 GROUND_FLOOR_THICKNESS = 0.17
 UPPER_FLOOR_THICKNESS = 0.10
+FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
+FLOOR_BUILDUP_MATERIAL = "Floor build-up"
+CEILING_FINISH_THICKNESS = 0.02
+CEILING_FINISH_MATERIAL = "Ceiling finish"
 FOUNDATION_BASE_PLATE_THICKNESS = 0.20
 FOUNDATION_WALL_HEIGHT = 0.80
 FOUNDATION_FOOTER_WIDTH = 0.70
 FOUNDATION_FOOTER_HEIGHT = 0.50
+RING_BEAM_BAR_DIAMETER = 0.03
+RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 0.77 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
 
@@ -145,9 +151,9 @@ load_bearing_wall = house.wall_type(
 )
 
 foundation_wall = house.wall_type(
-	"Foundation wall - Concrete 240 mm",
+	"Foundation wall - ztracene bedneni 240 mm",
 	layers=[
-		("Concrete", BWT),
+		("ztracene bedneni", BWT),
 		"axis",
 	],
 	color="#A9A9A9",
@@ -204,6 +210,9 @@ pokoj_dole = ground.floor_layer(
 		(BWT, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
+	insulation_thickness=0.10,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
+	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
 CHODBA_DEPTH = 2.5
@@ -250,6 +259,9 @@ kuchyn = ground.floor_layer(
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
+	insulation_thickness=0.10,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
+	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
 chodba = ground.floor_layer(
@@ -265,6 +277,9 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
+	insulation_thickness=0.10,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
+	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
 koupelna = ground.floor_layer(
@@ -276,7 +291,32 @@ koupelna = ground.floor_layer(
 		(wall3_x, BWT+BATHROOM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
+	insulation_thickness=0.10,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
+	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
+)
+
+ceiling_pokoj_dole = ground.ceiling_layer(
+	"Ceiling - Pokoj",
+	outline=pokoj_dole.outline,
+	thickness=CEILING_FINISH_THICKNESS,
+	start_height=ground_floor_height-CEILING_FINISH_THICKNESS,
+	material=CEILING_FINISH_MATERIAL,
+)
+ceiling_kuchyn = ground.ceiling_layer(
+	"Ceiling - Kuchyn",
+	outline=kuchyn.outline,
+	thickness=CEILING_FINISH_THICKNESS,
+	start_height=ground_floor_height-CEILING_FINISH_THICKNESS,
+	material=CEILING_FINISH_MATERIAL,
+)
+ceiling_koupelna = ground.ceiling_layer(
+	"Ceiling - Koupelna",
+	outline=koupelna.outline,
+	thickness=CEILING_FINISH_THICKNESS,
+	start_height=ground_floor_height-CEILING_FINISH_THICKNESS,
+	material=CEILING_FINISH_MATERIAL,
 )
 
 # Load-bearing walls
@@ -341,6 +381,17 @@ wall_gym = ground.wall(
 	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
 	wall_type=load_bearing_wall, height=ground_floor_height)
 
+ring_beams = ground.add_ring_beams_from(
+	ground,
+	source_wall_type=load_bearing_wall,
+	height=CEILING_THICKNESS,
+	start_height=ground_floor_height,
+	concrete_material="Concrete topping",
+	reinforcement_material="Ring beam reinforcement",
+	bar_diameter=RING_BEAM_BAR_DIAMETER,
+	concrete_cover=RING_BEAM_CONCRETE_COVER,
+)
+
 foundation_base_plate = foundation.floor_layer(
 	"Foundation base plate",
 	outline=(
@@ -355,7 +406,7 @@ foundation_base_plate = foundation.floor_layer(
 	start_height=-FOUNDATION_BASE_PLATE_THICKNESS,
 	kind="BASESLAB",
 	load_bearing=True,
-	material="Concrete",
+	buildup_material="Base plate concrete",
 	color="#B8B8B8",
 )
 foundation_walls = foundation.add_walls_from(
@@ -503,27 +554,6 @@ wall_3.add_door(
 	reverse_swing=True,
 )
 
-# kruhy kolem komina
-#ground.cylinder(
-#    center=(CHIMNEY_X_START, CHIMNEY_Y_START),
-#    radius=1,
-#    height=GROUND_FLOOR_THICKNESS+2.1,
-#    start_height=0,
-#    material="Concrete",
-#    color="#cccccc",
-#    transparency=0,
-#)
-#ground.cylinder(
-#    center=(CHIMNEY_X_END, CHIMNEY_Y_START),
-#    radius=1,
-#    height=GROUND_FLOOR_THICKNESS+2.1,
-#    start_height=0,
-#    material="Concrete",
-#    color="#cccccc",
-#    transparency=0,
-#)
-
-
 # stairs
 GALERY_START = BWT+CHODBA_DEPTH
 stairs_width = 1
@@ -585,8 +615,8 @@ gallery_stairs = ground.stair(
 chimney = ground.chimney(
     center=(CHIMNEY_X_MID, CHIMNEY_Y_MID),
     size=0.4,
-    height=8.8,
-    flue_diameter=0.18,
+    height=8.5,
+    flue_diameter=0.2,
     start_height=0,
     name="Main chimney",
     material="Chimney",
@@ -879,6 +909,9 @@ upper_pokoj_1 = upper.floor_layer(
 			(BWT, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
+		insulation_thickness=0.03,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
+		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
 upper_pokoj_2 = upper.floor_layer(
@@ -890,6 +923,9 @@ upper_pokoj_2 = upper.floor_layer(
 			(wall2_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
+		insulation_thickness=0.03,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
+		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
 galerie = upper.floor_layer(
@@ -901,6 +937,9 @@ galerie = upper.floor_layer(
 			(wall2_x, GALERY_END),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
+		insulation_thickness=0.03,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
+		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
 upper_sklad = upper.floor_layer(
@@ -912,6 +951,9 @@ upper_sklad = upper.floor_layer(
 			(wall3_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
+		insulation_thickness=0.03,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
+		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
 zachod_nahore = upper.floor_layer(
@@ -923,6 +965,9 @@ zachod_nahore = upper.floor_layer(
 			(wall3_x, BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
+		insulation_thickness=0.03,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
+		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
 
@@ -1199,7 +1244,7 @@ upper.furniture(
     kind="USERDEFINED",
     size=(1, 0.5, 2.5),
     color="#ffff00",
-    center=(HOUSE_WIDTH-BWT-0.3, 7.75-2),
+    center=(HOUSE_WIDTH-BWT-0.3, wall_zachod_nahore_y-0.7),
 	rotation=90,
 	start_height=UPPER_FLOOR_THICKNESS,
 )

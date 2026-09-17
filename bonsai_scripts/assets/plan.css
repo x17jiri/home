@@ -77,6 +77,10 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 .material-sand { fill: url(#sand); }
 .material-concrete { fill: url(#concrete); stroke-width: 0.5; }
 .material-Wood {
+    fill: white !important;
+}
+
+.material-Wood.cut {
     fill: #f4d35e !important;
 }
 
@@ -86,7 +90,7 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 /* Bonsai emits projected plan beams as separate open edge paths. */
 .target-view-PLANVIEW .projected-wood-fill {
-    fill: #f4d35e !important;
+    fill: white !important;
     stroke: none !important;
 }
 
@@ -107,6 +111,10 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 /* Simplified insulation/heating/screed floor build-ups. */
 .material-Floorbuildup {
+    fill: white !important;
+}
+
+.material-Ceilingfinish {
     fill: white !important;
 }
 
@@ -135,6 +143,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 .material-MIAKOreinforcement.cut {
+    fill: #333 !important;
+    stroke: #333 !important;
+    stroke-width: 0.025 !important;
+}
+
+.material-Ringbeamreinforcement.cut {
     fill: #333 !important;
     stroke: #333 !important;
     stroke-width: 0.025 !important;
@@ -200,6 +214,37 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 /* Editable house material rules. */
 .cut.layer-material-Brick {
     fill: url(#brick) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-ztracenebedneni {
+    fill: url(#ztracene-bedneni) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-tepelnakrocejovaizolace {
+    fill: url(#thermal-impact-insulation) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcSlab.cut.layer-material-Floorbuildup,
+.IfcSlab.material-Floorbuildup.cut {
+    fill: white !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcSlab.material-Baseplateconcrete.cut {
+    fill: url(#base-plate) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcFooting.cut {
+    fill: url(#footing-cross) !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }
