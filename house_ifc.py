@@ -230,7 +230,7 @@ CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = wall2_x + 1.15 + 0.25
+CHIMNEY_X_START = (3.98+4.98)/2 - 0.2
 
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
@@ -243,9 +243,7 @@ BATHROOM_DEPTH = 2.6
 kuchyn = ground.floor_layer(
 	"Kuchyn",
 	outline=(
-		(wall2_x, BWT+GYM_DEPTH+0.5+1.05+0.1),
-		(wall2_x+1.15+0.15, BWT+GYM_DEPTH+0.5+1.05+0.1),
-		(wall2_x+1.15+0.15, BWT+CHODBA_DEPTH+0.15),
+		(wall2_x, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
@@ -270,9 +268,7 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
-		(wall2_x+1.15, BWT+CHODBA_DEPTH),
-		(wall2_x+1.15, BWT+GYM_DEPTH+0.5+1.05),
-		(wall2_x, BWT+GYM_DEPTH+0.5+1.05),
+		(wall2_x, BWT+CHODBA_DEPTH),
 		(wall2_x, BWT+GYM_DEPTH),
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
@@ -353,6 +349,12 @@ front_door = wall_1b.add_door(
 	sill_height=GROUND_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_RIGHT"
 )
+
+# Front windows (koupelna)
+wall_front.add_window(
+	at=wall3_x-CUT_WIDTH+KK_WIDTH/2-0.25, width=0.5,
+	sill_height=GROUND_WINDOW_HEIGHT-0.5,
+	height=GROUND_WINDOW_HEIGHT)
 
 # Back windows
 print("KK_WIDTH=", KK_WIDTH)
@@ -497,24 +499,24 @@ ground.asset(
 )
 
 # Kitchen, Kuchyn
-wall_kitchen_0 = ground.wall(
-	(wall2_x, BWT+GYM_DEPTH+0.5+1.05),
-	(wall2_x+1.15, BWT+GYM_DEPTH+0.5+1.05),
-	wall_type=dry_wall, height=ground_floor_height)
+#wall_kitchen_0 = ground.wall(
+#	(wall2_x, BWT+GYM_DEPTH+0.5+1.05),
+#	(wall2_x+1.15, BWT+GYM_DEPTH+0.5+1.05),
+#	wall_type=dry_wall, height=ground_floor_height)
 wall_kitchen_1 = ground.wall(
-	(wall2_x+1.15, BWT+CHODBA_DEPTH),
+	(wall2_x, BWT+CHODBA_DEPTH),
 	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen_2 = ground.wall(
-	(wall2_x+1.15, BWT+GYM_DEPTH+0.5+1.05+0.1),
-	(wall2_x+1.15, BWT+CHODBA_DEPTH),
+	(wall2_x+1, BWT+CHODBA_DEPTH+0.75),
+	(wall2_x+1, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen_3 = ground.wall(
-	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH+0.5),
-	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH),
-	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen_0.add_door(
-	at=0.075,
+#wall_kitchen_3 = ground.wall(
+#	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH+0.5),
+#	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH),
+#	wall_type=partition_wall, height=ground_floor_height)
+wall_kitchen_1.add_door(
+	at=1.25,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -524,13 +526,13 @@ wall_kitchen_0.add_door(
 )
 
 # Pokoj Risanek
-wall_2.add_door(
-	at=0.5,
+wall_gym.add_door(
+	at=wall2_x-2*BWT-0.25-1,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=GROUND_FLOOR_THICKNESS,
 	clear_height=door_clear_height,
-	operation="SINGLE_SWING_LEFT",
+	operation="SINGLE_SWING_RIGHT",
 #	reverse_swing=True,
 )
 
@@ -630,7 +632,7 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall2_x + 1.15+0.15+0.15+0.3, BWT+CHODBA_DEPTH+0.15+0.2+0.25),
+    center=(wall2_x + 0.5, BWT+CHODBA_DEPTH+0.15+0.2+0.25),
 	start_height=GROUND_FLOOR_THICKNESS,
 #    rotation=-45,
 )
@@ -1447,16 +1449,15 @@ ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 # leave it full-length.
 rafters = [
 	-0.12,
-	0.63,
-	1.63,
-	2.63,
+	0.54,
+	1.34,
+	2.34,
 	(3.34, "+before"),
-	(4.00, "before"),
-	(4.80, "before"),
-	(5.80, "before"),
-	(6.46, "after"),
-	(7.12, "after"),
-	(8.12, "after"),
+	(3.98, "after"),
+	(4.98, "after"),
+	(5.98, "after"),
+	(6.98, "after"),
+	(7.98, "after"),
 	(8.78, "+after"),
 	9.78,
 	10.78,
@@ -2091,9 +2092,11 @@ if "ground" in sys.argv:
 	drawing1.add_chimney_annotation(chimney)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+0.15), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
-	# Kuchyn hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
+	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
+	# KK hloubka
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
+	# kuchyn hloubka
+	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWT), offset=-0)
 
 	# Vnejsi rozmery
 	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
@@ -2102,14 +2105,20 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(HOUSE_WIDTH, 0), end=(HOUSE_WIDTH, 8), offset=-1)
 
 	# koupelna hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+CHODBA_DEPTH), offset=-0.75)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH), offset=-0.75)
 
 	# gym hloubka
-	drawing1.add_dimension(start=(BWT, BWT), end=(BWT, BWT+GYM_DEPTH), offset=0.75)
+	drawing1.add_dimension(start=(3.5, BWT), end=(3.5, BWT+GYM_DEPTH))
+	# chodba delka
+	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
+	# komin
+	drawing1.add_dimension(start=(wall2_x, CHIMNEY_Y_MID-0.1), end=(CHIMNEY_X_START, CHIMNEY_Y_MID-0.1))
+	# kamna
+	drawing1.add_dimension(start=(wall2_x, CHODBA_DEPTH+0.5), end=(wall2_x+1, CHODBA_DEPTH+0.5))
 
 	drawing1.add_entrance_arrow(
-		(wall3_x-BWT-0.125-0.55, -0.5),
-		rotation=90,  # points left
+		(CUT_WIDTH - 0.6, BWT + 0.125 + 0.55),
+#		rotation=90,  # points left
 		size=0.6,      # metres
 	)
 
