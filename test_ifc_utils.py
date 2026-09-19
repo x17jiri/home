@@ -33,6 +33,7 @@ from ifc_utils import (
     MiakoSlab,
     Roof,
     RoofLayer,
+    RoofOpening,
     RoofPlane,
     Stair,
     VerticalFrame,
@@ -601,6 +602,111 @@ class HouseTests(unittest.TestCase):
                 material="Wood",
                 extra_cuts=[((0, 0, 0), (1, 0, 0), (2, 0, 0))],
             )
+
+    def test_cuts_an_absolute_xy_opening_through_all_roof_parts(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        slope = roof.plane(
+            "South slope",
+            points=((0, 0, 4), (6, 0, 4), (0, 4, 6)),
+        )
+        first_layer = slope.layer(
+            "Decking",
+            outline=((0, 0), (6, 0), (6, 4), (0, 4)),
+            thickness=0.1,
+            material="Wood",
+        )
+        batten = slope.beam(
+            "Batten",
+            start=(0, 1.5 * np.sqrt(5) / 2),
+            end=(6, 1.5 * np.sqrt(5) / 2),
+            size=(0.05, 0.05),
+            material="Wood",
+        )
+        visibility_storey = house.storey("Roof - test layer", elevation=3)
+        visibility_storey.add(first_layer, batten)
+
+        opening = roof.add_opening(
+            "Bedroom roof window",
+            rectangle=((3, 2), (2, 1)),
+        )
+
+        self.assertIsInstance(opening, RoofOpening)
+        self.assertEqual(opening.name, "Bedroom roof window")
+        self.assertEqual(opening.rectangle, ((2, 1), (3, 2)))
+        self.assertEqual(roof.openings, (opening,))
+        self.assertEqual(slope.elements, (first_layer, batten))
+        self.assertEqual(len(opening.elements), 2)
+        for void in opening.elements:
+            self.assertTrue(void.is_a("IfcOpeningElement"))
+            self.assertEqual(void.PredefinedType, "OPENING")
+            self.assertEqual(void.ObjectType, "ROOF_OPENING")
+            self.assertEqual(len(void.VoidsElements), 1)
+            self.assertEqual(
+                json.loads(
+                    ifcopenshell.util.element.get_pset(
+                        void, "BBIM_RoofOpening", "Rectangle"
+                    )
+                ),
+                [[2.0, 1.0], [3.0, 2.0]],
+            )
+        self.assertEqual(
+            {void.VoidsElements[0].RelatingBuildingElement for void in opening.elements},
+            {first_layer, batten},
+        )
+
+        shape = ifcopenshell.geom.create_shape(
+            ifcopenshell.geom.settings(), first_layer
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            6 * 4 * 0.1 - np.sqrt(5) / 2 * 0.1,
+            places=6,
+        )
+
+        # Registration is order independent: later roof parts inherit the cut.
+        second_layer = slope.layer(
+            "Underlay",
+            outline=((0, 0), (6, 0), (6, 4), (0, 4)),
+            z_offset=0.1,
+            thickness=0.01,
+            material="Underlay",
+        )
+        distant_layer = slope.layer(
+            "Distant layer",
+            outline=((7, 0), (8, 0), (8, 1), (7, 1)),
+            thickness=0.1,
+            material="Wood",
+        )
+        self.assertEqual(len(opening.elements), 3)
+        self.assertEqual(len(second_layer.HasOpenings), 1)
+        self.assertFalse(distant_layer.HasOpenings)
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "roof-opening.ifc"
+            house.write(output)
+            reopened = ifcopenshell.open(output)
+            self.assertEqual(len(reopened.by_type("IfcOpeningElement")), 3)
+
+    def test_validates_absolute_xy_roof_openings(self) -> None:
+        roof = House("My house").storey("Upper floor", elevation=3).roof(
+            "Main roof"
+        )
+        with self.assertRaisesRegex(TypeError, "exactly two opposite corners"):
+            roof.add_opening("Invalid", rectangle=((0, 0),))
+        with self.assertRaisesRegex(ValueError, "non-zero width and depth"):
+            roof.add_opening("Invalid", rectangle=((0, 0), (0, 1)))
+
+        roof.add_opening("First", rectangle=((0, 0), (1, 1)))
+        with self.assertRaisesRegex(ValueError, "name already exists"):
+            roof.add_opening("First", rectangle=((2, 2), (3, 3)))
+        with self.assertRaisesRegex(ValueError, "overlaps another opening"):
+            roof.add_opening("Overlapping", rectangle=((0.5, 0.5), (2, 2)))
+
+        # Edge-touching roof windows are permitted.
+        adjacent = roof.add_opening(rectangle=((1, 0), (2, 1)))
+        self.assertEqual(adjacent.name, "Roof Opening 2")
 
     def test_adds_existing_elements_to_a_roof_and_validates_planes(self) -> None:
         house = House("My house")

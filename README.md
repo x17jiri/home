@@ -123,6 +123,28 @@ The Python-side coordinates remain unchanged, including values returned by
 walls, stairs, and roof planes. Only written IFC files and rendered drawings
 are mirrored, so existing coordinate calculations need no special handling.
 
+## Roof openings
+
+Use `Roof.add_opening()` to cut a vertical opening through every roof slab or
+beam above an absolute XY rectangle. The two supplied points are opposite
+corners and may be given in either order:
+
+```python
+upper = house.storey("Upper floor", elevation=3)
+roof = upper.roof("Main roof")
+
+roof.add_opening(
+    rectangle=((2.4, 1.8), (3.2, 3.0)),
+    name="Bedroom roof window",  # Optional; defaults to "Roof Opening 1".
+)
+```
+
+The opening may be registered before or after the roof planes, layers, and
+beams are created. IFC permits one opening to void only one host, so the
+returned `RoofOpening.elements` contains one aligned `IfcOpeningElement` for
+each intersecting roof part. This creates the construction hole; the window
+frame and glazing can be added separately.
+
 The optional `"axis"` marker places the reference line at a boundary between
 layers. In this example, brick extends 120 mm to the left of the axis and rock
 wool extends 100 mm to the right. Without a marker, the wall construction is

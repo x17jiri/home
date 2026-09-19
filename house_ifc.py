@@ -351,7 +351,7 @@ front_door = wall_1b.add_door(
 )
 
 # Front windows (koupelna)
-wall_front.add_window(
+window_bathroom = wall_front.add_window(
 	at=wall3_x-CUT_WIDTH+KK_WIDTH/2-0.25, width=0.5,
 	sill_height=GROUND_WINDOW_HEIGHT-0.5,
 	height=GROUND_WINDOW_HEIGHT)
@@ -1274,11 +1274,11 @@ wall_2.add_door(
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik 1 nahore
-window_pokoj_nahore_1 = wall_1a.add_window(
-	at=HOUSE_DEPTH/2-0.75-BWT,
-	width=1.5,
-	height=2.375,
-	sill_height=2.375-0.875, partition="SINGLE_PANEL",)
+#window_pokoj_nahore_1 = wall_1a.add_window(
+#	at=HOUSE_DEPTH/2-0.75-BWT,
+#	width=1.5,
+#	height=2.375,
+#	sill_height=2.375-0.875, partition="SINGLE_PANEL",)
 # okno do silnice
 window_pokoj_nahore_2 = wall_gym.add_window(
 	at=BWT,width=1.25, sill_height=NADEZDIVKA, height=2.375
@@ -1293,6 +1293,15 @@ window_sklad = wall_4.add_window(
 # Roof
 
 roof = upper.roof("Main roof")
+
+ROOF_WINDOW_Y1 = HOUSE_DEPTH - BWT - 0.25
+roof_window_opening = roof.add_opening(
+	name="Bedroom roof window",
+	rectangle=(
+		(1.88+0.04, ROOF_WINDOW_Y1),
+		(2.88-0.04, ROOF_WINDOW_Y1 - 1.2),
+	),
+)
 
 roof_inner_cuts = [
 	((0, BWT, 0), (10, BWT, 0), (0, BWT, 10)),
@@ -1449,9 +1458,9 @@ ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 # leave it full-length.
 rafters = [
 	-0.12,
-	0.54,
-	1.34,
-	2.34,
+	0.88,
+	1.88,
+	2.88,
 	(3.34, "+before"),
 	(3.98, "after"),
 	(4.98, "after"),
@@ -2114,7 +2123,7 @@ if "ground" in sys.argv:
 	# komin
 	drawing1.add_dimension(start=(wall2_x, CHIMNEY_Y_MID-0.1), end=(CHIMNEY_X_START, CHIMNEY_Y_MID-0.1))
 	# kamna
-	drawing1.add_dimension(start=(wall2_x, CHODBA_DEPTH+0.5), end=(wall2_x+1, CHODBA_DEPTH+0.5))
+	drawing1.add_dimension(start=(wall2_x, CHODBA_DEPTH+0.5), end=(wall2_x+1, CHODBA_DEPTH+0.5), offset=1)
 
 	drawing1.add_entrance_arrow(
 		(CUT_WIDTH - 0.6, BWT + 0.125 + 0.55),
@@ -2147,6 +2156,7 @@ if "ground" in sys.argv:
 		identifier="0.04",
 		description="Koupelna",
 		area=koupelna.area,
+		window_area=window_area(window_bathroom),
 	)
 	drawing1.add_room_legend()
 
@@ -2183,24 +2193,21 @@ if "upper" in sys.argv:
 	drawing1.add_chimney_annotation(chimney)
 
 	drawing1.add_room_annotation(
-		(1.5, 6),
+		(6.5, 6),
 		identifier="P.01",
 		description="Pokoj 1",
-		area=upper_pokoj_1.area,
-		window_area=window_area(
-			window_pokoj_nahore_1,
-			window_pokoj_nahore_2,
-		),
-	)
-
-	drawing1.add_room_annotation(
-		(6.5, 6),
-		identifier="P.02",
-		description="Pokoj 2",
 		area=upper_pokoj_2.area,
 		window_area=window_area(window_dormer_1, window_dormer_2),
 	)
-
+	drawing1.add_room_annotation(
+		(1.5, 6),
+		identifier="P.02",
+		description="Pokoj 2",
+		area=upper_pokoj_1.area,
+		window_area=1.3+window_area(
+			window_pokoj_nahore_2,
+		),
+	)
 	drawing1.add_room_annotation(
 		(9.5, 5),
 		identifier="P.03",
@@ -2210,17 +2217,16 @@ if "upper" in sys.argv:
 	)
 
 	drawing1.add_room_annotation(
-		(7, 3),
-		description="Galerie",
-		identifier="P.04",
-		area=galerie.area
-	)
-
-	drawing1.add_room_annotation(
 		(9.5, 1.5),
-		identifier="P.05",
+		identifier="P.04",
 		description="Záchod",
 		area=zachod_nahore.area
+	)
+	drawing1.add_room_annotation(
+		(7, 3),
+		description="Galerie",
+		identifier="P.05",
+		area=galerie.area
 	)
 	drawing1.add_room_legend()
 

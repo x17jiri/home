@@ -62,6 +62,7 @@ __all__ = [
     "MiakoSlab",
     "Roof",
     "RoofLayer",
+    "RoofOpening",
     "RoofPlane",
     "Stair",
     "Storey",
@@ -6458,6 +6459,7 @@ class Roof(ifcopenshell.entity_instance):
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "storey", storey)
         object.__setattr__(self, "_planes", [])
+        object.__setattr__(self, "_openings", [])
 
     @property
     def element(self) -> ifcopenshell.entity_instance:
@@ -6468,6 +6470,177 @@ class Roof(ifcopenshell.entity_instance):
     def planes(self) -> tuple[RoofPlane, ...]:
         """Return the coordinate planes created beneath this roof."""
         return tuple(self._planes)
+
+    @property
+    def openings(self) -> tuple[RoofOpening, ...]:
+        """Return the absolute-XY openings registered on this roof."""
+        return tuple(self._openings)
+
+    def add_opening(
+        self,
+        name: str | None = None,
+        *,
+        rectangle: Sequence[Point],
+    ) -> RoofOpening:
+        """Cut a vertical rectangular void through every intersecting roof part.
+
+        ``rectangle`` contains two opposite corners in absolute global XY
+        coordinates.  Its order does not matter.  A separate aligned
+        ``IfcOpeningElement`` is created for every intersecting slab or beam,
+        because IFC permits an opening to void only one building element.
+
+        Openings are also applied to roof-plane elements created later, so an
+        opening may be registered before or after the roof build-up.
+        """
+        opening_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Roof Opening {len(self._openings) + 1}"
+        )
+        if any(opening.name == opening_name for opening in self._openings):
+            raise ValueError(
+                f'roof opening name already exists: "{opening_name}"'
+            )
+        if isinstance(rectangle, (str, bytes)):
+            raise TypeError("rectangle must contain exactly two opposite corners")
+        try:
+            supplied_corners = list(rectangle)
+        except TypeError as error:
+            raise TypeError(
+                "rectangle must contain exactly two opposite corners"
+            ) from error
+        if len(supplied_corners) != 2:
+            raise TypeError("rectangle must contain exactly two opposite corners")
+        first = _point(supplied_corners[0], "rectangle corner 1")
+        second = _point(supplied_corners[1], "rectangle corner 2")
+        x_min, x_max = sorted((first[0], second[0]))
+        y_min, y_max = sorted((first[1], second[1]))
+        if isclose(x_min, x_max, abs_tol=1e-9) or isclose(
+            y_min, y_max, abs_tol=1e-9
+        ):
+            raise ValueError("rectangle must have a non-zero width and depth")
+        rectangle_bounds = ((x_min, y_min), (x_max, y_max))
+        for existing in self._openings:
+            (existing_x_min, existing_y_min), (
+                existing_x_max,
+                existing_y_max,
+            ) = existing.rectangle
+            if (
+                x_min < existing_x_max - 1e-9
+                and existing_x_min < x_max - 1e-9
+                and y_min < existing_y_max - 1e-9
+                and existing_y_min < y_max - 1e-9
+            ):
+                raise ValueError("roof opening overlaps another opening")
+
+        opening = RoofOpening(opening_name, rectangle_bounds)
+        self._openings.append(opening)
+        for plane in self._planes:
+            for element in plane.elements:
+                self._apply_opening(opening, element)
+        return opening
+
+    def _apply_openings(self, element: ifcopenshell.entity_instance) -> None:
+        """Apply every registered roof opening to one completed roof part."""
+        for opening in self._openings:
+            self._apply_opening(opening, element)
+
+    def _apply_opening(
+        self,
+        roof_opening: RoofOpening,
+        element: ifcopenshell.entity_instance,
+    ) -> None:
+        """Create one host-specific vertical opening when the XY bounds meet."""
+        if any(
+            void.RelatedOpeningElement in roof_opening.elements
+            for void in (element.HasOpenings or ())
+        ):
+            return
+        body = ifcopenshell.util.representation.get_representation(
+            element,
+            "Model",
+            "Body",
+            "MODEL_VIEW",
+        )
+        if body is None:
+            return
+
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        try:
+            shape = ifcopenshell.geom.create_shape(settings, element)
+        except RuntimeError:
+            return
+        vertices = np.asarray(shape.geometry.verts, dtype=float).reshape((-1, 3))
+        if not len(vertices):
+            return
+        minimum = vertices.min(axis=0)
+        maximum = vertices.max(axis=0)
+        (x_min, y_min), (x_max, y_max) = roof_opening.rectangle
+        tolerance = 1e-9
+        if (
+            maximum[0] <= x_min + tolerance
+            or x_max <= minimum[0] + tolerance
+            or maximum[1] <= y_min + tolerance
+            or y_max <= minimum[1] + tolerance
+        ):
+            return
+
+        overlap = 0.05
+        opening_bottom = float(minimum[2]) - overlap
+        opening_height = float(maximum[2] - minimum[2]) + 2 * overlap
+        model = self.file
+        opening = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcOpeningElement",
+            name=f"{roof_opening.name} - {element.Name or element.is_a()}",
+            predefined_type="OPENING",
+        )
+        opening.ObjectType = "ROOF_OPENING"
+        representation = ifcopenshell.api.geometry.add_slab_representation(
+            model,
+            context=self.storey.house._body_context,
+            depth=opening_height,
+            polyline=(
+                (0.0, 0.0),
+                (x_max - x_min, 0.0),
+                (x_max - x_min, y_max - y_min),
+                (0.0, y_max - y_min),
+            ),
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=opening,
+            representation=representation,
+        )
+        ifcopenshell.api.feature.add_feature(
+            model,
+            feature=opening,
+            element=element,
+        )
+        placement = np.eye(4)
+        placement[:3, 3] = (x_min, y_min, opening_bottom)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=opening,
+            matrix=placement,
+            is_si=True,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=opening,
+            name="BBIM_RoofOpening",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={
+                "Roof": self.GlobalId,
+                "Rectangle": json.dumps(roof_opening.rectangle),
+                "Host": element.GlobalId,
+            },
+        )
+        roof_opening._elements.append(opening)
 
     def add(
         self,
@@ -6636,6 +6809,7 @@ class RoofPlane(ifcopenshell.entity_instance):
         object.__setattr__(self, "coordinate_matrix", coordinate_matrix)
         object.__setattr__(self, "normal_flipped", normal_flipped)
         object.__setattr__(self, "geometry_y_sign", -1.0 if normal_flipped else 1.0)
+        object.__setattr__(self, "_elements", [])
         object.__setattr__(
             self,
             "x_axis",
@@ -6656,6 +6830,11 @@ class RoofPlane(ifcopenshell.entity_instance):
     def element(self) -> ifcopenshell.entity_instance:
         """Return this roof plane as its underlying IFC assembly."""
         return self
+
+    @property
+    def elements(self) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Return physical elements created or added in this roof plane."""
+        return tuple(self._elements)
 
     def to_world(self, point: Point3D) -> tuple[float, float, float]:
         """Transform a local XYZ point into global coordinates."""
@@ -6689,11 +6868,16 @@ class RoofPlane(ifcopenshell.entity_instance):
             if element in {self, self.roof}:
                 raise ValueError("a roof plane cannot aggregate itself or its roof")
             normalised.append(element)
-        return ifcopenshell.api.aggregate.assign_object(
+        relationship = ifcopenshell.api.aggregate.assign_object(
             self.file,
             products=normalised,
             relating_object=self,
         )
+        for element in normalised:
+            if element not in self._elements:
+                self._elements.append(element)
+            self.roof._apply_openings(element)
+        return relationship
 
     def beam(
         self,
@@ -6841,7 +7025,6 @@ class RoofPlane(ifcopenshell.entity_instance):
             cuts=effective_cuts,
             extra_cuts=normalised_extra_cuts,
         )
-        self.add(layer)
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=layer,
@@ -6860,6 +7043,7 @@ class RoofPlane(ifcopenshell.entity_instance):
             product=layer,
             representation=body,
         )
+        self.add(layer)
         surface_style = self.storey.house._surface_style(
             "slab",
             color=color,
@@ -6903,6 +7087,24 @@ class RoofPlane(ifcopenshell.entity_instance):
             },
         )
         return layer
+
+
+class RoofOpening:
+    """One absolute-XY rectangle and its host-specific IFC void elements."""
+
+    def __init__(
+        self,
+        name: str,
+        rectangle: tuple[tuple[float, float], tuple[float, float]],
+    ) -> None:
+        self.name = name
+        self.rectangle = rectangle
+        self._elements: list[ifcopenshell.entity_instance] = []
+
+    @property
+    def elements(self) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Return the aligned ``IfcOpeningElement`` objects cutting roof parts."""
+        return tuple(self._elements)
 
 
 class RoofLayer(ifcopenshell.entity_instance):
