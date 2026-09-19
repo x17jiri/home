@@ -3690,10 +3690,10 @@ class House:
             raise ValueError("depth must be greater than zero")
         if gap <= 0:
             raise ValueError("gap must be greater than zero")
-        if start_extension < 0:
-            raise ValueError("start_extension must not be negative")
-        if end_extension < 0:
-            raise ValueError("end_extension must not be negative")
+        #if start_extension < 0:
+        #    raise ValueError("start_extension must not be negative")
+        #if end_extension < 0:
+        #    raise ValueError("end_extension must not be negative")
         if space_before_openings < 0:
             raise ValueError("space_before_openings must not be negative")
         if space_after_openings < 0:
@@ -4095,10 +4095,10 @@ class House:
             raise ValueError("offset must not be negative")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
-        if start_extension < 0:
-            raise ValueError("start_extension must not be negative")
-        if end_extension < 0:
-            raise ValueError("end_extension must not be negative")
+        #if start_extension < 0:
+        #    raise ValueError("start_extension must not be negative")
+        #if end_extension < 0:
+        #    raise ValueError("end_extension must not be negative")
 
         resolved_start_height = (
             wall.start_height
@@ -4579,6 +4579,7 @@ class Drawing:
                 0.0,
             )
         self._batting_count = 0
+        self._wall_insulation_count = 0
         self._dimension_count = 0
         self._entrance_arrow_count = 0
         self._annotated_stairs: set[int] = set()
@@ -5843,44 +5844,21 @@ class Drawing:
         )
         return annotation
 
-    def add_wall_batting(
+    def _wall_annotation_intervals(
         self,
         wall: Wall,
         *,
-        side: WallSide,
-        thickness: Number,
-        offset: Number = 0,
-        name: str | None = None,
-    ) -> tuple[ifcopenshell.entity_instance, ...]:
-        """Add direction-aware batting over a wall layer in this plan.
-
-        ``side`` is relative to looking from the wall's start towards its end.
-        ``offset`` is the distance from the axis to the layer's near face.
-        The batting runs along the layer centre and is split wherever an
-        opening intersects this drawing's cut plane, so insulation waves do
-        not cross plan-view doors or windows.
-        """
-        self._require_plan_view("add_wall_batting")
-        if not isinstance(wall, Wall):
-            raise TypeError("wall must be a Wall")
-        if wall.storey.house is not self.house:
-            raise ValueError("wall must belong to this house")
-        if not self._includes_storey(wall.storey):
-            raise ValueError("wall storey is not included in this drawing")
-        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
-        thickness = _number(thickness, "thickness")
-        offset = _number(offset, "offset")
-        if thickness <= 0:
-            raise ValueError("thickness must be greater than zero")
-        if offset < 0:
-            raise ValueError("offset must not be negative")
-        base_name = _name(name, "name") if name is not None else None
-
+        start_extension: float,
+        end_extension: float,
+    ) -> tuple[tuple[float, float], ...]:
+        """Return wall-axis intervals visible at this plan's cut height."""
+        interval_start = -start_extension
+        interval_end = wall.length + end_extension
         cut_height = self.z - wall.storey.elevation
         blocked = sorted(
             (
-                max(0.0, opening_start),
-                min(wall.length, opening_end),
+                max(interval_start, opening_start),
+                min(interval_end, opening_end),
             )
             for (
                 opening_start,
@@ -5905,13 +5883,62 @@ class Drawing:
                 merged_blocked.append([opening_start, opening_end])
 
         clear_intervals = []
-        cursor = 0.0
+        cursor = interval_start
         for opening_start, opening_end in merged_blocked:
             if opening_start > cursor + 1e-9:
                 clear_intervals.append((cursor, opening_start))
             cursor = max(cursor, opening_end)
-        if cursor < wall.length - 1e-9:
-            clear_intervals.append((cursor, wall.length))
+        if cursor < interval_end - 1e-9:
+            clear_intervals.append((cursor, interval_end))
+        return tuple(clear_intervals)
+
+    def add_wall_batting(
+        self,
+        wall: Wall,
+        *,
+        side: WallSide,
+        thickness: Number,
+        offset: Number = 0,
+        start_extension: Number = 0,
+        end_extension: Number = 0,
+        name: str | None = None,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Add direction-aware batting over a wall layer in this plan.
+
+        ``side`` is relative to looking from the wall's start towards its end.
+        ``offset`` is the distance from the axis to the layer's near face.
+        The batting runs along the layer centre and is split wherever an
+        opening intersects this drawing's cut plane, so insulation waves do
+        not cross plan-view doors or windows.  ``start_extension`` and
+        ``end_extension`` continue it beyond the corresponding wall ends.
+        """
+        self._require_plan_view("add_wall_batting")
+        if not isinstance(wall, Wall):
+            raise TypeError("wall must be a Wall")
+        if wall.file is not self.house.model or wall.storey.house is not self.house:
+            raise ValueError("wall must belong to this house")
+        if not self._includes_storey(wall.storey):
+            raise ValueError("wall storey is not included in this drawing")
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        thickness = _number(thickness, "thickness")
+        offset = _number(offset, "offset")
+        start_extension = _number(start_extension, "start_extension")
+        end_extension = _number(end_extension, "end_extension")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if offset < 0:
+            raise ValueError("offset must not be negative")
+        #if start_extension < 0:
+        #    raise ValueError("start_extension must not be negative")
+        #if end_extension < 0:
+        #    raise ValueError("end_extension must not be negative")
+        base_name = _name(name, "name") if name is not None else None
+
+        clear_intervals = self._wall_annotation_intervals(
+            wall,
+            start_extension=start_extension,
+            end_extension=end_extension,
+        )
 
         tangent_x = (wall.end[0] - wall.start[0]) / wall.length
         tangent_y = (wall.end[1] - wall.start[1]) / wall.length
@@ -5954,6 +5981,287 @@ class Drawing:
                 )
             )
         return tuple(batting)
+
+    def _add_wall_insulation_interface(
+        self,
+        wall: Wall,
+        *,
+        side: WallSide,
+        name: str,
+    ) -> ifcopenshell.entity_instance | None:
+        """Redraw the cut wall edge above an insulation annotation."""
+        clear_intervals = self._wall_annotation_intervals(
+            wall,
+            start_extension=0,
+            end_extension=0,
+        )
+        if not clear_intervals:
+            return None
+
+        inner_face = (
+            wall.body_offset
+            if side == "right"
+            else wall.body_offset + wall.thickness
+        )
+        model = self.house.model
+        curves = [
+            model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(
+                    [
+                        (float(segment_start), float(inner_face)),
+                        (float(segment_end), float(inner_face)),
+                    ]
+                ),
+                None,
+                False,
+            )
+            for segment_start, segment_end in clear_intervals
+        ]
+        interface = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{name} Wall Interface",
+            predefined_type="LINEWORK",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=interface,
+            matrix=wall._placement(0, 0),
+            is_si=True,
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet(curves)],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=interface,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=interface,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={"Classes": "wall-insulation-interface"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[interface],
+        )
+        return interface
+
+    def add_wall_insulation(
+        self,
+        wall: Wall,
+        *,
+        thickness: Number,
+        material: str,
+        side: WallSide = "right",
+        start_extension: Number = 0,
+        end_extension: Number = 0,
+        name: str | None = None,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Draw opening-aware insulation outside one wall in this plan.
+
+        This is a drawing-only annotation and does not change the IFC wall or
+        its 3D construction.  ``side`` is relative to looking from the wall's
+        start towards its end and defaults to ``"right"``.  The insulation
+        begins at that side's finished wall face.  Extensions continue it
+        beyond the wall ends to make manual corner joins possible.
+
+        ``material="polystyrene"`` draws the existing hexagonal hatch;
+        ``material="rockwool"`` draws direction-aware batting.  Both leave
+        gaps for doors and windows intersected by this drawing's cut plane.
+        """
+        self._require_plan_view("add_wall_insulation")
+        if not isinstance(wall, Wall):
+            raise TypeError("wall must be a Wall")
+        if wall.file is not self.house.model or wall.storey.house is not self.house:
+            raise ValueError("wall must belong to this house")
+        if not self._includes_storey(wall.storey):
+            raise ValueError("wall storey is not included in this drawing")
+        thickness = _number(thickness, "thickness")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        material_name = _enum(
+            material,
+            "material",
+            {"POLYSTYRENE", "ROCKWOOL"},
+        ).lower()
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        start_extension = _number(start_extension, "start_extension")
+        end_extension = _number(end_extension, "end_extension")
+#        if start_extension < 0:
+#            raise ValueError("start_extension must not be negative")
+#        if end_extension < 0:
+#            raise ValueError("end_extension must not be negative")
+
+        clear_intervals = self._wall_annotation_intervals(
+            wall,
+            start_extension=start_extension,
+            end_extension=end_extension,
+        )
+        if not clear_intervals:
+            return ()
+
+        self._wall_insulation_count += 1
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else (
+                f"{self.name} Wall Insulation "
+                f"{self._wall_insulation_count}"
+            )
+        )
+        if side == "right":
+            wall_face_offset = -wall.body_offset
+        else:
+            wall_face_offset = wall.body_offset + wall.thickness
+
+        model = self.house.model
+        if material_name == "rockwool":
+            annotations = self.add_wall_batting(
+                wall,
+                side=side,
+                thickness=thickness,
+                offset=wall_face_offset,
+                start_extension=start_extension,
+                end_extension=end_extension,
+                name=annotation_name,
+            )
+            for annotation in annotations:
+                annotation_pset = ifcopenshell.api.pset.add_pset(
+                    model,
+                    product=annotation,
+                    name="EPset_Annotation",
+                )
+                ifcopenshell.api.pset.edit_pset(
+                    model,
+                    pset=annotation_pset,
+                    properties={
+                        "Classes": (
+                            "wall-insulation wall-insulation-rockwool"
+                        )
+                    },
+                )
+                insulation_pset = ifcopenshell.api.pset.add_pset(
+                    model,
+                    product=annotation,
+                    name="BBIM_WallInsulation",
+                )
+                ifcopenshell.api.pset.edit_pset(
+                    model,
+                    pset=insulation_pset,
+                    properties={
+                        "HostWall": wall.GlobalId,
+                        "Material": material_name,
+                        "Thickness": thickness,
+                        "Side": side,
+                        "StartExtension": start_extension,
+                        "EndExtension": end_extension,
+                    },
+                )
+            self._add_wall_insulation_interface(
+                wall,
+                side=side,
+                name=annotation_name,
+            )
+            return annotations
+
+        if side == "right":
+            inner_face = wall.body_offset
+            outer_face = inner_face - thickness
+        else:
+            inner_face = wall.body_offset + wall.thickness
+            outer_face = inner_face + thickness
+        y_min, y_max = sorted((inner_face, outer_face))
+        fill_areas = []
+        for segment_start, segment_end in clear_intervals:
+            points = (
+                (segment_start, y_min),
+                (segment_end, y_min),
+                (segment_end, y_max),
+                (segment_start, y_max),
+                (segment_start, y_min),
+            )
+            curve = model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(points),
+                None,
+                False,
+            )
+            fill_areas.append(model.createIfcAnnotationFillArea(curve, None))
+
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=annotation_name,
+            predefined_type="FILLAREA",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=wall._placement(0, 0),
+            is_si=True,
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            fill_areas,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={
+                "Classes": "wall-insulation wall-insulation-polystyrene"
+            },
+        )
+        insulation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="BBIM_WallInsulation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=insulation_pset,
+            properties={
+                "HostWall": wall.GlobalId,
+                "Material": material_name,
+                "Thickness": thickness,
+                "Side": side,
+                "StartExtension": start_extension,
+                "EndExtension": end_extension,
+                "Segments": json.dumps(clear_intervals),
+            },
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        self._add_wall_insulation_interface(
+            wall,
+            side=side,
+            name=annotation_name,
+        )
+        return (annotation,)
 
     def add_chimney_annotation(
         self,

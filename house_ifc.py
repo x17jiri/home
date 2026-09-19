@@ -310,23 +310,23 @@ ceiling_koupelna = ground.ceiling_layer(
 )
 
 # Load-bearing walls
-wall_front = ground.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_front_g = ground.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_4 = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_back = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_1a = ground.wall((0, HOUSE_DEPTH), (0, BWT+GYM_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1b = ground.wall((CUT_WIDTH, GYM_DEPTH+2*BWT), (CUT_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1b_g = ground.wall((CUT_WIDTH, GYM_DEPTH+2*BWT), (CUT_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_2 = ground.wall((wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
 ground.connect_wall(wall_1a, wall_back)
 
-#ground.connect_wall(wall_2, wall_front, is_atpath=True)
+#ground.connect_wall(wall_2, wall_front_g, is_atpath=True)
 ground.connect_wall(wall_2, wall_back, is_atpath=True)
 
-ground.connect_wall(wall_3, wall_front, is_atpath=True)
+ground.connect_wall(wall_3, wall_front_g, is_atpath=True)
 ground.connect_wall(wall_3, wall_back, is_atpath=True)
 
-ground.connect_wall(wall_4, wall_front)
+ground.connect_wall(wall_4, wall_front_g)
 ground.connect_wall(wall_4, wall_back)
 
 # Front door/window
@@ -335,7 +335,7 @@ BOTTOM_STAIR_TREADS = 9
 GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
-front_door = wall_1b.add_door(
+front_door = wall_1b_g.add_door(
 	at=2*BWT+GYM_DEPTH-0.375-1.125,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
@@ -345,7 +345,7 @@ front_door = wall_1b.add_door(
 )
 
 # Front windows (koupelna)
-window_bathroom = wall_front.add_window(
+window_bathroom = wall_front_g.add_window(
 	at=wall3_x-CUT_WIDTH+KK_WIDTH/2-0.25, width=0.5,
 	sill_height=GROUND_WINDOW_HEIGHT-0.5,
 	height=GROUND_WINDOW_HEIGHT)
@@ -373,7 +373,7 @@ window_pokoj_dole_2 = wall_1a.add_window(
 	height=GROUND_WINDOW_HEIGHT)
 
 # Posilovna, Gym
-wall_gym = ground.wall(
+wall_gym_g = ground.wall(
 	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
 	wall_type=load_bearing_wall, height=ground_floor_height)
 
@@ -520,7 +520,7 @@ wall_kitchen_1.add_door(
 )
 
 # Pokoj Risanek
-wall_gym.add_door(
+wall_gym_g.add_door(
 	at=wall2_x-2*BWT-0.25-1,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
@@ -684,143 +684,6 @@ ground.asset(
 	start_height=GROUND_FLOOR_THICKNESS,
 	#size=(1.3, 0.8*3),
 )
-
-# facade
-if 0:
-	frame1_v = house.add_vertical_frame(
-	    wall_front,
-	    offset=0,
-	    width=0.05,
-	    depth=0.08,
-	    start_height=0.2,
-	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-	    gap=0.60,
-	    lath_offsets=[0, wall_front.length - 0.05],
-	)
-	lath_width=0.05
-	window_space=0.03
-	frame2_v = house.add_vertical_frame(
-	    wall_back,
-	    offset=0,
-	    width=lath_width,
-	    depth=0.1,
-	    start_height=0.2,
-	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-	    gap=0.60,
-	    lath_offsets=[
-			0,
-			2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
-			BWT+3.5+BWT+0.5 - lath_width-window_space, BWT+3.5+BWT+0.5 + 1 + window_space,
-			BWT+3.5+BWT+0.5 + 1.5 + window_space,
-			BWT+3.5+BWT+0.5+1+1 - lath_width-window_space, BWT+3.5+BWT+0.5+1+1 + 1.5 + window_space,
-			BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 - lath_width-window_space, BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 + 1.5 + window_space,
-			wall_back.length - lath_width
-		],
-		space_before_openings=window_space,
-		space_after_openings=window_space,
-		space_above_openings=window_space,
-		space_below_openings=window_space,
-		insulation_material="Rockwool",
-		insulation_color="#E8D36D",
-	)
-	lath_width=0.04
-	frame2_h = house.add_horizontal_frame(
-	    wall_back,
-	    offset=0.1,
-	    width=lath_width,
-	    depth=0.06,
-	    lath_offsets=[
-			0.2,
-			BWT+0.875-lath_width-window_space,
-			UPPER_FLOOR_START+NADEZDIVKA-lath_width-0.1
-		],
-	    start_extension=0.1,
-	    end_extension=0.1,
-		gap=0.6,
-		space_before_openings=window_space,
-		space_after_openings=window_space,
-		space_above_openings=window_space,
-		space_below_openings=window_space,
-		insulation_material="Rockwool",
-		insulation_color="#E8D36D",
-	)
-	lath_width=0.03
-	frame2_v2 = house.add_vertical_frame(
-	    wall_back,
-	    offset=0.16,
-	    width=lath_width,
-	    depth=0.05,
-	    start_height=0.2,
-	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-	    gap=0.40,
-	    lath_offsets=[
-			0,
-			2.75 - lath_width-window_space, 2.75 + 0.5 + window_space,
-			BWT+3.5+BWT+0.5 - lath_width-window_space, BWT+3.5+BWT+0.5 + 1 + window_space,
-			BWT+3.5+BWT+0.5 + 1.5 + window_space,
-			BWT+3.5+BWT+0.5+1+1 - lath_width-window_space, BWT+3.5+BWT+0.5+1+1 + 1.5 + window_space,
-			BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 - lath_width-window_space, BWT+3.5+BWT+KITCHEN_WIDTH+BWT+0.75 + 1.5 + window_space,
-			wall_back.length - lath_width
-		],
-		space_before_openings=window_space,
-		space_after_openings=window_space,
-		space_above_openings=window_space,
-		space_below_openings=window_space,
-	)
-	frame2_finish = house.add_facade_layer(
-		wall_back,
-		name="Cementovlaknita deska - garden facade",
-		offset=0.21,
-		thickness=0.01,
-		start_height=0.2,
-		height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-		color="#ffffff",
-	)
-	frame3_v = house.add_vertical_frame(
-	    wall_4,
-	    offset=0,
-	    width=0.05,
-	    depth=0.08,
-	    start_height=0.2,
-	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-	    gap=0.60,
-	    lath_offsets=[0, wall_4.length - 0.05],
-	)
-	frame4_v = house.add_vertical_frame(
-	    wall_1a,
-	    offset=0,
-	    width=0.05,
-	    depth=0.08,
-	    start_height=0.2,
-	    height=UPPER_FLOOR_START+NADEZDIVKA-0.2-0.1,
-	    gap=0.60,
-	    lath_offsets=[0, wall_1a.length - 0.05],
-	)
-
-
-	facade_1 = house.storey("Facade Layer 1", elevation=ground.elevation)
-	facade_1.add(frame1_v)
-	facade_1.add(frame2_v)
-	facade_1.add(frame3_v)
-	facade_1.add(frame4_v)
-
-	facade_2 = house.storey("Facade Layer 2", elevation=ground.elevation)
-	#facade_2.add(frame1_h)
-	facade_2.add(frame2_h)
-	#facade_2.add(frame3_h)
-	#facade_2.add(frame4_h)
-
-	facade_3 = house.storey("Facade Layer 3", elevation=ground.elevation)
-	#facade_3.add(frame1_v)
-	facade_3.add(frame2_v2)
-	#facade_3.add(frame3_v)
-	#facade_3.add(frame4_v)
-
-	facade_4 = house.storey(
-		"Facade Layer 4 - Cementovlaknita deska",
-		elevation=ground.elevation,
-	)
-	facade_4.add(frame2_finish)
 
 # MIAKO
 ceiling1 = upper.miako_slab(
@@ -1077,7 +940,7 @@ wall_cuts_2_3 = [
 wall_dormer = upper.wall(
 	(wall3_x, HOUSE_DEPTH), (wall2_x-BWT, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=DORMER_WALL_HEIGHT-NADEZDIVKA, start_height=NADEZDIVKA)
-wall_front = upper.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
+wall_front_u = upper.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_back = upper.wall(
 	(HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
@@ -1085,11 +948,11 @@ wall_1a = upper.wall(
 	(0, HOUSE_DEPTH-BWT), (0, BWT+GYM_DEPTH+BWT),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
-wall_1b = upper.wall(
+wall_1b_u = upper.wall(
 	(CUT_WIDTH, GYM_DEPTH+BWT), (CUT_WIDTH, BWT),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
-wall_gym = upper.wall(
+wall_gym_u = upper.wall(
 	(0, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
 	wall_type=load_bearing_wall,
 	height=CUT_STREET_WALL_HEIGHT,
@@ -1165,15 +1028,15 @@ upper.asset(
 
 #upper.connect_wall(wall_1, wall_back)
 #
-#upper.connect_wall(wall_2, wall_front, is_atpath=True)
+#upper.connect_wall(wall_2, wall_front_u, is_atpath=True)
 #upper.connect_wall(wall_2, wall_back, is_atpath=True)
 #upper.connect_wall(wall_2, wall_dormer)
 #
-#upper.connect_wall(wall_3, wall_front, is_atpath=True)
+#upper.connect_wall(wall_3, wall_front_u, is_atpath=True)
 #upper.connect_wall(wall_3, wall_back, is_atpath=True)
 #upper.connect_wall(wall_3, wall_dormer)
 #
-#upper.connect_wall(wall_4, wall_front)
+#upper.connect_wall(wall_4, wall_front_u)
 #upper.connect_wall(wall_4, wall_back)
 
 
@@ -1274,7 +1137,7 @@ wall_2.add_door(
 #	height=2.375,
 #	sill_height=2.375-0.875, partition="SINGLE_PANEL",)
 # okno do silnice
-window_pokoj_nahore_2 = wall_gym.add_window(
+window_pokoj_nahore_2 = wall_gym_u.add_window(
 	at=BWT,width=1.25, sill_height=NADEZDIVKA, height=2.375
 )
 # Okno k sousedum nahore
@@ -2167,6 +2030,28 @@ if "ground" in sys.argv:
 		window_area=window_area(window_bathroom),
 	)
 	drawing1.add_room_legend()
+
+	drawing1.add_wall_insulation(
+		wall_front_g,
+		thickness=0.16,
+		material="polystyrene",
+		start_extension=0.16,
+		end_extension=0.16,
+	)
+	drawing1.add_wall_insulation(
+		wall_1b_g,
+		thickness=0.16,
+		material="polystyrene",
+		start_extension=-BWT-0.2,
+#		end_extension=0.16,
+	)
+	drawing1.add_wall_insulation(
+		wall_gym_g,
+		thickness=0.2,
+		material="rockwool",
+		start_extension=BWT+0.2,
+		end_extension=-1.5-BWT,
+	)
 
 	drawing1.render("ground.svg", png=True, png_dpi=600)
 

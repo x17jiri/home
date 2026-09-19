@@ -326,6 +326,25 @@ drawing.add_entrance_arrow(
 )
 ```
 
+Add drawing-only façade insulation outside an individual wall with
+`add_wall_insulation()`. It does not alter the wall or its 3D construction.
+The default `side="right"` means the right side when looking from the wall's
+start towards its end. Doors and windows intersecting the plan cut are left
+clear, while the optional extensions can close corner gaps:
+
+```python
+drawing.add_wall_insulation(
+    wall_front,
+    thickness=0.16,
+    material="polystyrene",  # or "rockwool"
+    start_extension=0.16,
+    end_extension=0,
+)
+```
+
+Polystyrene uses the existing hexagonal hatch. Rockwool uses the conventional
+batting wave and follows the wall direction.
+
 The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
 metres in both X and Y, so the example cuts the model at 1.6 m and covers a
 10 m by 10 m area. `png=True` additionally creates `house.png` through

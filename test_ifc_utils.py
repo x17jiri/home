@@ -5917,6 +5917,218 @@ class HouseTests(unittest.TestCase):
             {0.20},
         )
 
+    def test_adds_opening_aware_polystyrene_wall_insulation(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall(
+            (0, 0), (4, 0), thickness=0.24, height=3
+        )
+        wall.add_opening(
+            at=1,
+            width=1,
+            height=2,
+            show_overhead=False,
+        )
+        # This high opening does not intersect the drawing cut and therefore
+        # must not interrupt the insulation hatch.
+        wall.add_opening(
+            at=2.5,
+            width=0.5,
+            sill_height=2,
+            height=2.8,
+            show_overhead=False,
+        )
+        drawing = house.add_drawing(
+            "Ground plan", 2, 2, 1, 6, storeys=[ground]
+        )
+
+        insulation = drawing.add_wall_insulation(
+            wall,
+            thickness=0.16,
+            material="polystyrene",
+            start_extension=0.2,
+            end_extension=0.3,
+        )
+
+        self.assertEqual(len(insulation), 1)
+        annotation = insulation[0]
+        self.assertEqual(annotation.ObjectType, "FILLAREA")
+        placement = ifcopenshell.util.placement.get_local_placement(
+            annotation.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            placement[:3, 3], (0, 0, 0), atol=1e-9
+        )
+        representation = annotation.Representation.Representations[0]
+        self.assertEqual(representation.RepresentationType, "Annotation2D")
+        self.assertEqual(len(representation.Items), 2)
+        self.assertEqual(
+            [item.OuterBoundary.Points.CoordList for item in representation.Items],
+            [
+                (
+                    (-0.2, -0.28),
+                    (1.0, -0.28),
+                    (1.0, -0.12),
+                    (-0.2, -0.12),
+                    (-0.2, -0.28),
+                ),
+                (
+                    (2.0, -0.28),
+                    (4.3, -0.28),
+                    (4.3, -0.12),
+                    (2.0, -0.12),
+                    (2.0, -0.28),
+                ),
+            ],
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"
+            ),
+            "wall-insulation wall-insulation-polystyrene",
+        )
+        properties = ifcopenshell.util.element.get_pset(
+            annotation, "BBIM_WallInsulation"
+        )
+        self.assertEqual(properties["HostWall"], wall.GlobalId)
+        self.assertEqual(properties["Material"], "polystyrene")
+        self.assertEqual(properties["Thickness"], 0.16)
+        self.assertEqual(properties["Side"], "right")
+        self.assertEqual(properties["StartExtension"], 0.2)
+        self.assertEqual(properties["EndExtension"], 0.3)
+        self.assertEqual(
+            json.loads(properties["Segments"]),
+            [[-0.2, 1.0], [2.0, 4.3]],
+        )
+        self.assertIn(
+            annotation,
+            drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+        interface = next(
+            product
+            for product in drawing.group.IsGroupedBy[0].RelatedObjects
+            if ifcopenshell.util.element.get_pset(
+                product, "EPset_Annotation", "Classes"
+            )
+            == "wall-insulation-interface"
+        )
+        self.assertEqual(interface.ObjectType, "LINEWORK")
+        interface_curves = (
+            interface.Representation.Representations[0].Items[0].Elements
+        )
+        self.assertEqual(
+            [curve.Points.CoordList for curve in interface_curves],
+            [
+                ((0.0, -0.12), (1.0, -0.12)),
+                ((2.0, -0.12), (4.0, -0.12)),
+            ],
+        )
+
+    def test_adds_extended_rockwool_outside_the_wall_face(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall(
+            (5, 0), (5, 4), thickness=0.24, height=3
+        )
+        wall.add_opening(
+            at=0.8,
+            width=0.5,
+            height=2,
+            show_overhead=False,
+        )
+        drawing = house.add_drawing(
+            "Ground plan", 2, 2, 1, 6, storeys=[ground]
+        )
+
+        insulation = drawing.add_wall_insulation(
+            wall,
+            thickness=0.20,
+            material="Rockwool",
+            start_extension=0.1,
+            end_extension=0.2,
+            name="Facade wool",
+        )
+
+        self.assertEqual(len(insulation), 2)
+        self.assertEqual(
+            [annotation.Name for annotation in insulation],
+            ["Facade wool 1", "Facade wool 2"],
+        )
+        placements = [
+            ifcopenshell.util.placement.get_local_placement(
+                annotation.ObjectPlacement
+            )
+            for annotation in insulation
+        ]
+        np.testing.assert_allclose(
+            placements[0][:3, 3], (5.22, -0.1, 0), atol=1e-9
+        )
+        np.testing.assert_allclose(
+            placements[1][:3, 3], (5.22, 1.3, 0), atol=1e-9
+        )
+        for annotation in insulation:
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    annotation, "EPset_Annotation", "Classes"
+                ),
+                "wall-insulation wall-insulation-rockwool",
+            )
+            properties = ifcopenshell.util.element.get_pset(
+                annotation, "BBIM_WallInsulation"
+            )
+            self.assertEqual(properties["HostWall"], wall.GlobalId)
+            self.assertEqual(properties["Material"], "rockwool")
+            self.assertEqual(properties["Thickness"], 0.20)
+            self.assertEqual(properties["StartExtension"], 0.1)
+            self.assertEqual(properties["EndExtension"], 0.2)
+
+    def test_validates_wall_insulation_arguments(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        upper = house.storey("Upper floor", elevation=3)
+        wall = ground.wall((0, 0), (4, 0), thickness=0.24, height=3)
+        upper_wall = upper.wall(
+            (0, 0), (4, 0), thickness=0.24, height=3
+        )
+        drawing = house.add_drawing(
+            "Ground plan", 2, 2, 1, 6, storeys=[ground]
+        )
+
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            drawing.add_wall_insulation(
+                wall, thickness=0, material="polystyrene"
+            )
+        with self.assertRaisesRegex(ValueError, "material must be one of"):
+            drawing.add_wall_insulation(
+                wall, thickness=0.16, material="foam"
+            )
+        with self.assertRaisesRegex(ValueError, "start_extension"):
+            drawing.add_wall_insulation(
+                wall,
+                thickness=0.16,
+                material="polystyrene",
+                start_extension=-0.1,
+            )
+        with self.assertRaisesRegex(ValueError, "not included"):
+            drawing.add_wall_insulation(
+                upper_wall,
+                thickness=0.16,
+                material="polystyrene",
+            )
+        elevation = house.add_drawing(
+            "Elevation",
+            2,
+            -2,
+            1,
+            6,
+            view="elevation",
+            direction=(0, 1, 0),
+        )
+        with self.assertRaisesRegex(ValueError, "plan drawings"):
+            elevation.add_wall_insulation(
+                wall, thickness=0.16, material="polystyrene"
+            )
+
     def test_persists_material_legend_in_an_optional_right_panel(self) -> None:
         house = House("My house")
         drawing = house.add_drawing(
@@ -7041,6 +7253,19 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: white !important", rockwool_rule)
         self.assertNotIn("yellow", rockwool_rule)
+        drawing_rule = stylesheet.split(
+            ".PredefinedType-FILLAREA.wall-insulation-polystyrene",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(
+            "fill: url(#thermal-impact-insulation) !important",
+            drawing_rule,
+        )
+        interface_rule = stylesheet.split(
+            ".PredefinedType-LINEWORK.wall-insulation-interface",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("stroke-width: 0.35 !important", interface_rule)
 
     def test_hides_miako_concrete_cover_seams_in_plan_only(self) -> None:
         stylesheet = (
