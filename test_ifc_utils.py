@@ -5847,6 +5847,76 @@ class HouseTests(unittest.TestCase):
             ]
             self.assertEqual({drawing.Name for drawing in drawings}, {"Ground plan", "Other plan"})
 
+    def test_adds_direction_aware_wall_batting_split_at_openings(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall_type = house.wall_type(
+            "Facade wall",
+            layers=[
+                ("Brick", 0.24),
+                "axis",
+                ("Rockwool", 0.20),
+            ],
+        )
+        horizontal = ground.wall(
+            (0, 0), (4, 0), wall_type=wall_type, height=2.8
+        )
+        horizontal.add_opening(at=1, width=1, height=2)
+        vertical = ground.wall(
+            (5, 0), (5, 4), wall_type=wall_type, height=2.8
+        )
+        drawing = house.add_drawing(
+            "Ground plan", 2, 2, 1, 6, storeys=[ground]
+        )
+
+        split_batting = drawing.add_wall_batting(
+            horizontal,
+            side="right",
+            thickness=0.20,
+            name="Horizontal Rockwool",
+        )
+        vertical_batting = drawing.add_wall_batting(
+            vertical,
+            side="right",
+            thickness=0.20,
+        )
+
+        self.assertEqual(len(split_batting), 2)
+        self.assertEqual(
+            [annotation.Name for annotation in split_batting],
+            ["Horizontal Rockwool 1", "Horizontal Rockwool 2"],
+        )
+        horizontal_placements = [
+            ifcopenshell.util.placement.get_local_placement(
+                annotation.ObjectPlacement
+            )
+            for annotation in split_batting
+        ]
+        np.testing.assert_allclose(
+            horizontal_placements[0][:3, 3], (0, -0.1, 0), atol=1e-9
+        )
+        np.testing.assert_allclose(
+            horizontal_placements[1][:3, 3], (2, -0.1, 0), atol=1e-9
+        )
+        vertical_placement = ifcopenshell.util.placement.get_local_placement(
+            vertical_batting[0].ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            vertical_placement[:3, 3], (5.1, 0, 0), atol=1e-9
+        )
+        np.testing.assert_allclose(
+            vertical_placement[:3, 0], (0, 1, 0), atol=1e-9
+        )
+        self.assertEqual(
+            {
+                ifcopenshell.util.element.get_pset(
+                    annotation, "BBIM_Batting", "Thickness"
+                )
+                for annotation in (*split_batting, *vertical_batting)
+            },
+            {0.20},
+        )
+
     def test_persists_material_legend_in_an_optional_right_panel(self) -> None:
         house = House("My house")
         drawing = house.add_drawing(
@@ -6848,6 +6918,50 @@ class HouseTests(unittest.TestCase):
         self.assertIn("fill: url(#ztracene-bedneni) !important", rule)
         self.assertIn("stroke-width: 0.05 !important", rule)
 
+    def test_styles_drywall_with_tinted_partition_hatch(self) -> None:
+        project_dir = Path(__file__).parent
+        patterns = (
+            project_dir / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            project_dir / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        diagonal = patterns.split(
+            '<pattern id="diagonal1"', maxsplit=1
+        )[1].split("</pattern>", maxsplit=1)[0]
+        drywall_diagonal = patterns.split(
+            '<pattern id="drywall-diagonal1"', maxsplit=1
+        )[1].split("</pattern>", maxsplit=1)[0]
+        self.assertIn('fill="white"', diagonal)
+        self.assertIn('fill="#dfefcf"', drywall_diagonal)
+        self.assertIn(
+            '<line x1="0" y1="0" x2="0" y2="1" '
+            'style="stroke:black; stroke-width:0.25" />',
+            diagonal,
+        )
+        self.assertIn(
+            '<line x1="0" y1="0" x2="0" y2="1" '
+            'style="stroke:black; stroke-width:0.25" />',
+            drywall_diagonal,
+        )
+        rule = stylesheet.split(
+            ".cut.layer-material-SDK", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: url(#drywall-diagonal1) !important", rule)
+        self.assertNotIn("random-dots", rule)
+
+    def test_preserves_random_dots_as_a_reusable_pattern(self) -> None:
+        patterns = (
+            Path(__file__).parent / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+
+        random_dots = patterns.split(
+            '<pattern id="random-dots"', maxsplit=1
+        )[1].split("</pattern>", maxsplit=1)[0]
+        self.assertEqual(random_dots.count("<circle "), 8)
+        self.assertNotIn('<pattern id="sand-dense"', patterns)
+
     def test_styles_footing_cuts_with_cross_pattern(self) -> None:
         project_dir = Path(__file__).parent
         patterns = (
@@ -6904,6 +7018,29 @@ class HouseTests(unittest.TestCase):
         self.assertIn(".IfcSlab.material-Floorbuildup.cut", buildup_rule)
         self.assertIn("fill: white !important", buildup_rule)
         self.assertNotIn("url(#", buildup_rule)
+
+    def test_styles_facade_insulation_patterns(self) -> None:
+        project_dir = Path(__file__).parent
+        patterns = (
+            project_dir / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            project_dir / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('<pattern id="rockwool-wave"', patterns)
+        polystyrene_rule = stylesheet.split(
+            ".cut.layer-material-Polystyrene", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(
+            "fill: url(#thermal-impact-insulation) !important",
+            polystyrene_rule,
+        )
+        rockwool_rule = stylesheet.split(
+            ".cut.layer-material-Rockwool", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", rockwool_rule)
+        self.assertNotIn("yellow", rockwool_rule)
 
     def test_hides_miako_concrete_cover_seams_in_plan_only(self) -> None:
         stylesheet = (
@@ -7177,7 +7314,12 @@ class HouseTests(unittest.TestCase):
         foundation = house.storey("Foundations", elevation=0)
         ground = house.storey("Ground floor", elevation=0)
         load_bearing = house.wall_type(
-            "Load bearing", layers=[("Brick", 0.24), "axis"]
+            "Load bearing",
+            layers=[
+                ("Brick", 0.24),
+                "axis",
+                ("Rockwool", 0.20),
+            ],
         )
         partition = house.wall_type(
             "Partition", layers=[("Brick", 0.12)]
@@ -7223,6 +7365,8 @@ class HouseTests(unittest.TestCase):
         footings = foundation.add_strip_footings_from(
             ground,
             source_wall_type=load_bearing,
+            structural_width=0.24,
+            structural_center_offset=0.12,
             width=0.7,
             height=0.5,
             start_height=-1.3,
@@ -7274,7 +7418,12 @@ class HouseTests(unittest.TestCase):
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
         load_bearing = house.wall_type(
-            "Load bearing", layers=[("Brick", 0.24), "axis"]
+            "Load bearing",
+            layers=[
+                ("Brick", 0.24),
+                "axis",
+                ("Rockwool", 0.20),
+            ],
         )
         partition = house.wall_type(
             "Partition", layers=[("Brick", 0.12), "axis"]
@@ -7289,6 +7438,8 @@ class HouseTests(unittest.TestCase):
         ring_beams = ground.add_ring_beams_from(
             ground,
             source_wall_type=load_bearing,
+            structural_width=0.24,
+            structural_center_offset=0.12,
             height=0.21,
             start_height=2.8,
             bar_diameter=0.012,

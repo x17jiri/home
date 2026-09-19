@@ -250,13 +250,19 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 .cut.layer-material-SDK {
-    fill: url(#sand-dense) !important;
+    fill: url(#drywall-diagonal1) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-Polystyrene {
+    fill: url(#thermal-impact-insulation) !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }
 
 .cut.layer-material-Rockwool {
-    fill: yellow !important;
+    fill: white !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }

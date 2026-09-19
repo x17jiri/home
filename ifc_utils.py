@@ -5843,6 +5843,118 @@ class Drawing:
         )
         return annotation
 
+    def add_wall_batting(
+        self,
+        wall: Wall,
+        *,
+        side: WallSide,
+        thickness: Number,
+        offset: Number = 0,
+        name: str | None = None,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Add direction-aware batting over a wall layer in this plan.
+
+        ``side`` is relative to looking from the wall's start towards its end.
+        ``offset`` is the distance from the axis to the layer's near face.
+        The batting runs along the layer centre and is split wherever an
+        opening intersects this drawing's cut plane, so insulation waves do
+        not cross plan-view doors or windows.
+        """
+        self._require_plan_view("add_wall_batting")
+        if not isinstance(wall, Wall):
+            raise TypeError("wall must be a Wall")
+        if wall.storey.house is not self.house:
+            raise ValueError("wall must belong to this house")
+        if not self._includes_storey(wall.storey):
+            raise ValueError("wall storey is not included in this drawing")
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        thickness = _number(thickness, "thickness")
+        offset = _number(offset, "offset")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if offset < 0:
+            raise ValueError("offset must not be negative")
+        base_name = _name(name, "name") if name is not None else None
+
+        cut_height = self.z - wall.storey.elevation
+        blocked = sorted(
+            (
+                max(0.0, opening_start),
+                min(wall.length, opening_end),
+            )
+            for (
+                opening_start,
+                opening_end,
+                opening_bottom,
+                opening_top,
+            ) in wall._openings
+            if opening_bottom - 1e-9 <= cut_height <= opening_top + 1e-9
+        )
+        merged_blocked: list[list[float]] = []
+        for opening_start, opening_end in blocked:
+            if opening_end <= opening_start + 1e-9:
+                continue
+            if (
+                merged_blocked
+                and opening_start <= merged_blocked[-1][1] + 1e-9
+            ):
+                merged_blocked[-1][1] = max(
+                    merged_blocked[-1][1], opening_end
+                )
+            else:
+                merged_blocked.append([opening_start, opening_end])
+
+        clear_intervals = []
+        cursor = 0.0
+        for opening_start, opening_end in merged_blocked:
+            if opening_start > cursor + 1e-9:
+                clear_intervals.append((cursor, opening_start))
+            cursor = max(cursor, opening_end)
+        if cursor < wall.length - 1e-9:
+            clear_intervals.append((cursor, wall.length))
+
+        tangent_x = (wall.end[0] - wall.start[0]) / wall.length
+        tangent_y = (wall.end[1] - wall.start[1]) / wall.length
+        normal_x = -tangent_y
+        normal_y = tangent_x
+        side_sign = 1 if side == "left" else -1
+        center_offset = side_sign * (offset + thickness / 2)
+
+        batting = []
+        for segment_number, (segment_start, segment_end) in enumerate(
+            clear_intervals, start=1
+        ):
+            start = (
+                wall.start[0]
+                + tangent_x * segment_start
+                + normal_x * center_offset,
+                wall.start[1]
+                + tangent_y * segment_start
+                + normal_y * center_offset,
+            )
+            end = (
+                wall.start[0]
+                + tangent_x * segment_end
+                + normal_x * center_offset,
+                wall.start[1]
+                + tangent_y * segment_end
+                + normal_y * center_offset,
+            )
+            segment_name = (
+                None
+                if base_name is None
+                else f"{base_name} {segment_number}"
+            )
+            batting.append(
+                self.add_batting(
+                    start,
+                    end,
+                    thickness=thickness,
+                    name=segment_name,
+                )
+            )
+        return tuple(batting)
+
     def add_chimney_annotation(
         self,
         chimney: Chimney,
@@ -8412,6 +8524,8 @@ class Storey:
         source_storey: Storey,
         *,
         source_wall_type: ifcopenshell.entity_instance | None = None,
+        structural_width: Number | None = None,
+        structural_center_offset: Number | None = None,
         width: Number,
         height: Number,
         start_height: Number,
@@ -8419,11 +8533,17 @@ class Storey:
         color: str | None = None,
         transparency: Number = 0,
     ) -> tuple[ifcopenshell.entity_instance, ...]:
-        """Add strip footings centred beneath selected source-wall bodies.
+        """Add strip footings beneath selected source-wall structures.
 
         Each footing projects past both wall ends by the same distance that it
         projects beyond either wall face.  This makes perpendicular strips
         meet cleanly at corners without extending past the footing outline.
+
+        By default the whole physical wall body is treated as structural.
+        ``structural_width`` and ``structural_center_offset`` can instead
+        identify a structural core inside a composite wall.  The offset is
+        measured from the wall axis along its local positive Y direction
+        (the left side when looking from the wall start towards its end).
         """
         if not isinstance(source_storey, Storey):
             raise TypeError("source_storey must be a Storey")
@@ -8440,6 +8560,18 @@ class Storey:
         width = _number(width, "width")
         height = _number(height, "height")
         start_height = _number(start_height, "start_height")
+        if structural_width is not None:
+            structural_width = _number(
+                structural_width, "structural_width"
+            )
+            if structural_width <= 0:
+                raise ValueError(
+                    "structural_width must be greater than zero"
+                )
+        if structural_center_offset is not None:
+            structural_center_offset = _number(
+                structural_center_offset, "structural_center_offset"
+            )
         material_name = _name(material, "material")
         transparency = _number(transparency, "transparency")
         if width <= 0:
@@ -8476,23 +8608,30 @@ class Storey:
             delta_y = source_wall.end[1] - source_wall.start[1]
             normal_x = -delta_y / source_wall.length
             normal_y = delta_x / source_wall.length
-            source_body_center_offset = (
+            resolved_structural_width = (
+                source_wall.thickness
+                if structural_width is None
+                else structural_width
+            )
+            resolved_structural_center_offset = (
                 source_wall.body_offset + source_wall.thickness / 2
+                if structural_center_offset is None
+                else structural_center_offset
             )
             end_extension = max(
-                (width - source_wall.thickness) / 2,
+                (width - resolved_structural_width) / 2,
                 0.0,
             )
             tangent_x = delta_x / source_wall.length
             tangent_y = delta_y / source_wall.length
             start_x = (
                 source_wall.start[0]
-                + normal_x * source_body_center_offset
+                + normal_x * resolved_structural_center_offset
                 - tangent_x * end_extension
             )
             start_y = (
                 source_wall.start[1]
-                + normal_y * source_body_center_offset
+                + normal_y * resolved_structural_center_offset
                 - tangent_y * end_extension
             )
             footing_length = source_wall.length + 2 * end_extension
@@ -8583,6 +8722,10 @@ class Storey:
                     "Height": height,
                     "Length": footing_length,
                     "StartHeight": start_height,
+                    "StructuralWidth": resolved_structural_width,
+                    "StructuralCenterOffset": (
+                        resolved_structural_center_offset
+                    ),
                 },
             )
             footings.append(footing)
@@ -8593,6 +8736,8 @@ class Storey:
         source_storey: Storey,
         *,
         source_wall_type: ifcopenshell.entity_instance | None = None,
+        structural_width: Number | None = None,
+        structural_center_offset: Number | None = None,
         height: Number,
         start_height: Number,
         concrete_material: str = "Concrete topping",
@@ -8605,11 +8750,15 @@ class Storey:
     ) -> tuple[Beam, ...]:
         """Add reinforced-concrete ring beams over selected wall bodies.
 
-        Every beam follows the centre of its source wall's physical body and
-        inherits that body's thickness.  Four longitudinal reinforcing bars
-        are placed behind ``concrete_cover`` at the section corners.  The
-        returned beams expose their source wall as ``source_wall`` and their
-        four :class:`IfcReinforcingBar` occurrences as ``reinforcement``.
+        Every beam follows the centre of its source wall's structural body
+        and inherits its width.  By default that means the whole physical
+        wall.  ``structural_width`` and ``structural_center_offset`` can
+        identify a structural core inside a composite wall; the offset is
+        measured from the wall axis along local positive Y (left when looking
+        from start to end).  Four longitudinal reinforcing bars are placed
+        behind ``concrete_cover`` at the section corners.  The returned beams
+        expose their source wall as ``source_wall`` and their four
+        :class:`IfcReinforcingBar` occurrences as ``reinforcement``.
         """
         if not isinstance(source_storey, Storey):
             raise TypeError("source_storey must be a Storey")
@@ -8626,6 +8775,18 @@ class Storey:
 
         height = _number(height, "height")
         start_height = _number(start_height, "start_height")
+        if structural_width is not None:
+            structural_width = _number(
+                structural_width, "structural_width"
+            )
+            if structural_width <= 0:
+                raise ValueError(
+                    "structural_width must be greater than zero"
+                )
+        if structural_center_offset is not None:
+            structural_center_offset = _number(
+                structural_center_offset, "structural_center_offset"
+            )
         bar_diameter = _number(bar_diameter, "bar_diameter")
         concrete_cover = _number(concrete_cover, "concrete_cover")
         transparency = _number(transparency, "transparency")
@@ -8672,8 +8833,18 @@ class Storey:
                 != source_wall_type
             ):
                 continue
+            resolved_structural_width = (
+                source_wall.thickness
+                if structural_width is None
+                else structural_width
+            )
+            resolved_structural_center_offset = (
+                source_wall.body_offset + source_wall.thickness / 2
+                if structural_center_offset is None
+                else structural_center_offset
+            )
             if 2 * (concrete_cover + bar_diameter) > min(
-                source_wall.thickness, height
+                resolved_structural_width, height
             ):
                 raise ValueError(
                     "concrete_cover and bar_diameter do not fit inside "
@@ -8684,13 +8855,22 @@ class Storey:
             delta_y = source_wall.end[1] - source_wall.start[1]
             normal_x = -delta_y / source_wall.length
             normal_y = delta_x / source_wall.length
-            body_center_offset = (
-                source_wall.body_offset + source_wall.thickness / 2
+            start_x = (
+                source_wall.start[0]
+                + normal_x * resolved_structural_center_offset
             )
-            start_x = source_wall.start[0] + normal_x * body_center_offset
-            start_y = source_wall.start[1] + normal_y * body_center_offset
-            end_x = source_wall.end[0] + normal_x * body_center_offset
-            end_y = source_wall.end[1] + normal_y * body_center_offset
+            start_y = (
+                source_wall.start[1]
+                + normal_y * resolved_structural_center_offset
+            )
+            end_x = (
+                source_wall.end[0]
+                + normal_x * resolved_structural_center_offset
+            )
+            end_y = (
+                source_wall.end[1]
+                + normal_y * resolved_structural_center_offset
+            )
             center_z = self.elevation + start_height + height / 2
 
             self._ring_beam_count += 1
@@ -8698,7 +8878,7 @@ class Storey:
                 f"Ring beam {self._ring_beam_count}",
                 start=(start_x, start_y, center_z),
                 end=(end_x, end_y, center_z),
-                size=(source_wall.thickness, height),
+                size=(resolved_structural_width, height),
                 material=concrete_material_name,
                 color=concrete_color,
                 transparency=transparency,
@@ -8715,16 +8895,21 @@ class Storey:
                 pset=ring_beam_pset,
                 properties={
                     "SourceWall": source_wall.GlobalId,
-                    "Width": source_wall.thickness,
+                    "Width": resolved_structural_width,
                     "Height": height,
                     "Length": source_wall.length,
                     "StartHeight": start_height,
+                    "StructuralCenterOffset": (
+                        resolved_structural_center_offset
+                    ),
                     "BarDiameter": bar_diameter,
                     "ConcreteCover": concrete_cover,
                 },
             )
 
-            y_offset = source_wall.thickness / 2 - concrete_cover - radius
+            y_offset = (
+                resolved_structural_width / 2 - concrete_cover - radius
+            )
             z_offset = height / 2 - concrete_cover - radius
             reinforcement = []
             for bar_number, (local_y, local_z) in enumerate(

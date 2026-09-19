@@ -94,7 +94,7 @@ FOUNDATION_FOOTER_WIDTH = 0.70
 FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 0.77 # Vzdalenost vaznice od hrebene
+VAZNICE_DIST = 0.8 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
 
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
@@ -116,6 +116,8 @@ door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
 UNDER_HOLE = 2.875
+HOLE_HEIGHT = 0.25
+ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.06
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.16)
@@ -124,7 +126,7 @@ COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # The collar-tie tops meet the underside of the two central purlins and the
 # wall below them.  The horizontal vapour barrier is derived from the tie
 # underside so the two cannot drift apart when the framing changes.
-COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + 0.5
+COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
 COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
 NADEZDIVKA = 1.25
 
@@ -173,14 +175,6 @@ dry_wall = house.wall_type(
         "axis",
     ],
 	color="#dfefcf"
-)
-
-facade_insulation = house.wall_type(
-    "Facade insulation - Rockwool",
-    layers=[
-        "axis",
-        ("Rockwool", 0.20),
-    ],
 )
 
 HOUSE_DEPTH = 8.0
@@ -975,7 +969,7 @@ zachod_nahore = upper.floor_layer(
 
 STREET_ROOF_JOINT_Y = HALF_DEPTH-VAZNICE_DIST-0.08
 GARDEN_ROOF_JOINT_Y = HALF_DEPTH+VAZNICE_DIST+0.08
-ROOF_JOINT_Z = UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25+VAZNICE_HEIGHT
+ROOF_JOINT_Z = UPPER_FLOOR_START + UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE + VAZNICE_HEIGHT
 STREET_ROOF_PLANE_POINTS = (
 	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -1064,9 +1058,9 @@ wall_cuts_1_4 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, HALF_DEPTH-VAZNICE_DIST-0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(0, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(5, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH-VAZNICE_DIST-0.08, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
+		(0, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
+		(5, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
@@ -1074,9 +1068,9 @@ wall_cuts_2_3 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*DORMER_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, HALF_DEPTH-VAZNICE_DIST-0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(0, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
-		(5, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+0.25+0.25),
+		(0, HALF_DEPTH-VAZNICE_DIST-0.08, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
+		(0, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
+		(5, HALF_DEPTH+VAZNICE_DIST+0.08, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
 	),
 ]
 
@@ -1106,14 +1100,14 @@ wall_2 = upper.wall(
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_2.add_opening(
-	at=3.625-BWT-GYM_DEPTH, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
+	at=3.625-BWT-GYM_DEPTH, width=0.75, height=UNDER_HOLE+HOLE_HEIGHT, sill_height=UNDER_HOLE)
 
 wall_3 = upper.wall(
 	(wall3_x, BWT), (wall3_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
 wall_3.add_opening(
-	at=3.625-BWT, width=0.75, height=UNDER_HOLE+0.25, sill_height=UNDER_HOLE)
+	at=3.625-BWT, width=0.75, height=UNDER_HOLE+HOLE_HEIGHT, sill_height=UNDER_HOLE)
 
 wall_3.add_opening(
     at=GALERY_START-BWT,
@@ -1185,16 +1179,16 @@ upper.asset(
 
 beam1 = upper.beam(
     "Beam",
-    start=(-0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
-    end=(HOUSE_WIDTH+0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    start=(-0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
+    end=(HOUSE_WIDTH+0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
     size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
     kind="BEAM",
 )
 beam2 = upper.beam(
     "Beam",
-    start=(-0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
-    end=(HOUSE_WIDTH+0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+0.5+VAZNICE_HEIGHT/2),
+    start=(-0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
+    end=(HOUSE_WIDTH+0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
     size=(0.16, VAZNICE_HEIGHT),
     material="Wood",
     kind="BEAM",
@@ -2078,6 +2072,19 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 
 house.write("house.ifc")
 
+if "found" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Foundation",
+		x=5,
+		y=4,
+		z=-1.3,
+		radius=8,
+		storeys=[foundation],
+		right_panel_width=40,
+	)
+
+	drawing1.render("found.svg", png=True, png_dpi=600)
+
 # Drawing 1 - ground floor
 if "ground" in sys.argv:
 	drawing1 = house.add_drawing(
@@ -2092,7 +2099,7 @@ if "ground" in sys.argv:
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
-		("sand-dense", "Příčka - Sádrokarton 100 mm"),
+		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 	])
 
 	drawing1.add_stair_annotation(main_stairs)
@@ -2108,6 +2115,7 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWT), offset=-0)
 
 	# Vnejsi rozmery
+	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
 	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
 	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
 	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=0.75)
@@ -2160,13 +2168,6 @@ if "ground" in sys.argv:
 	)
 	drawing1.add_room_legend()
 
-	# The Rockwool occupies the right side of each wall axis.  These annotations
-	# belong only to Drawing 1 and follow the Rockwool centre lines.
-	#drawing1.add_batting((-0.10, -0.10), (12.10, -0.10), thickness=0.12)
-	#drawing1.add_batting((12.10, -0.10), (12.10, 8.10), thickness=0.12)
-	#drawing1.add_batting((12.10, 8.10), (-0.10, 8.10), thickness=0.12)
-	#drawing1.add_batting((-0.10, 8.10), (-0.10, -0.10), thickness=0.12)
-
 	drawing1.render("ground.svg", png=True, png_dpi=600)
 
 # Drawing 2 - upper floor
@@ -2183,7 +2184,7 @@ if "upper" in sys.argv:
 	drawing1.include_element(heat_pump)
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
-		("sand-dense", "Příčka - Sádrokarton 100 mm"),
+		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		("wood-solid", "Dřevěné části krovu"),
 	])
 

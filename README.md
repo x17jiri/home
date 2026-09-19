@@ -391,8 +391,10 @@ drawing.add_material_legend(
 Descriptions wrap automatically and may also contain explicit newlines.
 Available pattern names are defined in `drawings/assets/patterns.svg`, including
 `diagonal1`, `diagonal2`, `crosshatch1`, `brick`, `concrete`, `sand`, and
-`wood`.  A zero `right_panel_width` (the default) keeps the original square
-drawing sheet.
+`wood`. Project-specific reusable patterns include `drywall-diagonal1` (the
+`diagonal1` hatch on the drywall tint) and `random-dots` (the preserved
+irregular dot field). A zero `right_panel_width` (the default) keeps the
+original square drawing sheet.
 
 The Blender-side implementation is in `bonsai_scripts/generate_plan.py`.
 Parameters are passed directly after Blender's `--` command separator instead
