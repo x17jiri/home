@@ -94,7 +94,7 @@ FOUNDATION_FOOTER_WIDTH = 0.70
 FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 0.8 # Vzdalenost vaznice od hrebene
+VAZNICE_DIST = 0.85 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
 
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
@@ -110,14 +110,14 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 )
 
 BWT = 0.24 # Basic wall thickness
-POLYSTYRENE_INSULATION_THICKNESS = 0.16
-ROCKWOOL_INSULATION_THICKNESS = 0.20
+POLYSTYRENE_INSULATION_THICKNESS = 0.16 + 0.0075
+ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.0075
 
 ground_floor_height = 2.82
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.875
+UNDER_HOLE = 2.85
 HOLE_HEIGHT = 0.25
 ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
@@ -439,7 +439,7 @@ heat_pump = ground.furniture(
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(HOUSE_WIDTH+0.1+0.25, 0+0.6),
+    center=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS+0.1+0.25, 0+0.6),
 	rotation=-90,
 )
 ground.furniture(
@@ -1937,6 +1937,73 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 
 house.write("house.ifc")
 
+def common_dims(drawing1):
+	# Risankuv pokoj hloubka
+	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1)
+	# chodba hloubka
+	drawing1.add_dimension(start=(CHIMNEY_X_END+0.1, BWT), end=(CHIMNEY_X_END+0.1, BWT+CHODBA_DEPTH), offset=0)
+	# gym hloubka
+	drawing1.add_dimension(start=(wall2_x-BWT, BWT), end=(wall2_x-BWT, BWT+GYM_DEPTH))
+
+	# Vnejsi rozmery
+	drawing1.add_dimension(start=(-ROCKWOOL_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), offset=2)
+	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
+	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=1)
+	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=1)
+	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=1)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, 0), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH), offset=-1.5)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, -POLYSTYRENE_INSULATION_THICKNESS), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS), offset=-2)
+	# chodba delka
+	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
+	# komin
+	drawing1.add_dimension(start=(wall2_x, CHIMNEY_Y_MID-0.1), end=(CHIMNEY_X_START, CHIMNEY_Y_MID-0.1))
+
+def common_wall_insulation(
+	drawing1, wall_front, wall_1a, wall_1b, wall_gym, wall_back, wall_4
+):
+	drawing1.add_wall_insulation(
+		wall_front,
+		thickness=POLYSTYRENE_INSULATION_THICKNESS,
+		material="polystyrene",
+		start_x=CUT_WIDTH-POLYSTYRENE_INSULATION_THICKNESS,
+		end_x=HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS,
+	)
+	drawing1.add_wall_insulation(
+		wall_1a,
+		thickness=ROCKWOOL_INSULATION_THICKNESS,
+		material="rockwool",
+		start_y=GYM_DEPTH+BWT,
+		end_y=HOUSE_DEPTH+0.01,
+	)
+	drawing1.add_wall_insulation(
+		wall_1b,
+		thickness=POLYSTYRENE_INSULATION_THICKNESS,
+		material="polystyrene",
+		start_y=-POLYSTYRENE_INSULATION_THICKNESS,
+		end_y=BWT+GYM_DEPTH-ROCKWOOL_INSULATION_THICKNESS,
+	)
+	drawing1.add_wall_insulation(
+		wall_gym,
+		thickness=ROCKWOOL_INSULATION_THICKNESS,
+		material="rockwool",
+		start_x=-ROCKWOOL_INSULATION_THICKNESS,
+		end_x=CUT_WIDTH,
+	)
+	drawing1.add_wall_insulation(
+		wall_back,
+		thickness=ROCKWOOL_INSULATION_THICKNESS,
+		material="rockwool",
+		start_x=-ROCKWOOL_INSULATION_THICKNESS,
+		end_x=HOUSE_WIDTH,
+	)
+	drawing1.add_wall_insulation(
+		wall_4,
+		thickness=POLYSTYRENE_INSULATION_THICKNESS,
+		material="polystyrene",
+		start_extension=POLYSTYRENE_INSULATION_THICKNESS,
+		end_extension=ROCKWOOL_INSULATION_THICKNESS,
+	)
+
 if "found" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Foundation",
@@ -1954,10 +2021,10 @@ if "found" in sys.argv:
 if "ground" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Drawing 1",
-		x=5,
-		y=4,
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
 		z=GROUND_FLOOR_THICKNESS+2.05,
-		radius=8,
+		radius=8.5,
 		storeys=[ground],
 		right_panel_width=40,
 	)
@@ -1967,13 +2034,11 @@ if "ground" in sys.argv:
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"thermal-impact-insulation",
-			f"Fasádní izolace - Polystyren "
-			f"{POLYSTYRENE_INSULATION_THICKNESS * 1000:g} mm",
+			f"Fasádní izolace - Polystyren 160 mm",
 		),
 		(
 			"rockwool-wave",
-			f"Fasádní izolace - Rockwool "
-			f"{ROCKWOOL_INSULATION_THICKNESS * 1000:g} mm",
+			f"Fasádní izolace - Minerální vata 200 mm",
 		),
 	])
 
@@ -1982,30 +2047,15 @@ if "ground" in sys.argv:
 	drawing1.add_stair_annotation(gallery_stairs)
 	drawing1.add_chimney_annotation(chimney)
 
-	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
+	common_dims(drawing1)
+
 	# KK hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-1)
 	# kuchyn hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWT), offset=-0)
-
-	# Vnejsi rozmery
-	drawing1.add_dimension(start=(-ROCKWOOL_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), offset=2.25)
-	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
-	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(HOUSE_WIDTH, 0), end=(HOUSE_WIDTH, 8), offset=-1)
-
+	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWT), offset=0)
 	# koupelna hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH), offset=-0.75)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH), offset=-1)
 
-	# gym hloubka
-#	drawing1.add_dimension(start=(3.5, BWT), end=(3.5, BWT+GYM_DEPTH))
-	# chodba delka
-	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
-	# komin
-	drawing1.add_dimension(start=(wall2_x, CHIMNEY_Y_MID-0.1), end=(CHIMNEY_X_START, CHIMNEY_Y_MID-0.1))
 	# kamna
 	drawing1.add_dimension(start=(wall2_x, CHODBA_DEPTH+0.5), end=(wall2_x+1, CHODBA_DEPTH+0.5), offset=1)
 
@@ -2016,74 +2066,37 @@ if "ground" in sys.argv:
 	)
 
 	drawing1.add_room_annotation(
-		(1.5, 6),
-		identifier="0.01",
-		description="Pokoj",
-		area=pokoj_dole.area,
-		window_area=window_area(window_pokoj_dole, window_pokoj_dole_2),
-	)
-	drawing1.add_room_annotation(
 		(wall3_x - 2.5, HOUSE_DEPTH - 2.5),
-		identifier="0.02",
+		identifier="0.01",
 		description="Obývak s KK",
 		area=kuchyn.area,
 		window_area=window_area(window_obyvak, window_kk),
 	)
 	drawing1.add_room_annotation(
-		(6, 1+1),
-		identifier="0.03",
-		description="Chodba a schody",
-		area=chodba.area,
+		(1.5, 6),
+		identifier="0.02",
+		description="Pokoj",
+		area=pokoj_dole.area,
+		window_area=window_area(window_pokoj_dole, window_pokoj_dole_2),
 	)
 	drawing1.add_room_annotation(
 		(HOUSE_WIDTH-1.4, BWT+1.25),
-		identifier="0.04",
+		identifier="0.03",
 		description="Koupelna",
 		area=koupelna.area,
 		window_area=window_area(window_bathroom),
 	)
+	drawing1.add_room_annotation(
+		(6, 1+1),
+		identifier="0.04",
+		description="Chodba a schody",
+		area=chodba.area,
+	)
 	drawing1.add_room_legend()
 
-	drawing1.add_wall_insulation(
-		wall_front_g,
-		thickness=POLYSTYRENE_INSULATION_THICKNESS,
-		material="polystyrene",
-		start_x=CUT_WIDTH-POLYSTYRENE_INSULATION_THICKNESS,
-		end_x=HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS,
-	)
-	drawing1.add_wall_insulation(
-		wall_1a_g,
-		thickness=ROCKWOOL_INSULATION_THICKNESS,
-		material="rockwool",
-#		start_extension=ROCKWOOL_INSULATION_THICKNESS,
-	)
-	drawing1.add_wall_insulation(
-		wall_1b_g,
-		thickness=POLYSTYRENE_INSULATION_THICKNESS,
-		material="polystyrene",
-		start_y=-POLYSTYRENE_INSULATION_THICKNESS,
-		end_y=BWT+GYM_DEPTH-ROCKWOOL_INSULATION_THICKNESS,
-	)
-	drawing1.add_wall_insulation(
-		wall_gym_g,
-		thickness=ROCKWOOL_INSULATION_THICKNESS,
-		material="rockwool",
-		start_x=-ROCKWOOL_INSULATION_THICKNESS,
-		end_x=CUT_WIDTH,
-	)
-	drawing1.add_wall_insulation(
-		wall_back_g,
-		thickness=ROCKWOOL_INSULATION_THICKNESS,
-		material="rockwool",
-		start_extension=0,
-		end_extension=ROCKWOOL_INSULATION_THICKNESS,
-	)
-	drawing1.add_wall_insulation(
-		wall_4_g,
-		thickness=POLYSTYRENE_INSULATION_THICKNESS,
-		material="polystyrene",
-		start_extension=POLYSTYRENE_INSULATION_THICKNESS,
-		end_extension=ROCKWOOL_INSULATION_THICKNESS,
+	common_wall_insulation(
+		drawing1,
+		wall_front_g, wall_1a_g, wall_1b_g, wall_gym_g, wall_back_g, wall_4_g
 	)
 
 	drawing1.render("ground.svg", png=True, png_dpi=600)
@@ -2092,10 +2105,10 @@ if "ground" in sys.argv:
 if "upper" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Drawing 2",
-		x=5,
-		y=4,
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
 		z=BWT+2.75+2,
-		radius=8,
+		radius=8.5,
 		storeys=[upper],
 		right_panel_width=40,
 	)
@@ -2149,27 +2162,22 @@ if "upper" in sys.argv:
 	)
 	drawing1.add_room_legend()
 
-	# Pokoj 1, hloubka
-	drawing1.add_dimension(start=(BWT, BWT+2.06+0.1), end=(BWT, HOUSE_DEPTH-BWT), offset=1+BWT)
 	# sklad nahore hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
 	# Pokoj 2, hloubka
 	drawing1.add_dimension(start=(5.5, GALERY_END+0.1), end=(5.5, HOUSE_DEPTH-BWT), offset=0)
 
-	# Vnejsi rozmery
-	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=0.75)
-	drawing1.add_dimension(start=(HOUSE_WIDTH, 0), end=(HOUSE_WIDTH, 8), offset=-1)
-
 	# zachod nahire hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1), offset=-0.75)
 
-	# gym hloubka
-	drawing1.add_dimension(start=(BWT, BWT), end=(BWT, BWT+2.06), offset=0.75)
-
 	# galerie hloubka
 	drawing1.add_dimension(start=(6, GALERY_START), end=(6, GALERY_END), offset=0)
+
+	common_dims(drawing1)
+	common_wall_insulation(
+		drawing1,
+		wall_front_u, wall_1a_u, wall_1b_u, wall_gym_u, wall_dormer, wall_4_u
+	)
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 
