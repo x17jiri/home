@@ -110,6 +110,8 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 )
 
 BWT = 0.24 # Basic wall thickness
+POLYSTYRENE_INSULATION_THICKNESS = 0.16
+ROCKWOOL_INSULATION_THICKNESS = 0.20
 
 ground_floor_height = 2.82
 door_clear_height = 2.1
@@ -311,23 +313,23 @@ ceiling_koupelna = ground.ceiling_layer(
 
 # Load-bearing walls
 wall_front_g = ground.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_4 = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_back = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1a = ground.wall((0, HOUSE_DEPTH), (0, BWT+GYM_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_4_g = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_back_g = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1a_g = ground.wall((0, HOUSE_DEPTH), (0, BWT+GYM_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_1b_g = ground.wall((CUT_WIDTH, GYM_DEPTH+2*BWT), (CUT_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_2 = ground.wall((wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
-ground.connect_wall(wall_1a, wall_back)
+ground.connect_wall(wall_1a_g, wall_back_g)
 
 #ground.connect_wall(wall_2, wall_front_g, is_atpath=True)
-ground.connect_wall(wall_2, wall_back, is_atpath=True)
+ground.connect_wall(wall_2, wall_back_g, is_atpath=True)
 
 ground.connect_wall(wall_3, wall_front_g, is_atpath=True)
-ground.connect_wall(wall_3, wall_back, is_atpath=True)
+ground.connect_wall(wall_3, wall_back_g, is_atpath=True)
 
-ground.connect_wall(wall_4, wall_front_g)
-ground.connect_wall(wall_4, wall_back)
+ground.connect_wall(wall_4_g, wall_front_g)
+ground.connect_wall(wall_4_g, wall_back_g)
 
 # Front door/window
 
@@ -352,21 +354,21 @@ window_bathroom = wall_front_g.add_window(
 
 # Back windows
 print("KK_WIDTH=", KK_WIDTH)
-window_obyvak = wall_back.add_window(
+window_obyvak = wall_back_g.add_window(
 	at=2*BWT+KK_WIDTH+1, width=2.5,
 	sill_height=GROUND_WINDOW_SILL_HEIGHT,
 	height=GROUND_WINDOW_HEIGHT)
-window_pokoj_dole = wall_back.add_window(
+window_pokoj_dole = wall_back_g.add_window(
 	at=HOUSE_WIDTH-wall2_x+BWT+0.875,
 	width=1.5, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
-window_kk = wall_back.add_door(
+window_kk = wall_back_g.add_door(
 	at=BWT+KK_WIDTH-0.125-1,
 	width=0.8, sill_height=GROUND_WINDOW_HEIGHT-2.0,
 	height=GROUND_WINDOW_HEIGHT, # align height with windows even though this is door
 	opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",)
 
-window_pokoj_dole_2 = wall_1a.add_window(
+window_pokoj_dole_2 = wall_1a_g.add_window(
 	at=1,#HOUSE_DEPTH/2-0.75-BWT,
 	width=1,
 	sill_height=GROUND_WINDOW_HEIGHT-0.75,
@@ -941,10 +943,10 @@ wall_dormer = upper.wall(
 	(wall3_x, HOUSE_DEPTH), (wall2_x-BWT, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=DORMER_WALL_HEIGHT-NADEZDIVKA, start_height=NADEZDIVKA)
 wall_front_u = upper.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_back = upper.wall(
+wall_back_u = upper.wall(
 	(HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_1a = upper.wall(
+wall_1a_u = upper.wall(
 	(0, HOUSE_DEPTH-BWT), (0, BWT+GYM_DEPTH+BWT),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
@@ -978,14 +980,14 @@ wall_3.add_opening(
     height=2.25,
 )
 
-wall_4 = upper.wall(
+wall_4_u = upper.wall(
 	(HOUSE_WIDTH, 0.002), (HOUSE_WIDTH, HOUSE_DEPTH-0.002),
 	wall_type=load_bearing_wall,
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_4.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
-wall_4.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
+wall_4_u.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
+wall_4_u.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_pokoj2 = upper.wall(
 	start=(wall2_x, GALERY_END),
@@ -1026,18 +1028,18 @@ upper.asset(
 	rotation=180,
 )
 
-#upper.connect_wall(wall_1, wall_back)
+#upper.connect_wall(wall_1, wall_back_u)
 #
 #upper.connect_wall(wall_2, wall_front_u, is_atpath=True)
-#upper.connect_wall(wall_2, wall_back, is_atpath=True)
+#upper.connect_wall(wall_2, wall_back_u, is_atpath=True)
 #upper.connect_wall(wall_2, wall_dormer)
 #
 #upper.connect_wall(wall_3, wall_front_u, is_atpath=True)
-#upper.connect_wall(wall_3, wall_back, is_atpath=True)
+#upper.connect_wall(wall_3, wall_back_u, is_atpath=True)
 #upper.connect_wall(wall_3, wall_dormer)
 #
-#upper.connect_wall(wall_4, wall_front_u)
-#upper.connect_wall(wall_4, wall_back)
+#upper.connect_wall(wall_4_u, wall_front_u)
+#upper.connect_wall(wall_4_u, wall_back_u)
 
 
 beam1 = upper.beam(
@@ -1131,7 +1133,7 @@ wall_2.add_door(
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 # Okna pokojik 1 nahore
-#window_pokoj_nahore_1 = wall_1a.add_window(
+#window_pokoj_nahore_1 = wall_1a_u.add_window(
 #	at=HOUSE_DEPTH/2-0.75-BWT,
 #	width=1.5,
 #	height=2.375,
@@ -1141,7 +1143,7 @@ window_pokoj_nahore_2 = wall_gym_u.add_window(
 	at=BWT,width=1.25, sill_height=NADEZDIVKA, height=2.375
 )
 # Okno k sousedum nahore
-window_sklad = wall_4.add_window(
+window_sklad = wall_4_u.add_window(
 	at=HALF_DEPTH-0.5,
 	width=1,
 	height=2.375,
@@ -1963,6 +1965,16 @@ if "ground" in sys.argv:
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
+		(
+			"thermal-impact-insulation",
+			f"Fasádní izolace - Polystyren "
+			f"{POLYSTYRENE_INSULATION_THICKNESS * 1000:g} mm",
+		),
+		(
+			"rockwool-wave",
+			f"Fasádní izolace - Rockwool "
+			f"{ROCKWOOL_INSULATION_THICKNESS * 1000:g} mm",
+		),
 	])
 
 	drawing1.add_stair_annotation(main_stairs)
@@ -1978,6 +1990,7 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWT), offset=-0)
 
 	# Vnejsi rozmery
+	drawing1.add_dimension(start=(-ROCKWOOL_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), offset=2.25)
 	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
 	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
 	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=0.75)
@@ -1988,7 +2001,7 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH), offset=-0.75)
 
 	# gym hloubka
-	drawing1.add_dimension(start=(3.5, BWT), end=(3.5, BWT+GYM_DEPTH))
+#	drawing1.add_dimension(start=(3.5, BWT), end=(3.5, BWT+GYM_DEPTH))
 	# chodba delka
 	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
 	# komin
@@ -2033,24 +2046,44 @@ if "ground" in sys.argv:
 
 	drawing1.add_wall_insulation(
 		wall_front_g,
-		thickness=0.16,
+		thickness=POLYSTYRENE_INSULATION_THICKNESS,
 		material="polystyrene",
-		start_extension=0.16,
-		end_extension=0.16,
+		start_x=CUT_WIDTH-POLYSTYRENE_INSULATION_THICKNESS,
+		end_x=HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS,
+	)
+	drawing1.add_wall_insulation(
+		wall_1a_g,
+		thickness=ROCKWOOL_INSULATION_THICKNESS,
+		material="rockwool",
+#		start_extension=ROCKWOOL_INSULATION_THICKNESS,
 	)
 	drawing1.add_wall_insulation(
 		wall_1b_g,
-		thickness=0.16,
+		thickness=POLYSTYRENE_INSULATION_THICKNESS,
 		material="polystyrene",
-		start_extension=-BWT-0.2,
-#		end_extension=0.16,
+		start_y=-POLYSTYRENE_INSULATION_THICKNESS,
+		end_y=BWT+GYM_DEPTH-ROCKWOOL_INSULATION_THICKNESS,
 	)
 	drawing1.add_wall_insulation(
 		wall_gym_g,
-		thickness=0.2,
+		thickness=ROCKWOOL_INSULATION_THICKNESS,
 		material="rockwool",
-		start_extension=BWT+0.2,
-		end_extension=-1.5-BWT,
+		start_x=-ROCKWOOL_INSULATION_THICKNESS,
+		end_x=CUT_WIDTH,
+	)
+	drawing1.add_wall_insulation(
+		wall_back_g,
+		thickness=ROCKWOOL_INSULATION_THICKNESS,
+		material="rockwool",
+		start_extension=0,
+		end_extension=ROCKWOOL_INSULATION_THICKNESS,
+	)
+	drawing1.add_wall_insulation(
+		wall_4_g,
+		thickness=POLYSTYRENE_INSULATION_THICKNESS,
+		material="polystyrene",
+		start_extension=POLYSTYRENE_INSULATION_THICKNESS,
+		end_extension=ROCKWOOL_INSULATION_THICKNESS,
 	)
 
 	drawing1.render("ground.svg", png=True, png_dpi=600)

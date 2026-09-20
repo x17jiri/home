@@ -948,7 +948,45 @@ def _postprocess_projected_chimney_fills(svg_path: Path) -> None:
     )
 
 
+def _postprocess_wall_insulation_batting(
+    svg_path: Path,
+    *,
+    stroke_width: float = 0.10,
+) -> None:
+    """Set Rockwool batting marker strokes for reliable SVG rasterisation."""
+    svg = svg_path.read_text(encoding="utf-8")
+    marker_ids: set[str] = set()
+    for polyline in re.findall(r"<polyline\b[^>]*>", svg):
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', polyline))
+        if "wall-insulation-rockwool" not in attributes.get("class", "").split():
+            continue
+        marker_ids.update(re.findall(r"url\(#([^)]+)\)", polyline))
+
+    for marker_id in marker_ids:
+        marker = re.compile(
+            rf'(<marker\b[^>]*\bid="{re.escape(marker_id)}"[^>]*>)(.*?)(</marker>)',
+            re.DOTALL,
+        )
+
+        def set_stroke_width(match: re.Match[str]) -> str:
+            body = re.sub(
+                r"stroke-width\s*:\s*(?:\d+(?:\.\d*)?|\.\d+)",
+                f"stroke-width:{stroke_width:g}",
+                match[2],
+            )
+            return f"{match[1]}{body}{match[3]}"
+
+        svg = marker.sub(set_stroke_width, svg)
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 _DRAWING_PATTERN_IDS: frozenset[str] | None = None
+
+_BATTING_MARKER_PATH = (
+    "M 0 0.365 A 0.365 0.365 0 0 1 0.73 0.365 L 0.365 1.46 "
+    "M 0 0.365 L 0.365 1.46 A 0.365 0.365 0 0 0 0.73 1.825 "
+    "M 0.365 1.46 A 0.365 0.365 0 0 1 0 1.825"
+)
 
 
 def _drawing_pattern_ids() -> frozenset[str]:
@@ -1044,12 +1082,41 @@ def _material_legend_svg(
     row_y = header_bottom
     available_patterns = _drawing_pattern_ids()
     for (pattern, lines, _), row_height in zip(normalised_items, row_heights):
-        fill = f"url(#{pattern})" if pattern in available_patterns else "white"
+        is_batting = pattern == "rockwool-wave"
+        fill = (
+            f"url(#{pattern})"
+            if pattern in available_patterns and not is_batting
+            else "white"
+        )
         parts.append(
             f'<rect class="material-legend-swatch" x="{x:.6g}" '
             f'y="{row_y:.6g}" width="{swatch_width:.6g}" '
             f'height="{row_height:.6g}" fill="{fill}"/>'
         )
+        if is_batting:
+            batting_height = row_height * 0.82
+            batting_scale = batting_height / 1.825
+            batting_stroke_width = 0.10 / batting_scale
+            repeat_width = 0.73 * batting_scale
+            repeat_count = max(1, int(swatch_width / repeat_width))
+            batting_width = repeat_count * repeat_width
+            batting_x = x + (swatch_width - batting_width) / 2
+            batting_y = row_y + (row_height - batting_height) / 2
+            batting_paths = "".join(
+                (
+                    f'<path d="{_BATTING_MARKER_PATH}" '
+                    f'transform="translate({index * 0.73:.6g} 0)"/>'
+                )
+                for index in range(repeat_count)
+            )
+            parts.append(
+                '<g class="material-legend-batting" '
+                f'transform="translate({batting_x:.6g} {batting_y:.6g}) '
+                f'scale({batting_scale:.6g})" '
+                f'style="fill:none;stroke:black;'
+                f'stroke-width:{batting_stroke_width:.6g}">'
+                f"{batting_paths}</g>"
+            )
         text_x = x + swatch_width + padding
         text_block_height = (len(lines) - 1) * line_height
         first_baseline = (
@@ -2279,6 +2346,7 @@ def generate_plan(
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG plan: {absolute_output}")
     model = ifcopenshell.open(str(ifc_path))
+    _postprocess_wall_insulation_batting(absolute_output)
     _postprocess_door_overheads(
         absolute_output,
         mask_global_ids=_overhead_mask_global_ids(model, z),
@@ -2412,6 +2480,7 @@ def _render_existing_drawing(
             )[2, 3]
         )
         _postprocess_projected_wood_fills(absolute_output)
+        _postprocess_wall_insulation_batting(absolute_output)
         _postprocess_door_overheads(
             absolute_output,
             mask_global_ids=_overhead_mask_global_ids(model, cut_z),
@@ -5901,6 +5970,7 @@ class Drawing:
         offset: Number = 0,
         start_extension: Number = 0,
         end_extension: Number = 0,
+        segment_inset: Number = 0,
         name: str | None = None,
     ) -> tuple[ifcopenshell.entity_instance, ...]:
         """Add direction-aware batting over a wall layer in this plan.
@@ -5910,7 +5980,10 @@ class Drawing:
         The batting runs along the layer centre and is split wherever an
         opening intersects this drawing's cut plane, so insulation waves do
         not cross plan-view doors or windows.  ``start_extension`` and
-        ``end_extension`` continue it beyond the corresponding wall ends.
+        ``end_extension`` continue it beyond the corresponding wall ends when
+        positive and trim it before those ends when negative.
+        ``segment_inset`` shortens the batting at both ends of every resulting
+        visible segment.
         """
         self._require_plan_view("add_wall_batting")
         if not isinstance(wall, Wall):
@@ -5924,14 +5997,13 @@ class Drawing:
         offset = _number(offset, "offset")
         start_extension = _number(start_extension, "start_extension")
         end_extension = _number(end_extension, "end_extension")
+        segment_inset = _number(segment_inset, "segment_inset")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
         if offset < 0:
             raise ValueError("offset must not be negative")
-        #if start_extension < 0:
-        #    raise ValueError("start_extension must not be negative")
-        #if end_extension < 0:
-        #    raise ValueError("end_extension must not be negative")
+        if segment_inset < 0:
+            raise ValueError("segment_inset must not be negative")
         base_name = _name(name, "name") if name is not None else None
 
         clear_intervals = self._wall_annotation_intervals(
@@ -5947,9 +6019,18 @@ class Drawing:
         side_sign = 1 if side == "left" else -1
         center_offset = side_sign * (offset + thickness / 2)
 
+        batting_intervals = tuple(
+            (
+                segment_start + segment_inset,
+                segment_end - segment_inset,
+            )
+            for segment_start, segment_end in clear_intervals
+            if segment_start + segment_inset
+            < segment_end - segment_inset - 1e-9
+        )
         batting = []
         for segment_number, (segment_start, segment_end) in enumerate(
-            clear_intervals, start=1
+            batting_intervals, start=1
         ):
             start = (
                 wall.start[0]
@@ -5982,50 +6063,44 @@ class Drawing:
             )
         return tuple(batting)
 
-    def _add_wall_insulation_interface(
+    def _add_wall_insulation_boundary(
         self,
         wall: Wall,
         *,
-        side: WallSide,
+        clear_intervals: tuple[tuple[float, float], ...],
+        inner_face: float,
+        outer_face: float,
         name: str,
-    ) -> ifcopenshell.entity_instance | None:
-        """Redraw the cut wall edge above an insulation annotation."""
-        clear_intervals = self._wall_annotation_intervals(
-            wall,
-            start_extension=0,
-            end_extension=0,
-        )
-        if not clear_intervals:
-            return None
-
-        inner_face = (
-            wall.body_offset
-            if side == "right"
-            else wall.body_offset + wall.thickness
-        )
+    ) -> ifcopenshell.entity_instance:
+        """Draw closed outlines around the visible Rockwool segments."""
+        y_min, y_max = sorted((inner_face, outer_face))
         model = self.house.model
-        curves = [
-            model.createIfcIndexedPolyCurve(
-                model.createIfcCartesianPointList2D(
-                    [
-                        (float(segment_start), float(inner_face)),
-                        (float(segment_end), float(inner_face)),
-                    ]
-                ),
-                None,
-                False,
+        curves = []
+        for segment_start, segment_end in clear_intervals:
+            points = (
+                (segment_start, y_min),
+                (segment_end, y_min),
+                (segment_end, y_max),
+                (segment_start, y_max),
+                (segment_start, y_min),
             )
-            for segment_start, segment_end in clear_intervals
-        ]
-        interface = ifcopenshell.api.root.create_entity(
+            curves.append(
+                model.createIfcIndexedPolyCurve(
+                    model.createIfcCartesianPointList2D(points),
+                    None,
+                    False,
+                )
+            )
+
+        boundary = ifcopenshell.api.root.create_entity(
             model,
             ifc_class="IfcAnnotation",
-            name=f"{name} Wall Interface",
+            name=f"{name} Boundary",
             predefined_type="LINEWORK",
         )
         ifcopenshell.api.geometry.edit_object_placement(
             model,
-            product=interface,
+            product=boundary,
             matrix=wall._placement(0, 0),
             is_si=True,
         )
@@ -6037,25 +6112,111 @@ class Drawing:
         )
         ifcopenshell.api.geometry.assign_representation(
             model,
-            product=interface,
+            product=boundary,
             representation=representation,
         )
         annotation_pset = ifcopenshell.api.pset.add_pset(
             model,
-            product=interface,
+            product=boundary,
             name="EPset_Annotation",
         )
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=annotation_pset,
-            properties={"Classes": "wall-insulation-interface"},
+            properties={
+                "Classes": (
+                    "wall-insulation wall-insulation-rockwool-boundary"
+                )
+            },
         )
         ifcopenshell.api.group.assign_group(
             model,
             group=self.group,
-            products=[interface],
+            products=[boundary],
         )
-        return interface
+        return boundary
+
+    def _add_wall_insulation_opening_boundary(
+        self,
+        wall: Wall,
+        *,
+        clear_intervals: tuple[tuple[float, float], ...],
+        full_interval: tuple[float, float],
+        outer_face: float,
+        material: str,
+        name: str,
+    ) -> ifcopenshell.entity_instance | None:
+        """Continue only the outer insulation boundary across openings."""
+        opening_intervals = []
+        cursor = full_interval[0]
+        for segment_start, segment_end in clear_intervals:
+            if segment_start > cursor + 1e-9:
+                opening_intervals.append((cursor, segment_start))
+            cursor = max(cursor, segment_end)
+        if cursor < full_interval[1] - 1e-9:
+            opening_intervals.append((cursor, full_interval[1]))
+
+        if not opening_intervals:
+            return None
+
+        model = self.house.model
+        opening_curves = [
+            model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(
+                    (
+                        (opening_start, outer_face),
+                        (opening_end, outer_face),
+                    )
+                ),
+                None,
+                False,
+            )
+            for opening_start, opening_end in opening_intervals
+        ]
+        opening_boundary = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{name} Opening Boundary",
+            predefined_type="LINEWORK",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=opening_boundary,
+            matrix=wall._placement(0, 0),
+            is_si=True,
+        )
+        opening_representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet(opening_curves)],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=opening_boundary,
+            representation=opening_representation,
+        )
+        opening_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=opening_boundary,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=opening_pset,
+            properties={
+                "Classes": (
+                    f"wall-insulation wall-insulation-{material}-opening "
+                    "wall-insulation-opening door-overhead dashed"
+                )
+            },
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[opening_boundary],
+        )
+        return opening_boundary
 
     def add_wall_insulation(
         self,
@@ -6066,6 +6227,10 @@ class Drawing:
         side: WallSide = "right",
         start_extension: Number = 0,
         end_extension: Number = 0,
+        start_x: Number | None = None,
+        end_x: Number | None = None,
+        start_y: Number | None = None,
+        end_y: Number | None = None,
         name: str | None = None,
     ) -> tuple[ifcopenshell.entity_instance, ...]:
         """Draw opening-aware insulation outside one wall in this plan.
@@ -6073,8 +6238,18 @@ class Drawing:
         This is a drawing-only annotation and does not change the IFC wall or
         its 3D construction.  ``side`` is relative to looking from the wall's
         start towards its end and defaults to ``"right"``.  The insulation
-        begins at that side's finished wall face.  Extensions continue it
-        beyond the wall ends to make manual corner joins possible.
+        begins just outside that side's finished wall face, leaving the
+        original cut outline visible.  Only the wall-side edge moves, so the
+        drawn insulation is 17.5 mm thinner than ``thickness``.  Zero
+        extensions resolve to 17.5 mm so perpendicular insulation strips meet.
+        Other positive extensions continue it beyond the wall ends; negative
+        extensions trim it before an end.  For horizontal walls, ``start_x``
+        and ``end_x`` may instead set either endpoint in absolute model X
+        coordinates.  Vertical walls similarly accept ``start_y`` and
+        ``end_y``.  Coordinate endpoints follow the wall's start-to-end
+        direction, including walls drawn right-to-left or top-to-bottom.  If
+        the coordinates are supplied in the opposite order, they are swapped
+        automatically.
 
         ``material="polystyrene"`` draws the existing hexagonal hatch;
         ``material="rockwool"`` draws direction-aware batting.  Both leave
@@ -6090,6 +6265,16 @@ class Drawing:
         thickness = _number(thickness, "thickness")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
+        # At this drawing's fixed 1:100 scale, half of the 0.35 mm wall cut
+        # stroke is 17.5 mm in model space.  The wall-side insulation edge is
+        # inset by this amount so its fill cannot cover the original outline.
+        wall_outline_clearance = 0.0175
+        drawn_thickness = thickness - wall_outline_clearance
+        if drawn_thickness <= 0:
+            raise ValueError(
+                "thickness must be greater than the 0.0175 m wall outline "
+                "clearance"
+            )
         material_name = _enum(
             material,
             "material",
@@ -6098,11 +6283,75 @@ class Drawing:
         side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
         start_extension = _number(start_extension, "start_extension")
         end_extension = _number(end_extension, "end_extension")
-#        if start_extension < 0:
-#            raise ValueError("start_extension must not be negative")
-#        if end_extension < 0:
-#            raise ValueError("end_extension must not be negative")
+        supplied_x = start_x is not None or end_x is not None
+        supplied_y = start_y is not None or end_y is not None
+        if supplied_x and supplied_y:
+            raise ValueError("x and y insulation endpoints must not be mixed")
 
+        delta_x = wall.end[0] - wall.start[0]
+        delta_y = wall.end[1] - wall.start[1]
+        if supplied_x:
+            if abs(delta_y) > 1e-9:
+                raise ValueError(
+                    "start_x and end_x are only supported for horizontal walls"
+                )
+            if start_x is not None:
+                if start_extension != 0:
+                    raise ValueError(
+                        "start_x and start_extension are alternatives"
+                    )
+                resolved_start_x = _number(start_x, "start_x")
+                start_parameter = (
+                    resolved_start_x - wall.start[0]
+                ) / (delta_x / wall.length)
+                start_extension = -start_parameter
+            if end_x is not None:
+                if end_extension != 0:
+                    raise ValueError("end_x and end_extension are alternatives")
+                resolved_end_x = _number(end_x, "end_x")
+                end_parameter = (
+                    resolved_end_x - wall.start[0]
+                ) / (delta_x / wall.length)
+                end_extension = end_parameter - wall.length
+        elif supplied_y:
+            if abs(delta_x) > 1e-9:
+                raise ValueError(
+                    "start_y and end_y are only supported for vertical walls"
+                )
+            if start_y is not None:
+                if start_extension != 0:
+                    raise ValueError(
+                        "start_y and start_extension are alternatives"
+                    )
+                resolved_start_y = _number(start_y, "start_y")
+                start_parameter = (
+                    resolved_start_y - wall.start[1]
+                ) / (delta_y / wall.length)
+                start_extension = -start_parameter
+            if end_y is not None:
+                if end_extension != 0:
+                    raise ValueError("end_y and end_extension are alternatives")
+                resolved_end_y = _number(end_y, "end_y")
+                end_parameter = (
+                    resolved_end_y - wall.start[1]
+                ) / (delta_y / wall.length)
+                end_extension = end_parameter - wall.length
+
+        if start_x is None and start_y is None and start_extension == 0:
+            start_extension = wall_outline_clearance
+        if end_x is None and end_y is None and end_extension == 0:
+            end_extension = wall_outline_clearance
+        segment_start = -start_extension
+        segment_end = wall.length + end_extension
+        if segment_start > segment_end + 1e-9 and (supplied_x or supplied_y):
+            segment_start, segment_end = segment_end, segment_start
+            start_extension = -segment_start
+            end_extension = segment_end - wall.length
+        if segment_start >= segment_end - 1e-9:
+            raise ValueError(
+                "insulation start must precede its end along the wall direction"
+            )
+        insulation_interval = (segment_start, segment_end)
         clear_intervals = self._wall_annotation_intervals(
             wall,
             start_extension=start_extension,
@@ -6121,19 +6370,46 @@ class Drawing:
             )
         )
         if side == "right":
-            wall_face_offset = -wall.body_offset
+            wall_face_offset = -wall.body_offset + wall_outline_clearance
+            inner_face = wall.body_offset - wall_outline_clearance
+            outer_face = wall.body_offset - thickness
         else:
-            wall_face_offset = wall.body_offset + wall.thickness
+            wall_face_offset = (
+                wall.body_offset + wall.thickness + wall_outline_clearance
+            )
+            inner_face = (
+                wall.body_offset + wall.thickness + wall_outline_clearance
+            )
+            outer_face = wall.body_offset + wall.thickness + thickness
 
         model = self.house.model
         if material_name == "rockwool":
+            batting_inset = min(0.03, drawn_thickness * 0.1)
+            batting_end_inset = 0.03
+            batting_thickness = drawn_thickness - 2 * batting_inset
             annotations = self.add_wall_batting(
                 wall,
                 side=side,
-                thickness=thickness,
-                offset=wall_face_offset,
+                thickness=batting_thickness,
+                offset=wall_face_offset + batting_inset,
                 start_extension=start_extension,
                 end_extension=end_extension,
+                segment_inset=batting_end_inset,
+                name=annotation_name,
+            )
+            self._add_wall_insulation_boundary(
+                wall,
+                clear_intervals=clear_intervals,
+                inner_face=inner_face,
+                outer_face=outer_face,
+                name=annotation_name,
+            )
+            self._add_wall_insulation_opening_boundary(
+                wall,
+                clear_intervals=clear_intervals,
+                full_interval=insulation_interval,
+                outer_face=outer_face,
+                material=material_name,
                 name=annotation_name,
             )
             for annotation in annotations:
@@ -6163,24 +6439,18 @@ class Drawing:
                         "HostWall": wall.GlobalId,
                         "Material": material_name,
                         "Thickness": thickness,
+                        "DrawnThickness": drawn_thickness,
+                        "BattingThickness": batting_thickness,
+                        "BattingInset": batting_inset,
+                        "BattingEndInset": batting_end_inset,
+                        "WallOutlineClearance": wall_outline_clearance,
                         "Side": side,
                         "StartExtension": start_extension,
                         "EndExtension": end_extension,
                     },
                 )
-            self._add_wall_insulation_interface(
-                wall,
-                side=side,
-                name=annotation_name,
-            )
             return annotations
 
-        if side == "right":
-            inner_face = wall.body_offset
-            outer_face = inner_face - thickness
-        else:
-            inner_face = wall.body_offset + wall.thickness
-            outer_face = inner_face + thickness
         y_min, y_max = sorted((inner_face, outer_face))
         fill_areas = []
         for segment_start, segment_end in clear_intervals:
@@ -6245,6 +6515,8 @@ class Drawing:
                 "HostWall": wall.GlobalId,
                 "Material": material_name,
                 "Thickness": thickness,
+                "DrawnThickness": drawn_thickness,
+                "WallOutlineClearance": wall_outline_clearance,
                 "Side": side,
                 "StartExtension": start_extension,
                 "EndExtension": end_extension,
@@ -6256,9 +6528,12 @@ class Drawing:
             group=self.group,
             products=[annotation],
         )
-        self._add_wall_insulation_interface(
+        self._add_wall_insulation_opening_boundary(
             wall,
-            side=side,
+            clear_intervals=clear_intervals,
+            full_interval=insulation_interval,
+            outer_face=outer_face,
+            material=material_name,
             name=annotation_name,
         )
         return (annotation,)

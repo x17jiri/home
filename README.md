@@ -330,7 +330,9 @@ Add drawing-only façade insulation outside an individual wall with
 `add_wall_insulation()`. It does not alter the wall or its 3D construction.
 The default `side="right"` means the right side when looking from the wall's
 start towards its end. Doors and windows intersecting the plan cut are left
-clear, while the optional extensions can close corner gaps:
+clear. Positive extensions can close corner gaps, while negative extensions
+trim the insulation before a wall end. A zero extension is automatically
+resolved to 17.5 mm so perpendicular insulation strips meet:
 
 ```python
 drawing.add_wall_insulation(
@@ -342,8 +344,43 @@ drawing.add_wall_insulation(
 )
 ```
 
+For horizontal walls, the insulation endpoints may instead be specified as
+absolute model X coordinates. Vertical walls accept the corresponding Y
+coordinates:
+
+```python
+drawing.add_wall_insulation(
+    horizontal_wall,
+    thickness=0.16,
+    material="polystyrene",
+    start_x=1.38,
+    end_x=2.30,
+)
+drawing.add_wall_insulation(
+    vertical_wall,
+    thickness=0.20,
+    material="rockwool",
+    start_y=3.50,
+    end_y=1.75,
+)
+```
+
+The two coordinates may be given in either order; they are automatically
+matched to the wall's start-to-end direction, including for walls drawn
+right-to-left or top-to-bottom. A coordinate and its corresponding extension
+cannot be supplied together.
+
 Polystyrene uses the existing hexagonal hatch. Rockwool uses the conventional
-batting wave and follows the wall direction.
+batting wave and follows the wall direction. Rockwool also receives an
+opening-aware boundary box matching the polystyrene outline; its batting is
+inset slightly inside that box on all four sides and uses a lighter stroke. A
+single dashed outer boundary continues across each door or window opening for
+both insulation materials, using the same dash cadence as the opening;
+the wall-side boundary remains absent to avoid duplicating opening linework. A
+small drawing-only clearance keeps the wall's original cut outline visible
+between the wall and insulation. Only the wall-side edge is moved, so the
+drawn layer boundary is 17.5 mm thinner than the requested nominal thickness
+while its outer edge stays fixed.
 
 The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
 metres in both X and Y, so the example cuts the model at 1.6 m and covers a

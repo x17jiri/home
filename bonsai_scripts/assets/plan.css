@@ -58,11 +58,6 @@ a:hover { cursor: pointer; }
 .PredefinedType-FILLAREA.wall-insulation-polystyrene {
     fill: url(#thermal-impact-insulation) !important;
 }
-.PredefinedType-LINEWORK.wall-insulation-interface {
-    fill: none !important;
-    stroke: black !important;
-    stroke-width: 0.35 !important;
-}
 .PredefinedType-BREAKLINE { fill: none; stroke: black; stroke-width: 0.25; marker-mid: url(#breakline-marker); }
 .PredefinedType-TEXT { fill: black; stroke: none; }
 path.PredefinedType-TEXTLEADER { marker-end: url(#leader-marker); }
@@ -290,6 +285,13 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 /* Bonsai generates batting marker paths with an inline 0.18 stroke. */
 marker[id^="batting-"] path {
+    stroke-width: 0.10 !important;
+}
+
+.PredefinedType-LINEWORK.wall-insulation-rockwool-boundary,
+.PredefinedType-LINEWORK.wall-insulation-rockwool-boundary path {
+    fill: none !important;
+    stroke: black !important;
     stroke-width: 0.05 !important;
 }
 
