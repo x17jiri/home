@@ -583,6 +583,158 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_ring_beam_stirrups(
+    svg_path: Path,
+    model: ifcopenshell.file,
+    drawing: ifcopenshell.entity_instance,
+) -> None:
+    """Connect each sectioned ring beam's four longitudinal-bar dots."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if '<g class="ring-beam-stirrups' in svg:
+        return
+
+    root = re.search(r"<svg\b(?P<attrs>[^>]*)>", svg)
+    if root is None:
+        return
+    attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', root["attrs"]))
+    try:
+        view_box = tuple(
+            float(value)
+            for value in re.split(r"[,\s]+", attributes["viewBox"].strip())
+        )
+    except (KeyError, ValueError):
+        return
+    if len(view_box) != 4:
+        return
+    scale_match = re.fullmatch(
+        r"\s*1\s*[:/]\s*(?P<denominator>[0-9]+(?:\.[0-9]+)?)\s*",
+        attributes.get("data-scale", ""),
+    )
+    if scale_match is None:
+        return
+    scale_denominator = float(scale_match["denominator"])
+    if scale_denominator <= 0:
+        return
+
+    svg_units_per_metre = 1000.0 / scale_denominator
+    view_x, view_y, view_width, view_height = view_box
+    view_center_x = view_x + view_width / 2
+    view_center_y = view_y + view_height / 2
+    camera_to_world = ifcopenshell.util.placement.get_local_placement(
+        drawing.ObjectPlacement
+    )
+    world_to_camera = np.linalg.inv(camera_to_world)
+    plane_origin = camera_to_world[:3, 3]
+    plane_normal = camera_to_world[:3, 2]
+    geometry_settings = ifcopenshell.geom.settings()
+    geometry_settings.set(geometry_settings.USE_WORLD_COORDS, True)
+    stirrups: list[tuple[str, float, list[tuple[float, float]]]] = []
+
+    for ring_beam in model.by_type("IfcBeam"):
+        properties = ifcopenshell.util.element.get_pset(
+            ring_beam, "BBIM_RingBeam"
+        )
+        if not properties:
+            continue
+        stirrup_diameter = properties.get("StirrupDiameter")
+        if stirrup_diameter is None:
+            # Keep drawings from older IFC files useful.  The limit prevents
+            # an unusually large display bar from producing a heavy stirrup.
+            bar_diameter = float(properties.get("BarDiameter", 0.024))
+            stirrup_diameter = min(bar_diameter / 3, 0.008)
+        stirrup_diameter = float(stirrup_diameter)
+        if stirrup_diameter <= 0:
+            continue
+
+        bars = []
+        for relationship in ring_beam.IsDecomposedBy or ():
+            bars.extend(
+                product
+                for product in relationship.RelatedObjects
+                if product.is_a("IfcReinforcingBar")
+                and product.PredefinedType == "MAIN"
+            )
+        section_points: set[tuple[float, float]] = set()
+        for bar in bars:
+            try:
+                shape = ifcopenshell.geom.create_shape(
+                    geometry_settings, bar
+                )
+            except (RuntimeError, ValueError):
+                continue
+            cut_points = _section_shape_points(
+                shape,
+                plane_origin=plane_origin,
+                plane_normal=plane_normal,
+                world_to_camera=world_to_camera,
+            )
+            cut_hull = _convex_hull_2d(cut_points)
+            if not cut_hull:
+                continue
+            cut_x_coordinates = [x for x, _ in cut_hull]
+            cut_y_coordinates = [y for _, y in cut_hull]
+            section_points.add(
+                (
+                    round(
+                        (min(cut_x_coordinates) + max(cut_x_coordinates)) / 2,
+                        9,
+                    ),
+                    round(
+                        (min(cut_y_coordinates) + max(cut_y_coordinates)) / 2,
+                        9,
+                    ),
+                )
+            )
+
+        hull = _convex_hull_2d(section_points)
+        if len(hull) != 4:
+            continue
+        svg_hull = [
+            (
+                view_center_x + x * svg_units_per_metre,
+                view_center_y - y * svg_units_per_metre,
+            )
+            for x, y in hull
+        ]
+        if (
+            max(x for x, _ in svg_hull) < view_x
+            or min(x for x, _ in svg_hull) > view_x + view_width
+            or max(y for _, y in svg_hull) < view_y
+            or min(y for _, y in svg_hull) > view_y + view_height
+        ):
+            continue
+        stirrups.append(
+            (
+                ring_beam.Name or "Ring beam stirrup",
+                stirrup_diameter * svg_units_per_metre,
+                svg_hull,
+            )
+        )
+
+    closing_svg = svg.rfind("</svg>")
+    if not stirrups or closing_svg < 0:
+        return
+    polygons = "\n".join(
+        (
+            f'    <polygon class="ring-beam-stirrup" '
+            f'ifc:name="{escape(name, quote=True)}" '
+            f'points="'
+            + " ".join(f"{x:.6g},{y:.6g}" for x, y in points)
+            + f'" style="fill:none !important;stroke:#333 !important;'
+            f'stroke-width:{stroke_width:.6g} !important;'
+            'stroke-linejoin:miter"/>'
+        )
+        for name, stroke_width, points in stirrups
+    )
+    overlay = (
+        '<g class="ring-beam-stirrups target-view-ELEVATIONVIEW">\n'
+        f"{polygons}\n"
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{overlay}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_vapour_barrier_overlays(svg_path: Path) -> None:
     """Draw sectioned vapour barriers above coincident insulation edges."""
     svg = svg_path.read_text(encoding="utf-8")
@@ -2534,7 +2686,14 @@ def _render_existing_drawing(
         _postprocess_wall_insulation_backdrop(absolute_output)
     else:
         _postprocess_projected_chimney_fills(absolute_output)
+        _postprocess_wall_insulation_batting(absolute_output)
+        _postprocess_wall_insulation_backdrop(absolute_output)
         _postprocess_elevation_opening_overlays(
+            absolute_output,
+            model,
+            drawing,
+        )
+        _postprocess_ring_beam_stirrups(
             absolute_output,
             model,
             drawing,
@@ -6406,6 +6565,446 @@ class Drawing:
         )
         return opening_boundary
 
+    def _add_elevation_wall_insulation(
+        self,
+        wall: Wall,
+        *,
+        thickness: float,
+        drawn_thickness: float,
+        wall_outline_clearance: float,
+        material: str,
+        side: str,
+        start_z: Number | None,
+        end_z: Number | None,
+        name: str | None,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Draw insulation where an elevation section cuts a wall end-on."""
+        tangent_x = (wall.end[0] - wall.start[0]) / wall.length
+        tangent_y = (wall.end[1] - wall.start[1]) / wall.length
+        view_x, view_y, _ = self.direction
+        alignment = abs(tangent_x * view_x + tangent_y * view_y)
+        if alignment < cos(radians(5)):
+            raise ValueError(
+                "elevation wall insulation requires a wall perpendicular "
+                "to the drawing plane"
+            )
+
+        plane_normal = np.array((-view_x, -view_y), dtype=float)
+        plane_origin = np.array((self.x, self.y), dtype=float)
+        wall_start = np.array(wall.start, dtype=float)
+        wall_end = np.array(wall.end, dtype=float)
+        start_distance = float(
+            np.dot(wall_start - plane_origin, plane_normal)
+        )
+        end_distance = float(np.dot(wall_end - plane_origin, plane_normal))
+        distance_delta = end_distance - start_distance
+        if abs(distance_delta) <= 1e-9:
+            raise ValueError(
+                "wall does not cross the elevation drawing plane"
+            )
+        fraction = -start_distance / distance_delta
+        if fraction < -1e-9 or fraction > 1 + 1e-9:
+            raise ValueError(
+                "wall does not cross the elevation drawing plane"
+            )
+        fraction = min(1.0, max(0.0, fraction))
+        wall_parameter = fraction * wall.length
+        section_point = wall_start + fraction * (wall_end - wall_start)
+
+        wall_start_z = wall.storey.elevation + wall.start_height
+        wall_end_z = wall.storey.elevation + wall.end_height
+        resolved_start_z = (
+            wall_start_z
+            if start_z is None
+            else _number(start_z, "start_z")
+        )
+        resolved_end_z = (
+            wall_end_z
+            if end_z is None
+            else _number(end_z, "end_z")
+        )
+        if resolved_start_z > resolved_end_z:
+            resolved_start_z, resolved_end_z = (
+                resolved_end_z,
+                resolved_start_z,
+            )
+        if resolved_start_z >= resolved_end_z - 1e-9:
+            raise ValueError("insulation start_z and end_z must be different")
+
+        blocked_intervals = sorted(
+            (
+                max(
+                    resolved_start_z,
+                    wall.storey.elevation + opening_bottom,
+                ),
+                min(
+                    resolved_end_z,
+                    wall.storey.elevation + opening_top,
+                ),
+            )
+            for (
+                opening_start,
+                opening_end,
+                opening_bottom,
+                opening_top,
+            ) in wall._openings
+            if opening_start - 1e-9
+            <= wall_parameter
+            <= opening_end + 1e-9
+        )
+        merged_blocked: list[list[float]] = []
+        for opening_start_z, opening_end_z in blocked_intervals:
+            if opening_end_z <= opening_start_z + 1e-9:
+                continue
+            if (
+                merged_blocked
+                and opening_start_z <= merged_blocked[-1][1] + 1e-9
+            ):
+                merged_blocked[-1][1] = max(
+                    merged_blocked[-1][1], opening_end_z
+                )
+            else:
+                merged_blocked.append([opening_start_z, opening_end_z])
+
+        clear_intervals = []
+        cursor = resolved_start_z
+        for opening_start_z, opening_end_z in merged_blocked:
+            if opening_start_z > cursor + 1e-9:
+                clear_intervals.append((cursor, opening_start_z))
+            cursor = max(cursor, opening_end_z)
+        if cursor < resolved_end_z - 1e-9:
+            clear_intervals.append((cursor, resolved_end_z))
+        if not clear_intervals:
+            return ()
+
+        self._wall_insulation_count += 1
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else (
+                f"{self.name} Wall Insulation "
+                f"{self._wall_insulation_count}"
+            )
+        )
+        if side == "right":
+            inner_face = wall.body_offset - wall_outline_clearance
+            outer_face = wall.body_offset - thickness
+        else:
+            inner_face = (
+                wall.body_offset + wall.thickness + wall_outline_clearance
+            )
+            outer_face = wall.body_offset + wall.thickness + thickness
+        x_min, x_max = sorted((inner_face, outer_face))
+        normal_x = -tangent_y
+        normal_y = tangent_x
+        model = self.house.model
+
+        section_placement = np.eye(4)
+        section_placement[:3, 0] = (normal_x, normal_y, 0.0)
+        section_placement[:3, 1] = (0.0, 0.0, 1.0)
+        section_placement[:3, 2] = (tangent_x, tangent_y, 0.0)
+        section_placement[:3, 3] = (
+            float(section_point[0]),
+            float(section_point[1]),
+            0.0,
+        )
+
+        common_properties: dict[str, object] = {
+            "HostWall": wall.GlobalId,
+            "Material": material,
+            "Thickness": thickness,
+            "DrawnThickness": drawn_thickness,
+            "WallOutlineClearance": wall_outline_clearance,
+            "Side": side,
+            "StartZ": resolved_start_z,
+            "EndZ": resolved_end_z,
+            "Segments": json.dumps(clear_intervals),
+        }
+
+        def assign_annotation_metadata(
+            annotation: ifcopenshell.entity_instance,
+            classes: str,
+            properties: Mapping[str, object],
+        ) -> None:
+            annotation_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=annotation,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=annotation_pset,
+                properties={"Classes": classes},
+            )
+            insulation_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=annotation,
+                name="BBIM_WallInsulation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=insulation_pset,
+                properties=dict(properties),
+            )
+            ifcopenshell.api.group.assign_group(
+                model,
+                group=self.group,
+                products=[annotation],
+            )
+
+        def add_boundaries() -> None:
+            boundary_curves = []
+            for segment_start_z, segment_end_z in clear_intervals:
+                points = (
+                    (x_min, segment_start_z),
+                    (x_max, segment_start_z),
+                    (x_max, segment_end_z),
+                    (x_min, segment_end_z),
+                    (x_min, segment_start_z),
+                )
+                boundary_curves.append(
+                    model.createIfcIndexedPolyCurve(
+                        model.createIfcCartesianPointList2D(points),
+                        None,
+                        False,
+                    )
+                )
+            boundary = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcAnnotation",
+                name=f"{annotation_name} Boundary",
+                predefined_type="LINEWORK",
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=boundary,
+                matrix=section_placement,
+                is_si=True,
+            )
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context,
+                "Annotation",
+                "GeometricCurveSet",
+                [model.createIfcGeometricCurveSet(boundary_curves)],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=boundary,
+                representation=representation,
+            )
+            boundary_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=boundary,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=boundary_pset,
+                properties={
+                    "Classes": (
+                        "wall-insulation wall-insulation-rockwool-boundary"
+                    )
+                },
+            )
+            ifcopenshell.api.group.assign_group(
+                model,
+                group=self.group,
+                products=[boundary],
+            )
+
+        def add_opening_boundaries() -> None:
+            if not merged_blocked:
+                return
+            curves = [
+                model.createIfcIndexedPolyCurve(
+                    model.createIfcCartesianPointList2D(
+                        (
+                            (outer_face, opening_start_z),
+                            (outer_face, opening_end_z),
+                        )
+                    ),
+                    None,
+                    False,
+                )
+                for opening_start_z, opening_end_z in merged_blocked
+            ]
+            boundary = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcAnnotation",
+                name=f"{annotation_name} Opening Boundary",
+                predefined_type="LINEWORK",
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=boundary,
+                matrix=section_placement,
+                is_si=True,
+            )
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context,
+                "Annotation",
+                "GeometricCurveSet",
+                [model.createIfcGeometricCurveSet(curves)],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=boundary,
+                representation=representation,
+            )
+            boundary_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=boundary,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=boundary_pset,
+                properties={
+                    "Classes": (
+                        f"wall-insulation wall-insulation-{material}-opening "
+                        "wall-insulation-opening door-overhead dashed"
+                    )
+                },
+            )
+            ifcopenshell.api.group.assign_group(
+                model,
+                group=self.group,
+                products=[boundary],
+            )
+
+        if material == "rockwool":
+            batting_inset = min(0.03, drawn_thickness * 0.1)
+            batting_end_inset = 0.03
+            batting_thickness = drawn_thickness - 2 * batting_inset
+            batting_properties = {
+                **common_properties,
+                "BattingThickness": batting_thickness,
+                "BattingInset": batting_inset,
+                "BattingEndInset": batting_end_inset,
+            }
+            batting_center = (inner_face + outer_face) / 2
+            annotations = []
+            for segment_number, (
+                segment_start_z,
+                segment_end_z,
+            ) in enumerate(clear_intervals, start=1):
+                batting_start_z = segment_start_z + batting_end_inset
+                batting_end_z = segment_end_z - batting_end_inset
+                if batting_start_z >= batting_end_z - 1e-9:
+                    continue
+                annotation = ifcopenshell.api.root.create_entity(
+                    model,
+                    ifc_class="IfcAnnotation",
+                    name=f"{annotation_name} {segment_number}",
+                    predefined_type="BATTING",
+                )
+                batting_placement = np.eye(4)
+                batting_placement[:3, 0] = (0.0, 0.0, 1.0)
+                batting_placement[:3, 1] = (normal_x, normal_y, 0.0)
+                batting_placement[:3, 2] = (
+                    -tangent_x,
+                    -tangent_y,
+                    0.0,
+                )
+                batting_placement[:3, 3] = (
+                    section_point[0] + normal_x * batting_center,
+                    section_point[1] + normal_y * batting_center,
+                    batting_start_z,
+                )
+                ifcopenshell.api.geometry.edit_object_placement(
+                    model,
+                    product=annotation,
+                    matrix=batting_placement,
+                    is_si=True,
+                )
+                representation = ifcopenshell.api.geometry.add_axis_representation(
+                    model,
+                    context=self.house._annotation_context,
+                    axis=[
+                        (0.0, 0.0),
+                        (batting_end_z - batting_start_z, 0.0),
+                    ],
+                )
+                ifcopenshell.api.geometry.assign_representation(
+                    model,
+                    product=annotation,
+                    representation=representation,
+                )
+                batting_pset = ifcopenshell.api.pset.add_pset(
+                    model,
+                    product=annotation,
+                    name="BBIM_Batting",
+                )
+                ifcopenshell.api.pset.edit_pset(
+                    model,
+                    pset=batting_pset,
+                    properties={"Thickness": batting_thickness},
+                )
+                assign_annotation_metadata(
+                    annotation,
+                    "wall-insulation wall-insulation-rockwool",
+                    batting_properties,
+                )
+                annotations.append(annotation)
+            add_boundaries()
+            add_opening_boundaries()
+            result = tuple(annotations)
+        else:
+            fill_areas = []
+            for segment_start_z, segment_end_z in clear_intervals:
+                points = (
+                    (x_min, segment_start_z),
+                    (x_max, segment_start_z),
+                    (x_max, segment_end_z),
+                    (x_min, segment_end_z),
+                    (x_min, segment_start_z),
+                )
+                curve = model.createIfcIndexedPolyCurve(
+                    model.createIfcCartesianPointList2D(points),
+                    None,
+                    False,
+                )
+                fill_areas.append(
+                    model.createIfcAnnotationFillArea(curve, None)
+                )
+            annotation = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcAnnotation",
+                name=annotation_name,
+                predefined_type="FILLAREA",
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=annotation,
+                matrix=section_placement,
+                is_si=True,
+            )
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context,
+                "Annotation",
+                "Annotation2D",
+                fill_areas,
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=annotation,
+                representation=representation,
+            )
+            assign_annotation_metadata(
+                annotation,
+                "wall-insulation wall-insulation-polystyrene",
+                common_properties,
+            )
+            add_opening_boundaries()
+            result = (annotation,)
+
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=self._drawing_pset,
+            properties={"HasAnnotation": True},
+        )
+        return result
+
     def add_wall_insulation(
         self,
         wall: Wall,
@@ -6419,9 +7018,11 @@ class Drawing:
         end_x: Number | None = None,
         start_y: Number | None = None,
         end_y: Number | None = None,
+        start_z: Number | None = None,
+        end_z: Number | None = None,
         name: str | None = None,
     ) -> tuple[ifcopenshell.entity_instance, ...]:
-        """Draw opening-aware insulation outside one wall in this plan.
+        """Draw opening-aware insulation outside one wall in this drawing.
 
         This is a drawing-only annotation and does not change the IFC wall or
         its 3D construction.  ``side`` is relative to looking from the wall's
@@ -6437,13 +7038,15 @@ class Drawing:
         ``end_y``.  Coordinate endpoints follow the wall's start-to-end
         direction, including walls drawn right-to-left or top-to-bottom.  If
         the coordinates are supplied in the opposite order, they are swapped
-        automatically.
+        automatically.  In an elevation section through a perpendicular wall,
+        ``start_z`` and ``end_z`` optionally set the insulation's absolute
+        lower and upper elevations.  They default to the wall's bottom and
+        top, and are also swapped when supplied in the opposite order.
 
         ``material="polystyrene"`` draws the existing hexagonal hatch;
         ``material="rockwool"`` draws direction-aware batting.  Both leave
         gaps for doors and windows intersected by this drawing's cut plane.
         """
-        self._require_plan_view("add_wall_insulation")
         if not isinstance(wall, Wall):
             raise TypeError("wall must be a Wall")
         if wall.file is not self.house.model or wall.storey.house is not self.house:
@@ -6471,6 +7074,35 @@ class Drawing:
         side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
         start_extension = _number(start_extension, "start_extension")
         end_extension = _number(end_extension, "end_extension")
+        if self.view == "elevation":
+            if any(
+                coordinate is not None
+                for coordinate in (start_x, end_x, start_y, end_y)
+            ):
+                raise ValueError(
+                    "start_x, end_x, start_y, and end_y are only supported "
+                    "for plan drawings"
+                )
+            if start_extension != 0 or end_extension != 0:
+                raise ValueError(
+                    "start_extension and end_extension are only supported "
+                    "for plan drawings; use start_z and end_z in elevations"
+                )
+            return self._add_elevation_wall_insulation(
+                wall,
+                thickness=thickness,
+                drawn_thickness=drawn_thickness,
+                wall_outline_clearance=wall_outline_clearance,
+                material=material_name,
+                side=side,
+                start_z=start_z,
+                end_z=end_z,
+                name=name,
+            )
+        if start_z is not None or end_z is not None:
+            raise ValueError(
+                "start_z and end_z are only supported for elevation drawings"
+            )
         supplied_x = start_x is not None or end_x is not None
         supplied_y = start_y is not None or end_y is not None
         if supplied_x and supplied_y:
@@ -9514,6 +10146,7 @@ class Storey:
         concrete_material: str = "Concrete topping",
         reinforcement_material: str = "Ring beam reinforcement",
         bar_diameter: Number = 0.016,
+        stirrup_diameter: Number = 0.008,
         concrete_cover: Number = 0.045,
         concrete_color: str | None = "#bfc3c5",
         reinforcement_color: str | None = "#333333",
@@ -9527,9 +10160,11 @@ class Storey:
         identify a structural core inside a composite wall; the offset is
         measured from the wall axis along local positive Y (left when looking
         from start to end).  Four longitudinal reinforcing bars are placed
-        behind ``concrete_cover`` at the section corners.  The returned beams
-        expose their source wall as ``source_wall`` and their four
-        :class:`IfcReinforcingBar` occurrences as ``reinforcement``.
+        behind ``concrete_cover`` at the section corners.  Elevation sections
+        connect the four cut-bar dots with a closed line of
+        ``stirrup_diameter``.  The returned beams expose their source wall as
+        ``source_wall`` and their four :class:`IfcReinforcingBar` occurrences
+        as ``reinforcement``.
         """
         if not isinstance(source_storey, Storey):
             raise TypeError("source_storey must be a Storey")
@@ -9559,6 +10194,7 @@ class Storey:
                 structural_center_offset, "structural_center_offset"
             )
         bar_diameter = _number(bar_diameter, "bar_diameter")
+        stirrup_diameter = _number(stirrup_diameter, "stirrup_diameter")
         concrete_cover = _number(concrete_cover, "concrete_cover")
         transparency = _number(transparency, "transparency")
         concrete_material_name = _name(
@@ -9571,6 +10207,8 @@ class Storey:
             raise ValueError("height must be greater than zero")
         if bar_diameter <= 0:
             raise ValueError("bar_diameter must be greater than zero")
+        if stirrup_diameter <= 0:
+            raise ValueError("stirrup_diameter must be greater than zero")
         if concrete_cover < 0:
             raise ValueError("concrete_cover must not be negative")
         if not 0 <= transparency <= 1:
@@ -9674,6 +10312,7 @@ class Storey:
                         resolved_structural_center_offset
                     ),
                     "BarDiameter": bar_diameter,
+                    "StirrupDiameter": stirrup_diameter,
                     "ConcreteCover": concrete_cover,
                 },
             )

@@ -93,6 +93,7 @@ FOUNDATION_WALL_HEIGHT = 0.80
 FOUNDATION_FOOTER_WIDTH = 0.70
 FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
+RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 0.9 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
@@ -387,6 +388,7 @@ ring_beams = ground.add_ring_beams_from(
 	concrete_material="Concrete topping",
 	reinforcement_material="Ring beam reinforcement",
 	bar_diameter=RING_BEAM_BAR_DIAMETER,
+	stirrup_diameter=RING_BEAM_STIRRUP_DIAMETER,
 	concrete_cover=RING_BEAM_CONCRETE_COVER,
 )
 
@@ -476,7 +478,7 @@ ground.asset(
     "Umyv",
     asset="basin_large",
 	center=(HOUSE_WIDTH-BWT-0.35, BWT+0.8+0.4),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=GROUND_FLOOR_THICKNESS + 0.85 - 0.25,
 	rotation=-90,
 )
 ground.asset(
@@ -1024,7 +1026,7 @@ upper.asset(
     "Umyv",
     asset="basin_large",
     center=(HOUSE_WIDTH-BWT-0.4, wall_zachod_nahore_y+0.35),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=UPPER_FLOOR_THICKNESS + 0.85 - 0.25,
 	rotation=180,
 )
 
@@ -2213,14 +2215,28 @@ if "cut1" in sys.argv:
 if "aa" in sys.argv:
 	drawing1 = house.add_drawing(
 		"aa",
-		x=wall2_x+0.01,
+		x=wall3_x-1.5,
 		y=4,
 		z=3.5,
 		radius=8,
 		view="elevation",
-		direction=(1, 0, 0),
+		direction=(-1, 0, 0),
 		storeys=None,
 		doors_closed=True,
+	)
+	drawing1.add_wall_insulation(
+		wall_front_g,
+		thickness=POLYSTYRENE_INSULATION_THICKNESS,
+		material="polystyrene",
+		start_z=0,
+		end_z=UPPER_FLOOR_START+1.3,
+	)
+	drawing1.add_wall_insulation(
+		wall_dormer,
+		thickness=ROCKWOOL_INSULATION_THICKNESS,
+		material="rockwool",
+		start_z=0,
+		end_z=UPPER_FLOOR_START+2.8,
 	)
 	drawing1.render("aa.svg", png=True, png_dpi=600)
 

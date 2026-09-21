@@ -45,6 +45,7 @@ from ifc_utils import (
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
     _postprocess_projected_wood_fills,
+    _postprocess_ring_beam_stirrups,
     _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
     _postprocess_wall_insulation_backdrop,
@@ -6308,6 +6309,212 @@ class HouseTests(unittest.TestCase):
             [[-0.25, 3.5]],
         )
 
+    def test_adds_opening_aware_polystyrene_to_elevation_section(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.2)
+        wall = ground.wall(
+            (0, 0),
+            (4, 0),
+            thickness=0.24,
+            height=3,
+            start_height=0.1,
+        )
+        wall.add_opening(
+            at=1,
+            width=1,
+            sill_height=0.8,
+            height=2,
+            show_overhead=False,
+        )
+        drawing = house.add_drawing(
+            "Wall section",
+            1.5,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(-1, 0, 0),
+        )
+
+        insulation = drawing.add_wall_insulation(
+            wall,
+            thickness=0.16,
+            material="polystyrene",
+            start_z=3,
+            end_z=0.5,
+        )
+
+        self.assertEqual(len(insulation), 1)
+        annotation = insulation[0]
+        placement = ifcopenshell.util.placement.get_local_placement(
+            annotation.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            placement,
+            (
+                (0, 0, 1, 1.5),
+                (1, 0, 0, 0),
+                (0, 1, 0, 0),
+                (0, 0, 0, 1),
+            ),
+            atol=1e-9,
+        )
+        self.assertEqual(
+            [
+                item.OuterBoundary.Points.CoordList
+                for item in annotation.Representation.Representations[0].Items
+            ],
+            [
+                (
+                    (-0.28, 0.5),
+                    (-0.1375, 0.5),
+                    (-0.1375, 1.0),
+                    (-0.28, 1.0),
+                    (-0.28, 0.5),
+                ),
+                (
+                    (-0.28, 2.2),
+                    (-0.1375, 2.2),
+                    (-0.1375, 3.0),
+                    (-0.28, 3.0),
+                    (-0.28, 2.2),
+                ),
+            ],
+        )
+        properties = ifcopenshell.util.element.get_pset(
+            annotation, "BBIM_WallInsulation"
+        )
+        self.assertEqual(properties["StartZ"], 0.5)
+        self.assertEqual(properties["EndZ"], 3.0)
+        self.assertEqual(
+            json.loads(properties["Segments"]),
+            [[0.5, 1.0], [2.2, 3.0]],
+        )
+        self.assertTrue(
+            ifcopenshell.util.element.get_pset(
+                drawing.element, "EPset_Drawing", "HasAnnotation"
+            )
+        )
+        opening_boundary = next(
+            candidate
+            for candidate in house.model.by_type("IfcAnnotation")
+            if ifcopenshell.util.element.get_pset(
+                candidate, "EPset_Annotation", "Classes"
+            )
+            == (
+                "wall-insulation wall-insulation-polystyrene-opening "
+                "wall-insulation-opening door-overhead dashed"
+            )
+        )
+        opening_curve = (
+            opening_boundary.Representation.Representations[0]
+            .Items[0]
+            .Elements[0]
+        )
+        self.assertEqual(
+            opening_curve.Points.CoordList,
+            ((-0.28, 1.0), (-0.28, 2.2)),
+        )
+
+    def test_adds_rockwool_batting_to_elevation_section(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall(
+            (0, 0), (4, 0), thickness=0.24, height=3
+        )
+        wall.add_opening(
+            at=1,
+            width=1,
+            sill_height=0.8,
+            height=2,
+            show_overhead=False,
+        )
+        drawing = house.add_drawing(
+            "Wall section",
+            1.5,
+            0,
+            1.5,
+            4,
+            view="elevation",
+            direction=(-1, 0, 0),
+        )
+
+        insulation = drawing.add_wall_insulation(
+            wall,
+            thickness=0.20,
+            material="rockwool",
+        )
+
+        self.assertEqual(len(insulation), 2)
+        placements = [
+            ifcopenshell.util.placement.get_local_placement(
+                annotation.ObjectPlacement
+            )
+            for annotation in insulation
+        ]
+        np.testing.assert_allclose(
+            placements[0][:3, 3], (1.5, -0.22875, 0.03), atol=1e-9
+        )
+        np.testing.assert_allclose(
+            placements[1][:3, 3], (1.5, -0.22875, 2.03), atol=1e-9
+        )
+        np.testing.assert_allclose(
+            placements[0][:3, :3],
+            ((0, 0, -1), (0, 1, 0), (1, 0, 0)),
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            [
+                annotation.Representation.Representations[0]
+                .Items[0]
+                .Points.CoordList
+                for annotation in insulation
+            ],
+            [((0.0, 0.0), (0.74, 0.0)), ((0.0, 0.0), (0.94, 0.0))],
+            atol=1e-9,
+        )
+        self.assertTrue(
+            all(
+                ifcopenshell.util.element.get_pset(
+                    annotation, "BBIM_Batting", "Thickness"
+                )
+                == 0.146
+                for annotation in insulation
+            )
+        )
+        boundary = next(
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"
+            )
+            == "wall-insulation wall-insulation-rockwool-boundary"
+        )
+        self.assertEqual(
+            [
+                curve.Points.CoordList
+                for curve in boundary.Representation.Representations[0]
+                .Items[0]
+                .Elements
+            ],
+            [
+                (
+                    (-0.32, 0.0),
+                    (-0.1375, 0.0),
+                    (-0.1375, 0.8),
+                    (-0.32, 0.8),
+                    (-0.32, 0.0),
+                ),
+                (
+                    (-0.32, 2.0),
+                    (-0.1375, 2.0),
+                    (-0.1375, 3.0),
+                    (-0.32, 3.0),
+                    (-0.32, 2.0),
+                ),
+            ],
+        )
+
     def test_validates_wall_insulation_arguments(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
@@ -6379,6 +6586,13 @@ class HouseTests(unittest.TestCase):
                 start_extension=-3,
                 end_extension=-2,
             )
+        with self.assertRaisesRegex(ValueError, "elevation drawings"):
+            drawing.add_wall_insulation(
+                wall,
+                thickness=0.16,
+                material="polystyrene",
+                start_z=0,
+            )
         elevation = house.add_drawing(
             "Elevation",
             2,
@@ -6388,9 +6602,40 @@ class HouseTests(unittest.TestCase):
             view="elevation",
             direction=(0, 1, 0),
         )
-        with self.assertRaisesRegex(ValueError, "plan drawings"):
+        with self.assertRaisesRegex(ValueError, "perpendicular"):
             elevation.add_wall_insulation(
                 wall, thickness=0.16, material="polystyrene"
+            )
+        section = house.add_drawing(
+            "Section",
+            2,
+            0,
+            1,
+            6,
+            view="elevation",
+            direction=(-1, 0, 0),
+        )
+        with self.assertRaisesRegex(ValueError, "plan drawings"):
+            section.add_wall_insulation(
+                wall,
+                thickness=0.16,
+                material="polystyrene",
+                start_x=0,
+            )
+        with self.assertRaisesRegex(ValueError, "use start_z and end_z"):
+            section.add_wall_insulation(
+                wall,
+                thickness=0.16,
+                material="polystyrene",
+                start_extension=0.2,
+            )
+        with self.assertRaisesRegex(ValueError, "must be different"):
+            section.add_wall_insulation(
+                wall,
+                thickness=0.16,
+                material="polystyrene",
+                start_z=1,
+                end_z=1,
             )
 
     def test_persists_material_legend_in_an_optional_right_panel(self) -> None:
@@ -8025,6 +8270,7 @@ class HouseTests(unittest.TestCase):
             height=0.21,
             start_height=2.8,
             bar_diameter=0.012,
+            stirrup_diameter=0.008,
             concrete_cover=0.03,
         )
 
@@ -8110,7 +8356,37 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(properties["SourceWall"], source_wall.GlobalId)
         self.assertEqual(properties["BarDiameter"], 0.012)
+        self.assertEqual(properties["StirrupDiameter"], 0.008)
         self.assertEqual(properties["ConcreteCover"], 0.03)
+
+        drawing = house.add_drawing(
+            "Ring beam section",
+            x=2,
+            y=0.12,
+            z=2.905,
+            radius=4,
+            view="elevation",
+            direction=(-1, 0, 0),
+        )
+        with TemporaryDirectory() as temporary_directory:
+            svg_path = Path(temporary_directory) / "ring-beam.svg"
+            svg_path.write_text(
+                '<svg data-scale="1:100" viewBox="0 0 100 100"></svg>',
+                encoding="utf-8",
+            )
+            _postprocess_ring_beam_stirrups(
+                svg_path, house.model, drawing.element
+            )
+            _postprocess_ring_beam_stirrups(
+                svg_path, house.model, drawing.element
+            )
+            svg = svg_path.read_text(encoding="utf-8")
+
+        self.assertEqual(svg.count('class="ring-beam-stirrups'), 1)
+        self.assertEqual(svg.count('class="ring-beam-stirrup"'), 1)
+        self.assertIn('ifc:name="Ring beam 1"', svg)
+        self.assertIn('stroke-width:0.08 !important', svg)
+        self.assertIn('style="fill:none !important;stroke:#333', svg)
 
     def test_rejects_invalid_wall_layers_and_type_usage(self) -> None:
         house = House("My house")
