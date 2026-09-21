@@ -46,6 +46,8 @@ import ifcopenshell.util.representation
 import ifcopenshell.util.type
 from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
 
 __all__ = [
@@ -977,6 +979,49 @@ def _postprocess_wall_insulation_batting(
             return f"{match[1]}{body}{match[3]}"
 
         svg = marker.sub(set_stroke_width, svg)
+    svg_path.write_text(svg, encoding="utf-8")
+
+
+def _postprocess_wall_insulation_backdrop(svg_path: Path) -> None:
+    """Move facade-insulation graphics behind all other drawing content."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if '<g class="wall-insulation-backdrop">' in svg:
+        return
+
+    insulation_elements: list[str] = []
+    drawable = re.compile(
+        r"(?P<leading>^[ \t]*)?"
+        r"(?P<element><(?:line|path|polyline)\b[^>]*/>)"
+        r"(?P<trailing>[ \t]*\r?\n)?",
+        re.DOTALL | re.MULTILINE,
+    )
+
+    def collect_insulation(match: re.Match[str]) -> str:
+        element = match["element"]
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', element))
+        if "wall-insulation" not in attributes.get("class", "").split():
+            return match.group(0)
+        insulation_elements.append(element.strip())
+        return ""
+
+    svg = drawable.sub(collect_insulation, svg)
+    if not insulation_elements:
+        return
+
+    backdrop = (
+        '\n  <g class="wall-insulation-backdrop">\n'
+        + "\n".join(f"    {element}" for element in insulation_elements)
+        + "\n  </g>\n"
+    )
+    definitions_end = svg.find("</defs>")
+    if definitions_end >= 0:
+        insertion_point = definitions_end + len("</defs>")
+    else:
+        root = re.search(r"<svg\b[^>]*>", svg)
+        if root is None:
+            return
+        insertion_point = root.end()
+    svg = f"{svg[:insertion_point]}{backdrop}{svg[insertion_point:]}"
     svg_path.write_text(svg, encoding="utf-8")
 
 
@@ -2351,6 +2396,7 @@ def generate_plan(
         absolute_output,
         mask_global_ids=_overhead_mask_global_ids(model, z),
     )
+    _postprocess_wall_insulation_backdrop(absolute_output)
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -2485,6 +2531,7 @@ def _render_existing_drawing(
             absolute_output,
             mask_global_ids=_overhead_mask_global_ids(model, cut_z),
         )
+        _postprocess_wall_insulation_backdrop(absolute_output)
     else:
         _postprocess_projected_chimney_fills(absolute_output)
         _postprocess_elevation_opening_overlays(
@@ -5960,6 +6007,147 @@ class Drawing:
         if cursor < interval_end - 1e-9:
             clear_intervals.append((cursor, interval_end))
         return tuple(clear_intervals)
+
+    def add_wall_outlines(
+        self,
+        walls: Sequence[Wall],
+        *,
+        style: Literal["dashed", "solid"] = "dashed",
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add one merged plan outline of the supplied wall footprints.
+
+        The walls are geometry sources only: hosted openings are ignored and
+        the resulting linework belongs exclusively to this drawing.  Wall
+        rectangles are unioned before their boundary is drawn, preventing
+        internal end lines at corners and T-junctions.
+        """
+        self._require_plan_view("add_wall_outlines")
+        if isinstance(walls, (str, bytes)):
+            raise TypeError("walls must be a sequence of Wall objects")
+        try:
+            supplied_walls = list(walls)
+        except TypeError as error:
+            raise TypeError(
+                "walls must be a sequence of Wall objects"
+            ) from error
+        if not supplied_walls:
+            raise ValueError("walls must not be empty")
+        for index, wall in enumerate(supplied_walls, start=1):
+            if not isinstance(wall, Wall):
+                raise TypeError(f"wall {index} must be a Wall")
+            if (
+                wall.file is not self.house.model
+                or wall.storey.house is not self.house
+            ):
+                raise ValueError(f"wall {index} must belong to this house")
+            if not self._includes_storey(wall.storey):
+                raise ValueError(
+                    f"wall {index} storey is not included in this drawing"
+                )
+        style_name = _enum(style, "style", {"DASHED", "SOLID"}).lower()
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} Wall Outlines"
+        )
+
+        footprints = []
+        for wall in supplied_walls:
+            tangent_x = (wall.end[0] - wall.start[0]) / wall.length
+            tangent_y = (wall.end[1] - wall.start[1]) / wall.length
+            normal_x = -tangent_y
+            normal_y = tangent_x
+            near_offset = wall.body_offset
+            far_offset = wall.body_offset + wall.thickness
+
+            def point(along: float, offset: float) -> tuple[float, float]:
+                return (
+                    wall.start[0] + tangent_x * along + normal_x * offset,
+                    wall.start[1] + tangent_y * along + normal_y * offset,
+                )
+
+            footprints.append(
+                Polygon(
+                    (
+                        point(0.0, near_offset),
+                        point(wall.length, near_offset),
+                        point(wall.length, far_offset),
+                        point(0.0, far_offset),
+                    )
+                )
+            )
+
+        merged = unary_union(footprints)
+        polygons = (
+            (merged,)
+            if isinstance(merged, Polygon)
+            else tuple(
+                geometry
+                for geometry in merged.geoms
+                if isinstance(geometry, Polygon)
+            )
+        )
+        model = self.house.model
+        curves = []
+        for polygon in polygons:
+            for ring in (polygon.exterior, *polygon.interiors):
+                points = [
+                    (float(x), float(y))
+                    for x, y in ring.coords
+                ]
+                curves.append(
+                    model.createIfcIndexedPolyCurve(
+                        model.createIfcCartesianPointList2D(points),
+                        None,
+                        False,
+                    )
+                )
+
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=annotation_name,
+            predefined_type="LINEWORK",
+        )
+        placement = np.eye(4)
+        placement[2, 3] = supplied_walls[0].storey.elevation
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet(curves)],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        classes = "load-bearing-wall-outline"
+        if style_name == "dashed":
+            classes += " dashed"
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={"Classes": classes},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        return annotation
 
     def add_wall_batting(
         self,

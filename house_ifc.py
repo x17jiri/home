@@ -94,7 +94,7 @@ FOUNDATION_FOOTER_WIDTH = 0.70
 FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 0.85 # Vzdalenost vaznice od hrebene
+VAZNICE_DIST = 0.9 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
 
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
@@ -117,7 +117,7 @@ ground_floor_height = 2.82
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.85
+UNDER_HOLE = 2.82
 HOLE_HEIGHT = 0.25
 ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
@@ -1616,12 +1616,13 @@ print(f"  Normal roof: {normal_plasterboard_wall_height:.3f} m")
 print(f"  Dormer roof: {dormer_plasterboard_wall_height:.3f} m")
 
 roof_outer_face_offset = ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS
+ground_floor_top = ground.elevation + GROUND_FLOOR_THICKNESS
 total_house_height = max(
 	roof_layer_height_at_y(
 		plane,
 		roof_outer_face_offset,
 		HALF_DEPTH,
-		ground.elevation,
+		ground_floor_top,
 	)
 	for plane in (
 		street_roof,
@@ -1630,7 +1631,8 @@ total_house_height = max(
 	)
 )
 print(
-	f"Total house height to top of roof, excluding chimney: "
+	f"Total house height from top of ground floor to top of roof, "
+	f"excluding chimney: "
 	f"{total_house_height:.3f} m"
 )
 
@@ -2014,6 +2016,7 @@ if "found" in sys.argv:
 		storeys=[foundation],
 		right_panel_width=40,
 	)
+	drawing1.add_wall_outlines(foundation_walls, style="dashed")
 
 	drawing1.render("found.svg", png=True, png_dpi=600)
 
@@ -2163,13 +2166,11 @@ if "upper" in sys.argv:
 	drawing1.add_room_legend()
 
 	# sklad nahore hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-0.75)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-1)
+	# zachod nahore hloubka
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1), offset=-1)
 	# Pokoj 2, hloubka
 	drawing1.add_dimension(start=(5.5, GALERY_END+0.1), end=(5.5, HOUSE_DEPTH-BWT), offset=0)
-
-	# zachod nahire hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1), offset=-0.75)
-
 	# galerie hloubka
 	drawing1.add_dimension(start=(6, GALERY_START), end=(6, GALERY_END), offset=0)
 
@@ -2208,20 +2209,20 @@ if "cut1" in sys.argv:
 	)
 	drawing1.render("cut1.svg", png=True, png_dpi=600)
 
-# Drawing - cut1
-if "cut2" in sys.argv:
+# Drawing - cut AA
+if "aa" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Cut2",
-		x=7.275,
+		"aa",
+		x=wall2_x+0.01,
 		y=4,
 		z=3.5,
 		radius=8,
 		view="elevation",
-		direction=(-1, 0, 0),
+		direction=(1, 0, 0),
 		storeys=None,
 		doors_closed=True,
 	)
-	drawing1.render("cut2.svg", png=True, png_dpi=600)
+	drawing1.render("aa.svg", png=True, png_dpi=600)
 
 # Drawing - cut3
 if "cut3" in sys.argv:

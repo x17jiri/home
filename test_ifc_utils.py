@@ -47,6 +47,7 @@ from ifc_utils import (
     _postprocess_projected_wood_fills,
     _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
+    _postprocess_wall_insulation_backdrop,
     _postprocess_wall_insulation_batting,
     elliptic_stairs,
     generate_plan,
@@ -5849,6 +5850,77 @@ class HouseTests(unittest.TestCase):
             ]
             self.assertEqual({drawing.Name for drawing in drawings}, {"Ground plan", "Other plan"})
 
+    def test_adds_merged_dashed_wall_outlines_without_junction_seams(
+        self,
+    ) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        horizontal = ground.wall(
+            (0, 0), (4, 0), thickness=1, height=2.8
+        )
+        vertical = ground.wall(
+            (2, 0), (2, 2), thickness=1, height=2.8
+        )
+        drawing = house.add_drawing(
+            "Foundation", 2, 1, -1, 4, storeys=[ground]
+        )
+        other_drawing = house.add_drawing(
+            "Other plan", 2, 1, -1, 4, storeys=[ground]
+        )
+
+        outline = drawing.add_wall_outlines(
+            (horizontal, vertical),
+            style="dashed",
+        )
+
+        self.assertEqual(outline.ObjectType, "LINEWORK")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                outline, "EPset_Annotation", "Classes"
+            ),
+            "load-bearing-wall-outline dashed",
+        )
+        curves = outline.Representation.Representations[0].Items[0].Elements
+        self.assertEqual(len(curves), 1)
+        points = [
+            tuple(round(float(coordinate), 9) for coordinate in point)
+            for point in curves[0].Points.CoordList
+        ]
+        self.assertEqual(len(points), 9)
+        self.assertEqual(
+            set(points),
+            {
+                (0.0, -0.5),
+                (4.0, -0.5),
+                (4.0, 0.5),
+                (2.5, 0.5),
+                (2.5, 2.0),
+                (1.5, 2.0),
+                (1.5, 0.5),
+                (0.0, 0.5),
+            },
+        )
+        self.assertIn(outline, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(
+            outline,
+            other_drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+
+    def test_styles_wall_outlines_like_wall_openings(self) -> None:
+        stylesheet = (
+            Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        shared_rule = stylesheet.split(
+            ".PredefinedType-LINEWORK.door-overhead", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(
+            ".PredefinedType-LINEWORK.load-bearing-wall-outline",
+            shared_rule,
+        )
+        self.assertIn("stroke-width: 0.1 !important", shared_rule)
+        self.assertIn("stroke-dasharray: 0.7 0.8 !important", shared_rule)
+
     def test_adds_direction_aware_wall_batting_split_at_openings(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
@@ -7389,6 +7461,12 @@ class HouseTests(unittest.TestCase):
         self.assertIn("fill: url(#footing-cross) !important", rule)
         self.assertIn("stroke-width: 0.05 !important", rule)
 
+        plan_rule = stylesheet.split(
+            ".target-view-PLANVIEW .IfcFooting.cut", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", plan_rule)
+        self.assertIn("stroke: white !important", plan_rule)
+
     def test_styles_base_plate_with_dash_dot_pattern(self) -> None:
         project_dir = Path(__file__).parent
         patterns = (
@@ -7502,6 +7580,49 @@ class HouseTests(unittest.TestCase):
             svg = svg_path.read_text(encoding="utf-8")
             self.assertEqual(svg.count('stroke-width:0.1"'), 2)
             self.assertEqual(svg.count('stroke-width:0.18"'), 1)
+
+    def test_moves_wall_insulation_to_first_drawable_svg_layer(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg">\n'
+                '  <defs><pattern id="insulation"/></defs>\n'
+                '  <g id="model"><path id="wall"/></g>\n'
+                '  <line id="dimension" class="IfcAnnotation"/>\n'
+                '  <path id="polystyrene" class="IfcAnnotation '
+                'wall-insulation wall-insulation-polystyrene"/>\n'
+                '  <polyline id="rockwool" class="IfcAnnotation '
+                'wall-insulation wall-insulation-rockwool"/>\n'
+                '  <line id="opening" class="IfcAnnotation wall-insulation '
+                'wall-insulation-opening dashed"/>\n'
+                '</svg>\n',
+                encoding="utf-8",
+            )
+
+            _postprocess_wall_insulation_backdrop(svg_path)
+            _postprocess_wall_insulation_backdrop(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            backdrop_start = svg.index(
+                '<g class="wall-insulation-backdrop">'
+            )
+            backdrop_end = svg.index("</g>", backdrop_start)
+            self.assertEqual(
+                svg.count('<g class="wall-insulation-backdrop">'),
+                1,
+            )
+            self.assertLess(svg.index("</defs>"), backdrop_start)
+            self.assertLess(backdrop_end, svg.index('<g id="model">'))
+            self.assertLess(
+                svg.index('id="polystyrene"'),
+                svg.index('id="rockwool"'),
+            )
+            self.assertLess(
+                svg.index('id="rockwool"'),
+                svg.index('id="opening"'),
+            )
+            self.assertGreater(svg.index('id="dimension"'), backdrop_end)
+            self.assertNotIn("\n  \n", svg)
 
     def test_hides_miako_concrete_cover_seams_in_plan_only(self) -> None:
         stylesheet = (

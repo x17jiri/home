@@ -256,6 +256,13 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+/* In a foundation plan the strip footings are seen from above.  Keep their
+ * cross hatch for elevation/section cuts, but use a plain fill in plan. */
+.target-view-PLANVIEW .IfcFooting.cut {
+    fill: white !important;
+    stroke: white !important;
+}
+
 .cut.layer-material-SDK {
     fill: url(#drywall-diagonal1) !important;
     stroke: black;
@@ -397,7 +404,8 @@ tspan.room-area {
     stroke-width: 0.3 !important;
 }
 
-.PredefinedType-LINEWORK.door-overhead {
+.PredefinedType-LINEWORK.door-overhead,
+.PredefinedType-LINEWORK.load-bearing-wall-outline {
     fill: none !important;
     stroke: black !important;
     stroke-width: 0.1 !important;
