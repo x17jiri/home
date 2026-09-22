@@ -1102,17 +1102,19 @@ def _postprocess_projected_chimney_fills(svg_path: Path) -> None:
     )
 
 
-def _postprocess_wall_insulation_batting(
+def _postprocess_batting_marker_strokes(
     svg_path: Path,
     *,
-    stroke_width: float = 0.10,
+    annotation_class: str,
+    stroke_width: float,
+    important: bool = False,
 ) -> None:
-    """Set Rockwool batting marker strokes for reliable SVG rasterisation."""
+    """Set marker strokes used by one class of batting annotations."""
     svg = svg_path.read_text(encoding="utf-8")
     marker_ids: set[str] = set()
     for polyline in re.findall(r"<polyline\b[^>]*>", svg):
         attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', polyline))
-        if "wall-insulation-rockwool" not in attributes.get("class", "").split():
+        if annotation_class not in attributes.get("class", "").split():
             continue
         marker_ids.update(re.findall(r"url\(#([^)]+)\)", polyline))
 
@@ -1124,14 +1126,96 @@ def _postprocess_wall_insulation_batting(
 
         def set_stroke_width(match: re.Match[str]) -> str:
             body = re.sub(
-                r"stroke-width\s*:\s*(?:\d+(?:\.\d*)?|\.\d+)",
-                f"stroke-width:{stroke_width:g}",
+                r"stroke-width\s*:\s*(?:\d+(?:\.\d*)?|\.\d+)"
+                r"(?:\s*!important)?",
+                (
+                    f"stroke-width:{stroke_width:g}!important"
+                    if important
+                    else f"stroke-width:{stroke_width:g}"
+                ),
                 match[2],
             )
             return f"{match[1]}{body}{match[3]}"
 
         svg = marker.sub(set_stroke_width, svg)
     svg_path.write_text(svg, encoding="utf-8")
+
+
+def _postprocess_wall_insulation_batting(
+    svg_path: Path,
+    *,
+    stroke_width: float = 0.06,
+) -> None:
+    """Use the same light marker stroke for facade and roof batting."""
+    _postprocess_batting_marker_strokes(
+        svg_path,
+        annotation_class="wall-insulation-rockwool",
+        stroke_width=stroke_width,
+        important=True,
+    )
+
+
+def _hide_annotation_source_geometry(
+    svg_path: Path,
+    *,
+    annotation_class: str,
+) -> None:
+    """Hide raw IFC geometry duplicated by a styled annotation polyline."""
+    svg = svg_path.read_text(encoding="utf-8")
+    global_ids: set[str] = set()
+    for polyline in re.findall(r"<polyline\b[^>]*>", svg):
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', polyline))
+        classes = attributes.get("class", "").split()
+        if annotation_class not in classes:
+            continue
+        global_ids.update(
+            class_name.removeprefix("GlobalId-")
+            for class_name in classes
+            if class_name.startswith("GlobalId-")
+        )
+    if not global_ids:
+        return
+
+    source_group = re.compile(
+        r'<g\b(?=[^>]*\bifc:guid="(?:'
+        + "|".join(re.escape(global_id) for global_id in global_ids)
+        + r')")[^>]*>'
+    )
+
+    def hide_group(match: re.Match[str]) -> str:
+        tag = match[0]
+        if re.search(r'\bstyle="[^"]*"', tag):
+            return re.sub(
+                r'\bstyle="([^"]*)"',
+                lambda style: (
+                    f'style="{style[1].rstrip("; ")};display:none!important"'
+                ),
+                tag,
+                count=1,
+            )
+        return f'{tag[:-1]} style="display:none!important">'
+
+    processed_svg = source_group.sub(hide_group, svg)
+    if processed_svg != svg:
+        svg_path.write_text(processed_svg, encoding="utf-8")
+
+
+def _postprocess_roof_batting(
+    svg_path: Path,
+    *,
+    stroke_width: float = 0.06,
+) -> None:
+    """Use a lighter marker stroke for drawing-only roof batting."""
+    _postprocess_batting_marker_strokes(
+        svg_path,
+        annotation_class="roof-batting",
+        stroke_width=stroke_width,
+        important=True,
+    )
+    _hide_annotation_source_geometry(
+        svg_path,
+        annotation_class="roof-batting",
+    )
 
 
 def _postprocess_wall_insulation_backdrop(svg_path: Path) -> None:
@@ -1174,6 +1258,235 @@ def _postprocess_wall_insulation_backdrop(svg_path: Path) -> None:
             return
         insertion_point = root.end()
     svg = f"{svg[:insertion_point]}{backdrop}{svg[insertion_point:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
+_WALL_INSULATION_FOREGROUND_DEPTH = 1.0
+_IFC_GLOBAL_ID = re.compile(r"[0-3][0-9A-Za-z_$]{21}")
+
+
+def _postprocess_elevation_wall_insulation_depth(
+    svg_path: Path,
+    model: ifcopenshell.file,
+    drawing: ifcopenshell.entity_instance,
+    *,
+    foreground_depth: float = _WALL_INSULATION_FOREGROUND_DEPTH,
+) -> None:
+    """Place elevation insulation behind products near the camera.
+
+    ``foreground_depth`` is measured from the drawing plane along its
+    orthographic view direction, rather than radially from a camera point.
+    Each product is classified by its closest mesh vertex so that a wall or
+    another long product crossing the threshold remains in the foreground.
+    """
+    svg = svg_path.read_text(encoding="utf-8")
+    if '<g class="wall-insulation-depth-layer ' in svg:
+        return
+
+    insulation_elements: list[str] = []
+    insertion_marker = "<!-- wall-insulation-depth-insertion -->"
+    drawable = re.compile(
+        r"(?P<leading>^[ \t]*)?"
+        r"(?P<element><(?:line|path|polyline)\b[^>]*/>)"
+        r"(?P<trailing>[ \t]*\r?\n)?",
+        re.DOTALL | re.MULTILINE,
+    )
+
+    def collect_insulation(match: re.Match[str]) -> str:
+        element = match["element"]
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', element))
+        if "wall-insulation" not in attributes.get("class", "").split():
+            return match.group(0)
+        insulation_elements.append(element.strip())
+        if len(insulation_elements) > 1:
+            return ""
+        return (
+            (match["leading"] or "")
+            + insertion_marker
+            + (match["trailing"] or "")
+        )
+
+    svg = drawable.sub(collect_insulation, svg)
+    if not insulation_elements:
+        return
+
+    camera_to_world = ifcopenshell.util.placement.get_local_placement(
+        drawing.ObjectPlacement
+    )
+    drawing_origin = camera_to_world[:3, 3]
+    view_direction = -camera_to_world[:3, 2]
+    view_direction /= np.linalg.norm(view_direction)
+    geometry_settings = ifcopenshell.geom.settings()
+    geometry_settings.set(geometry_settings.USE_WORLD_COORDS, True)
+    closest_depths: dict[str, float | None] = {}
+
+    def closest_depth(global_id: str) -> float | None:
+        if global_id in closest_depths:
+            return closest_depths[global_id]
+        try:
+            product = model.by_guid(global_id)
+            shape = ifcopenshell.geom.create_shape(geometry_settings, product)
+            vertices = np.asarray(
+                shape.geometry.verts,
+                dtype=float,
+            ).reshape((-1, 3))
+            depth = float(np.min((vertices - drawing_origin) @ view_direction))
+        except (RuntimeError, TypeError, ValueError):
+            depth = None
+        closest_depths[global_id] = depth
+        return depth
+
+    # Product projection and cut groups contain no nested groups.  Some cut
+    # fills combine several products and expose their GUIDs as class tokens;
+    # such a group is foreground when the closest of those products is.
+    product_group = re.compile(
+        r"<g\b(?P<attrs>[^>]*)>"
+        r"(?P<body>(?:(?!</?g\b).)*?)"
+        r"</g>",
+        re.DOTALL,
+    )
+    path_element = re.compile(r"<path\b(?P<attrs>[^>]*)/>", re.DOTALL)
+    svg_number = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+    line_segment = re.compile(
+        rf"\s*M\s*(?P<x1>{svg_number})[,\s]+(?P<y1>{svg_number})"
+        rf"\s*L\s*(?P<x2>{svg_number})[,\s]+(?P<y2>{svg_number})\s*"
+    )
+
+    def closed_projection_paths(body: str) -> list[str]:
+        """Return closed paths formed by simple projected edge segments."""
+        coordinates: dict[tuple[float, float], tuple[float, float]] = {}
+        edges: list[
+            tuple[tuple[float, float], tuple[float, float]]
+        ] = []
+        adjacency: dict[tuple[float, float], list[int]] = {}
+        for path_match in path_element.finditer(body):
+            path_attributes = dict(
+                re.findall(
+                    r'([\w:-]+)="([^"]*)"',
+                    path_match["attrs"],
+                )
+            )
+            segment = line_segment.fullmatch(path_attributes.get("d", ""))
+            if segment is None:
+                continue
+            first_coordinates = (
+                float(segment["x1"]),
+                float(segment["y1"]),
+            )
+            second_coordinates = (
+                float(segment["x2"]),
+                float(segment["y2"]),
+            )
+            first = tuple(round(value, 6) for value in first_coordinates)
+            second = tuple(round(value, 6) for value in second_coordinates)
+            if first == second:
+                continue
+            coordinates.setdefault(first, first_coordinates)
+            coordinates.setdefault(second, second_coordinates)
+            edge_index = len(edges)
+            edges.append((first, second))
+            adjacency.setdefault(first, []).append(edge_index)
+            adjacency.setdefault(second, []).append(edge_index)
+
+        # Only synthesize fills from unambiguous loops.  Open or branching
+        # projection linework must remain linework rather than becoming a
+        # potentially oversized mask.
+        if not edges or any(len(indices) != 2 for indices in adjacency.values()):
+            return []
+
+        paths: list[str] = []
+        unused_edges = set(range(len(edges)))
+        while unused_edges:
+            edge_index = min(unused_edges)
+            start, current = edges[edge_index]
+            unused_edges.remove(edge_index)
+            points = [start, current]
+            while current != start:
+                candidates = [
+                    candidate
+                    for candidate in adjacency[current]
+                    if candidate in unused_edges
+                ]
+                if len(candidates) != 1:
+                    return []
+                edge_index = candidates[0]
+                unused_edges.remove(edge_index)
+                first, second = edges[edge_index]
+                current = second if first == current else first
+                points.append(current)
+            if len(points) < 4:
+                return []
+            path_points = [coordinates[point] for point in points[:-1]]
+            paths.append(
+                "M"
+                + " L".join(f"{x:.12g},{y:.12g}" for x, y in path_points)
+                + " Z"
+            )
+        return paths
+
+    foreground_groups: list[str] = []
+    for match in product_group.finditer(svg):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"])
+        )
+        classes = attributes.get("class", "").split()
+        if "IfcAnnotation" in classes:
+            continue
+        global_ids = {
+            value
+            for key, value in attributes.items()
+            if key.endswith(":guid") and _IFC_GLOBAL_ID.fullmatch(value)
+        }
+        global_ids.update(
+            token for token in classes if _IFC_GLOBAL_ID.fullmatch(token)
+        )
+        depths = [
+            depth
+            for global_id in global_ids
+            if (depth := closest_depth(global_id)) is not None
+        ]
+        if not depths or min(depths) >= foreground_depth:
+            continue
+        # The original group remains in the model layer.  Its foreground copy
+        # must not duplicate SVG ids, which are not required for rendering.
+        foreground_group = re.sub(
+            r'\s+id="[^"]*"',
+            "",
+            match.group(0),
+        )
+        if "projection" in classes and "IfcSlab" in classes:
+            projection_paths = closed_projection_paths(match["body"])
+            if projection_paths:
+                fills = "".join(
+                    '<path class="wall-insulation-foreground-mask" '
+                    'style="fill:white;stroke:none" '
+                    f'd="{path}"/>'
+                    '<path class="wall-insulation-foreground-fill" '
+                    'style="stroke:none" '
+                    f'd="{path}"/>'
+                    for path in projection_paths
+                )
+                foreground_group = foreground_group.replace(
+                    ">",
+                    f">{fills}",
+                    1,
+                )
+        foreground_groups.append(foreground_group)
+
+    depth_layers = (
+        '<g class="wall-insulation-depth-layer '
+        'target-view-ELEVATIONVIEW">\n'
+        + "\n".join(f"  {element}" for element in insulation_elements)
+        + "\n</g>\n"
+    )
+    if foreground_groups:
+        depth_layers += (
+            '<g class="wall-insulation-foreground section '
+            'target-view-ELEVATIONVIEW">\n'
+            + "\n".join(f"  {group}" for group in foreground_groups)
+            + "\n</g>\n"
+        )
+    svg = svg.replace(insertion_marker, depth_layers, 1)
     svg_path.write_text(svg, encoding="utf-8")
 
 
@@ -2687,7 +3000,12 @@ def _render_existing_drawing(
     else:
         _postprocess_projected_chimney_fills(absolute_output)
         _postprocess_wall_insulation_batting(absolute_output)
-        _postprocess_wall_insulation_backdrop(absolute_output)
+        _postprocess_roof_batting(absolute_output)
+        _postprocess_elevation_wall_insulation_depth(
+            absolute_output,
+            model,
+            drawing,
+        )
         _postprocess_elevation_opening_overlays(
             absolute_output,
             model,
@@ -6038,24 +6356,73 @@ class Drawing:
 
     def add_batting(
         self,
-        start: Point,
-        end: Point,
+        start: Point | Point3D,
+        end: Point | Point3D,
         *,
         thickness: Number,
         name: str | None = None,
+        classes: str | None = None,
     ) -> ifcopenshell.entity_instance:
-        """Add a batting annotation scoped only to this drawing."""
-        self._require_plan_view("add_batting")
-        start_x, start_y = _point(start, "start")
-        end_x, end_y = _point(end, "end")
+        """Add a batting annotation scoped only to this drawing.
+
+        Plan drawings accept two-dimensional model XY points.  Elevation
+        drawings accept three-dimensional world points lying in the drawing
+        plane, allowing sloped batting to follow sectioned roof geometry.
+        ``classes`` adds drawing-style classes to the annotation.
+        """
         thickness = _number(thickness, "thickness")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
+        annotation_classes = (
+            _name(classes, "classes") if classes is not None else None
+        )
 
-        delta_x = end_x - start_x
-        delta_y = end_y - start_y
-        length = hypot(delta_x, delta_y)
-        if length == 0:
+        if self.view == "plan":
+            start_x, start_y = _point(start, "start")
+            end_x, end_y = _point(end, "end")
+            storeys_below = [
+                storey
+                for storey in self.house._storeys
+                if storey.elevation <= self.z
+            ]
+            annotation_z = (
+                max(
+                    storeys_below,
+                    key=lambda storey: storey.elevation,
+                ).elevation
+                if storeys_below
+                else 0.0
+            )
+            start_point = np.array(
+                (start_x, start_y, annotation_z),
+                dtype=float,
+            )
+            end_point = np.array(
+                (end_x, end_y, annotation_z),
+                dtype=float,
+            )
+            annotation_normal = np.array((0.0, 0.0, 1.0))
+        else:
+            start_point = np.array(_point_3d(start, "start"), dtype=float)
+            end_point = np.array(_point_3d(end, "end"), dtype=float)
+            drawing_origin = np.array((self.x, self.y, self.z), dtype=float)
+            drawing_normal = np.array(self.direction, dtype=float)
+            if (
+                abs(float(np.dot(start_point - drawing_origin, drawing_normal)))
+                > 1e-7
+                or abs(
+                    float(np.dot(end_point - drawing_origin, drawing_normal))
+                )
+                > 1e-7
+            ):
+                raise ValueError(
+                    "elevation batting points must lie in the drawing plane"
+                )
+            annotation_normal = -drawing_normal
+
+        delta = end_point - start_point
+        length = float(np.linalg.norm(delta))
+        if length <= 1e-9:
             raise ValueError("batting start and end must be different points")
 
         self._batting_count += 1
@@ -6070,21 +6437,14 @@ class Drawing:
             predefined_type="BATTING",
         )
 
-        storeys_below = [storey for storey in self.house._storeys if storey.elevation <= self.z]
-        annotation_z = (
-            max(storeys_below, key=lambda storey: storey.elevation).elevation
-            if storeys_below
-            else 0.0
-        )
-        angle = atan2(delta_y, delta_x)
+        annotation_x = delta / length
+        annotation_y = np.cross(annotation_normal, annotation_x)
+        annotation_y /= np.linalg.norm(annotation_y)
         placement = np.eye(4)
-        placement[0, 0] = cos(angle)
-        placement[0, 1] = -sin(angle)
-        placement[1, 0] = sin(angle)
-        placement[1, 1] = cos(angle)
-        placement[0, 3] = start_x
-        placement[1, 3] = start_y
-        placement[2, 3] = annotation_z
+        placement[:3, 0] = annotation_x
+        placement[:3, 1] = annotation_y
+        placement[:3, 2] = annotation_normal
+        placement[:3, 3] = start_point
         ifcopenshell.api.geometry.edit_object_placement(
             self.house.model,
             product=annotation,
@@ -6112,6 +6472,17 @@ class Drawing:
             pset=pset,
             properties={"Thickness": thickness},
         )
+        if annotation_classes is not None:
+            annotation_pset = ifcopenshell.api.pset.add_pset(
+                self.house.model,
+                product=annotation,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                self.house.model,
+                pset=annotation_pset,
+                properties={"Classes": annotation_classes},
+            )
         ifcopenshell.api.group.assign_group(
             self.house.model,
             group=self.group,

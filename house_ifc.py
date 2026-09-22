@@ -1,4 +1,11 @@
 
+# TODO:
+# - komin should use different pattern - now it uses the same as load bearing walls
+# - venec covered by miako
+# - xps perimeter
+# - floor insulation - different pattern?
+# - chimney wall should use no pattern
+
 # Strecha:
 #    - taska:
 #        - KMB BETA Briliant cihlová
@@ -72,6 +79,9 @@ from ifc_utils import *
 RAFTER_Z_OFFSET = -0.04
 RAFTER_THICKNESS = 0.08
 RAFTER_SIZE = (RAFTER_THICKNESS, 0.20)
+ROOF_BATTING_CENTER_OFFSET = RAFTER_Z_OFFSET + RAFTER_SIZE[1] / 2
+ROOF_BATTING_THICKNESS = RAFTER_SIZE[1] - 0.06
+ROOF_BATTING_END_INSET = 0.03
 VAPOUR_BARRIER_THICKNESS = 0.001
 THERMAL_INSULATION_UNDER_RAFTERS = 0
 INSTALLATION_SPACE_THICKNESS = 0.08
@@ -1218,6 +1228,64 @@ flat_ceiling_roof = roof.plane(
 )
 
 
+def roof_batting_point(plane, *, x, y):
+	"""Return a world point at the centre of one roof's rafter cavity."""
+	batting_plane = offset_plane(
+		*plane.points,
+		offset=ROOF_BATTING_CENTER_OFFSET,
+	)
+	return (
+		x,
+		y,
+		plane_height_at(*batting_plane, x=x, y=y),
+	)
+
+
+def roof_batting_intersection(first_plane, second_plane, *, x):
+	"""Intersect two rafter-cavity centre planes in a vertical X section."""
+	reference_y = HALF_DEPTH
+	first_at_reference = roof_batting_point(
+		first_plane, x=x, y=reference_y
+	)[2]
+	second_at_reference = roof_batting_point(
+		second_plane, x=x, y=reference_y
+	)[2]
+	first_slope = (
+		roof_batting_point(first_plane, x=x, y=reference_y + 1)[2]
+		- first_at_reference
+	)
+	second_slope = (
+		roof_batting_point(second_plane, x=x, y=reference_y + 1)[2]
+		- second_at_reference
+	)
+	slope_delta = first_slope - second_slope
+	if abs(slope_delta) <= 1e-9:
+		raise ValueError("roof batting planes must not be parallel")
+	intersection_y = reference_y + (
+		(second_at_reference - first_at_reference) / slope_delta
+	)
+	return roof_batting_point(first_plane, x=x, y=intersection_y)
+
+
+def inset_roof_batting_segment(start, end):
+	"""Keep batting loops clear of wall, ridge, and roof-joint outlines."""
+	delta = tuple(end_value - start_value for start_value, end_value in zip(start, end))
+	length = math.sqrt(sum(value * value for value in delta))
+	if length <= 2 * ROOF_BATTING_END_INSET:
+		raise ValueError("roof batting segment is too short for its end insets")
+	direction = tuple(value / length for value in delta)
+	return (
+		tuple(
+			value + axis * ROOF_BATTING_END_INSET
+			for value, axis in zip(start, direction)
+		),
+		tuple(
+			value - axis * ROOF_BATTING_END_INSET
+			for value, axis in zip(end, direction)
+		),
+	)
+
+
 def roof_angle_degrees(plane):
 	"""Return a roof plane's acute pitch angle above horizontal."""
 	normal_z = min(1.0, max(-1.0, abs(plane.z_axis[2])))
@@ -2215,12 +2283,12 @@ if "cut1" in sys.argv:
 if "aa" in sys.argv:
 	drawing1 = house.add_drawing(
 		"aa",
-		x=wall3_x-1.5,
+		x=wall2_x+0.6,
 		y=4,
 		z=3.5,
 		radius=8,
 		view="elevation",
-		direction=(-1, 0, 0),
+		direction=(1, 0, 0),
 		storeys=None,
 		doors_closed=True,
 	)
@@ -2229,15 +2297,47 @@ if "aa" in sys.argv:
 		thickness=POLYSTYRENE_INSULATION_THICKNESS,
 		material="polystyrene",
 		start_z=0,
-		end_z=UPPER_FLOOR_START+1.3,
+		end_z=UPPER_FLOOR_START+NADEZDIVKA+0.15,
 	)
 	drawing1.add_wall_insulation(
 		wall_dormer,
 		thickness=ROCKWOOL_INSULATION_THICKNESS,
 		material="rockwool",
 		start_z=0,
-		end_z=UPPER_FLOOR_START+2.8,
+		end_z=UPPER_FLOOR_START+DORMER_WALL_HEIGHT+0.15,
 	)
+	aa_x = drawing1.x
+	ridge_batting = roof_batting_intersection(
+		street_roof,
+		garden_roof,
+		x=aa_x,
+	)
+	garden_joint_batting = roof_batting_intersection(
+		garden_roof,
+		dormer_roof,
+		x=aa_x,
+	)
+	street_wall_batting = roof_batting_point(
+	street_roof,
+		x=aa_x,
+		y=0,
+	)
+	garden_wall_batting = roof_batting_point(
+	dormer_roof,
+		x=aa_x,
+		y=HOUSE_DEPTH,
+	)
+	for batting_name, batting_start, batting_end in (
+		("AA street roof batting", street_wall_batting, ridge_batting),
+		("AA garden roof batting", ridge_batting, garden_joint_batting),
+		("AA dormer roof batting", garden_joint_batting, garden_wall_batting),
+	):
+		drawing1.add_batting(
+			*inset_roof_batting_segment(batting_start, batting_end),
+			thickness=ROOF_BATTING_THICKNESS,
+			name=batting_name,
+			classes="roof-batting",
+		)
 	drawing1.render("aa.svg", png=True, png_dpi=600)
 
 # Drawing - cut3

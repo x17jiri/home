@@ -42,10 +42,12 @@ from ifc_utils import (
     _close_door_bodies,
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
+    _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
     _postprocess_projected_wood_fills,
     _postprocess_ring_beam_stirrups,
+    _postprocess_roof_batting,
     _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
     _postprocess_wall_insulation_backdrop,
@@ -5851,6 +5853,67 @@ class HouseTests(unittest.TestCase):
             ]
             self.assertEqual({drawing.Name for drawing in drawings}, {"Ground plan", "Other plan"})
 
+    def test_adds_sloped_batting_in_an_elevation_drawing_plane(self) -> None:
+        house = House("My house")
+        house.storey("Ground floor", elevation=0)
+        drawing = house.add_drawing(
+            "Section",
+            2,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(1, 0, 0),
+        )
+
+        batting = drawing.add_batting(
+            (2, 0, 1),
+            (2, 3, 4),
+            thickness=0.16,
+            classes="roof-batting",
+        )
+
+        placement = ifcopenshell.util.placement.get_local_placement(
+            batting.ObjectPlacement
+        )
+        diagonal = 2**-0.5
+        np.testing.assert_allclose(
+            placement,
+            np.array(
+                (
+                    (0, 0, -1, 2),
+                    (diagonal, diagonal, 0, 0),
+                    (diagonal, -diagonal, 0, 1),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-9,
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                batting,
+                "BBIM_Batting",
+                "Thickness",
+            ),
+            0.16,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                batting,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "roof-batting",
+        )
+        self.assertIn(batting, drawing.group.IsGroupedBy[0].RelatedObjects)
+
+        with self.assertRaisesRegex(ValueError, "drawing plane"):
+            drawing.add_batting(
+                (2.01, 0, 1),
+                (2, 3, 4),
+                thickness=0.16,
+            )
+
     def test_adds_merged_dashed_wall_outlines_without_junction_seams(
         self,
     ) -> None:
@@ -7823,8 +7886,46 @@ class HouseTests(unittest.TestCase):
             _postprocess_wall_insulation_batting(svg_path)
 
             svg = svg_path.read_text(encoding="utf-8")
-            self.assertEqual(svg.count('stroke-width:0.1"'), 2)
+            self.assertEqual(svg.count("stroke-width:0.06!important"), 2)
             self.assertEqual(svg.count('stroke-width:0.18"'), 1)
+
+    def test_uses_a_lighter_stroke_only_for_roof_batting_markers(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                '<marker id="batting-roof"><path '
+                'style="stroke:black;stroke-width:0.18"/></marker>'
+                '<marker id="batting-wall"><path '
+                'style="stroke:black;stroke-width:0.18"/></marker>'
+                '<g ifc:guid="roof-guid" class="IfcAnnotation cut">'
+                '<path d="M 0 0 L 10 0"/></g>'
+                '<g ifc:guid="other-guid" class="IfcAnnotation cut">'
+                '<path d="M 0 1 L 10 1"/></g>'
+                '<polyline class="IfcAnnotation roof-batting" '
+                'style="marker-start:url(#batting-roof)"/>'
+                '<polyline class="GlobalId-roof-guid IfcAnnotation roof-batting" '
+                'style="marker-start:url(#batting-roof)"/>'
+                '<polyline class="IfcAnnotation wall-insulation-rockwool" '
+                'style="marker-start:url(#batting-wall)"/>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            _postprocess_wall_insulation_batting(svg_path)
+            _postprocess_roof_batting(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count("stroke-width:0.06!important"), 2)
+            self.assertIn(
+                '<g ifc:guid="roof-guid" class="IfcAnnotation cut" '
+                'style="display:none!important">',
+                svg,
+            )
+            self.assertIn(
+                '<g ifc:guid="other-guid" class="IfcAnnotation cut">',
+                svg,
+            )
 
     def test_moves_wall_insulation_to_first_drawable_svg_layer(self) -> None:
         with TemporaryDirectory() as directory:
@@ -7868,6 +7969,122 @@ class HouseTests(unittest.TestCase):
             )
             self.assertGreater(svg.index('id="dimension"'), backdrop_end)
             self.assertNotIn("\n  \n", svg)
+
+    def test_layers_elevation_insulation_by_closest_view_depth(self) -> None:
+        near_guid = "0AAAAAAAAAAAAAAAAAAAAA"
+        far_guid = "1BBBBBBBBBBBBBBBBBBBBB"
+        spanning_guid = "2CCCCCCCCCCCCCCCCCCCCC"
+        products = {
+            near_guid: object(),
+            far_guid: object(),
+            spanning_guid: object(),
+        }
+        vertices = {
+            products[near_guid]: (
+                100.0,
+                -100.0,
+                -0.25,
+                200.0,
+                100.0,
+                -0.75,
+            ),
+            products[far_guid]: (0.0, 0.0, -1.5, 1.0, 1.0, -2.0),
+            products[spanning_guid]: (0.0, 0.0, -0.5, 0.0, 0.0, -3.0),
+        }
+
+        class Model:
+            @staticmethod
+            def by_guid(global_id: str) -> object:
+                return products[global_id]
+
+        class Drawing:
+            ObjectPlacement = object()
+
+        def create_shape(_settings: object, product: object) -> object:
+            return type(
+                "Shape",
+                (),
+                {
+                    "geometry": type(
+                        "Geometry",
+                        (),
+                        {"verts": vertices[product]},
+                    )()
+                },
+            )()
+
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:ifc="http://www.ifcopenshell.org/ns">\n'
+                '  <defs/>\n'
+                '  <g class="section target-view-ELEVATIONVIEW">\n'
+                f'    <g class="IfcSlab projection" ifc:guid="{far_guid}">'
+                '<path data-object="far"/></g>\n'
+                f'    <g class="IfcSlab projection" ifc:guid="{near_guid}">'
+                '<path data-object="near"/>'
+                '<path d="M0,0 L1,0"/>'
+                '<path d="M1,0 L1,1"/>'
+                '<path d="M1,1 L0,1"/>'
+                '<path d="M0,1 L0,0"/>'
+                '</g>\n'
+                f'    <g class="IfcWall cut {spanning_guid}">'
+                '<path data-object="spanning"/></g>\n'
+                '  </g>\n'
+                '  <path class="IfcAnnotation wall-insulation" '
+                'data-object="insulation"/>\n'
+                '  <line class="IfcAnnotation" data-object="dimension"/>\n'
+                '</svg>\n',
+                encoding="utf-8",
+            )
+
+            with (
+                patch(
+                    "ifc_utils.ifcopenshell.util.placement.get_local_placement",
+                    return_value=np.eye(4),
+                ),
+                patch(
+                    "ifc_utils.ifcopenshell.geom.create_shape",
+                    side_effect=create_shape,
+                ),
+            ):
+                _postprocess_elevation_wall_insulation_depth(
+                    svg_path,
+                    Model(),
+                    Drawing(),
+                )
+                _postprocess_elevation_wall_insulation_depth(
+                    svg_path,
+                    Model(),
+                    Drawing(),
+                )
+
+            svg = svg_path.read_text(encoding="utf-8")
+            insulation = svg.index('data-object="insulation"')
+            self.assertEqual(svg.count("wall-insulation-depth-layer"), 1)
+            self.assertEqual(svg.count('data-object="far"'), 1)
+            self.assertEqual(svg.count('data-object="near"'), 2)
+            self.assertEqual(svg.count('data-object="spanning"'), 2)
+            self.assertEqual(
+                svg.count('class="wall-insulation-foreground-mask"'),
+                1,
+            )
+            self.assertEqual(
+                svg.count('class="wall-insulation-foreground-fill"'),
+                1,
+            )
+            self.assertLess(svg.index('data-object="far"'), insulation)
+            self.assertGreater(
+                svg.index('class="wall-insulation-foreground-mask"'),
+                insulation,
+            )
+            self.assertGreater(svg.rindex('data-object="near"'), insulation)
+            self.assertGreater(
+                svg.rindex('data-object="spanning"'),
+                insulation,
+            )
+            self.assertGreater(svg.index('data-object="dimension"'), insulation)
 
     def test_hides_miako_concrete_cover_seams_in_plan_only(self) -> None:
         stylesheet = (
