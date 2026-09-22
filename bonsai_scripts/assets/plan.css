@@ -131,6 +131,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke: none !important;
 }
 
+/* The cast-in-place MIAKO cover is continuous concrete.  Its generated cut
+ * perimeter creates false seams where it overlaps the ring beam. */
+.IfcBuildingElementPart.material-Concretetopping.cut {
+    stroke: none !important;
+}
+
 /* Distinguish the concrete, ceramic, and steel in every MIAKO section. */
 .material-MIAKOceramicconcrete.cut,
 .material-MIAKOconcrete.cut,

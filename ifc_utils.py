@@ -588,7 +588,7 @@ def _postprocess_ring_beam_stirrups(
     model: ifcopenshell.file,
     drawing: ifcopenshell.entity_instance,
 ) -> None:
-    """Connect each sectioned ring beam's four longitudinal-bar dots."""
+    """Redraw sectioned ring-beam bars last and connect their four dots."""
     svg = svg_path.read_text(encoding="utf-8")
     if '<g class="ring-beam-stirrups' in svg:
         return
@@ -629,6 +629,7 @@ def _postprocess_ring_beam_stirrups(
     geometry_settings = ifcopenshell.geom.settings()
     geometry_settings.set(geometry_settings.USE_WORLD_COORDS, True)
     stirrups: list[tuple[str, float, list[tuple[float, float]]]] = []
+    reinforcement_global_ids: set[str] = set()
 
     for ring_beam in model.by_type("IfcBeam"):
         properties = ifcopenshell.util.element.get_pset(
@@ -655,6 +656,7 @@ def _postprocess_ring_beam_stirrups(
                 and product.PredefinedType == "MAIN"
             )
         section_points: set[tuple[float, float]] = set()
+        section_bar_global_ids: set[str] = set()
         for bar in bars:
             try:
                 shape = ifcopenshell.geom.create_shape(
@@ -671,6 +673,7 @@ def _postprocess_ring_beam_stirrups(
             cut_hull = _convex_hull_2d(cut_points)
             if not cut_hull:
                 continue
+            section_bar_global_ids.add(bar.GlobalId)
             cut_x_coordinates = [x for x, _ in cut_hull]
             cut_y_coordinates = [y for _, y in cut_hull]
             section_points.add(
@@ -689,6 +692,7 @@ def _postprocess_ring_beam_stirrups(
         hull = _convex_hull_2d(section_points)
         if len(hull) != 4:
             continue
+        reinforcement_global_ids.update(section_bar_global_ids)
         svg_hull = [
             (
                 view_center_x + x * svg_units_per_metre,
@@ -711,8 +715,43 @@ def _postprocess_ring_beam_stirrups(
             )
         )
 
+    reinforcement_sources: dict[str, tuple[re.Match[str], dict[str, str]]] = {}
+    for match in re.finditer(r'<g\b(?P<attrs>[^>\n]*)>', svg):
+        source_attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"])
+        )
+        global_id = source_attributes.get("ifc:guid")
+        if global_id not in reinforcement_global_ids:
+            continue
+        classes = set(source_attributes.get("class", "").split())
+        if not {
+            "IfcReinforcingBar",
+            "material-Ringbeamreinforcement",
+            "cut",
+        }.issubset(classes):
+            continue
+        reinforcement_sources.setdefault(
+            global_id,
+            (match, source_attributes),
+        )
+
+    reinforcement_ids = []
+    id_insertions = []
+    for index, (match, source_attributes) in enumerate(
+        reinforcement_sources.values(),
+        start=1,
+    ):
+        element_id = source_attributes.get("id")
+        if element_id is None:
+            element_id = f"ring-beam-reinforcement-overlay-source-{index}"
+            id_insertions.append((match.end() - 1, f' id="{element_id}"'))
+        reinforcement_ids.append(element_id)
+
+    for offset, identifier in sorted(id_insertions, reverse=True):
+        svg = f"{svg[:offset]}{identifier}{svg[offset:]}"
+
     closing_svg = svg.rfind("</svg>")
-    if not stirrups or closing_svg < 0:
+    if (not stirrups and not reinforcement_ids) or closing_svg < 0:
         return
     polygons = "\n".join(
         (
@@ -726,9 +765,17 @@ def _postprocess_ring_beam_stirrups(
         )
         for name, stroke_width, points in stirrups
     )
+    reinforcement_uses = "\n".join(
+        f'    <use class="ring-beam-reinforcement-overlay" '
+        f'href="#{element_id}" xlink:href="#{element_id}"/>'
+        for element_id in reinforcement_ids
+    )
+    overlay_children = "\n".join(
+        child for child in (polygons, reinforcement_uses) if child
+    )
     overlay = (
         '<g class="ring-beam-stirrups target-view-ELEVATIONVIEW">\n'
-        f"{polygons}\n"
+        f"{overlay_children}\n"
         "  </g>\n"
     )
     svg = f"{svg[:closing_svg]}{overlay}{svg[closing_svg:]}"
@@ -1216,6 +1263,177 @@ def _postprocess_roof_batting(
         svg_path,
         annotation_class="roof-batting",
     )
+
+
+_PAVATEX_BATTING_OWNER_PREFIX = "pavatex-owner-"
+_PAVATEX_BATTING_CLIP_ID = "pavatex-batting-visible-material"
+
+
+def _postprocess_pavatex_batting(
+    svg_path: Path,
+    *,
+    stroke_width: float = 0.06,
+) -> None:
+    """Place PAVATEX batting in its owning roof product's SVG layer.
+
+    Bonsai writes batting annotations as a final overlay, independently of
+    their real elevation-view depth. PAVATEX batting carries its owning roof
+    slab's IFC GUID and desired ``cut`` or ``projection`` representation as
+    annotation classes. Moving the polyline into that product group restores
+    the same front-to-back ordering as the roof geometry.
+    """
+    _postprocess_batting_marker_strokes(
+        svg_path,
+        annotation_class="pavatex-batting",
+        stroke_width=stroke_width,
+        important=True,
+    )
+    _hide_annotation_source_geometry(
+        svg_path,
+        annotation_class="pavatex-batting",
+    )
+
+    svg = svg_path.read_text(encoding="utf-8")
+    simple_group = re.compile(
+        r"<g\b(?P<attrs>[^>]*)>"
+        r"(?P<body>(?:(?!</?g\b).)*?)"
+        r"</g>",
+        re.DOTALL,
+    )
+    path_element = re.compile(r"<path\b(?P<attrs>[^>]*)/>", re.DOTALL)
+
+    # The projected roof consists mostly of open edge paths, so SVG ordering
+    # alone cannot hide a long batting annotation behind intervening objects.
+    # Use Bonsai's final visible PAVATEX surface and cut fills as one clip.
+    clip_paths: list[str] = []
+    for path in path_element.finditer(svg):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', path["attrs"])
+        )
+        classes = set(attributes.get("class", "").split())
+        path_data = attributes.get("d")
+        if (
+            path_data is not None
+            and "material-Woodfiberboard" in classes
+            and "surface" in classes
+        ):
+            clip_paths.append(path_data)
+    for group in simple_group.finditer(svg):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
+        )
+        classes = set(attributes.get("class", "").split())
+        if not {"material-Woodfiberboard", "cut"} <= classes:
+            continue
+        for path in path_element.finditer(group["body"]):
+            path_attributes = dict(
+                re.findall(r'([\w:-]+)="([^"]*)"', path["attrs"])
+            )
+            if path_data := path_attributes.get("d"):
+                clip_paths.append(path_data)
+
+    has_material_clip = bool(clip_paths)
+    if has_material_clip and f'id="{_PAVATEX_BATTING_CLIP_ID}"' not in svg:
+        clip = (
+            f'<clipPath id="{_PAVATEX_BATTING_CLIP_ID}" '
+            'clipPathUnits="userSpaceOnUse">'
+            + "".join(f'<path d="{path_data}"/>' for path_data in clip_paths)
+            + "</clipPath>"
+        )
+        definitions_end = svg.find("</defs>")
+        if definitions_end >= 0:
+            svg = f"{svg[:definitions_end]}{clip}{svg[definitions_end:]}"
+        else:
+            root = re.search(r"<svg\b[^>]*>", svg)
+            if root is not None:
+                svg = f"{svg[:root.end()]}<defs>{clip}</defs>{svg[root.end():]}"
+
+    batting = re.compile(
+        r"<polyline\b[^>]*\bclass=\"[^\"]*\bpavatex-batting\b[^\"]*\"[^>]*/>",
+        re.DOTALL,
+    )
+    pending: list[tuple[str, str, str]] = []
+
+    def collect_batting(match: re.Match[str]) -> str:
+        element = match.group(0)
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', element))
+        classes = attributes.get("class", "").split()
+        owner_class = next(
+            (
+                class_name
+                for class_name in classes
+                if class_name.startswith(_PAVATEX_BATTING_OWNER_PREFIX)
+            ),
+            None,
+        )
+        target_class = next(
+            (
+                class_name.removeprefix("pavatex-target-")
+                for class_name in classes
+                if class_name.startswith("pavatex-target-")
+            ),
+            None,
+        )
+        if owner_class is None or target_class not in {"cut", "projection"}:
+            return element
+        if has_material_clip:
+            element = re.sub(
+                r"\s*/>$",
+                f' clip-path="url(#{_PAVATEX_BATTING_CLIP_ID})"/>',
+                element,
+            )
+        pending.append(
+            (
+                owner_class.removeprefix(_PAVATEX_BATTING_OWNER_PREFIX),
+                target_class,
+                element,
+            )
+        )
+        return ""
+
+    svg = batting.sub(collect_batting, svg)
+    if not pending:
+        return
+
+    unresolved: list[str] = []
+    for owner_guid, target_class, element in pending:
+        matching_groups: list[re.Match[str]] = []
+        for group in simple_group.finditer(svg):
+            attributes = dict(
+                re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
+            )
+            classes = attributes.get("class", "").split()
+            group_guids = {
+                token for token in classes if _IFC_GLOBAL_ID.fullmatch(token)
+            }
+            ifc_guid = attributes.get("ifc:guid")
+            if ifc_guid is not None:
+                group_guids.add(ifc_guid)
+            if owner_guid in group_guids and target_class in classes:
+                matching_groups.append(group)
+        if not matching_groups:
+            unresolved.append(element)
+            continue
+
+        # Elevation insulation depth handling may have copied a near product
+        # into a foreground layer. The last matching group is that copy;
+        # otherwise it is simply the original group.
+        owner_group = matching_groups[-1]
+        insertion_point = owner_group.end() - len("</g>")
+        svg = (
+            f"{svg[:insertion_point]}\n  {element}"
+            f"{svg[insertion_point:]}"
+        )
+
+    if unresolved:
+        closing_svg = svg.rfind("</svg>")
+        if closing_svg >= 0:
+            svg = (
+                f"{svg[:closing_svg]}"
+                + "\n".join(unresolved)
+                + f"\n{svg[closing_svg:]}"
+            )
+    svg_path.write_text(svg, encoding="utf-8")
 
 
 def _postprocess_wall_insulation_backdrop(svg_path: Path) -> None:
@@ -3006,18 +3224,19 @@ def _render_existing_drawing(
             model,
             drawing,
         )
+        _postprocess_pavatex_batting(absolute_output)
         _postprocess_elevation_opening_overlays(
-            absolute_output,
-            model,
-            drawing,
-        )
-        _postprocess_ring_beam_stirrups(
             absolute_output,
             model,
             drawing,
         )
         _postprocess_miako_reinforcement_overlays(absolute_output)
         _postprocess_vapour_barrier_overlays(absolute_output)
+        _postprocess_ring_beam_stirrups(
+            absolute_output,
+            model,
+            drawing,
+        )
     _postprocess_right_panel(
         absolute_output,
         drawing_properties or {},
@@ -6367,7 +6586,8 @@ class Drawing:
 
         Plan drawings accept two-dimensional model XY points.  Elevation
         drawings accept three-dimensional world points lying in the drawing
-        plane, allowing sloped batting to follow sectioned roof geometry.
+        plane or one parallel to it. This allows sloped batting to follow
+        sectioned roof geometry or retain the real depth of projected work.
         ``classes`` adds drawing-style classes to the annotation.
         """
         thickness = _number(thickness, "thickness")
@@ -6407,16 +6627,14 @@ class Drawing:
             end_point = np.array(_point_3d(end, "end"), dtype=float)
             drawing_origin = np.array((self.x, self.y, self.z), dtype=float)
             drawing_normal = np.array(self.direction, dtype=float)
-            if (
-                abs(float(np.dot(start_point - drawing_origin, drawing_normal)))
-                > 1e-7
-                or abs(
-                    float(np.dot(end_point - drawing_origin, drawing_normal))
-                )
-                > 1e-7
-            ):
+            start_depth = float(
+                np.dot(start_point - drawing_origin, drawing_normal)
+            )
+            end_depth = float(np.dot(end_point - drawing_origin, drawing_normal))
+            if abs(start_depth - end_depth) > 1e-7:
                 raise ValueError(
-                    "elevation batting points must lie in the drawing plane"
+                    "elevation batting points must lie in one plane parallel "
+                    "to the drawing plane"
                 )
             annotation_normal = -drawing_normal
 

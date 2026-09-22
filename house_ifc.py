@@ -87,6 +87,12 @@ THERMAL_INSULATION_UNDER_RAFTERS = 0
 INSTALLATION_SPACE_THICKNESS = 0.08
 GYPSUM_PLASTERBOARD_THICKNESS = 0.015
 WOOD_FIBERBOARD_THICKNESS = 0.1
+WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
+PAVATEX_BATTING_CENTER_OFFSET = (
+	WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS / 2
+)
+PAVATEX_BATTING_THICKNESS = WOOD_FIBERBOARD_THICKNESS - 0.03
+PAVATEX_BATTING_END_INSET = 0.03
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
@@ -1185,12 +1191,18 @@ roof_inner_cuts = [
 	((HOUSE_WIDTH-BWT, 0, 0), (HOUSE_WIDTH-BWT, 10, 0), (HOUSE_WIDTH-BWT, 0, 10)),
 ]
 
+STREET_ROOF_EAVE_Y = -0.5
+GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + 0.5
 street_roof = roof.plane(
     "Street slope",
 	points=STREET_ROOF_PLANE_POINTS,
     cuts=[
 		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
-		((0, -0.5, 0), (10, -0.5, 0), (0, -0.5, 10)),
+		(
+			(0, STREET_ROOF_EAVE_Y, 0),
+			(10, STREET_ROOF_EAVE_Y, 0),
+			(0, STREET_ROOF_EAVE_Y, 10),
+		),
 	],
 )
 CUT_STREET_EAVE_Y = BWT + GYM_DEPTH - 0.5
@@ -1211,7 +1223,11 @@ garden_roof = roof.plane(
 	points=GARDEN_ROOF_PLANE_POINTS,
     cuts=[
 		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
-		((0, HOUSE_DEPTH+0.5, 0), (10, HOUSE_DEPTH+0.5, 0), (0, HOUSE_DEPTH+0.5, 10)),
+		(
+			(0, GARDEN_ROOF_EAVE_Y, 0),
+			(10, GARDEN_ROOF_EAVE_Y, 0),
+			(0, GARDEN_ROOF_EAVE_Y, 10),
+		),
 	],
 )
 dormer_roof = roof.plane(
@@ -1219,7 +1235,11 @@ dormer_roof = roof.plane(
 	points=DORMER_ROOF_PLANE_POINTS,
     cuts=[
 		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
-		((0, HOUSE_DEPTH+0.5, 0), (10, HOUSE_DEPTH+0.5, 0), (0, HOUSE_DEPTH+0.5, 10)),
+		(
+			(0, GARDEN_ROOF_EAVE_Y, 0),
+			(10, GARDEN_ROOF_EAVE_Y, 0),
+			(0, GARDEN_ROOF_EAVE_Y, 10),
+		),
 	],
 )
 flat_ceiling_roof = roof.plane(
@@ -1228,11 +1248,17 @@ flat_ceiling_roof = roof.plane(
 )
 
 
-def roof_batting_point(plane, *, x, y):
-	"""Return a world point at the centre of one roof's rafter cavity."""
+def roof_batting_point(
+	plane,
+	*,
+	x,
+	y,
+	center_offset=ROOF_BATTING_CENTER_OFFSET,
+):
+	"""Return a world point on an offset roof-layer centre plane."""
 	batting_plane = offset_plane(
 		*plane.points,
-		offset=ROOF_BATTING_CENTER_OFFSET,
+		offset=center_offset,
 	)
 	return (
 		x,
@@ -1241,21 +1267,43 @@ def roof_batting_point(plane, *, x, y):
 	)
 
 
-def roof_batting_intersection(first_plane, second_plane, *, x):
-	"""Intersect two rafter-cavity centre planes in a vertical X section."""
+def roof_batting_intersection(
+	first_plane,
+	second_plane,
+	*,
+	x,
+	center_offset=ROOF_BATTING_CENTER_OFFSET,
+):
+	"""Intersect two offset roof-layer centre planes in a vertical X section."""
 	reference_y = HALF_DEPTH
 	first_at_reference = roof_batting_point(
-		first_plane, x=x, y=reference_y
+		first_plane,
+		x=x,
+		y=reference_y,
+		center_offset=center_offset,
 	)[2]
 	second_at_reference = roof_batting_point(
-		second_plane, x=x, y=reference_y
+		second_plane,
+		x=x,
+		y=reference_y,
+		center_offset=center_offset,
 	)[2]
 	first_slope = (
-		roof_batting_point(first_plane, x=x, y=reference_y + 1)[2]
+		roof_batting_point(
+			first_plane,
+			x=x,
+			y=reference_y + 1,
+			center_offset=center_offset,
+		)[2]
 		- first_at_reference
 	)
 	second_slope = (
-		roof_batting_point(second_plane, x=x, y=reference_y + 1)[2]
+		roof_batting_point(
+			second_plane,
+			x=x,
+			y=reference_y + 1,
+			center_offset=center_offset,
+		)[2]
 		- second_at_reference
 	)
 	slope_delta = first_slope - second_slope
@@ -1264,23 +1312,33 @@ def roof_batting_intersection(first_plane, second_plane, *, x):
 	intersection_y = reference_y + (
 		(second_at_reference - first_at_reference) / slope_delta
 	)
-	return roof_batting_point(first_plane, x=x, y=intersection_y)
+	return roof_batting_point(
+		first_plane,
+		x=x,
+		y=intersection_y,
+		center_offset=center_offset,
+	)
 
 
-def inset_roof_batting_segment(start, end):
+def inset_roof_batting_segment(
+	start,
+	end,
+	*,
+	end_inset=ROOF_BATTING_END_INSET,
+):
 	"""Keep batting loops clear of wall, ridge, and roof-joint outlines."""
 	delta = tuple(end_value - start_value for start_value, end_value in zip(start, end))
 	length = math.sqrt(sum(value * value for value in delta))
-	if length <= 2 * ROOF_BATTING_END_INSET:
+	if length <= 2 * end_inset:
 		raise ValueError("roof batting segment is too short for its end insets")
 	direction = tuple(value / length for value in delta)
 	return (
 		tuple(
-			value + axis * ROOF_BATTING_END_INSET
+			value + axis * end_inset
 			for value, axis in zip(start, direction)
 		),
 		tuple(
-			value - axis * ROOF_BATTING_END_INSET
+			value - axis * end_inset
 			for value, axis in zip(end, direction)
 		),
 	)
@@ -1330,6 +1388,7 @@ roof_layer_storeys.update({
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
 })
+roof_fiberboards = {}
 for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.ObjectType = "ROOF_LAYER"
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
@@ -1375,7 +1434,6 @@ FLAT_CEILING_INNER_LAYER_LAYOUT = {
 	)
 	for layer_name, (bottom, top) in FLAT_CEILING_LAYER_HEIGHTS.items()
 }
-WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
 UNDERLAY_BOTTOM = WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
@@ -1552,6 +1610,7 @@ def add_continuous_roof_layers(
 			color="#C9B56D",
 		)
 		roof_layer_storeys["Wood fiberboard"].add(fiberboard)
+		roof_fiberboards[name] = fiberboard
 		underlay = plane.layer(
 			f"{name} roofing underlay",
 			outline=outer_outline,
@@ -2337,6 +2396,98 @@ if "aa" in sys.argv:
 			thickness=ROOF_BATTING_THICKNESS,
 			name=batting_name,
 			classes="roof-batting",
+		)
+
+	pavatex_ridge = roof_batting_intersection(
+		street_roof,
+		garden_roof,
+		x=aa_x,
+		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
+	)
+	pavatex_garden_joint = roof_batting_intersection(
+		garden_roof,
+		dormer_roof,
+		x=aa_x,
+		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
+	)
+	pavatex_street_eave = roof_batting_point(
+		street_roof,
+		x=aa_x,
+		y=STREET_ROOF_EAVE_Y,
+		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
+	)
+	pavatex_dormer_eave = roof_batting_point(
+		dormer_roof,
+		x=aa_x,
+		y=GARDEN_ROOF_EAVE_Y,
+		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
+	)
+
+	# Garden segment 3 is not cut by AA. Its near face is nevertheless visible
+	# below the dormer, so retain its real X depth and attach its batting to the
+	# projected PAVATEX product during SVG post-processing.
+	projected_garden_x = roof_over_rafter_x_ranges[3][0]
+	projected_pavatex_ridge = roof_batting_intersection(
+		street_roof,
+		garden_roof,
+		x=projected_garden_x,
+		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
+	)
+	projected_pavatex_eave = roof_batting_point(
+		garden_roof,
+		x=projected_garden_x,
+		y=GARDEN_ROOF_EAVE_Y,
+		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
+	)
+	pavatex_batting_segments = (
+		(
+			"AA street PAVATEX batting",
+			pavatex_street_eave,
+			pavatex_ridge,
+			roof_fiberboards["Street segment 2"],
+			"cut",
+		),
+		(
+			"AA garden PAVATEX batting",
+			pavatex_ridge,
+			pavatex_garden_joint,
+			roof_fiberboards["Garden segment 2 above dormer"],
+			"cut",
+		),
+		(
+			"AA dormer PAVATEX batting",
+			pavatex_garden_joint,
+			pavatex_dormer_eave,
+			roof_fiberboards["Dormer segment 2"],
+			"cut",
+		),
+		(
+			"AA projected garden PAVATEX batting",
+			projected_pavatex_ridge,
+			projected_pavatex_eave,
+			roof_fiberboards["Garden segment 3"],
+			"projection",
+		),
+	)
+	for (
+		batting_name,
+		batting_start,
+		batting_end,
+		owner,
+		target,
+	) in pavatex_batting_segments:
+		drawing1.add_batting(
+			*inset_roof_batting_segment(
+				batting_start,
+				batting_end,
+				end_inset=PAVATEX_BATTING_END_INSET,
+			),
+			thickness=PAVATEX_BATTING_THICKNESS,
+			name=batting_name,
+			classes=(
+				f"pavatex-batting pavatex-target-{target} "
+				f"pavatex-owner-{owner.GlobalId}"
+			),
 		)
 	drawing1.render("aa.svg", png=True, png_dpi=600)
 

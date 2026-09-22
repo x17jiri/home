@@ -46,6 +46,7 @@ from ifc_utils import (
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
     _postprocess_projected_wood_fills,
+    _postprocess_pavatex_batting,
     _postprocess_ring_beam_stirrups,
     _postprocess_roof_batting,
     _postprocess_right_panel,
@@ -5907,7 +5908,17 @@ class HouseTests(unittest.TestCase):
         )
         self.assertIn(batting, drawing.group.IsGroupedBy[0].RelatedObjects)
 
-        with self.assertRaisesRegex(ValueError, "drawing plane"):
+        projected_batting = drawing.add_batting(
+            (4, 0, 1),
+            (4, 3, 4),
+            thickness=0.10,
+        )
+        projected_placement = ifcopenshell.util.placement.get_local_placement(
+            projected_batting.ObjectPlacement
+        )
+        self.assertEqual(tuple(projected_placement[:3, 3]), (4, 0, 1))
+
+        with self.assertRaisesRegex(ValueError, "parallel"):
             drawing.add_batting(
                 (2.01, 0, 1),
                 (2, 3, 4),
@@ -7927,6 +7938,58 @@ class HouseTests(unittest.TestCase):
                 svg,
             )
 
+    def test_places_pavatex_batting_in_its_depth_ordered_owner_group(self) -> None:
+        owner_guid = "0AAAAAAAAAAAAAAAAAAAAA"
+        annotation_guid = "1BBBBBBBBBBBBBBBBBBBBB"
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                '<marker id="batting-pavatex"><path '
+                'style="stroke:black;stroke-width:0.18"/></marker>'
+                '<path class="IfcSlab material-Woodfiberboard surface" '
+                'd="M0,0 L10,0 L10,1 L0,1 Z"/>'
+                f'<g ifc:guid="{owner_guid}" class="IfcSlab '
+                'material-Woodfiberboard projection">'
+                '<path id="original-owner"/></g>'
+                '<g class="wall-insulation-foreground">'
+                f'<g ifc:guid="{owner_guid}" class="IfcSlab '
+                'material-Woodfiberboard projection">'
+                '<path id="foreground-owner"/></g></g>'
+                f'<g ifc:guid="{annotation_guid}" '
+                'class="IfcAnnotation projection"><path/></g>'
+                f'<polyline id="pavatex" class="GlobalId-{annotation_guid} '
+                'IfcAnnotation pavatex-batting pavatex-target-projection '
+                f'pavatex-owner-{owner_guid}" '
+                'style="marker-start:url(#batting-pavatex)"/>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            _postprocess_pavatex_batting(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            original_owner = svg.index('id="original-owner"')
+            foreground_owner = svg.index('id="foreground-owner"')
+            pavatex = svg.index('id="pavatex"')
+            self.assertLess(original_owner, foreground_owner)
+            self.assertLess(foreground_owner, pavatex)
+            self.assertIn("stroke-width:0.06!important", svg)
+            self.assertIn(
+                'clip-path="url(#pavatex-batting-visible-material)"',
+                svg,
+            )
+            self.assertEqual(
+                svg.count('id="pavatex-batting-visible-material"'),
+                1,
+            )
+            self.assertIn(
+                f'<g ifc:guid="{annotation_guid}" '
+                'class="IfcAnnotation projection" '
+                'style="display:none!important">',
+                svg,
+            )
+
     def test_moves_wall_insulation_to_first_drawable_svg_layer(self) -> None:
         with TemporaryDirectory() as directory:
             svg_path = Path(directory) / "drawing.svg"
@@ -8086,7 +8149,7 @@ class HouseTests(unittest.TestCase):
             )
             self.assertGreater(svg.index('data-object="dimension"'), insulation)
 
-    def test_hides_miako_concrete_cover_seams_in_plan_only(self) -> None:
+    def test_hides_miako_concrete_cover_seams(self) -> None:
         stylesheet = (
             Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
         ).read_text(encoding="utf-8")
@@ -8096,7 +8159,12 @@ class HouseTests(unittest.TestCase):
             maxsplit=1,
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("stroke: none !important", plan_rule)
-        self.assertIn(".material-Concretetopping.cut", stylesheet)
+
+        cut_rule = stylesheet.split(
+            ".IfcBuildingElementPart.material-Concretetopping.cut",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("stroke: none !important", cut_rule)
 
     def test_styles_stair_annotations_with_short_fine_dashes(self) -> None:
         stylesheet = (
@@ -8594,8 +8662,19 @@ class HouseTests(unittest.TestCase):
         )
         with TemporaryDirectory() as temporary_directory:
             svg_path = Path(temporary_directory) / "ring-beam.svg"
+            reinforcement_groups = "".join(
+                (
+                    f'<g ifc:guid="{bar.GlobalId}" '
+                    'class="IfcReinforcingBar '
+                    'material-Ringbeamreinforcement cut"><path/></g>'
+                )
+                for bar in ring_beam.reinforcement
+            )
             svg_path.write_text(
-                '<svg data-scale="1:100" viewBox="0 0 100 100"></svg>',
+                '<svg data-scale="1:100" viewBox="0 0 100 100">'
+                '<g ifc:guid="projected" class="IfcReinforcingBar '
+                'material-Ringbeamreinforcement projection"><path/></g>'
+                f'{reinforcement_groups}</svg>',
                 encoding="utf-8",
             )
             _postprocess_ring_beam_stirrups(
@@ -8611,6 +8690,24 @@ class HouseTests(unittest.TestCase):
         self.assertIn('ifc:name="Ring beam 1"', svg)
         self.assertIn('stroke-width:0.08 !important', svg)
         self.assertIn('style="fill:none !important;stroke:#333', svg)
+        self.assertEqual(
+            svg.count('class="ring-beam-reinforcement-overlay"'),
+            4,
+        )
+        self.assertGreater(
+            svg.index('<g class="ring-beam-stirrups'),
+            svg.rindex("material-Ringbeamreinforcement cut"),
+        )
+        for index in range(1, 5):
+            source_id = f"ring-beam-reinforcement-overlay-source-{index}"
+            self.assertEqual(svg.count(f'id="{source_id}"'), 1)
+            self.assertEqual(
+                svg.count(
+                    f'href="#{source_id}" xlink:href="#{source_id}"'
+                ),
+                1,
+            )
+        self.assertNotIn('href="#projected"', svg)
 
     def test_rejects_invalid_wall_layers_and_type_usage(self) -> None:
         house = House("My house")
