@@ -310,7 +310,7 @@ marker[id^="batting-"] path {
 }
 
 .IfcChimney.cut {
-    fill: url(#brick) !important;
+    fill: white !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }

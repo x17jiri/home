@@ -8173,6 +8173,13 @@ class HouseTests(unittest.TestCase):
         self.assertIn("stroke: black !important", chimney_projection_rule)
         self.assertIn("stroke-width: 0.06 !important", chimney_projection_rule)
 
+        chimney_cut_rule = stylesheet.split(
+            ".IfcChimney.cut",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", chimney_cut_rule)
+        self.assertNotIn("url(#", chimney_cut_rule)
+
     def test_centers_short_dimension_labels_during_svg_postprocessing(self) -> None:
         with TemporaryDirectory() as directory:
             svg_path = Path(directory) / "plan.svg"
