@@ -2350,20 +2350,68 @@ if "aa" in sys.argv:
 		direction=(1, 0, 0),
 		storeys=None,
 		doors_closed=True,
+		right_panel_width=60,
 	)
+	drawing1.add_material_legend([
+		("brick", "Nosná zeď - VPC Cihla\n240 mm"),
+		(
+			"ztracene-bedneni",
+			"Základová stěna - ztracené\nbednění 240 mm",
+		),
+		(
+			"base-plate",
+			f"Základová deska - beton\n"
+			f"{FOUNDATION_BASE_PLATE_THICKNESS * 1000:.0f} mm",
+		),
+		(
+			"footing-cross",
+			f"Základový pas - beton\n"
+			f"{FOUNDATION_FOOTER_WIDTH * 1000:.0f} × "
+			f"{FOUNDATION_FOOTER_HEIGHT * 1000:.0f} mm",
+		),
+		("wood-solid", "Dřevěné části krovu"),
+		("drywall-diagonal1", "Sádrokarton"),
+		(
+			"thermal-impact-insulation",
+			"Fasádní izolace - Polystyren\n160 mm",
+		),
+		(
+			"rockwool-wave",
+			"Minerální vata 200 mm\n(fasáda a mezi krokvemi)",
+		),
+		(
+			"pavatex-wave",
+			f"PAVATEX ISOLAIR\ndřevovláknitá deska "
+			f"{WOOD_FIBERBOARD_THICKNESS * 1000:.0f} mm",
+		),
+	])
 	drawing1.add_wall_insulation(
 		wall_front_g,
 		thickness=POLYSTYRENE_INSULATION_THICKNESS,
 		material="polystyrene",
-		start_z=0,
+		start_z=0.3,
 		end_z=UPPER_FLOOR_START+NADEZDIVKA+0.15,
 	)
 	drawing1.add_wall_insulation(
 		wall_dormer,
 		thickness=ROCKWOOL_INSULATION_THICKNESS,
 		material="rockwool",
-		start_z=0,
+		start_z=0.3,
 		end_z=UPPER_FLOOR_START+DORMER_WALL_HEIGHT+0.15,
+	)
+	drawing1.add_wall_insulation(
+		wall_front_g,
+		thickness=0.1,
+		material="polystyrene",
+		start_z=-1,
+		end_z=0.3,
+	)
+	drawing1.add_wall_insulation(
+		wall_dormer,
+		thickness=0.1,
+		material="polystyrene",
+		start_z=-1,
+		end_z=0.3,
 	)
 	aa_x = drawing1.x
 	ridge_batting = roof_batting_intersection(

@@ -6842,6 +6842,10 @@ class HouseTests(unittest.TestCase):
                                     "pattern": "rockwool-wave",
                                     "description": "Rockwool 200 mm",
                                 },
+                                {
+                                    "pattern": "pavatex-wave",
+                                    "description": "PAVATEX 100 mm",
+                                },
                             ],
                         }
                     ],
@@ -6871,6 +6875,11 @@ class HouseTests(unittest.TestCase):
             self.assertIn('fill="url(#diagonal1)"', svg)
             self.assertIn('fill="url(#crosshatch1)"', svg)
             self.assertIn('class="material-legend-batting"', svg)
+            self.assertIn(
+                'class="material-legend-batting material-legend-pavatex"',
+                svg,
+            )
+            self.assertIn('fill="#c9b56d"', svg)
             self.assertIn(_BATTING_MARKER_PATH, svg)
             self.assertNotIn('fill="url(#rockwool-wave)"', svg)
             self.assertIn("LEGENDA &amp; MATERIÁLY", svg)

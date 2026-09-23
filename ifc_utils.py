@@ -1810,11 +1810,12 @@ def _material_legend_svg(
     row_y = header_bottom
     available_patterns = _drawing_pattern_ids()
     for (pattern, lines, _), row_height in zip(normalised_items, row_heights):
-        is_batting = pattern == "rockwool-wave"
+        is_batting = pattern in {"rockwool-wave", "pavatex-wave"}
+        is_pavatex = pattern == "pavatex-wave"
         fill = (
             f"url(#{pattern})"
             if pattern in available_patterns and not is_batting
-            else "white"
+            else "#c9b56d" if is_pavatex else "white"
         )
         parts.append(
             f'<rect class="material-legend-swatch" x="{x:.6g}" '
@@ -1822,9 +1823,9 @@ def _material_legend_svg(
             f'height="{row_height:.6g}" fill="{fill}"/>'
         )
         if is_batting:
-            batting_height = row_height * 0.82
+            batting_height = row_height * (0.70 if is_pavatex else 0.82)
             batting_scale = batting_height / 1.825
-            batting_stroke_width = 0.10 / batting_scale
+            batting_stroke_width = (0.06 if is_pavatex else 0.10) / batting_scale
             repeat_width = 0.73 * batting_scale
             repeat_count = max(1, int(swatch_width / repeat_width))
             batting_width = repeat_count * repeat_width
@@ -1837,8 +1838,11 @@ def _material_legend_svg(
                 )
                 for index in range(repeat_count)
             )
+            batting_class = "material-legend-batting"
+            if is_pavatex:
+                batting_class += " material-legend-pavatex"
             parts.append(
-                '<g class="material-legend-batting" '
+                f'<g class="{batting_class}" '
                 f'transform="translate({batting_x:.6g} {batting_y:.6g}) '
                 f'scale({batting_scale:.6g})" '
                 f'style="fill:none;stroke:black;'
