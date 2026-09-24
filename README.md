@@ -154,6 +154,23 @@ wall. `connect_wall()` creates an
 default it joins their nearest ends; pass `is_atpath=True` to terminate the end
 of the first wall along the path of the second wall at a T-junction.
 
+To vary a wall's material from bottom to top without splitting its geometry,
+assign vertical material layers after all wall joins have been made. Their
+thicknesses are vertical heights and must add up to the wall height:
+
+```python
+wall.set_vertical_material_layers(
+    [
+        ("Liapor brick", 0.25),
+        ("Brick", wall.height - 0.25),
+    ],
+    type_name="Ground load bearing wall - Liapor base course",
+)
+```
+
+The original wall, its body, and its hosted door and window openings remain
+unchanged; the resulting IFC material usage has layers along `AXIS3`.
+
 ## Library objects and plan symbols
 
 `House.assets` provides a searchable catalog of the plan-ready objects in

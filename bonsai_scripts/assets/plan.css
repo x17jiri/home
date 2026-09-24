@@ -234,6 +234,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+.cut.layer-material-Liaporbrick {
+    fill: url(#liapor-brick) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
 .cut.layer-material-ztracenebedneni {
     fill: url(#ztracene-bedneni) !important;
     stroke: black;

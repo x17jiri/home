@@ -3845,6 +3845,81 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(usage.DirectionSense, "NEGATIVE")
         self.assertAlmostEqual(usage.OffsetFromReferenceLine, 0.06)
 
+    def test_assigns_vertical_wall_material_layers_without_splitting_wall(
+        self,
+    ) -> None:
+        house = House("My house")
+        wall_type = house.wall_type(
+            "Load bearing wall", layers=[("Brick", 0.24), "axis"]
+        )
+        ground = house.storey("Ground floor", elevation=0)
+        wall_1 = ground.wall(
+            (0, 0), (4, 0), wall_type=wall_type, height=2.75
+        )
+        wall_2 = ground.wall(
+            (4, 0), (4, 3), wall_type=wall_type, height=2.75
+        )
+        ground.connect_wall(wall_1, wall_2)
+        door = wall_1.add_door(
+            at=1,
+            width=0.9,
+            height=2.2,
+            sill_height=0.1,
+        )
+        body_before = ifcopenshell.util.representation.get_representation(
+            wall_1, "Model", "Body", "MODEL_VIEW"
+        )
+
+        vertical_type_1 = wall_1.set_vertical_material_layers(
+            [("Liapor brick", 0.25), ("Brick", 2.50)],
+            type_name="Ground load bearing wall",
+        )
+        vertical_type_2 = wall_2.set_vertical_material_layers(
+            [("Liapor brick", 0.25), ("Brick", 2.50)],
+            type_name="Ground load bearing wall",
+        )
+
+        self.assertEqual(vertical_type_1, vertical_type_2)
+        self.assertEqual(
+            ifcopenshell.util.element.get_type(wall_1), vertical_type_1
+        )
+        usage = ifcopenshell.util.element.get_material(wall_1)
+        self.assertTrue(usage.is_a("IfcMaterialLayerSetUsage"))
+        self.assertEqual(usage.LayerSetDirection, "AXIS3")
+        self.assertEqual(usage.DirectionSense, "POSITIVE")
+        self.assertEqual(usage.OffsetFromReferenceLine, 0.0)
+        self.assertEqual(
+            [
+                (layer.Material.Name, layer.LayerThickness)
+                for layer in usage.ForLayerSet.MaterialLayers
+            ],
+            [("Liapor brick", 0.25), ("Brick", 2.50)],
+        )
+        self.assertEqual(wall_1.thickness, 0.24)
+        self.assertEqual(wall_1.body_offset, 0.0)
+        self.assertEqual(
+            ifcopenshell.util.representation.get_representation(
+                wall_1, "Model", "Body", "MODEL_VIEW"
+            ),
+            body_before,
+        )
+        self.assertEqual(
+            wall_1.HasOpenings[0]
+            .RelatedOpeningElement.HasFillings[0]
+            .RelatedBuildingElement,
+            door,
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.placement.get_local_placement(
+                door.ObjectPlacement
+            )[2, 3],
+            0.1,
+        )
+        with self.assertRaisesRegex(
+            ValueError, "before assigning vertical material layers"
+        ):
+            ground.connect_wall(wall_1, wall_2)
+
     def test_creates_spatial_hierarchy_and_wall(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=1.5)
@@ -7773,6 +7848,33 @@ class HouseTests(unittest.TestCase):
             ".cut.layer-material-ztracenebedneni", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: url(#ztracene-bedneni) !important", rule)
+        self.assertIn("stroke-width: 0.05 !important", rule)
+
+    def test_styles_liapor_base_course_like_tinted_brick(self) -> None:
+        project_dir = Path(__file__).parent
+        patterns = (
+            project_dir / "drawings" / "assets" / "patterns.svg"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            project_dir / "bonsai_scripts" / "assets" / "plan.css"
+        ).read_text(encoding="utf-8")
+
+        brick_pattern = patterns.split(
+            '<pattern id="brick"', maxsplit=1
+        )[1].split("</pattern>", maxsplit=1)[0]
+        liapor_pattern = patterns.split(
+            '<pattern id="liapor-brick"', maxsplit=1
+        )[1].split("</pattern>", maxsplit=1)[0]
+        self.assertIn('fill="white"', brick_pattern)
+        self.assertIn('fill="#fff2cc"', liapor_pattern)
+        self.assertEqual(
+            brick_pattern.count("<line "),
+            liapor_pattern.count("<line "),
+        )
+        rule = stylesheet.split(
+            ".cut.layer-material-Liaporbrick", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: url(#liapor-brick) !important", rule)
         self.assertIn("stroke-width: 0.05 !important", rule)
 
     def test_styles_drywall_with_tinted_partition_hatch(self) -> None:

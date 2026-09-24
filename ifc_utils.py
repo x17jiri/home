@@ -3416,6 +3416,10 @@ class House:
         self._materials: dict[str, ifcopenshell.entity_instance] = {}
         self._wall_type_layouts: dict[int, tuple[float, float]] = {}
         self._wall_type_styles: dict[int, ifcopenshell.entity_instance | None] = {}
+        self._vertical_wall_types: dict[
+            tuple[str, float, tuple[tuple[str, float], ...]],
+            ifcopenshell.entity_instance,
+        ] = {}
         self._horizontal_frame_count = 0
         self._vertical_frame_count = 0
         self._facade_layer_count = 0
@@ -9558,11 +9562,156 @@ class Wall(ifcopenshell.entity_instance):
         object.__setattr__(self, "surface_style", surface_style)
         object.__setattr__(self, "cuts", cuts)
         object.__setattr__(self, "_openings", [])
+        object.__setattr__(self, "_vertical_material_layers", None)
 
     @property
     def element(self) -> ifcopenshell.entity_instance:
         """Return this wall as its underlying IFC entity."""
         return self
+
+    def set_vertical_material_layers(
+        self,
+        layers: Sequence[tuple[str, Number]],
+        *,
+        type_name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Assign bottom-to-top material layers without splitting the wall.
+
+        The wall remains one geometric and semantic element, so its existing
+        doors, windows, openings, placement, joins, and body representation
+        remain unchanged.  Layer thicknesses are measured upward from the
+        wall bottom and must add up to the wall height.  Apply wall joins
+        before calling this method because joining regenerates conventional
+        ``AXIS2`` wall constructions.
+
+        Walls with the same ``type_name``, thickness, and layer sequence
+        reuse one generated ``IfcWallType``.
+        """
+        if isinstance(layers, (str, bytes)):
+            raise TypeError("layers must be a sequence of layer pairs")
+        try:
+            supplied_layers = list(layers)
+        except TypeError as error:
+            raise TypeError(
+                "layers must be a sequence of layer pairs"
+            ) from error
+        if not supplied_layers:
+            raise ValueError("layers must contain at least one layer")
+
+        normalised_layers: list[tuple[str, float]] = []
+        for index, supplied_layer in enumerate(supplied_layers, start=1):
+            if isinstance(supplied_layer, (str, bytes)):
+                raise TypeError(
+                    f"layer {index} must contain a material name and thickness"
+                )
+            try:
+                material_name, layer_thickness = supplied_layer
+            except (TypeError, ValueError) as error:
+                raise TypeError(
+                    f"layer {index} must contain a material name and thickness"
+                ) from error
+            material_name = _name(
+                material_name, f"layer {index} material name"
+            )
+            layer_thickness = _number(
+                layer_thickness, f"layer {index} thickness"
+            )
+            if layer_thickness <= 0:
+                raise ValueError(
+                    f"layer {index} thickness must be greater than zero"
+                )
+            normalised_layers.append((material_name, layer_thickness))
+
+        total_height = sum(
+            layer_thickness
+            for _, layer_thickness in normalised_layers
+        )
+        if not isclose(total_height, self.height, abs_tol=1e-9):
+            raise ValueError("vertical material layers must equal wall height")
+
+        model = self.storey.house.model
+        current_type = ifcopenshell.util.element.get_type(self)
+        resolved_type_name = (
+            _name(type_name, "type_name")
+            if type_name is not None
+            else (
+                f"{current_type.Name} - vertical material layers"
+                if current_type is not None and current_type.Name
+                else "Vertical material wall"
+            )
+        )
+        normalised_layer_tuple = tuple(normalised_layers)
+        type_key = (
+            resolved_type_name,
+            self.thickness,
+            normalised_layer_tuple,
+        )
+        vertical_type = self.storey.house._vertical_wall_types.get(type_key)
+        if vertical_type is None:
+            vertical_type = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcWallType",
+                name=resolved_type_name,
+            )
+            layer_set = ifcopenshell.api.material.add_material_set(
+                model,
+                name=resolved_type_name,
+                set_type="IfcMaterialLayerSet",
+            )
+            for material_name, layer_thickness in normalised_layer_tuple:
+                material = self.storey.house._materials.get(material_name)
+                if material is None:
+                    material = ifcopenshell.api.material.add_material(
+                        model,
+                        name=material_name,
+                    )
+                    self.storey.house._materials[material_name] = material
+                material_layer = ifcopenshell.api.material.add_layer(
+                    model,
+                    layer_set=layer_set,
+                    material=material,
+                    name=material_name,
+                )
+                ifcopenshell.api.material.edit_layer(
+                    model,
+                    layer=material_layer,
+                    attributes={"LayerThickness": layer_thickness},
+                )
+            ifcopenshell.api.material.assign_material(
+                model,
+                products=[vertical_type],
+                type="IfcMaterialLayerSet",
+                material=layer_set,
+            )
+            self.storey.house._vertical_wall_types[type_key] = vertical_type
+
+        ifcopenshell.api.type.assign_type(
+            model,
+            related_objects=[self],
+            relating_type=vertical_type,
+            should_map_representations=False,
+        )
+        material_relationship = ifcopenshell.api.material.assign_material(
+            model,
+            products=[self],
+            type="IfcMaterialLayerSetUsage",
+        )
+        usage = material_relationship.RelatingMaterial
+        ifcopenshell.api.material.edit_layer_usage(
+            model,
+            usage=usage,
+            attributes={
+                "LayerSetDirection": "AXIS3",
+                "DirectionSense": "POSITIVE",
+                "OffsetFromReferenceLine": 0.0,
+            },
+        )
+        object.__setattr__(
+            self,
+            "_vertical_material_layers",
+            normalised_layer_tuple,
+        )
+        return vertical_type
 
     def _validate_opening(
         self,
@@ -14321,6 +14470,11 @@ class Storey:
             if not usage or not usage.is_a("IfcMaterialLayerSetUsage"):
                 raise ValueError(
                     f"{argument} must use an IfcMaterialLayerSetUsage"
+                )
+            if usage.LayerSetDirection != "AXIS2":
+                raise ValueError(
+                    "wall connections must be created before assigning "
+                    "vertical material layers"
                 )
 
         connection = ifcopenshell.api.geometry.connect_wall(

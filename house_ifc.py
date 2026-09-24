@@ -114,9 +114,11 @@ RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 0.9 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
-PERIMETER_INSULATION_THICKNESS = 0.16
+EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.0075
+FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.0075
 PERIMETER_INSULATION_MATERIAL = "XPS"
 PERIMETER_INSULATION_COLOR = "#f4dddd"
+LIAPOR_COLOR = "#fff2cc"
 
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
 	RAFTER_Z_OFFSET - THERMAL_INSULATION_UNDER_RAFTERS
@@ -131,10 +133,15 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 )
 
 BWT = 0.24 # Basic wall thickness
-POLYSTYRENE_INSULATION_THICKNESS = 0.16 + 0.0075
+POLYSTYRENE_INSULATION_NOMINAL_THICKNESS = 0.20
+POLYSTYRENE_INSULATION_THICKNESS = (
+	POLYSTYRENE_INSULATION_NOMINAL_THICKNESS + 0.0075
+)
 ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.0075
 
 ground_floor_height = 2.75
+GROUND_WALL_BASE_COURSE_HEIGHT = 0.25
+GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
@@ -181,7 +188,7 @@ foundation_wall = house.wall_type(
 		("ztracene bedneni", BWT),
 		"axis",
 	],
-	color="#fff2cc",
+	color=LIAPOR_COLOR,
 )
 
 partition_wall = house.wall_type(
@@ -227,8 +234,8 @@ pokoj_dole = ground.floor_layer(
 		(BWT, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-	insulation_material=FLOOR_INSULATION_MATERIAL,
+#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+#	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -274,8 +281,8 @@ kuchyn = ground.floor_layer(
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-	insulation_material=FLOOR_INSULATION_MATERIAL,
+#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+#	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -290,8 +297,8 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-	insulation_material=FLOOR_INSULATION_MATERIAL,
+#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+#	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -304,8 +311,8 @@ koupelna = ground.floor_layer(
 		(wall3_x, BWT+BATHROOM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-	insulation_material=FLOOR_INSULATION_MATERIAL,
+#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+#	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -706,6 +713,31 @@ wall_3.add_door(
 	reverse_swing=True,
 )
 
+ground_load_bearing_walls = (
+	wall_front_g,
+	wall_4_g,
+	wall_back_g,
+	wall_1a_g,
+	wall_1b_g,
+	wall_2,
+	wall_3,
+	wall_gym_g,
+)
+for wall in ground_load_bearing_walls:
+	wall.set_vertical_material_layers(
+		[
+			(
+				GROUND_WALL_BASE_COURSE_MATERIAL,
+				GROUND_WALL_BASE_COURSE_HEIGHT,
+			),
+			(
+				"Brick",
+				wall.height - GROUND_WALL_BASE_COURSE_HEIGHT,
+			),
+		],
+		type_name="Ground load bearing wall - Liapor base course",
+	)
+
 # stairs
 GALERY_START = BWT+CHODBA_DEPTH
 stairs_width = 1
@@ -924,8 +956,8 @@ upper_pokoj_1 = upper.floor_layer(
 			(BWT, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-		insulation_material=FLOOR_INSULATION_MATERIAL,
+#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+#		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -938,8 +970,8 @@ upper_pokoj_2 = upper.floor_layer(
 			(wall2_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-		insulation_material=FLOOR_INSULATION_MATERIAL,
+#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+#		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -952,8 +984,8 @@ galerie = upper.floor_layer(
 			(wall2_x, GALERY_END),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-		insulation_material=FLOOR_INSULATION_MATERIAL,
+#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+#		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -966,8 +998,8 @@ upper_sklad = upper.floor_layer(
 			(wall3_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-		insulation_material=FLOOR_INSULATION_MATERIAL,
+#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+#		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -980,8 +1012,8 @@ zachod_nahore = upper.floor_layer(
 			(wall3_x, BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-		insulation_material=FLOOR_INSULATION_MATERIAL,
+#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+#		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -1896,8 +1928,7 @@ total_house_height = max(
 	)
 )
 print(
-	f"Total house height from top of ground floor to top of roof, "
-	f"excluding chimney: "
+	f"Total house height from ground-storey finished floor level to top of roof, excluding chimney: "
 	f"{total_house_height:.3f} m"
 )
 
@@ -2211,7 +2242,7 @@ add_foundation_insulation(
 		(wall2_x, GYM_DEPTH+BWT),
 		(CUT_WIDTH+BWT, BWT+GYM_DEPTH),
 	),
-	thickness=PERIMETER_INSULATION_THICKNESS,
+	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
 	height=0.8
 )
 add_foundation_insulation(
@@ -2221,7 +2252,7 @@ add_foundation_insulation(
 		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
 		(HOUSE_WIDTH-BWT, BWT),
 	),
-	thickness=PERIMETER_INSULATION_THICKNESS,
+	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
 	height=0.8
 )
 add_foundation_insulation(
@@ -2231,7 +2262,7 @@ add_foundation_insulation(
 		(wall2_x-BWT, HOUSE_DEPTH-BWT),
 		(BWT, HOUSE_DEPTH-BWT),
 	),
-	thickness=PERIMETER_INSULATION_THICKNESS,
+	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
 	height=0.8
 )
 
@@ -2335,7 +2366,8 @@ if "ground" in sys.argv:
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"thermal-impact-insulation",
-			f"Fasádní izolace - Polystyren 160 mm",
+			f"Fasádní izolace - Polystyren "
+			f"{POLYSTYRENE_INSULATION_NOMINAL_THICKNESS * 1000:.0f} mm",
 		),
 		(
 			"rockwool-wave",
@@ -2522,10 +2554,14 @@ if "aa" in sys.argv:
 		right_panel_width=60,
 	)
 	drawing1.add_material_legend([
-		("brick", "Nosná zeď - VPC Cihla\n240 mm"),
+		("brick", "Nosná zeď\nVPC Cihla 240 mm, λ = 0.75"),
+		(
+			"liapor-brick",
+			f"První řada nosných stěn\nLiapor M AKU, 12 MPa, λ = 0.333",
+		),
 		(
 			"ztracene-bedneni",
-			"Základová stěna - ztracené\nbednění 240 mm",
+			"Základová stěna\nztracené bednění vyplněné Liapor Betonem",
 		),
 		(
 			"base-plate",
@@ -2538,25 +2574,23 @@ if "aa" in sys.argv:
 			f"{FOUNDATION_FOOTER_WIDTH * 1000:.0f} × "
 			f"{FOUNDATION_FOOTER_HEIGHT * 1000:.0f} mm",
 		),
-		("wood-solid", "Dřevěné části krovu"),
+		("wood-solid", "Dřevo"),
 		("drywall-diagonal1", "Sádrokarton"),
 		(
 			"thermal-impact-insulation",
-			"Fasádní izolace - Polystyren\n160 mm",
+			f"EPS 200mm, λ ≤ 0.35"
 		),
 		(
 			"perimeter-polystyrene",
-			f"Perimetrická izolace - XPS\n"
-			f"{PERIMETER_INSULATION_THICKNESS * 1000:.0f} mm",
+			f"XPS 100mm a 200 mm, λ ≤ 0.35"
 		),
 		(
 			"rockwool-wave",
-			"Minerální vata 200 mm\n(fasáda a mezi krokvemi)",
+			"Minerální vata 200 mm, λ ≤ 0.39\n(fasáda a mezi krokvemi)",
 		),
 		(
 			"pavatex-wave",
-			f"PAVATEX ISOLAIR\ndřevovláknitá deska "
-			f"{WOOD_FIBERBOARD_THICKNESS * 1000:.0f} mm",
+			f"Dřevovláknitá deska 100mm, λ ≤ 0.43",
 		),
 	])
 	drawing1.add_wall_insulation(
@@ -2575,14 +2609,14 @@ if "aa" in sys.argv:
 	)
 	drawing1.add_wall_insulation(
 		wall_front_g,
-		thickness=PERIMETER_INSULATION_THICKNESS,
+		thickness=EXTERIOR_XPS_INSULATION_THICKNESS,
 		material="xps",
 		start_z=-1,
 		end_z=0.3,
 	)
 	drawing1.add_wall_insulation(
 		wall_dormer,
-		thickness=PERIMETER_INSULATION_THICKNESS,
+		thickness=EXTERIOR_XPS_INSULATION_THICKNESS,
 		material="xps",
 		start_z=-1,
 		end_z=0.3,
