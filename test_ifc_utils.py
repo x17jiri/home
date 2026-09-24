@@ -6117,15 +6117,15 @@ class HouseTests(unittest.TestCase):
                 (
                     (-0.2, -0.28),
                     (1.0, -0.28),
-                    (1.0, -0.1375),
-                    (-0.2, -0.1375),
+                    (1.0, -0.12),
+                    (-0.2, -0.12),
                     (-0.2, -0.28),
                 ),
                 (
                     (2.0, -0.28),
                     (4.3, -0.28),
-                    (4.3, -0.1375),
-                    (2.0, -0.1375),
+                    (4.3, -0.12),
+                    (2.0, -0.12),
                     (2.0, -0.28),
                 ),
             ],
@@ -6142,8 +6142,8 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(properties["HostWall"], wall.GlobalId)
         self.assertEqual(properties["Material"], "polystyrene")
         self.assertEqual(properties["Thickness"], 0.16)
-        self.assertAlmostEqual(properties["DrawnThickness"], 0.1425)
-        self.assertEqual(properties["WallOutlineClearance"], 0.0175)
+        self.assertAlmostEqual(properties["DrawnThickness"], 0.16)
+        self.assertEqual(properties["WallOutlineClearance"], 0.0)
         self.assertEqual(properties["Side"], "right")
         self.assertEqual(properties["StartExtension"], 0.2)
         self.assertEqual(properties["EndExtension"], 0.3)
@@ -6214,10 +6214,10 @@ class HouseTests(unittest.TestCase):
             for annotation in insulation
         ]
         np.testing.assert_allclose(
-            placements[0][:3, 3], (5.22875, -0.07, 0), atol=1e-9
+            placements[0][:3, 3], (5.22, -0.07, 0), atol=1e-9
         )
         np.testing.assert_allclose(
-            placements[1][:3, 3], (5.22875, 1.33, 0), atol=1e-9
+            placements[1][:3, 3], (5.22, 1.33, 0), atol=1e-9
         )
         for annotation in insulation:
             self.assertEqual(
@@ -6232,18 +6232,18 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(properties["HostWall"], wall.GlobalId)
             self.assertEqual(properties["Material"], "rockwool")
             self.assertEqual(properties["Thickness"], 0.20)
-            self.assertAlmostEqual(properties["DrawnThickness"], 0.1825)
-            self.assertAlmostEqual(properties["BattingThickness"], 0.146)
-            self.assertAlmostEqual(properties["BattingInset"], 0.01825)
+            self.assertAlmostEqual(properties["DrawnThickness"], 0.20)
+            self.assertAlmostEqual(properties["BattingThickness"], 0.16)
+            self.assertAlmostEqual(properties["BattingInset"], 0.02)
             self.assertEqual(properties["BattingEndInset"], 0.03)
-            self.assertEqual(properties["WallOutlineClearance"], 0.0175)
+            self.assertEqual(properties["WallOutlineClearance"], 0.0)
             self.assertEqual(properties["StartExtension"], 0.1)
             self.assertEqual(properties["EndExtension"], -0.2)
             self.assertAlmostEqual(
                 ifcopenshell.util.element.get_pset(
                     annotation, "BBIM_Batting", "Thickness"
                 ),
-                0.146,
+                0.16,
             )
 
         boundary = next(
@@ -6264,8 +6264,8 @@ class HouseTests(unittest.TestCase):
             (
                 (-0.1, -0.32),
                 (0.8, -0.32),
-                (0.8, -0.1375),
-                (-0.1, -0.1375),
+                (0.8, -0.12),
+                (-0.1, -0.12),
                 (-0.1, -0.32),
             ),
         )
@@ -6301,7 +6301,7 @@ class HouseTests(unittest.TestCase):
             drawing.group.IsGroupedBy[0].RelatedObjects,
         )
 
-    def test_resolves_zero_wall_insulation_extensions_to_clearance(self) -> None:
+    def test_resolves_zero_wall_insulation_extensions_for_corners(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
         wall = ground.wall((0, 0), (2, 0), thickness=0.24, height=3)
@@ -6321,8 +6321,8 @@ class HouseTests(unittest.TestCase):
             (
                 (-0.0175, -0.28),
                 (2.0175, -0.28),
-                (2.0175, -0.1375),
-                (-0.0175, -0.1375),
+                (2.0175, -0.12),
+                (-0.0175, -0.12),
                 (-0.0175, -0.28),
             ),
         )
@@ -6441,15 +6441,15 @@ class HouseTests(unittest.TestCase):
             [
                 (
                     (-0.28, 0.5),
-                    (-0.1375, 0.5),
-                    (-0.1375, 1.0),
+                    (-0.12, 0.5),
+                    (-0.12, 1.0),
                     (-0.28, 1.0),
                     (-0.28, 0.5),
                 ),
                 (
                     (-0.28, 2.2),
-                    (-0.1375, 2.2),
-                    (-0.1375, 3.0),
+                    (-0.12, 2.2),
+                    (-0.12, 3.0),
                     (-0.28, 3.0),
                     (-0.28, 2.2),
                 ),
@@ -6490,6 +6490,52 @@ class HouseTests(unittest.TestCase):
             ((-0.28, 1.0), (-0.28, 2.2)),
         )
 
+    def test_adds_xps_wall_insulation_with_its_own_material_class(
+        self,
+    ) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall(
+            (0, 0), (4, 0), thickness=0.24, height=3
+        )
+        plan = house.add_drawing(
+            "Ground plan", 2, 2, 1, 6, storeys=[ground]
+        )
+        section = house.add_drawing(
+            "Wall section",
+            1.5,
+            0,
+            1.5,
+            4,
+            view="elevation",
+            direction=(-1, 0, 0),
+        )
+
+        plan_annotation = plan.add_wall_insulation(
+            wall, thickness=0.16, material="XPS"
+        )[0]
+        section_annotation = section.add_wall_insulation(
+            wall,
+            thickness=0.16,
+            material="xps",
+            start_z=-1,
+            end_z=0.3,
+        )[0]
+
+        for annotation in (plan_annotation, section_annotation):
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    annotation, "EPset_Annotation", "Classes"
+                ),
+                "wall-insulation wall-insulation-xps",
+            )
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    annotation, "BBIM_WallInsulation", "Material"
+                ),
+                "xps",
+            )
+
     def test_adds_rockwool_batting_to_elevation_section(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
@@ -6527,10 +6573,10 @@ class HouseTests(unittest.TestCase):
             for annotation in insulation
         ]
         np.testing.assert_allclose(
-            placements[0][:3, 3], (1.5, -0.22875, 0.03), atol=1e-9
+            placements[0][:3, 3], (1.5, -0.22, 0.03), atol=1e-9
         )
         np.testing.assert_allclose(
-            placements[1][:3, 3], (1.5, -0.22875, 2.03), atol=1e-9
+            placements[1][:3, 3], (1.5, -0.22, 2.03), atol=1e-9
         )
         np.testing.assert_allclose(
             placements[0][:3, :3],
@@ -6552,7 +6598,7 @@ class HouseTests(unittest.TestCase):
                 ifcopenshell.util.element.get_pset(
                     annotation, "BBIM_Batting", "Thickness"
                 )
-                == 0.146
+                == 0.16
                 for annotation in insulation
             )
         )
@@ -6574,15 +6620,15 @@ class HouseTests(unittest.TestCase):
             [
                 (
                     (-0.32, 0.0),
-                    (-0.1375, 0.0),
-                    (-0.1375, 0.8),
+                    (-0.12, 0.0),
+                    (-0.12, 0.8),
                     (-0.32, 0.8),
                     (-0.32, 0.0),
                 ),
                 (
                     (-0.32, 2.0),
-                    (-0.1375, 2.0),
-                    (-0.1375, 3.0),
+                    (-0.12, 2.0),
+                    (-0.12, 3.0),
                     (-0.32, 3.0),
                     (-0.32, 2.0),
                 ),
@@ -6607,10 +6653,6 @@ class HouseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "greater than zero"):
             drawing.add_wall_insulation(
                 wall, thickness=0, material="polystyrene"
-            )
-        with self.assertRaisesRegex(ValueError, "outline clearance"):
-            drawing.add_wall_insulation(
-                wall, thickness=0.01, material="polystyrene"
             )
         with self.assertRaisesRegex(ValueError, "material must be one of"):
             drawing.add_wall_insulation(
@@ -7723,6 +7765,10 @@ class HouseTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn('<pattern id="ztracene-bedneni"', patterns)
+        lost_formwork_pattern = patterns.split(
+            '<pattern id="ztracene-bedneni"', maxsplit=1
+        )[1].split("</pattern>", maxsplit=1)[0]
+        self.assertIn('fill="#fff2cc"', lost_formwork_pattern)
         rule = stylesheet.split(
             ".cut.layer-material-ztracenebedneni", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
@@ -7849,9 +7895,20 @@ class HouseTests(unittest.TestCase):
         polystyrene_rule = stylesheet.split(
             ".cut.layer-material-Polystyrene", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
+        self.assertIn(".cut.material-Polystyrene", polystyrene_rule)
         self.assertIn(
             "fill: url(#thermal-impact-insulation) !important",
             polystyrene_rule,
+        )
+        self.assertIn('<pattern id="perimeter-polystyrene"', patterns)
+        self.assertIn('fill="#f4eeee"', patterns)
+        perimeter_rule = stylesheet.split(
+            ".cut.layer-material-XPS", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(".cut.material-XPS", perimeter_rule)
+        self.assertIn(
+            "fill: url(#perimeter-polystyrene) !important",
+            perimeter_rule,
         )
         rockwool_rule = stylesheet.split(
             ".cut.layer-material-Rockwool", maxsplit=1
@@ -7865,6 +7922,14 @@ class HouseTests(unittest.TestCase):
         self.assertIn(
             "fill: url(#thermal-impact-insulation) !important",
             drawing_rule,
+        )
+        xps_drawing_rule = stylesheet.split(
+            ".PredefinedType-FILLAREA.wall-insulation-xps",
+            maxsplit=1,
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn(
+            "fill: url(#perimeter-polystyrene) !important",
+            xps_drawing_rule,
         )
         batting_rule = stylesheet.split(
             'marker[id^="batting-"] path', maxsplit=1

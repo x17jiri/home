@@ -75,6 +75,7 @@
 from math import acos, degrees, isclose
 import sys, math
 from ifc_utils import *
+from shapely.geometry import Polygon
 
 RAFTER_Z_OFFSET = -0.04
 RAFTER_THICKNESS = 0.08
@@ -98,13 +99,13 @@ COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.05
-GROUND_FLOOR_THICKNESS = 0.17
+GROUND_FLOOR_THICKNESS = 0.10
 UPPER_FLOOR_THICKNESS = 0.10
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
 CEILING_FINISH_THICKNESS = 0.02
 CEILING_FINISH_MATERIAL = "Ceiling finish"
-FOUNDATION_BASE_PLATE_THICKNESS = 0.20
+FOUNDATION_BASE_PLATE_THICKNESS = 0.15
 FOUNDATION_WALL_HEIGHT = 0.80
 FOUNDATION_FOOTER_WIDTH = 0.70
 FOUNDATION_FOOTER_HEIGHT = 0.50
@@ -113,6 +114,9 @@ RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 0.9 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
+PERIMETER_INSULATION_THICKNESS = 0.16
+PERIMETER_INSULATION_MATERIAL = "XPS"
+PERIMETER_INSULATION_COLOR = "#f4dddd"
 
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
 	RAFTER_Z_OFFSET - THERMAL_INSULATION_UNDER_RAFTERS
@@ -130,11 +134,11 @@ BWT = 0.24 # Basic wall thickness
 POLYSTYRENE_INSULATION_THICKNESS = 0.16 + 0.0075
 ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.0075
 
-ground_floor_height = 2.82
+ground_floor_height = 2.75
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.82
+UNDER_HOLE = 2.80
 HOLE_HEIGHT = 0.25
 ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
@@ -177,7 +181,7 @@ foundation_wall = house.wall_type(
 		("ztracene bedneni", BWT),
 		"axis",
 	],
-	color="#A9A9A9",
+	color="#fff2cc",
 )
 
 partition_wall = house.wall_type(
@@ -223,7 +227,7 @@ pokoj_dole = ground.floor_layer(
 		(BWT, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=0.10,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -270,7 +274,7 @@ kuchyn = ground.floor_layer(
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=0.10,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -286,7 +290,7 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=0.10,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -300,7 +304,7 @@ koupelna = ground.floor_layer(
 		(wall3_x, BWT+BATHROOM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=0.10,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -447,6 +451,138 @@ foundation_footers = foundation.add_strip_footings_from(
 	material="Concrete",
 	color="#969696",
 )
+
+_foundation_insulation_sets = []
+_foundation_insulation_wall_types = {}
+
+def add_foundation_insulation(outline, *, thickness, height):
+	"""Add horizontal and inward-facing vertical foundation insulation.
+
+	``outline`` is a polygon in global XY coordinates.  The horizontal layer
+	sits directly below the foundation base plate.  Vertical layers follow the
+	polygon boundary, extend inward, and finish at the base plate underside.
+	Clockwise outlines are reversed automatically.
+	"""
+	def point(value, argument):
+		if isinstance(value, (str, bytes)):
+			raise TypeError(f"{argument} must contain exactly two coordinates")
+		try:
+			x, y = value
+		except (TypeError, ValueError) as error:
+			raise TypeError(
+				f"{argument} must contain exactly two coordinates"
+			) from error
+		for coordinate, coordinate_name in ((x, "x"), (y, "y")):
+			if (
+				isinstance(coordinate, bool)
+				or not isinstance(coordinate, (int, float))
+				or not math.isfinite(coordinate)
+			):
+				raise TypeError(
+					f"{argument} {coordinate_name} must be a finite number"
+				)
+		return float(x), float(y)
+
+	if isinstance(outline, (str, bytes)):
+		raise TypeError("outline must contain at least three points")
+	try:
+		supplied_outline = list(outline)
+	except TypeError as error:
+		raise TypeError("outline must contain at least three points") from error
+	if len(supplied_outline) < 3:
+		raise ValueError("outline must contain at least three points")
+	points = tuple(
+		point(value, f"outline point {index}")
+		for index, value in enumerate(supplied_outline, start=1)
+	)
+	if len(points) > 3 and points[-1] == points[0]:
+		points = points[:-1]
+	if len(points) < 3:
+		raise ValueError("outline must contain at least three distinct points")
+	for current, following in zip(points, (*points[1:], points[0])):
+		if current == following:
+			raise ValueError(
+				"outline must not contain consecutive duplicate points"
+			)
+	polygon = Polygon(points)
+	if polygon.is_empty or polygon.area <= 1e-9:
+		raise ValueError("foundation insulation outline must enclose an area")
+	if not polygon.is_valid:
+		raise ValueError("foundation insulation outline must be a valid polygon")
+	twice_signed_area = sum(
+		current[0] * following[1] - following[0] * current[1]
+		for current, following in zip(points, (*points[1:], points[0]))
+	)
+	if twice_signed_area < 0:
+		points = tuple(reversed(points))
+
+	if (
+		isinstance(thickness, bool)
+		or not isinstance(thickness, (int, float))
+		or not math.isfinite(thickness)
+		or thickness <= 0
+	):
+		raise ValueError("thickness must be a finite number greater than zero")
+	if (
+		isinstance(height, bool)
+		or not isinstance(height, (int, float))
+		or not math.isfinite(height)
+		or height <= 0
+	):
+		raise ValueError("height must be a finite number greater than zero")
+
+	thickness = float(thickness)
+	height = float(height)
+	if polygon.buffer(-thickness, join_style="mitre").is_empty:
+		raise ValueError(
+			"thickness is too large for the foundation insulation outline"
+		)
+
+	set_number = len(_foundation_insulation_sets) + 1
+	base_plate_bottom = foundation_base_plate.start_height
+	horizontal = foundation.floor_layer(
+		f"Foundation insulation {set_number} horizontal",
+		outline=points,
+		thickness=thickness,
+		start_height=base_plate_bottom-thickness,
+		kind="FLOOR",
+		buildup_material=PERIMETER_INSULATION_MATERIAL,
+		color=PERIMETER_INSULATION_COLOR,
+	)
+
+	wall_type = _foundation_insulation_wall_types.get(thickness)
+	if wall_type is None:
+		wall_type = house.wall_type(
+			f"Foundation insulation - {PERIMETER_INSULATION_MATERIAL} "
+			f"{thickness * 1000:g} mm",
+			layers=[(PERIMETER_INSULATION_MATERIAL, thickness), "axis"],
+			color=PERIMETER_INSULATION_COLOR,
+		)
+		_foundation_insulation_wall_types[thickness] = wall_type
+
+	vertical = tuple(
+		foundation.wall(
+			wall_start,
+			wall_end,
+			wall_type=wall_type,
+			height=height,
+			start_height=base_plate_bottom-height,
+		)
+		for wall_start, wall_end in zip(
+			points,
+			(*points[1:], points[0]),
+		)
+	)
+	for side_number, wall in enumerate(vertical, start=1):
+		wall.Name = (
+			f"Foundation insulation {set_number} vertical {side_number}"
+		)
+	for wall, next_wall in zip(vertical, (*vertical[1:], vertical[0])):
+		foundation.connect_wall(wall, next_wall)
+
+	result = (horizontal, vertical)
+	_foundation_insulation_sets.append(result)
+	return result
 
 # Bathroom, Koupelna
 wall_bathroom = ground.wall(
@@ -788,7 +924,7 @@ upper_pokoj_1 = upper.floor_layer(
 			(BWT, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=0.03,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -802,7 +938,7 @@ upper_pokoj_2 = upper.floor_layer(
 			(wall2_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=0.03,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -816,7 +952,7 @@ galerie = upper.floor_layer(
 			(wall2_x, GALERY_END),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=0.03,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -830,7 +966,7 @@ upper_sklad = upper.floor_layer(
 			(wall3_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=0.03,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -844,7 +980,7 @@ zachod_nahore = upper.floor_layer(
 			(wall3_x, BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=0.03,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -2066,6 +2202,39 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 		)
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
 
+add_foundation_insulation(
+	(
+		(CUT_WIDTH+BWT, BWT),
+		(wall3_x-BWT, BWT),
+		(wall3_x-BWT, HOUSE_DEPTH-BWT),
+		(wall2_x, HOUSE_DEPTH-BWT),
+		(wall2_x, GYM_DEPTH+BWT),
+		(CUT_WIDTH+BWT, BWT+GYM_DEPTH),
+	),
+	thickness=PERIMETER_INSULATION_THICKNESS,
+	height=0.8
+)
+add_foundation_insulation(
+	(
+		(wall3_x, BWT),
+		(wall3_x, HOUSE_DEPTH-BWT),
+		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
+		(HOUSE_WIDTH-BWT, BWT),
+	),
+	thickness=PERIMETER_INSULATION_THICKNESS,
+	height=0.8
+)
+add_foundation_insulation(
+	(
+		(BWT, BWT+GYM_DEPTH+BWT),
+		(wall2_x-BWT, BWT+GYM_DEPTH+BWT),
+		(wall2_x-BWT, HOUSE_DEPTH-BWT),
+		(BWT, HOUSE_DEPTH-BWT),
+	),
+	thickness=PERIMETER_INSULATION_THICKNESS,
+	height=0.8
+)
+
 house.write("house.ifc")
 
 def common_dims(drawing1):
@@ -2376,6 +2545,11 @@ if "aa" in sys.argv:
 			"Fasádní izolace - Polystyren\n160 mm",
 		),
 		(
+			"perimeter-polystyrene",
+			f"Perimetrická izolace - XPS\n"
+			f"{PERIMETER_INSULATION_THICKNESS * 1000:.0f} mm",
+		),
+		(
 			"rockwool-wave",
 			"Minerální vata 200 mm\n(fasáda a mezi krokvemi)",
 		),
@@ -2401,15 +2575,15 @@ if "aa" in sys.argv:
 	)
 	drawing1.add_wall_insulation(
 		wall_front_g,
-		thickness=0.1,
-		material="polystyrene",
+		thickness=PERIMETER_INSULATION_THICKNESS,
+		material="xps",
 		start_z=-1,
 		end_z=0.3,
 	)
 	drawing1.add_wall_insulation(
 		wall_dormer,
-		thickness=0.1,
-		material="polystyrene",
+		thickness=PERIMETER_INSULATION_THICKNESS,
+		material="xps",
 		start_z=-1,
 		end_z=0.3,
 	)

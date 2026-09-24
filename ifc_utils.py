@@ -7585,7 +7585,7 @@ class Drawing:
             )
             assign_annotation_metadata(
                 annotation,
-                "wall-insulation wall-insulation-polystyrene",
+                f"wall-insulation wall-insulation-{material}",
                 common_properties,
             )
             add_opening_boundaries()
@@ -7620,10 +7620,9 @@ class Drawing:
         This is a drawing-only annotation and does not change the IFC wall or
         its 3D construction.  ``side`` is relative to looking from the wall's
         start towards its end and defaults to ``"right"``.  The insulation
-        begins just outside that side's finished wall face, leaving the
-        original cut outline visible.  Only the wall-side edge moves, so the
-        drawn insulation is 17.5 mm thinner than ``thickness``.  Zero
-        extensions resolve to 17.5 mm so perpendicular insulation strips meet.
+        begins at that side's finished wall face and has the full requested
+        ``thickness``.  Zero extensions resolve to 17.5 mm so perpendicular
+        insulation strips meet.
         Other positive extensions continue it beyond the wall ends; negative
         extensions trim it before an end.  For horizontal walls, ``start_x``
         and ``end_x`` may instead set either endpoint in absolute model X
@@ -7636,9 +7635,11 @@ class Drawing:
         lower and upper elevations.  They default to the wall's bottom and
         top, and are also swapped when supplied in the opposite order.
 
-        ``material="polystyrene"`` draws the existing hexagonal hatch;
-        ``material="rockwool"`` draws direction-aware batting.  Both leave
-        gaps for doors and windows intersected by this drawing's cut plane.
+        ``material="polystyrene"`` draws the existing white hexagonal hatch;
+        ``material="xps"`` uses the same hatch with the perimeter-insulation
+        pink tint; ``material="rockwool"`` draws direction-aware batting.
+        All materials leave gaps for doors and windows intersected by this
+        drawing's cut plane.
         """
         if not isinstance(wall, Wall):
             raise TypeError("wall must be a Wall")
@@ -7649,20 +7650,17 @@ class Drawing:
         thickness = _number(thickness, "thickness")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
-        # At this drawing's fixed 1:100 scale, half of the 0.35 mm wall cut
-        # stroke is 17.5 mm in model space.  The wall-side insulation edge is
-        # inset by this amount so its fill cannot cover the original outline.
-        wall_outline_clearance = 0.0175
-        drawn_thickness = thickness - wall_outline_clearance
-        if drawn_thickness <= 0:
-            raise ValueError(
-                "thickness must be greater than the 0.0175 m wall outline "
-                "clearance"
-            )
+        # Insulation is rendered behind the wall linework, so no geometric
+        # stand-off is needed to keep the wall outline visible.
+        wall_outline_clearance = 0.0
+        drawn_thickness = thickness
+        # Keep the independent corner-closing heuristic: when no endpoint is
+        # supplied, extend a strip slightly so perpendicular strips overlap.
+        default_end_extension = 0.0175
         material_name = _enum(
             material,
             "material",
-            {"POLYSTYRENE", "ROCKWOOL"},
+            {"POLYSTYRENE", "ROCKWOOL", "XPS"},
         ).lower()
         side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
         start_extension = _number(start_extension, "start_extension")
@@ -7751,9 +7749,9 @@ class Drawing:
                 end_extension = end_parameter - wall.length
 
         if start_x is None and start_y is None and start_extension == 0:
-            start_extension = wall_outline_clearance
+            start_extension = default_end_extension
         if end_x is None and end_y is None and end_extension == 0:
-            end_extension = wall_outline_clearance
+            end_extension = default_end_extension
         segment_start = -start_extension
         segment_end = wall.length + end_extension
         if segment_start > segment_end + 1e-9 and (supplied_x or supplied_y):
@@ -7913,7 +7911,9 @@ class Drawing:
             model,
             pset=annotation_pset,
             properties={
-                "Classes": "wall-insulation wall-insulation-polystyrene"
+                "Classes": (
+                    f"wall-insulation wall-insulation-{material_name}"
+                )
             },
         )
         insulation_pset = ifcopenshell.api.pset.add_pset(

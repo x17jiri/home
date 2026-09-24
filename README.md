@@ -338,7 +338,7 @@ resolved to 17.5 mm so perpendicular insulation strips meet:
 drawing.add_wall_insulation(
     wall_front,
     thickness=0.16,
-    material="polystyrene",  # or "rockwool"
+    material="polystyrene",  # or "xps" / "rockwool"
     start_extension=0.16,
     end_extension=0,
 )
@@ -370,17 +370,17 @@ matched to the wall's start-to-end direction, including for walls drawn
 right-to-left or top-to-bottom. A coordinate and its corresponding extension
 cannot be supplied together.
 
-Polystyrene uses the existing hexagonal hatch. Rockwool uses the conventional
+Polystyrene uses the existing white hexagonal hatch. XPS uses the same hatch
+with the light-pink perimeter-insulation tint. Rockwool uses the conventional
 batting wave and follows the wall direction. Rockwool also receives an
 opening-aware boundary box matching the polystyrene outline; its batting is
 inset slightly inside that box on all four sides and uses a lighter stroke. A
 single dashed outer boundary continues across each door or window opening for
-both insulation materials, using the same dash cadence as the opening;
-the wall-side boundary remains absent to avoid duplicating opening linework. A
-small drawing-only clearance keeps the wall's original cut outline visible
-between the wall and insulation. Only the wall-side edge is moved, so the
-drawn layer boundary is 17.5 mm thinner than the requested nominal thickness
-while its outer edge stays fixed.
+all insulation materials, using the same dash cadence as the opening;
+the wall-side boundary remains absent to avoid duplicating opening linework.
+The insulation begins directly at the finished wall face and is drawn at its
+full requested thickness. It is placed behind the wall linework so the shared
+boundary remains visible without introducing a geometric gap.
 
 The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
 metres in both X and Y, so the example cuts the model at 1.6 m and covers a

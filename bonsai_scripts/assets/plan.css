@@ -58,6 +58,9 @@ a:hover { cursor: pointer; }
 .PredefinedType-FILLAREA.wall-insulation-polystyrene {
     fill: url(#thermal-impact-insulation) !important;
 }
+.PredefinedType-FILLAREA.wall-insulation-xps {
+    fill: url(#perimeter-polystyrene) !important;
+}
 .PredefinedType-BREAKLINE { fill: none; stroke: black; stroke-width: 0.25; marker-mid: url(#breakline-marker); }
 .PredefinedType-TEXT { fill: black; stroke: none; }
 path.PredefinedType-TEXTLEADER { marker-end: url(#leader-marker); }
@@ -275,8 +278,16 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
-.cut.layer-material-Polystyrene {
+.cut.layer-material-Polystyrene,
+.cut.material-Polystyrene {
     fill: url(#thermal-impact-insulation) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-XPS,
+.cut.material-XPS {
+    fill: url(#perimeter-polystyrene) !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }
