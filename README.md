@@ -206,6 +206,8 @@ included. `center` consistently means the centre of the object in plan even
 when the source library uses a corner or wall face as its origin. Pass
 `size=(width, depth)` to resize the complete footprint, including surrounding
 parts such as the chairs in a dining-table asset. The original height is kept.
+If an asset is given `label="..."`, that text is also centred on its visible
+projection in elevation drawings.
 
 For simple cylindrical objects, provide the centre of the circular footprint,
 its radius, and its vertical dimensions:
@@ -422,9 +424,29 @@ house.write("south.ifc")
 elevation.render("south.svg", png=True, png_dpi=600)
 ```
 
-Elevation directions must currently be horizontal.  Elevations project the
+Elevation directions must currently be horizontal. Elevations project the
 existing 3D model bodies and deliberately omit plan-only annotations such as
-door dimensions, room labels, stair arrows, and furniture labels.
+door dimensions, room labels, and stair arrows. Furniture created with
+`Storey.furniture()` retains its box label, and explicitly labelled library
+assets retain their label. Each label faces the elevation camera, is centred
+on the projected object, and is omitted when that object has no visible SVG
+geometry.
+
+A stylised ridge-tile section can be attached to an elevation without adding
+3D roof geometry. The supplied world point is the underside crown of the cap;
+the intersection of the two roof outer faces is therefore a useful anchor:
+
+```python
+drawing.add_ridge_tile(
+    ridge,
+    width=0.40,
+    rise=0.12,
+    thickness=0.025,
+)
+```
+
+The curved, terracotta-filled annotation is scoped to that drawing and stays
+attached to the model when its camera or scale changes.
 
 Persisted plan and elevation drawings may reserve additional paper space on
 their right side without changing the camera framing.  The width is expressed

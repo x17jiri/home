@@ -1,10 +1,11 @@
 
 # TODO:
-# - komin should use different pattern - now it uses the same as load bearing walls
-# - venec covered by miako
-# - xps perimeter
-# - floor insulation - different pattern?
-# - chimney wall should use no pattern
+# - venec pod pozednici
+# - roof angles
+
+# Cihla:
+# https://www.dek.cz/produkty/detail/4400914454-porfix-aku-248-pdk-tvarnice-p20-1800-248x249x248
+# ma 56 dB, jine jen 53
 
 # Strecha:
 #    - taska:
@@ -99,6 +100,9 @@ COUNTER_BATTEN_SIZE = (0.04, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.05
+RIDGE_TILE_WIDTH = 0.40
+RIDGE_TILE_RISE = 0.12
+RIDGE_TILE_THICKNESS = 0.025
 GROUND_FLOOR_THICKNESS = 0.10
 UPPER_FLOOR_THICKNESS = 0.10
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
@@ -114,8 +118,8 @@ RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 0.9 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
-EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.0075
-FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.0075
+EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.005
+FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.005
 PERIMETER_INSULATION_MATERIAL = "XPS"
 PERIMETER_INSULATION_COLOR = "#f4dddd"
 LIAPOR_COLOR = "#fff2cc"
@@ -135,9 +139,9 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 BWT = 0.24 # Basic wall thickness
 POLYSTYRENE_INSULATION_NOMINAL_THICKNESS = 0.20
 POLYSTYRENE_INSULATION_THICKNESS = (
-	POLYSTYRENE_INSULATION_NOMINAL_THICKNESS + 0.0075
+	POLYSTYRENE_INSULATION_NOMINAL_THICKNESS + 0.005
 )
-ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.0075
+ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.005
 
 ground_floor_height = 2.75
 GROUND_WALL_BASE_COURSE_HEIGHT = 0.25
@@ -207,13 +211,13 @@ dry_wall = house.wall_type(
 	color="#dfefcf"
 )
 
-HOUSE_DEPTH = 8.0
+HOUSE_DEPTH = 7.99
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.75 - 0.03
-HOUSE_WIDTH = 11.375
+KITCHEN_WIDTH = 4.75 + 0.01
+HOUSE_WIDTH = 11.490
 CUT_WIDTH = 1.75
 
-wall2_x = BWT + 3.25 - 0.03 + BWT;
+wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
@@ -224,7 +228,7 @@ STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
 KK_WIDTH = HOUSE_WIDTH - wall3_x - BWT
 
-GYM_DEPTH = 2
+GYM_DEPTH = 2.01
 pokoj_dole = ground.floor_layer(
 	"Pokoj",
 	outline=(
@@ -1173,7 +1177,7 @@ wall_4_u = upper.wall(
 	cuts=wall_cuts_1_4,
 )
 wall_4_u.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
-wall_4_u.add_opening(at=7.75, width=BWT, height=1.5, sill_height=NADEZDIVKA)
+wall_4_u.add_opening(at=HOUSE_DEPTH-BWT-0.002*2, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_pokoj2 = upper.wall(
 	start=(wall2_x, GALERY_END),
@@ -2557,20 +2561,20 @@ if "aa" in sys.argv:
 		("brick", "Nosná zeď\nVPC Cihla 240 mm, λ = 0.75"),
 		(
 			"liapor-brick",
-			f"První řada nosných stěn\nLiapor M AKU, 12 MPa, λ = 0.333",
+			f"První řada cihel nosných stěn\nLiapor M AKU, 12 MPa, λ = 0.333",
 		),
 		(
 			"ztracene-bedneni",
-			"Základová stěna\nztracené bednění vyplněné Liapor Betonem",
+			"Ztracené bednění\nvyplněné Liapor Betonem",
 		),
 		(
 			"base-plate",
-			f"Základová deska - beton\n"
+			f"Základová deska\n"
 			f"{FOUNDATION_BASE_PLATE_THICKNESS * 1000:.0f} mm",
 		),
 		(
 			"footing-cross",
-			f"Základový pas - beton\n"
+			f"Základový pas\nbeton"
 			f"{FOUNDATION_FOOTER_WIDTH * 1000:.0f} × "
 			f"{FOUNDATION_FOOTER_HEIGHT * 1000:.0f} mm",
 		),
@@ -2578,19 +2582,19 @@ if "aa" in sys.argv:
 		("drywall-diagonal1", "Sádrokarton"),
 		(
 			"thermal-impact-insulation",
-			f"EPS 200mm, λ ≤ 0.35"
+			f"EPS Fasádní izolace\n200 mm, λ ≤ 0.35"
 		),
 		(
 			"perimeter-polystyrene",
-			f"XPS 100mm a 200 mm, λ ≤ 0.35"
+			f"XPS Perimetrická izolace\n100 mm a 200 mm, λ ≤ 0.35"
 		),
 		(
 			"rockwool-wave",
-			"Minerální vata 200 mm, λ ≤ 0.39\n(fasáda a mezi krokvemi)",
+			"Minerální vata, fasáda a mezi krokvemi\n200 mm, λ ≤ 0.39",
 		),
 		(
 			"pavatex-wave",
-			f"Dřevovláknitá deska 100mm, λ ≤ 0.43",
+			f"Dřevovláknitá deska\n100 mm, λ ≤ 0.43",
 		),
 	])
 	drawing1.add_wall_insulation(
@@ -2622,6 +2626,19 @@ if "aa" in sys.argv:
 		end_z=0.3,
 	)
 	aa_x = drawing1.x
+	ridge_tile_center = roof_batting_intersection(
+		street_roof,
+		garden_roof,
+		x=aa_x,
+		center_offset=roof_outer_face_offset,
+	)
+	drawing1.add_ridge_tile(
+		ridge_tile_center,
+		width=RIDGE_TILE_WIDTH,
+		rise=RIDGE_TILE_RISE,
+		thickness=RIDGE_TILE_THICKNESS,
+		name="AA ridge tile",
+	)
 	ridge_batting = roof_batting_intersection(
 		street_roof,
 		garden_roof,

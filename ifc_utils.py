@@ -136,6 +136,22 @@ class AssetInfo:
     ifc_type_class: str
 
 
+@dataclass(frozen=True)
+class _FurnitureLabelSpec:
+    """World-space data used to create view-specific furniture labels."""
+
+    product: ifcopenshell.entity_instance
+    storey: Storey
+    name: str
+    text: str
+    center: tuple[float, float, float]
+    local_x: tuple[float, float]
+    local_y: tuple[float, float]
+    width: float
+    depth: float
+    height: float
+
+
 _ASSET_PRIMARY_ALIASES = {
     "Neufert Toilet with Cistern": "toilet_with_cistern",
     "Generic Toilet without Cistern": "toilet_without_cistern",
@@ -2171,6 +2187,84 @@ def _postprocess_right_panel(
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_elevation_furniture_labels(svg_path: Path) -> None:
+    """Keep visible furniture labels above elevation linework."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="furniture-elevation-label-overlays"' in svg:
+        return
+
+    visible_products: set[str] = set()
+    for match in re.finditer(
+        r"<g\b(?P<attrs>[^>]*)>(?P<body>.*?)</g>",
+        svg,
+        re.DOTALL,
+    ):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"])
+        )
+        product_guid = attributes.get("ifc:guid")
+        if product_guid is None:
+            continue
+        if re.search(
+            r"<(?:path\b[^>]*\bd=|line\b|polyline\b|polygon\b|"
+            r"circle\b|ellipse\b|rect\b)",
+            match["body"],
+        ):
+            visible_products.add(product_guid)
+
+    visible_labels: list[str] = []
+
+    def remove_or_collect_label(match: re.Match[str]) -> str:
+        text_svg = match.group(0)
+        classes = {
+            class_name
+            for class_value in re.findall(r'\bclass="([^"]*)"', text_svg)
+            for class_name in class_value.split()
+        }
+        if "furniture-elevation-label" not in classes:
+            return text_svg
+        owner_class = next(
+            (
+                class_name
+                for class_name in classes
+                if class_name.startswith("furniture-owner-")
+            ),
+            None,
+        )
+        if (
+            owner_class is not None
+            and owner_class.removeprefix("furniture-owner-")
+            in visible_products
+        ):
+            visible_labels.append(text_svg.strip())
+        return ""
+
+    svg = re.sub(
+        r"<text\b(?P<attrs>[^>]*?)(?<!/)>.*?</text>",
+        remove_or_collect_label,
+        svg,
+        flags=re.DOTALL,
+    )
+    if not visible_labels:
+        svg_path.write_text(svg, encoding="utf-8")
+        return
+
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    labels = "\n".join(
+        "    " + label.replace("\n", "\n    ")
+        for label in visible_labels
+    )
+    overlays = (
+        '  <g class="furniture-elevation-label-overlays">\n'
+        f"{labels}\n"
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -3241,6 +3335,7 @@ def _render_existing_drawing(
             model,
             drawing,
         )
+        _postprocess_elevation_furniture_labels(absolute_output)
     _postprocess_right_panel(
         absolute_output,
         drawing_properties or {},
@@ -3413,6 +3508,7 @@ class House:
         self._storeys: list[Storey] = []
         self._drawings: list[Drawing] = []
         self._plan_annotations: list[ifcopenshell.entity_instance] = []
+        self._furniture_label_specs: list[_FurnitureLabelSpec] = []
         self._materials: dict[str, ifcopenshell.entity_instance] = {}
         self._wall_type_layouts: dict[int, tuple[float, float]] = {}
         self._wall_type_styles: dict[int, ifcopenshell.entity_instance | None] = {}
@@ -5269,8 +5365,10 @@ class House:
         ``view="plan"`` preserves the existing downward-looking plan.  For a
         basic side view, use ``view="elevation"`` and supply a horizontal
         ``direction`` pointing from the camera toward the building, such as
-        ``(0, 1, 0)``.  Elevations currently contain projected model geometry
-        only; plan annotations and automatic door labels are omitted.
+        ``(0, 1, 0)``.  Elevations use projected model geometry; plan-only
+        annotations and automatic door labels are omitted.
+        Furniture text labels are recreated facing each elevation camera and
+        are emitted only when their owning product is visible in the SVG.
         ``storeys`` limits both model geometry and automatic plan annotations
         to the supplied building storeys.  When omitted, all storeys are
         included.  Drawing-specific annotations are always included.
@@ -5399,6 +5497,7 @@ class Drawing:
                 0.0,
             )
         self._batting_count = 0
+        self._ridge_tile_count = 0
         self._wall_insulation_count = 0
         self._dimension_count = 0
         self._entrance_arrow_count = 0
@@ -5406,6 +5505,9 @@ class Drawing:
         self._annotated_stair_landings: set[int] = set()
         self._annotated_chimneys: set[int] = set()
         self._annotated_doors: set[int] = set()
+        self._elevation_furniture_labels: dict[
+            int, ifcopenshell.entity_instance
+        ] = {}
         if not isinstance(door_annotations, bool):
             raise TypeError("door_annotations must be a boolean")
         self._automatic_door_annotations = (
@@ -5640,6 +5742,10 @@ class Drawing:
                         door,
                         offset=self._door_annotation_offset,
                     )
+        elif self.view == "elevation":
+            for label_spec in self.house._furniture_label_specs:
+                if self._includes_storey(label_spec.storey):
+                    self._add_elevation_furniture_label(label_spec)
 
     @property
     def storeys(self) -> tuple[Storey, ...]:
@@ -5699,8 +5805,8 @@ class Drawing:
         """Include one model element outside this drawing's storey scope.
 
         The element retains its original spatial container and geometry, so
-        this only affects the current drawing.  In plan views, linked plan
-        annotations such as a furniture label are included with it.
+        this only affects the current drawing.  Linked furniture labels are
+        included using the current plan or elevation view.
         """
         if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a(
             "IfcElement"
@@ -5724,7 +5830,113 @@ class Drawing:
                     group=self.group,
                     products=annotations,
                 )
+        else:
+            label_spec = next(
+                (
+                    candidate
+                    for candidate in self.house._furniture_label_specs
+                    if candidate.product == element
+                ),
+                None,
+            )
+            if label_spec is not None:
+                self._add_elevation_furniture_label(label_spec)
         return self
+
+    def _add_elevation_furniture_label(
+        self,
+        label_spec: _FurnitureLabelSpec,
+    ) -> ifcopenshell.entity_instance:
+        """Create a centred, camera-facing label for one furniture product."""
+        if self.view != "elevation":
+            raise ValueError(
+                "elevation furniture labels require an elevation drawing"
+            )
+        product_id = label_spec.product.id()
+        existing_label = self._elevation_furniture_labels.get(product_id)
+        if existing_label is not None:
+            return existing_label
+
+        direction = np.array(self.direction)
+        camera_z = -direction
+        camera_y = np.array((0.0, 0.0, 1.0))
+        camera_x = np.cross(camera_y, camera_z)
+        placement = np.eye(4)
+        placement[:3, 0] = camera_x
+        placement[:3, 1] = camera_y
+        placement[:3, 2] = camera_z
+        placement[:3, 3] = label_spec.center
+
+        local_x = np.array(label_spec.local_x)
+        local_y = np.array(label_spec.local_y)
+        projected_width = (
+            abs(float(np.dot(local_x, camera_x[:2]))) * label_spec.width
+            + abs(float(np.dot(local_y, camera_x[:2]))) * label_spec.depth
+        )
+
+        model = self.house.model
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{label_spec.name} Elevation Label - {self.name}",
+            predefined_type="TEXT",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+        literal_origin = model.createIfcAxis2Placement3D(
+            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+            model.createIfcDirection((0.0, 0.0, 1.0)),
+            model.createIfcDirection((1.0, 0.0, 0.0)),
+        )
+        literal = model.createIfcTextLiteralWithExtent(
+            label_spec.text,
+            literal_origin,
+            "RIGHT",
+            model.createIfcPlanarExtent(projected_width, label_spec.height),
+            "center",
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [literal],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={
+                "Classes": (
+                    "furniture-label furniture-elevation-label small "
+                    f"furniture-owner-{label_spec.product.GlobalId}"
+                )
+            },
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=self._drawing_pset,
+            properties={"HasAnnotation": True},
+        )
+        self._elevation_furniture_labels[product_id] = annotation
+        return annotation
 
     def add_material_legend(
         self,
@@ -6713,6 +6925,132 @@ class Drawing:
             self.house.model,
             group=self.group,
             products=[annotation],
+        )
+        return annotation
+
+    def add_ridge_tile(
+        self,
+        center: Point3D,
+        *,
+        width: Number,
+        rise: Number,
+        thickness: Number,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a camera-facing ridge-tile section to an elevation drawing.
+
+        ``center`` is the underside crown of the cap in world coordinates.
+        The curved band extends downward over the two roof faces, so the
+        intersection of their outer faces is a convenient anchor point.
+        The annotation belongs only to this drawing and does not add a 3D
+        ridge tile to the building model.
+        """
+        if self.view != "elevation":
+            raise ValueError("ridge tiles are only supported in elevation drawings")
+        center_point = np.array(_point_3d(center, "center"), dtype=float)
+        width = _number(width, "width")
+        rise = _number(rise, "rise")
+        thickness = _number(thickness, "thickness")
+        if width <= 0:
+            raise ValueError("width must be greater than zero")
+        if rise <= 0:
+            raise ValueError("rise must be greater than zero")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if 2 * thickness >= width:
+            raise ValueError("thickness must be less than half the width")
+        if thickness >= rise:
+            raise ValueError("thickness must be less than rise")
+
+        outer_radius_x = width / 2
+        outer_radius_y = rise
+        inner_radius_x = outer_radius_x - thickness
+        inner_radius_y = outer_radius_y - thickness
+        vertical_offset = -inner_radius_y
+        segment_count = 24
+        outer_arc = [
+            (
+                outer_radius_x * cos(pi - pi * index / segment_count),
+                vertical_offset
+                + outer_radius_y * sin(pi - pi * index / segment_count),
+            )
+            for index in range(segment_count + 1)
+        ]
+        inner_arc = [
+            (
+                inner_radius_x * cos(pi * index / segment_count),
+                vertical_offset
+                + inner_radius_y * sin(pi * index / segment_count),
+            )
+            for index in range(segment_count + 1)
+        ]
+        outline_points = (*outer_arc, *inner_arc, outer_arc[0])
+
+        model = self.house.model
+        self._ridge_tile_count += 1
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=(
+                _name(name, "name")
+                if name is not None
+                else f"{self.name} Ridge Tile {self._ridge_tile_count}"
+            ),
+            predefined_type="FILLAREA",
+        )
+
+        direction = np.array(self.direction)
+        camera_z = -direction
+        camera_y = np.array((0.0, 0.0, 1.0))
+        camera_x = np.cross(camera_y, camera_z)
+        placement = np.eye(4)
+        placement[:3, 0] = camera_x
+        placement[:3, 1] = camera_y
+        placement[:3, 2] = camera_z
+        placement[:3, 3] = center_point
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+
+        curve = model.createIfcIndexedPolyCurve(
+            model.createIfcCartesianPointList2D(outline_points),
+            None,
+            False,
+        )
+        fill_area = model.createIfcAnnotationFillArea(curve, None)
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [fill_area],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=pset,
+            properties={"Classes": "ridge-tile"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[annotation],
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=self._drawing_pset,
+            properties={"HasAnnotation": True},
         )
         return annotation
 
@@ -11915,6 +12253,7 @@ class Storey:
         both its 3D body and plan symbol while preserving its original height.
         ``rotation`` is counter-clockwise in degrees, and ``start_height``
         places the bottom of the object above this storey's elevation.
+        Supplying ``label`` adds centred text to plan and elevation drawings.
         """
         object_name = _name(name, "name")
         center_x, center_y = _point(center, "center")
@@ -12050,17 +12389,18 @@ class Storey:
             label_placement[0, 3] = center_x
             label_placement[1, 3] = center_y
             label_placement[2, 3] = self.elevation + start_height
-            self._add_plan_label(
+            self._add_furniture_label(
                 occurrence,
                 name=object_name,
                 text=label_text,
                 placement=label_placement,
                 width=max_x - min_x,
                 depth=max_y - min_y,
+                height=max_z - min_z,
             )
         return occurrence
 
-    def _add_plan_label(
+    def _add_furniture_label(
         self,
         product: ifcopenshell.entity_instance,
         *,
@@ -12069,7 +12409,9 @@ class Storey:
         placement: np.ndarray,
         width: float,
         depth: float,
+        height: float,
     ) -> ifcopenshell.entity_instance:
+        """Create the plan label and register it for elevation drawings."""
         model = self.house.model
         annotation = ifcopenshell.api.root.create_entity(
             model,
@@ -12127,6 +12469,23 @@ class Storey:
             related_object=annotation,
         )
         self.house._plan_annotations.append(annotation)
+        label_spec = _FurnitureLabelSpec(
+            product=product,
+            storey=self,
+            name=name,
+            text=text,
+            center=(
+                float(placement[0, 3]),
+                float(placement[1, 3]),
+                float(placement[2, 3] + height / 2),
+            ),
+            local_x=(float(placement[0, 0]), float(placement[1, 0])),
+            local_y=(float(placement[0, 1]), float(placement[1, 1])),
+            width=width,
+            depth=depth,
+            height=height,
+        )
+        self.house._furniture_label_specs.append(label_spec)
         for drawing in self.house._drawings:
             if drawing.view == "plan" and drawing._includes_storey(self):
                 ifcopenshell.api.group.assign_group(
@@ -12134,6 +12493,11 @@ class Storey:
                     group=drawing.group,
                     products=[annotation],
                 )
+            elif (
+                drawing.view == "elevation"
+                and drawing._includes_storey(self)
+            ):
+                drawing._add_elevation_furniture_label(label_spec)
         return annotation
 
     def furniture(
@@ -12156,7 +12520,8 @@ class Storey:
         counter-clockwise in degrees from global X, and ``start_height`` is
         measured above this storey's elevation.  The plan representation is a
         dashed rectangle with ``label`` centred inside; when omitted, the
-        furniture name is used as the label.
+        furniture name is used as the label.  Elevation drawings receive a
+        camera-facing copy centred vertically on the projected box.
         """
         furniture_name = _name(name, "name")
         kind = _enum(kind, "kind", _FURNITURE_KINDS)
@@ -12253,13 +12618,14 @@ class Storey:
             representation=plan,
         )
 
-        self._add_plan_label(
+        self._add_furniture_label(
             furniture,
             name=furniture_name,
             text=label_text,
             placement=placement.copy(),
             width=width,
             depth=depth,
+            height=height,
         )
         return furniture
 

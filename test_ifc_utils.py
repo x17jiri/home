@@ -42,6 +42,7 @@ from ifc_utils import (
     _close_door_bodies,
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
+    _postprocess_elevation_furniture_labels,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
@@ -1517,6 +1518,72 @@ class HouseTests(unittest.TestCase):
                 center=(0, 0),
                 label=" ",
             )
+
+    def test_adds_furniture_label_to_an_existing_elevation_drawing(
+        self,
+    ) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        elevation = house.add_drawing(
+            "Interior elevation",
+            0,
+            -1,
+            1.5,
+            4,
+            view="elevation",
+            direction=(0, 1, 0),
+            storeys=[ground],
+        )
+
+        stove = ground.furniture(
+            "Kamna",
+            kind="USERDEFINED",
+            size=(0.6, 0.5, 1.5),
+            center=(2, 2),
+            start_height=0.1,
+        )
+
+        elevation_labels = [
+            annotation
+            for annotation in elevation.group.IsGroupedBy[0].RelatedObjects
+            if "furniture-elevation-label"
+            in (
+                ifcopenshell.util.element.get_pset(
+                    annotation, "EPset_Annotation", "Classes"
+                )
+                or ""
+            ).split()
+        ]
+        self.assertEqual(len(elevation_labels), 1)
+        literal = (
+            elevation_labels[0].Representation.Representations[0].Items[0]
+        )
+        self.assertEqual(literal.Literal, "Kamna")
+        self.assertIn(
+            f"furniture-owner-{stove.GlobalId}",
+            ifcopenshell.util.element.get_pset(
+                elevation_labels[0], "EPset_Annotation", "Classes"
+            ).split(),
+        )
+        self.assertTrue(
+            ifcopenshell.util.element.get_pset(
+                elevation.element, "EPset_Drawing", "HasAnnotation"
+            )
+        )
+        self.assertIs(elevation.include_element(stove), elevation)
+        self.assertEqual(
+            sum(
+                "furniture-elevation-label"
+                in (
+                    ifcopenshell.util.element.get_pset(
+                        annotation, "EPset_Annotation", "Classes"
+                    )
+                    or ""
+                ).split()
+                for annotation in elevation.group.IsGroupedBy[0].RelatedObjects
+            ),
+            1,
+        )
 
     def test_aligns_transparent_window_glazing_on_the_wall_axis(self) -> None:
         house = House("My house", colors={"window": "#369"})
@@ -6000,6 +6067,97 @@ class HouseTests(unittest.TestCase):
                 thickness=0.16,
             )
 
+    def test_adds_camera_facing_ridge_tile_to_elevation(self) -> None:
+        house = House("My house")
+        house.storey("Ground floor", elevation=0)
+        drawing = house.add_drawing(
+            "Section",
+            2,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(1, 0, 0),
+        )
+        other_drawing = house.add_drawing(
+            "Other section",
+            2,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(1, 0, 0),
+        )
+
+        ridge_tile = drawing.add_ridge_tile(
+            (2, 3, 4),
+            width=0.40,
+            rise=0.12,
+            thickness=0.025,
+        )
+
+        self.assertEqual(ridge_tile.ObjectType, "FILLAREA")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                ridge_tile,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "ridge-tile",
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            ridge_tile.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            placement,
+            np.array(
+                (
+                    (0, 0, -1, 2),
+                    (-1, 0, 0, 3),
+                    (0, 1, 0, 4),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-9,
+        )
+        points = (
+            ridge_tile.Representation.Representations[0]
+            .Items[0]
+            .OuterBoundary.Points.CoordList
+        )
+        self.assertEqual(len(points), 51)
+        self.assertAlmostEqual(min(point[0] for point in points), -0.20)
+        self.assertAlmostEqual(max(point[0] for point in points), 0.20)
+        self.assertAlmostEqual(max(point[1] for point in points), 0.025)
+        self.assertIn(ridge_tile, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(
+            ridge_tile,
+            other_drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+        self.assertTrue(
+            ifcopenshell.util.element.get_pset(
+                drawing.element,
+                "EPset_Drawing",
+                "HasAnnotation",
+            )
+        )
+
+        plan = house.add_drawing("Plan", 2, 2, 1, 5)
+        with self.assertRaisesRegex(ValueError, "elevation"):
+            plan.add_ridge_tile(
+                (2, 3, 4),
+                width=0.40,
+                rise=0.12,
+                thickness=0.025,
+            )
+        with self.assertRaisesRegex(ValueError, "half the width"):
+            drawing.add_ridge_tile(
+                (2, 3, 4),
+                width=0.04,
+                rise=0.12,
+                thickness=0.025,
+            )
+
     def test_adds_merged_dashed_wall_outlines_without_junction_seams(
         self,
     ) -> None:
@@ -7110,12 +7268,14 @@ class HouseTests(unittest.TestCase):
             self.assertIn("2,25 m² (18,0 %)", svg)
             self.assertIn("0,00 m² (0,0 %)", svg)
 
-    def test_stores_a_basic_elevation_camera_without_plan_annotations(self) -> None:
+    def test_stores_elevation_camera_with_camera_facing_furniture_label(
+        self,
+    ) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)
         wall = ground.wall((0, 0), (5, 0), thickness=0.2, height=2.8)
         wall.add_door(at=0.5, width=0.9, height=2.1)
-        ground.furniture(
+        table = ground.furniture(
             "Table",
             kind="TABLE",
             size=(1, 1, 0.75),
@@ -7156,11 +7316,58 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(drawing_pset["TargetView"], "ELEVATION_VIEW")
         self.assertEqual(drawing_pset["FillMode"], "SHAPELY")
-        self.assertEqual(drawing_pset["HasAnnotation"], False)
+        self.assertEqual(drawing_pset["HasAnnotation"], True)
         self.assertEqual(drawing_pset["DoorsClosed"], True)
+        plan_label = next(
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"
+            )
+            == "furniture-label small"
+        )
+        elevation_label = next(
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if "furniture-elevation-label"
+            in (
+                ifcopenshell.util.element.get_pset(
+                    annotation, "EPset_Annotation", "Classes"
+                )
+                or ""
+            ).split()
+        )
         self.assertEqual(
             set(drawing.group.IsGroupedBy[0].RelatedObjects),
-            {drawing.element},
+            {drawing.element, elevation_label},
+        )
+        self.assertNotIn(plan_label, drawing.group.IsGroupedBy[0].RelatedObjects)
+        label_placement = ifcopenshell.util.placement.get_local_placement(
+            elevation_label.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            label_placement,
+            np.array(
+                (
+                    (1, 0, 0, 2),
+                    (0, 0, -1, 2),
+                    (0, 1, 0, 0.375),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-12,
+        )
+        label_literal = (
+            elevation_label.Representation.Representations[0].Items[0]
+        )
+        self.assertEqual(label_literal.Literal, "Table")
+        self.assertAlmostEqual(label_literal.Extent.SizeInX, 1)
+        self.assertAlmostEqual(label_literal.Extent.SizeInY, 0.75)
+        self.assertIn(
+            f"furniture-owner-{table.GlobalId}",
+            ifcopenshell.util.element.get_pset(
+                elevation_label, "EPset_Annotation", "Classes"
+            ).split(),
         )
         self.assertFalse(drawing._automatic_door_annotations)
         with self.assertRaisesRegex(ValueError, "only supported for plan"):
@@ -7467,6 +7674,36 @@ class HouseTests(unittest.TestCase):
                 if association.is_a("IfcRelAssociatesDocument")
             )
             self.assertEqual(Path(document.Location), output.resolve())
+
+    def test_keeps_only_visible_furniture_labels_above_elevation_linework(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "elevation.svg"
+            svg_path.write_text(
+                """<svg xmlns:ifc="http://www.ifcopenshell.org/namespaces/ifc">
+  <g class="symbol"><text class="template"/></g>
+  <g ifc:guid="VISIBLE" class="IfcFurniture projection"><path d="M0 0L1 1"/></g>
+  <g ifc:guid="HIDDEN" class="IfcFurniture projection"><path/></g>
+  <text style="font-size:0"><tspan class="IfcAnnotation furniture-label furniture-elevation-label furniture-owner-VISIBLE">Kamna</tspan></text>
+  <text style="font-size:0"><tspan class="IfcAnnotation furniture-label furniture-elevation-label furniture-owner-HIDDEN">Skříň</tspan></text>
+  <text class="unrelated"><tspan>Note</tspan></text>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_elevation_furniture_labels(svg_path)
+            _postprocess_elevation_furniture_labels(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            overlay = '<g class="furniture-elevation-label-overlays">'
+            self.assertEqual(svg.count(overlay), 1)
+            self.assertEqual(svg.count("Kamna"), 1)
+            self.assertNotIn("Skříň", svg)
+            self.assertEqual(svg.count("Note"), 1)
+            self.assertIn('<g class="symbol"><text class="template"/></g>', svg)
+            self.assertGreater(svg.index(overlay), svg.index("VISIBLE"))
 
     def test_layers_door_and_furniture_symbols_above_plan_linework(self) -> None:
         with TemporaryDirectory() as directory:

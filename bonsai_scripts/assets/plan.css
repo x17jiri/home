@@ -61,6 +61,12 @@ a:hover { cursor: pointer; }
 .PredefinedType-FILLAREA.wall-insulation-xps {
     fill: url(#perimeter-polystyrene) !important;
 }
+.PredefinedType-FILLAREA.ridge-tile {
+    fill: #a64b35 !important;
+    stroke: black !important;
+    stroke-width: 0.10 !important;
+    stroke-linejoin: round !important;
+}
 .PredefinedType-BREAKLINE { fill: none; stroke: black; stroke-width: 0.25; marker-mid: url(#breakline-marker); }
 .PredefinedType-TEXT { fill: black; stroke: none; }
 path.PredefinedType-TEXTLEADER { marker-end: url(#leader-marker); }
