@@ -79,16 +79,21 @@ from ifc_utils import *
 from shapely.geometry import Polygon
 
 RAFTER_Z_OFFSET = -0.04
-RAFTER_THICKNESS = 0.08
-RAFTER_SIZE = (RAFTER_THICKNESS, 0.20)
+RAFTER_THICKNESS = 0.10
+RAFTER_SIZE = (RAFTER_THICKNESS, 0.18)
 ROOF_BATTING_CENTER_OFFSET = RAFTER_Z_OFFSET + RAFTER_SIZE[1] / 2
 ROOF_BATTING_THICKNESS = RAFTER_SIZE[1] - 0.06
 ROOF_BATTING_END_INSET = 0.03
 VAPOUR_BARRIER_THICKNESS = 0.001
-THERMAL_INSULATION_UNDER_RAFTERS = 0
+THERMAL_INSULATION_UNDER_RAFTERS = 0.06
+UNDER_RAFTER_BATTING_THICKNESS = max(
+	0,
+	THERMAL_INSULATION_UNDER_RAFTERS - 0.02,
+)
+UNDER_RAFTER_BATTING_END_INSET = 0.015
 INSTALLATION_SPACE_THICKNESS = 0.08
 GYPSUM_PLASTERBOARD_THICKNESS = 0.015
-WOOD_FIBERBOARD_THICKNESS = 0.1
+WOOD_FIBERBOARD_THICKNESS = 0.08
 WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
 PAVATEX_BATTING_CENTER_OFFSET = (
 	WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS / 2
@@ -127,6 +132,10 @@ LIAPOR_COLOR = "#fff2cc"
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = (
 	RAFTER_Z_OFFSET - THERMAL_INSULATION_UNDER_RAFTERS
 )
+UNDER_RAFTER_BATTING_CENTER_OFFSET = (
+	THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM
+	+ THERMAL_INSULATION_UNDER_RAFTERS / 2
+)
 VAPOUR_BARRIER_BOTTOM = (
 	THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM - VAPOUR_BARRIER_THICKNESS
 )
@@ -149,11 +158,11 @@ GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.80
+UNDER_HOLE = 2.875
 HOLE_HEIGHT = 0.25
 ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
-COLLAR_TIE_THICKNESS = 0.06
+COLLAR_TIE_THICKNESS = 0.05
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.16)
 COLLAR_TIE_EXTENSION = 1.5
 COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
@@ -162,7 +171,7 @@ COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # underside so the two cannot drift apart when the framing changes.
 COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
 COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
-NADEZDIVKA = 1.25
+NADEZDIVKA = 1.30
 
 house = House(
     "My house",
@@ -198,7 +207,7 @@ foundation_wall = house.wall_type(
 partition_wall = house.wall_type(
     "Partition wall - VPC 115 mm",
     layers=[
-        ("Brick", 0.15),
+        ("Brick", 0.115),
         "axis",
     ],
 )
@@ -213,12 +222,13 @@ dry_wall = house.wall_type(
 
 HOUSE_DEPTH = 7.99
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.75 + 0.01
-HOUSE_WIDTH = 11.490
+KITCHEN_WIDTH = 4.50 + 0.01
 CUT_WIDTH = 1.75
+KK_WIDTH = 2.50 + 0.01
 
 wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
+HOUSE_WIDTH = wall3_x + KK_WIDTH + 0.24
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
@@ -226,7 +236,6 @@ step_count = 16
 STAIR_TREAD_THICKNESS = 0.04
 STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
-KK_WIDTH = HOUSE_WIDTH - wall3_x - BWT
 
 GYM_DEPTH = 2.01
 pokoj_dole = ground.floor_layer(
@@ -243,7 +252,9 @@ pokoj_dole = ground.floor_layer(
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.5
+CHODBA_DEPTH = 2.535
+GALERY_START = BWT+2.5
+
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 
@@ -253,12 +264,12 @@ CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - 0.08 - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
-CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.45 # override
+CHIMNEY_Y_START = GALERY_START - 0.45 # override
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = (3.98+4.98)/2 - 0.2
+CHIMNEY_X_START = (3.96 + 4.74)/2 - 0.2
 
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
@@ -267,16 +278,16 @@ print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
 print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
-BATHROOM_DEPTH = 2.6
+BATHROOM_DEPTH = 2.615
 kuchyn = ground.floor_layer(
 	"Kuchyn",
 	outline=(
-		(wall2_x, BWT+CHODBA_DEPTH+0.15),
-		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.15),
+		(wall2_x, BWT+CHODBA_DEPTH+0.115),
+		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.115),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
-		(wall3_x, BWT+BATHROOM_DEPTH+0.15),
-		(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.15),
+		(wall3_x, BWT+BATHROOM_DEPTH+0.115),
+		(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.115),
 		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
 		(wall3_x, HOUSE_DEPTH-BWT),
 		(wall3_x, oblouk_at+2.5),
@@ -370,7 +381,7 @@ GROUND_DOOR_HEIGHT = 2.32
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
 front_door = wall_1b_g.add_door(
-	at=2*BWT+GYM_DEPTH-0.375-1.125,
+	at=2*BWT+GYM_DEPTH-0.5-1.125,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
@@ -387,7 +398,7 @@ window_bathroom = wall_front_g.add_window(
 # Back windows
 print("KK_WIDTH=", KK_WIDTH)
 window_obyvak = wall_back_g.add_window(
-	at=2*BWT+KK_WIDTH+1, width=2.5,
+	at=BWT+KK_WIDTH+BWT + round(KITCHEN_WIDTH / 0.25) * 0.125 - 1.25, width=2.5,
 	sill_height=GROUND_WINDOW_SILL_HEIGHT,
 	height=GROUND_WINDOW_HEIGHT)
 window_pokoj_dole = wall_back_g.add_window(
@@ -623,13 +634,14 @@ ground.furniture(
     color="#ffffff",
     center=(HOUSE_WIDTH-(BWT+0.8)-0.4, BWT+0.4),
 )
-ground.asset(
-	"Gauc", asset="3_seater_sofa",
-	center=(wall2_x+0.1+0.55, HOUSE_DEPTH-BWT-0.1-1.25),
-	start_height=GROUND_FLOOR_THICKNESS,
-	size=(2.5, 1.1),
-	rotation=90,
-)
+if "aa" not in sys.argv:
+	gauc = ground.asset(
+		"Gauc", asset="3_seater_sofa",
+		center=(wall2_x+0.1+0.55, HOUSE_DEPTH-BWT-0.1-1.25),
+		start_height=GROUND_FLOOR_THICKNESS,
+		size=(2.5, 1.1),
+		rotation=90,
+	)
 ground.asset(
 	"Gauc", asset="1_seater_sofa",
 	center=(wall2_x+0.1+1.1+0.1+0.55, HOUSE_DEPTH-BWT-0.1-0.55),
@@ -743,7 +755,6 @@ for wall in ground_load_bearing_walls:
 	)
 
 # stairs
-GALERY_START = BWT+CHODBA_DEPTH
 stairs_width = 1
 straight_stair_step_size = 0.27
 stair_step_height = stair_height / step_count
@@ -813,12 +824,12 @@ chimney = ground.chimney(
 
 GALERY_END = GALERY_START + 1.05
 
-ground.furniture(
+kamna = ground.furniture(
     "Kamna",
     kind="USERDEFINED",
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall2_x + 0.5, BWT+CHODBA_DEPTH+0.15+0.2+0.25),
+    center=(wall2_x + 0.5, BWT+CHODBA_DEPTH+0.115+0.2+0.25),
 	start_height=GROUND_FLOOR_THICKNESS,
 #    rotation=-45,
 )
@@ -830,14 +841,14 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.7, 0.7, 0.8),
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.15+0.35),
+    center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.115+0.35),
 )
 ground.furniture(
 	"Myčka",
     kind="USERDEFINED",
     size=(0.7, 0.7, 0.8),
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-BWT-0.35-0.7, BWT+BATHROOM_DEPTH+0.15+0.35),
+    center=(HOUSE_WIDTH-BWT-0.35-0.7, BWT+BATHROOM_DEPTH+0.115+0.35),
 )
 ground.furniture(
 	"Lednice",
@@ -850,10 +861,10 @@ ground.furniture(
 	"Sporák",
     kind="USERDEFINED",
     size=(0.7, 0.7, 0.8),
-    center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.15+0.35+0.7),
+    center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.115+0.35+0.7),
 	start_height=GROUND_FLOOR_THICKNESS,
 )
-KUCH_LINKA_LEN = HOUSE_DEPTH-2*BWT-0.15-BATHROOM_DEPTH-2.4
+KUCH_LINKA_LEN = HOUSE_DEPTH-2*BWT-0.115-BATHROOM_DEPTH-2.4
 ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
@@ -866,7 +877,7 @@ ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
     size=(KUCH_LINKA_LEN, 0.7, 0.8),
-    center=(HOUSE_WIDTH-BWT-1.4-KUCH_LINKA_LEN/2, BWT+BATHROOM_DEPTH+0.15+0.35),
+    center=(HOUSE_WIDTH-BWT-1.4-KUCH_LINKA_LEN/2, BWT+BATHROOM_DEPTH+0.115+0.35),
 	start_height=GROUND_FLOOR_THICKNESS,
 )
 ground.asset(
@@ -1310,9 +1321,9 @@ upper.furniture(
 
 # Okna obyvak
 window_dormer_1 = wall_dormer.add_window(
-	at=BWT+0.5,width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
+	at=BWT+0.25,width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 window_dormer_2 = wall_dormer.add_window(
-	at=BWT+KITCHEN_WIDTH-0.5-1.375,
+	at=BWT+KITCHEN_WIDTH-0.25-1.375,
 	width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
 wall_2.add_door(
@@ -1347,8 +1358,8 @@ ROOF_WINDOW_Y1 = HOUSE_DEPTH - BWT - 0.25
 roof_window_opening = roof.add_opening(
 	name="Bedroom roof window",
 	rectangle=(
-		(1.88+0.04, ROOF_WINDOW_Y1),
-		(2.88-0.04, ROOF_WINDOW_Y1 - 1.2),
+		(1.63-0.34, ROOF_WINDOW_Y1),
+		(1.63+0.34, ROOF_WINDOW_Y1 - 1.2),
 	),
 )
 
@@ -1437,6 +1448,17 @@ def roof_batting_point(
 		y,
 		plane_height_at(*batting_plane, x=x, y=y),
 	)
+
+
+def roof_batting_local_point(
+	plane,
+	*,
+	x,
+	local_y,
+	center_offset,
+):
+	"""Return a world point using a modeled roof layer's local Y limit."""
+	return tuple(plane.to_world((x, local_y, center_offset)))
 
 
 def roof_batting_intersection(
@@ -1617,19 +1639,25 @@ ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 # leave it full-length.
 rafters = [
 	-0.12,
-	0.88,
-	1.88,
-	2.88,
-	(3.34, "+before"),
-	(3.98, "after"),
-	(4.98, "after"),
-	(5.98, "after"),
-	(6.98, "after"),
-	(7.98, "after"),
-	(8.78, "+after"),
-	9.78,
-	10.78,
-	11.5,
+	-0.12+0.68,
+	-0.12+0.68+0.68,
+	1.63,
+	3.38-0.68-0.68,
+	3.38-0.68,
+	(3.38, "+before"),
+	(3.96, "after"),
+	(4.74, "after"),
+	(5.43, "after"),
+	(6.00, "after"),
+	(6.57, "after"),
+	(7.14, "after"),
+	(7.83, "after"),
+	(8.61, "+after"),
+
+	8.61+0.68,
+	8.61+0.68+0.69,
+	8.61+0.68+0.69+0.69,
+	11.36,
 	]
 rafter_layout = []
 for rafter in rafters:
@@ -2275,8 +2303,6 @@ house.write("house.ifc")
 def common_dims(drawing1):
 	# Risankuv pokoj hloubka
 	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1)
-	# chodba hloubka
-	drawing1.add_dimension(start=(CHIMNEY_X_END+0.1, BWT), end=(CHIMNEY_X_END+0.1, BWT+CHODBA_DEPTH), offset=0)
 	# gym hloubka
 	drawing1.add_dimension(start=(wall2_x-BWT, BWT), end=(wall2_x-BWT, BWT+GYM_DEPTH))
 
@@ -2386,10 +2412,12 @@ if "ground" in sys.argv:
 
 	common_dims(drawing1)
 
+	# chodba hloubka
+	drawing1.add_dimension(start=(CHIMNEY_X_END+0.1, BWT), end=(CHIMNEY_X_END+0.1, BWT+CHODBA_DEPTH), offset=0)
 	# KK hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.15), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-1)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.115), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-1)
 	# kuchyn hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWT+CHODBA_DEPTH+0.15), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWT), offset=0)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWT+CHODBA_DEPTH+0.115), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWT), offset=0)
 	# koupelna hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH), offset=-1)
 
@@ -2397,7 +2425,7 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(wall2_x, CHODBA_DEPTH+0.5), end=(wall2_x+1, CHODBA_DEPTH+0.5), offset=1)
 
 	drawing1.add_entrance_arrow(
-		(CUT_WIDTH - 0.6, BWT + 0.125 + 0.55),
+		(CUT_WIDTH - 0.6, BWT + 0.25 + 0.55),
 #		rotation=90,  # points left
 		size=0.6,      # metres
 	)
@@ -2507,6 +2535,8 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(5.5, GALERY_END+0.1), end=(5.5, HOUSE_DEPTH-BWT), offset=0)
 	# galerie hloubka
 	drawing1.add_dimension(start=(6, GALERY_START), end=(6, GALERY_END), offset=0)
+	# chodba hloubka
+	drawing1.add_dimension(start=(CHIMNEY_X_END+0.1, BWT), end=(CHIMNEY_X_END+0.1, GALERY_START), offset=0)
 
 	common_dims(drawing1)
 	common_wall_insulation(
@@ -2547,7 +2577,7 @@ if "cut1" in sys.argv:
 if "aa" in sys.argv:
 	drawing1 = house.add_drawing(
 		"aa",
-		x=wall2_x+0.6,
+		x=wall2_x+0.8,
 		y=4,
 		z=3.5,
 		radius=8,
@@ -2557,11 +2587,13 @@ if "aa" in sys.argv:
 		doors_closed=True,
 		right_panel_width=60,
 	)
+	drawing1.add_furniture_label(kamna)
+	#drawing1.add_furniture_label(gauc)
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď\nVPC Cihla 240 mm, λ = 0.75"),
 		(
 			"liapor-brick",
-			f"První řada cihel nosných stěn\nLiapor M AKU, 12 MPa, λ = 0.333",
+			f"První řada cihel nosných stěn, λ = 0.333\nLiapor M AKU, 12 MPa",
 		),
 		(
 			"ztracene-bedneni",
@@ -2582,19 +2614,20 @@ if "aa" in sys.argv:
 		("drywall-diagonal1", "Sádrokarton"),
 		(
 			"thermal-impact-insulation",
-			f"EPS Fasádní izolace\n200 mm, λ ≤ 0.35"
+			f"EPS Fasádní izolace, λ ≤ 0.35\n200 mm"
 		),
 		(
 			"perimeter-polystyrene",
-			f"XPS Perimetrická izolace\n100 mm a 200 mm, λ ≤ 0.35"
+			f"XPS Perimetrická izolace, λ ≤ 0.35\n100 mm nebo 200 mm"
 		),
 		(
 			"rockwool-wave",
-			"Minerální vata, fasáda a mezi krokvemi\n200 mm, λ ≤ 0.39",
+			"Minerální vata, λ ≤ 0.039\n"
+			"tloušťka podle skladby konstrukce",
 		),
 		(
 			"pavatex-wave",
-			f"Dřevovláknitá deska\n100 mm, λ ≤ 0.43",
+			f"Dřevovláknitá deska, λ ≤ 0.43\n100 mm",
 		),
 	])
 	drawing1.add_wall_insulation(
@@ -2670,6 +2703,75 @@ if "aa" in sys.argv:
 			name=batting_name,
 			classes="roof-batting",
 		)
+
+	if THERMAL_INSULATION_UNDER_RAFTERS > 0:
+		layer_name = "Thermal insulation under rafters"
+		street_slope_y, street_eave_y = sloped_inner_y_limits(
+			street_roof,
+			street_inner_boundaries,
+			0.25,
+		)[layer_name]
+		dormer_slope_y, dormer_eave_y = sloped_inner_y_limits(
+			dormer_roof,
+			dormer_inner_boundaries,
+			7.75,
+		)[layer_name]
+		street_flat_y, dormer_flat_y = flat_inner_y_limits(
+			street_inner_boundaries,
+			dormer_inner_boundaries,
+		)[layer_name]
+		flat_bottom, flat_thickness = FLAT_CEILING_INNER_LAYER_LAYOUT[
+			layer_name
+		]
+		flat_center_offset = flat_bottom + flat_thickness / 2
+		under_rafter_batting_segments = (
+			(
+				"AA street under-rafter batting",
+				street_roof,
+				street_eave_y,
+				street_slope_y,
+				UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			),
+			(
+				"AA flat-ceiling under-rafter batting",
+				flat_ceiling_roof,
+				street_flat_y,
+				dormer_flat_y,
+				flat_center_offset,
+			),
+			(
+				"AA dormer under-rafter batting",
+				dormer_roof,
+				dormer_slope_y,
+				dormer_eave_y,
+				UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			),
+		)
+		for batting_name, plane, start_y, end_y, center_offset in (
+			under_rafter_batting_segments
+		):
+			batting_start = roof_batting_local_point(
+				plane,
+				x=aa_x,
+				local_y=start_y,
+				center_offset=center_offset,
+			)
+			batting_end = roof_batting_local_point(
+				plane,
+				x=aa_x,
+				local_y=end_y,
+				center_offset=center_offset,
+			)
+			drawing1.add_batting(
+				*inset_roof_batting_segment(
+					batting_start,
+					batting_end,
+					end_inset=UNDER_RAFTER_BATTING_END_INSET,
+				),
+				thickness=UNDER_RAFTER_BATTING_THICKNESS,
+				name=batting_name,
+				classes="roof-batting under-rafter-batting",
+			)
 
 	pavatex_ridge = roof_batting_intersection(
 		street_roof,

@@ -12,8 +12,8 @@ Y_MIN, Y_MAX = -3, 20
 DX_PER_DY = 0.12#0.125
 DISTANCE_ALONG_LINE = 7.75
 SECOND_LINE_ANGLE = 70
-CENTER_HEIGHT = 8.36
-SLOPE = 0.7359
+CENTER_HEIGHT = 8.38
+SLOPE = 0.75
 WINDOW_HEIGHT = 1.5 + 0.75
 
 # Move the entire polygon by changing only this point.

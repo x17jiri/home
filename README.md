@@ -426,11 +426,16 @@ elevation.render("south.svg", png=True, png_dpi=600)
 
 Elevation directions must currently be horizontal. Elevations project the
 existing 3D model bodies and deliberately omit plan-only annotations such as
-door dimensions, room labels, and stair arrows. Furniture created with
-`Storey.furniture()` retains its box label, and explicitly labelled library
-assets retain their label. Each label faces the elevation camera, is centred
-on the projected object, and is omitted when that object has no visible SVG
-geometry.
+door dimensions, room labels, and stair arrows. Furniture labels remain
+automatic in plan drawings but are opt-in for elevations:
+
+```python
+stove = ground.furniture("Kamna", ...)
+elevation.add_furniture_label(stove)
+```
+
+Each selected label faces the elevation camera, is centred on the projected
+object, and is omitted when that object has no visible SVG geometry.
 
 A stylised ridge-tile section can be attached to an elevation without adding
 3D roof geometry. The supplied world point is the underside crown of the cap;
@@ -447,6 +452,35 @@ drawing.add_ridge_tile(
 
 The curved, terracotta-filled annotation is scoped to that drawing and stays
 attached to the model when its camera or scale changes.
+
+## Rafter load helper
+
+`rafter_load.py` estimates the uniformly distributed transverse line load
+that reaches a chosen deflection limit for a simply supported rectangular
+rafter. Edit its `USER INPUTS` constants or override them on the command line:
+
+```bash
+python rafter_load.py --width 80 --height 200 --span 3.7 \
+    --angle 36.65 --dormer-span 3.1 --dormer-angle 17.03 \
+    --deflection-ratio 300 --modulus 11 --spacing 0.8 --snow-load 1.5
+```
+
+Enter each permanent roof-layer mass in `ROOF_LAYERS_KG_M2` near the top of
+the script. Values are kg/m² of the actual sloping surface. Leave an unknown
+value as `None`: the script will calculate with the known layers while clearly
+marking the result incomplete instead of silently treating that layer as
+weightless.
+
+The snow input is a vertical roof load per square metre of horizontal
+projection; the helper applies both its tributary-area projection and its
+component perpendicular to the sloping rafter. It reports immediate and
+creep-adjusted final deflection, followed by preliminary C24 bending, shear,
+and support-bearing checks for both the main and dormer rafters. Both cases
+share the section, spacing, material, layers, snow, and safety factors; only
+their support spans and roof angles are separate. The Eurocode-style material,
+creep, action, and partial factors are all editable constants. Lateral
+stability, axial force, notches, connections, wind uplift, fire, and the
+selection of governing snow arrangements remain outside this member check.
 
 Persisted plan and elevation drawings may reserve additional paper space on
 their right side without changing the camera framing.  The width is expressed

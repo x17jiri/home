@@ -1543,6 +1543,21 @@ class HouseTests(unittest.TestCase):
             start_height=0.1,
         )
 
+        self.assertIs(elevation.include_element(stove), elevation)
+        self.assertFalse(
+            any(
+                "furniture-elevation-label"
+                in (
+                    ifcopenshell.util.element.get_pset(
+                        annotation, "EPset_Annotation", "Classes"
+                    )
+                    or ""
+                ).split()
+                for annotation in house.model.by_type("IfcAnnotation")
+            )
+        )
+        elevation_label = elevation.add_furniture_label(stove)
+        self.assertIs(elevation.add_furniture_label(stove), elevation_label)
         elevation_labels = [
             annotation
             for annotation in elevation.group.IsGroupedBy[0].RelatedObjects
@@ -1570,7 +1585,6 @@ class HouseTests(unittest.TestCase):
                 elevation.element, "EPset_Drawing", "HasAnnotation"
             )
         )
-        self.assertIs(elevation.include_element(stove), elevation)
         self.assertEqual(
             sum(
                 "furniture-elevation-label"
@@ -7293,6 +7307,19 @@ class HouseTests(unittest.TestCase):
             storeys=[ground],
             doors_closed=True,
         )
+        self.assertFalse(
+            any(
+                "furniture-elevation-label"
+                in (
+                    ifcopenshell.util.element.get_pset(
+                        annotation, "EPset_Annotation", "Classes"
+                    )
+                    or ""
+                ).split()
+                for annotation in house.model.by_type("IfcAnnotation")
+            )
+        )
+        drawing.add_furniture_label(table)
 
         self.assertEqual(drawing.view, "elevation")
         self.assertEqual(drawing.direction, (0.0, 1.0, 0.0))
@@ -8326,12 +8353,17 @@ class HouseTests(unittest.TestCase):
                 '<path d="M 0 0 L 10 0"/></g>'
                 '<g ifc:guid="other-guid" class="IfcAnnotation cut">'
                 '<path d="M 0 1 L 10 1"/></g>'
-                '<polyline class="IfcAnnotation roof-batting" '
+                '<polyline id="ordinary-roof-batting" '
+                'class="IfcAnnotation roof-batting" '
                 'style="marker-start:url(#batting-roof)"/>'
                 '<polyline class="GlobalId-roof-guid IfcAnnotation roof-batting" '
                 'style="marker-start:url(#batting-roof)"/>'
+                '<polyline id="under-rafter-batting" '
+                'class="IfcAnnotation roof-batting under-rafter-batting" '
+                'style="marker-start:url(#batting-roof)"/>'
                 '<polyline class="IfcAnnotation wall-insulation-rockwool" '
                 'style="marker-start:url(#batting-wall)"/>'
+                '<path id="foreground-geometry"/>'
                 '</svg>',
                 encoding="utf-8",
             )
@@ -8349,6 +8381,14 @@ class HouseTests(unittest.TestCase):
             self.assertIn(
                 '<g ifc:guid="other-guid" class="IfcAnnotation cut">',
                 svg,
+            )
+            self.assertLess(
+                svg.index('id="ordinary-roof-batting"'),
+                svg.index('id="foreground-geometry"'),
+            )
+            self.assertLess(
+                svg.index('id="foreground-geometry"'),
+                svg.index('id="under-rafter-batting"'),
             )
 
     def test_places_pavatex_batting_in_its_depth_ordered_owner_group(self) -> None:

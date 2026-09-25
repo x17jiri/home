@@ -1279,6 +1279,33 @@ def _postprocess_roof_batting(
         svg_path,
         annotation_class="roof-batting",
     )
+    _move_annotation_polylines_to_front(
+        svg_path,
+        annotation_class="under-rafter-batting",
+    )
+
+
+def _move_annotation_polylines_to_front(
+    svg_path: Path,
+    *,
+    annotation_class: str,
+) -> None:
+    """Move selected standalone annotation polylines to the SVG foreground."""
+    svg = svg_path.read_text(encoding="utf-8")
+    annotation_class = re.escape(annotation_class)
+    polyline = re.compile(
+        rf'<polyline\b[^>]*\bclass="[^"]*\b{annotation_class}\b[^"]*"[^>]*/>',
+        re.DOTALL,
+    )
+    elements = polyline.findall(svg)
+    if not elements:
+        return
+    svg = polyline.sub("", svg)
+    root_end = svg.rfind("</svg>")
+    if root_end < 0:
+        raise ValueError(f"SVG root closing tag not found in {svg_path}")
+    svg = f'{svg[:root_end]}{"".join(elements)}{svg[root_end:]}'
+    svg_path.write_text(svg, encoding="utf-8")
 
 
 _PAVATEX_BATTING_OWNER_PREFIX = "pavatex-owner-"
@@ -5367,8 +5394,11 @@ class House:
         ``direction`` pointing from the camera toward the building, such as
         ``(0, 1, 0)``.  Elevations use projected model geometry; plan-only
         annotations and automatic door labels are omitted.
-        Furniture text labels are recreated facing each elevation camera and
-        are emitted only when their owning product is visible in the SVG.
+        Furniture text labels remain automatic in plans.  Elevations omit
+        them unless explicitly added with
+        :meth:`Drawing.add_furniture_label`; selected labels face the
+        elevation camera and are emitted only when their owning product is
+        visible in the SVG.
         ``storeys`` limits both model geometry and automatic plan annotations
         to the supplied building storeys.  When omitted, all storeys are
         included.  Drawing-specific annotations are always included.
@@ -5742,10 +5772,6 @@ class Drawing:
                         door,
                         offset=self._door_annotation_offset,
                     )
-        elif self.view == "elevation":
-            for label_spec in self.house._furniture_label_specs:
-                if self._includes_storey(label_spec.storey):
-                    self._add_elevation_furniture_label(label_spec)
 
     @property
     def storeys(self) -> tuple[Storey, ...]:
@@ -5805,8 +5831,9 @@ class Drawing:
         """Include one model element outside this drawing's storey scope.
 
         The element retains its original spatial container and geometry, so
-        this only affects the current drawing.  Linked furniture labels are
-        included using the current plan or elevation view.
+        this only affects the current drawing.  Linked plan labels are
+        included in plan views.  Elevation labels remain opt-in through
+        :meth:`add_furniture_label`.
         """
         if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a(
             "IfcElement"
@@ -5830,18 +5857,43 @@ class Drawing:
                     group=self.group,
                     products=annotations,
                 )
-        else:
-            label_spec = next(
-                (
-                    candidate
-                    for candidate in self.house._furniture_label_specs
-                    if candidate.product == element
-                ),
-                None,
-            )
-            if label_spec is not None:
-                self._add_elevation_furniture_label(label_spec)
         return self
+
+    def add_furniture_label(
+        self,
+        furniture: ifcopenshell.entity_instance,
+    ) -> ifcopenshell.entity_instance:
+        """Explicitly add one furniture label to an elevation drawing.
+
+        Plan labels remain automatic.  ``furniture`` may be a box created by
+        :meth:`Storey.furniture` or a labelled library asset created by
+        :meth:`Storey.asset`.
+        """
+        if self.view != "elevation":
+            raise ValueError(
+                "add_furniture_label is only supported for elevation drawings"
+            )
+        if (
+            not isinstance(furniture, ifcopenshell.entity_instance)
+            or not furniture.is_a("IfcElement")
+        ):
+            raise TypeError("furniture must be an IfcElement")
+        if furniture.file is not self.house.model:
+            raise ValueError("furniture must belong to this house")
+
+        label_spec = next(
+            (
+                candidate
+                for candidate in self.house._furniture_label_specs
+                if candidate.product == furniture
+            ),
+            None,
+        )
+        if label_spec is None:
+            raise ValueError("furniture must have a label")
+        if not self._includes_storey(label_spec.storey):
+            raise ValueError("furniture is outside this drawing's storey scope")
+        return self._add_elevation_furniture_label(label_spec)
 
     def _add_elevation_furniture_label(
         self,
@@ -12253,7 +12305,8 @@ class Storey:
         both its 3D body and plan symbol while preserving its original height.
         ``rotation`` is counter-clockwise in degrees, and ``start_height``
         places the bottom of the object above this storey's elevation.
-        Supplying ``label`` adds centred text to plan and elevation drawings.
+        Supplying ``label`` adds centred text to plan drawings and makes the
+        label available to :meth:`Drawing.add_furniture_label` in elevations.
         """
         object_name = _name(name, "name")
         center_x, center_y = _point(center, "center")
@@ -12411,7 +12464,7 @@ class Storey:
         depth: float,
         height: float,
     ) -> ifcopenshell.entity_instance:
-        """Create the plan label and register it for elevation drawings."""
+        """Create the plan label and register it for optional elevation use."""
         model = self.house.model
         annotation = ifcopenshell.api.root.create_entity(
             model,
@@ -12493,11 +12546,6 @@ class Storey:
                     group=drawing.group,
                     products=[annotation],
                 )
-            elif (
-                drawing.view == "elevation"
-                and drawing._includes_storey(self)
-            ):
-                drawing._add_elevation_furniture_label(label_spec)
         return annotation
 
     def furniture(
@@ -12520,8 +12568,9 @@ class Storey:
         counter-clockwise in degrees from global X, and ``start_height`` is
         measured above this storey's elevation.  The plan representation is a
         dashed rectangle with ``label`` centred inside; when omitted, the
-        furniture name is used as the label.  Elevation drawings receive a
-        camera-facing copy centred vertically on the projected box.
+        furniture name is used as the label.  Use
+        :meth:`Drawing.add_furniture_label` to place a camera-facing copy in
+        a selected elevation drawing.
         """
         furniture_name = _name(name, "name")
         kind = _enum(kind, "kind", _FURNITURE_KINDS)
