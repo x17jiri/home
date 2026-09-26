@@ -8,7 +8,11 @@ from rafter_load import (
     DORMER_ROOF_ANGLE_DEGREES,
     DORMER_SUPPORT_SPAN_M,
     GRAVITY_M_S2,
+    PURLIN_HEIGHT_MM,
+    PURLIN_SUPPORT_SPAN_M,
+    PURLIN_WIDTH_MM,
     calculate_rafter_load,
+    calculate_purlin_check,
     calculate_roof_check,
     main,
 )
@@ -167,6 +171,65 @@ class RafterLoadTests(unittest.TestCase):
         self.assertEqual(check.roof_layer_mass_kg_m2, 50)
         self.assertEqual(check.missing_roof_layers, ("Unknown",))
 
+    def test_purlin_uses_sloping_dead_and_horizontal_snow_tributaries(
+        self,
+    ) -> None:
+        check = calculate_purlin_check(
+            width_mm=160,
+            height_mm=280,
+            support_span_m=4.75,
+            upper_rafter_length_m=1.08,
+            lower_rafter_span_m=3.7,
+            upper_roof_angle_degrees=35.84,
+            lower_roof_angle_degrees=35.84,
+            rafter_width_mm=100,
+            rafter_height_mm=180,
+            rafter_spacing_m=0.82,
+            deflection_ratio=300,
+            elastic_modulus_gpa=11,
+            snow_load_kn_m2=1.7,
+            roof_layers_kg_m2={"Layers": 100, "Unknown": None},
+            additional_permanent_load_kn_m=0.2,
+            timber_density_kg_m3=450,
+            bearing_length_mm=240,
+        )
+
+        expected_slope_width = 1.08 + 3.7 / 2
+        expected_horizontal_width = expected_slope_width * cos(
+            radians(35.84)
+        )
+        expected_rafter_mass = (
+            450 * 0.1 * 0.18 * expected_slope_width / 0.82
+        )
+        expected_transferred_mass = (
+            100 * expected_slope_width
+            + expected_rafter_mass
+            + 0.2 * 1000 / GRAVITY_M_S2
+        )
+
+        self.assertAlmostEqual(
+            check.tributary_slope_width_m,
+            expected_slope_width,
+        )
+        self.assertAlmostEqual(
+            check.tributary_horizontal_width_m,
+            expected_horizontal_width,
+        )
+        self.assertAlmostEqual(
+            check.rafter_line_mass_kg_m,
+            expected_rafter_mass,
+        )
+        self.assertAlmostEqual(
+            check.roof_snow_line_load_kn_m,
+            1.7 * expected_horizontal_width,
+        )
+        self.assertAlmostEqual(
+            check.beam.permanent_transverse_n_per_m,
+            (450 * 0.16 * 0.28 + expected_transferred_mass)
+            * GRAVITY_M_S2,
+        )
+        self.assertEqual(check.missing_roof_layers, ("Unknown",))
+
     def test_main_checks_main_and_dormer_with_shared_parameters(self) -> None:
         output = StringIO()
         arguments = [
@@ -194,11 +257,20 @@ class RafterLoadTests(unittest.TestCase):
             "Dormer roof:\n  Support span: 3.1 m; roof angle: 17.03°",
             report,
         )
-        self.assertIn("Governing roof cases:", report)
+        self.assertIn("Governing rafter cases:", report)
+        self.assertIn("Shared purlin: 160 × 280 mm", report)
+        self.assertIn("Main roof onto purlin:", report)
+        self.assertIn("Dormer roof onto purlin:", report)
+        self.assertIn("Governing purlin cases:", report)
 
     def test_dormer_defaults_match_the_modeled_roof(self) -> None:
-        self.assertEqual(DORMER_SUPPORT_SPAN_M, 3.10)
-        self.assertEqual(DORMER_ROOF_ANGLE_DEGREES, 17.03)
+        self.assertEqual(DORMER_SUPPORT_SPAN_M, 3.13)
+        self.assertEqual(DORMER_ROOF_ANGLE_DEGREES, 16.92)
+
+    def test_purlin_defaults_match_the_modeled_beam(self) -> None:
+        self.assertEqual(PURLIN_WIDTH_MM, 160)
+        self.assertEqual(PURLIN_HEIGHT_MM, 280)
+        self.assertEqual(PURLIN_SUPPORT_SPAN_M, 4.75)
 
 
 if __name__ == "__main__":

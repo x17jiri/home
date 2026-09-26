@@ -73,6 +73,9 @@
 #	Tepelné čerpadlo LG Therma V Split 12kW HN1636M+HU123MA (model 2023)
 #	https://www.vzduchotechnika1.cz/lg-therma-v-split-12kw-hn1636m-hu123ma
 
+# Zaves se sylomerem:
+#    https://primavent.cz/primy-zaves-60-125-1-00-mm-akusticky-sylomer-baleni-35ks/
+
 from math import acos, degrees, isclose
 import sys, math
 from ifc_utils import *
@@ -85,13 +88,13 @@ ROOF_BATTING_CENTER_OFFSET = RAFTER_Z_OFFSET + RAFTER_SIZE[1] / 2
 ROOF_BATTING_THICKNESS = RAFTER_SIZE[1] - 0.06
 ROOF_BATTING_END_INSET = 0.03
 VAPOUR_BARRIER_THICKNESS = 0.001
-THERMAL_INSULATION_UNDER_RAFTERS = 0.06
+THERMAL_INSULATION_UNDER_RAFTERS = 0.12
 UNDER_RAFTER_BATTING_THICKNESS = max(
 	0,
 	THERMAL_INSULATION_UNDER_RAFTERS - 0.02,
 )
 UNDER_RAFTER_BATTING_END_INSET = 0.015
-INSTALLATION_SPACE_THICKNESS = 0.08
+INSTALLATION_SPACE_THICKNESS = 0.05
 GYPSUM_PLASTERBOARD_THICKNESS = 0.015
 WOOD_FIBERBOARD_THICKNESS = 0.08
 WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
@@ -121,7 +124,7 @@ FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 0.9 # Vzdalenost vaznice od hrebene
+VAZNICE_DIST = 0.879 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.28
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.005
 FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.005
@@ -171,7 +174,7 @@ COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # underside so the two cannot drift apart when the framing changes.
 COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
 COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
-NADEZDIVKA = 1.30
+NADEZDIVKA = 1.375
 
 house = House(
     "My house",
@@ -1544,11 +1547,43 @@ def roof_angle_degrees(plane):
 	return degrees(acos(normal_z))
 
 
+def rafter_support_span(plane, first_support_y, second_support_y):
+	"""Return the rafter distance between two support centrelines."""
+	first_support = roof_batting_point(
+		plane,
+		x=0,
+		y=first_support_y,
+	)
+	second_support = roof_batting_point(
+		plane,
+		x=0,
+		y=second_support_y,
+	)
+	return math.dist(first_support, second_support)
+
+
 street_roof_angle = roof_angle_degrees(street_roof)
 garden_roof_angle = roof_angle_degrees(garden_roof)
 dormer_roof_angle = roof_angle_degrees(dormer_roof)
 if not isclose(street_roof_angle, garden_roof_angle, abs_tol=1e-9):
 	raise ValueError("street and garden roof angles must match")
+street_rafter_span = rafter_support_span(
+	street_roof,
+	STREET_WALL_PLATE_Y,
+	HALF_DEPTH - VAZNICE_DIST,
+)
+garden_rafter_span = rafter_support_span(
+	garden_roof,
+	HALF_DEPTH + VAZNICE_DIST,
+	GARDEN_WALL_PLATE_Y,
+)
+if not isclose(street_rafter_span, garden_rafter_span, abs_tol=1e-9):
+	raise ValueError("street and garden rafter support spans must match")
+dormer_rafter_span = rafter_support_span(
+	dormer_roof,
+	HALF_DEPTH + VAZNICE_DIST,
+	GARDEN_WALL_PLATE_Y,
+)
 print(
 	f"Main roof angle: {street_roof_angle:.2f}° "
 	f"({100 * math.tan(math.radians(street_roof_angle)):.2f}%)"
@@ -1556,6 +1591,14 @@ print(
 print(
 	f"Dormer roof angle: {dormer_roof_angle:.2f}° "
 	f"({100 * math.tan(math.radians(dormer_roof_angle)):.2f}%)"
+)
+print("Rafter load inputs (support centreline to centreline):")
+print(f"  SUPPORT_SPAN_M = {street_rafter_span:.3f}")
+print(f"  ROOF_ANGLE_DEGREES = {street_roof_angle:.2f}")
+print(f"  DORMER_SUPPORT_SPAN_M = {dormer_rafter_span:.3f}")
+print(f"  DORMER_ROOF_ANGLE_DEGREES = {dormer_roof_angle:.2f}")
+print(
+	f"CUT_STREET_WALL_HEIGHT = {CUT_STREET_WALL_HEIGHT:.4f}"
 )
 
 # Bonsai creates Outliner collections from spatial containers, but flattens
@@ -1587,10 +1630,10 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.ObjectType = "ROOF_LAYER"
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
 
-# Sloping layers remain a conventional contiguous build-up.  The horizontal
-# ceiling has an installation void, so describe that exceptional part with
-# readable storey-relative bottom/top heights instead of adding more roof
-# planes or special geometry types.
+# The under-rafter insulation follows the roof slopes continuously through the
+# ridge and the garden/dormer joint.  The vapour barrier and plasterboard still
+# transition onto the horizontal ceiling, whose exceptional heights are
+# described relative to the upper-storey floor.
 SLOPED_INNER_LAYER_LAYOUT = {
 	"Thermal insulation under rafters": (
 		THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM,
@@ -1604,18 +1647,12 @@ SLOPED_INNER_LAYER_LAYOUT = {
 }
 FLAT_CEILING_LAYER_HEIGHTS = {
 	# Values are (bottom, top), measured from the upper-storey floor.
-	"Thermal insulation under rafters": (
-		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_UNDER_RAFTERS,
+	"Vapour barrier": (
+		COLLAR_TIE_BOTTOM_HEIGHT - VAPOUR_BARRIER_THICKNESS,
 		COLLAR_TIE_BOTTOM_HEIGHT,
 	),
-	"Vapour barrier": (
-		COLLAR_TIE_BOTTOM_HEIGHT
-		- THERMAL_INSULATION_UNDER_RAFTERS
-		- VAPOUR_BARRIER_THICKNESS,
-		COLLAR_TIE_BOTTOM_HEIGHT - THERMAL_INSULATION_UNDER_RAFTERS,
-	),
-	# The first 50 mm below the vapour barrier is an empty installation
-	# space.  The horizontal plasterboard retains its lower ceiling height.
+	# The horizontal plasterboard remains on its lower suspended-ceiling plane;
+	# the space between it and the vapour barrier is the ceiling/service void.
 	"Gypsum plasterboard": (
 		UPPER_FLOOR_THICKNESS + 2.63,
 		UPPER_FLOOR_THICKNESS + 2.63 +  GYPSUM_PLASTERBOARD_THICKNESS,
@@ -1731,7 +1768,8 @@ def add_continuous_roof_layers(
 	inner_cuts=(),
 	inner_y_limits=None,
 	inner_layout=SLOPED_INNER_LAYER_LAYOUT,
-	include_inner=True,
+	include_under_rafter_insulation=True,
+	include_inner_finishes=True,
 	include_outer=True,
 	outer_x_range=None,
 ):
@@ -1747,7 +1785,11 @@ def add_continuous_roof_layers(
 	)
 
 	def inner_outline(layer_name):
-		if inner_y_limits is None:
+		if layer_name == "Thermal insulation under rafters":
+			# This layer follows the same full sloping path as the insulation
+			# between the rafters and the wood-fibre insulation above them.
+			layer_y_min, layer_y_max = y_min, y_max
+		elif inner_y_limits is None:
 			layer_y_min, layer_y_max = y_min, y_max
 		else:
 			layer_y_min, layer_y_max = inner_y_limits[layer_name]
@@ -1758,7 +1800,7 @@ def add_continuous_roof_layers(
 			(x_min, layer_y_max),
 		)
 
-	if include_inner:
+	if include_under_rafter_insulation:
 		insulation_bottom, insulation_thickness = inner_layout[
 			"Thermal insulation under rafters"
 		]
@@ -1775,6 +1817,7 @@ def add_continuous_roof_layers(
 			roof_layer_storeys["Thermal insulation under rafters"].add(
 				insulation
 			)
+	if include_inner_finishes:
 		vapour_barrier_bottom, vapour_barrier_thickness = inner_layout[
 			"Vapour barrier"
 		]
@@ -1832,10 +1875,10 @@ def add_continuous_roof_layers(
 
 
 def independent_inner_layer_boundaries(slope_plane):
-	"""Return matching, unconnected slope/ceiling endpoints for each layer."""
+	"""Return matching slope/ceiling endpoints for the interior finishes."""
 	boundaries = {}
-	for layer_name, (slope_bottom, _) in SLOPED_INNER_LAYER_LAYOUT.items():
-		flat_bottom = FLAT_CEILING_INNER_LAYER_LAYOUT[layer_name][0]
+	for layer_name, (flat_bottom, _) in FLAT_CEILING_INNER_LAYER_LAYOUT.items():
+		slope_bottom = SLOPED_INNER_LAYER_LAYOUT[layer_name][0]
 		flat_z = flat_ceiling_roof.to_world((0, 0, flat_bottom))[2]
 		slope_origin_z = slope_plane.to_world((0, 0, slope_bottom))[2]
 		slope_y = (flat_z - slope_origin_z) / slope_plane.y_axis[2]
@@ -1941,8 +1984,8 @@ dormer_plasterboard_wall_height = roof_layer_height_at_y(
 	upper.elevation,
 )
 print("Plasterboard inner-face height at wall, relative to upper floor:")
-print(f"  Normal roof: {normal_plasterboard_wall_height:.3f} m")
-print(f"  Dormer roof: {dormer_plasterboard_wall_height:.3f} m")
+print(f"  Normal roof: {normal_plasterboard_wall_height-UPPER_FLOOR_THICKNESS:.3f} m")
+print(f"  Dormer roof: {dormer_plasterboard_wall_height-UPPER_FLOOR_THICKNESS:.3f} m")
 
 roof_outer_face_offset = ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS
 ground_floor_top = ground.elevation + GROUND_FLOOR_THICKNESS
@@ -1971,7 +2014,7 @@ def flat_inner_y_limits(left_boundaries, right_boundaries):
 			left_boundaries[layer_name][1],
 			right_boundaries[layer_name][1],
 		)
-		for layer_name in SLOPED_INNER_LAYER_LAYOUT
+		for layer_name in FLAT_CEILING_INNER_LAYER_LAYOUT
 	}
 
 
@@ -2028,7 +2071,8 @@ add_continuous_roof_layers(
 	garden_roof, "Garden segment 2 above dormer",
 	*roof_under_rafter_x_ranges[2], roof_y_min, 0,
 	outer_x_range=roof_over_rafter_x_ranges[2],
-	include_inner=False,
+	inner_cuts=roof_inner_cuts,
+	include_inner_finishes=False,
 )
 add_continuous_roof_layers(
 	dormer_roof, "Dormer segment 2", *roof_under_rafter_x_ranges[2], 0,
@@ -2087,6 +2131,7 @@ for (
 			garden_side_boundaries,
 		),
 		inner_layout=FLAT_CEILING_INNER_LAYER_LAYOUT,
+		include_under_rafter_insulation=False,
 		include_outer=False,
 	)
 
@@ -2577,7 +2622,7 @@ if "cut1" in sys.argv:
 if "aa" in sys.argv:
 	drawing1 = house.add_drawing(
 		"aa",
-		x=wall2_x+0.8,
+		x=wall2_x+0.4,
 		y=4,
 		z=3.5,
 		radius=8,
@@ -2705,63 +2750,50 @@ if "aa" in sys.argv:
 		)
 
 	if THERMAL_INSULATION_UNDER_RAFTERS > 0:
-		layer_name = "Thermal insulation under rafters"
-		street_slope_y, street_eave_y = sloped_inner_y_limits(
+		under_rafter_ridge = roof_batting_intersection(
 			street_roof,
-			street_inner_boundaries,
-			0.25,
-		)[layer_name]
-		dormer_slope_y, dormer_eave_y = sloped_inner_y_limits(
+			garden_roof,
+			x=aa_x,
+			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		)
+		under_rafter_garden_joint = roof_batting_intersection(
+			garden_roof,
 			dormer_roof,
-			dormer_inner_boundaries,
-			7.75,
-		)[layer_name]
-		street_flat_y, dormer_flat_y = flat_inner_y_limits(
-			street_inner_boundaries,
-			dormer_inner_boundaries,
-		)[layer_name]
-		flat_bottom, flat_thickness = FLAT_CEILING_INNER_LAYER_LAYOUT[
-			layer_name
-		]
-		flat_center_offset = flat_bottom + flat_thickness / 2
+			x=aa_x,
+			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		)
+		under_rafter_street_eave = roof_batting_point(
+			street_roof,
+			x=aa_x,
+			y=0.25,
+			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		)
+		under_rafter_dormer_eave = roof_batting_point(
+			dormer_roof,
+			x=aa_x,
+			y=7.75,
+			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		)
 		under_rafter_batting_segments = (
 			(
 				"AA street under-rafter batting",
-				street_roof,
-				street_eave_y,
-				street_slope_y,
-				UNDER_RAFTER_BATTING_CENTER_OFFSET,
+				under_rafter_street_eave,
+				under_rafter_ridge,
 			),
 			(
-				"AA flat-ceiling under-rafter batting",
-				flat_ceiling_roof,
-				street_flat_y,
-				dormer_flat_y,
-				flat_center_offset,
+				"AA garden under-rafter batting",
+				under_rafter_ridge,
+				under_rafter_garden_joint,
 			),
 			(
 				"AA dormer under-rafter batting",
-				dormer_roof,
-				dormer_slope_y,
-				dormer_eave_y,
-				UNDER_RAFTER_BATTING_CENTER_OFFSET,
+				under_rafter_garden_joint,
+				under_rafter_dormer_eave,
 			),
 		)
-		for batting_name, plane, start_y, end_y, center_offset in (
+		for batting_name, batting_start, batting_end in (
 			under_rafter_batting_segments
 		):
-			batting_start = roof_batting_local_point(
-				plane,
-				x=aa_x,
-				local_y=start_y,
-				center_offset=center_offset,
-			)
-			batting_end = roof_batting_local_point(
-				plane,
-				x=aa_x,
-				local_y=end_y,
-				center_offset=center_offset,
-			)
 			drawing1.add_batting(
 				*inset_roof_batting_segment(
 					batting_start,

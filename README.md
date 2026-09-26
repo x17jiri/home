@@ -455,14 +455,16 @@ attached to the model when its camera or scale changes.
 
 ## Rafter load helper
 
-`rafter_load.py` estimates the uniformly distributed transverse line load
-that reaches a chosen deflection limit for a simply supported rectangular
-rafter. Edit its `USER INPUTS` constants or override them on the command line:
+`rafter_load.py` checks the main and dormer rafters and the supporting purlin
+as simply supported rectangular members. Edit its `USER INPUTS` constants or
+override them on the command line:
 
 ```bash
 python rafter_load.py --width 80 --height 200 --span 3.7 \
     --angle 36.65 --dormer-span 3.1 --dormer-angle 17.03 \
-    --deflection-ratio 300 --modulus 11 --spacing 0.8 --snow-load 1.5
+    --deflection-ratio 300 --modulus 11 --spacing 0.8 --snow-load 1.5 \
+    --purlin-width 160 --purlin-height 280 --purlin-span 4.75 \
+    --upper-rafter-length 1.08
 ```
 
 Enter each permanent roof-layer mass in `ROOF_LAYERS_KG_M2` near the top of
@@ -481,6 +483,17 @@ their support spans and roof angles are separate. The Eurocode-style material,
 creep, action, and partial factors are all editable constants. Lateral
 stability, axial force, notches, connections, wind uplift, fire, and the
 selection of governing snow arrangements remain outside this member check.
+
+For each purlin case, the transferred permanent load uses the full rafter
+length from purlin to ridge plus half of the lower rafter support span. Snow
+uses the horizontal projection of that tributary roof width. The normal and
+dormer cases therefore share the upper length but use their own lower spans
+and pitches. Rafter self-weight and purlin self-weight are included. Use
+`PURLIN_ADDITIONAL_PERMANENT_LOAD_KN_M` (or `--purlin-extra-load`) for a
+ceiling, collar-tie, or other vertical line load that really bears on the
+purlin. The purlin calculation smears discrete rafter reactions into a uniform
+line load and treats the longest segment as simply supported; it does not
+check continuity moments or lateral-torsional stability.
 
 Persisted plan and elevation drawings may reserve additional paper space on
 their right side without changing the camera framing.  The width is expressed
