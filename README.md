@@ -455,15 +455,17 @@ attached to the model when its camera or scale changes.
 
 ## Rafter load helper
 
-`rafter_load.py` checks the main and dormer rafters and the supporting purlin
-as simply supported rectangular members. Edit its `USER INPUTS` constants or
-override them on the command line:
+`rafter_load.py` checks the main and dormer rafters as simply supported
+rectangular members. It checks the street-side purlin as one continuous beam
+over four supports. Edit its `USER INPUTS` constants or override them on the
+command line:
 
 ```bash
 python rafter_load.py --width 80 --height 200 --span 3.7 \
     --angle 36.65 --dormer-span 3.1 --dormer-angle 17.03 \
     --deflection-ratio 300 --modulus 11 --spacing 0.8 --snow-load 1.5 \
-    --purlin-width 160 --purlin-height 280 --purlin-span 4.75 \
+    --purlin-width 160 --purlin-height 280 \
+    --purlin-spans 3.74 4.80 2.75 \
     --upper-rafter-length 1.08
 ```
 
@@ -484,16 +486,18 @@ creep, action, and partial factors are all editable constants. Lateral
 stability, axial force, notches, connections, wind uplift, fire, and the
 selection of governing snow arrangements remain outside this member check.
 
-For each purlin case, the transferred permanent load uses the full rafter
-length from purlin to ridge plus half of the lower rafter support span. Snow
-uses the horizontal projection of that tributary roof width. The normal and
-dormer cases therefore share the upper length but use their own lower spans
-and pitches. Rafter self-weight and purlin self-weight are included. Use
+The purlin check intentionally uses only the simple street roof. Its
+transferred permanent load uses the entered upper rafter contribution plus
+half of the lower rafter support span. Snow uses the horizontal projection of
+that tributary roof width and is applied uniformly to all three purlin spans.
+Rafter self-weight and purlin self-weight are included. Use
 `PURLIN_ADDITIONAL_PERMANENT_LOAD_KN_M` (or `--purlin-extra-load`) for a
 ceiling, collar-tie, or other vertical line load that really bears on the
 purlin. The purlin calculation smears discrete rafter reactions into a uniform
-line load and treats the longest segment as simply supported; it does not
-check continuity moments or lateral-torsional stability.
+line load. It reports deflection in every span, positive span moments, negative
+support moments, shear, and reactions/bearing. The garden/dormer purlin, end
+overhangs, non-moment-transferring splices, snow drift/shape cases, and
+lateral-torsional stability remain outside this simplified check.
 
 Persisted plan and elevation drawings may reserve additional paper space on
 their right side without changing the camera framing.  The width is expressed

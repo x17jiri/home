@@ -1584,6 +1584,29 @@ dormer_rafter_span = rafter_support_span(
 	HALF_DEPTH + VAZNICE_DIST,
 	GARDEN_WALL_PLATE_Y,
 )
+street_rafter_length_above_purlin = rafter_support_span(
+	street_roof,
+	HALF_DEPTH - VAZNICE_DIST,
+	HALF_DEPTH,
+)
+garden_rafter_length_above_purlin = rafter_support_span(
+	garden_roof,
+	HALF_DEPTH,
+	HALF_DEPTH + VAZNICE_DIST,
+)
+if not isclose(
+	street_rafter_length_above_purlin,
+	garden_rafter_length_above_purlin,
+	abs_tol=1e-9,
+):
+	raise ValueError(
+		"street and garden rafter lengths above the purlin must match"
+	)
+purlin_support_spans = (
+	wall2_x,
+	wall3_x - wall2_x,
+	HOUSE_WIDTH - wall3_x,
+)
 print(
 	f"Main roof angle: {street_roof_angle:.2f}° "
 	f"({100 * math.tan(math.radians(street_roof_angle)):.2f}%)"
@@ -1597,6 +1620,15 @@ print(f"  SUPPORT_SPAN_M = {street_rafter_span:.3f}")
 print(f"  ROOF_ANGLE_DEGREES = {street_roof_angle:.2f}")
 print(f"  DORMER_SUPPORT_SPAN_M = {dormer_rafter_span:.3f}")
 print(f"  DORMER_ROOF_ANGLE_DEGREES = {dormer_roof_angle:.2f}")
+print(
+	f"  RAFTER_LENGTH_ABOVE_PURLIN_M = "
+	f"{street_rafter_length_above_purlin:.3f}"
+)
+print(
+	"  PURLIN_SPANS_M = ("
+	+ ", ".join(f"{span:.3f}" for span in purlin_support_spans)
+	+ ")"
+)
 print(
 	f"CUT_STREET_WALL_HEIGHT = {CUT_STREET_WALL_HEIGHT:.4f}"
 )

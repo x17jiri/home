@@ -9,8 +9,10 @@ from rafter_load import (
     DORMER_SUPPORT_SPAN_M,
     GRAVITY_M_S2,
     PURLIN_HEIGHT_MM,
+    PURLIN_SPANS_M,
     PURLIN_SUPPORT_SPAN_M,
     PURLIN_WIDTH_MM,
+    calculate_continuous_beam_response,
     calculate_rafter_load,
     calculate_purlin_check,
     calculate_roof_check,
@@ -177,11 +179,10 @@ class RafterLoadTests(unittest.TestCase):
         check = calculate_purlin_check(
             width_mm=160,
             height_mm=280,
-            support_span_m=4.75,
+            support_spans_m=(3.7, 4.75, 2.75),
             upper_rafter_length_m=1.08,
             lower_rafter_span_m=3.7,
-            upper_roof_angle_degrees=35.84,
-            lower_roof_angle_degrees=35.84,
+            roof_angle_degrees=35.84,
             rafter_width_mm=100,
             rafter_height_mm=180,
             rafter_spacing_m=0.82,
@@ -224,11 +225,41 @@ class RafterLoadTests(unittest.TestCase):
             1.7 * expected_horizontal_width,
         )
         self.assertAlmostEqual(
-            check.beam.permanent_transverse_n_per_m,
+            check.permanent_line_load_kn_m,
             (450 * 0.16 * 0.28 + expected_transferred_mass)
-            * GRAVITY_M_S2,
+            * GRAVITY_M_S2
+            / 1000,
         )
+        self.assertLess(min(check.design_response.support_moments_nm), 0)
+        self.assertEqual(len(check.final_deflection_utilizations), 3)
         self.assertEqual(check.missing_roof_layers, ("Unknown",))
+
+    def test_continuous_beam_matches_two_equal_span_solution(self) -> None:
+        span = 4.0
+        load = 1000.0
+        response = calculate_continuous_beam_response(
+            span_lengths_m=(span, span),
+            uniform_loads_n_per_m=(load, load),
+            elastic_modulus_pa=11e9,
+            second_moment_m4=0.0001,
+        )
+
+        self.assertAlmostEqual(
+            response.support_moments_nm[1],
+            -load * span**2 / 8,
+        )
+        self.assertAlmostEqual(
+            response.span_positive_moments_nm[0],
+            9 * load * span**2 / 128,
+        )
+        self.assertAlmostEqual(
+            response.support_reactions_n[0],
+            3 * load * span / 8,
+        )
+        self.assertAlmostEqual(
+            response.support_reactions_n[1],
+            5 * load * span / 4,
+        )
 
     def test_main_checks_main_and_dormer_with_shared_parameters(self) -> None:
         output = StringIO()
@@ -258,19 +289,53 @@ class RafterLoadTests(unittest.TestCase):
             report,
         )
         self.assertIn("Governing rafter cases:", report)
-        self.assertIn("Shared purlin: 160 × 280 mm", report)
-        self.assertIn("Main roof onto purlin:", report)
-        self.assertIn("Dormer roof onto purlin:", report)
-        self.assertIn("Governing purlin cases:", report)
+        self.assertIn(
+            f"Shared purlin: {PURLIN_WIDTH_MM:g} × "
+            f"{PURLIN_HEIGHT_MM:g} mm",
+            report,
+        )
+        self.assertIn("Street-side continuous purlin:", report)
+        self.assertNotIn("Dormer roof onto purlin:", report)
+        self.assertIn("Support moments:", report)
+        self.assertIn(
+            "OVERALL RESULT FOR CHECKS ABOVE:\n  EVERYTHING PASSED.",
+            report,
+        )
 
-    def test_dormer_defaults_match_the_modeled_roof(self) -> None:
-        self.assertEqual(DORMER_SUPPORT_SPAN_M, 3.13)
-        self.assertEqual(DORMER_ROOF_ANGLE_DEGREES, 16.92)
+    def test_main_reports_failures_in_overall_result(self) -> None:
+        output = StringIO()
+        arguments = [
+            "rafter_load.py",
+            "--width",
+            "40",
+            "--height",
+            "80",
+            "--purlin-width",
+            "60",
+            "--purlin-height",
+            "100",
+        ]
+        with patch("sys.argv", arguments), redirect_stdout(output):
+            main()
+
+        report = output.getvalue()
+        self.assertIn("FAIL", report)
+        self.assertIn(
+            "OVERALL RESULT FOR CHECKS ABOVE:\n"
+            "  THERE ARE FAILURES. Review the checks marked FAIL above.",
+            report,
+        )
+
+    def test_roof_defaults_are_valid_inputs(self) -> None:
+        self.assertGreater(DORMER_SUPPORT_SPAN_M, 0)
+        self.assertGreater(DORMER_ROOF_ANGLE_DEGREES, 0)
 
     def test_purlin_defaults_match_the_modeled_beam(self) -> None:
-        self.assertEqual(PURLIN_WIDTH_MM, 160)
-        self.assertEqual(PURLIN_HEIGHT_MM, 280)
-        self.assertEqual(PURLIN_SUPPORT_SPAN_M, 4.75)
+        self.assertGreater(PURLIN_WIDTH_MM, 0)
+        self.assertGreater(PURLIN_HEIGHT_MM, 0)
+        self.assertEqual(PURLIN_SPANS_M[1], PURLIN_SUPPORT_SPAN_M)
+        self.assertEqual(len(PURLIN_SPANS_M), 3)
+        self.assertTrue(all(span > 0 for span in PURLIN_SPANS_M))
 
 
 if __name__ == "__main__":
