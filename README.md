@@ -465,6 +465,8 @@ python rafter_load.py --width 80 --height 200 --span 3.7 \
     --angle 36.65 --dormer-span 3.1 --dormer-angle 17.03 \
     --deflection-ratio 300 --modulus 11 --spacing 0.8 --snow-load 1.5 \
     --purlin-width 160 --purlin-height 280 \
+    --purlin-left-width 140 --purlin-left-height 240 \
+    --purlin-right-width 120 --purlin-right-height 220 \
     --purlin-spans 3.74 4.80 2.75 \
     --upper-rafter-length 1.08
 ```
@@ -499,13 +501,19 @@ support moments, shear, and reactions/bearing. The garden/dormer purlin, end
 overhangs, non-moment-transferring splices, snow drift/shape cases, and
 lateral-torsional stability remain outside this simplified check.
 
-The report also checks the longest purlin span as an independent, simply
-supported piece. This is the alternative used to decide whether the purlin can
-be split at its supports without relying on continuity into the side spans.
-For a butt joint centred over a support, each piece defaults to half of
-`--purlin-bearing-length`; override that detail with
+The report also checks all three purlin spans as independent, simply supported
+pieces. Configure their `(width, height)` pairs in
+`PURLIN_SEGMENT_SIZES_MM`. On the command line, `--purlin-width` and
+`--purlin-height` set the middle piece, while the corresponding
+`--purlin-left-*` and `--purlin-right-*` options set the side pieces. The
+continuous alternative deliberately uses the middle piece's dimensions over
+all three spans; the split alternative calculates each piece with its own
+self-weight, stiffness, and resistance.
+
+For a butt joint centred over a support, each independent piece defaults to
+half of `--purlin-bearing-length`; override that detail with
 `--purlin-split-bearing-length`. The calculation checks the individual timber
-piece, but not the splice hardware or the supporting wall itself.
+pieces, but not the splice hardware or the supporting wall itself.
 
 Persisted plan and elevation drawings may reserve additional paper space on
 their right side without changing the camera framing.  The width is expressed

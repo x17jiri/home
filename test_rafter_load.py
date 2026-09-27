@@ -180,6 +180,7 @@ class RafterLoadTests(unittest.TestCase):
             width_mm=160,
             height_mm=280,
             support_spans_m=(3.7, 4.75, 2.75),
+            segment_sizes_mm=((120, 200), (160, 280), (100, 180)),
             upper_rafter_length_m=1.08,
             lower_rafter_span_m=3.7,
             roof_angle_degrees=35.84,
@@ -233,6 +234,32 @@ class RafterLoadTests(unittest.TestCase):
         self.assertLess(min(check.design_response.support_moments_nm), 0)
         self.assertEqual(len(check.final_deflection_utilizations), 3)
         self.assertEqual(check.missing_roof_layers, ("Unknown",))
+        self.assertEqual(len(check.independent_spans), 3)
+        self.assertEqual(
+            tuple(
+                (span.width_mm, span.height_mm)
+                for span in check.independent_spans
+            ),
+            ((120, 200), (160, 280), (100, 180)),
+        )
+        self.assertAlmostEqual(
+            check.purlin_self_mass_kg_m,
+            450 * 0.16 * 0.28,
+        )
+        self.assertAlmostEqual(
+            check.independent_spans[0].self_mass_kg_m,
+            450 * 0.12 * 0.20,
+        )
+        self.assertAlmostEqual(
+            check.independent_spans[0].bending_resistance_nm
+            / check.independent_spans[1].bending_resistance_nm,
+            (0.12 * 0.20**2) / (0.16 * 0.28**2),
+        )
+        self.assertAlmostEqual(
+            check.independent_spans[0].bearing_resistance_n
+            / check.independent_spans[1].bearing_resistance_n,
+            0.12 / 0.16,
+        )
 
         independent = check.independent_longest_span
         independent_span = 4.75
@@ -313,6 +340,14 @@ class RafterLoadTests(unittest.TestCase):
             "3.1",
             "--dormer-angle",
             "17.03",
+            "--purlin-left-width",
+            "140",
+            "--purlin-left-height",
+            "240",
+            "--purlin-right-width",
+            "120",
+            "--purlin-right-height",
+            "220",
         ]
         with patch("sys.argv", arguments), redirect_stdout(output):
             main()
@@ -326,15 +361,20 @@ class RafterLoadTests(unittest.TestCase):
         )
         self.assertIn("Governing rafter cases:", report)
         self.assertIn(
-            f"Shared purlin: {PURLIN_WIDTH_MM:g} × "
+            "Continuous purlin section (middle-segment size): "
+            f"{PURLIN_WIDTH_MM:g} × "
             f"{PURLIN_HEIGHT_MM:g} mm",
             report,
         )
         self.assertIn("Street-side continuous purlin:", report)
+        self.assertIn("Independent purlin pieces:", report)
+        self.assertIn("Segment 1: 3.74 m, 140 × 240 mm", report)
         self.assertIn(
-            "Longest purlin span as an independent piece:",
+            f"Segment 2: 4.8 m, {PURLIN_WIDTH_MM:g} × "
+            f"{PURLIN_HEIGHT_MM:g} mm",
             report,
         )
+        self.assertIn("Segment 3: 2.75 m, 120 × 220 mm", report)
         self.assertIn("SPLIT OPTION RESULT:", report)
         self.assertNotIn("Dormer roof onto purlin:", report)
         self.assertIn("Support moments:", report)
