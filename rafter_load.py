@@ -3,8 +3,9 @@
 
 Edit the values in the USER INPUTS section or pass command-line overrides.
 Rafters are treated as simply supported beams. The street-side purlin is
-treated as one continuous beam over four supports. It is a quick comparison
-tool, not a structural design.
+checked both as one continuous beam over four supports and, as an alternative,
+as separate simply supported pieces. It is a quick comparison tool, not a
+structural design.
 """
 
 from __future__ import annotations
@@ -23,19 +24,19 @@ RAFTER_SPACING_M = 0.82
 
 PURLIN_SUPPORT_SPAN_M = 4.8  # middle span; retained as a convenient input
 if 1:
-  SUPPORT_SPAN_M = 3.7
-  ROOF_ANGLE_DEGREES = 35.84
-  DORMER_SUPPORT_SPAN_M = 3.2
-  DORMER_ROOF_ANGLE_DEGREES = 16.92
-  RAFTER_LENGTH_ABOVE_PURLIN_M = 1.1
+  SUPPORT_SPAN_M = 3.85
+  ROOF_ANGLE_DEGREES = 35.83
+  DORMER_SUPPORT_SPAN_M = 3.25
+  DORMER_ROOF_ANGLE_DEGREES = 17.22
+  RAFTER_LENGTH_ABOVE_PURLIN_M = 1.05
   PURLIN_SPANS_M = (3.740, 4.8, 2.750)
 
 # RAFTER_LENGTH_ABOVE_PURLIN_M is the part assigned to one purlin by the user;
 # copy the geometry-derived value printed by house_ifc.py when it changes.
 # RAFTER_LENGTH_ABOVE_PURLIN_M is measured along the main roof slope, from the
 # purlin support towards the ridge.
-PURLIN_WIDTH_MM = 160.0
-PURLIN_HEIGHT_MM = 280.0
+PURLIN_WIDTH_MM = 240.0
+PURLIN_HEIGHT_MM = 240.0
 PURLIN_BEARING_LENGTH_MM = 240.0
 
 # Add any permanent vertical line load carried by the purlin but not included
@@ -46,7 +47,7 @@ PURLIN_ADDITIONAL_PERMANENT_LOAD_KN_M = 0.0
 # Vertical roof snow load per square metre of HORIZONTAL projection. This is
 # treated as the selected roof load case; no snow shape, exposure, thermal,
 # drift, or partial-safety coefficient is applied automatically.
-SNOW_LOAD_KN_M2 = 1.7
+SNOW_LOAD_KN_M2 = 2.0
 
 # Permanent masses per square metre of ACTUAL SLOPING roof surface. Enter the
 # installed mass of every layer. Use 0 only when a listed layer is genuinely
@@ -55,9 +56,9 @@ ROOF_LAYERS_KG_M2: dict[str, float | None] = {
     "Roof tiles": 50,
     "Tile battens": 5,
     "Counter battens": 5,
-    "Wood fibreboard": 14,
+    "Wood fibreboard": 15,
     "Installation battens/services": 5,
-    "Gypsum plasterboard": 30,
+    "Gypsum plasterboard": 40,
 }
 
 # Deflection also depends on timber stiffness. 11 GPa is an illustrative
@@ -155,6 +156,32 @@ class ContinuousBeamResponse:
 
 
 @dataclass(frozen=True)
+class IndependentPurlinSpanResult:
+    """Longest purlin span checked without continuity into adjacent spans."""
+
+    span_m: float
+    bearing_length_mm: float
+    immediate_deflection_m: float
+    final_deflection_m: float
+    deflection_limit_m: float
+    immediate_deflection_utilization: float
+    final_deflection_utilization: float
+    maximum_roof_snow_immediate_kn_m2: float
+    maximum_roof_snow_final_kn_m2: float
+    design_bending_moment_nm: float
+    design_shear_force_n: float
+    design_support_reaction_n: float
+    bending_resistance_nm: float
+    shear_resistance_n: float
+    bearing_resistance_n: float
+    bending_utilization: float
+    shear_utilization: float
+    bearing_utilization: float
+    governing_strength_check: str
+    governing_strength_utilization: float
+
+
+@dataclass(frozen=True)
 class PurlinCheckResult:
     """Three-span street-side purlin check and its tributary roof load."""
 
@@ -186,6 +213,7 @@ class PurlinCheckResult:
     bearing_utilization: float
     governing_strength_check: str
     governing_strength_utilization: float
+    independent_longest_span: IndependentPurlinSpanResult
     missing_roof_layers: tuple[str, ...]
 
 
@@ -824,6 +852,7 @@ def calculate_purlin_check(
     permanent_load_factor: float = PERMANENT_LOAD_FACTOR,
     snow_load_factor: float = SNOW_LOAD_FACTOR,
     bearing_length_mm: float = PURLIN_BEARING_LENGTH_MM,
+    split_bearing_length_mm: float | None = None,
     bearing_strength_factor: float = BEARING_STRENGTH_FACTOR,
     shear_effective_width_factor: float = SHEAR_EFFECTIVE_WIDTH_FACTOR,
 ) -> PurlinCheckResult:
@@ -849,6 +878,17 @@ def calculate_purlin_check(
     rafter_height_m = _positive(rafter_height_mm, "rafter_height_mm") / 1000
     purlin_width_m = _positive(width_mm, "width_mm") / 1000
     purlin_height_m = _positive(height_mm, "height_mm") / 1000
+    continuous_bearing_length_mm = _positive(
+        bearing_length_mm,
+        "bearing_length_mm",
+    )
+    if split_bearing_length_mm is None:
+        independent_bearing_length_mm = continuous_bearing_length_mm / 2
+    else:
+        independent_bearing_length_mm = _positive(
+            split_bearing_length_mm,
+            "split_bearing_length_mm",
+        )
     density_kg_m3 = _positive(timber_density_kg_m3, "timber_density_kg_m3")
     modulus_pa = _positive(elastic_modulus_gpa, "elastic_modulus_gpa") * 1e9
     ratio = _positive(deflection_ratio, "deflection_ratio")
@@ -999,12 +1039,7 @@ def calculate_purlin_check(
     shear_resistance_n = (
         design_shear_strength_pa * effective_width_m * purlin_height_m / 1.5
     )
-    bearing_area_m2 = (
-        purlin_width_m
-        * _positive(bearing_length_mm, "bearing_length_mm")
-        / 1000
-    )
-    bearing_resistance_n = (
+    design_compression_perpendicular_pa = (
         _positive(
             compression_perpendicular_mpa,
             "compression_perpendicular_mpa",
@@ -1012,7 +1047,18 @@ def calculate_purlin_check(
         * 1e6
         * design_strength_multiplier
         * _positive(bearing_strength_factor, "bearing_strength_factor")
-        * bearing_area_m2
+    )
+
+    def bearing_resistance(length_mm: float) -> float:
+        return (
+            design_compression_perpendicular_pa
+            * purlin_width_m
+            * length_mm
+            / 1000
+        )
+
+    bearing_resistance_n = bearing_resistance(
+        continuous_bearing_length_mm
     )
 
     maximum_positive_moment_nm = max(
@@ -1040,6 +1086,101 @@ def calculate_purlin_check(
     governing_strength_check = max(
         strength_utilizations,
         key=strength_utilizations.__getitem__,
+    )
+
+    # Alternative construction: cut the purlin at its supports and check only
+    # the longest piece. With no moment transfer into its neighbours it is a
+    # simply supported beam, so it receives none of the continuity benefit.
+    independent_span_m = max(spans)
+
+    def independent_deflection(line_load_kn_m: float) -> float:
+        return (
+            5
+            * line_load_kn_m
+            * 1000
+            * independent_span_m**4
+            / (384 * modulus_pa * second_moment_m4)
+        )
+
+    independent_limit_m = independent_span_m / ratio
+    independent_permanent_deflection_m = independent_deflection(
+        permanent_line_load_kn_m
+    )
+    independent_unit_snow_deflection_m = independent_deflection(
+        tributary_horizontal_width_m
+    )
+    independent_immediate_deflection_m = independent_deflection(
+        immediate_line_load_kn_m
+    )
+    independent_final_deflection_m = independent_deflection(
+        final_line_load_kn_m
+    )
+    independent_immediate_snow_capacity = (
+        max(0.0, independent_limit_m - independent_permanent_deflection_m)
+        / independent_unit_snow_deflection_m
+    )
+    independent_final_snow_capacity = (
+        max(
+            0.0,
+            independent_limit_m
+            - independent_permanent_deflection_m * (1 + creep_factor),
+        )
+        / (
+            independent_unit_snow_deflection_m
+            * (1 + snow_creep_combination_factor * creep_factor)
+        )
+    )
+    independent_design_load_n_m = design_line_load_kn_m * 1000
+    independent_design_bending_nm = (
+        independent_design_load_n_m * independent_span_m**2 / 8
+    )
+    independent_design_reaction_n = (
+        independent_design_load_n_m * independent_span_m / 2
+    )
+    independent_bearing_resistance_n = bearing_resistance(
+        independent_bearing_length_mm
+    )
+    independent_strength_utilizations = {
+        "bending": independent_design_bending_nm / bending_resistance_nm,
+        "shear": independent_design_reaction_n / shear_resistance_n,
+        "bearing": (
+            independent_design_reaction_n
+            / independent_bearing_resistance_n
+        ),
+    }
+    independent_governing_strength_check = max(
+        independent_strength_utilizations,
+        key=independent_strength_utilizations.__getitem__,
+    )
+    independent_longest_span = IndependentPurlinSpanResult(
+        span_m=independent_span_m,
+        bearing_length_mm=independent_bearing_length_mm,
+        immediate_deflection_m=independent_immediate_deflection_m,
+        final_deflection_m=independent_final_deflection_m,
+        deflection_limit_m=independent_limit_m,
+        immediate_deflection_utilization=(
+            independent_immediate_deflection_m / independent_limit_m
+        ),
+        final_deflection_utilization=(
+            independent_final_deflection_m / independent_limit_m
+        ),
+        maximum_roof_snow_immediate_kn_m2=(
+            independent_immediate_snow_capacity
+        ),
+        maximum_roof_snow_final_kn_m2=independent_final_snow_capacity,
+        design_bending_moment_nm=independent_design_bending_nm,
+        design_shear_force_n=independent_design_reaction_n,
+        design_support_reaction_n=independent_design_reaction_n,
+        bending_resistance_nm=bending_resistance_nm,
+        shear_resistance_n=shear_resistance_n,
+        bearing_resistance_n=independent_bearing_resistance_n,
+        bending_utilization=independent_strength_utilizations["bending"],
+        shear_utilization=independent_strength_utilizations["shear"],
+        bearing_utilization=independent_strength_utilizations["bearing"],
+        governing_strength_check=independent_governing_strength_check,
+        governing_strength_utilization=independent_strength_utilizations[
+            independent_governing_strength_check
+        ],
     )
 
     return PurlinCheckResult(
@@ -1073,6 +1214,7 @@ def calculate_purlin_check(
         governing_strength_utilization=strength_utilizations[
             governing_strength_check
         ],
+        independent_longest_span=independent_longest_span,
         missing_roof_layers=tuple(missing_roof_layers),
     )
 
@@ -1080,8 +1222,8 @@ def calculate_purlin_check(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Check main-roof and dormer rafters, plus the continuous "
-            "street-side purlin, under uniformly distributed loads."
+            "Check main-roof and dormer rafters, plus continuous and split "
+            "street-side purlin options, under uniformly distributed loads."
         )
     )
     parser.add_argument("--width", type=float, default=RAFTER_WIDTH_MM,
@@ -1173,6 +1315,15 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
         default=PURLIN_BEARING_LENGTH_MM,
         help="purlin bearing length along its axis at a support in mm",
+    )
+    parser.add_argument(
+        "--purlin-split-bearing-length",
+        type=float,
+        default=None,
+        help=(
+            "end bearing length for each independently supported purlin "
+            "piece in mm; defaults to half --purlin-bearing-length"
+        ),
     )
     parser.add_argument(
         "--purlin-extra-load",
@@ -1462,6 +1613,101 @@ def _print_purlin_check(
     )
 
 
+def _independent_purlin_span_status(check: PurlinCheckResult) -> str:
+    span = check.independent_longest_span
+    has_failure = max(
+        span.immediate_deflection_utilization,
+        span.final_deflection_utilization,
+        span.bending_utilization,
+        span.shear_utilization,
+        span.bearing_utilization,
+    ) > 1
+    if has_failure and check.missing_roof_layers:
+        return "FAIL; CHECK INCOMPLETE"
+    if has_failure:
+        return "FAIL"
+    if check.missing_roof_layers:
+        return "CHECK INCOMPLETE"
+    return "PASS"
+
+
+def _print_independent_purlin_span(
+    *,
+    deflection_ratio: float,
+    check: PurlinCheckResult,
+) -> None:
+    """Print the alternative check with the longest purlin span split off."""
+    span = check.independent_longest_span
+    print()
+    print("Longest purlin span as an independent piece:")
+    print(
+        f"  Simply supported span: {span.span_m:g} m; no moment "
+        "continuity into the side spans"
+    )
+    print(
+        f"  End bearing length used per piece: {span.bearing_length_mm:g} mm "
+        "(override with --purlin-split-bearing-length; default is half the "
+        "continuous-purlin bearing length)"
+    )
+    print("  Serviceability (SLS):")
+    print(
+        f"    L/{deflection_ratio:g} = "
+        f"{span.deflection_limit_m * 1000:.1f} mm: immediate "
+        f"{span.immediate_deflection_m * 1000:.1f} mm "
+        f"({span.immediate_deflection_utilization * 100:.1f}%, "
+        f"{_status(span.immediate_deflection_utilization)}); final "
+        f"{span.final_deflection_m * 1000:.1f} mm "
+        f"({span.final_deflection_utilization * 100:.1f}%, "
+        f"{_status(span.final_deflection_utilization)})"
+    )
+    print(
+        "    Maximum roof snow from immediate deflection: "
+        f"{span.maximum_roof_snow_immediate_kn_m2:.2f} kN/m²"
+    )
+    print(
+        "    Maximum roof snow from final deflection: "
+        f"{span.maximum_roof_snow_final_kn_m2:.2f} kN/m²"
+    )
+    print(
+        "  Ultimate strength (ULS, preliminary C24; "
+        f"{PERMANENT_LOAD_FACTOR:g}G + {SNOW_LOAD_FACTOR:g}S):"
+    )
+    for check_name, demand, resistance, utilization, unit in (
+        (
+            "Bending",
+            span.design_bending_moment_nm,
+            span.bending_resistance_nm,
+            span.bending_utilization,
+            "kN·m",
+        ),
+        (
+            "Shear",
+            span.design_shear_force_n,
+            span.shear_resistance_n,
+            span.shear_utilization,
+            "kN",
+        ),
+        (
+            "Bearing",
+            span.design_support_reaction_n,
+            span.bearing_resistance_n,
+            span.bearing_utilization,
+            "kN",
+        ),
+    ):
+        print(
+            f"    {check_name}: {demand / 1000:.2f} / "
+            f"{resistance / 1000:.2f} {unit}, "
+            f"{utilization * 100:.1f}% ({_status(utilization)})"
+        )
+    print(
+        f"    Governing: {span.governing_strength_check}, "
+        f"{span.governing_strength_utilization * 100:.1f}% "
+        f"({_status(span.governing_strength_utilization)})"
+    )
+    print(f"  SPLIT OPTION RESULT: {_independent_purlin_span_status(check)}")
+
+
 def main() -> None:
     arguments = _parser().parse_args()
     shared_rafter_check_arguments = {
@@ -1509,6 +1755,7 @@ def main() -> None:
         "additional_permanent_load_kn_m": arguments.purlin_extra_load,
         "timber_density_kg_m3": arguments.density,
         "bearing_length_mm": arguments.purlin_bearing_length,
+        "split_bearing_length_mm": arguments.purlin_split_bearing_length,
     }
     purlin_check = calculate_purlin_check(
         **shared_purlin_check_arguments,
@@ -1593,21 +1840,30 @@ def main() -> None:
         deflection_ratio=arguments.deflection_ratio,
         check=purlin_check,
     )
+    _print_independent_purlin_span(
+        deflection_ratio=arguments.deflection_ratio,
+        check=purlin_check,
+    )
 
     print()
     print(
         "WARNING: Preliminary member check only. Confirm material values and "
         "National Annex factors. Axial force, lateral buckling/restraint, "
         "notches, holes, connections, wind uplift, fire, and snow drift/shape "
-        "cases still require separate checks. The purlin is assumed continuous "
-        "over all four supports and the discrete rafter reactions are smeared "
-        "into a uniform load. The garden/dormer purlin, end overhangs, "
-        "concentrated-load effects, and any non-moment-transferring splice are "
-        "not checked."
+        "cases still require separate checks. The primary purlin model assumes "
+        "continuity over all four supports, while the split alternative treats "
+        "the longest piece as simply supported. Discrete rafter reactions are "
+        "smeared into a uniform load. The garden/dormer purlin, end overhangs, "
+        "concentrated-load effects, and the design of any splice or connection "
+        "are not checked."
     )
     print()
-    print("OVERALL RESULT FOR CHECKS ABOVE:")
+    print("OVERALL RESULT FOR RAFTERS AND CONTINUOUS PURLIN:")
     print(f"  {_overall_result(rafter_checks, purlin_check)}")
+    print(
+        "SPLIT-PURLIN ALTERNATIVE: "
+        f"{_independent_purlin_span_status(purlin_check)}"
+    )
 
 
 if __name__ == "__main__":

@@ -499,6 +499,14 @@ support moments, shear, and reactions/bearing. The garden/dormer purlin, end
 overhangs, non-moment-transferring splices, snow drift/shape cases, and
 lateral-torsional stability remain outside this simplified check.
 
+The report also checks the longest purlin span as an independent, simply
+supported piece. This is the alternative used to decide whether the purlin can
+be split at its supports without relying on continuity into the side spans.
+For a butt joint centred over a support, each piece defaults to half of
+`--purlin-bearing-length`; override that detail with
+`--purlin-split-bearing-length`. The calculation checks the individual timber
+piece, but not the splice hardware or the supporting wall itself.
+
 Persisted plan and elevation drawings may reserve additional paper space on
 their right side without changing the camera framing.  The width is expressed
 in printed millimetres.  Optional tables are stacked from the top of this

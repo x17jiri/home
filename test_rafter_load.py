@@ -234,6 +234,42 @@ class RafterLoadTests(unittest.TestCase):
         self.assertEqual(len(check.final_deflection_utilizations), 3)
         self.assertEqual(check.missing_roof_layers, ("Unknown",))
 
+        independent = check.independent_longest_span
+        independent_span = 4.75
+        design_line_load_kn_m = (
+            1.35 * check.permanent_line_load_kn_m
+            + 1.5 * check.roof_snow_line_load_kn_m
+        )
+        second_moment_m4 = 0.16 * 0.28**3 / 12
+        expected_immediate_deflection = (
+            5
+            * (
+                check.permanent_line_load_kn_m
+                + check.roof_snow_line_load_kn_m
+            )
+            * 1000
+            * independent_span**4
+            / (384 * 11e9 * second_moment_m4)
+        )
+        self.assertEqual(independent.span_m, independent_span)
+        self.assertEqual(independent.bearing_length_mm, 120)
+        self.assertAlmostEqual(
+            independent.immediate_deflection_m,
+            expected_immediate_deflection,
+        )
+        self.assertAlmostEqual(
+            independent.design_bending_moment_nm,
+            design_line_load_kn_m * 1000 * independent_span**2 / 8,
+        )
+        self.assertAlmostEqual(
+            independent.design_support_reaction_n,
+            design_line_load_kn_m * 1000 * independent_span / 2,
+        )
+        self.assertAlmostEqual(
+            independent.bearing_resistance_n,
+            check.bearing_resistance_n / 2,
+        )
+
     def test_continuous_beam_matches_two_equal_span_solution(self) -> None:
         span = 4.0
         load = 1000.0
@@ -295,10 +331,15 @@ class RafterLoadTests(unittest.TestCase):
             report,
         )
         self.assertIn("Street-side continuous purlin:", report)
+        self.assertIn(
+            "Longest purlin span as an independent piece:",
+            report,
+        )
+        self.assertIn("SPLIT OPTION RESULT:", report)
         self.assertNotIn("Dormer roof onto purlin:", report)
         self.assertIn("Support moments:", report)
         self.assertIn(
-            "OVERALL RESULT FOR CHECKS ABOVE:\n  EVERYTHING PASSED.",
+            "OVERALL RESULT FOR RAFTERS AND CONTINUOUS PURLIN:",
             report,
         )
 
@@ -321,7 +362,7 @@ class RafterLoadTests(unittest.TestCase):
         report = output.getvalue()
         self.assertIn("FAIL", report)
         self.assertIn(
-            "OVERALL RESULT FOR CHECKS ABOVE:\n"
+            "OVERALL RESULT FOR RAFTERS AND CONTINUOUS PURLIN:\n"
             "  THERE ARE FAILURES. Review the checks marked FAIL above.",
             report,
         )
