@@ -95,7 +95,7 @@ UNDER_RAFTER_BATTING_THICKNESS = max(
 )
 UNDER_RAFTER_BATTING_END_INSET = 0.015
 INSTALLATION_SPACE_THICKNESS = 0.06
-GYPSUM_PLASTERBOARD_THICKNESS = 0.025
+GYPSUM_PLASTERBOARD_THICKNESS = 0.0125
 WOOD_FIBERBOARD_THICKNESS = 0.08
 WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
 PAVATEX_BATTING_CENTER_OFFSET = (
@@ -1067,7 +1067,7 @@ COLLAR_TIE_CUTS = (
 		offset=RAFTER_Z_OFFSET + RAFTER_SIZE[1],
 	),
 )
-DORMER_WALL_HEIGHT = 2.7
+DORMER_WALL_HEIGHT = 2.625
 DORMER_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -2930,6 +2930,103 @@ if "aa" in sys.argv:
 		end_z=0.3,
 	)
 	aa_x = drawing1.x
+	# Move each leader endpoint 100 mm into its referenced build-up so the
+	# pointer visibly crosses the outer boundary instead of merely touching it.
+	AA_COMPOSITION_MARKER_PENETRATION = 0.10
+	composition_marker_clearance = (
+		HEXAGON_MARKER_LEADER_REACH
+		- AA_COMPOSITION_MARKER_PENETRATION
+	)
+	roof_composition_y = 1.25
+	roof_composition_target = roof_batting_point(
+		street_roof,
+		x=aa_x,
+		y=roof_composition_y,
+		center_offset=roof_outer_face_offset,
+	)
+	roof_composition_angle = street_roof_angle
+	roof_composition_normal_y = math.sin(
+		math.radians(roof_composition_angle)
+	)
+	roof_composition_normal_z = -math.cos(
+		math.radians(roof_composition_angle)
+	)
+	drawing1.add_hexagon_marker(
+		(
+			aa_x,
+			roof_composition_target[1]
+			- roof_composition_normal_y * composition_marker_clearance,
+			roof_composition_target[2]
+			- roof_composition_normal_z * composition_marker_clearance,
+		),
+		"SK3",
+		rotation=-roof_composition_angle,
+		name="AA roof composition SK3",
+		line_length=1.3,
+	)
+	drawing1.add_hexagon_marker(
+		(
+			aa_x,
+			HALF_DEPTH - 0.07,
+			GROUND_FLOOR_THICKNESS
+			+ composition_marker_clearance,
+		),
+		"SK1",
+		#rotation=180,
+		name="AA ground-floor composition SK1",
+		line_length=0.95,
+	)
+	drawing1.add_hexagon_marker(
+		(
+			aa_x,
+			HOUSE_DEPTH - 1.8,
+			UPPER_FLOOR_START
+			+ UPPER_FLOOR_THICKNESS
+			+ composition_marker_clearance,
+		),
+		"SK2",
+		name="AA upper-floor composition SK2",
+		line_length=0.95,
+	)
+	wall_composition_z = (
+		UPPER_FLOOR_START + UPPER_FLOOR_THICKNESS + 0.35
+	)
+	street_wall_outer_y = -POLYSTYRENE_INSULATION_THICKNESS
+	garden_wall_outer_y = HOUSE_DEPTH + ROCKWOOL_INSULATION_THICKNESS
+	drawing1.add_hexagon_marker(
+		(
+			aa_x,
+			street_wall_outer_y - composition_marker_clearance,
+			wall_composition_z,
+		),
+		"SK4",
+		rotation=-90,
+		name="AA street-wall composition SK4",
+		line_length=1.2,
+	)
+	drawing1.add_hexagon_marker(
+		(
+			aa_x,
+			garden_wall_outer_y + composition_marker_clearance,
+			wall_composition_z,
+		),
+		"SK5",
+		rotation=90,
+		name="AA garden-wall composition SK5",
+		line_length=1.2,
+	)
+	street_foundation_outer_y = -EXTERIOR_XPS_INSULATION_THICKNESS
+	drawing1.add_hexagon_marker(
+		(
+			aa_x,
+			street_foundation_outer_y - composition_marker_clearance,
+			-FOUNDATION_BASE_PLATE_THICKNESS - 0.25,
+		),
+		"SK6",
+		rotation=-90,
+		name="AA street-foundation-wall composition SK6",
+		line_length=1.2,
+	)
 	ridge_tile_center = roof_batting_intersection(
 		street_roof,
 		garden_roof,

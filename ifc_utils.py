@@ -61,6 +61,7 @@ __all__ = [
     "FloorLayer",
     "HorizontalFrame",
     "House",
+    "HEXAGON_MARKER_LEADER_REACH",
     "MiakoSlab",
     "Roof",
     "RoofLayer",
@@ -125,6 +126,8 @@ _DOOR_DIMENSION_WIDTH_OFFSET = 0.12
 _DOOR_DIMENSION_HEIGHT_OFFSET = 0.15
 _LINTEL_TAG_ALONG_OFFSET = 0.45
 _LINTEL_TAG_NORMAL_OFFSET = 0.65
+_HEXAGON_MARKER_LEADER_START = 0.1732
+HEXAGON_MARKER_LEADER_REACH = 0.6165
 
 
 @dataclass(frozen=True)
@@ -2525,6 +2528,75 @@ def _postprocess_elevation_furniture_labels(svg_path: Path) -> None:
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_hexagon_marker_overlays(svg_path: Path) -> None:
+    """Move complete elevation hexagon markers above all model geometry."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="hexagon-marker-overlays' in svg:
+        return
+
+    leaders: list[str] = []
+
+    def remove_or_collect_leader(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = {
+            class_name
+            for class_value in re.findall(r'\bclass="([^"]*)"', element)
+            for class_name in class_value.split()
+        }
+        if "hexagon-marker-leader" not in classes:
+            return element
+        leaders.append(element.strip())
+        return ""
+
+    svg = re.sub(
+        r"<line\b[^>]*(?:/>|>\s*</line>)",
+        remove_or_collect_leader,
+        svg,
+        flags=re.DOTALL,
+    )
+
+    markers: list[str] = []
+
+    def remove_or_collect_marker(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = {
+            class_name
+            for class_value in re.findall(r'\bclass="([^"]*)"', element)
+            for class_name in class_value.split()
+        }
+        if "hexagon-marker" not in classes:
+            return element
+        markers.append(element.strip())
+        return ""
+
+    # Rendered fixed symbols are simple, non-nested groups.  Restricting the
+    # match accordingly avoids disturbing drawing layers and SVG definitions.
+    svg = re.sub(
+        r"<g\b[^>]*>(?:(?!<g\b|</g>).)*</g>",
+        remove_or_collect_marker,
+        svg,
+        flags=re.DOTALL,
+    )
+    if not leaders and not markers:
+        return
+
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    contents = "\n".join(
+        "    " + element.replace("\n", "\n    ")
+        for element in (*leaders, *markers)
+    )
+    overlays = (
+        '  <g class="hexagon-marker-overlays '
+        'target-view-ELEVATIONVIEW">\n'
+        f"{contents}\n"
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -3597,6 +3669,7 @@ def _render_existing_drawing(
             drawing,
         )
         _postprocess_elevation_furniture_labels(absolute_output)
+        _postprocess_hexagon_marker_overlays(absolute_output)
     _postprocess_right_panel(
         absolute_output,
         drawing_properties or {},
@@ -5632,7 +5705,8 @@ class House:
         them unless explicitly added with
         :meth:`Drawing.add_furniture_label`; selected labels face the
         elevation camera and are emitted only when their owning product is
-        visible in the SVG.
+        visible in the SVG.  Use :meth:`Drawing.add_hexagon_marker` for a
+        camera-facing, fixed-size construction identifier with a leader.
         ``storeys`` limits both model geometry and automatic plan annotations
         to the supplied building storeys.  When omitted, all storeys are
         included.  Drawing-specific annotations are always included.
@@ -5766,6 +5840,7 @@ class Drawing:
         self._wall_insulation_count = 0
         self._dimension_count = 0
         self._entrance_arrow_count = 0
+        self._hexagon_marker_count = 0
         self._annotated_stairs: set[int] = set()
         self._annotated_stair_landings: set[int] = set()
         self._annotated_chimneys: set[int] = set()
@@ -6224,6 +6299,175 @@ class Drawing:
             properties={"HasAnnotation": True},
         )
         self._elevation_furniture_labels[product_id] = annotation
+        return annotation
+
+    def add_hexagon_marker(
+        self,
+        center: Point3D,
+        identifier: str,
+        *,
+        rotation: Number = 0,
+        line_length: Number = HEXAGON_MARKER_LEADER_REACH,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a fixed-size hexagonal identifier to an elevation drawing.
+
+        ``center`` is the hexagon centre in world XYZ coordinates.  At zero
+        rotation its leader extends vertically downward on the drawing.
+        Positive ``rotation`` is counter-clockwise in drawing-plane degrees
+        and rotates the leader around the centre.  The hexagon and its text
+        remain upright. ``line_length`` is the distance in metres from the
+        hexagon centre to the leader endpoint; it must extend beyond the
+        hexagon boundary.
+        """
+        if self.view != "elevation":
+            raise ValueError(
+                "add_hexagon_marker is only supported for elevation drawings"
+            )
+        center_point = np.array(_point_3d(center, "center"), dtype=float)
+        identifier = _name(identifier, "identifier")
+        rotation = _number(rotation, "rotation")
+        line_length = _number(line_length, "line_length")
+        if line_length <= _HEXAGON_MARKER_LEADER_START:
+            raise ValueError(
+                "line_length must extend beyond the hexagon boundary"
+            )
+        marker_name = _name(name, "name") if name is not None else None
+
+        direction = np.array(self.direction)
+        camera_z = -direction
+        camera_y = np.array((0.0, 0.0, 1.0))
+        camera_x = np.cross(camera_y, camera_z)
+        placement = np.eye(4)
+        placement[:3, 0] = camera_x
+        placement[:3, 1] = camera_y
+        placement[:3, 2] = camera_z
+        placement[:3, 3] = center_point
+
+        self._hexagon_marker_count += 1
+        model = self.house.model
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=(
+                marker_name
+                or (
+                    f"{self.name} Hexagon Marker "
+                    f"{self._hexagon_marker_count} ({identifier})"
+                )
+            ),
+            predefined_type="TEXT",
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=placement,
+            is_si=True,
+        )
+        literal_origin = model.createIfcAxis2Placement3D(
+            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+            model.createIfcDirection((0.0, 0.0, 1.0)),
+            model.createIfcDirection((1.0, 0.0, 0.0)),
+        )
+        literal = model.createIfcTextLiteralWithExtent(
+            identifier,
+            literal_origin,
+            "RIGHT",
+            model.createIfcPlanarExtent(1.0, 1.0),
+            "center",
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [literal],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={
+                "Classes": "hexagon-marker",
+                "Symbol": "hexagon-marker",
+            },
+        )
+        marker_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="BBIM_HexagonMarker",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=marker_pset,
+            properties={
+                "Identifier": identifier,
+                "Rotation": rotation,
+                "LineLength": line_length,
+            },
+        )
+
+        angle = radians(rotation)
+        leader_x = sin(angle) * camera_x - cos(angle) * camera_y
+        leader_y = np.cross(camera_z, leader_x)
+        leader_placement = np.eye(4)
+        leader_placement[:3, 0] = leader_x
+        leader_placement[:3, 1] = leader_y
+        leader_placement[:3, 2] = camera_z
+        leader_placement[:3, 3] = center_point
+        leader = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{annotation.Name} Leader",
+            predefined_type="LINEWORK",
+        )
+        leader_representation = ifcopenshell.api.geometry.add_axis_representation(
+            model,
+            context=self.house._annotation_context,
+            axis=[
+                (_HEXAGON_MARKER_LEADER_START, 0.0),
+                (line_length, 0.0),
+            ],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=leader,
+            representation=leader_representation,
+        )
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=leader,
+            matrix=leader_placement,
+            is_si=True,
+        )
+        leader_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=leader,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=leader_pset,
+            properties={"Classes": "hexagon-marker-leader"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[leader, annotation],
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=self._drawing_pset,
+            properties={"HasAnnotation": True},
+        )
         return annotation
 
     def add_material_legend(

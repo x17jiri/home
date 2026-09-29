@@ -431,6 +431,18 @@ tspan.lintel-symbol {
     font-size: 1.8px !important;
 }
 
+/* Fixed-size construction identifier inside the elevation hexagon marker. */
+text.hexagon-marker,
+tspan.hexagon-marker {
+    font-size: 1.44px !important;
+}
+
+.PredefinedType-LINEWORK.hexagon-marker-leader {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
 /* Doors: light plan swing, both overhead wall faces, and size labels. */
 .IfcDoor.projection,
 .IfcDoor.cut {

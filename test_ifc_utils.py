@@ -43,6 +43,7 @@ from ifc_utils import (
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
+    _postprocess_hexagon_marker_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
@@ -6390,6 +6391,161 @@ class HouseTests(unittest.TestCase):
                 thickness=0.16,
             )
 
+    def test_adds_rotatable_hexagon_marker_to_elevation(self) -> None:
+        house = House("My house")
+        house.storey("Ground floor", elevation=0)
+        drawing = house.add_drawing(
+            "Section",
+            2,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(1, 0, 0),
+        )
+        other_drawing = house.add_drawing(
+            "Other section",
+            2,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(1, 0, 0),
+        )
+
+        marker = drawing.add_hexagon_marker(
+            (2, 3, 4),
+            "SK1",
+            rotation=90,
+            line_length=0.8,
+        )
+
+        self.assertEqual(marker.ObjectType, "TEXT")
+        self.assertEqual(
+            marker.Representation.Representations[0].Items[0].Literal,
+            "SK1",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                marker,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "hexagon-marker",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                marker,
+                "EPset_Annotation",
+                "Symbol",
+            ),
+            "hexagon-marker",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                marker,
+                "BBIM_HexagonMarker",
+                "Identifier",
+            ),
+            "SK1",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                marker,
+                "BBIM_HexagonMarker",
+                "Rotation",
+            ),
+            90.0,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                marker,
+                "BBIM_HexagonMarker",
+                "LineLength",
+            ),
+            0.8,
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            marker.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            placement,
+            np.array(
+                (
+                    (0, 0, -1, 2),
+                    (-1, 0, 0, 3),
+                    (0, 1, 0, 4),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-9,
+        )
+        leader = next(
+            annotation
+            for annotation in drawing.group.IsGroupedBy[0].RelatedObjects
+            if annotation.Name == f"{marker.Name} Leader"
+        )
+        leader_placement = ifcopenshell.util.placement.get_local_placement(
+            leader.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            leader_placement,
+            np.array(
+                (
+                    (0, 0, -1, 2),
+                    (-1, 0, 0, 3),
+                    (0, 1, 0, 4),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-9,
+        )
+        self.assertEqual(
+            leader.Representation.Representations[0].Items[0].Points.CoordList,
+            ((0.1732, 0.0), (0.8, 0.0)),
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                leader,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "hexagon-marker-leader",
+        )
+        self.assertIn(marker, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(leader, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(
+            marker,
+            other_drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+        self.assertTrue(
+            ifcopenshell.util.element.get_pset(
+                drawing.element,
+                "EPset_Drawing",
+                "HasAnnotation",
+            )
+        )
+        self.assertIn(
+            'id="hexagon-marker"',
+            Path("drawings/assets/symbols.svg").read_text(),
+        )
+        self.assertIn(
+            "text.hexagon-marker",
+            Path("bonsai_scripts/assets/plan.css").read_text(),
+        )
+
+        plan = house.add_drawing("Plan", 2, 2, 1, 5)
+        with self.assertRaisesRegex(ValueError, "elevation"):
+            plan.add_hexagon_marker((2, 3, 4), "SK2")
+        with self.assertRaisesRegex(ValueError, "identifier must not be empty"):
+            drawing.add_hexagon_marker((2, 3, 4), " ")
+        with self.assertRaisesRegex(ValueError, "hexagon boundary"):
+            drawing.add_hexagon_marker(
+                (2, 3, 4),
+                "SK2",
+                line_length=0.1,
+            )
+
     def test_adds_camera_facing_ridge_tile_to_elevation(self) -> None:
         house = House("My house")
         house.storey("Ground floor", elevation=0)
@@ -8098,6 +8254,46 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(svg.count("Note"), 1)
             self.assertIn('<g class="symbol"><text class="template"/></g>', svg)
             self.assertGreater(svg.index(overlay), svg.index("VISIBLE"))
+
+    def test_moves_complete_hexagon_markers_above_elevation_geometry(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "elevation.svg"
+            svg_path.write_text(
+                """<svg>
+  <defs>
+    <g id="hexagon-marker"><path/><text class="small"/></g>
+  </defs>
+  <line class="IfcAnnotation PredefinedType-LINEWORK hexagon-marker-leader" x1="1" y1="2" x2="3" y2="4"/>
+  <g id="floor-layer"><path d="M0 0L5 0"/></g>
+  <g transform="translate(2,3)">
+    <path d="hexagon"/>
+    <text class="IfcAnnotation PredefinedType-TEXT hexagon-marker">SK1</text>
+  </g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_hexagon_marker_overlays(svg_path)
+            _postprocess_hexagon_marker_overlays(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            overlay = (
+                '<g class="hexagon-marker-overlays '
+                'target-view-ELEVATIONVIEW">'
+            )
+            self.assertEqual(svg.count(overlay), 1)
+            self.assertEqual(svg.count("hexagon-marker-leader"), 1)
+            self.assertEqual(svg.count(">SK1</text>"), 1)
+            self.assertEqual(svg.count('id="hexagon-marker"'), 1)
+            self.assertGreater(svg.index(overlay), svg.index('id="floor-layer"'))
+            overlay_svg = svg[svg.index(overlay) :]
+            self.assertLess(
+                overlay_svg.index("hexagon-marker-leader"),
+                overlay_svg.index(">SK1</text>"),
+            )
 
     def test_layers_door_and_furniture_symbols_above_plan_linework(self) -> None:
         with TemporaryDirectory() as directory:
