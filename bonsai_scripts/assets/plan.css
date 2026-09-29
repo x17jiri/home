@@ -443,6 +443,20 @@ tspan.hexagon-marker {
     stroke-width: 0.06 !important;
 }
 
+.PredefinedType-LINEWORK.note-leader {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.08 !important;
+    marker-end: url(#note-arrow-marker);
+}
+
+text.note-text,
+tspan.note-text {
+    fill: black !important;
+    stroke: none !important;
+    font-size: 2px !important;
+}
+
 /* Doors: light plan swing, both overhead wall faces, and size labels. */
 .IfcDoor.projection,
 .IfcDoor.cut {

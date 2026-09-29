@@ -44,6 +44,7 @@ from ifc_utils import (
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
     _postprocess_hexagon_marker_overlays,
+    _postprocess_note_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
@@ -6546,6 +6547,136 @@ class HouseTests(unittest.TestCase):
                 line_length=0.1,
             )
 
+    def test_adds_arrow_notes_to_plans_and_elevations(self) -> None:
+        house = House("My house")
+        house.storey("Ground floor", elevation=0)
+        plan = house.add_drawing("Plan", 2, 2, 1, 5)
+        elevation = house.add_drawing(
+            "Section",
+            2,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(1, 0, 0),
+        )
+
+        plan_note = plan.add_note(
+            point=(1, 2),
+            angle=30,
+            distance=2,
+            text="Poznámka",
+        )
+        plan_placement = ifcopenshell.util.placement.get_local_placement(
+            plan_note.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            plan_placement[:3, 3],
+            (1 + np.sqrt(3), 3, 0),
+            atol=1e-9,
+        )
+        self.assertEqual(
+            plan_note.Representation.Representations[0].Items[0].Literal,
+            "Poznámka",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                plan_note,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "note-text",
+        )
+        self.assertEqual(
+            json.loads(
+                ifcopenshell.util.element.get_pset(
+                    plan_note,
+                    "BBIM_Note",
+                    "Point",
+                )
+            ),
+            [1.0, 2.0],
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                plan_note,
+                "BBIM_Note",
+                "Angle",
+            ),
+            30.0,
+        )
+
+        elevation_note = elevation.add_note(
+            point=(3, 4),
+            angle=90,
+            distance=1.5,
+            text="Detail",
+            name="Section note",
+        )
+        np.testing.assert_allclose(
+            ifcopenshell.util.placement.get_local_placement(
+                elevation_note.ObjectPlacement
+            ),
+            np.array(
+                (
+                    (0, 0, -1, 2),
+                    (-1, 0, 0, 3),
+                    (0, 1, 0, 5.5),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-9,
+        )
+        leader = next(
+            annotation
+            for annotation in elevation.group.IsGroupedBy[0].RelatedObjects
+            if annotation.Name == "Section note Leader"
+        )
+        np.testing.assert_allclose(
+            ifcopenshell.util.placement.get_local_placement(
+                leader.ObjectPlacement
+            )[:3, 0],
+            (0, 0, -1),
+            atol=1e-9,
+        )
+        self.assertEqual(
+            leader.Representation.Representations[0].Items[0].Points.CoordList,
+            ((0.0, 0.0), (1.5, 0.0)),
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                leader,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "note-leader",
+        )
+        self.assertIn(elevation_note, elevation.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(leader, elevation.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(elevation_note, plan.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(
+            'id="note-arrow-marker"',
+            Path("drawings/assets/markers.svg").read_text(),
+        )
+        self.assertIn(
+            ".PredefinedType-LINEWORK.note-leader",
+            Path("bonsai_scripts/assets/plan.css").read_text(),
+        )
+
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            plan.add_note((1, 2), 0, 0, "Invalid")
+        oblique = house.add_drawing(
+            "Oblique section",
+            2,
+            0,
+            2,
+            5,
+            view="elevation",
+            direction=(1, 1, 0),
+        )
+        with self.assertRaisesRegex(ValueError, "axis-aligned"):
+            oblique.add_note((3, 4), 0, 1, "Invalid")
+
     def test_adds_camera_facing_ridge_tile_to_elevation(self) -> None:
         house = House("My house")
         house.storey("Ground floor", elevation=0)
@@ -8293,6 +8424,38 @@ class HouseTests(unittest.TestCase):
             self.assertLess(
                 overlay_svg.index("hexagon-marker-leader"),
                 overlay_svg.index(">SK1</text>"),
+            )
+
+    def test_moves_complete_notes_above_drawing_geometry(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                """<svg>
+  <defs><g id="symbol"><text data-type="text-template"/></g></defs>
+  <line class="IfcAnnotation PredefinedType-LINEWORK note-leader" x1="1" y1="2" x2="3" y2="4"/>
+  <g id="wall"><path d="M0 0L5 0"/></g>
+  <text style="font-size:0"><tspan class="IfcAnnotation PredefinedType-TEXT note-text">Poznámka</tspan></text>
+  <text class="unrelated">Keep me</text>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_note_overlays(svg_path)
+            _postprocess_note_overlays(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            overlay = '<g class="note-overlays">'
+            self.assertEqual(svg.count(overlay), 1)
+            self.assertEqual(svg.count("note-leader"), 1)
+            self.assertEqual(svg.count("Poznámka"), 1)
+            self.assertEqual(svg.count("Keep me"), 1)
+            self.assertEqual(svg.count('data-type="text-template"'), 1)
+            self.assertGreater(svg.index(overlay), svg.index('id="wall"'))
+            overlay_svg = svg[svg.index(overlay) :]
+            self.assertLess(
+                overlay_svg.index("note-leader"),
+                overlay_svg.index("Poznámka"),
             )
 
     def test_layers_door_and_furniture_symbols_above_plan_linework(self) -> None:

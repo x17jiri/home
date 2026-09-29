@@ -2597,6 +2597,72 @@ def _postprocess_hexagon_marker_overlays(svg_path: Path) -> None:
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_note_overlays(svg_path: Path) -> None:
+    """Move note leaders and text above all model geometry."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="note-overlays' in svg:
+        return
+
+    leaders: list[str] = []
+
+    def remove_or_collect_leader(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = {
+            class_name
+            for class_value in re.findall(r'\bclass="([^"]*)"', element)
+            for class_name in class_value.split()
+        }
+        if "note-leader" not in classes:
+            return element
+        leaders.append(element.strip())
+        return ""
+
+    svg = re.sub(
+        r"<line\b[^>]*(?:/>|>\s*</line>)",
+        remove_or_collect_leader,
+        svg,
+        flags=re.DOTALL,
+    )
+
+    texts: list[str] = []
+
+    def remove_or_collect_text(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = {
+            class_name
+            for class_value in re.findall(r'\bclass="([^"]*)"', element)
+            for class_name in class_value.split()
+        }
+        if "note-text" not in classes:
+            return element
+        texts.append(element.strip())
+        return ""
+
+    svg = re.sub(
+        r"<text\b(?P<attrs>[^>]*?)(?<!/)>.*?</text>",
+        remove_or_collect_text,
+        svg,
+        flags=re.DOTALL,
+    )
+    if not leaders and not texts:
+        return
+
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    contents = "\n".join(
+        "    " + element.replace("\n", "\n    ")
+        for element in (*leaders, *texts)
+    )
+    overlays = (
+        '  <g class="note-overlays">\n'
+        f"{contents}\n"
+        "  </g>\n"
+    )
+    svg = f"{svg[:closing_svg]}{overlays}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -3670,6 +3736,7 @@ def _render_existing_drawing(
         )
         _postprocess_elevation_furniture_labels(absolute_output)
         _postprocess_hexagon_marker_overlays(absolute_output)
+    _postprocess_note_overlays(absolute_output)
     _postprocess_right_panel(
         absolute_output,
         drawing_properties or {},
@@ -5706,7 +5773,8 @@ class House:
         :meth:`Drawing.add_furniture_label`; selected labels face the
         elevation camera and are emitted only when their owning product is
         visible in the SVG.  Use :meth:`Drawing.add_hexagon_marker` for a
-        camera-facing, fixed-size construction identifier with a leader.
+        camera-facing, fixed-size construction identifier with a leader, and
+        :meth:`Drawing.add_note` for a text note with an arrow leader.
         ``storeys`` limits both model geometry and automatic plan annotations
         to the supplied building storeys.  When omitted, all storeys are
         included.  Drawing-specific annotations are always included.
@@ -5841,6 +5909,7 @@ class Drawing:
         self._dimension_count = 0
         self._entrance_arrow_count = 0
         self._hexagon_marker_count = 0
+        self._note_count = 0
         self._annotated_stairs: set[int] = set()
         self._annotated_stair_landings: set[int] = set()
         self._annotated_chimneys: set[int] = set()
@@ -6457,6 +6526,223 @@ class Drawing:
             model,
             pset=leader_pset,
             properties={"Classes": "hexagon-marker-leader"},
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[leader, annotation],
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=self._drawing_pset,
+            properties={"HasAnnotation": True},
+        )
+        return annotation
+
+    def add_note(
+        self,
+        point: Point,
+        angle: Number,
+        distance: Number,
+        text: str,
+        *,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a text note whose arrow points to ``point``.
+
+        In a plan, ``point`` is world ``(x, y)``.  In an elevation looking
+        along X it is world ``(y, z)``; looking along Y it is ``(x, z)``.
+        Elevation notes therefore remain easy to place using the two visible
+        model coordinates. ``angle`` is counter-clockwise in degrees in that
+        coordinate pair, with zero along its positive horizontal axis.
+        ``distance`` is the model-space distance from the arrow point to the
+        text origin.
+        """
+        point_horizontal, point_vertical = _point(point, "point")
+        angle = _number(angle, "angle")
+        distance = _number(distance, "distance")
+        if distance <= 0:
+            raise ValueError("distance must be greater than zero")
+        note_text = _name(text, "text")
+        note_name = _name(name, "name") if name is not None else None
+
+        angle_radians = radians(angle)
+        horizontal_offset = distance * cos(angle_radians)
+        vertical_offset = distance * sin(angle_radians)
+        camera_y = np.array((0.0, 0.0, 1.0))
+        if self.view == "plan":
+            storeys_below = [
+                storey for storey in self.storeys if storey.elevation <= self.z
+            ]
+            annotation_z = (
+                max(
+                    storeys_below,
+                    key=lambda storey: storey.elevation,
+                ).elevation
+                if storeys_below
+                else 0.0
+            )
+            target_point = np.array(
+                (point_horizontal, point_vertical, annotation_z),
+                dtype=float,
+            )
+            text_origin = np.array(
+                (
+                    point_horizontal + horizontal_offset,
+                    point_vertical + vertical_offset,
+                    annotation_z,
+                ),
+                dtype=float,
+            )
+            camera_x = np.array((1.0, 0.0, 0.0))
+            camera_y = np.array((0.0, 1.0, 0.0))
+            camera_z = np.array((0.0, 0.0, 1.0))
+        else:
+            direction_x, direction_y, _ = self.direction
+            if isclose(abs(direction_x), 1.0, abs_tol=1e-9):
+                target_point = np.array(
+                    (self.x, point_horizontal, point_vertical),
+                    dtype=float,
+                )
+                text_origin = np.array(
+                    (
+                        self.x,
+                        point_horizontal + horizontal_offset,
+                        point_vertical + vertical_offset,
+                    ),
+                    dtype=float,
+                )
+            elif isclose(abs(direction_y), 1.0, abs_tol=1e-9):
+                target_point = np.array(
+                    (point_horizontal, self.y, point_vertical),
+                    dtype=float,
+                )
+                text_origin = np.array(
+                    (
+                        point_horizontal + horizontal_offset,
+                        self.y,
+                        point_vertical + vertical_offset,
+                    ),
+                    dtype=float,
+                )
+            else:
+                raise ValueError(
+                    "add_note requires an axis-aligned elevation direction"
+                )
+            camera_z = -np.array(self.direction)
+            camera_x = np.cross(camera_y, camera_z)
+
+        leader_delta = target_point - text_origin
+        leader_length = float(np.linalg.norm(leader_delta))
+        leader_x = leader_delta / leader_length
+        leader_y = np.cross(camera_z, leader_x)
+        leader_y /= np.linalg.norm(leader_y)
+
+        self._note_count += 1
+        resolved_name = note_name or f"{self.name} Note {self._note_count}"
+        model = self.house.model
+        leader = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{resolved_name} Leader",
+            predefined_type="LINEWORK",
+        )
+        leader_placement = np.eye(4)
+        leader_placement[:3, 0] = leader_x
+        leader_placement[:3, 1] = leader_y
+        leader_placement[:3, 2] = camera_z
+        leader_placement[:3, 3] = text_origin
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=leader,
+            matrix=leader_placement,
+            is_si=True,
+        )
+        leader_representation = ifcopenshell.api.geometry.add_axis_representation(
+            model,
+            context=self.house._annotation_context,
+            axis=[(0.0, 0.0), (leader_length, 0.0)],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=leader,
+            representation=leader_representation,
+        )
+        leader_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=leader,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=leader_pset,
+            properties={"Classes": "note-leader"},
+        )
+
+        annotation = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=resolved_name,
+            predefined_type="TEXT",
+        )
+        text_placement = np.eye(4)
+        text_placement[:3, 0] = camera_x
+        text_placement[:3, 1] = camera_y
+        text_placement[:3, 2] = camera_z
+        text_placement[:3, 3] = text_origin
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=annotation,
+            matrix=text_placement,
+            is_si=True,
+        )
+        literal_origin = model.createIfcAxis2Placement3D(
+            model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+            model.createIfcDirection((0.0, 0.0, 1.0)),
+            model.createIfcDirection((1.0, 0.0, 0.0)),
+        )
+        literal = model.createIfcTextLiteralWithExtent(
+            note_text,
+            literal_origin,
+            "RIGHT",
+            model.createIfcPlanarExtent(max(1.0, distance), 0.5),
+            "bottom-left",
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            [literal],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=annotation,
+            representation=representation,
+        )
+        annotation_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=annotation_pset,
+            properties={"Classes": "note-text"},
+        )
+        note_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=annotation,
+            name="BBIM_Note",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=note_pset,
+            properties={
+                "Point": json.dumps([point_horizontal, point_vertical]),
+                "Angle": angle,
+                "Distance": distance,
+                "Text": note_text,
+            },
         )
         ifcopenshell.api.group.assign_group(
             model,

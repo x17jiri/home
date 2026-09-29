@@ -1183,8 +1183,16 @@ wall_3 = upper.wall(
 	(wall3_x, BWT), (wall3_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=4)
+WALL_3_INSTALLATION_OPENING_AT = 3.625-BWT
+WALL_3_INSTALLATION_OPENING_WIDTH = 0.75
+WALL_3_INSTALLATION_OPENING_TOP = UNDER_HOLE+HOLE_HEIGHT
 wall_3.add_opening(
-	at=3.625-BWT, width=0.75, height=UNDER_HOLE+HOLE_HEIGHT, sill_height=UNDER_HOLE)
+	at=WALL_3_INSTALLATION_OPENING_AT,
+	width=WALL_3_INSTALLATION_OPENING_WIDTH,
+	height=WALL_3_INSTALLATION_OPENING_TOP,
+	sill_height=UNDER_HOLE,
+	name="Instalační otvor pro vedení rekuperace",
+)
 
 sklad_opening = wall_3.add_opening(
     at=GALERY_START-BWT,
@@ -2860,6 +2868,18 @@ if "aa" in sys.argv:
 	)
 	drawing1.add_furniture_label(kamna)
 	#drawing1.add_furniture_label(gauc)
+	drawing1.add_note(
+		point=(
+			wall_3.start[1]
+			+ WALL_3_INSTALLATION_OPENING_AT
+			+ WALL_3_INSTALLATION_OPENING_WIDTH,
+			UPPER_FLOOR_START + WALL_3_INSTALLATION_OPENING_TOP,
+		),
+		angle=60,
+		distance=1.7,
+		text="Instalační otvor pro\nvedení rekuperace",
+		name="AA note - instalační otvor pro vedení rekuperace",
+	)
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď\nVPC Cihla 240 mm, λ = 0.75"),
 		(
