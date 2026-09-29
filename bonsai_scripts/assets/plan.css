@@ -472,11 +472,25 @@ tspan.note-text {
 }
 
 .PredefinedType-LINEWORK.door-overhead,
-.PredefinedType-LINEWORK.load-bearing-wall-outline {
+.PredefinedType-LINEWORK.load-bearing-wall-outline,
+.PredefinedType-LINEWORK.roof-opening {
     fill: none !important;
     stroke: black !important;
     stroke-width: 0.1 !important;
     stroke-dasharray: 0.7 0.8 !important;
+}
+
+/* Inserted immediately behind the four roof-window outline lines. */
+.roof-opening-mask {
+    fill: white !important;
+    stroke: none !important;
+}
+
+/* Rendering postprocessing replaces this full-opening reference with the
+ * white mask polygon. Keep it invisible if the SVG is viewed before that. */
+.PredefinedType-LINEWORK.roof-opening-mask-source {
+    fill: none !important;
+    stroke: none !important;
 }
 
 text.door-dimension,

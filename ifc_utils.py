@@ -1104,6 +1104,7 @@ def _postprocess_projection_hull_fills(
     *,
     required_classes: set[str],
     fill_class: str,
+    fill_style: str | None = None,
 ) -> None:
     """Add a filled hull behind matching groups of open projection paths."""
     svg = svg_path.read_text(encoding="utf-8")
@@ -1139,9 +1140,14 @@ def _postprocess_projection_hull_fills(
         indentation_match = re.match(r'\n([ \t]+)', match["body"])
         if indentation_match is not None:
             indentation = indentation_match.group(1)
+        style_attribute = (
+            f' style="{escape(fill_style, quote=True)}"'
+            if fill_style is not None
+            else ""
+        )
         polygon = (
-            f'\n{indentation}<polygon class="{fill_class}" '
-            f'points="{point_text}"/>'
+            f'\n{indentation}<polygon class="{fill_class}"'
+            f'{style_attribute} points="{point_text}"/>'
         )
         return (
             f'{match["open"]}{polygon}{match["body"]}{match["close"]}'
@@ -1152,13 +1158,145 @@ def _postprocess_projection_hull_fills(
         svg_path.write_text(processed_svg, encoding="utf-8")
 
 
-def _postprocess_projected_wood_fills(svg_path: Path) -> None:
+def _postprocess_projected_wood_fills(
+    svg_path: Path,
+    *,
+    color: str | None = None,
+) -> None:
     """Add a filled hull behind open projected-wood edge paths in plans."""
     _postprocess_projection_hull_fills(
         svg_path,
         required_classes={"IfcBeam", "material-Wood", "projection"},
         fill_class="projected-wood-fill",
+        fill_style=(f"fill: {color} !important;" if color is not None else None),
     )
+
+
+def _postprocess_roof_opening_masks(svg_path: Path) -> None:
+    """Mask projected framing behind dashed rectangular roof openings."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if '<polygon class="roof-opening-mask"' in svg:
+        return
+
+    line_pattern = re.compile(
+        r'(?P<indent>^[ \t]*)<line\b(?P<attrs>[^>\n]*)/>[ \t]*$',
+        re.MULTILINE,
+    )
+    mask_line_groups: dict[str, list[re.Match[str]]] = {}
+    outline_line_groups: dict[str, list[re.Match[str]]] = {}
+    for match in line_pattern.finditer(svg):
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
+        classes = set(attributes.get("class", "").split())
+        if not {
+            "roof-opening-mask-source",
+            "roof-opening",
+        } & classes:
+            continue
+        global_id = next(
+            (
+                token
+                for token in classes
+                if token.startswith("GlobalId-")
+            ),
+            None,
+        )
+        if global_id is not None:
+            target = (
+                mask_line_groups
+                if "roof-opening-mask-source" in classes
+                else outline_line_groups
+            )
+            target.setdefault(global_id, []).append(match)
+
+    # Older drawings have no separate full-opening mask source. Their dashed
+    # rectangle still provides a usable fallback.
+    source_groups = mask_line_groups or outline_line_groups
+
+    polygons = []
+    for lines in source_groups.values():
+        if len(lines) != 4:
+            continue
+        coordinates = []
+        for line in lines:
+            attributes = dict(
+                re.findall(r'([\w:-]+)="([^"]*)"', line["attrs"])
+            )
+            try:
+                coordinates.extend(
+                    (
+                        (float(attributes["x1"]), float(attributes["y1"])),
+                        (float(attributes["x2"]), float(attributes["y2"])),
+                    )
+                )
+            except (KeyError, ValueError):
+                coordinates = []
+                break
+        if not coordinates:
+            continue
+        x_min = min(point[0] for point in coordinates)
+        x_max = max(point[0] for point in coordinates)
+        y_min = min(point[1] for point in coordinates)
+        y_max = max(point[1] for point in coordinates)
+        if x_min == x_max or y_min == y_max:
+            continue
+        polygon = (
+            f'{lines[0]["indent"]}<polygon class="roof-opening-mask" '
+            f'points="{x_min:g},{y_min:g} {x_max:g},{y_min:g} '
+            f'{x_max:g},{y_max:g} {x_min:g},{y_max:g}"/>\n'
+        )
+        polygons.append(polygon)
+
+    if not polygons:
+        return
+
+    if mask_line_groups:
+        def remove_mask_source(match: re.Match[str]) -> str:
+            attributes = dict(
+                re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"])
+            )
+            if "roof-opening-mask-source" in set(
+                attributes.get("class", "").split()
+            ):
+                return ""
+            return match.group(0)
+
+        svg = line_pattern.sub(remove_mask_source, svg)
+
+    insertion_offset = svg.rfind("</svg>")
+    for match in line_pattern.finditer(svg):
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
+        if "roof-opening" in set(attributes.get("class", "").split()):
+            insertion_offset = match.start()
+            break
+    if insertion_offset < 0:
+        return
+    svg = (
+        f"{svg[:insertion_offset]}{''.join(polygons)}"
+        f"{svg[insertion_offset:]}"
+    )
+    svg_path.write_text(svg, encoding="utf-8")
+
+
+def _postprocess_model_line_width(
+    svg_path: Path,
+    *,
+    width: float,
+) -> None:
+    """Apply one drawing-specific stroke width to model cut/projection groups."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="model-line-width-override"' in svg:
+        return
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    style = (
+        '  <style class="model-line-width-override" type="text/css">'
+        f'.section g.cut, .section g.projection '
+        f'{{ stroke-width: {width:g} !important; }}'
+        '</style>\n'
+    )
+    svg = f"{svg[:closing_svg]}{style}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
 
 
 def _postprocess_projected_chimney_fills(svg_path: Path) -> None:
@@ -3698,13 +3836,36 @@ def _render_existing_drawing(
     )
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
+    model_line_width = (
+        drawing_properties.get("ModelLineWidth")
+        if drawing_properties
+        else None
+    )
+    if model_line_width is not None:
+        _postprocess_model_line_width(
+            absolute_output,
+            width=float(model_line_width),
+        )
     if target_view == "PLAN_VIEW":
         cut_z = float(
             ifcopenshell.util.placement.get_local_placement(
                 drawing.ObjectPlacement
             )[2, 3]
         )
-        _postprocess_projected_wood_fills(absolute_output)
+        projected_wood_color = (
+            drawing_properties.get("ProjectedWoodColor")
+            if drawing_properties
+            else None
+        )
+        _postprocess_projected_wood_fills(
+            absolute_output,
+            color=(
+                str(projected_wood_color)
+                if projected_wood_color
+                else None
+            ),
+        )
+        _postprocess_roof_opening_masks(absolute_output)
         _postprocess_wall_insulation_batting(absolute_output)
         _postprocess_door_overheads(
             absolute_output,
@@ -5760,6 +5921,8 @@ class House:
         door_annotation_offset: Number = 0,
         doors_closed: bool = False,
         right_panel_width: Number = 0,
+        projected_wood_color: str | None = None,
+        model_line_width: Number | None = None,
     ) -> Drawing:
         """Add a persisted square plan or elevation drawing to this IFC model.
 
@@ -5789,6 +5952,12 @@ class House:
         view.  Use :meth:`Drawing.add_material_legend` and
         :meth:`Drawing.add_room_legend`, or
         :meth:`Drawing.add_lintel_legend` to add optional tables to that panel.
+        ``projected_wood_color`` optionally overrides the fill of projected
+        wooden beams in this plan only; cut wood and other drawings are not
+        affected.
+        ``model_line_width`` optionally sets the printed SVG stroke width for
+        model cut and projection geometry in this drawing only.  Annotation
+        line conventions remain unchanged.
         """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
@@ -5807,6 +5976,8 @@ class House:
             door_annotation_offset=door_annotation_offset,
             doors_closed=doors_closed,
             right_panel_width=right_panel_width,
+            projected_wood_color=projected_wood_color,
+            model_line_width=model_line_width,
         )
         self._drawings.append(drawing)
         return drawing
@@ -5873,6 +6044,8 @@ class Drawing:
         door_annotation_offset: Number,
         doors_closed: bool,
         right_panel_width: Number,
+        projected_wood_color: str | None,
+        model_line_width: Number | None,
     ) -> None:
         self.house = house
         self.name = name
@@ -5883,6 +6056,29 @@ class Drawing:
         if self.radius <= 0:
             raise ValueError("radius must be greater than zero")
         self.view = _enum(view, "view", {"PLAN", "ELEVATION"}).lower()
+        if projected_wood_color is None:
+            self.projected_wood_color: str | None = None
+        else:
+            if self.view != "plan":
+                raise ValueError(
+                    "projected_wood_color is only supported for plan drawings"
+                )
+            color_channels = _color(
+                projected_wood_color,
+                "projected_wood_color",
+            )
+            self.projected_wood_color = "#" + "".join(
+                f"{round(channel * 255):02x}" for channel in color_channels
+            )
+        if model_line_width is None:
+            self.model_line_width: float | None = None
+        else:
+            self.model_line_width = _number(
+                model_line_width,
+                "model_line_width",
+            )
+            if self.model_line_width <= 0:
+                raise ValueError("model_line_width must be greater than zero")
         if self.view == "plan":
             if direction is not None:
                 raise ValueError("direction is only supported for elevation drawings")
@@ -5915,6 +6111,7 @@ class Drawing:
         self._annotated_chimneys: set[int] = set()
         self._annotated_doors: set[int] = set()
         self._annotated_lintels: set[int] = set()
+        self._annotated_roof_openings: set[int] = set()
         self._elevation_furniture_labels: dict[
             int, ifcopenshell.entity_instance
         ] = {}
@@ -6102,6 +6299,12 @@ class Drawing:
             "RightPanelWidth": self.right_panel_width,
             "RightPanelTables": "[]",
         }
+        if self.projected_wood_color is not None:
+            drawing_properties["ProjectedWoodColor"] = (
+                self.projected_wood_color
+            )
+        if self.model_line_width is not None:
+            drawing_properties["ModelLineWidth"] = self.model_line_width
         if not self._includes_all_storeys:
             drawing_properties["Include"] = (
                 "+".join(
@@ -6547,6 +6750,7 @@ class Drawing:
         text: str,
         *,
         name: str | None = None,
+        text_alignment: Literal["bottom-left", "bottom-right"] = "bottom-left",
     ) -> ifcopenshell.entity_instance:
         """Add a text note whose arrow points to ``point``.
 
@@ -6556,7 +6760,8 @@ class Drawing:
         model coordinates. ``angle`` is counter-clockwise in degrees in that
         coordinate pair, with zero along its positive horizontal axis.
         ``distance`` is the model-space distance from the arrow point to the
-        text origin.
+        text origin. ``text_alignment`` controls whether the note extends to
+        the right or left from that origin.
         """
         point_horizontal, point_vertical = _point(point, "point")
         angle = _number(angle, "angle")
@@ -6565,6 +6770,11 @@ class Drawing:
             raise ValueError("distance must be greater than zero")
         note_text = _name(text, "text")
         note_name = _name(name, "name") if name is not None else None
+        text_alignment = _enum(
+            text_alignment,
+            "text_alignment",
+            {"BOTTOM-LEFT", "BOTTOM-RIGHT"},
+        ).lower()
 
         angle_radians = radians(angle)
         horizontal_offset = distance * cos(angle_radians)
@@ -6706,7 +6916,7 @@ class Drawing:
             literal_origin,
             "RIGHT",
             model.createIfcPlanarExtent(max(1.0, distance), 0.5),
-            "bottom-left",
+            text_alignment,
         )
         representation = model.createIfcShapeRepresentation(
             self.house._annotation_context,
@@ -6742,6 +6952,7 @@ class Drawing:
                 "Angle": angle,
                 "Distance": distance,
                 "Text": note_text,
+                "TextAlignment": text_alignment,
             },
         )
         ifcopenshell.api.group.assign_group(
@@ -8415,6 +8626,138 @@ class Drawing:
             products=[annotation],
         )
         return annotation
+
+    def add_roof_opening_outline(
+        self,
+        opening: RoofOpening,
+        *,
+        inset: Number = 0.05,
+        mask_horizontal_inset: Number = 0.02,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add a white-backed dashed plan outline for one roof opening.
+
+        The dashed outline is moved inward by ``inset`` on every side.  The
+        white mask retains the opening's full vertical extent but is narrowed
+        by ``mask_horizontal_inset`` on each side, preserving the outlines of
+        the adjacent rafters.  The line uses the same fine dash pattern as
+        wall openings.  This masks projected members behind the future roof
+        window without changing their model geometry.
+        """
+        self._require_plan_view("add_roof_opening_outline")
+        if not isinstance(opening, RoofOpening) or opening.roof is None:
+            raise TypeError(
+                "opening must be a RoofOpening created by Roof.add_opening"
+            )
+        if opening.roof.storey.house is not self.house:
+            raise ValueError("opening must belong to this house")
+        inset = _number(inset, "inset")
+        if inset < 0:
+            raise ValueError("inset must not be negative")
+        mask_horizontal_inset = _number(
+            mask_horizontal_inset,
+            "mask_horizontal_inset",
+        )
+        if mask_horizontal_inset < 0:
+            raise ValueError("mask_horizontal_inset must not be negative")
+        opening_identity = id(opening)
+        if opening_identity in self._annotated_roof_openings:
+            raise ValueError(
+                "roof opening already has an outline in this drawing"
+            )
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} {opening.name} Outline"
+        )
+        (x_min, y_min), (x_max, y_max) = opening.rectangle
+        if 2 * inset >= min(x_max - x_min, y_max - y_min):
+            raise ValueError("inset must leave a non-empty roof opening outline")
+        if 2 * mask_horizontal_inset >= x_max - x_min:
+            raise ValueError(
+                "mask_horizontal_inset must leave a non-empty roof opening mask"
+            )
+        mask_points = (
+            (x_min + mask_horizontal_inset, y_min),
+            (x_max - mask_horizontal_inset, y_min),
+            (x_max - mask_horizontal_inset, y_max),
+            (x_min + mask_horizontal_inset, y_max),
+            (x_min + mask_horizontal_inset, y_min),
+        )
+        outline_points = (
+            (x_min + inset, y_min + inset),
+            (x_max - inset, y_min + inset),
+            (x_max - inset, y_max - inset),
+            (x_min + inset, y_max - inset),
+            (x_min + inset, y_min + inset),
+        )
+
+        model = self.house.model
+        placement = np.eye(4)
+        placement[2, 3] = opening.roof.storey.elevation
+
+        def add_rectangle(
+            rectangle_name: str,
+            points: tuple[tuple[float, float], ...],
+            classes: str,
+        ) -> ifcopenshell.entity_instance:
+            annotation = ifcopenshell.api.root.create_entity(
+                model,
+                ifc_class="IfcAnnotation",
+                name=rectangle_name,
+                predefined_type="LINEWORK",
+            )
+            ifcopenshell.api.geometry.edit_object_placement(
+                model,
+                product=annotation,
+                matrix=placement,
+                is_si=True,
+            )
+            curve = model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(points),
+                None,
+                False,
+            )
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context,
+                "Annotation",
+                "GeometricCurveSet",
+                [model.createIfcGeometricCurveSet([curve])],
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model,
+                product=annotation,
+                representation=representation,
+            )
+            annotation_pset = ifcopenshell.api.pset.add_pset(
+                model,
+                product=annotation,
+                name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model,
+                pset=annotation_pset,
+                properties={"Classes": classes},
+            )
+            return annotation
+
+        mask_source = add_rectangle(
+            f"{annotation_name} Mask Source",
+            mask_points,
+            "roof-opening-mask-source",
+        )
+        outline = add_rectangle(
+            annotation_name,
+            outline_points,
+            "roof-opening dashed",
+        )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[mask_source, outline],
+        )
+        self._annotated_roof_openings.add(opening_identity)
+        return outline
 
     def add_wall_batting(
         self,
@@ -10156,7 +10499,11 @@ class Roof(ifcopenshell.entity_instance):
             ):
                 raise ValueError("roof opening overlaps another opening")
 
-        opening = RoofOpening(opening_name, rectangle_bounds)
+        opening = RoofOpening(
+            opening_name,
+            rectangle_bounds,
+            roof=self,
+        )
         self._openings.append(opening)
         for plane in self._planes:
             for element in plane.elements:
@@ -10719,9 +11066,12 @@ class RoofOpening:
         self,
         name: str,
         rectangle: tuple[tuple[float, float], tuple[float, float]],
+        *,
+        roof: Roof | None = None,
     ) -> None:
         self.name = name
         self.rectangle = rectangle
+        self.roof = roof
         self._elements: list[ifcopenshell.entity_instance] = []
 
     @property

@@ -419,9 +419,11 @@ window_kk = wall_back_g.add_door(
 	opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",)
 
+WINDOW_POKOJ_DOLE_2_AT = 1
+WINDOW_POKOJ_DOLE_2_WIDTH = 1
 window_pokoj_dole_2 = wall_1a_g.add_window(
-	at=1,#HOUSE_DEPTH/2-0.75-BWT,
-	width=1,
+	at=WINDOW_POKOJ_DOLE_2_AT,#HOUSE_DEPTH/2-0.75-BWT,
+	width=WINDOW_POKOJ_DOLE_2_WIDTH,
 	sill_height=GROUND_WINDOW_HEIGHT-0.75,
 	height=GROUND_WINDOW_HEIGHT)
 
@@ -2642,6 +2644,19 @@ if "ground" in sys.argv:
 		storeys=[ground],
 		right_panel_width=40,
 	)
+	drawing1.add_note(
+		point=(
+			wall_1a_g.start[0]+BWT,
+			wall_1a_g.start[1]
+			- WINDOW_POKOJ_DOLE_2_AT
+			- WINDOW_POKOJ_DOLE_2_WIDTH,
+		),
+		angle=-65,
+		distance=1.2,
+		text="Neotvíratelné okno\ns bílým sklem",
+		name="Ground note - neotvíratelné okno s bílým sklem",
+		text_alignment="bottom-right",
+	)
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
@@ -2825,6 +2840,45 @@ if "upper" in sys.argv:
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 
+# Roof framing plan. Its camera is above the complete roof build-up, so all
+# selected model elements are projections rather than section cuts.
+if "roof" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Roof plan",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=ground_floor_top+total_house_height+0.5,
+		radius=8.5,
+		storeys=[roof_layer_storeys["Rafters"]],
+		door_annotations=False,
+		projected_wood_color="#f4d35e",
+		model_line_width=0.06,
+	)
+	for element in (
+		wall_dormer,
+		wall_front_u,
+		wall_back_u,
+		wall_1a_u,
+		wall_1b_u,
+		wall_gym_u,
+		wall_2,
+		wall_3,
+		wall_4_u,
+		wall_pokoj2,
+		wall_zachod_nahore,
+		*street_purlins,
+		*garden_purlins,
+		beam3,
+		beam_cut_street,
+		beam4_a,
+		beam4_b,
+		beam_dormer,
+	):
+		drawing1.include_element(element)
+	drawing1.add_roof_opening_outline(roof_window_opening)
+
+	drawing1.render("roof.svg", png=True, png_dpi=600)
+
 if "ceiling" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Drawing 2", x=6, y=4, z=ground_floor_height+0.1, radius=8, storeys=[upper]
@@ -2877,7 +2931,7 @@ if "aa" in sys.argv:
 		),
 		angle=60,
 		distance=1.7,
-		text="Instalační otvor pro\nvedení rekuperace",
+		text=" Instalační otvor pro\n vedení rekuperace",
 		name="AA note - instalační otvor pro vedení rekuperace",
 	)
 	drawing1.add_material_legend([

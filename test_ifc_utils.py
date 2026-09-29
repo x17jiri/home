@@ -44,11 +44,13 @@ from ifc_utils import (
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
     _postprocess_hexagon_marker_overlays,
+    _postprocess_model_line_width,
     _postprocess_note_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
     _postprocess_projected_wood_fills,
+    _postprocess_roof_opening_masks,
     _postprocess_pavatex_batting,
     _postprocess_ring_beam_stirrups,
     _postprocess_roof_batting,
@@ -6612,6 +6614,11 @@ class HouseTests(unittest.TestCase):
             distance=1.5,
             text="Detail",
             name="Section note",
+            text_alignment="bottom-right",
+        )
+        self.assertEqual(
+            elevation_note.Representation.Representations[0].Items[0].BoxAlignment,
+            "bottom-right",
         )
         np.testing.assert_allclose(
             ifcopenshell.util.placement.get_local_placement(
@@ -6665,6 +6672,14 @@ class HouseTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "greater than zero"):
             plan.add_note((1, 2), 0, 0, "Invalid")
+        with self.assertRaisesRegex(ValueError, "text_alignment"):
+            plan.add_note(
+                (1, 2),
+                0,
+                1,
+                "Invalid",
+                text_alignment="center",
+            )
         oblique = house.add_drawing(
             "Oblique section",
             2,
@@ -6836,8 +6851,138 @@ class HouseTests(unittest.TestCase):
             ".PredefinedType-LINEWORK.load-bearing-wall-outline",
             shared_rule,
         )
+        self.assertIn(
+            ".PredefinedType-LINEWORK.roof-opening",
+            shared_rule,
+        )
         self.assertIn("stroke-width: 0.1 !important", shared_rule)
         self.assertIn("stroke-dasharray: 0.7 0.8 !important", shared_rule)
+
+        roof_opening_rule = stylesheet.split(
+            ".roof-opening-mask", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", roof_opening_rule)
+        self.assertIn("stroke: none !important", roof_opening_rule)
+        self.assertIn(
+            ".PredefinedType-LINEWORK.roof-opening-mask-source",
+            stylesheet,
+        )
+
+    def test_adds_white_backed_dashed_roof_opening_outline(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        opening = roof.add_opening(
+            "Bedroom roof window",
+            rectangle=((3, 2), (2, 1)),
+        )
+        drawing = house.add_drawing(
+            "Roof plan",
+            2,
+            2,
+            8,
+            5,
+            storeys=[upper],
+        )
+        other_drawing = house.add_drawing(
+            "Other plan",
+            2,
+            2,
+            8,
+            5,
+            storeys=[upper],
+        )
+
+        outline = drawing.add_roof_opening_outline(opening)
+
+        self.assertEqual(outline.ObjectType, "LINEWORK")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                outline,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "roof-opening dashed",
+        )
+        curve = outline.Representation.Representations[0].Items[0].Elements[0]
+        self.assertEqual(
+            [tuple(point) for point in curve.Points.CoordList],
+            [
+                (2.05, 1.05),
+                (2.95, 1.05),
+                (2.95, 1.95),
+                (2.05, 1.95),
+                (2.05, 1.05),
+            ],
+        )
+        mask_source = next(
+            annotation
+            for annotation in drawing.group.IsGroupedBy[0].RelatedObjects
+            if ifcopenshell.util.element.get_pset(
+                annotation,
+                "EPset_Annotation",
+                "Classes",
+            )
+            == "roof-opening-mask-source"
+        )
+        mask_curve = (
+            mask_source.Representation.Representations[0].Items[0].Elements[0]
+        )
+        self.assertEqual(
+            [tuple(point) for point in mask_curve.Points.CoordList],
+            [
+                (2.02, 1.0),
+                (2.98, 1.0),
+                (2.98, 2.0),
+                (2.02, 2.0),
+                (2.02, 1.0),
+            ],
+        )
+        placement = ifcopenshell.util.placement.get_local_placement(
+            outline.ObjectPlacement
+        )
+        self.assertAlmostEqual(placement[2, 3], 3)
+        self.assertIn(outline, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(
+            mask_source,
+            drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+        self.assertNotIn(
+            outline,
+            other_drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+        self.assertNotIn(
+            mask_source,
+            other_drawing.group.IsGroupedBy[0].RelatedObjects,
+        )
+        with self.assertRaisesRegex(ValueError, "already has an outline"):
+            drawing.add_roof_opening_outline(opening)
+        with self.assertRaisesRegex(ValueError, "must not be negative"):
+            other_drawing.add_roof_opening_outline(opening, inset=-0.01)
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            other_drawing.add_roof_opening_outline(opening, inset=0.5)
+        with self.assertRaisesRegex(ValueError, "mask_horizontal_inset"):
+            other_drawing.add_roof_opening_outline(
+                opening,
+                mask_horizontal_inset=-0.01,
+            )
+        with self.assertRaisesRegex(ValueError, "non-empty roof opening mask"):
+            other_drawing.add_roof_opening_outline(
+                opening,
+                mask_horizontal_inset=0.5,
+            )
+
+        elevation = house.add_drawing(
+            "Elevation",
+            2,
+            0,
+            3,
+            5,
+            view="elevation",
+            direction=(0, 1, 0),
+        )
+        with self.assertRaisesRegex(ValueError, "only supported for plan"):
+            elevation.add_roof_opening_outline(opening)
 
     def test_adds_direction_aware_wall_batting_split_at_openings(self) -> None:
         house = House("My house")
@@ -8796,6 +8941,155 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: white !important", projected_rule)
         self.assertIn("fill: #f4d35e !important", cut_rule)
+
+    def test_overrides_projected_wood_fill_for_one_plan(self) -> None:
+        house = House("My house")
+        drawing = house.add_drawing(
+            "Roof plan",
+            2,
+            3,
+            8,
+            5,
+            projected_wood_color="#f4d35e",
+        )
+        other_drawing = house.add_drawing("Upper plan", 2, 3, 4, 5)
+
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        other_properties = ifcopenshell.util.element.get_pset(
+            other_drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertEqual(properties["ProjectedWoodColor"], "#f4d35e")
+        self.assertNotIn("ProjectedWoodColor", other_properties)
+
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "roof.svg"
+            svg_path.write_text(
+                """<svg>
+  <g class="IfcBeam material-Wood projection">
+    <path d="M0,0 L2,0 L2,1 L0,1 L0,0"/>
+  </g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_projected_wood_fills(
+                svg_path,
+                color=properties["ProjectedWoodColor"],
+            )
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertIn(
+                '<polygon class="projected-wood-fill" '
+                'style="fill: #f4d35e !important;" '
+                'points="0,0 2,0 2,1 0,1"/>',
+                svg,
+            )
+
+        with self.assertRaisesRegex(ValueError, "only supported for plan"):
+            house.add_drawing(
+                "Invalid elevation",
+                2,
+                0,
+                2,
+                5,
+                view="elevation",
+                direction=(0, 1, 0),
+                projected_wood_color="yellow",
+            )
+
+    def test_masks_projected_members_behind_roof_opening_outline(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "roof.svg"
+            svg_path.write_text(
+                """<svg>
+  <polygon id="projected-rafter-fill" points="4,0 6,0 6,10 4,10"/>
+  <line class="GlobalId-MASK IfcAnnotation PredefinedType-LINEWORK roof-opening-mask-source" x1="3" y1="4" x2="7" y2="4"/>
+  <line class="GlobalId-MASK IfcAnnotation PredefinedType-LINEWORK roof-opening-mask-source" x1="7" y1="4" x2="7" y2="8"/>
+  <line class="GlobalId-MASK IfcAnnotation PredefinedType-LINEWORK roof-opening-mask-source" x1="7" y1="8" x2="3" y2="8"/>
+  <line class="GlobalId-MASK IfcAnnotation PredefinedType-LINEWORK roof-opening-mask-source" x1="3" y1="8" x2="3" y2="4"/>
+  <line class="GlobalId-OPENING IfcAnnotation PredefinedType-LINEWORK roof-opening dashed" x1="3.5" y1="4.5" x2="6.5" y2="4.5"/>
+  <line class="GlobalId-OPENING IfcAnnotation PredefinedType-LINEWORK roof-opening dashed" x1="6.5" y1="4.5" x2="6.5" y2="7.5"/>
+  <line class="GlobalId-OPENING IfcAnnotation PredefinedType-LINEWORK roof-opening dashed" x1="6.5" y1="7.5" x2="3.5" y2="7.5"/>
+  <line class="GlobalId-OPENING IfcAnnotation PredefinedType-LINEWORK roof-opening dashed" x1="3.5" y1="7.5" x2="3.5" y2="4.5"/>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_roof_opening_masks(svg_path)
+            _postprocess_roof_opening_masks(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            mask = (
+                '<polygon class="roof-opening-mask" '
+                'points="3,4 7,4 7,8 3,8"/>'
+            )
+            self.assertEqual(svg.count(mask), 1)
+            self.assertNotIn("roof-opening-mask-source", svg)
+            self.assertGreater(svg.index(mask), svg.index("projected-rafter-fill"))
+            self.assertLess(svg.index(mask), svg.index("roof-opening dashed"))
+
+    def test_applies_drawing_specific_model_line_width(self) -> None:
+        house = House("My house")
+        drawing = house.add_drawing(
+            "Roof plan",
+            2,
+            3,
+            8,
+            5,
+            model_line_width=0.06,
+        )
+        other_drawing = house.add_drawing("Upper plan", 2, 3, 4, 5)
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        other_properties = ifcopenshell.util.element.get_pset(
+            other_drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertAlmostEqual(properties["ModelLineWidth"], 0.06)
+        self.assertNotIn("ModelLineWidth", other_properties)
+
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "roof.svg"
+            svg_path.write_text(
+                """<svg>
+  <g class="section target-view-PLANVIEW">
+    <g class="IfcBeam projection"><path d="M0,0 L1,1"/></g>
+  </g>
+  <line class="IfcAnnotation roof-opening dashed"/>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_model_line_width(svg_path, width=0.06)
+            _postprocess_model_line_width(svg_path, width=0.06)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('class="model-line-width-override"'), 1)
+            self.assertIn(
+                ".section g.cut, .section g.projection "
+                "{ stroke-width: 0.06 !important; }",
+                svg,
+            )
+            self.assertIn("IfcAnnotation roof-opening dashed", svg)
+
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            house.add_drawing(
+                "Invalid line width",
+                2,
+                3,
+                8,
+                5,
+                model_line_width=0,
+            )
 
     def test_styles_facade_laths_with_fine_plan_lines(self) -> None:
         stylesheet = (
