@@ -12,22 +12,30 @@ Y_MIN, Y_MAX = -3, 20
 DX_PER_DY = 0.12#0.125
 DISTANCE_ALONG_LINE = 7.75
 SECOND_LINE_ANGLE = 70
-CENTER_HEIGHT = 8.40
+CENTER_HEIGHT = 8.37
 SLOPE = 0.72
 WINDOW_HEIGHT = 1.5 + 0.75
 
 # Move the entire polygon by changing only this point.
-POLYGON_ORIGIN = (-3.75, 4.25+8.5/2)
+POLYGON_ORIGIN = (-3.70, 4.4+8.5/2)
 
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
-POLYGON_POINTS: tuple[tuple[float, float], ...] = (
-    (-12, -8.5/2),
-	(-1.75, -8.5/2),
-	(-1.75, -8.5/2+1.75),
-	(0, -8.5/2+1.75),
-	(0, +8.5/2),
-	(-12, +8.5/2)
-)
+if 0:
+	POLYGON_POINTS: tuple[tuple[float, float], ...] = (
+		(-12, -8.5/2),
+		(0, -8.5/2),
+		(0, +8.5/2),
+		(-12, +8.5/2)
+	)
+else:
+	POLYGON_POINTS: tuple[tuple[float, float], ...] = (
+		(-12, -8.5/2),
+		(-1.75, -8.5/2),
+		(-1.75, -8.5/2+2.25),
+		(0, -8.5/2+2.25),
+		(0, +8.5/2),
+		(-12, +8.5/2)
+	)
 
 OUTPUT_FILE = Path(__file__).with_name("shadow.png")
 

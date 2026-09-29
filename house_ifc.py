@@ -94,7 +94,7 @@ UNDER_RAFTER_BATTING_THICKNESS = max(
 	THERMAL_INSULATION_UNDER_RAFTERS - 0.02,
 )
 UNDER_RAFTER_BATTING_END_INSET = 0.015
-INSTALLATION_SPACE_THICKNESS = 0.05
+INSTALLATION_SPACE_THICKNESS = 0.06
 GYPSUM_PLASTERBOARD_THICKNESS = 0.025
 WOOD_FIBERBOARD_THICKNESS = 0.08
 WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
@@ -126,6 +126,7 @@ RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 0.797 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.24
+VAZNICE_EXTRA_HEIGHT = 0.08
 VAZNICE_BASE = 0.24
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.005
@@ -234,6 +235,8 @@ KK_WIDTH = 2.50 + 0.01
 wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
+MIDDLE_PURLIN_X_MIN = wall2_x - BWT / 2
+MIDDLE_PURLIN_X_MAX = wall3_x - BWT / 2
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
@@ -693,7 +696,7 @@ wall_kitchen_2 = ground.wall(
 #	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH+0.5),
 #	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH),
 #	wall_type=partition_wall, height=ground_floor_height)
-wall_kitchen_1.add_door(
+kitchen_door = wall_kitchen_1.add_door(
 	at=1.25,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
@@ -704,7 +707,7 @@ wall_kitchen_1.add_door(
 )
 
 # Pokoj Risanek
-wall_gym_g.add_door(
+pokoj0_door = wall_gym_g.add_door(
 	at=wall2_x-2*BWT-0.25-1,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
@@ -715,7 +718,7 @@ wall_gym_g.add_door(
 )
 
 # Oblouk
-wall_3.add_opening(
+oblouk = wall_3.add_opening(
 	at=oblouk_at,
 	width=2.5,
     height=ground_floor_height-0.5,
@@ -724,7 +727,7 @@ wall_3.add_opening(
 )
 
 # Bathroom
-wall_3.add_door(
+bathroom_door = wall_3.add_door(
     at=BWT+math.floor((CHODBA_DEPTH-1)/0.125)*0.125,
     opening_width=1.0, width=0.9,
     height=GROUND_DOOR_HEIGHT,
@@ -1040,7 +1043,10 @@ zachod_nahore = upper.floor_layer(
 
 STREET_ROOF_JOINT_Y = HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE
 GARDEN_ROOF_JOINT_Y = HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE
-ROOF_JOINT_Z = UPPER_FLOOR_START + UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE + VAZNICE_HEIGHT
+PURLIN_WALL_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
+ROOF_JOINT_Z = (
+	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
+)
 STREET_ROOF_PLANE_POINTS = (
 	(0, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(10, STREET_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -1129,9 +1135,9 @@ wall_cuts_1_4 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
-		(0, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
-		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
+		(0, HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
+		(0, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
+		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
@@ -1139,9 +1145,9 @@ wall_cuts_2_3 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*DORMER_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
-		(0, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
-		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE),
+		(0, HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
+		(0, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
+		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
 	),
 ]
 
@@ -1180,27 +1186,43 @@ wall_3 = upper.wall(
 wall_3.add_opening(
 	at=3.625-BWT, width=0.75, height=UNDER_HOLE+HOLE_HEIGHT, sill_height=UNDER_HOLE)
 
-wall_3.add_opening(
+sklad_opening = wall_3.add_opening(
     at=GALERY_START-BWT,
     width=1,
     height=2.25,
 )
 
+
+def add_purlin_wall_recess(wall, *, side, wall_name):
+	"""Lower one half of a wall along its full length for the larger purlin."""
+	return wall.add_recess(
+		at=0,
+		width=wall.length,
+		depth=BWT / 2,
+		height=VAZNICE_EXTRA_HEIGHT,
+		sill_height=PURLIN_WALL_TOP_HEIGHT - VAZNICE_EXTRA_HEIGHT,
+		side=side,
+		top_extension=0.01,
+		name=f"{wall_name} purlin recess",
+	)
+
+
+add_purlin_wall_recess(wall_2, side="right", wall_name="Wall 2")
+add_purlin_wall_recess(wall_3, side="left", wall_name="Wall 3")
+
 wall_4_u = upper.wall(
-	(HOUSE_WIDTH, 0.002), (HOUSE_WIDTH, HOUSE_DEPTH-0.002),
+	(HOUSE_WIDTH, BWT), (HOUSE_WIDTH, HOUSE_DEPTH-BWT),
 	wall_type=load_bearing_wall,
 	height=4,
 	cuts=wall_cuts_1_4,
 )
-wall_4_u.add_opening(at=0, width=BWT, height=1.5, sill_height=NADEZDIVKA)
-wall_4_u.add_opening(at=HOUSE_DEPTH-BWT-0.002*2, width=BWT, height=1.5, sill_height=NADEZDIVKA)
 
 wall_pokoj2 = upper.wall(
 	start=(wall2_x, GALERY_END),
 	end=(wall3_x-BWT, GALERY_END),
 	wall_type=dry_wall, height=2.85)
 UPPER_DOOR_HEIGHT = 2.25
-wall_pokoj2.add_door(
+pokoj2_door = wall_pokoj2.add_door(
 	at=0.125,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
@@ -1211,7 +1233,7 @@ wall_zachod_nahore = upper.wall(
 	start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
 	end=(wall3_x, wall_zachod_nahore_y),
 	wall_type=dry_wall, height=2.85)
-wall_zachod_nahore.add_door(
+zachod_nahore_door = wall_zachod_nahore.add_door(
 	at=0.8,
 	opening_width=0.8, width=0.7,
 	height=UPPER_DOOR_HEIGHT,
@@ -1248,21 +1270,44 @@ upper.asset(
 #upper.connect_wall(wall_4_u, wall_back_u)
 
 
-beam1 = upper.beam(
-    "Beam",
-    start=(-0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
-    end=(HOUSE_WIDTH+0.2, HALF_DEPTH-VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
-    size=(0.16, VAZNICE_HEIGHT),
-    material="Wood",
-    kind="BEAM",
+PURLIN_TOP_Z = (
+	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
 )
-beam2 = upper.beam(
-    "Beam",
-    start=(-0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
-    end=(HOUSE_WIDTH+0.2, HALF_DEPTH+VAZNICE_DIST, UPPER_FLOOR_START+UNDER_HOLE+HOLE_HEIGHT+ABOVE_HOLE+VAZNICE_HEIGHT/2),
-    size=(0.16, VAZNICE_HEIGHT),
-    material="Wood",
-    kind="BEAM",
+PURLIN_X_SEGMENTS = (
+	("left", -0.2, MIDDLE_PURLIN_X_MIN, VAZNICE_HEIGHT),
+	(
+		"middle",
+		MIDDLE_PURLIN_X_MIN,
+		MIDDLE_PURLIN_X_MAX,
+		VAZNICE_HEIGHT + VAZNICE_EXTRA_HEIGHT,
+	),
+	("right", MIDDLE_PURLIN_X_MAX, HOUSE_WIDTH + 0.2, VAZNICE_HEIGHT),
+)
+
+
+def add_purlin_segments(name, y):
+	"""Add one three-piece purlin with a common top elevation."""
+	segments = []
+	for segment_name, x_start, x_end, height in PURLIN_X_SEGMENTS:
+		center_z = PURLIN_TOP_Z - height / 2
+		segments.append(upper.beam(
+			f"{name} purlin {segment_name}",
+			start=(x_start, y, center_z),
+			end=(x_end, y, center_z),
+			size=(VAZNICE_BASE, height),
+			material="Wood",
+			kind="BEAM",
+		))
+	return tuple(segments)
+
+
+street_purlins = add_purlin_segments(
+	"Street",
+	HALF_DEPTH - VAZNICE_DIST,
+)
+garden_purlins = add_purlin_segments(
+	"Garden",
+	HALF_DEPTH + VAZNICE_DIST,
 )
 beam3 = upper.beam(
     "Beam",
@@ -1331,7 +1376,7 @@ window_dormer_2 = wall_dormer.add_window(
 	at=BWT+KITCHEN_WIDTH-0.25-1.375,
 	width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
-wall_2.add_door(
+pokoj1_door = wall_2.add_door(
 	at=GALERY_START-GYM_DEPTH-BWT,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
@@ -1350,7 +1395,7 @@ window_pokoj_nahore_2 = wall_gym_u.add_window(
 )
 # Okno k sousedum nahore
 window_sklad = wall_4_u.add_window(
-	at=HALF_DEPTH-0.5,
+	at=HALF_DEPTH-BWT-0.5,
 	width=1,
 	height=2.375,
 	sill_height=NADEZDIVKA, partition="SINGLE_PANEL",)
@@ -1660,6 +1705,7 @@ roof_layer_storeys.update({
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
 })
 roof_fiberboards = {}
+roof_under_rafter_insulations = {}
 for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.ObjectType = "ROOF_LAYER"
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
@@ -1698,6 +1744,14 @@ FLAT_CEILING_INNER_LAYER_LAYOUT = {
 		top - bottom,
 	)
 	for layer_name, (bottom, top) in FLAT_CEILING_LAYER_HEIGHTS.items()
+}
+MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT = {
+	**FLAT_CEILING_INNER_LAYER_LAYOUT,
+	"Vapour barrier": (
+		FLAT_CEILING_INNER_LAYER_LAYOUT["Vapour barrier"][0]
+		- VAZNICE_EXTRA_HEIGHT,
+		VAPOUR_BARRIER_THICKNESS,
+	),
 }
 UNDERLAY_BOTTOM = WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
@@ -1804,6 +1858,8 @@ def add_continuous_roof_layers(
 	inner_layout=SLOPED_INNER_LAYER_LAYOUT,
 	include_under_rafter_insulation=True,
 	include_inner_finishes=True,
+	include_vapour_barrier=True,
+	include_gypsum=True,
 	include_outer=True,
 	outer_x_range=None,
 ):
@@ -1848,10 +1904,11 @@ def add_continuous_roof_layers(
 				color="#E8D36D",
 				extra_cuts=inner_cuts,
 			)
+			roof_under_rafter_insulations[name] = insulation
 			roof_layer_storeys["Thermal insulation under rafters"].add(
 				insulation
 			)
-	if include_inner_finishes:
+	if include_inner_finishes and include_vapour_barrier:
 		vapour_barrier_bottom, vapour_barrier_thickness = inner_layout[
 			"Vapour barrier"
 		]
@@ -1866,6 +1923,7 @@ def add_continuous_roof_layers(
 			extra_cuts=inner_cuts,
 		)
 		roof_layer_storeys["Vapour barrier"].add(vapour_barrier)
+	if include_inner_finishes and include_gypsum:
 		gypsum_bottom, gypsum_thickness = inner_layout["Gypsum plasterboard"]
 		gypsum_plasterboard = plane.layer(
 			f"{name} gypsum plasterboard",
@@ -1908,10 +1966,13 @@ def add_continuous_roof_layers(
 		roof_layer_storeys["Roof tiles"].add(tiles)
 
 
-def independent_inner_layer_boundaries(slope_plane):
+def independent_inner_layer_boundaries(
+	slope_plane,
+	flat_layout=FLAT_CEILING_INNER_LAYER_LAYOUT,
+):
 	"""Return matching slope/ceiling endpoints for the interior finishes."""
 	boundaries = {}
-	for layer_name, (flat_bottom, _) in FLAT_CEILING_INNER_LAYER_LAYOUT.items():
+	for layer_name, (flat_bottom, _) in flat_layout.items():
 		slope_bottom = SLOPED_INNER_LAYER_LAYOUT[layer_name][0]
 		flat_z = flat_ceiling_roof.to_world((0, 0, flat_bottom))[2]
 		slope_origin_z = slope_plane.to_world((0, 0, slope_bottom))[2]
@@ -1971,6 +2032,14 @@ cut_street_inner_boundaries = independent_inner_layer_boundaries(
 )
 garden_inner_boundaries = independent_inner_layer_boundaries(garden_roof)
 dormer_inner_boundaries = independent_inner_layer_boundaries(dormer_roof)
+middle_street_inner_boundaries = independent_inner_layer_boundaries(
+	street_roof,
+	MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT,
+)
+middle_dormer_inner_boundaries = independent_inner_layer_boundaries(
+	dormer_roof,
+	MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT,
+)
 cut_street_outer_y_min, cut_street_outer_y_max = local_y_limits_from_cuts(
 	cut_street_roof,
 	ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS / 2,
@@ -2082,7 +2151,8 @@ for part_name, (x_min, x_max), outer_x_range in zip(
 		inner_y_limits=sloped_inner_y_limits(
 			street_roof, street_inner_boundaries, 0.25
 		),
-)
+		include_vapour_barrier=part_name != "Street segment 2",
+	)
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 0", *roof_under_rafter_x_ranges[0],
 	roof_y_min, roof_y_max,
@@ -2116,6 +2186,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		dormer_roof, dormer_inner_boundaries, 7.75
 	),
+	include_vapour_barrier=False,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 3", *roof_under_rafter_x_ranges[3],
@@ -2166,6 +2237,95 @@ for (
 		),
 		inner_layout=FLAT_CEILING_INNER_LAYER_LAYOUT,
 		include_under_rafter_insulation=False,
+		include_vapour_barrier=part_name != "Flat ceiling segment 2",
+		include_outer=False,
+	)
+
+# Segment 2 crosses the taller middle purlin.  Its vapour barrier therefore
+# follows the two collar-tie elevations while the plasterboard remains on one
+# continuous plane below it.
+for (
+	part_name,
+	x_min,
+	x_max,
+	flat_layout,
+	street_side_boundaries,
+	garden_side_boundaries,
+) in (
+	(
+		"left shoulder",
+		roof_under_rafter_x_ranges[2][0],
+		MIDDLE_PURLIN_X_MIN,
+		FLAT_CEILING_INNER_LAYER_LAYOUT,
+		street_inner_boundaries,
+		dormer_inner_boundaries,
+	),
+	(
+		"lower middle",
+		MIDDLE_PURLIN_X_MIN,
+		MIDDLE_PURLIN_X_MAX,
+		MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT,
+		middle_street_inner_boundaries,
+		middle_dormer_inner_boundaries,
+	),
+	(
+		"right shoulder",
+		MIDDLE_PURLIN_X_MAX,
+		roof_under_rafter_x_ranges[2][1],
+		FLAT_CEILING_INNER_LAYER_LAYOUT,
+		street_inner_boundaries,
+		dormer_inner_boundaries,
+	),
+):
+	add_continuous_roof_layers(
+		street_roof,
+		f"Street segment 2 vapour barrier {part_name}",
+		x_min,
+		x_max,
+		roof_y_min,
+		roof_y_max,
+		inner_cuts=roof_inner_cuts,
+		inner_y_limits=sloped_inner_y_limits(
+			street_roof,
+			street_side_boundaries,
+			0.25,
+		),
+		include_under_rafter_insulation=False,
+		include_gypsum=False,
+		include_outer=False,
+	)
+	add_continuous_roof_layers(
+		dormer_roof,
+		f"Dormer segment 2 vapour barrier {part_name}",
+		x_min,
+		x_max,
+		0,
+		roof_y_max - 1,
+		inner_cuts=roof_inner_cuts,
+		inner_y_limits=sloped_inner_y_limits(
+			dormer_roof,
+			garden_side_boundaries,
+			7.75,
+		),
+		include_under_rafter_insulation=False,
+		include_gypsum=False,
+		include_outer=False,
+	)
+	add_continuous_roof_layers(
+		flat_ceiling_roof,
+		f"Flat ceiling segment 2 vapour barrier {part_name}",
+		x_min,
+		x_max,
+		BWT - STREET_ROOF_JOINT_Y,
+		HOUSE_DEPTH - BWT - STREET_ROOF_JOINT_Y,
+		inner_cuts=roof_inner_cuts,
+		inner_y_limits=flat_inner_y_limits(
+			street_side_boundaries,
+			garden_side_boundaries,
+		),
+		inner_layout=flat_layout,
+		include_under_rafter_insulation=False,
+		include_gypsum=False,
 		include_outer=False,
 	)
 
@@ -2238,21 +2398,26 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 			("left", -COLLAR_TIE_X_OFFSET),
 			("right", COLLAR_TIE_X_OFFSET),
 		):
+			collar_tie_x = rafter_x + x_offset
+			collar_tie_top_height = COLLAR_TIE_TOP_HEIGHT
+			if MIDDLE_PURLIN_X_MIN <= collar_tie_x <= MIDDLE_PURLIN_X_MAX:
+				collar_tie_top_height -= VAZNICE_EXTRA_HEIGHT
+			collar_tie_center_z = (
+				UPPER_FLOOR_START
+				+ collar_tie_top_height
+				- COLLAR_TIE_SIZE[1] / 2
+			)
 			collar_tie = upper.beam(
 				f"Collar tie {i + 1} {side}",
 				start=(
-					rafter_x + x_offset,
+					collar_tie_x,
 					STREET_ROOF_JOINT_Y - COLLAR_TIE_EXTENSION,
-					UPPER_FLOOR_START
-					+ COLLAR_TIE_BOTTOM_HEIGHT
-					+ COLLAR_TIE_SIZE[1] / 2,
+					collar_tie_center_z,
 				),
 				end=(
-					rafter_x + x_offset,
+					collar_tie_x,
 					GARDEN_ROOF_JOINT_Y + COLLAR_TIE_EXTENSION,
-					UPPER_FLOOR_START
-					+ COLLAR_TIE_BOTTOM_HEIGHT
-					+ COLLAR_TIE_SIZE[1] / 2,
+					collar_tie_center_z,
 				),
 				size=COLLAR_TIE_SIZE,
 				material="Wood",
@@ -2440,8 +2605,8 @@ def common_wall_insulation(
 		wall_4,
 		thickness=POLYSTYRENE_INSULATION_THICKNESS,
 		material="polystyrene",
-		start_extension=POLYSTYRENE_INSULATION_THICKNESS,
-		end_extension=ROCKWOOL_INSULATION_THICKNESS,
+		start_y=-POLYSTYRENE_INSULATION_THICKNESS,
+		end_y=HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS,
 	)
 
 if "found" in sys.argv:
@@ -2472,7 +2637,6 @@ if "ground" in sys.argv:
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
-		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"thermal-impact-insulation",
 			f"Fasádní izolace - Polystyren "
@@ -2543,6 +2707,18 @@ if "ground" in sys.argv:
 		wall_front_g, wall_1a_g, wall_1b_g, wall_gym_g, wall_back_g, wall_4_g
 	)
 
+	drawing1.add_lintel(front_door, 1, position="after")
+	drawing1.add_lintel(kitchen_door, 2, position="after", direction="in")
+	drawing1.add_lintel(window_kk, 3, direction="in")
+	drawing1.add_lintel(pokoj0_door, 3, direction="in")
+	drawing1.add_lintel(bathroom_door, 3)
+	drawing1.add_lintel(window_bathroom, 4, position="after")
+	drawing1.add_lintel(window_pokoj_dole, 5, direction="in")
+	drawing1.add_lintel(window_pokoj_dole_2, 6, direction="in")
+	drawing1.add_lintel(window_obyvak, 7, position="after", direction="in")
+	drawing1.add_lintel(oblouk, 8)
+	drawing1.add_lintel_legend()
+
 	drawing1.render("ground.svg", png=True, png_dpi=600)
 
 # Drawing 2 - upper floor
@@ -2560,7 +2736,15 @@ if "upper" in sys.argv:
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
-		("wood-solid", "Dřevěné části krovu"),
+		(
+			"thermal-impact-insulation",
+			f"Fasádní izolace - Polystyren "
+			f"{POLYSTYRENE_INSULATION_NOMINAL_THICKNESS * 1000:.0f} mm",
+		),
+		(
+			"rockwool-wave",
+			f"Fasádní izolace - Minerální vata 200 mm",
+		),
 	])
 
 	drawing1.add_stair_annotation(main_stairs)
@@ -2622,6 +2806,14 @@ if "upper" in sys.argv:
 		drawing1,
 		wall_front_u, wall_1a_u, wall_1b_u, wall_gym_u, wall_dormer, wall_4_u
 	)
+
+	drawing1.add_lintel(pokoj1_door, 1, position="after", direction="in")
+	drawing1.add_lintel(window_dormer_1, 2, direction="in", position="after")
+	drawing1.add_lintel(window_dormer_2, 2, direction="in")
+	drawing1.add_lintel(window_pokoj_nahore_2, 3)
+	drawing1.add_lintel(window_sklad, 1, position="after", direction="in")
+	drawing1.add_lintel(sklad_opening, 1, position="after")
+	drawing1.add_lintel_legend()
 
 	drawing1.render("upper.svg", png=True, png_dpi=600)
 
@@ -2813,19 +3005,24 @@ if "aa" in sys.argv:
 				"AA street under-rafter batting",
 				under_rafter_street_eave,
 				under_rafter_ridge,
+				roof_under_rafter_insulations["Street segment 2"],
 			),
 			(
 				"AA garden under-rafter batting",
 				under_rafter_ridge,
 				under_rafter_garden_joint,
+				roof_under_rafter_insulations[
+					"Garden segment 2 above dormer"
+				],
 			),
 			(
 				"AA dormer under-rafter batting",
 				under_rafter_garden_joint,
 				under_rafter_dormer_eave,
+				roof_under_rafter_insulations["Dormer segment 2"],
 			),
 		)
-		for batting_name, batting_start, batting_end in (
+		for batting_name, batting_start, batting_end, insulation in (
 			under_rafter_batting_segments
 		):
 			drawing1.add_batting(
@@ -2836,7 +3033,11 @@ if "aa" in sys.argv:
 				),
 				thickness=UNDER_RAFTER_BATTING_THICKNESS,
 				name=batting_name,
-				classes="roof-batting under-rafter-batting",
+				classes=(
+					"roof-batting under-rafter-batting "
+					f"under-rafter-owner-{insulation.element.GlobalId} "
+					"under-rafter-target-projection"
+				),
 			)
 
 	pavatex_ridge = roof_batting_intersection(

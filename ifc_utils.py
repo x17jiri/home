@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from difflib import get_close_matches
 from html import escape
 import json
-from math import atan2, cos, hypot, isclose, isfinite, pi, radians, sin
+from math import atan2, ceil, cos, hypot, isclose, isfinite, pi, radians, sin
 from os import PathLike, environ
 from pathlib import Path
 import re
@@ -123,6 +123,8 @@ FurnitureKind: TypeAlias = Literal[
 
 _DOOR_DIMENSION_WIDTH_OFFSET = 0.12
 _DOOR_DIMENSION_HEIGHT_OFFSET = 0.15
+_LINTEL_TAG_ALONG_OFFSET = 0.45
+_LINTEL_TAG_NORMAL_OFFSET = 0.65
 
 
 @dataclass(frozen=True)
@@ -1279,32 +1281,108 @@ def _postprocess_roof_batting(
         svg_path,
         annotation_class="roof-batting",
     )
-    _move_annotation_polylines_to_front(
-        svg_path,
-        annotation_class="under-rafter-batting",
-    )
 
 
-def _move_annotation_polylines_to_front(
-    svg_path: Path,
-    *,
-    annotation_class: str,
-) -> None:
-    """Move selected standalone annotation polylines to the SVG foreground."""
+_UNDER_RAFTER_BATTING_OWNER_PREFIX = "under-rafter-owner-"
+
+
+def _postprocess_under_rafter_batting_depth(svg_path: Path) -> None:
+    """Give under-rafter batting the SVG depth of its insulation slab.
+
+    Bonsai emits annotations after model geometry, which otherwise makes this
+    batting cover purlins regardless of their actual elevation-view depth.
+    The annotations carry their insulation slab's IFC GUID and are moved into
+    the last matching product group after elevation depth processing. That
+    keeps the symbol with its physical layer instead of forcing it to the
+    foreground.
+    """
     svg = svg_path.read_text(encoding="utf-8")
-    annotation_class = re.escape(annotation_class)
-    polyline = re.compile(
-        rf'<polyline\b[^>]*\bclass="[^"]*\b{annotation_class}\b[^"]*"[^>]*/>',
+    simple_group = re.compile(
+        r"<g\b(?P<attrs>[^>]*)>"
+        r"(?P<body>(?:(?!</?g\b).)*?)"
+        r"</g>",
         re.DOTALL,
     )
-    elements = polyline.findall(svg)
-    if not elements:
+    batting = re.compile(
+        r"<polyline\b[^>]*\bclass=\"[^\"]*\bunder-rafter-batting\b"
+        r"[^\"]*\"[^>]*/>",
+        re.DOTALL,
+    )
+    pending: list[tuple[str, str, str]] = []
+
+    def collect_batting(match: re.Match[str]) -> str:
+        element = match.group(0)
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', element))
+        classes = attributes.get("class", "").split()
+        owner_class = next(
+            (
+                class_name
+                for class_name in classes
+                if class_name.startswith(_UNDER_RAFTER_BATTING_OWNER_PREFIX)
+            ),
+            None,
+        )
+        target_class = next(
+            (
+                class_name.removeprefix("under-rafter-target-")
+                for class_name in classes
+                if class_name.startswith("under-rafter-target-")
+            ),
+            None,
+        )
+        if owner_class is None or target_class not in {"cut", "projection"}:
+            return element
+        pending.append(
+            (
+                owner_class.removeprefix(
+                    _UNDER_RAFTER_BATTING_OWNER_PREFIX
+                ),
+                target_class,
+                element,
+            )
+        )
+        return ""
+
+    svg = batting.sub(collect_batting, svg)
+    if not pending:
         return
-    svg = polyline.sub("", svg)
-    root_end = svg.rfind("</svg>")
-    if root_end < 0:
-        raise ValueError(f"SVG root closing tag not found in {svg_path}")
-    svg = f'{svg[:root_end]}{"".join(elements)}{svg[root_end:]}'
+
+    unresolved: list[str] = []
+    for owner_guid, target_class, element in pending:
+        matching_groups: list[re.Match[str]] = []
+        for group in simple_group.finditer(svg):
+            attributes = dict(
+                re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
+            )
+            classes = attributes.get("class", "").split()
+            group_guids = {
+                token for token in classes if _IFC_GLOBAL_ID.fullmatch(token)
+            }
+            if ifc_guid := attributes.get("ifc:guid"):
+                group_guids.add(ifc_guid)
+            if owner_guid in group_guids and target_class in classes:
+                matching_groups.append(group)
+        if not matching_groups:
+            unresolved.append(element)
+            continue
+
+        # Elevation depth handling may copy the owner into its ordered layer.
+        # The last matching group is that copy; otherwise it is the original.
+        owner_group = matching_groups[-1]
+        insertion_point = owner_group.end() - len("</g>")
+        svg = (
+            f"{svg[:insertion_point]}\n  {element}"
+            f"{svg[insertion_point:]}"
+        )
+
+    if unresolved:
+        closing_svg = svg.rfind("</svg>")
+        if closing_svg >= 0:
+            svg = (
+                f"{svg[:closing_svg]}"
+                + "\n".join(unresolved)
+                + f"\n{svg[closing_svg:]}"
+            )
     svg_path.write_text(svg, encoding="utf-8")
 
 
@@ -2084,6 +2162,160 @@ def _room_legend_svg(
     return "\n    ".join(parts), height
 
 
+def _lintel_legend_svg(
+    table: Mapping[str, object],
+    *,
+    x: float,
+    y: float,
+    width: float,
+    units_per_mm: float,
+    layout_scale: float | None = None,
+) -> tuple[str, float]:
+    """Return one numbered lintel schedule and its SVG height."""
+    title = str(table.get("title", "LEGENDA PŘEKLADŮ"))
+    supplied_items = table.get("items", [])
+    items = supplied_items if isinstance(supplied_items, list) else []
+    width_mm = width / units_per_mm
+    if layout_scale is None:
+        layout_scale = min(1.0, width_mm / 90.0)
+
+    normalised_items: list[tuple[str, float, float, int]] = []
+    for supplied_item in items:
+        if not isinstance(supplied_item, dict):
+            continue
+        try:
+            number = str(supplied_item["number"])
+            opening_width = float(supplied_item["width"])
+            bearing = float(supplied_item["bearing"])
+            count = int(supplied_item["count"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        normalised_items.append((number, opening_width, bearing, count))
+
+    u = units_per_mm
+    title_height = 12.0 * layout_scale * u
+    heading_height = 8.0 * layout_scale * u
+    row_height = 10.0 * layout_scale * u
+    height = title_height + heading_height + len(normalised_items) * row_height
+    right = x + width
+    title_bottom = y + title_height
+    heading_bottom = title_bottom + heading_height
+    column_rights = (
+        x + width * 0.22,
+        x + width * 0.52,
+        x + width * 0.82,
+        right,
+    )
+    column_lefts = (x, *column_rights[:-1])
+    column_centres = tuple(
+        (left + right_edge) / 2
+        for left, right_edge in zip(column_lefts, column_rights)
+    )
+    parts = [
+        '<g class="right-panel-table lintel-legend">',
+        (
+            f'<rect class="right-panel-table-outline" x="{x:.6g}" '
+            f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
+        ),
+        (
+            f'<text class="right-panel-table-title" '
+            f'x="{x + width / 2:.6g}" '
+            f'y="{y + title_height / 2:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{5.5 * layout_scale:.6g}px">'
+            f'{escape(title)}</text>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{title_bottom:.6g}"/>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{heading_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{heading_bottom:.6g}"/>'
+        ),
+    ]
+    for column_right in column_rights[:-1]:
+        parts.append(
+            f'<line class="right-panel-table-grid" '
+            f'x1="{column_right:.6g}" y1="{title_bottom:.6g}" '
+            f'x2="{column_right:.6g}" y2="{y + height:.6g}"/>'
+        )
+
+    heading_y = title_bottom + heading_height / 2
+    heading_font_size = 2.8 * layout_scale
+    for heading, centre in zip(
+        ("OZNAČENÍ", "ŠÍŘKA", "ULOŽENÍ", "POČET"),
+        column_centres,
+    ):
+        parts.append(
+            f'<text class="lintel-legend-heading" x="{centre:.6g}" '
+            f'y="{heading_y:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{heading_font_size:.6g}px">'
+            f'{heading}</text>'
+        )
+
+    def millimetres(value: float) -> str:
+        text = f"{value * 1000:.1f}".rstrip("0").rstrip(".")
+        return text.replace(".", ",") + " mm"
+
+    row_y = heading_bottom
+    body_font_size = 3.4 * layout_scale
+    symbol_radius = 3.6 * layout_scale * u
+    symbol_stroke = 0.225 * layout_scale * u
+    symbol_font_size = 2.7 * layout_scale
+    for number, opening_width, bearing, count in normalised_items:
+        centre_y = row_y + row_height / 2
+        symbol_x = column_centres[0]
+        parts.extend(
+            (
+                f'<circle class="lintel-legend-symbol" cx="{symbol_x:.6g}" '
+                f'cy="{centre_y:.6g}" r="{symbol_radius:.6g}" '
+                f'style="fill:white;stroke:black;'
+                f'stroke-width:{symbol_stroke:.6g}"/>',
+                f'<line class="lintel-legend-symbol-divider" '
+                f'x1="{symbol_x - symbol_radius:.6g}" '
+                f'y1="{centre_y:.6g}" '
+                f'x2="{symbol_x + symbol_radius:.6g}" '
+                f'y2="{centre_y:.6g}" '
+                f'style="stroke:black;stroke-width:{symbol_stroke:.6g}"/>',
+                f'<text class="lintel-legend-symbol-text" '
+                f'x="{symbol_x:.6g}" '
+                f'y="{centre_y - 1.275 * layout_scale * u:.6g}" '
+                f'text-anchor="middle" dominant-baseline="middle" '
+                f'style="font-size:{symbol_font_size:.6g}px">Př</text>',
+                f'<text class="lintel-legend-symbol-text" '
+                f'x="{symbol_x:.6g}" '
+                f'y="{centre_y + 1.8 * layout_scale * u:.6g}" '
+                f'text-anchor="middle" dominant-baseline="middle" '
+                f'style="font-size:{symbol_font_size:.6g}px">'
+                f'{escape(number)}</text>',
+            )
+        )
+        for value, centre in zip(
+            (millimetres(opening_width), millimetres(bearing), str(count)),
+            column_centres[1:],
+        ):
+            parts.append(
+                f'<text class="lintel-legend-text" x="{centre:.6g}" '
+                f'y="{centre_y:.6g}" text-anchor="middle" '
+                f'dominant-baseline="middle" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{escape(value)}</text>'
+            )
+        row_y += row_height
+        if row_y < y + height - 1e-9:
+            parts.append(
+                f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+                f'y1="{row_y:.6g}" x2="{right:.6g}" '
+                f'y2="{row_y:.6g}"/>'
+            )
+    parts.append("</g>")
+    return "\n    ".join(parts), height
+
+
 def _postprocess_right_panel(
     svg_path: Path,
     drawing_properties: Mapping[str, object],
@@ -2150,6 +2382,7 @@ def _postprocess_right_panel(
         table_renderer = {
             "material_legend": _material_legend_svg,
             "room_legend": _room_legend_svg,
+            "lintel_legend": _lintel_legend_svg,
         }.get(table.get("kind"))
         if table_renderer is None:
             continue
@@ -3349,6 +3582,7 @@ def _render_existing_drawing(
             model,
             drawing,
         )
+        _postprocess_under_rafter_batting_depth(absolute_output)
         _postprocess_pavatex_batting(absolute_output)
         _postprocess_elevation_opening_overlays(
             absolute_output,
@@ -5411,7 +5645,8 @@ class House:
         ``right_panel_width`` adds paper space to the right of the camera view,
         measured in printed millimetres.  It does not resize or move the model
         view.  Use :meth:`Drawing.add_material_legend` and
-        :meth:`Drawing.add_room_legend` to add optional tables to that panel.
+        :meth:`Drawing.add_room_legend`, or
+        :meth:`Drawing.add_lintel_legend` to add optional tables to that panel.
         """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
@@ -5535,6 +5770,7 @@ class Drawing:
         self._annotated_stair_landings: set[int] = set()
         self._annotated_chimneys: set[int] = set()
         self._annotated_doors: set[int] = set()
+        self._annotated_lintels: set[int] = set()
         self._elevation_furniture_labels: dict[
             int, ifcopenshell.entity_instance
         ] = {}
@@ -6125,6 +6361,108 @@ class Drawing:
         )
         return self
 
+    def add_lintel_legend(
+        self,
+        *,
+        title: str = "LEGENDA PŘEKLADŮ",
+    ) -> Drawing:
+        """Add a schedule derived from this drawing's lintel annotations.
+
+        One row is emitted for each distinct lintel number in numeric order.
+        Opening width is the rough wall-opening width recorded by
+        :meth:`add_lintel`; equal numbers are counted together. The bearing on
+        each end is calculated as ``(ceil(width / 0.25) * 0.25 + 0.25 -
+        width) / 2``. Reusing a number for different opening widths is rejected
+        as an ambiguous schedule.
+        """
+        self._require_plan_view("add_lintel_legend")
+        if self.right_panel_width <= 0:
+            raise ValueError(
+                "add_lintel_legend requires right_panel_width on the drawing"
+            )
+        if self.right_panel_width < 40:
+            raise ValueError(
+                "right_panel_width must be at least 40 mm for a lintel legend"
+            )
+        title = _name(title, "title")
+
+        grouped: dict[str, dict[str, object]] = {}
+        drawing_members = self.group.IsGroupedBy[0].RelatedObjects
+        for annotation in drawing_members:
+            lintel = ifcopenshell.util.element.get_pset(
+                annotation,
+                "BBIM_Lintel",
+            )
+            if not lintel:
+                continue
+            number_value = lintel.get("Number")
+            width_value = lintel.get("OpeningWidth")
+            if number_value is None or width_value is None:
+                continue
+            number = str(number_value)
+            try:
+                opening_width = float(width_value)
+            except (TypeError, ValueError):
+                continue
+            existing = grouped.get(number)
+            if existing is None:
+                grouped[number] = {
+                    "number": number,
+                    "width": opening_width,
+                    "count": 1,
+                }
+            else:
+                existing_width = float(existing["width"])
+                if not isclose(
+                    existing_width,
+                    opening_width,
+                    abs_tol=1e-9,
+                ):
+                    raise ValueError(
+                        f'lintel number "{number}" is used for different '
+                        "opening widths"
+                    )
+                existing["count"] = int(existing["count"]) + 1
+
+        if not grouped:
+            raise ValueError(
+                "add_lintel_legend requires at least one lintel annotation"
+            )
+        items = []
+        ordered_numbers = sorted(
+            grouped,
+            key=lambda number: (
+                (0, int(number))
+                if number.isdecimal()
+                else (1, number.casefold())
+            ),
+        )
+        for number in ordered_numbers:
+            item = grouped[number]
+            opening_width = float(item["width"])
+            rounded_width = ceil(opening_width / 0.25 - 1e-9) * 0.25
+            bearing = (rounded_width + 0.25 - opening_width) / 2
+            items.append({**item, "bearing": bearing})
+
+        self._right_panel_tables.append(
+            {
+                "kind": "lintel_legend",
+                "title": title,
+                "items": items,
+            }
+        )
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model,
+            pset=self._drawing_pset,
+            properties={
+                "RightPanelTables": json.dumps(
+                    self._right_panel_tables,
+                    ensure_ascii=False,
+                )
+            },
+        )
+        return self
+
     def add_dimension(
         self,
         start: Point,
@@ -6603,6 +6941,259 @@ class Drawing:
             products=[annotation],
         )
         return annotation
+
+    def add_lintel(
+        self,
+        opening: ifcopenshell.entity_instance,
+        number: int | str,
+        *,
+        position: Literal["before", "after"] = "before",
+        direction: Literal["in", "out"] = "out",
+    ) -> ifcopenshell.entity_instance:
+        """Add a numbered lintel tag beside a wall opening in a plan.
+
+        ``opening`` may be an ``IfcDoor``, ``IfcWindow``, or an unfilled
+        ``IfcOpeningElement`` created by :class:`Wall`. ``position`` selects
+        the jamb at the wall-start (``"before"``) or wall-end
+        (``"after"``) side of the opening. ``direction`` selects the side of
+        the wall: ``"in"`` is the left side and ``"out"`` the right side
+        when looking from the wall's start towards its end.
+
+        The fixed-size split-circle tag contains ``Př`` above ``number``. A
+        leader joins its centre to the selected jamb; the tag's white fill
+        masks the final part of that line in the rendered drawing.
+        """
+        self._require_plan_view("add_lintel")
+        if (
+            not isinstance(opening, ifcopenshell.entity_instance)
+            or not any(
+                opening.is_a(ifc_class)
+                for ifc_class in (
+                    "IfcDoor",
+                    "IfcWindow",
+                    "IfcOpeningElement",
+                )
+            )
+        ):
+            raise TypeError(
+                "opening must be an IfcDoor, IfcWindow, or IfcOpeningElement"
+            )
+        if opening.file is not self.house.model:
+            raise ValueError("opening must belong to this house")
+        if isinstance(number, bool) or not isinstance(number, (int, str)):
+            raise TypeError("number must be an integer or string")
+        if isinstance(number, int):
+            if number <= 0:
+                raise ValueError("number must be greater than zero")
+            lintel_number = str(number)
+        else:
+            lintel_number = _name(number, "number")
+        position = _enum(position, "position", {"BEFORE", "AFTER"})
+        direction = _enum(direction, "direction", {"IN", "OUT"})
+
+        product = opening
+        if opening.is_a("IfcDoor") or opening.is_a("IfcWindow"):
+            fills = list(opening.FillsVoids or ())
+            if len(fills) != 1:
+                raise ValueError("door or window must fill exactly one opening")
+            opening = fills[0].RelatingOpeningElement
+        if opening.PredefinedType == "RECESS":
+            raise ValueError("a wall recess cannot have a lintel annotation")
+        voids = list(opening.VoidsElements or ())
+        if len(voids) != 1:
+            raise ValueError("opening must void exactly one wall")
+        host_element = voids[0].RelatingBuildingElement
+        if not host_element.is_a("IfcWall"):
+            raise ValueError("opening must void an IfcWall")
+
+        host_wall = next(
+            (
+                wall
+                for storey in self.house._storeys
+                for wall in storey.walls
+                if wall.id() == host_element.id()
+            ),
+            None,
+        )
+        if host_wall is None:
+            raise ValueError("opening must be created by Wall")
+        if not self._includes_storey(host_wall.storey):
+            raise ValueError("opening storey is not included in this drawing")
+        if opening.id() in self._annotated_lintels:
+            raise ValueError("opening already has a lintel annotation")
+
+        wall_placement = ifcopenshell.util.placement.get_local_placement(
+            host_wall.ObjectPlacement
+        )
+        opening_placement = ifcopenshell.util.placement.get_local_placement(
+            opening.ObjectPlacement
+        )
+        local_opening_placement = (
+            np.linalg.inv(wall_placement) @ opening_placement
+        )
+        opening_start = float(local_opening_placement[0, 3])
+        opening_bottom = (
+            float(local_opening_placement[2, 3]) + host_wall.start_height
+        )
+        matching_intervals = [
+            interval
+            for interval in host_wall._openings
+            if isclose(interval[0], opening_start, abs_tol=1e-7)
+            and isclose(interval[2], opening_bottom, abs_tol=1e-7)
+        ]
+        if len(matching_intervals) != 1:
+            raise ValueError("could not resolve the opening width on its wall")
+        opening_end = matching_intervals[0][1]
+
+        if position == "BEFORE":
+            jamb_x = opening_start
+            tag_x = jamb_x - _LINTEL_TAG_ALONG_OFFSET
+        else:
+            jamb_x = opening_end
+            tag_x = jamb_x + _LINTEL_TAG_ALONG_OFFSET
+        if direction == "IN":
+            wall_face_y = host_wall.body_offset + host_wall.thickness
+            tag_y = wall_face_y + _LINTEL_TAG_NORMAL_OFFSET
+        else:
+            wall_face_y = host_wall.body_offset
+            tag_y = wall_face_y - _LINTEL_TAG_NORMAL_OFFSET
+
+        def world_xy(local_x: float, local_y: float) -> tuple[float, float]:
+            point = wall_placement @ np.array(
+                (local_x, local_y, 0.0, 1.0), dtype=float
+            )
+            return float(point[0]), float(point[1])
+
+        jamb_point = world_xy(jamb_x, wall_face_y)
+        tag_point = world_xy(tag_x, tag_y)
+        annotation_z = host_wall.storey.elevation
+        model = self.house.model
+
+        leader = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{self.name} Lintel Př{lintel_number} Leader",
+            predefined_type="LINEWORK",
+        )
+        leader_representation = ifcopenshell.api.geometry.add_axis_representation(
+            model,
+            context=self.house._annotation_context,
+            axis=[jamb_point, tag_point],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=leader,
+            representation=leader_representation,
+        )
+        leader_placement = np.eye(4)
+        leader_placement[2, 3] = annotation_z
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=leader,
+            matrix=leader_placement,
+            is_si=True,
+        )
+        leader_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=leader,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=leader_pset,
+            properties={"Classes": "lintel-leader"},
+        )
+
+        tag = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcAnnotation",
+            name=f"{self.name} Lintel Př{lintel_number}",
+            predefined_type="TEXT",
+        )
+        tag_placement = np.eye(4)
+        tag_placement[:3, 3] = (*tag_point, annotation_z)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=tag,
+            matrix=tag_placement,
+            is_si=True,
+        )
+
+        literals = []
+        for value in ("Př", lintel_number):
+            literal_origin = model.createIfcAxis2Placement3D(
+                model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+                model.createIfcDirection((0.0, 0.0, 1.0)),
+                model.createIfcDirection((1.0, 0.0, 0.0)),
+            )
+            literals.append(
+                model.createIfcTextLiteralWithExtent(
+                    value,
+                    literal_origin,
+                    "RIGHT",
+                    model.createIfcPlanarExtent(1.0, 1.0),
+                    "center",
+                )
+            )
+        tag_representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context,
+            "Annotation",
+            "Annotation2D",
+            literals,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=tag,
+            representation=tag_representation,
+        )
+        tag_pset = ifcopenshell.api.pset.add_pset(
+            model,
+            product=tag,
+            name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=tag_pset,
+            properties={
+                "Classes": "lintel-symbol lintel-tag regular",
+                "Symbol": "lintel-tag",
+            },
+        )
+        metadata = ifcopenshell.api.pset.add_pset(
+            model,
+            product=tag,
+            name="BBIM_Lintel",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=metadata,
+            properties={
+                "Number": lintel_number,
+                "OpeningWidth": opening_end - opening_start,
+                "Position": position.lower(),
+                "Direction": direction.lower(),
+                "Opening": opening.GlobalId,
+                "HostWall": host_wall.GlobalId,
+            },
+        )
+        for annotation in (leader, tag):
+            ifcopenshell.api.drawing.assign_product(
+                model,
+                relating_product=product,
+                related_object=annotation,
+            )
+        ifcopenshell.api.group.assign_group(
+            model,
+            group=self.group,
+            products=[leader, tag],
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=self._drawing_pset,
+            properties={"HasAnnotation": True},
+        )
+        self._annotated_lintels.add(opening.id())
+        return tag
 
     def add_door_annotation(
         self,
@@ -9952,6 +10543,7 @@ class Wall(ifcopenshell.entity_instance):
         object.__setattr__(self, "surface_style", surface_style)
         object.__setattr__(self, "cuts", cuts)
         object.__setattr__(self, "_openings", [])
+        object.__setattr__(self, "_recesses", [])
         object.__setattr__(self, "_vertical_material_layers", None)
 
     @property
@@ -10110,6 +10702,7 @@ class Wall(ifcopenshell.entity_instance):
         width: Number,
         height: Number,
         sill_height: Number,
+        check_recesses: bool = True,
     ) -> tuple[float, float, float, float]:
         opening_start = _number(opening_start, "opening start")
         width = _number(width, "width")
@@ -10143,6 +10736,26 @@ class Wall(ifcopenshell.entity_instance):
             )
             if overlaps_horizontally and overlaps_vertically:
                 raise ValueError("opening overlaps another opening in this wall")
+
+        if check_recesses:
+            for (
+                existing_start,
+                existing_end,
+                existing_bottom,
+                existing_top,
+                _,
+                _,
+            ) in self._recesses:
+                overlaps_horizontally = (
+                    opening_start < existing_end - tolerance
+                    and existing_start < opening_end - tolerance
+                )
+                overlaps_vertically = (
+                    sill_height < existing_top - tolerance
+                    and existing_bottom < opening_top - tolerance
+                )
+                if overlaps_horizontally and overlaps_vertically:
+                    raise ValueError("opening overlaps a recess in this wall")
 
         return opening_start, width, height, sill_height
 
@@ -10202,6 +10815,138 @@ class Wall(ifcopenshell.entity_instance):
             is_si=True,
         )
         return opening
+
+    def add_recess(
+        self,
+        *,
+        at: Number,
+        width: Number,
+        depth: Number,
+        height: Number,
+        sill_height: Number = 0,
+        side: WallSide = "right",
+        top_extension: Number = 0,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Cut a rectangular partial-depth recess into one wall face.
+
+        ``at`` and ``width`` locate the recess along the wall.  ``depth`` is
+        measured inward from the selected finished wall face, while
+        ``sill_height`` is relative to the storey elevation and ``height`` is
+        the vertical extent of the recess.  ``side`` is viewed while looking
+        from the wall's ``start`` towards its ``end``.  ``top_extension`` may
+        extend the cutting solid into known empty space above a clipped wall;
+        it does not change the recorded nominal recess height.
+
+        The cutting solid extends slightly beyond the selected wall face to
+        keep the Boolean reliable.  Its inner face, bottom, width, and nominal
+        height remain exact.
+        """
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        depth = _number(depth, "depth")
+        height = _number(height, "height")
+        sill_height = _number(sill_height, "sill_height")
+        top_extension = _number(top_extension, "top_extension")
+        if depth <= 0:
+            raise ValueError("depth must be greater than zero")
+        if depth >= self.thickness:
+            raise ValueError("depth must be less than the wall thickness")
+        if height <= 0:
+            raise ValueError("height must be greater than zero")
+        if top_extension < 0:
+            raise ValueError("top_extension must not be negative")
+
+        recess_start, width, height, sill_height = self._validate_opening(
+            opening_start=at,
+            width=width,
+            height=height,
+            sill_height=sill_height,
+            check_recesses=False,
+        )
+        recess_end = recess_start + width
+        recess_top = sill_height + height
+        tolerance = 1e-9
+        for (
+            existing_start,
+            existing_end,
+            existing_bottom,
+            existing_top,
+            existing_side,
+            existing_depth,
+        ) in self._recesses:
+            overlaps_along_wall = (
+                recess_start < existing_end - tolerance
+                and existing_start < recess_end - tolerance
+            )
+            overlaps_vertically = (
+                sill_height < existing_top - tolerance
+                and existing_bottom < recess_top - tolerance
+            )
+            overlaps_through_depth = (
+                side == existing_side
+                or depth + existing_depth > self.thickness + tolerance
+            )
+            if (
+                overlaps_along_wall
+                and overlaps_vertically
+                and overlaps_through_depth
+            ):
+                raise ValueError("recess overlaps another recess in this wall")
+
+        self.storey._recess_count += 1
+        recess_name = (
+            _name(name, "name")
+            if name is not None
+            else f"Wall Recess {self.storey._recess_count}"
+        )
+        model = self.storey.house.model
+        recess = ifcopenshell.api.root.create_entity(
+            model,
+            ifc_class="IfcOpeningElement",
+            name=recess_name,
+            predefined_type="RECESS",
+        )
+        overlap = 0.01
+        if side == "left":
+            body_offset = self.body_offset + self.thickness - depth
+        else:
+            body_offset = self.body_offset - overlap
+        representation = ifcopenshell.api.geometry.add_wall_representation(
+            model,
+            context=self.storey.house._body_context,
+            length=width,
+            height=height + top_extension,
+            thickness=depth + overlap,
+            offset=body_offset,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model,
+            product=recess,
+            representation=representation,
+        )
+        ifcopenshell.api.feature.add_feature(
+            model,
+            feature=recess,
+            element=self,
+        )
+        placement = self._placement(recess_start, sill_height)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model,
+            product=recess,
+            matrix=placement,
+            is_si=True,
+        )
+        self._recesses.append(
+            (
+                recess_start,
+                recess_end,
+                sill_height,
+                recess_top,
+                side,
+                depth,
+            )
+        )
+        return recess
 
     def _add_dashed_overhead_line(
         self,
@@ -10977,6 +11722,7 @@ class Storey:
         self._wall_count = 0
         self._batting_count = 0
         self._opening_count = 0
+        self._recess_count = 0
         self._door_count = 0
         self._window_count = 0
         self._stair_count = 0

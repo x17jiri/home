@@ -419,6 +419,18 @@ tspan.room-area {
     stroke-linejoin: miter !important;
 }
 
+/* Lintel reference line from the opening jamb to its numbered tag. */
+.PredefinedType-LINEWORK.lintel-leader {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+text.lintel-symbol,
+tspan.lintel-symbol {
+    font-size: 1.8px !important;
+}
+
 /* Doors: light plan swing, both overhead wall faces, and size labels. */
 .IfcDoor.projection,
 .IfcDoor.cut {

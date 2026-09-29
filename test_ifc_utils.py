@@ -50,6 +50,7 @@ from ifc_utils import (
     _postprocess_pavatex_batting,
     _postprocess_ring_beam_stirrups,
     _postprocess_roof_batting,
+    _postprocess_under_rafter_batting_depth,
     _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
     _postprocess_wall_insulation_backdrop,
@@ -5101,6 +5102,85 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(len(reopened.by_type("IfcOpeningElement")), 1)
             self.assertEqual(len(reopened.by_type("IfcDoor")), 0)
 
+    def test_adds_partial_depth_wall_recesses_from_either_side(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0.25)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.24, height=3)
+        right_recess = wall.add_recess(
+            at=0.5,
+            width=0.3,
+            depth=0.12,
+            height=0.08,
+            sill_height=2.92,
+            side="right",
+            top_extension=0.01,
+            name="Right purlin seat",
+        )
+        left_recess = wall.add_recess(
+            at=1.0,
+            width=0.4,
+            depth=0.12,
+            height=0.1,
+            sill_height=2.9,
+            side="left",
+            name="Left purlin seat",
+        )
+
+        self.assertEqual(right_recess.PredefinedType, "RECESS")
+        self.assertEqual(left_recess.PredefinedType, "RECESS")
+        self.assertEqual(
+            right_recess.VoidsElements[0].RelatingBuildingElement,
+            wall,
+        )
+        self.assertEqual(
+            left_recess.VoidsElements[0].RelatingBuildingElement,
+            wall,
+        )
+        self.assertEqual(len(house.model.by_type("IfcAnnotation")), 0)
+
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+
+        def bounds(element):
+            shape = ifcopenshell.geom.create_shape(settings, element)
+            vertices = np.asarray(shape.geometry.verts).reshape((-1, 3))
+            return vertices.min(axis=0), vertices.max(axis=0)
+
+        right_minimum, right_maximum = bounds(right_recess)
+        np.testing.assert_allclose(right_minimum, (0.5, -0.13, 3.17))
+        np.testing.assert_allclose(right_maximum, (0.8, 0.0, 3.26))
+        left_minimum, left_maximum = bounds(left_recess)
+        np.testing.assert_allclose(left_minimum, (1.0, 0.0, 3.15))
+        np.testing.assert_allclose(left_maximum, (1.4, 0.13, 3.25))
+
+        wall_shape = ifcopenshell.geom.create_shape(settings, wall)
+        expected_volume = (
+            5 * 0.24 * 3
+            - 0.3 * 0.12 * 0.08
+            - 0.4 * 0.12 * 0.1
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(wall_shape.geometry),
+            expected_volume,
+        )
+
+    def test_rejects_a_wall_recess_as_deep_as_the_wall(self) -> None:
+        house = House("My house")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=0.24, height=3)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "depth must be less than the wall thickness",
+        ):
+            wall.add_recess(
+                at=0.5,
+                width=0.3,
+                depth=0.24,
+                height=0.08,
+                sill_height=2.92,
+            )
+
     def test_writes_a_file_that_ifcopenshell_can_reopen(self) -> None:
         house = House("My house")
         house.storey("Ground floor", elevation=0).wall(
@@ -5962,6 +6042,235 @@ class HouseTests(unittest.TestCase):
                 {literal.Literal for literal in reopened_literals},
                 {"900", "2100"},
             )
+
+    def test_adds_a_numbered_lintel_symbol_at_a_selected_opening_jamb(
+        self,
+    ) -> None:
+        house = House("Lintel annotations")
+        ground = house.storey("Ground floor", elevation=0.25)
+        wall = ground.wall(
+            (1, 2),
+            (5, 2),
+            thickness=0.24,
+            height=2.8,
+        )
+        door = wall.add_door(
+            at=1,
+            opening_width=1.1,
+            width=0.9,
+            height=2.1,
+        )
+        bare_opening = wall.add_opening(
+            at=2.5,
+            width=0.8,
+            height=2.2,
+        )
+        drawing = house.add_drawing(
+            "Ground plan",
+            3,
+            2,
+            1.6,
+            4,
+            storeys=[ground],
+            door_annotations=False,
+        )
+
+        tag = drawing.add_lintel(
+            door,
+            2,
+            position="after",
+            direction="in",
+        )
+
+        self.assertEqual(tag.ObjectType, "TEXT")
+        literals = tag.Representation.Representations[0].Items
+        self.assertEqual([literal.Literal for literal in literals], ["Př", "2"])
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                tag, "EPset_Annotation", "Classes"
+            ),
+            "lintel-symbol lintel-tag regular",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                tag, "EPset_Annotation", "Symbol"
+            ),
+            "lintel-tag",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(tag, "BBIM_Lintel", "Number"),
+            "2",
+        )
+        self.assertAlmostEqual(
+            ifcopenshell.util.element.get_pset(
+                tag, "BBIM_Lintel", "OpeningWidth"
+            ),
+            1.1,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(tag, "BBIM_Lintel", "Position"),
+            "after",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(tag, "BBIM_Lintel", "Direction"),
+            "in",
+        )
+        tag_placement = ifcopenshell.util.placement.get_local_placement(
+            tag.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            tag_placement[:3, 3],
+            (3.55, 2.77, 0.25),
+            atol=1e-9,
+        )
+
+        leader = next(
+            annotation
+            for annotation in drawing.group.IsGroupedBy[0].RelatedObjects
+            if annotation.Name == "Ground plan Lintel Př2 Leader"
+        )
+        self.assertEqual(leader.ObjectType, "LINEWORK")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                leader, "EPset_Annotation", "Classes"
+            ),
+            "lintel-leader",
+        )
+        leader_representation = ifcopenshell.util.representation.get_representation(
+            leader,
+            "Plan",
+            "Annotation",
+            "PLAN_VIEW",
+        )
+        np.testing.assert_allclose(
+            leader_representation.Items[0].Points.CoordList,
+            ((3.1, 2.12), (3.55, 2.77)),
+            atol=1e-9,
+        )
+        self.assertTrue(
+            any(
+                relation.RelatingProduct == door
+                for relation in tag.HasAssignments
+                if relation.is_a("IfcRelAssignsToProduct")
+            )
+        )
+        self.assertIn(tag, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(leader, drawing.group.IsGroupedBy[0].RelatedObjects)
+
+        default_tag = drawing.add_lintel(bare_opening, "3A")
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                default_tag, "BBIM_Lintel", "Position"
+            ),
+            "before",
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                default_tag, "BBIM_Lintel", "Direction"
+            ),
+            "out",
+        )
+        default_tag_placement = ifcopenshell.util.placement.get_local_placement(
+            default_tag.ObjectPlacement
+        )
+        np.testing.assert_allclose(
+            default_tag_placement[:3, 3],
+            (3.05, 1.23, 0.25),
+            atol=1e-9,
+        )
+        self.assertIn(
+            'id="lintel-tag"',
+            Path("drawings/assets/symbols.svg").read_text(),
+        )
+
+        with self.assertRaisesRegex(ValueError, "already has"):
+            drawing.add_lintel(door, 4)
+        with self.assertRaisesRegex(ValueError, "position must be one of"):
+            drawing.add_lintel(door, 4, position="middle")
+        with self.assertRaisesRegex(TypeError, "opening must be"):
+            drawing.add_lintel(wall, 4)
+
+    def test_builds_lintel_legend_from_numbered_openings(self) -> None:
+        house = House("Lintel legend")
+        ground = house.storey("Ground floor", elevation=0)
+        wall = ground.wall((0, 0), (8, 0), thickness=0.24, height=2.8)
+        first = wall.add_opening(at=0.5, width=1.0, height=2.1)
+        second = wall.add_opening(at=2.0, width=1.0, height=2.1)
+        third = wall.add_opening(at=3.5, width=1.125, height=2.1)
+        conflicting = wall.add_opening(at=5.0, width=0.8, height=2.1)
+        drawing = house.add_drawing(
+            "Ground plan",
+            4,
+            2,
+            1.6,
+            5,
+            storeys=[ground],
+            door_annotations=False,
+            right_panel_width=40,
+        )
+        drawing.add_lintel(first, 2)
+        drawing.add_lintel(second, 2, position="after", direction="in")
+        drawing.add_lintel(third, 1)
+
+        result = drawing.add_lintel_legend()
+
+        self.assertIs(result, drawing)
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertEqual(
+            json.loads(properties["RightPanelTables"]),
+            [
+                {
+                    "kind": "lintel_legend",
+                    "title": "LEGENDA PŘEKLADŮ",
+                    "items": [
+                        {
+                            "number": "1",
+                            "width": 1.125,
+                            "count": 1,
+                            "bearing": 0.1875,
+                        },
+                        {
+                            "number": "2",
+                            "width": 1.0,
+                            "count": 2,
+                            "bearing": 0.125,
+                        },
+                    ],
+                }
+            ],
+        )
+
+        drawing.add_lintel(conflicting, 2)
+        with self.assertRaisesRegex(ValueError, "different opening widths"):
+            drawing.add_lintel_legend()
+
+        no_lintels = house.add_drawing(
+            "No lintels",
+            4,
+            2,
+            1.6,
+            5,
+            storeys=[ground],
+            door_annotations=False,
+            right_panel_width=40,
+        )
+        with self.assertRaisesRegex(ValueError, "at least one lintel"):
+            no_lintels.add_lintel_legend()
+        no_panel = house.add_drawing(
+            "No panel",
+            4,
+            2,
+            1.6,
+            5,
+            storeys=[ground],
+            door_annotations=False,
+        )
+        no_panel.add_lintel(first, 5)
+        with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
+            no_panel.add_lintel_legend()
 
     def test_stores_drawing_camera_and_scoped_batting_in_ifc(self) -> None:
         house = House("My house")
@@ -7238,6 +7547,64 @@ class HouseTests(unittest.TestCase):
             self.assertIn("12,35 m²", svg)
             self.assertIn("8,00 m²", svg)
 
+    def test_appends_lintel_legend_to_right_panel(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg width="160mm" height="160mm" '
+                'viewBox="0 0 160 160">\n'
+                '  <g id="model-view"/>\n'
+                "</svg>\n",
+                encoding="utf-8",
+            )
+            properties = {
+                "RightPanelWidth": 40,
+                "RightPanelTables": json.dumps(
+                    [
+                        {
+                            "kind": "lintel_legend",
+                            "title": "LEGENDA PŘEKLADŮ",
+                            "items": [
+                                {
+                                    "number": "1",
+                                    "width": 1.125,
+                                    "bearing": 0.1875,
+                                    "count": 1,
+                                },
+                                {
+                                    "number": "2",
+                                    "width": 1.0,
+                                    "bearing": 0.125,
+                                    "count": 4,
+                                },
+                            ],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+            }
+
+            _postprocess_right_panel(svg_path, properties)
+            _postprocess_right_panel(svg_path, properties)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('class="right-side-panel"'), 1)
+            self.assertEqual(
+                svg.count('class="right-panel-table lintel-legend"'),
+                1,
+            )
+            self.assertIn("LEGENDA PŘEKLADŮ", svg)
+            self.assertIn(">OZNAČENÍ</text>", svg)
+            self.assertIn(">ŠÍŘKA</text>", svg)
+            self.assertIn(">ULOŽENÍ</text>", svg)
+            self.assertIn(">POČET</text>", svg)
+            self.assertEqual(svg.count(">Př</text>"), 2)
+            self.assertIn(">1125 mm</text>", svg)
+            self.assertIn(">187,5 mm</text>", svg)
+            self.assertIn(">1000 mm</text>", svg)
+            self.assertIn(">125 mm</text>", svg)
+            self.assertEqual(svg.count('class="lintel-legend-symbol"'), 2)
+
     def test_appends_window_area_and_floor_area_percentage_to_room_legend(
         self,
     ) -> None:
@@ -8387,8 +8754,8 @@ class HouseTests(unittest.TestCase):
                 svg.index('id="foreground-geometry"'),
             )
             self.assertLess(
-                svg.index('id="foreground-geometry"'),
                 svg.index('id="under-rafter-batting"'),
+                svg.index('id="foreground-geometry"'),
             )
 
     def test_places_pavatex_batting_in_its_depth_ordered_owner_group(self) -> None:
@@ -8441,6 +8808,45 @@ class HouseTests(unittest.TestCase):
                 'class="IfcAnnotation projection" '
                 'style="display:none!important">',
                 svg,
+            )
+
+    def test_places_under_rafter_batting_in_its_depth_ordered_owner_group(
+        self,
+    ) -> None:
+        owner_guid = "0AAAAAAAAAAAAAAAAAAAAA"
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                f'<g ifc:guid="{owner_guid}" class="IfcSlab projection">'
+                '<path id="original-owner"/></g>'
+                '<g class="depth-ordered-products">'
+                f'<g ifc:guid="{owner_guid}" class="IfcSlab projection">'
+                '<path id="ordered-owner"/></g>'
+                '<g class="IfcBeam cut"><path id="purlin"/></g>'
+                '</g>'
+                '<polyline id="under-rafter" class="IfcAnnotation '
+                'roof-batting under-rafter-batting '
+                f'under-rafter-owner-{owner_guid} '
+                'under-rafter-target-projection"/>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            _postprocess_under_rafter_batting_depth(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertLess(
+                svg.index('id="original-owner"'),
+                svg.index('id="ordered-owner"'),
+            )
+            self.assertLess(
+                svg.index('id="ordered-owner"'),
+                svg.index('id="under-rafter"'),
+            )
+            self.assertLess(
+                svg.index('id="under-rafter"'),
+                svg.index('id="purlin"'),
             )
 
     def test_moves_wall_insulation_to_first_drawable_svg_layer(self) -> None:
