@@ -616,6 +616,56 @@ class HouseTests(unittest.TestCase):
                 extra_cuts=[((0, 0, 0), (1, 0, 0), (2, 0, 0))],
             )
 
+    def test_appends_beam_specific_cuts_to_roof_plane_cuts(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        roof = upper.roof("Main roof")
+        plane_cuts = (
+            ((0, 0, 0), (0, 1, 0), (0, 0, 1)),
+            ((6, 0, 0), (6, 1, 0), (6, 0, 1)),
+        )
+        extra_cut = ((4, 0, 0), (4, 1, 0), (4, 0, 1))
+        plane = roof.plane(
+            "Flat roof",
+            points=((0, 0, 4), (6, 0, 4), (0, 4, 4)),
+            cuts=plane_cuts,
+        )
+
+        beam = plane.beam(
+            "Trimmed purlin",
+            start=(-1, 2),
+            end=(7, 2),
+            size=(0.1, 0.2),
+            kind="PURLIN",
+            extra_cuts=(extra_cut,),
+        )
+
+        self.assertEqual(beam.extra_cuts, (extra_cut,))
+        self.assertEqual(beam.cuts, (*plane_cuts, extra_cut))
+        body = ifcopenshell.util.representation.get_representation(
+            beam, "Model", "Body", "MODEL_VIEW"
+        )
+        item = body.Items[0]
+        clipping_count = 0
+        while item.is_a("IfcBooleanClippingResult"):
+            clipping_count += 1
+            item = item.FirstOperand
+        self.assertEqual(clipping_count, 3)
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), beam)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            4 * 0.1 * 0.2,
+        )
+
+        with self.assertRaisesRegex(ValueError, "cut 1 points"):
+            plane.beam(
+                "Invalid",
+                start=(0, 2),
+                end=(6, 2),
+                size=(0.1, 0.2),
+                extra_cuts=[((0, 0, 0), (1, 0, 0), (2, 0, 0))],
+            )
+
     def test_cuts_an_absolute_xy_opening_through_all_roof_parts(self) -> None:
         house = House("My house")
         upper = house.storey("Upper floor", elevation=3)
@@ -648,6 +698,7 @@ class HouseTests(unittest.TestCase):
         self.assertIsInstance(opening, RoofOpening)
         self.assertEqual(opening.name, "Bedroom roof window")
         self.assertEqual(opening.rectangle, ((2, 1), (3, 2)))
+        self.assertTrue(opening.trimmers)
         self.assertEqual(roof.openings, (opening,))
         self.assertEqual(slope.elements, (first_layer, batten))
         self.assertEqual(len(opening.elements), 2)
@@ -664,6 +715,27 @@ class HouseTests(unittest.TestCase):
                 ),
                 [[2.0, 1.0], [3.0, 2.0]],
             )
+            self.assertEqual(
+                ifcopenshell.util.element.get_pset(
+                    void, "BBIM_RoofOpening", "RoofPlane"
+                ),
+                slope.GlobalId,
+            )
+            self.assertTrue(
+                ifcopenshell.util.element.get_pset(
+                    void, "BBIM_RoofOpening", "Trimmers"
+                )
+            )
+            opening_placement = (
+                ifcopenshell.util.placement.get_local_placement(
+                    void.ObjectPlacement
+                )
+            )
+            np.testing.assert_allclose(
+                opening_placement[:3, 2],
+                slope.z_axis,
+                atol=1e-9,
+            )
         self.assertEqual(
             {void.VoidsElements[0].RelatingBuildingElement for void in opening.elements},
             {first_layer, batten},
@@ -677,6 +749,33 @@ class HouseTests(unittest.TestCase):
             6 * 4 * 0.1 - np.sqrt(5) / 2 * 0.1,
             places=6,
         )
+
+        # Opening framing may overlap the void slightly without being cut.
+        trimmer = slope.beam(
+            "Roof-window trimmer",
+            start=(0, 1.5 * np.sqrt(5) / 2),
+            end=(6, 1.5 * np.sqrt(5) / 2),
+            size=(0.05, 0.05),
+            material="Wood",
+            trim_openings=False,
+        )
+        self.assertIn(trimmer, slope.elements)
+        self.assertFalse(trimmer.HasOpenings)
+        self.assertNotIn(
+            trimmer,
+            {
+                void.VoidsElements[0].RelatingBuildingElement
+                for void in opening.elements
+            },
+        )
+        with self.assertRaisesRegex(TypeError, "trim_openings must be a boolean"):
+            slope.beam(
+                "Invalid trimmer",
+                start=(0, 1),
+                end=(1, 1),
+                size=(0.05, 0.05),
+                trim_openings="no",
+            )
 
         # Registration is order independent: later roof parts inherit the cut.
         second_layer = slope.layer(
@@ -710,6 +809,12 @@ class HouseTests(unittest.TestCase):
             roof.add_opening("Invalid", rectangle=((0, 0),))
         with self.assertRaisesRegex(ValueError, "non-zero width and depth"):
             roof.add_opening("Invalid", rectangle=((0, 0), (0, 1)))
+        with self.assertRaisesRegex(TypeError, "trimmers must be a boolean"):
+            roof.add_opening(
+                "Invalid trimmers",
+                rectangle=((0, 0), (1, 1)),
+                trimmers="no",
+            )
 
         roof.add_opening("First", rectangle=((0, 0), (1, 1)))
         with self.assertRaisesRegex(ValueError, "name already exists"):
@@ -718,8 +823,12 @@ class HouseTests(unittest.TestCase):
             roof.add_opening("Overlapping", rectangle=((0.5, 0.5), (2, 2)))
 
         # Edge-touching roof windows are permitted.
-        adjacent = roof.add_opening(rectangle=((1, 0), (2, 1)))
+        adjacent = roof.add_opening(
+            rectangle=((1, 0), (2, 1)),
+            trimmers=False,
+        )
         self.assertEqual(adjacent.name, "Roof Opening 2")
+        self.assertFalse(adjacent.trimmers)
 
     def test_adds_existing_elements_to_a_roof_and_validates_planes(self) -> None:
         house = House("My house")
@@ -1969,7 +2078,9 @@ class HouseTests(unittest.TestCase):
             "EPset_Drawing",
             "Include",
         )
-        included_ids = set(include.split("+"))
+        included_ids = {
+            selector.strip() for selector in include.split("+")
+        }
         self.assertTrue(
             all(tread.GlobalId in included_ids for tread in stair.tread_elements)
         )
@@ -2080,7 +2191,7 @@ class HouseTests(unittest.TestCase):
             include,
             (
                 f'location="{upper.element.GlobalId}"'
-                f"+{stair.flight.GlobalId}+{landing.GlobalId}"
+                f" + {stair.flight.GlobalId} + {landing.GlobalId}"
             ),
         )
         selected_elements = ifcopenshell.util.selector.filter_elements(
@@ -2198,7 +2309,7 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(
             upper_include,
-            f'location="{upper.element.GlobalId}"+{chimney.GlobalId}',
+            f'location="{upper.element.GlobalId}" + {chimney.GlobalId}',
         )
         selected_elements = ifcopenshell.util.selector.filter_elements(
             house.model,
@@ -6276,6 +6387,87 @@ class HouseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
             no_panel.add_lintel_legend()
 
+    def test_builds_timber_schedule_from_finished_beams(self) -> None:
+        house = House("Timber schedule")
+        roof = house.storey("Roof", elevation=0)
+        first = roof.beam(
+            "Rafter 1",
+            start=(0, 0, 0),
+            end=(4, 0, 0),
+            size=(0.1, 0.18),
+            cuts=[((3, 0, 0), (3, 1, 0), (3, 0, 1))],
+        )
+        second = roof.beam(
+            "Rafter 2",
+            start=(0, 1, 0),
+            end=(4, 1, 0),
+            size=(0.1, 0.18),
+            cuts=[((3, 0, 0), (3, 1, 0), (3, 0, 1))],
+        )
+        drawing = house.add_drawing(
+            "Roof plan",
+            2,
+            1,
+            2,
+            4,
+            storeys=[roof],
+            right_panel_width=90,
+        )
+
+        result = drawing.add_timber_schedule(
+            [
+                (
+                    "Hlavní krokve",
+                    (first, second),
+                    0.315,
+                    {
+                        "pattern": "brick",
+                        "color": "orange",
+                        "drawing_order": 2,
+                    },
+                )
+            ]
+        )
+
+        self.assertIs(result, drawing)
+        self.assertAlmostEqual(first.finished_length(), 3.0)
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertEqual(
+            json.loads(properties["RightPanelTables"]),
+            [
+                {
+                    "kind": "timber_schedule",
+                    "title": "SPECIFIKACE PRVKŮ KROVU",
+                    "items": [
+                        {
+                            "mark": "A",
+                            "name": "Hlavní krokve",
+                            "width": 100,
+                            "height": 180,
+                            "length": 3315,
+                            "count": 2,
+                            "pattern": "brick",
+                            "color": "#ffa500",
+                            "drawing_order": 2,
+                            "member_guids": [
+                                first.GlobalId,
+                                second.GlobalId,
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+
+        no_panel = house.add_drawing("No panel", 2, 1, 2, 4)
+        with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
+            no_panel.add_timber_schedule(
+                [("Hlavní krokve", (first, second), 0)]
+            )
+
     def test_stores_drawing_camera_and_scoped_batting_in_ifc(self) -> None:
         house = House("My house")
         house.storey("Ground floor", elevation=0)
@@ -6955,12 +7147,67 @@ class HouseTests(unittest.TestCase):
             mask_source,
             other_drawing.group.IsGroupedBy[0].RelatedObjects,
         )
+        unmasked_drawing = house.add_drawing(
+            "Unmasked roof plan",
+            2,
+            2,
+            8,
+            5,
+            storeys=[upper],
+        )
+        unmasked_outline = unmasked_drawing.add_roof_opening_outline(
+            opening,
+            y_min_inset=0.1,
+            mask=False,
+        )
+        self.assertEqual(
+            ifcopenshell.util.element.get_pset(
+                unmasked_outline,
+                "EPset_Annotation",
+                "Classes",
+            ),
+            "roof-opening roof-opening-unmasked dashed",
+        )
+        unmasked_curve = (
+            unmasked_outline.Representation.Representations[0].Items[0].Elements[0]
+        )
+        self.assertEqual(
+            [tuple(point) for point in unmasked_curve.Points.CoordList],
+            [
+                (2.05, 1.1),
+                (2.95, 1.1),
+                (2.95, 1.95),
+                (2.05, 1.95),
+                (2.05, 1.1),
+            ],
+        )
+        self.assertFalse(
+            any(
+                ifcopenshell.util.element.get_pset(
+                    annotation,
+                    "EPset_Annotation",
+                    "Classes",
+                )
+                == "roof-opening-mask-source"
+                for annotation in unmasked_drawing.group.IsGroupedBy[0].RelatedObjects
+            )
+        )
         with self.assertRaisesRegex(ValueError, "already has an outline"):
             drawing.add_roof_opening_outline(opening)
         with self.assertRaisesRegex(ValueError, "must not be negative"):
             other_drawing.add_roof_opening_outline(opening, inset=-0.01)
+        with self.assertRaisesRegex(ValueError, "y_min_inset"):
+            other_drawing.add_roof_opening_outline(
+                opening,
+                y_min_inset=-0.01,
+            )
         with self.assertRaisesRegex(ValueError, "non-empty"):
             other_drawing.add_roof_opening_outline(opening, inset=0.5)
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            other_drawing.add_roof_opening_outline(
+                opening,
+                y_min_inset=0.95,
+            )
         with self.assertRaisesRegex(ValueError, "mask_horizontal_inset"):
             other_drawing.add_roof_opening_outline(
                 opening,
@@ -6971,6 +7218,8 @@ class HouseTests(unittest.TestCase):
                 opening,
                 mask_horizontal_inset=0.5,
             )
+        with self.assertRaisesRegex(TypeError, "mask must be a boolean"):
+            other_drawing.add_roof_opening_outline(opening, mask="no")
 
         elevation = house.add_drawing(
             "Elevation",
@@ -7936,6 +8185,7 @@ class HouseTests(unittest.TestCase):
             svg_path.write_text(
                 '<svg width="160mm" height="160mm" '
                 'viewBox="0 0 160 160">\n'
+                '  <defs><pattern id="brick-tint-f4d35e"/></defs>\n'
                 '  <g id="model-view"/>\n'
                 "</svg>\n",
                 encoding="utf-8",
@@ -8036,6 +8286,71 @@ class HouseTests(unittest.TestCase):
             self.assertIn(">1000 mm</text>", svg)
             self.assertIn(">125 mm</text>", svg)
             self.assertEqual(svg.count('class="lintel-legend-symbol"'), 2)
+
+    def test_appends_timber_schedule_to_right_panel(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg width="160mm" height="160mm" '
+                'viewBox="0 0 160 160">\n'
+                '  <g id="model-view"/>\n'
+                "</svg>\n",
+                encoding="utf-8",
+            )
+            properties = {
+                "RightPanelWidth": 110,
+                "RightPanelTables": json.dumps(
+                    [
+                        {
+                            "kind": "timber_schedule",
+                            "title": "SPECIFIKACE PRVKŮ KROVU",
+                            "items": [
+                                {
+                                    "mark": "A",
+                                    "name": "Hlavní krokve",
+                                    "width": 100,
+                                    "height": 180,
+                                    "length": 5989,
+                                    "count": 27,
+                                    "pattern": "brick",
+                                    "color": "#f4d35e",
+                                    "member_guids": ["rafter-guid"],
+                                }
+                            ],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+            }
+
+            _postprocess_right_panel(svg_path, properties)
+            _postprocess_right_panel(svg_path, properties)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('class="right-side-panel"'), 1)
+            self.assertEqual(
+                svg.count('class="right-panel-table timber-schedule"'),
+                1,
+            )
+            self.assertIn("SPECIFIKACE PRVKŮ KROVU", svg)
+            for heading in (
+                "OZNAČENÍ",
+                "NÁZEV",
+                "ŠÍŘKA",
+                "VÝŠKA",
+                "DÉLKA",
+                "POČET",
+            ):
+                self.assertIn(f">{heading}</text>", svg)
+            self.assertIn(">Hlavní krokve</text>", svg)
+            self.assertIn(">5989</text>", svg)
+            self.assertIn(">27</text>", svg)
+            self.assertIn(
+                'class="timber-schedule-swatch"',
+                svg,
+            )
+            self.assertIn('fill="url(#brick-tint-f4d35e)"', svg)
+            self.assertNotIn(">A</text>", svg)
 
     def test_appends_window_area_and_floor_area_percentage_to_room_legend(
         self,
@@ -8273,6 +8588,15 @@ class HouseTests(unittest.TestCase):
         all_storeys_drawing = house.add_drawing(
             "All storeys", 2.5, 2, 1.6, 4, door_annotations=False
         )
+        two_storeys_drawing = house.add_drawing(
+            "Two storeys",
+            2.5,
+            2,
+            1.6,
+            4,
+            storeys=[ground, upper],
+            door_annotations=False,
+        )
         empty_drawing = house.add_drawing(
             "No storeys",
             2.5,
@@ -8319,6 +8643,9 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(
             automatic_members(all_storeys_drawing), automatic_annotations
         )
+        self.assertEqual(
+            automatic_members(two_storeys_drawing), automatic_annotations
+        )
         self.assertEqual(automatic_members(empty_drawing), set())
         self.assertEqual(ground_drawing.storeys, (ground,))
         self.assertEqual(all_storeys_drawing.storeys, (ground, upper))
@@ -8329,6 +8656,24 @@ class HouseTests(unittest.TestCase):
             ground_drawing.element, "EPset_Drawing", "Include"
         )
         self.assertEqual(ground_include, f'location="{ground.element.GlobalId}"')
+        two_storeys_include = ifcopenshell.util.element.get_pset(
+            two_storeys_drawing.element,
+            "EPset_Drawing",
+            "Include",
+        )
+        self.assertEqual(
+            two_storeys_include,
+            (
+                f'location="{ground.element.GlobalId}" + '
+                f'location="{upper.element.GlobalId}"'
+            ),
+        )
+        selected_storey_elements = ifcopenshell.util.selector.filter_elements(
+            house.model,
+            two_storeys_include,
+        )
+        self.assertIn(ground_wall, selected_storey_elements)
+        self.assertIn(upper_wall, selected_storey_elements)
         self.assertIsNone(
             ifcopenshell.util.element.get_pset(
                 all_storeys_drawing.element, "EPset_Drawing", "Include"
@@ -8394,7 +8739,7 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(
             include,
-            f'location="{upper.element.GlobalId}"+{furniture.GlobalId}',
+            f'location="{upper.element.GlobalId}" + {furniture.GlobalId}',
         )
         selected_elements = ifcopenshell.util.selector.filter_elements(
             house.model,
@@ -8903,6 +9248,7 @@ class HouseTests(unittest.TestCase):
             svg_path = Path(directory) / "plan.svg"
             svg_path.write_text(
                 """<svg>
+<g class="section target-view-PLANVIEW">
   <g class="IfcBeam material-Wood projection">
     <path d="M0,0 L1,0"/>
     <path d="M3,0 L4,0"/>
@@ -8913,6 +9259,18 @@ class HouseTests(unittest.TestCase):
   <g class="IfcBeam material-Steel projection">
     <path d="M5,0 L6,0 L6,1 L5,1"/>
   </g>
+  <g class="IfcBeam material-Wood projection">
+    <path d="M4,2 L5,2 L5,4 L4,4 L4,2"/>
+  </g>
+  <g class="IfcBeam material-Wood projection">
+    <path d="M6,2 L7,2"/>
+    <path d="M6,2 L6,5"/>
+    <path d="M7,2 L7,4"/>
+  </g>
+  <g class="IfcBeam material-Wood projection">
+    <path d="M8,0 L9,1 L8,2 L7,1 L8,0"/>
+  </g>
+</g>
 </svg>
 """,
                 encoding="utf-8",
@@ -8927,7 +9285,29 @@ class HouseTests(unittest.TestCase):
                 'points="0,0 4,0 4,1 0,1"/>'
             )
             self.assertEqual(svg.count(polygon), 1)
-            self.assertLess(svg.index(polygon), svg.index('<path d="M0,0 L1,0"'))
+            self.assertIn(
+                '<polygon class="projected-wood-fill" '
+                'points="4,2 5,2 5,4 4,4"/>',
+                svg,
+            )
+            self.assertIn(
+                '<polygon class="projected-wood-fill" '
+                'points="6,2 7,2 7,5 6,5"/>',
+                svg,
+            )
+            self.assertIn(
+                '<polygon class="projected-wood-fill" '
+                'points="7,1 8,0 9,1 8,2"/>',
+                svg,
+            )
+            fill_layer = '<g class="projected-wood-fill-layer">'
+            wood_group = '<g class="IfcBeam material-Wood projection">'
+            self.assertEqual(svg.count(fill_layer), 1)
+            self.assertLess(svg.index(fill_layer), svg.index(wood_group))
+            self.assertLess(
+                svg.rindex('<polygon class="projected-wood-fill"'),
+                svg.index(wood_group),
+            )
             self.assertNotIn('points="5,0 6,0 6,1 5,1"', svg)
 
         stylesheet = (
@@ -8969,9 +9349,11 @@ class HouseTests(unittest.TestCase):
             svg_path = Path(directory) / "roof.svg"
             svg_path.write_text(
                 """<svg>
+<g class="section target-view-PLANVIEW">
   <g class="IfcBeam material-Wood projection">
     <path d="M0,0 L2,0 L2,1 L0,1 L0,0"/>
   </g>
+</g>
 </svg>
 """,
                 encoding="utf-8",
@@ -8989,6 +9371,10 @@ class HouseTests(unittest.TestCase):
                 'points="0,0 2,0 2,1 0,1"/>',
                 svg,
             )
+            self.assertLess(
+                svg.index('<g class="projected-wood-fill-layer">'),
+                svg.index('<g class="IfcBeam material-Wood projection">'),
+            )
 
         with self.assertRaisesRegex(ValueError, "only supported for plan"):
             house.add_drawing(
@@ -9000,6 +9386,117 @@ class HouseTests(unittest.TestCase):
                 view="elevation",
                 direction=(0, 1, 0),
                 projected_wood_color="yellow",
+            )
+
+    def test_patterns_selected_projected_wood_members(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "roof.svg"
+            svg_path.write_text(
+                """<svg>
+<defs>
+  <pattern id="brick" width="3" height="3">
+    <rect width="3" height="3" fill="white"/>
+    <line x1="1" y1="0" x2="1" y2="3"/>
+  </pattern>
+</defs>
+<g class="section target-view-PLANVIEW">
+  <g id="styled-product" class="IfcBeam material-Wood projection" ifc:guid="styled-member">
+    <path d="M0,0 L2,0 L2,1 L0,1 L0,0"/>
+  </g>
+  <g id="ordinary-product" class="IfcBeam material-Wood projection" ifc:guid="ordinary-member">
+    <path d="M3,0 L5,0 L5,1 L3,1 L3,0"/>
+  </g>
+  <g id="solid-product" class="IfcBeam material-Wood projection" ifc:guid="solid-member">
+    <path d="M6,0 L8,0 L8,1 L6,1 L6,0"/>
+  </g>
+</g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_projected_wood_fills(
+                svg_path,
+                color="#f4d35e",
+                styles={
+                    "styled-member": {
+                        "pattern": "brick",
+                        "color": "#f4a261",
+                        "drawing_order": 1,
+                    },
+                    "solid-member": {
+                        "color": "#e76f51",
+                        "drawing_order": 0,
+                    },
+                    "ordinary-member": {"drawing_order": 2},
+                },
+            )
+            _postprocess_projected_wood_fills(
+                svg_path,
+                color="#f4d35e",
+                styles={
+                    "styled-member": {
+                        "pattern": "brick",
+                        "color": "#f4a261",
+                        "drawing_order": 1,
+                    },
+                    "solid-member": {
+                        "color": "#e76f51",
+                        "drawing_order": 0,
+                    },
+                    "ordinary-member": {"drawing_order": 2},
+                },
+            )
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('id="brick-tint-f4a261"'), 1)
+            self.assertIn(
+                '<rect width="3" height="3" fill="#f4a261"/>',
+                svg,
+            )
+            self.assertIn(
+                'style="fill: url(#brick-tint-f4a261) !important;" '
+                'points="0,0 2,0 2,1 0,1"',
+                svg,
+            )
+            self.assertIn(
+                'style="fill: #f4d35e !important;" '
+                'points="3,0 5,0 5,1 3,1"',
+                svg,
+            )
+            self.assertIn(
+                'style="fill: #e76f51 !important;" '
+                'points="6,0 8,0 8,1 6,1"',
+                svg,
+            )
+            self.assertEqual(
+                svg.count('class="projected-wood-order-layer"'),
+                3,
+            )
+            self.assertIn('<use href="#styled-product"/>', svg)
+            self.assertIn('<use href="#solid-product"/>', svg)
+            self.assertIn('<use href="#ordinary-product"/>', svg)
+            self.assertEqual(
+                svg.count('class="projected-wood-order-outline"'),
+                3,
+            )
+            self.assertLess(
+                svg.index(
+                    'style="fill: #e76f51 !important;" '
+                    'points="6,0 8,0 8,1 6,1"'
+                ),
+                svg.index(
+                    'class="projected-wood-order-outline" '
+                    'points="6,0 8,0 8,1 6,1"'
+                ),
+            )
+            self.assertLess(
+                svg.index('data-drawing-order="0"'),
+                svg.index('data-drawing-order="1"'),
+            )
+            self.assertLess(
+                svg.index('data-drawing-order="1"'),
+                svg.index('data-drawing-order="2"'),
             )
 
     def test_masks_projected_members_behind_roof_opening_outline(self) -> None:
@@ -9016,6 +9513,10 @@ class HouseTests(unittest.TestCase):
   <line class="GlobalId-OPENING IfcAnnotation PredefinedType-LINEWORK roof-opening dashed" x1="6.5" y1="4.5" x2="6.5" y2="7.5"/>
   <line class="GlobalId-OPENING IfcAnnotation PredefinedType-LINEWORK roof-opening dashed" x1="6.5" y1="7.5" x2="3.5" y2="7.5"/>
   <line class="GlobalId-OPENING IfcAnnotation PredefinedType-LINEWORK roof-opening dashed" x1="3.5" y1="7.5" x2="3.5" y2="4.5"/>
+  <line class="GlobalId-UNMASKED IfcAnnotation PredefinedType-LINEWORK roof-opening roof-opening-unmasked dashed" x1="8" y1="4" x2="10" y2="4"/>
+  <line class="GlobalId-UNMASKED IfcAnnotation PredefinedType-LINEWORK roof-opening roof-opening-unmasked dashed" x1="10" y1="4" x2="10" y2="8"/>
+  <line class="GlobalId-UNMASKED IfcAnnotation PredefinedType-LINEWORK roof-opening roof-opening-unmasked dashed" x1="10" y1="8" x2="8" y2="8"/>
+  <line class="GlobalId-UNMASKED IfcAnnotation PredefinedType-LINEWORK roof-opening roof-opening-unmasked dashed" x1="8" y1="8" x2="8" y2="4"/>
 </svg>
 """,
                 encoding="utf-8",
@@ -9033,6 +9534,11 @@ class HouseTests(unittest.TestCase):
             self.assertNotIn("roof-opening-mask-source", svg)
             self.assertGreater(svg.index(mask), svg.index("projected-rafter-fill"))
             self.assertLess(svg.index(mask), svg.index("roof-opening dashed"))
+            self.assertNotIn(
+                'points="8,4 10,4 10,8 8,8"',
+                svg,
+            )
+            self.assertEqual(svg.count("roof-opening-unmasked"), 4)
 
     def test_applies_drawing_specific_model_line_width(self) -> None:
         house = House("My house")

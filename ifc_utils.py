@@ -1105,8 +1105,18 @@ def _postprocess_projection_hull_fills(
     required_classes: set[str],
     fill_class: str,
     fill_style: str | None = None,
+    fill_styles_by_guid: Mapping[str, str] | None = None,
+    drawing_orders_by_guid: Mapping[str, int] | None = None,
+    fill_layer_class: str | None = None,
+    repair_axis_aligned_boxes: bool = False,
 ) -> None:
-    """Add a filled hull behind matching groups of open projection paths."""
+    """Add a filled hull behind matching groups of open projection paths.
+
+    When requested, an axis-aligned outline with only two X or two Y bands is
+    completed to its bounding box.  Projection linework can omit one obscured
+    corner of a rectangular member, which would otherwise leave a triangular
+    or trapezoidal convex-hull fill.
+    """
     svg = svg_path.read_text(encoding="utf-8")
     if f'class="{fill_class}"' in svg:
         return
@@ -1118,8 +1128,22 @@ def _postprocess_projection_hull_fills(
         re.DOTALL,
     )
     coordinate = re.compile(rf'({_SVG_NUMBER})[,\s]+({_SVG_NUMBER})')
+    layered_polygons: list[str] = []
+    ordered_overlays: dict[
+        int,
+        list[tuple[str, str, str | None]],
+    ] = {}
+    first_filled_group_offset: int | None = None
+
+    def coordinate_bands(values: list[float]) -> list[float]:
+        bands: list[float] = []
+        for value in sorted(values):
+            if not bands or abs(value - bands[-1]) > 1e-6:
+                bands.append(value)
+        return bands
 
     def add_fill(match: re.Match[str]) -> str:
+        nonlocal first_filled_group_offset
         attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
         classes = set(attributes.get("class", "").split())
         if not required_classes <= classes:
@@ -1132,7 +1156,24 @@ def _postprocess_projection_hull_fills(
                 (float(x), float(y))
                 for x, y in coordinate.findall(path_data)
             )
-        hull = _convex_hull_2d(points)
+        x_bands = coordinate_bands([x for x, _ in points])
+        y_bands = coordinate_bands([y for _, y in points])
+        if repair_axis_aligned_boxes and (
+            (len(x_bands) == 2 and len(y_bands) >= 2)
+            or (len(y_bands) == 2 and len(x_bands) >= 2)
+        ):
+            min_x = min(x for x, _ in points)
+            max_x = max(x for x, _ in points)
+            min_y = min(y for _, y in points)
+            max_y = max(y for _, y in points)
+            hull = [
+                (min_x, min_y),
+                (max_x, min_y),
+                (max_x, max_y),
+                (min_x, max_y),
+            ]
+        else:
+            hull = _convex_hull_2d(points)
         if not hull:
             return match.group(0)
         point_text = " ".join(f"{x:g},{y:g}" for x, y in hull)
@@ -1140,35 +1181,246 @@ def _postprocess_projection_hull_fills(
         indentation_match = re.match(r'\n([ \t]+)', match["body"])
         if indentation_match is not None:
             indentation = indentation_match.group(1)
+        group_fill_style = (
+            fill_styles_by_guid.get(attributes.get("ifc:guid", ""))
+            if fill_styles_by_guid is not None
+            else None
+        )
+        if group_fill_style is None:
+            group_fill_style = fill_style
         style_attribute = (
-            f' style="{escape(fill_style, quote=True)}"'
-            if fill_style is not None
+            f' style="{escape(group_fill_style, quote=True)}"'
+            if group_fill_style is not None
             else ""
         )
-        polygon = (
-            f'\n{indentation}<polygon class="{fill_class}"'
+        polygon_element = (
+            f'<polygon class="{fill_class}"'
             f'{style_attribute} points="{point_text}"/>'
         )
+        if fill_layer_class is not None:
+            global_id = attributes.get("ifc:guid", "")
+            drawing_order = (
+                drawing_orders_by_guid.get(global_id)
+                if drawing_orders_by_guid is not None
+                else None
+            )
+            if drawing_order is not None:
+                ordered_overlays.setdefault(drawing_order, []).append(
+                    (polygon_element, point_text, attributes.get("id")),
+                )
+                return match.group(0)
+            layered_polygons.append(polygon_element)
+            if first_filled_group_offset is None:
+                first_filled_group_offset = match.start()
+            return match.group(0)
+        polygon = f"\n{indentation}{polygon_element}"
         return (
             f'{match["open"]}{polygon}{match["body"]}{match["close"]}'
         )
 
     processed_svg = simple_group.sub(add_fill, svg)
+    if fill_layer_class is not None and layered_polygons:
+        assert first_filled_group_offset is not None
+        line_start = svg.rfind("\n", 0, first_filled_group_offset) + 1
+        child_indentation = svg[line_start:first_filled_group_offset]
+        if child_indentation.strip():
+            child_indentation = "  "
+        polygon_indentation = child_indentation + "  "
+        layer_body = "\n".join(
+            f"{polygon_indentation}{polygon}"
+            for polygon in layered_polygons
+        )
+        layer = (
+            f'<g class="{fill_layer_class}">\n'
+            f"{layer_body}\n"
+            f"{child_indentation}</g>"
+        )
+
+        section_open: re.Match[str] | None = None
+        for group_open in re.finditer(
+            r'<g\b[^>]*\bclass="([^"]*)"[^>]*>', processed_svg
+        ):
+            if "section" in group_open.group(1).split():
+                section_open = group_open
+                break
+        if section_open is not None:
+            insertion_offset = section_open.end()
+            processed_svg = (
+                f"{processed_svg[:insertion_offset]}\n"
+                f"{child_indentation}{layer}"
+                f"{processed_svg[insertion_offset:]}"
+            )
+        else:
+            insertion_offset = first_filled_group_offset
+            processed_svg = (
+                f"{processed_svg[:insertion_offset]}{layer}\n"
+                f"{child_indentation}{processed_svg[insertion_offset:]}"
+            )
+    if ordered_overlays:
+        section_open = next(
+            (
+                group_open
+                for group_open in re.finditer(
+                    r'<g\b[^>]*\bclass="([^"]*)"[^>]*>',
+                    processed_svg,
+                )
+                if "section" in group_open.group(1).split()
+            ),
+            None,
+        )
+        if section_open is not None:
+            section_close_offset = None
+            depth = 1
+            for group_token in re.finditer(
+                r"<g\b[^>]*>|</g>",
+                processed_svg[section_open.end() :],
+            ):
+                if group_token.group(0).startswith("<g"):
+                    depth += 1
+                else:
+                    depth -= 1
+                    if depth == 0:
+                        section_close_offset = (
+                            section_open.end() + group_token.start()
+                        )
+                        break
+            if section_close_offset is not None:
+                order_layers = []
+                for drawing_order in sorted(ordered_overlays):
+                    overlays = ordered_overlays[drawing_order]
+                    # Fill every member in the category before restoring its
+                    # linework.  Otherwise the next touching member's fill
+                    # can erase their shared separation edge.
+                    layer_body = [
+                        f"      {polygon}"
+                        for polygon, _, _ in overlays
+                    ]
+                    for _, point_text, product_id in overlays:
+                        if product_id is not None:
+                            layer_body.append(
+                                f'      <use href="#{escape(product_id, quote=True)}"/>'
+                            )
+                        # Bonsai merges the coplanar edge between touching
+                        # beams, so it is absent from the source linework.
+                        # The hull outline restores both outer perimeters and
+                        # same-category separation lines explicitly.
+                        layer_body.append(
+                            '<polygon class="projected-wood-order-outline" '
+                            f'points="{point_text}"/>'
+                        )
+                    order_layers.append(
+                        '    <g class="projected-wood-order-layer" '
+                        f'data-drawing-order="{drawing_order}">\n'
+                        + "\n".join(layer_body)
+                        + "\n    </g>\n"
+                    )
+                processed_svg = (
+                    f"{processed_svg[:section_close_offset]}"
+                    f"{''.join(order_layers)}"
+                    f"{processed_svg[section_close_offset:]}"
+                )
     if processed_svg != svg:
         svg_path.write_text(processed_svg, encoding="utf-8")
+
+
+def _tinted_pattern_id(pattern: str, color: str) -> str:
+    """Return the stable SVG identifier for one tinted drawing pattern."""
+    color_token = re.sub(r"[^0-9A-Za-z]+", "", color).lower()
+    pattern_token = re.sub(r"[^0-9A-Za-z_-]+", "-", pattern)
+    return f"{pattern_token}-tint-{color_token}"
+
+
+def _inject_tinted_drawing_patterns(
+    svg_path: Path,
+    appearances: set[tuple[str, str]],
+) -> None:
+    """Clone existing SVG patterns with a different background color."""
+    if not appearances:
+        return
+    svg = svg_path.read_text(encoding="utf-8")
+    definitions_end = svg.find("</defs>")
+    if definitions_end < 0:
+        return
+
+    clones = []
+    for pattern, color in sorted(appearances):
+        tinted_id = _tinted_pattern_id(pattern, color)
+        if re.search(rf'<pattern\b[^>]*\bid="{re.escape(tinted_id)}"', svg):
+            continue
+        source = re.search(
+            rf'<pattern\b(?=[^>]*\bid="{re.escape(pattern)}")[^>]*>'
+            r".*?</pattern>",
+            svg,
+            re.DOTALL,
+        )
+        if source is None:
+            continue
+        clone = re.sub(
+            rf'(\bid="){re.escape(pattern)}(")',
+            rf"\g<1>{tinted_id}\g<2>",
+            source.group(0),
+            count=1,
+        )
+        clone = re.sub(
+            r'(<rect\b[^>]*\bfill=")[^"]*(")',
+            lambda match: f'{match.group(1)}{color}{match.group(2)}',
+            clone,
+            count=1,
+        )
+        clones.append(clone)
+    if not clones:
+        return
+    svg = (
+        f"{svg[:definitions_end]}\n"
+        + "\n".join(clones)
+        + f"\n{svg[definitions_end:]}"
+    )
+    svg_path.write_text(svg, encoding="utf-8")
 
 
 def _postprocess_projected_wood_fills(
     svg_path: Path,
     *,
     color: str | None = None,
+    styles: Mapping[str, Mapping[str, object]] | None = None,
 ) -> None:
     """Add a filled hull behind open projected-wood edge paths in plans."""
+    fill_styles_by_guid = {}
+    drawing_orders_by_guid = {}
+    if styles:
+        _inject_tinted_drawing_patterns(
+            svg_path,
+            {
+                (style["pattern"], style["color"])
+                for style in styles.values()
+                if isinstance(style.get("pattern"), str)
+                and isinstance(style.get("color"), str)
+            },
+        )
+        for global_id, style in styles.items():
+            color_value = style.get("color")
+            if isinstance(color_value, str):
+                pattern_value = style.get("pattern")
+                fill = (
+                    f"url(#{_tinted_pattern_id(pattern_value, color_value)})"
+                    if isinstance(pattern_value, str)
+                    else color_value
+                )
+                fill_styles_by_guid[global_id] = f"fill: {fill} !important;"
+            drawing_order = style.get("drawing_order")
+            if isinstance(drawing_order, int) and not isinstance(
+                drawing_order, bool
+            ):
+                drawing_orders_by_guid[global_id] = drawing_order
     _postprocess_projection_hull_fills(
         svg_path,
         required_classes={"IfcBeam", "material-Wood", "projection"},
         fill_class="projected-wood-fill",
         fill_style=(f"fill: {color} !important;" if color is not None else None),
+        fill_styles_by_guid=fill_styles_by_guid,
+        drawing_orders_by_guid=drawing_orders_by_guid,
+        fill_layer_class="projected-wood-fill-layer",
+        repair_axis_aligned_boxes=True,
     )
 
 
@@ -1187,6 +1439,8 @@ def _postprocess_roof_opening_masks(svg_path: Path) -> None:
     for match in line_pattern.finditer(svg):
         attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
         classes = set(attributes.get("class", "").split())
+        if "roof-opening-unmasked" in classes:
+            continue
         if not {
             "roof-opening-mask-source",
             "roof-opening",
@@ -2457,6 +2711,237 @@ def _lintel_legend_svg(
     return "\n    ".join(parts), height
 
 
+def _timber_schedule_svg(
+    table: Mapping[str, object],
+    *,
+    x: float,
+    y: float,
+    width: float,
+    units_per_mm: float,
+    layout_scale: float | None = None,
+) -> tuple[str, float]:
+    """Return one structural-timber schedule and its SVG height."""
+    title = str(table.get("title", "SPECIFIKACE PRVKŮ KROVU"))
+    supplied_items = table.get("items", [])
+    items = supplied_items if isinstance(supplied_items, list) else []
+    width_mm = width / units_per_mm
+    if layout_scale is None:
+        layout_scale = min(1.0, width_mm / 100.0)
+
+    normalised_items: list[
+        tuple[str, str, int, int, int, int, str | None, str | None]
+    ] = []
+    for supplied_item in items:
+        if not isinstance(supplied_item, dict):
+            continue
+        try:
+            mark = str(supplied_item["mark"])
+            name = str(supplied_item["name"])
+            member_width = int(supplied_item["width"])
+            member_height = int(supplied_item["height"])
+            length = int(supplied_item["length"])
+            count = int(supplied_item["count"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        pattern_value = supplied_item.get("pattern")
+        color_value = supplied_item.get("color")
+        pattern = pattern_value if isinstance(pattern_value, str) else None
+        color = color_value if isinstance(color_value, str) else None
+        normalised_items.append(
+            (
+                mark,
+                name,
+                member_width,
+                member_height,
+                length,
+                count,
+                pattern,
+                color,
+            )
+        )
+
+    u = units_per_mm
+    title_height = 11.0 * layout_scale * u
+    heading_height = 8.0 * layout_scale * u
+    row_height = 7.5 * layout_scale * u
+    height = title_height + heading_height + len(normalised_items) * row_height
+    right = x + width
+    title_bottom = y + title_height
+    heading_bottom = title_bottom + heading_height
+    column_rights = (
+        x + width * 0.15,
+        x + width * 0.49,
+        x + width * 0.61,
+        x + width * 0.73,
+        x + width * 0.89,
+        right,
+    )
+    column_lefts = (x, *column_rights[:-1])
+    column_centres = tuple(
+        (left + right_edge) / 2
+        for left, right_edge in zip(column_lefts, column_rights)
+    )
+    parts = [
+        '<g class="right-panel-table timber-schedule">',
+        (
+            f'<rect class="right-panel-table-outline" x="{x:.6g}" '
+            f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
+        ),
+        (
+            f'<text class="right-panel-table-title" '
+            f'x="{x + width / 2:.6g}" '
+            f'y="{y + title_height / 2:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{5.0 * layout_scale:.6g}px">'
+            f'{escape(title)}</text>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{title_bottom:.6g}"/>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{heading_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{heading_bottom:.6g}"/>'
+        ),
+    ]
+    for column_right in column_rights[:-1]:
+        parts.append(
+            f'<line class="right-panel-table-grid" '
+            f'x1="{column_right:.6g}" y1="{title_bottom:.6g}" '
+            f'x2="{column_right:.6g}" y2="{y + height:.6g}"/>'
+        )
+
+    heading_y = title_bottom + heading_height / 2
+    heading_font_size = 2.6 * layout_scale
+    for heading, centre in zip(
+        ("OZNAČENÍ", "NÁZEV", "ŠÍŘKA", "VÝŠKA", "DÉLKA", "POČET"),
+        column_centres,
+    ):
+        parts.append(
+            f'<text class="timber-schedule-heading" x="{centre:.6g}" '
+            f'y="{heading_y:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{heading_font_size:.6g}px">'
+            f'{heading}</text>'
+        )
+
+    row_y = heading_bottom
+    body_font_size = 2.9 * layout_scale
+    for (
+        mark,
+        name,
+        member_width,
+        member_height,
+        length,
+        count,
+        pattern,
+        color,
+    ) in normalised_items:
+        centre_y = row_y + row_height / 2
+        if color is not None:
+            swatch_inset = 0.55 * layout_scale * u
+            swatch_fill = (
+                f"url(#{_tinted_pattern_id(pattern, color)})"
+                if pattern is not None
+                else color
+            )
+            parts.append(
+                f'<rect class="timber-schedule-swatch" '
+                f'x="{x + swatch_inset:.6g}" '
+                f'y="{row_y + swatch_inset:.6g}" '
+                f'width="{column_rights[0] - x - 2 * swatch_inset:.6g}" '
+                f'height="{row_height - 2 * swatch_inset:.6g}" '
+                f'fill="{swatch_fill}"/>'
+            )
+        else:
+            parts.append(
+                f'<text class="timber-schedule-text" '
+                f'x="{column_centres[0]:.6g}" y="{centre_y:.6g}" '
+                f'text-anchor="middle" dominant-baseline="middle" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{escape(mark)}</text>'
+            )
+        values = (
+            name,
+            str(member_width),
+            str(member_height),
+            str(length),
+            str(count),
+        )
+        for column_index, (value, centre) in enumerate(
+            zip(values, column_centres[1:]),
+            start=1,
+        ):
+            text_anchor = "start" if column_index == 1 else "middle"
+            text_x = (
+                column_lefts[column_index] + 1.5 * layout_scale * u
+                if column_index == 1
+                else centre
+            )
+            parts.append(
+                f'<text class="timber-schedule-text" x="{text_x:.6g}" '
+                f'y="{centre_y:.6g}" text-anchor="{text_anchor}" '
+                f'dominant-baseline="middle" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{escape(value)}</text>'
+            )
+        row_y += row_height
+        if row_y < y + height - 1e-9:
+            parts.append(
+                f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+                f'y1="{row_y:.6g}" x2="{right:.6g}" '
+                f'y2="{row_y:.6g}"/>'
+            )
+    parts.append("</g>")
+    return "\n    ".join(parts), height
+
+
+def _timber_schedule_member_styles(
+    drawing_properties: Mapping[str, object],
+) -> dict[str, dict[str, object]]:
+    """Return drawing-only timber appearances persisted by schedules."""
+    try:
+        tables = json.loads(
+            str(drawing_properties.get("RightPanelTables", "[]"))
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    if not isinstance(tables, list):
+        return {}
+    styles = {}
+    for table in tables:
+        if not isinstance(table, dict) or table.get("kind") != "timber_schedule":
+            continue
+        items = table.get("items", [])
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            pattern = item.get("pattern")
+            color = item.get("color")
+            drawing_order = item.get("drawing_order")
+            member_guids = item.get("member_guids", [])
+            if not isinstance(member_guids, list):
+                continue
+            for global_id in member_guids:
+                if isinstance(global_id, str):
+                    style: dict[str, object] = {}
+                    if isinstance(color, str):
+                        style["color"] = color
+                    if isinstance(pattern, str) and isinstance(color, str):
+                        style["pattern"] = pattern
+                    if isinstance(drawing_order, int) and not isinstance(
+                        drawing_order, bool
+                    ):
+                        style["drawing_order"] = drawing_order
+                    if style:
+                        styles[global_id] = style
+    return styles
+
+
 def _postprocess_right_panel(
     svg_path: Path,
     drawing_properties: Mapping[str, object],
@@ -2524,6 +3009,7 @@ def _postprocess_right_panel(
             "material_legend": _material_legend_svg,
             "room_legend": _room_legend_svg,
             "lintel_legend": _lintel_legend_svg,
+            "timber_schedule": _timber_schedule_svg,
         }.get(table.get("kind"))
         if table_renderer is None:
             continue
@@ -3863,6 +4349,9 @@ def _render_existing_drawing(
                 str(projected_wood_color)
                 if projected_wood_color
                 else None
+            ),
+            styles=_timber_schedule_member_styles(
+                drawing_properties or {}
             ),
         )
         _postprocess_roof_opening_masks(absolute_output)
@@ -5951,7 +6440,8 @@ class House:
         measured in printed millimetres.  It does not resize or move the model
         view.  Use :meth:`Drawing.add_material_legend` and
         :meth:`Drawing.add_room_legend`, or
-        :meth:`Drawing.add_lintel_legend` to add optional tables to that panel.
+        :meth:`Drawing.add_lintel_legend` to add optional legends, or
+        :meth:`Drawing.add_timber_schedule` for a measured roof-member table.
         ``projected_wood_color`` optionally overrides the fill of projected
         wooden beams in this plan only; cut wood and other drawings are not
         affected.
@@ -6307,7 +6797,7 @@ class Drawing:
             drawing_properties["ModelLineWidth"] = self.model_line_width
         if not self._includes_all_storeys:
             drawing_properties["Include"] = (
-                "+".join(
+                " + ".join(
                     f'location="{storey.element.GlobalId}"'
                     for storey in self._storeys
                 )
@@ -6397,10 +6887,12 @@ class Drawing:
         )
         if include is None:
             include = element.GlobalId
-        elif element.GlobalId in include.split("+"):
+        elif element.GlobalId in {
+            selector.strip() for selector in include.split("+")
+        }:
             return
         else:
-            include = f"{include}+{element.GlobalId}"
+            include = f"{include} + {element.GlobalId}"
         ifcopenshell.api.pset.edit_pset(
             self.house.model,
             pset=self._drawing_pset,
@@ -7188,6 +7680,216 @@ class Drawing:
         self._right_panel_tables.append(
             {
                 "kind": "lintel_legend",
+                "title": title,
+                "items": items,
+            }
+        )
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model,
+            pset=self._drawing_pset,
+            properties={
+                "RightPanelTables": json.dumps(
+                    self._right_panel_tables,
+                    ensure_ascii=False,
+                )
+            },
+        )
+        return self
+
+    def add_timber_schedule(
+        self,
+        rows: Sequence[
+            tuple[str, Sequence[Beam], Number]
+            | tuple[str, Sequence[Beam], Number, Mapping[str, object]]
+        ],
+        *,
+        title: str = "SPECIFIKACE PRVKŮ KROVU",
+    ) -> Drawing:
+        """Add an automatically measured structural-timber schedule.
+
+        Each row is ``(name, members, extra_length)`` and may include a fourth
+        optional settings such as ``{"color": ..., "pattern": ...,
+        "drawing_order": ...}``; omit ``pattern`` for a solid fill.  Members
+        with a higher integer ``drawing_order`` are drawn over members with a
+        lower one.  The ordering may be supplied without a colour.  ``members``
+        must be a non-empty group of equal-section beams with equal finished
+        lengths;
+        clipping planes are included when measuring them.  ``extra_length``
+        is added only to the displayed procurement length, which is useful for
+        a rafter end-cut allowance.  Marks are assigned as A, B, C, ...; rows
+        with an appearance show its hatch instead and apply it to those
+        projected members in this plan.  All dimensions are rounded to
+        millimetres.
+        """
+        if self.right_panel_width <= 0:
+            raise ValueError(
+                "add_timber_schedule requires right_panel_width on the drawing"
+            )
+        if self.right_panel_width < 70:
+            raise ValueError(
+                "right_panel_width must be at least 70 mm for a timber schedule"
+            )
+        title = _name(title, "title")
+        if isinstance(rows, (str, bytes)):
+            raise TypeError("rows must be a sequence of timber schedule rows")
+        try:
+            supplied_rows = list(rows)
+        except TypeError as error:
+            raise TypeError(
+                "rows must be a sequence of timber schedule rows"
+            ) from error
+        if not supplied_rows:
+            raise ValueError("rows must contain at least one timber group")
+
+        def alphabetical_mark(index: int) -> str:
+            mark = ""
+            value = index + 1
+            while value:
+                value, remainder = divmod(value - 1, 26)
+                mark = chr(ord("A") + remainder) + mark
+            return mark
+
+        items = []
+        available_patterns = _drawing_pattern_ids()
+        for row_index, supplied_row in enumerate(supplied_rows, start=1):
+            if isinstance(supplied_row, (str, bytes)):
+                raise TypeError(
+                    f"row {row_index} must contain name, members, extra length, "
+                    "and an optional appearance"
+                )
+            try:
+                row_values = tuple(supplied_row)
+            except TypeError as error:
+                raise TypeError(
+                    f"row {row_index} must contain name, members, extra length, "
+                    "and an optional appearance"
+                ) from error
+            if len(row_values) not in {3, 4}:
+                raise TypeError(
+                    f"row {row_index} must contain name, members, extra length, "
+                    "and an optional appearance"
+                )
+            name, supplied_members, extra_length = row_values[:3]
+            supplied_appearance = row_values[3] if len(row_values) == 4 else None
+            name = _name(name, f"row {row_index} name")
+            extra_length = _number(
+                extra_length,
+                f"row {row_index} extra_length",
+            )
+            if extra_length < 0:
+                raise ValueError(
+                    f"row {row_index} extra_length must not be negative"
+                )
+            appearance: dict[str, object] | None = None
+            if supplied_appearance is not None:
+                if not isinstance(supplied_appearance, Mapping):
+                    raise TypeError(
+                        f"row {row_index} appearance must be a mapping"
+                    )
+                appearance = {}
+                if "color" in supplied_appearance:
+                    color_channels = _color(
+                        supplied_appearance["color"],
+                        f"row {row_index} appearance color",
+                    )
+                    appearance["color"] = "#" + "".join(
+                        f"{round(channel * 255):02x}"
+                        for channel in color_channels
+                    )
+                if "pattern" in supplied_appearance:
+                    if "color" not in appearance:
+                        raise ValueError(
+                            f"row {row_index} appearance pattern requires color"
+                        )
+                    pattern = _name(
+                        supplied_appearance["pattern"],
+                        f"row {row_index} appearance pattern",
+                    )
+                    if pattern not in available_patterns:
+                        raise ValueError(
+                            f'row {row_index} pattern "{pattern}" is not available'
+                        )
+                    appearance["pattern"] = pattern
+                if "drawing_order" in supplied_appearance:
+                    drawing_order = supplied_appearance["drawing_order"]
+                    if isinstance(drawing_order, bool) or not isinstance(
+                        drawing_order, int
+                    ):
+                        raise TypeError(
+                            f"row {row_index} appearance drawing_order must be "
+                            "an integer"
+                        )
+                    if drawing_order < 0:
+                        raise ValueError(
+                            f"row {row_index} appearance drawing_order must not "
+                            "be negative"
+                        )
+                    appearance["drawing_order"] = drawing_order
+                if not appearance:
+                    raise ValueError(
+                        f"row {row_index} appearance must contain color or "
+                        "drawing_order"
+                    )
+            if isinstance(supplied_members, (str, bytes)):
+                raise TypeError(f"row {row_index} members must be a sequence")
+            try:
+                members = list(supplied_members)
+            except TypeError as error:
+                raise TypeError(
+                    f"row {row_index} members must be a sequence"
+                ) from error
+            if not members:
+                raise ValueError(
+                    f"row {row_index} members must contain at least one beam"
+                )
+            for member_index, member in enumerate(members, start=1):
+                if not isinstance(member, Beam):
+                    raise TypeError(
+                        f"row {row_index} member {member_index} must be a Beam"
+                    )
+                if member.file is not self.house.model:
+                    raise ValueError(
+                        f"row {row_index} member {member_index} must belong "
+                        "to this house"
+                    )
+
+            first = members[0]
+            width_mm = round(first.width * 1000)
+            height_mm = round(first.height * 1000)
+            for member in members[1:]:
+                if (
+                    round(member.width * 1000) != width_mm
+                    or round(member.height * 1000) != height_mm
+                ):
+                    raise ValueError(
+                        f"row {row_index} members must have equal sections"
+                    )
+
+            finished_lengths = [member.finished_length() for member in members]
+            finished_length_mm = [round(length * 1000) for length in finished_lengths]
+            if len(set(finished_length_mm)) != 1:
+                raise ValueError(
+                    f"row {row_index} members must have equal finished lengths"
+                )
+            scheduled_length_mm = round(
+                (max(finished_lengths) + extra_length) * 1000
+            )
+            item = {
+                "mark": alphabetical_mark(row_index - 1),
+                "name": name,
+                "width": width_mm,
+                "height": height_mm,
+                "length": scheduled_length_mm,
+                "count": len(members),
+                "member_guids": [member.GlobalId for member in members],
+            }
+            if appearance is not None:
+                item.update(appearance)
+            items.append(item)
+
+        self._right_panel_tables.append(
+            {
+                "kind": "timber_schedule",
                 "title": title,
                 "items": items,
             }
@@ -8632,17 +9334,20 @@ class Drawing:
         opening: RoofOpening,
         *,
         inset: Number = 0.05,
+        y_min_inset: Number | None = None,
         mask_horizontal_inset: Number = 0.02,
+        mask: bool = True,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
-        """Add a white-backed dashed plan outline for one roof opening.
+        """Add a dashed plan outline for one roof opening.
 
-        The dashed outline is moved inward by ``inset`` on every side.  The
-        white mask retains the opening's full vertical extent but is narrowed
-        by ``mask_horizontal_inset`` on each side, preserving the outlines of
-        the adjacent rafters.  The line uses the same fine dash pattern as
-        wall openings.  This masks projected members behind the future roof
-        window without changing their model geometry.
+        The dashed outline is moved inward by ``inset`` on every side.
+        ``y_min_inset`` may override the inset of only the minimum-Y side.
+        The line uses the same fine dash pattern as wall openings.  By default
+        a white mask retains the opening's full vertical extent but is
+        narrowed by ``mask_horizontal_inset`` on each side, preserving the
+        outlines of the adjacent rafters.  Set ``mask=False`` to leave modeled
+        framing visible beneath the dashed outline.
         """
         self._require_plan_view("add_roof_opening_outline")
         if not isinstance(opening, RoofOpening) or opening.roof is None:
@@ -8654,6 +9359,14 @@ class Drawing:
         inset = _number(inset, "inset")
         if inset < 0:
             raise ValueError("inset must not be negative")
+        if y_min_inset is None:
+            y_min_inset = inset
+        else:
+            y_min_inset = _number(y_min_inset, "y_min_inset")
+            if y_min_inset < 0:
+                raise ValueError("y_min_inset must not be negative")
+        if not isinstance(mask, bool):
+            raise TypeError("mask must be a boolean")
         mask_horizontal_inset = _number(
             mask_horizontal_inset,
             "mask_horizontal_inset",
@@ -8671,9 +9384,12 @@ class Drawing:
             else f"{self.name} {opening.name} Outline"
         )
         (x_min, y_min), (x_max, y_max) = opening.rectangle
-        if 2 * inset >= min(x_max - x_min, y_max - y_min):
+        if (
+            2 * inset >= x_max - x_min
+            or y_min_inset + inset >= y_max - y_min
+        ):
             raise ValueError("inset must leave a non-empty roof opening outline")
-        if 2 * mask_horizontal_inset >= x_max - x_min:
+        if mask and 2 * mask_horizontal_inset >= x_max - x_min:
             raise ValueError(
                 "mask_horizontal_inset must leave a non-empty roof opening mask"
             )
@@ -8685,11 +9401,11 @@ class Drawing:
             (x_min + mask_horizontal_inset, y_min),
         )
         outline_points = (
-            (x_min + inset, y_min + inset),
-            (x_max - inset, y_min + inset),
+            (x_min + inset, y_min + y_min_inset),
+            (x_max - inset, y_min + y_min_inset),
             (x_max - inset, y_max - inset),
             (x_min + inset, y_max - inset),
-            (x_min + inset, y_min + inset),
+            (x_min + inset, y_min + y_min_inset),
         )
 
         model = self.house.model
@@ -8741,20 +9457,27 @@ class Drawing:
             )
             return annotation
 
-        mask_source = add_rectangle(
-            f"{annotation_name} Mask Source",
-            mask_points,
-            "roof-opening-mask-source",
-        )
         outline = add_rectangle(
             annotation_name,
             outline_points,
-            "roof-opening dashed",
+            (
+                "roof-opening dashed"
+                if mask
+                else "roof-opening roof-opening-unmasked dashed"
+            ),
         )
+        drawing_products = [outline]
+        if mask:
+            mask_source = add_rectangle(
+                f"{annotation_name} Mask Source",
+                mask_points,
+                "roof-opening-mask-source",
+            )
+            drawing_products.insert(0, mask_source)
         ifcopenshell.api.group.assign_group(
             model,
             group=self.group,
-            products=[mask_source, outline],
+            products=drawing_products,
         )
         self._annotated_roof_openings.add(opening_identity)
         return outline
@@ -10256,6 +10979,31 @@ class Beam(ifcopenshell.entity_instance):
         """Return this beam as its underlying IFC entity."""
         return self
 
+    def finished_length(self) -> float:
+        """Return the finished solid's extent along the beam axis in metres.
+
+        Unlike :attr:`length`, this includes all Boolean clipping planes.  The
+        tessellation can retain unused vertices from the uncut source solid,
+        so only vertices referenced by a finished face are considered.
+        """
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        shape = ifcopenshell.geom.create_shape(settings, self)
+        vertices = np.asarray(shape.geometry.verts, dtype=float).reshape(-1, 3)
+        faces = np.asarray(shape.geometry.faces, dtype=int)
+        if faces.size == 0:
+            raise ValueError(f'beam "{self.Name}" has no finished faces')
+        used_vertices = vertices[np.unique(faces)]
+        placement = ifcopenshell.util.placement.get_local_placement(
+            self.ObjectPlacement
+        )
+        axis = np.asarray(placement[:3, 0], dtype=float)
+        axis_length = float(np.linalg.norm(axis))
+        if axis_length <= 1e-12:
+            raise ValueError(f'beam "{self.Name}" has no usable axis')
+        axial_positions = used_vertices @ (axis / axis_length)
+        return float(np.ptp(axial_positions))
+
 
 class FacadeLayer(ifcopenshell.entity_instance):
     """One opening-aware ``IfcCovering`` used as exterior cladding."""
@@ -10447,16 +11195,20 @@ class Roof(ifcopenshell.entity_instance):
         name: str | None = None,
         *,
         rectangle: Sequence[Point],
+        trimmers: bool = True,
     ) -> RoofOpening:
-        """Cut a vertical rectangular void through every intersecting roof part.
+        """Cut a roof-normal void through every intersecting roof-plane part.
 
         ``rectangle`` contains two opposite corners in absolute global XY
-        coordinates.  Its order does not matter.  A separate aligned
-        ``IfcOpeningElement`` is created for every intersecting slab or beam,
+        coordinates where the void crosses each roof plane's local-Z-zero
+        datum.  Its order does not matter.  A separate opening aligned to its
+        host roof plane is created for every intersecting slab or beam,
         because IFC permits an opening to void only one building element.
 
         Openings are also applied to roof-plane elements created later, so an
         opening may be registered before or after the roof build-up.
+        ``trimmers`` records whether downstream roof framing should add the
+        pair of headers at the opening ends; it does not affect the void.
         """
         opening_name = (
             _name(name, "name")
@@ -10467,6 +11219,8 @@ class Roof(ifcopenshell.entity_instance):
             raise ValueError(
                 f'roof opening name already exists: "{opening_name}"'
             )
+        if not isinstance(trimmers, bool):
+            raise TypeError("trimmers must be a boolean")
         if isinstance(rectangle, (str, bytes)):
             raise TypeError("rectangle must contain exactly two opposite corners")
         try:
@@ -10503,24 +11257,32 @@ class Roof(ifcopenshell.entity_instance):
             opening_name,
             rectangle_bounds,
             roof=self,
+            trimmers=trimmers,
         )
         self._openings.append(opening)
         for plane in self._planes:
             for element in plane.elements:
-                self._apply_opening(opening, element)
+                self._apply_opening(opening, element, plane=plane)
         return opening
 
-    def _apply_openings(self, element: ifcopenshell.entity_instance) -> None:
+    def _apply_openings(
+        self,
+        element: ifcopenshell.entity_instance,
+        *,
+        plane: RoofPlane,
+    ) -> None:
         """Apply every registered roof opening to one completed roof part."""
         for opening in self._openings:
-            self._apply_opening(opening, element)
+            self._apply_opening(opening, element, plane=plane)
 
     def _apply_opening(
         self,
         roof_opening: RoofOpening,
         element: ifcopenshell.entity_instance,
+        *,
+        plane: RoofPlane,
     ) -> None:
-        """Create one host-specific vertical opening when the XY bounds meet."""
+        """Create one host-specific opening normal to its roof plane."""
         if any(
             void.RelatedOpeningElement in roof_opening.elements
             for void in (element.HasOpenings or ())
@@ -10544,15 +11306,34 @@ class Roof(ifcopenshell.entity_instance):
         vertices = np.asarray(shape.geometry.verts, dtype=float).reshape((-1, 3))
         if not len(vertices):
             return
-        minimum = vertices.min(axis=0)
-        maximum = vertices.max(axis=0)
+
+        inverse_plane = np.linalg.inv(plane.coordinate_matrix)
+        homogeneous_vertices = np.column_stack(
+            (vertices, np.ones(len(vertices), dtype=float))
+        )
+        local_vertices = (inverse_plane @ homogeneous_vertices.T).T[:, :3]
+        minimum = local_vertices.min(axis=0)
+        maximum = local_vertices.max(axis=0)
         (x_min, y_min), (x_max, y_max) = roof_opening.rectangle
+        opening_outline = tuple(
+            plane.to_local_xy(point)
+            for point in (
+                (x_min, y_min),
+                (x_max, y_min),
+                (x_max, y_max),
+                (x_min, y_max),
+            )
+        )
+        opening_x_min = min(point[0] for point in opening_outline)
+        opening_x_max = max(point[0] for point in opening_outline)
+        opening_y_min = min(point[1] for point in opening_outline)
+        opening_y_max = max(point[1] for point in opening_outline)
         tolerance = 1e-9
         if (
-            maximum[0] <= x_min + tolerance
-            or x_max <= minimum[0] + tolerance
-            or maximum[1] <= y_min + tolerance
-            or y_max <= minimum[1] + tolerance
+            maximum[0] <= opening_x_min + tolerance
+            or opening_x_max <= minimum[0] + tolerance
+            or maximum[1] <= opening_y_min + tolerance
+            or opening_y_max <= minimum[1] + tolerance
         ):
             return
 
@@ -10571,11 +11352,9 @@ class Roof(ifcopenshell.entity_instance):
             model,
             context=self.storey.house._body_context,
             depth=opening_height,
-            polyline=(
-                (0.0, 0.0),
-                (x_max - x_min, 0.0),
-                (x_max - x_min, y_max - y_min),
-                (0.0, y_max - y_min),
+            polyline=tuple(
+                (local_x, plane.geometry_y_sign * local_y)
+                for local_x, local_y in opening_outline
             ),
         )
         ifcopenshell.api.geometry.assign_representation(
@@ -10588,8 +11367,10 @@ class Roof(ifcopenshell.entity_instance):
             feature=opening,
             element=element,
         )
-        placement = np.eye(4)
-        placement[:3, 3] = (x_min, y_min, opening_bottom)
+        placement = plane.placement.copy()
+        placement[:3, 3] = np.array(
+            plane.to_world((0.0, 0.0, opening_bottom))
+        )
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=opening,
@@ -10606,8 +11387,10 @@ class Roof(ifcopenshell.entity_instance):
             pset=pset,
             properties={
                 "Roof": self.GlobalId,
+                "RoofPlane": plane.GlobalId,
                 "Rectangle": json.dumps(roof_opening.rectangle),
                 "Host": element.GlobalId,
+                "Trimmers": roof_opening.trimmers,
             },
         )
         roof_opening._elements.append(opening)
@@ -10820,13 +11603,33 @@ class RoofPlane(ifcopenshell.entity_instance):
         )
         return tuple(float(value) for value in local[:3])
 
+    def to_local_xy(self, point: Point) -> tuple[float, float]:
+        """Map global XY onto this roof plane's local-Z-zero surface."""
+        world_x, world_y = _point(point, "point")
+        projected_axes = self.coordinate_matrix[:2, :2]
+        local_xy = np.linalg.solve(
+            projected_axes,
+            np.array(
+                (world_x - self.origin[0], world_y - self.origin[1]),
+                dtype=float,
+            ),
+        )
+        return float(local_xy[0]), float(local_xy[1])
+
     def add(
         self,
         *elements: ifcopenshell.entity_instance,
+        trim_openings: bool = True,
     ) -> ifcopenshell.entity_instance:
-        """Aggregate existing IFC elements beneath this roof plane."""
+        """Aggregate existing IFC elements beneath this roof plane.
+
+        ``trim_openings=False`` leaves framing around an opening uncut, which
+        permits a small intentional overlap at a joint.
+        """
         if not elements:
             raise ValueError("roof_plane.add requires at least one element")
+        if not isinstance(trim_openings, bool):
+            raise TypeError("trim_openings must be a boolean")
         normalised = []
         for index, element in enumerate(elements, start=1):
             if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a(
@@ -10846,7 +11649,8 @@ class RoofPlane(ifcopenshell.entity_instance):
         for element in normalised:
             if element not in self._elements:
                 self._elements.append(element)
-            self.roof._apply_openings(element)
+            if trim_openings:
+                self.roof._apply_openings(element, plane=self)
         return relationship
 
     def beam(
@@ -10862,12 +11666,19 @@ class RoofPlane(ifcopenshell.entity_instance):
         rotation: Number = 0,
         color: str | None = None,
         transparency: Number = 0,
+        extra_cuts: Sequence[PlaneCut] | None = None,
+        trim_openings: bool = True,
     ) -> Beam:
-        """Create a plane-local beam with its bottom at ``z_offset``.
+        """Create a plane-local beam, optionally with additional plane cuts.
 
         The unrotated section height follows the roof plane's local Z.  When
         ``rotation`` rolls the section, the centreline is raised as necessary
         so its lowest point along local Z remains at ``z_offset``.
+        ``extra_cuts`` are global three-point planes appended to the roof
+        plane's own boundary cuts; each retains the side containing the
+        uncut beam centre.
+        ``trim_openings=False`` permits opening-framing members to overlap an
+        opening boundary without the registered roof opening cutting them.
         """
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
@@ -10885,6 +11696,10 @@ class RoofPlane(ifcopenshell.entity_instance):
         if width <= 0 or height <= 0:
             raise ValueError("size dimensions must be greater than zero")
         rotation = _number(rotation, "rotation")
+        if not isinstance(trim_openings, bool):
+            raise TypeError("trim_openings must be a boolean")
+        normalised_extra_cuts = _plane_cuts(extra_cuts, "extra_cuts")
+        effective_cuts = (*self.cuts, *normalised_extra_cuts)
         roll = radians(rotation)
         section_extent_below_centre = (
             abs(sin(roll)) * width / 2
@@ -10902,14 +11717,15 @@ class RoofPlane(ifcopenshell.entity_instance):
             color=color,
             transparency=transparency,
             height_axis=self.z_axis,
-            cuts=self.cuts,
+            cuts=effective_cuts,
         )
-        self.add(beam)
+        self.add(beam, trim_openings=trim_openings)
         object.__setattr__(beam, "roof_plane", self)
         object.__setattr__(beam, "local_start", (start_x, start_y))
         object.__setattr__(beam, "local_end", (end_x, end_y))
         object.__setattr__(beam, "z_offset", z_offset)
         object.__setattr__(beam, "centerline_z_offset", centreline_z_offset)
+        object.__setattr__(beam, "extra_cuts", normalised_extra_cuts)
         return beam
 
     def layer(
@@ -11068,10 +11884,12 @@ class RoofOpening:
         rectangle: tuple[tuple[float, float], tuple[float, float]],
         *,
         roof: Roof | None = None,
+        trimmers: bool = True,
     ) -> None:
         self.name = name
         self.rectangle = rectangle
         self.roof = roof
+        self.trimmers = trimmers
         self._elements: list[ifcopenshell.entity_instance] = []
 
     @property

@@ -76,14 +76,28 @@
 # Zaves se sylomerem:
 #    https://primavent.cz/primy-zaves-60-125-1-00-mm-akusticky-sylomer-baleni-35ks/
 
+from dataclasses import dataclass
 from math import acos, degrees, isclose
 import sys, math
 from ifc_utils import *
 from shapely.geometry import Polygon
 
+
+@dataclass(frozen=True)
+class SplitRafter:
+	"""A main rafter divided at an absolute XY point inside a roof opening."""
+
+	x: float
+	y: float
+
 RAFTER_Z_OFFSET = -0.04
 RAFTER_THICKNESS = 0.10
-RAFTER_SIZE = (RAFTER_THICKNESS, 0.18)
+RAFTER_HEIGHT = 0.18
+RAFTER_EXTRA_LENGTH = 1.75*RAFTER_HEIGHT
+RAFTER_SIZE = (RAFTER_THICKNESS, RAFTER_HEIGHT)
+SHORT_RAFTER_CUT_OVERLENGTH = 0.10
+ROOF_WINDOW_TRIMMER_OVERLAP = 0.001
+ROOF_WINDOW_OUTLINE_Y_MIN_INSET = 0.10
 ROOF_BATTING_CENTER_OFFSET = RAFTER_Z_OFFSET + RAFTER_SIZE[1] / 2
 ROOF_BATTING_THICKNESS = RAFTER_SIZE[1] - 0.06
 ROOF_BATTING_END_INSET = 0.03
@@ -94,7 +108,7 @@ UNDER_RAFTER_BATTING_THICKNESS = max(
 	THERMAL_INSULATION_UNDER_RAFTERS - 0.02,
 )
 UNDER_RAFTER_BATTING_END_INSET = 0.015
-INSTALLATION_SPACE_THICKNESS = 0.06
+INSTALLATION_SPACE_THICKNESS = 0.058
 GYPSUM_PLASTERBOARD_THICKNESS = 0.0125
 WOOD_FIBERBOARD_THICKNESS = 0.08
 WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
@@ -129,6 +143,22 @@ VAZNICE_HEIGHT = 0.24
 VAZNICE_EXTRA_HEIGHT = 0.08
 VAZNICE_BASE = 0.24
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
+PURLIN_DRAWING_PATTERN = "brick"
+PURLIN_LEFT_DRAWING_COLOR = "#f4a261"
+PURLIN_MIDDLE_DRAWING_COLOR = "#e76f51"
+PURLIN_RIGHT_DRAWING_COLOR = "#f4d35e"
+WALL_PLATE_DRAWING_PATTERN = "brick-opposite"
+STREET_WALL_PLATE_DRAWING_COLOR = "#e76f51"
+SHORT_WALL_PLATE_DRAWING_COLOR = "#f4a261"
+GARDEN_WALL_PLATE_DRAWING_COLOR = "#f4d35e"
+DORMER_WALL_PLATE_DRAWING_COLOR = "#f4b6c2"
+COLLAR_TIE_A_DRAWING_COLOR = "#f4d35e"
+COLLAR_TIE_B_DRAWING_COLOR = "#e76f51"
+COLLAR_TIE_DRAWING_ORDER = 0
+PURLIN_AND_WALL_PLATE_DRAWING_ORDER = 1
+MAIN_RAFTER_DRAWING_ORDER = 2
+DORMER_WALL_PLATE_DRAWING_ORDER = 3
+DORMER_RAFTER_DRAWING_ORDER = 4
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.005
 FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.005
 PERIMETER_INSULATION_MATERIAL = "XPS"
@@ -169,7 +199,7 @@ HOLE_HEIGHT = 0.195
 ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
-COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.18)
+COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, RAFTER_HEIGHT)
 COLLAR_TIE_EXTENSION = 1.5
 COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # The collar-tie tops meet the underside of the two central purlins and the
@@ -266,6 +296,34 @@ GALERY_START = BWT+2.5
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 
+# Each number is the absolute X coordinate of a main rafter centre.
+# SplitRafter divides its garden-side rafter at an absolute Y coordinate inside
+# a roof opening; the opening then cuts the two parts back to its exact edges.
+# A tuple also creates a touching dormer rafter on the requested side.  "before"
+# and "after" shorten the main rafter on the garden side; "+before" and
+# "+after" leave it full-length.
+rafters = [
+	-0.12,
+	-0.12+0.77,
+	-0.12+0.77+0.68,
+	1.63,
+	1.63+0.87,
+	1.63+0.87+RAFTER_THICKNESS,
+	(3.38, "+before"),
+	(3.98, "after"),
+	(4.77, "after"),
+	(5.56, "after"),
+	(6.24, "after"),
+	(7.03, "after"),
+	(7.82, "after"),
+	(8.61, "+after"),
+
+	8.61+0.687,
+	8.61+0.687+0.687,
+	8.61+0.687+0.687+0.688,
+	11.36,
+	]
+
 # chimney
 CHIMNEY_DIST=0.47
 CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - VAZNICE_HALF_BASE - 0.05 - 0.4
@@ -277,7 +335,7 @@ CHIMNEY_Y_START = GALERY_START - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = (3.96 + 4.74)/2 - 0.2
+CHIMNEY_X_START = (rafters[7][0] + rafters[8][0])/2 - 0.2
 
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
@@ -1418,9 +1476,10 @@ ROOF_WINDOW_Y1 = HOUSE_DEPTH - BWT - 0.25
 roof_window_opening = roof.add_opening(
 	name="Bedroom roof window",
 	rectangle=(
-		(1.63-0.34, ROOF_WINDOW_Y1),
-		(1.63+0.34, ROOF_WINDOW_Y1 - 1.2),
+		(1.63+0.05, ROOF_WINDOW_Y1),
+		(1.63+0.87-0.05, ROOF_WINDOW_Y1 - 1.2),
 	),
+	trimmers=False,
 )
 
 roof_inner_cuts = [
@@ -1434,8 +1493,9 @@ roof_inner_cuts = [
 	((HOUSE_WIDTH-BWT, 0, 0), (HOUSE_WIDTH-BWT, 10, 0), (HOUSE_WIDTH-BWT, 0, 10)),
 ]
 
-STREET_ROOF_EAVE_Y = -0.5
-GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + 0.5
+ROOF_EAVE_OVERHANG = 0.8
+STREET_ROOF_EAVE_Y = -ROOF_EAVE_OVERHANG
+GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + ROOF_EAVE_OVERHANG
 street_roof = roof.plane(
     "Street slope",
 	points=STREET_ROOF_PLANE_POINTS,
@@ -1448,7 +1508,7 @@ street_roof = roof.plane(
 		),
 	],
 )
-CUT_STREET_EAVE_Y = BWT + GYM_DEPTH - 0.5
+CUT_STREET_EAVE_Y = BWT + GYM_DEPTH - ROOF_EAVE_OVERHANG
 cut_street_roof = roof.plane(
 	"Cut street slope",
 	points=STREET_ROOF_PLANE_POINTS,
@@ -1768,36 +1828,21 @@ COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 
-# Each number is the absolute X coordinate of a main rafter centre.  A tuple
-# also creates a touching dormer rafter on the requested side.  "before" and
-# "after" shorten the main rafter on the garden side; "+before" and "+after"
-# leave it full-length.
-rafters = [
-	-0.12,
-	-0.12+0.68,
-	-0.12+0.68+0.68,
-	1.63,
-	3.38-0.68-0.68,
-	3.38-0.68,
-	(3.38, "+before"),
-	(3.96, "after"),
-	(4.74, "after"),
-	(5.43, "after"),
-	(6.00, "after"),
-	(6.57, "after"),
-	(7.14, "after"),
-	(7.83, "after"),
-	(8.61, "+after"),
-
-	8.61+0.68,
-	8.61+0.68+0.69,
-	8.61+0.68+0.69+0.69,
-	11.36,
-	]
 rafter_layout = []
 for rafter in rafters:
+	if isinstance(rafter, SplitRafter):
+		if not any(
+			x_min < rafter.x < x_max and y_min < rafter.y < y_max
+			for opening in roof.openings
+			for (x_min, y_min), (x_max, y_max) in (opening.rectangle,)
+		):
+			raise ValueError(
+				"SplitRafter position must be inside a registered roof opening"
+			)
+		rafter_layout.append((rafter.x, "main", False, rafter.y))
+		continue
 	if not isinstance(rafter, tuple):
-		rafter_layout.append((rafter, "main", False))
+		rafter_layout.append((rafter, "main", False, None))
 		continue
 
 	rafter_x, dormer_side = rafter
@@ -1813,20 +1858,38 @@ for rafter in rafters:
 	)
 	rafter_layout.extend(
 		(
-			(rafter_x, "main", shorten_garden_side),
-			(rafter_x + dormer_offset, "dormer", False),
+			(rafter_x, "main", shorten_garden_side, None),
+			(rafter_x + dormer_offset, "dormer", False, None),
 		)
 	)
 
 rafter_layout.sort(key=lambda entry: entry[0])
 main_rafter_positions = [
-	x for x, kind, _ in rafter_layout if kind == "main"
+	x for x, kind, _, _ in rafter_layout if kind == "main"
 ]
 dormer_rafter_positions = [
-	x for x, kind, _ in rafter_layout if kind == "dormer"
+	x for x, kind, _, _ in rafter_layout if kind == "dormer"
 ]
 dormer_x_min = min(dormer_rafter_positions)
 dormer_x_max = max(dormer_rafter_positions)
+
+# Collar ties flank ordinary isolated main rafters.  Where two consecutive
+# main rafters touch, neither inward-facing side has room for a collar tie.
+# Paired dormer rafters are deliberately ignored here: their main rafter still
+# needs both collar ties.
+blocked_collar_tie_sides = set()
+for left_x, right_x in zip(
+	main_rafter_positions,
+	main_rafter_positions[1:],
+):
+	if isclose(
+		right_x - left_x,
+		RAFTER_THICKNESS,
+		rel_tol=0,
+		abs_tol=1e-9,
+	):
+		blocked_collar_tie_sides.add((left_x, "right"))
+		blocked_collar_tie_sides.add((right_x, "left"))
 
 def print_rafter_center_distances(label, positions):
 	print(f"{label} rafter center distances:")
@@ -2009,6 +2072,23 @@ def local_y_limits_from_cuts(plane, local_z=0):
 	if len(limits) != 2:
 		raise ValueError(f"{plane.Name} must have two constant-global-Y cuts")
 	return min(limits), max(limits)
+
+
+def local_y_at_global_z(plane, global_z, *, local_z=0):
+	"""Return the roof-local Y where one local-Z line reaches global Z."""
+	return (
+		global_z
+		- plane.origin[2]
+		- local_z * plane.z_axis[2]
+	) / plane.y_axis[2]
+
+
+def collar_tie_top_height_at(x):
+	"""Return a collar-tie top height relative to the upper-storey floor."""
+	height = COLLAR_TIE_TOP_HEIGHT
+	if MIDDLE_PURLIN_X_MIN <= x <= MIDDLE_PURLIN_X_MAX:
+		height -= VAZNICE_EXTRA_HEIGHT
+	return height
 
 
 def add_tile_battens(plane, name, x_ranges, y_min, y_max):
@@ -2401,17 +2481,29 @@ add_tile_battens(
 	dormer_y_max,
 )
 
-for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
+main_roof_rafters = []
+corner_short_rafters = []
+dormer_short_rafters = []
+dormer_roof_rafters = []
+middle_collar_ties = []
+other_collar_ties = []
+
+for i, (
+	rafter_x,
+	rafter_kind,
+	shorten_garden_side,
+	split_rafter_y,
+) in enumerate(rafter_layout):
 	is_dormer_rafter = rafter_kind == "dormer"
 	if not is_dormer_rafter:
 		for side, x_offset in (
 			("left", -COLLAR_TIE_X_OFFSET),
 			("right", COLLAR_TIE_X_OFFSET),
 		):
+			if (rafter_x, side) in blocked_collar_tie_sides:
+				continue
 			collar_tie_x = rafter_x + x_offset
-			collar_tie_top_height = COLLAR_TIE_TOP_HEIGHT
-			if MIDDLE_PURLIN_X_MIN <= collar_tie_x <= MIDDLE_PURLIN_X_MAX:
-				collar_tie_top_height -= VAZNICE_EXTRA_HEIGHT
+			collar_tie_top_height = collar_tie_top_height_at(collar_tie_x)
 			collar_tie_center_z = (
 				UPPER_FLOOR_START
 				+ collar_tie_top_height
@@ -2435,6 +2527,10 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 				cuts=COLLAR_TIE_CUTS,
 			)
 			roof_layer_storeys["Collar ties"].add(collar_tie)
+			if MIDDLE_PURLIN_X_MIN <= collar_tie_x <= MIDDLE_PURLIN_X_MAX:
+				middle_collar_ties.append(collar_tie)
+			else:
+				other_collar_ties.append(collar_tie)
 		street_side_plane = (
 			cut_street_roof
 			if rafter_x < roof_over_rafter_x_ranges[0][1]
@@ -2463,6 +2559,10 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 			kind="RAFTER",
 		)
 		roof_layer_storeys["Rafters"].add(rafter)
+		if street_side_plane is cut_street_roof:
+			corner_short_rafters.append(rafter)
+		else:
+			main_roof_rafters.append(rafter)
 		counter_batten = street_side_plane.beam(
 			f"Street counter-batten {i + 1}",
 			start=(rafter_x, street_counter_batten_y_min),
@@ -2484,6 +2584,7 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 			kind="RAFTER",
 		)
 		roof_layer_storeys["Rafters"].add(rafter)
+		dormer_roof_rafters.append(rafter)
 		counter_batten = dormer_roof.beam(
 			f"Dormer counter-batten {i + 1}",
 			start=(rafter_x, -0.5),
@@ -2496,18 +2597,68 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
 	else:
 		rafter_y_min = -2
-		rafter_y_max = 0.7 if shorten_garden_side else 5
+		rafter_extra_cuts = ()
+		if shorten_garden_side:
+			collar_tie_bottom_z = (
+				UPPER_FLOOR_START
+				+ collar_tie_top_height_at(rafter_x)
+				- COLLAR_TIE_SIZE[1]
+			)
+			# Carry the uncut rafter completely past the horizontal cutting
+			# plane.  Using its upper roof-local face here ensures the plane,
+			# rather than the source beam's square end, defines the whole end.
+			rafter_y_max = local_y_at_global_z(
+				garden_roof,
+				collar_tie_bottom_z,
+				local_z=RAFTER_Z_OFFSET + RAFTER_SIZE[1],
+			) + SHORT_RAFTER_CUT_OVERLENGTH
+			rafter_extra_cuts = (
+				(
+					(0, 0, collar_tie_bottom_z),
+					(1, 0, collar_tie_bottom_z),
+					(0, 1, collar_tie_bottom_z),
+				),
+			)
+		else:
+			rafter_y_max = 5
 		counter_batten_y_min = -2
 		counter_batten_y_max = 0 if shorten_garden_side else 5
-		rafter = garden_roof.beam(
-			"Rafter 1",
-			start=(rafter_x, rafter_y_min),
-			end=(rafter_x, rafter_y_max),
-			z_offset=RAFTER_Z_OFFSET,
-			size=RAFTER_SIZE,
-			kind="RAFTER",
-		)
-		roof_layer_storeys["Rafters"].add(rafter)
+		rafter_segments = ((rafter_y_min, rafter_y_max, "Rafter 1"),)
+		if split_rafter_y is not None:
+			split_local_y = garden_roof.to_local_xy(
+				(rafter_x, split_rafter_y)
+			)[1]
+			if not rafter_y_min < split_local_y < rafter_y_max:
+				raise ValueError(
+					"SplitRafter position must lie along the garden rafter"
+				)
+			rafter_segments = (
+				(
+					rafter_y_min,
+					split_local_y,
+					f"Rafter {i + 1} ridge segment",
+				),
+				(
+					split_local_y,
+					rafter_y_max,
+					f"Rafter {i + 1} eave segment",
+				),
+			)
+		for segment_start_y, segment_end_y, segment_name in rafter_segments:
+			rafter = garden_roof.beam(
+				segment_name,
+				start=(rafter_x, segment_start_y),
+				end=(rafter_x, segment_end_y),
+				z_offset=RAFTER_Z_OFFSET,
+				size=RAFTER_SIZE,
+				kind="RAFTER",
+				extra_cuts=rafter_extra_cuts,
+			)
+			roof_layer_storeys["Rafters"].add(rafter)
+			if shorten_garden_side:
+				dormer_short_rafters.append(rafter)
+			else:
+				main_roof_rafters.append(rafter)
 		counter_batten = garden_roof.beam(
 			f"Garden counter-batten {i + 1}",
 			start=(rafter_x, counter_batten_y_min),
@@ -2518,6 +2669,60 @@ for i, (rafter_x, rafter_kind, shorten_garden_side) in enumerate(rafter_layout):
 			kind="BEAM",
 		)
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
+
+roof_window_trimmers = []
+if roof_window_opening.trimmers:
+	# Trimmers span between the inner faces of the two uninterrupted main
+	# rafters.  Their roof-local Y positions use the same roof-plane datum as
+	# the perpendicular opening, keeping their inner faces outside its void.
+	roof_window_x_min, roof_window_y_min = roof_window_opening.rectangle[0]
+	roof_window_x_max, roof_window_y_max = roof_window_opening.rectangle[1]
+	roof_window_left_support_x = max(
+		x for x in main_rafter_positions if x < roof_window_x_min
+	)
+	roof_window_right_support_x = min(
+		x for x in main_rafter_positions if x > roof_window_x_max
+	)
+	roof_window_trimmer_x_min = (
+		roof_window_left_support_x + RAFTER_THICKNESS / 2
+	)
+	roof_window_trimmer_x_max = (
+		roof_window_right_support_x - RAFTER_THICKNESS / 2
+	)
+	roof_window_center_x = (roof_window_x_min + roof_window_x_max) / 2
+	roof_window_local_y_min = garden_roof.to_local_xy(
+		(roof_window_center_x, roof_window_y_min)
+	)[1]
+	roof_window_local_y_max = garden_roof.to_local_xy(
+		(roof_window_center_x, roof_window_y_max)
+	)[1]
+
+	for name, trimmer_local_y in (
+		(
+			"Roof window ridge trimmer",
+			roof_window_local_y_min
+			- RAFTER_SIZE[0] / 2
+			+ ROOF_WINDOW_TRIMMER_OVERLAP,
+		),
+		(
+			"Roof window eave trimmer",
+			roof_window_local_y_max
+			+ RAFTER_SIZE[0] / 2
+			- ROOF_WINDOW_TRIMMER_OVERLAP,
+		),
+	):
+		trimmer = garden_roof.beam(
+			name,
+			start=(roof_window_trimmer_x_min, trimmer_local_y),
+			end=(roof_window_trimmer_x_max, trimmer_local_y),
+			z_offset=RAFTER_Z_OFFSET + ROOF_WINDOW_TRIMMER_OVERLAP,
+			size=RAFTER_SIZE,
+			material="Wood",
+			kind="BEAM",
+			trim_openings=False,
+		)
+		roof_layer_storeys["Rafters"].add(trimmer)
+		roof_window_trimmers.append(trimmer)
 
 add_foundation_insulation(
 	(
@@ -2849,10 +3054,14 @@ if "roof" in sys.argv:
 		y=HOUSE_DEPTH/2,
 		z=ground_floor_top+total_house_height+0.5,
 		radius=8.5,
-		storeys=[roof_layer_storeys["Rafters"]],
+		storeys=[
+			roof_layer_storeys["Rafters"],
+			roof_layer_storeys["Collar ties"],
+		],
 		door_annotations=False,
 		projected_wood_color="#f4d35e",
 		model_line_width=0.06,
+		right_panel_width=110,
 	)
 	for element in (
 		wall_dormer,
@@ -2875,7 +3084,161 @@ if "roof" in sys.argv:
 		beam_dormer,
 	):
 		drawing1.include_element(element)
-	drawing1.add_roof_opening_outline(roof_window_opening)
+	drawing1.add_chimney_annotation(chimney)
+	drawing1.add_roof_opening_outline(
+		roof_window_opening,
+		y_min_inset=ROOF_WINDOW_OUTLINE_Y_MIN_INSET,
+		mask=False,
+	)
+
+	# Dimension the rafter centrelines directly from the layout derived from
+	# ``rafters``.  Main-rafter spacings form one chain below the street eave;
+	# dormer-rafter spacings form a second chain above the garden eave.
+	for index, (start_x, end_x) in enumerate(
+		zip(main_rafter_positions, main_rafter_positions[1:]),
+		start=1,
+	):
+		drawing1.add_dimension(
+			start=(start_x, STREET_ROOF_EAVE_Y),
+			end=(end_x, STREET_ROOF_EAVE_Y),
+			offset=-0.75,
+			name=f"Main rafter spacing {index}",
+		)
+	for index, (start_x, end_x) in enumerate(
+		zip(dormer_rafter_positions, dormer_rafter_positions[1:]),
+		start=1,
+	):
+		drawing1.add_dimension(
+			start=(start_x, GARDEN_ROOF_EAVE_Y),
+			end=(end_x, GARDEN_ROOF_EAVE_Y),
+			offset=0.75,
+			name=f"Dormer rafter spacing {index}",
+		)
+
+	timber_schedule_rows = [
+		(
+			"Vaznice – levý díl",
+			(street_purlins[0], garden_purlins[0]),
+			0,
+			{
+				"pattern": PURLIN_DRAWING_PATTERN,
+				"color": PURLIN_LEFT_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Vaznice – střední díl",
+			(street_purlins[1], garden_purlins[1]),
+			0,
+			{
+				"pattern": PURLIN_DRAWING_PATTERN,
+				"color": PURLIN_MIDDLE_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Vaznice – pravý díl",
+			(street_purlins[2], garden_purlins[2]),
+			0,
+			{
+				"pattern": PURLIN_DRAWING_PATTERN,
+				"color": PURLIN_RIGHT_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Hlavní krokve",
+			main_roof_rafters,
+			RAFTER_EXTRA_LENGTH,
+			{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+		),
+		(
+			"Zkrácené krokve A",
+			corner_short_rafters,
+			RAFTER_EXTRA_LENGTH,
+			{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+		),
+		(
+			"Zkrácené krokve B",
+			dormer_short_rafters,
+			RAFTER_EXTRA_LENGTH,
+			{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+		),
+		(
+			"Krokve vikýře",
+			dormer_roof_rafters,
+			RAFTER_EXTRA_LENGTH,
+			{"drawing_order": DORMER_RAFTER_DRAWING_ORDER},
+		),
+		(
+			"Pozednice – uliční",
+			(beam3,),
+			0,
+			{
+				"pattern": WALL_PLATE_DRAWING_PATTERN,
+				"color": STREET_WALL_PLATE_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Pozednice – krátká",
+			(beam_cut_street, beam4_a),
+			0,
+			{
+				"pattern": WALL_PLATE_DRAWING_PATTERN,
+				"color": SHORT_WALL_PLATE_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Pozednice – zahradní",
+			(beam4_b,),
+			0,
+			{
+				"pattern": WALL_PLATE_DRAWING_PATTERN,
+				"color": GARDEN_WALL_PLATE_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Pozednice – vikýř",
+			(beam_dormer,),
+			0,
+			{
+				"pattern": WALL_PLATE_DRAWING_PATTERN,
+				"color": DORMER_WALL_PLATE_DRAWING_COLOR,
+				"drawing_order": DORMER_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Kleštiny A",
+			middle_collar_ties,
+			0,
+			{
+				"color": COLLAR_TIE_A_DRAWING_COLOR,
+				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Kleštiny B",
+			other_collar_ties,
+			0,
+			{
+				"color": COLLAR_TIE_B_DRAWING_COLOR,
+				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
+			},
+		),
+	]
+	if roof_window_trimmers:
+		timber_schedule_rows.append(
+			(
+				"Tesařská výměna",
+				roof_window_trimmers,
+				0,
+				{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+			)
+		)
+	drawing1.add_timber_schedule(timber_schedule_rows)
 
 	drawing1.render("roof.svg", png=True, png_dpi=600)
 

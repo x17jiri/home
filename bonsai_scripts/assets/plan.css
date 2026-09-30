@@ -110,6 +110,14 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke: none !important;
 }
 
+/* Ordered timber fills mask the original Bonsai edges. Restore a clear
+ * perimeter afterwards, including the seam between touching beams. */
+.target-view-PLANVIEW .projected-wood-order-outline {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.10 !important;
+}
+
 /* Façade-frame laths are IfcMembers. Keep their plan outlines as light as
  * the roof-batten outlines used in sections, without changing their 3D form. */
 .target-view-PLANVIEW .IfcMember.cut,
@@ -515,7 +523,8 @@ tspan.door-dimension {
 .right-side-panel-separator,
 .right-panel-table-outline,
 .right-panel-table-grid,
-.material-legend-swatch {
+.material-legend-swatch,
+.timber-schedule-swatch {
     stroke: black;
     stroke-width: 0.18;
     stroke-linecap: square;
@@ -540,12 +549,15 @@ tspan.door-dimension {
 
 .material-legend-description,
 .room-legend-heading,
-.room-legend-text {
+.room-legend-text,
+.timber-schedule-heading,
+.timber-schedule-text {
     fill: black;
     stroke: none;
     font-size: 3.2px;
 }
 
-.room-legend-heading {
+.room-legend-heading,
+.timber-schedule-heading {
     font-weight: 500;
 }
