@@ -604,6 +604,343 @@ def _postprocess_miako_reinforcement_overlays(svg_path: Path) -> None:
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_miako_slab_end_faces(svg_path: Path) -> None:
+    """Remove false stacked outlines at the ends of projected MIAKO slabs.
+
+    Bonsai emits coincident end edges for the aggregate slab and for each of
+    its beams, shells, blocks, and reinforcement parts.  In plan views those
+    edges stack into a heavy bar.  The long reinforcement paths provide the
+    projected beam direction and exact span endpoints, allowing us to remove
+    only perpendicular paths on those two endpoints.  Component joints inside
+    the slab and all edges parallel to the beams are preserved.
+    """
+    svg = svg_path.read_text(encoding="utf-8")
+    marker = 'class="miako-open-ends-postprocess"'
+    if marker in svg:
+        return
+
+    group_pattern = re.compile(
+        r'<g\b(?P<attrs>(?=[^>]*\bclass="[^"]*\bprojection\b)[^>]*)>'
+        r'(?P<body>.*?)</g>',
+        re.DOTALL,
+    )
+    path_pattern = re.compile(r'<path\b[^>]*\bd="(?P<d>[^"]+)"[^>]*/>')
+    simple_line_pattern = re.compile(
+        rf'^\s*M\s*(?P<x1>{_SVG_NUMBER})[,\s]+'
+        rf'(?P<y1>{_SVG_NUMBER})\s*L\s*'
+        rf'(?P<x2>{_SVG_NUMBER})[,\s]+'
+        rf'(?P<y2>{_SVG_NUMBER})\s*$'
+    )
+
+    def line_from_path(path: re.Match[str]) -> tuple[float, ...] | None:
+        line = simple_line_pattern.match(path["d"])
+        if line is None:
+            return None
+        return tuple(
+            float(line[name]) for name in ("x1", "y1", "x2", "y2")
+        )
+
+    # Map each semantic slab name to the direction and endpoints of its beams.
+    # Reinforcement is the most reliable source because its longitudinal paths
+    # remain full-length even where walls hide parts of the beam outlines.
+    reinforcement_geometry: dict[
+        str,
+        tuple[tuple[float, float], list[tuple[float, float]]],
+    ] = {}
+    for group in group_pattern.finditer(svg):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
+        )
+        classes = set(attributes.get("class", "").split())
+        if "material-MIAKOreinforcement" not in classes:
+            continue
+        name = attributes.get("ifc:name", "")
+        name_match = re.fullmatch(r"(.+) Beam \d+ Reinforcement", name)
+        if name_match is None:
+            continue
+        slab_name = name_match.group(1)
+        segments = [
+            line
+            for path in path_pattern.finditer(group["body"])
+            if (line := line_from_path(path)) is not None
+        ]
+        if not segments:
+            continue
+        longest = max(
+            segments,
+            key=lambda line: hypot(line[2] - line[0], line[3] - line[1]),
+        )
+        length = hypot(longest[2] - longest[0], longest[3] - longest[1])
+        if length <= 1e-9:
+            continue
+        direction = (
+            (longest[2] - longest[0]) / length,
+            (longest[3] - longest[1]) / length,
+        )
+        if direction[0] < -1e-9 or (
+            abs(direction[0]) <= 1e-9 and direction[1] < 0
+        ):
+            direction = (-direction[0], -direction[1])
+        points = [
+            point
+            for x1, y1, x2, y2 in segments
+            for point in ((x1, y1), (x2, y2))
+        ]
+        existing = reinforcement_geometry.get(slab_name)
+        if existing is None:
+            reinforcement_geometry[slab_name] = (direction, points)
+        else:
+            existing[1].extend(points)
+
+    slab_geometry: dict[str, tuple[float, float, float, float]] = {}
+    for slab_name, (direction, points) in reinforcement_geometry.items():
+        along = [
+            x * direction[0] + y * direction[1] for x, y in points
+        ]
+        slab_geometry[slab_name] = (
+            direction[0],
+            direction[1],
+            min(along),
+            max(along),
+        )
+    if not slab_geometry:
+        return
+
+    def slab_for_name(name: str) -> str | None:
+        for slab_name in sorted(slab_geometry, key=len, reverse=True):
+            if name == slab_name or name.startswith(f"{slab_name} "):
+                return slab_name
+        return None
+
+    def process_group(group: re.Match[str]) -> str:
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
+        )
+        slab_name = slab_for_name(attributes.get("ifc:name", ""))
+        if slab_name is None:
+            return group.group(0)
+        direction_x, direction_y, start, end = slab_geometry[slab_name]
+
+        def remove_end_face(path: re.Match[str]) -> str:
+            line = line_from_path(path)
+            if line is None:
+                return path.group(0)
+            x1, y1, x2, y2 = line
+            segment_x = x2 - x1
+            segment_y = y2 - y1
+            segment_length = hypot(segment_x, segment_y)
+            if segment_length <= 1e-9:
+                return path.group(0)
+            along_segment = (
+                segment_x * direction_x + segment_y * direction_y
+            ) / segment_length
+            if abs(along_segment) > 1e-5:
+                return path.group(0)
+            along_position = (
+                (x1 + x2) * direction_x
+                + (y1 + y2) * direction_y
+            ) / 2
+            if min(abs(along_position - start), abs(along_position - end)) > 0.02:
+                return path.group(0)
+            return ""
+
+        body = path_pattern.sub(remove_end_face, group["body"])
+        return f'<g{group["attrs"]}>{body}</g>'
+
+    svg = group_pattern.sub(process_group, svg)
+
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    marker_element = (
+        '  <style class="miako-open-ends-postprocess"></style>\n'
+    )
+    svg = f"{svg[:closing_svg]}{marker_element}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
+def _postprocess_miako_beam_shell_shared_edges(svg_path: Path) -> None:
+    """Clean up the narrow ceramic U-shell around a MIAKO beam core."""
+    svg = svg_path.read_text(encoding="utf-8")
+    marker = 'class="miako-beam-shell-shared-edges-postprocess"'
+    if marker in svg:
+        return
+
+    group_pattern = re.compile(
+        r'<g\b(?P<attrs>(?=[^>]*\bclass="[^"]*\bprojection\b)[^>]*)>'
+        r'(?P<body>.*?)</g>',
+        re.DOTALL,
+    )
+    path_pattern = re.compile(r'<path\b[^>]*\bd="(?P<d>[^"]+)"[^>]*/>')
+    simple_line_pattern = re.compile(
+        rf'^\s*M\s*(?P<x1>{_SVG_NUMBER})[,\s]+'
+        rf'(?P<y1>{_SVG_NUMBER})\s*L\s*'
+        rf'(?P<x2>{_SVG_NUMBER})[,\s]+'
+        rf'(?P<y2>{_SVG_NUMBER})\s*$'
+    )
+
+    def line_points(
+        path: re.Match[str],
+    ) -> tuple[tuple[float, float], tuple[float, float]] | None:
+        line = simple_line_pattern.match(path["d"])
+        if line is None:
+            return None
+        start = (float(line["x1"]), float(line["y1"]))
+        end = (float(line["x2"]), float(line["y2"]))
+        if end < start:
+            start, end = end, start
+        return start, end
+
+    def line_key(path: re.Match[str]) -> tuple[float, ...] | None:
+        points = line_points(path)
+        if points is None:
+            return None
+        start, end = points
+        return tuple(round(value, 5) for point in (start, end) for value in point)
+
+    concrete_edges: dict[str, set[tuple[float, ...]]] = {}
+    concrete_lines: dict[
+        str,
+        list[tuple[tuple[float, float], tuple[float, float]]],
+    ] = {}
+    for group in group_pattern.finditer(svg):
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
+        )
+        classes = set(attributes.get("class", "").split())
+        if "material-MIAKOconcrete" not in classes:
+            continue
+        name = attributes.get("ifc:name", "")
+        if re.fullmatch(r".+ Beam \d+", name) is None:
+            continue
+        edges = concrete_edges.setdefault(name, set())
+        lines = concrete_lines.setdefault(name, [])
+        for path in path_pattern.finditer(group["body"]):
+            key = line_key(path)
+            points = line_points(path)
+            if key is not None and points is not None:
+                edges.add(key)
+                lines.append(points)
+    if not concrete_edges:
+        return
+
+    def process_shell(group: re.Match[str]) -> str:
+        attributes = dict(
+            re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
+        )
+        classes = set(attributes.get("class", "").split())
+        if "material-MIAKObeamceramic" not in classes:
+            return group.group(0)
+        name_match = re.fullmatch(
+            r"(.+ Beam \d+) Ceramic U-shell",
+            attributes.get("ifc:name", ""),
+        )
+        if name_match is None:
+            return group.group(0)
+        shared_edges = concrete_edges.get(name_match.group(1))
+        if not shared_edges:
+            return group.group(0)
+        inner_lines = concrete_lines[name_match.group(1)]
+
+        def clean_shell_edge(path: re.Match[str]) -> str:
+            key = line_key(path)
+            if key is not None and key in shared_edges:
+                return ""
+
+            outer = line_points(path)
+            if outer is None:
+                return path.group(0)
+            outer_start, outer_end = outer
+            outer_dx = outer_end[0] - outer_start[0]
+            outer_dy = outer_end[1] - outer_start[1]
+            closest: tuple[
+                float,
+                tuple[float, float],
+                tuple[float, float],
+            ] | None = None
+            for inner_start, inner_end in inner_lines:
+                if (
+                    abs((inner_end[0] - inner_start[0]) - outer_dx) > 1e-5
+                    or abs((inner_end[1] - inner_start[1]) - outer_dy) > 1e-5
+                ):
+                    continue
+                offset_start = (
+                    inner_start[0] - outer_start[0],
+                    inner_start[1] - outer_start[1],
+                )
+                offset_end = (
+                    inner_end[0] - outer_end[0],
+                    inner_end[1] - outer_end[1],
+                )
+                if (
+                    abs(offset_start[0] - offset_end[0]) > 1e-5
+                    or abs(offset_start[1] - offset_end[1]) > 1e-5
+                ):
+                    continue
+                distance = hypot(*offset_start)
+                if distance <= 1e-5 or distance > 0.5:
+                    continue
+                line_length = hypot(outer_dx, outer_dy)
+                if (
+                    line_length <= 1e-9
+                    or abs(
+                        offset_start[0] * outer_dx
+                        + offset_start[1] * outer_dy
+                    )
+                    / line_length
+                    > 1e-5
+                ):
+                    continue
+                if closest is None or distance < closest[0]:
+                    closest = distance, inner_start, inner_end
+
+            if closest is None:
+                return path.group(0)
+
+            distance, inner_start, inner_end = closest
+            centre_start = (
+                (outer_start[0] + inner_start[0]) / 2,
+                (outer_start[1] + inner_start[1]) / 2,
+            )
+            centre_end = (
+                (outer_end[0] + inner_end[0]) / 2,
+                (outer_end[1] + inner_end[1]) / 2,
+            )
+            fill_width = max(distance - 0.04, 0.01)
+            fill = (
+                '<path class="miako-shell-plan-fill" '
+                f'd="M{centre_start[0]:.9g},{centre_start[1]:.9g} '
+                f'L{centre_end[0]:.9g},{centre_end[1]:.9g}" '
+                'style="fill:none;stroke:#d98245;'
+                f'stroke-width:{fill_width:.9g};stroke-linecap:butt"/>'
+            )
+            return f"{fill}\n            {path.group(0)}"
+
+        body = path_pattern.sub(clean_shell_edge, group["body"])
+        return f'<g{group["attrs"]}>{body}</g>'
+
+    svg = group_pattern.sub(process_shell, svg)
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0:
+        return
+    # The real ceramic side is only 20 mm thick, or 0.2 mm in a 1:100
+    # drawing.  The default 0.25 mm projection strokes on its outer face and
+    # on the concrete core overlap completely and hide the ceramic fill.
+    # Keep both real boundaries, but render only this beam assembly with the
+    # same fine stroke that its cut styles were originally intended to use.
+    marker_element = """  <style class="miako-beam-shell-shared-edges-postprocess" type="text/css">
+.section.target-view-PLANVIEW g.material-MIAKOconcrete.cut,
+.section.target-view-PLANVIEW g.material-MIAKOconcrete.projection,
+.section.target-view-PLANVIEW g.material-MIAKObeamceramic.cut,
+.section.target-view-PLANVIEW g.material-MIAKObeamceramic.projection {
+    stroke-width: 0.04 !important;
+}
+  </style>
+"""
+    svg = f"{svg[:closing_svg]}{marker_element}{svg[closing_svg:]}"
+    svg_path.write_text(svg, encoding="utf-8")
+
+
 def _postprocess_ring_beam_stirrups(
     svg_path: Path,
     model: ifcopenshell.file,
@@ -4529,6 +4866,8 @@ def _render_existing_drawing(
                 drawing_properties or {}
             ),
         )
+        _postprocess_miako_slab_end_faces(absolute_output)
+        _postprocess_miako_beam_shell_shared_edges(absolute_output)
         _postprocess_roof_opening_masks(absolute_output)
         _postprocess_wall_insulation_batting(absolute_output)
         _postprocess_door_overheads(
@@ -7891,10 +8230,10 @@ class Drawing:
     ) -> Drawing:
         """Add a MIAKO beam schedule to this drawing's right-side panel.
 
-        Each row is a mapping containing ``location``, ``slab``, and
-        ``length``.  Length is supplied in metres and displayed in rounded
-        millimetres.  The beam count is derived from the supplied
-        :class:`MiakoSlab`.
+        Each row is a mapping containing ``location`` and ``slab``.  An
+        optional ``length`` in metres overrides the slab's full beam length;
+        the displayed value is rounded to millimetres.  The beam count is
+        derived from the supplied :class:`MiakoSlab`.
         """
         self._require_plan_view("add_miako_beam_schedule")
         if self.right_panel_width <= 0:
@@ -7926,11 +8265,10 @@ class Drawing:
             missing_keys = {
                 "location",
                 "slab",
-                "length",
             }.difference(supplied_row)
             if missing_keys:
                 raise ValueError(
-                    f"row {row_index} must contain location, slab, and length"
+                    f"row {row_index} must contain location and slab"
                 )
             location = _name(
                 supplied_row["location"],
@@ -7944,7 +8282,9 @@ class Drawing:
                     f"row {row_index} slab must belong to this house"
                 )
             length = _number(
-                supplied_row["length"],
+                supplied_row["length"]
+                if "length" in supplied_row
+                else slab.length,
                 f"row {row_index} length",
             )
             if length <= 0:
@@ -12402,6 +12742,8 @@ class MiakoSlab(ifcopenshell.entity_instance):
         width_after_axis: float,
         top: float,
         block_length: float,
+        block_start_offset: float,
+        block_end_offset: float,
         block_height: float,
         beam_height: float,
         topping: float,
@@ -12426,6 +12768,8 @@ class MiakoSlab(ifcopenshell.entity_instance):
         object.__setattr__(self, "expected_width", expected_width)
         object.__setattr__(self, "top", top)
         object.__setattr__(self, "block_length", block_length)
+        object.__setattr__(self, "block_start_offset", block_start_offset)
+        object.__setattr__(self, "block_end_offset", block_end_offset)
         object.__setattr__(self, "block_height", block_height)
         object.__setattr__(self, "beam_height", beam_height)
         object.__setattr__(self, "topping", topping)
@@ -15642,6 +15986,8 @@ class Storey:
         structure: Sequence[MiakoStructureItem],
         expected_width: Number | None = None,
         block_length: Number = 0.25,
+        block_start_offset: Number = 0,
+        block_end_offset: Number = 0,
         block_height: Number = 0.19,
         topping: Number = 0.06,
         beam_height: Number | None = None,
@@ -15671,6 +16017,10 @@ class Storey:
         is supplied, a warning is printed if the total width on both sides
         does not match it.
 
+        ``block_start_offset`` and ``block_end_offset`` leave the respective
+        ends of every block row empty while the beams continue for the full
+        start-end span.  Both offsets are measured along the beams in metres.
+
         ``top`` is measured from this storey's elevation.  The whole assembly
         extends downward by ``block_height + topping``.  ``beam_height`` is
         the height of the ceramic U-shell (60 mm by default), not the height
@@ -15694,6 +16044,11 @@ class Storey:
         direction_x, direction_y = _point(direction, "direction")
         top = _number(top, "top")
         block_length = _number(block_length, "block_length")
+        block_start_offset = _number(
+            block_start_offset,
+            "block_start_offset",
+        )
+        block_end_offset = _number(block_end_offset, "block_end_offset")
         block_height = _number(block_height, "block_height")
         topping = _number(topping, "topping")
         if expected_width is not None:
@@ -15712,6 +16067,12 @@ class Storey:
         ):
             if value <= 0:
                 raise ValueError(f"{argument} must be greater than zero")
+        for value, argument in (
+            (block_start_offset, "block_start_offset"),
+            (block_end_offset, "block_end_offset"),
+        ):
+            if value < 0:
+                raise ValueError(f"{argument} must not be negative")
         if beam_height > block_height:
             raise ValueError("beam_height must not be greater than block_height")
         if beam_height < 0.046:
@@ -15730,6 +16091,12 @@ class Storey:
         length = hypot(span_x, span_y)
         if length == 0:
             raise ValueError("slab start and end must be different points")
+        block_run_length = length - block_start_offset - block_end_offset
+        if block_run_length <= 0:
+            raise ValueError(
+                "block_start_offset + block_end_offset must be less than "
+                "the beam length"
+            )
         direction_length = hypot(direction_x, direction_y)
         if direction_length == 0:
             raise ValueError("direction must not be a zero vector")
@@ -15903,6 +16270,8 @@ class Storey:
                 "WidthBeforeAxis": width_before_axis,
                 "WidthAfterAxis": width_after_axis,
                 "BlockLength": block_length,
+                "BlockStartOffset": block_start_offset,
+                "BlockEndOffset": block_end_offset,
                 "BlockHeight": block_height,
                 "BeamHeight": beam_height,
                 "BeamShellHeight": beam_height,
@@ -16236,8 +16605,8 @@ class Storey:
         beam_number = 0
         bay_number = 0
         tolerance = 1e-9
-        full_block_count = int(length / block_length)
-        remainder = length - full_block_count * block_length
+        full_block_count = int(block_run_length / block_length)
+        remainder = block_run_length - full_block_count * block_length
         if remainder < tolerance:
             remainder = 0.0
         elif block_length - remainder < tolerance:
@@ -16334,7 +16703,7 @@ class Storey:
                 block_lengths = [block_length] * full_block_count
                 if remainder:
                     block_lengths.append(remainder)
-                along = 0.0
+                along = block_start_offset
                 for block_number, current_length in enumerate(
                     block_lengths,
                     start=1,
@@ -16499,6 +16868,8 @@ class Storey:
             expected_width=expected_width,
             top=top,
             block_length=block_length,
+            block_start_offset=block_start_offset,
+            block_end_offset=block_end_offset,
             block_height=block_height,
             beam_height=beam_height,
             topping=topping,

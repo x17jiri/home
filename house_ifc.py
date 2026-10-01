@@ -138,7 +138,7 @@ FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 0.797 # Vzdalenost vaznice od hrebene
+VAZNICE_DIST = 0.803 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.24
 VAZNICE_EXTRA_HEIGHT = 0.08
 VAZNICE_BASE = 0.24
@@ -261,13 +261,13 @@ dry_wall = house.wall_type(
 	color="#dfefcf"
 )
 
-HOUSE_DEPTH = 7.99
+HOUSE_DEPTH = 8.00
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.50 + 0.01
+KITCHEN_WIDTH = 4.50 - 0.02
 CUT_WIDTH = 1.75
-KK_WIDTH = 2.50 + 0.01
+KK_WIDTH = 2.50 - 0.02
 
-wall2_x = BWT + 3.25 + 0.01 + BWT;
+wall2_x = BWT + 3.25 - 0.02 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
 MIDDLE_PURLIN_X_MIN = wall2_x - BWT / 2
@@ -314,19 +314,19 @@ rafters = [
 	1.63,
 	1.63+0.87,
 	1.63+0.87+RAFTER_THICKNESS,
-	(3.38, "+before"),
+	(3.35, "+before"),
 	(3.98, "after"),
 	(4.77, "after"),
 	(5.56, "after"),
 	(6.24, "after"),
 	(7.03, "after"),
 	(7.82, "after"),
-	(8.61, "+after"),
+	(8.55, "+after"),
 
 	8.61+0.687,
 	8.61+0.687+0.687,
 	8.61+0.687+0.687+0.688,
-	11.36,
+	11.27,
 	]
 
 # chimney
@@ -966,41 +966,40 @@ ground.asset(
 # MIAKO
 ceiling1 = upper.miako_slab(
     "Ceiling 1",
-    start=(0.1, BWT+GYM_DEPTH+BWT-0.04),
-    end=(wall2_x-0.15, BWT+GYM_DEPTH+BWT-0.04),
+    start=(BWT-0.135, HOUSE_DEPTH-BWT+0.04),
+    end=(wall2_x-BWT+0.135, HOUSE_DEPTH-BWT+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
 	block_height=0.15,
-    direction=(0, 1),
+    direction=(0, -1),
 	expected_width=HOUSE_DEPTH-3*BWT-GYM_DEPTH+0.08,
-    structure=[
-#		"beam", "narrow",
-#		"beam", "narrow",
-#
-#		"axis",
-
-		"beam", "narrow",
-		"beam", "narrow",
-		"beam", "beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam"
+	block_start_offset=0.125,
+    block_end_offset=0.125,
+	structure=[
+		"narrow", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"narrow", "beam",
+		"wide", "beam",
 		],
 )
 ceiling2 = upper.miako_slab(
     "Ceiling 2",
-    start=(wall2_x-0.125, GALERY_START),
-    end=(wall3_x-0.125, GALERY_START),
+    start=(wall2_x-0.135, GALERY_START),
+    end=(wall3_x-BWT+0.135, GALERY_START),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
 	block_height=0.15,
     direction=(0, 1),
 	expected_width=HOUSE_DEPTH-2*BWT-CHODBA_DEPTH,
+	block_start_offset=0.125,
+    block_end_offset=0.125,
     structure=[
 		"beam", "narrow",
 		"beam", "narrow",
@@ -1016,14 +1015,16 @@ ceiling2 = upper.miako_slab(
 
 ceiling3 = upper.miako_slab(
     "Ceiling 3",
-    start=(wall3_x-0.1, HOUSE_DEPTH-BWT+0.04),
-    end=(HOUSE_WIDTH-0.1, HOUSE_DEPTH-BWT+0.04),
+    start=(wall3_x-0.135, HOUSE_DEPTH-BWT+0.04),
+    end=(HOUSE_WIDTH-BWT+0.135, HOUSE_DEPTH-BWT+0.04),
     top=0,
 	topping=0.06,
 	beam_height=0.06,
 	block_height=0.15,
     direction=(0, -1),
 	expected_width=HOUSE_DEPTH-2*BWT+0.08,
+	block_start_offset=0.125,
+    block_end_offset=0.125,
     structure=[
 		"narrow", "beam",
 		"wide", "beam",
@@ -1032,8 +1033,8 @@ ceiling3 = upper.miako_slab(
 		"wide", "beam",
 		"wide", "beam",
 		"wide", "beam",
-		"wide", "beam",
 		"narrow", "beam",
+		"wide", "beam",
 		"narrow", "beam",
 		"wide", "beam",
 		"wide", "beam",
@@ -3282,7 +3283,7 @@ if "ceiling" in sys.argv:
 		"Drawing 2",
 		x=HOUSE_WIDTH/2,
 		y=HOUSE_DEPTH/2,
-		z=ground_floor_height+0.1,
+		z=ground_floor_height+0.04,
 		radius=8.5,
 		storeys=[upper],
 		door_annotations=False,
@@ -3299,14 +3300,14 @@ if "ceiling" in sys.argv:
 	drawing1.add_miako_beam_dimensions(ceiling3, side="end", offset=0.8)
 
 	outside_dims(drawing1)
-	drawing1.add_dimension(start=(BWT/2, HOUSE_DEPTH-BWT), end=(wall2_x-BWT/2, HOUSE_DEPTH-BWT), offset=0.8)
-	drawing1.add_dimension(start=(wall2_x-BWT/2, HOUSE_DEPTH-BWT), end=(wall3_x-BWT/2, HOUSE_DEPTH-BWT), offset=0.8)
-	drawing1.add_dimension(start=(wall3_x-BWT/2, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT/2, HOUSE_DEPTH-BWT), offset=0.8)
+	drawing1.add_dimension(start=(BWT-0.135, HOUSE_DEPTH-BWT), end=(wall2_x-BWT+0.135, HOUSE_DEPTH-BWT), offset=0.8)
+	drawing1.add_dimension(start=(wall2_x-0.135, HOUSE_DEPTH-BWT), end=(wall3_x-BWT+0.135, HOUSE_DEPTH-BWT), offset=0.8)
+	drawing1.add_dimension(start=(wall3_x-0.135, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT+0.135, HOUSE_DEPTH-BWT), offset=0.8)
 	drawing1.add_miako_beam_schedule(
 		[
-			{"location": "Levá část", "slab": ceiling3, "length": 2.75},
-			{"location": "Střed", "slab": ceiling2, "length": 4.75},
-			{"location": "Pravá část", "slab": ceiling1, "length": 3.75},
+			{"location": "Levá část", "slab": ceiling3},
+			{"location": "Střed", "slab": ceiling2},
+			{"location": "Pravá část", "slab": ceiling1},
 		]
 	)
 

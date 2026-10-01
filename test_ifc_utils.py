@@ -44,6 +44,8 @@ from ifc_utils import (
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
     _postprocess_hexagon_marker_overlays,
+    _postprocess_miako_beam_shell_shared_edges,
+    _postprocess_miako_slab_end_faces,
     _postprocess_model_line_width,
     _postprocess_note_overlays,
     _postprocess_elevation_wall_insulation_depth,
@@ -2669,6 +2671,8 @@ class HouseTests(unittest.TestCase):
         self.assertAlmostEqual(slab.width_before_axis, 0)
         self.assertAlmostEqual(slab.width_after_axis, 1.125)
         self.assertAlmostEqual(slab.expected_width, 1.125)
+        self.assertAlmostEqual(slab.block_start_offset, 0)
+        self.assertAlmostEqual(slab.block_end_offset, 0)
         self.assertEqual(
             slab.footprint,
             ((0, 0), (0, 8), (1.125, 8.0), (1.125, 0.0)),
@@ -3087,6 +3091,81 @@ class HouseTests(unittest.TestCase):
                 top=0,
                 direction=(0, 1),
                 structure=["beam", "axis", "wide", "axis", "beam"],
+            )
+
+    def test_insets_miako_blocks_from_both_beam_ends(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        slab = upper.miako_slab(
+            "Inset blocks",
+            start=(1, 2),
+            end=(2.2, 2),
+            top=0,
+            direction=(0, 1),
+            structure=["beam", "wide", "beam"],
+            block_start_offset=0.1,
+            block_end_offset=0.15,
+        )
+
+        self.assertAlmostEqual(slab.length, 1.2)
+        self.assertAlmostEqual(slab.block_start_offset, 0.1)
+        self.assertAlmostEqual(slab.block_end_offset, 0.15)
+        self.assertEqual(len(slab.blocks), 4)
+        block_origins = [
+            ifcopenshell.util.placement.get_local_placement(
+                block.ObjectPlacement
+            )[0, 3]
+            for block in slab.blocks
+        ]
+        np.testing.assert_allclose(
+            block_origins,
+            (1.1, 1.35, 1.6, 1.85),
+            atol=1e-9,
+        )
+        block_lengths = [
+            ifcopenshell.util.shape.get_x(
+                ifcopenshell.geom.create_shape(
+                    ifcopenshell.geom.settings(),
+                    block,
+                ).geometry
+            )
+            for block in slab.blocks
+        ]
+        np.testing.assert_allclose(
+            block_lengths,
+            (0.25, 0.25, 0.25, 0.2),
+            atol=1e-9,
+        )
+        self.assertAlmostEqual(
+            block_origins[-1] + block_lengths[-1],
+            2.05,
+        )
+        properties = ifcopenshell.util.element.get_pset(
+            slab,
+            "BBIM_MiakoSlab",
+        )
+        self.assertAlmostEqual(properties["BlockStartOffset"], 0.1)
+        self.assertAlmostEqual(properties["BlockEndOffset"], 0.15)
+
+        valid_arguments = {
+            "start": (0, 0),
+            "end": (1.2, 0),
+            "top": 0,
+            "direction": (0, 1),
+            "structure": ["beam", "wide"],
+        }
+        with self.assertRaisesRegex(ValueError, "must not be negative"):
+            upper.miako_slab(
+                "Invalid offset",
+                **valid_arguments,
+                block_start_offset=-0.1,
+            )
+        with self.assertRaisesRegex(ValueError, "less than the beam length"):
+            upper.miako_slab(
+                "No block run",
+                **valid_arguments,
+                block_start_offset=0.6,
+                block_end_offset=0.6,
             )
 
     def test_handles_partial_miako_blocks_and_validates_the_layout(self) -> None:
@@ -6676,7 +6755,9 @@ class HouseTests(unittest.TestCase):
                 [("Hlavní krokve", (first, second), 0)]
             )
 
-    def test_builds_miako_beam_schedule_from_explicit_lengths(self) -> None:
+    def test_builds_miako_beam_schedule_from_explicit_and_slab_lengths(
+        self,
+    ) -> None:
         house = House("MIAKO schedule")
         upper = house.storey("Upper floor", elevation=3)
         left = upper.miako_slab(
@@ -6708,7 +6789,7 @@ class HouseTests(unittest.TestCase):
         result = drawing.add_miako_beam_schedule(
             [
                 {"location": "Levá část", "slab": left, "length": 3.75},
-                {"location": "Střed", "slab": middle, "length": 4.75},
+                {"location": "Střed", "slab": middle},
             ]
         )
 
@@ -6732,7 +6813,7 @@ class HouseTests(unittest.TestCase):
                         },
                         {
                             "location": "Střed",
-                            "length": 4750,
+                            "length": 4000,
                             "count": 2,
                             "slab_guid": middle.GlobalId,
                         },
@@ -6757,7 +6838,7 @@ class HouseTests(unittest.TestCase):
             drawing.add_miako_beam_schedule([("Left", left, 3.75)])
         with self.assertRaisesRegex(ValueError, "must contain"):
             drawing.add_miako_beam_schedule(
-                [{"location": "Left", "slab": left}]
+                [{"location": "Left"}]
             )
         with self.assertRaisesRegex(TypeError, "slab must be a MiakoSlab"):
             drawing.add_miako_beam_schedule(
@@ -9234,6 +9315,141 @@ class HouseTests(unittest.TestCase):
                 if association.is_a("IfcRelAssociatesDocument")
             )
             self.assertEqual(Path(document.Location), output.resolve())
+
+    def test_suppresses_only_miako_shell_edges_shared_with_core(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "plan.svg"
+            svg_path.write_text(
+                """<svg xmlns:ifc="http://www.ifcopenshell.org/ns">
+  <g class="IfcBeam material-MIAKOconcrete projection" ifc:name="Ceiling A Beam 1">
+    <path d="M0,1 L10,1"/>
+    <path d="M0,2 L10,2"/>
+    <path d="M0,1 L0,2"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKObeamceramic projection" ifc:name="Ceiling A Beam 1 Ceramic U-shell">
+    <path d="M0,0.8 L10,0.8"/>
+    <path d="M10,1 L0,1"/>
+    <path d="M0,2 L10,2"/>
+    <path d="M0,2.2 L10,2.2"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKObeamceramic projection" ifc:name="Ceiling B Beam 1 Ceramic U-shell">
+    <path d="M0,1 L10,1"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKObeamceramic cut" ifc:name="Ceiling A Beam 1 Ceramic U-shell">
+    <path d="M0,1 L10,1"/>
+  </g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_miako_beam_shell_shared_edges(svg_path)
+            _postprocess_miako_beam_shell_shared_edges(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(
+                svg.count("miako-beam-shell-shared-edges-postprocess"),
+                1,
+            )
+            self.assertNotIn('d="M10,1 L0,1"', svg)
+            self.assertEqual(svg.count('d="M0,2 L10,2"'), 1)
+            self.assertIn('d="M0,0.8 L10,0.8"', svg)
+            self.assertIn('d="M0,2.2 L10,2.2"', svg)
+            self.assertEqual(svg.count('d="M0,1 L10,1"'), 3)
+            self.assertEqual(svg.count('class="miako-shell-plan-fill"'), 2)
+            self.assertIn('d="M0,0.9 L10,0.9"', svg)
+            self.assertIn('d="M0,2.1 L10,2.1"', svg)
+            self.assertIn("stroke:#d98245;stroke-width:0.16", svg)
+            self.assertIn(
+                ".section.target-view-PLANVIEW "
+                "g.material-MIAKOconcrete.projection",
+                svg,
+            )
+            self.assertIn(
+                ".section.target-view-PLANVIEW "
+                "g.material-MIAKObeamceramic.cut",
+                svg,
+            )
+            self.assertEqual(svg.count("stroke-width: 0.04 !important"), 1)
+
+    def test_removes_only_projected_miako_slab_end_faces(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "plan.svg"
+            svg_path.write_text(
+                """<svg xmlns:ifc="http://www.ifcopenshell.org/ns">
+  <g class="IfcSlab material-null projection" ifc:name="Ceiling A">
+    <path d="M0,0 L0,4"/>
+    <path d="M5,0 L5,4"/>
+    <path d="M10,0 L10,4"/>
+  </g>
+  <g class="IfcBeam material-MIAKOconcrete projection" ifc:name="Ceiling A Beam 1">
+    <path d="M0,1 L0,2"/>
+    <path d="M0,1 L10,1"/>
+    <path d="M10,1 L10,2"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKOblockceramic projection" ifc:name="Ceiling A Wide Block 1.1">
+    <path d="M1,2 L1,3"/>
+    <path d="M2.5,2 L2.5,3"/>
+    <path d="M1,2 L2.5,2"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKOblockceramic projection" ifc:name="Ceiling A Wide Block 1.2">
+    <path d="M7.5,2 L7.5,3"/>
+    <path d="M9,2 L9,3"/>
+    <path d="M7.5,2 L9,2"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKOblockceramic cut" ifc:name="Ceiling A Wide Block 1.1">
+    <path d="M1,2 L2.5,2 L2.5,3 L1,3 Z"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKOblockceramic cut" ifc:name="Other slab block">
+    <path d="M20,2 L21,2 L21,3 L20,3 Z"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKOreinforcement projection" ifc:name="Ceiling A Beam 1 Reinforcement">
+    <path d="M0,1.4 L10,1.4"/>
+    <path d="M10,1.4 L10,1.5"/>
+    <path d="M10,1.5 L0,1.5"/>
+    <path d="M0,1.5 L0,1.4"/>
+  </g>
+  <g class="IfcWall material-null projection" ifc:name="Unrelated">
+    <path d="M0,0 L0,4"/>
+  </g>
+  <g class="IfcBuildingElementPart material-MIAKOreinforcement projection" ifc:name="Angled Beam 1 Reinforcement">
+    <path d="M0,0 L10,10"/>
+    <path d="M9,11 L11,9"/>
+  </g>
+  <g class="IfcBeam material-MIAKOconcrete projection" ifc:name="Angled Beam 1">
+    <path d="M-1,1 L1,-1"/>
+    <path d="M4,6 L6,4"/>
+    <path d="M9,11 L11,9"/>
+    <path d="M0,0 L10,10"/>
+  </g>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            _postprocess_miako_slab_end_faces(svg_path)
+            _postprocess_miako_slab_end_faces(svg_path)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count("miako-open-ends-postprocess"), 1)
+            self.assertNotIn('d="M0,1 L0,2"', svg)
+            self.assertNotIn('d="M10,1 L10,2"', svg)
+            self.assertIn('d="M1,2 L1,3"', svg)
+            self.assertIn('d="M9,2 L9,3"', svg)
+            self.assertIn('d="M2.5,2 L2.5,3"', svg)
+            self.assertIn('d="M7.5,2 L7.5,3"', svg)
+            self.assertIn('d="M0,1 L10,1"', svg)
+            self.assertEqual(svg.count('d="M0,0 L0,4"'), 1)
+            self.assertNotIn('d="M-1,1 L1,-1"', svg)
+            self.assertNotIn('d="M9,11 L11,9"', svg)
+            self.assertIn('d="M4,6 L6,4"', svg)
+            self.assertIn('d="M0,0 L10,10"', svg)
+            self.assertNotIn("stroke: none !important", svg)
+            self.assertIn(
+                'class="IfcBuildingElementPart material-MIAKOblockceramic cut" '
+                'ifc:name="Other slab block">',
+                svg,
+            )
 
     def test_keeps_only_visible_furniture_labels_above_elevation_linework(
         self,
