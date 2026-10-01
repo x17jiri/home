@@ -2666,10 +2666,19 @@ class HouseTests(unittest.TestCase):
         )
         self.assertEqual(slab.length, 8)
         self.assertAlmostEqual(slab.width, 1.125)
+        self.assertAlmostEqual(slab.width_before_axis, 0)
+        self.assertAlmostEqual(slab.width_after_axis, 1.125)
         self.assertAlmostEqual(slab.expected_width, 1.125)
         self.assertEqual(
             slab.footprint,
             ((0, 0), (0, 8), (1.125, 8.0), (1.125, 0.0)),
+        )
+        self.assertEqual(
+            slab.beam_centerlines,
+            (
+                ((0.54, 0.0), (0.54, 8.0)),
+                ((1.04, 0.0), (1.04, 8.0)),
+            ),
         )
         self.assertAlmostEqual(slab.height, 0.25)
         self.assertAlmostEqual(slab.bottom, -0.25)
@@ -2970,6 +2979,114 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(len(reopened.by_type("IfcBeamType")), 1)
             self.assertEqual(
                 len(reopened.by_type("IfcBuildingElementPartType")), 4
+            )
+
+    def test_places_miako_layout_items_on_both_sides_of_an_axis(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        slab = upper.miako_slab(
+            "Two-sided ceiling",
+            start=(1, 2),
+            end=(5, 2),
+            top=0,
+            direction=(0, 1),
+            structure=[
+                "beam",
+                "wide",
+                "beam",
+                "axis",
+                "beam",
+                "narrow",
+                "beam",
+            ],
+            expected_width=1.465,
+        )
+
+        self.assertEqual(
+            slab.structure,
+            ("beam", "wide", "beam", "axis", "beam", "narrow", "beam"),
+        )
+        self.assertAlmostEqual(slab.width_before_axis, 0.795)
+        self.assertAlmostEqual(slab.width_after_axis, 0.67)
+        self.assertAlmostEqual(slab.width, 1.465)
+        np.testing.assert_allclose(
+            slab.footprint,
+            (
+                (1.0, 1.205),
+                (5.0, 1.205),
+                (5.0, 2.67),
+                (1.0, 2.67),
+            ),
+            atol=1e-9,
+        )
+        np.testing.assert_allclose(
+            slab.beam_centerlines,
+            (
+                ((1.0, 1.29), (5.0, 1.29)),
+                ((1.0, 1.915), (5.0, 1.915)),
+                ((1.0, 2.085), (5.0, 2.085)),
+                ((1.0, 2.585), (5.0, 2.585)),
+            ),
+            atol=1e-9,
+        )
+
+        plan = ifcopenshell.util.representation.get_representation(
+            slab, "Plan", "Body", "PLAN_VIEW"
+        )
+        np.testing.assert_allclose(
+            plan.Items[0].Points.CoordList,
+            (
+                (0.0, -0.795),
+                (4.0, -0.795),
+                (4.0, 0.67),
+                (0.0, 0.67),
+                (0.0, -0.795),
+            ),
+            atol=1e-9,
+        )
+        beam_origins = [
+            ifcopenshell.util.placement.get_local_placement(
+                beam.ObjectPlacement
+            )[:2, 3]
+            for beam in slab.beams
+        ]
+        np.testing.assert_allclose(
+            beam_origins,
+            ((1.0, 1.205), (1.0, 1.83), (1.0, 2.0), (1.0, 2.5)),
+            atol=1e-9,
+        )
+
+        miako_properties = ifcopenshell.util.element.get_pset(
+            slab,
+            "BBIM_MiakoSlab",
+        )
+        self.assertEqual(
+            miako_properties["Structure"],
+            "beam,wide,beam,axis,beam,narrow,beam",
+        )
+        self.assertAlmostEqual(miako_properties["WidthBeforeAxis"], 0.795)
+        self.assertAlmostEqual(miako_properties["WidthAfterAxis"], 0.67)
+
+        topping_body = ifcopenshell.util.representation.get_representation(
+            slab.topping_element, "Model", "Body", "MODEL_VIEW"
+        )
+        profile = topping_body.Items[0].SweptArea.OuterCurve.Points.CoordList
+        self.assertTrue(
+            any(np.allclose(point, (-0.135, 0.06)) for point in profile)
+        )
+        self.assertTrue(
+            any(np.allclose(point, (0.135, 0.06)) for point in profile)
+        )
+        self.assertNotIn((0.0, 0.19), profile)
+
+        with self.assertRaisesRegex(ValueError, "at most one axis"):
+            upper.miako_slab(
+                "Invalid axes",
+                start=(0, 0),
+                end=(2, 0),
+                top=0,
+                direction=(0, 1),
+                structure=["beam", "axis", "wide", "axis", "beam"],
             )
 
     def test_handles_partial_miako_blocks_and_validates_the_layout(self) -> None:
@@ -5687,6 +5804,84 @@ class HouseTests(unittest.TestCase):
                 ["Millimeters"],
             )
 
+    def test_adds_miako_beam_centre_dimensions_on_the_selected_side(self) -> None:
+        house = House("My house")
+        upper = house.storey("Upper floor", elevation=3)
+        slab = upper.miako_slab(
+            "Ceiling",
+            start=(1, 2),
+            end=(5, 2),
+            top=0,
+            direction=(0, 1),
+            structure=["beam", "narrow", "beam", "wide", "beam"],
+        )
+        drawing = house.add_drawing(
+            "Ceiling plan", 3, 3, 3.1, 5, storeys=[upper]
+        )
+
+        dimensions = drawing.add_miako_beam_dimensions(
+            slab,
+            side="start",
+            offset=0.4,
+        )
+
+        self.assertEqual(len(dimensions), 2)
+        self.assertEqual(
+            [dimension.Name for dimension in dimensions],
+            [
+                "Ceiling Beam Center Distance 1",
+                "Ceiling Beam Center Distance 2",
+            ],
+        )
+        expected_lines = (
+            ((0.6, 2.085), (0.6, 2.585)),
+            ((0.6, 2.585), (0.6, 3.21)),
+        )
+        for dimension, expected_line in zip(dimensions, expected_lines):
+            representation = ifcopenshell.util.representation.get_representation(
+                dimension, "Plan", "Annotation", "PLAN_VIEW"
+            )
+            np.testing.assert_allclose(
+                representation.Items[0].Points.CoordList,
+                expected_line,
+                atol=1e-9,
+            )
+
+        end_dimensions = drawing.add_miako_beam_dimensions(
+            slab,
+            side="end",
+            offset=0.4,
+        )
+        end_representation = ifcopenshell.util.representation.get_representation(
+            end_dimensions[0], "Plan", "Annotation", "PLAN_VIEW"
+        )
+        np.testing.assert_allclose(
+            end_representation.Items[0].Points.CoordList,
+            ((5.4, 2.085), (5.4, 2.585)),
+            atol=1e-9,
+        )
+
+        reversed_dimensions = drawing.add_miako_beam_dimensions(
+            slab,
+            side="start",
+            offset=-0.4,
+        )
+        reversed_representation = (
+            ifcopenshell.util.representation.get_representation(
+                reversed_dimensions[0], "Plan", "Annotation", "PLAN_VIEW"
+            )
+        )
+        np.testing.assert_allclose(
+            reversed_representation.Items[0].Points.CoordList,
+            ((1.4, 2.085), (1.4, 2.585)),
+            atol=1e-9,
+        )
+
+        with self.assertRaisesRegex(TypeError, "must be a MiakoSlab"):
+            drawing.add_miako_beam_dimensions(upper.element)
+        with self.assertRaisesRegex(ValueError, "side must be one of"):
+            drawing.add_miako_beam_dimensions(slab, side="left")
+
     def test_adds_a_manual_room_identifier_and_area_annotation(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0.25)
@@ -5991,6 +6186,17 @@ class HouseTests(unittest.TestCase):
                 1.6,
                 4,
                 door_annotations="yes",
+            )
+        with self.assertRaisesRegex(
+            TypeError, "automatic_plan_annotations must be a boolean"
+        ):
+            house.add_drawing(
+                "Invalid automatic annotations",
+                2.5,
+                2,
+                1.6,
+                4,
+                automatic_plan_annotations="yes",
             )
 
     def test_adds_a_scoped_door_width_height_annotation(self) -> None:
@@ -6426,7 +6632,8 @@ class HouseTests(unittest.TestCase):
                         "drawing_order": 2,
                     },
                 )
-            ]
+            ],
+            layout_scale=0.5,
         )
 
         self.assertIs(result, drawing)
@@ -6458,6 +6665,7 @@ class HouseTests(unittest.TestCase):
                             ],
                         }
                     ],
+                    "layout_scale": 0.5,
                 }
             ],
         )
@@ -6466,6 +6674,98 @@ class HouseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
             no_panel.add_timber_schedule(
                 [("Hlavní krokve", (first, second), 0)]
+            )
+
+    def test_builds_miako_beam_schedule_from_explicit_lengths(self) -> None:
+        house = House("MIAKO schedule")
+        upper = house.storey("Upper floor", elevation=3)
+        left = upper.miako_slab(
+            "Left ceiling",
+            start=(0, 0),
+            end=(3, 0),
+            top=0,
+            direction=(0, 1),
+            structure=["beam", "wide", "beam", "narrow", "beam"],
+        )
+        middle = upper.miako_slab(
+            "Middle ceiling",
+            start=(3, 0),
+            end=(7, 0),
+            top=0,
+            direction=(0, 1),
+            structure=["beam", "wide", "beam"],
+        )
+        drawing = house.add_drawing(
+            "Ceiling plan",
+            3.5,
+            2,
+            3.1,
+            5,
+            storeys=[upper],
+            right_panel_width=50,
+        )
+
+        result = drawing.add_miako_beam_schedule(
+            [
+                {"location": "Levá část", "slab": left, "length": 3.75},
+                {"location": "Střed", "slab": middle, "length": 4.75},
+            ]
+        )
+
+        self.assertIs(result, drawing)
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertEqual(
+            json.loads(properties["RightPanelTables"]),
+            [
+                {
+                    "kind": "miako_beam_schedule",
+                    "title": "SPECIFIKACE MIAKO NOSNÍKŮ",
+                    "items": [
+                        {
+                            "location": "Levá část",
+                            "length": 3750,
+                            "count": 3,
+                            "slab_guid": left.GlobalId,
+                        },
+                        {
+                            "location": "Střed",
+                            "length": 4750,
+                            "count": 2,
+                            "slab_guid": middle.GlobalId,
+                        },
+                    ],
+                }
+            ],
+        )
+
+        no_panel = house.add_drawing("No panel", 2, 2, 3.1, 4)
+        with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
+            no_panel.add_miako_beam_schedule(
+                [{"location": "Left", "slab": left, "length": 3.75}]
+            )
+        narrow_panel = house.add_drawing(
+            "Narrow panel", 2, 2, 3.1, 4, right_panel_width=30
+        )
+        with self.assertRaisesRegex(ValueError, "at least 40 mm"):
+            narrow_panel.add_miako_beam_schedule(
+                [{"location": "Left", "slab": left, "length": 3.75}]
+            )
+        with self.assertRaisesRegex(TypeError, "row 1 must be a mapping"):
+            drawing.add_miako_beam_schedule([("Left", left, 3.75)])
+        with self.assertRaisesRegex(ValueError, "must contain"):
+            drawing.add_miako_beam_schedule(
+                [{"location": "Left", "slab": left}]
+            )
+        with self.assertRaisesRegex(TypeError, "slab must be a MiakoSlab"):
+            drawing.add_miako_beam_schedule(
+                [{"location": "Left", "slab": upper.element, "length": 3.75}]
+            )
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            drawing.add_miako_beam_schedule(
+                [{"location": "Left", "slab": left, "length": 0}]
             )
 
     def test_stores_drawing_camera_and_scoped_batting_in_ifc(self) -> None:
@@ -8304,6 +8604,7 @@ class HouseTests(unittest.TestCase):
                         {
                             "kind": "timber_schedule",
                             "title": "SPECIFIKACE PRVKŮ KROVU",
+                            "layout_scale": 0.5,
                             "items": [
                                 {
                                     "mark": "A",
@@ -8340,17 +8641,79 @@ class HouseTests(unittest.TestCase):
                 "VÝŠKA",
                 "DÉLKA",
                 "POČET",
+                "m³/kus",
+                "m³",
             ):
                 self.assertIn(f">{heading}</text>", svg)
             self.assertIn(">Hlavní krokve</text>", svg)
             self.assertIn(">5989</text>", svg)
             self.assertIn(">27</text>", svg)
+            self.assertIn(">0,108</text>", svg)
+            self.assertEqual(svg.count(">2,911</text>"), 2)
+            self.assertIn(">CELKEM</text>", svg)
+            self.assertIn("font-size:1.45px", svg)
             self.assertIn(
                 'class="timber-schedule-swatch"',
                 svg,
             )
             self.assertIn('fill="url(#brick-tint-f4d35e)"', svg)
             self.assertNotIn(">A</text>", svg)
+
+    def test_appends_miako_beam_schedule_to_right_panel(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg width="160mm" height="160mm" '
+                'viewBox="0 0 160 160">\n'
+                '  <g id="model-view"/>\n'
+                "</svg>\n",
+                encoding="utf-8",
+            )
+            properties = {
+                "RightPanelWidth": 50,
+                "RightPanelTables": json.dumps(
+                    [
+                        {
+                            "kind": "miako_beam_schedule",
+                            "title": "SPECIFIKACE MIAKO NOSNÍKŮ",
+                            "items": [
+                                {
+                                    "location": "Levá část",
+                                    "length": 3750,
+                                    "count": 9,
+                                    "slab_guid": "left-guid",
+                                },
+                                {
+                                    "location": "Střed",
+                                    "length": 4750,
+                                    "count": 10,
+                                    "slab_guid": "middle-guid",
+                                },
+                            ],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+            }
+
+            _postprocess_right_panel(svg_path, properties)
+            _postprocess_right_panel(svg_path, properties)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('class="right-side-panel"'), 1)
+            self.assertEqual(
+                svg.count('class="right-panel-table miako-beam-schedule"'),
+                1,
+            )
+            self.assertIn("SPECIFIKACE MIAKO NOSNÍKŮ", svg)
+            for heading in ("UMÍSTĚNÍ", "DÉLKA", "POČET"):
+                self.assertIn(f">{heading}</text>", svg)
+            self.assertIn(">Levá část</text>", svg)
+            self.assertIn(">Střed</text>", svg)
+            self.assertIn(">3750</text>", svg)
+            self.assertIn(">4750</text>", svg)
+            self.assertIn(">9</text>", svg)
+            self.assertIn(">10</text>", svg)
 
     def test_appends_window_area_and_floor_area_percentage_to_room_legend(
         self,
@@ -8606,6 +8969,16 @@ class HouseTests(unittest.TestCase):
             storeys=[],
             door_annotations=False,
         )
+        suppressed_future_annotations = house.add_drawing(
+            "No automatic annotations created later",
+            2.5,
+            2,
+            1.6,
+            4,
+            storeys=[upper],
+            door_annotations=False,
+            automatic_plan_annotations=False,
+        )
         ground_wall.add_door(at=0.5, width=0.9, height=2.1)
         upper_wall.add_door(at=2, width=0.9, height=2.1)
         ground.furniture(
@@ -8619,6 +8992,16 @@ class HouseTests(unittest.TestCase):
             kind="TABLE",
             size=(1, 1, 0.75),
             center=(3, 2),
+        )
+        suppressed_existing_annotations = house.add_drawing(
+            "No existing automatic annotations",
+            2.5,
+            2,
+            4.6,
+            4,
+            storeys=[upper],
+            door_annotations=False,
+            automatic_plan_annotations=False,
         )
 
         automatic_annotations = {
@@ -8647,6 +9030,12 @@ class HouseTests(unittest.TestCase):
             automatic_members(two_storeys_drawing), automatic_annotations
         )
         self.assertEqual(automatic_members(empty_drawing), set())
+        self.assertEqual(
+            automatic_members(suppressed_future_annotations), set()
+        )
+        self.assertEqual(
+            automatic_members(suppressed_existing_annotations), set()
+        )
         self.assertEqual(ground_drawing.storeys, (ground,))
         self.assertEqual(all_storeys_drawing.storeys, (ground, upper))
         self.assertFalse(ground_drawing.includes_all_storeys)

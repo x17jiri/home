@@ -17,10 +17,10 @@ from math import cos, isfinite, radians
 
 
 # USER INPUTS
-RAFTER_WIDTH_MM = 120.0
-RAFTER_HEIGHT_MM = 180.0
+RAFTER_WIDTH_MM = 80.0
+RAFTER_HEIGHT_MM = 200.0
 MAX_DEFLECTION_RATIO = 300.0  # 300 means L/300
-RAFTER_SPACING_M = 0.95
+RAFTER_SPACING_M = 0.92
 
 PURLIN_SUPPORT_SPAN_M = 4.8  # middle span; retained as a convenient input
 if 1:
@@ -60,12 +60,12 @@ SNOW_LOAD_KN_M2 = 2.0
 # installed mass of every layer. Use 0 only when a listed layer is genuinely
 # absent; None keeps the overall check explicitly incomplete.
 ROOF_LAYERS_KG_M2: dict[str, float | None] = {
-    "Roof tiles": 45,
+    "Roof tiles": 50,
     "Tile battens": 5,
     "Counter battens": 5,
-    "Wood fibreboard": 17,
+    "Wood fibreboard": 20,
     "Installation battens/services": 5,
-    "Gypsum plasterboard": 35,
+    "Gypsum plasterboard": 40,
 }
 
 # Deflection also depends on timber stiffness. 11 GPa is an illustrative

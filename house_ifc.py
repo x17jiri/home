@@ -152,8 +152,13 @@ STREET_WALL_PLATE_DRAWING_COLOR = "#e76f51"
 SHORT_WALL_PLATE_DRAWING_COLOR = "#f4a261"
 GARDEN_WALL_PLATE_DRAWING_COLOR = "#f4d35e"
 DORMER_WALL_PLATE_DRAWING_COLOR = "#f4b6c2"
-COLLAR_TIE_A_DRAWING_COLOR = "#f4d35e"
-COLLAR_TIE_B_DRAWING_COLOR = "#e76f51"
+RAFTER_DRAWING_PATTERN = "diagonal1"
+MAIN_RAFTER_DRAWING_COLOR = "#f4d35e"
+CORNER_SHORT_RAFTER_DRAWING_COLOR = "#f4a261"
+DORMER_SHORT_RAFTER_DRAWING_COLOR = "#f4b6c2"
+DORMER_RAFTER_DRAWING_COLOR = "#5ed3f4"
+COLLAR_TIE_A_DRAWING_COLOR = "#5ef4d3"
+COLLAR_TIE_B_DRAWING_COLOR = "#516fe7"
 COLLAR_TIE_DRAWING_ORDER = 0
 PURLIN_AND_WALL_PLATE_DRAWING_ORDER = 1
 MAIN_RAFTER_DRAWING_ORDER = 2
@@ -490,11 +495,13 @@ wall_gym_g = ground.wall(
 	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
 	wall_type=load_bearing_wall, height=ground_floor_height)
 
-ring_beams = ground.add_ring_beams_from(
+# The ring beam caps the ground-floor walls, but belongs to the upper storey.
+# Its negative local offset keeps it directly below the upper-floor elevation.
+ring_beams = upper.add_ring_beams_from(
 	ground,
 	source_wall_type=load_bearing_wall,
 	height=CEILING_THICKNESS,
-	start_height=ground_floor_height,
+	start_height=-CEILING_THICKNESS,
 	concrete_material="Concrete topping",
 	reinforcement_material="Ring beam reinforcement",
 	bar_diameter=RING_BEAM_BAR_DIAMETER,
@@ -968,16 +975,20 @@ ceiling1 = upper.miako_slab(
     direction=(0, 1),
 	expected_width=HOUSE_DEPTH-3*BWT-GYM_DEPTH+0.08,
     structure=[
-		"beam",
-		"narrow", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"narrow"
+#		"beam", "narrow",
+#		"beam", "narrow",
+#
+#		"axis",
+
+		"beam", "narrow",
+		"beam", "narrow",
+		"beam", "beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
+		"beam", "wide",
+		"beam"
 		],
 )
 ceiling2 = upper.miako_slab(
@@ -2759,20 +2770,28 @@ add_foundation_insulation(
 
 house.write("house.ifc")
 
+def outside_dims(drawing1):
+	# Vnejsi rozmery
+	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, 0), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH), offset=-1.5)
+	drawing1.add_dimension(start=(0, BWT+GYM_DEPTH), end=(0, HOUSE_DEPTH), offset=1.5)
+	drawing1.add_dimension(start=(CUT_WIDTH, 0), end=(CUT_WIDTH, BWT+GYM_DEPTH), offset=CUT_WIDTH+1.5)
+	drawing1.add_dimension(start=(CUT_WIDTH, BWT+GYM_DEPTH), end=(0, BWT+GYM_DEPTH), offset=BWT+GYM_DEPTH+1.5)
+	drawing1.add_dimension(start=(HOUSE_WIDTH, BWT+GYM_DEPTH), end=(CUT_WIDTH, BWT+GYM_DEPTH), offset=BWT+GYM_DEPTH+1.5)
+
+	drawing1.add_dimension(start=(-ROCKWOOL_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), offset=2)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, -POLYSTYRENE_INSULATION_THICKNESS), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS), offset=-2)
+
 def common_dims(drawing1):
+	outside_dims(drawing1)
+	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=1)
+	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=1)
+	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=1)
+
 	# Risankuv pokoj hloubka
 	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1)
 	# gym hloubka
 	drawing1.add_dimension(start=(wall2_x-BWT, BWT), end=(wall2_x-BWT, BWT+GYM_DEPTH))
-
-	# Vnejsi rozmery
-	drawing1.add_dimension(start=(-ROCKWOOL_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), offset=2)
-	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
-	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=1)
-	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=1)
-	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=1)
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, 0), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH), offset=-1.5)
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, -POLYSTYRENE_INSULATION_THICKNESS), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS), offset=-2)
 	# chodba delka
 	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
 	# komin
@@ -3061,7 +3080,7 @@ if "roof" in sys.argv:
 		door_annotations=False,
 		projected_wood_color="#f4d35e",
 		model_line_width=0.06,
-		right_panel_width=110,
+		right_panel_width=65,
 	)
 	for element in (
 		wall_dormer,
@@ -3117,7 +3136,7 @@ if "roof" in sys.argv:
 
 	timber_schedule_rows = [
 		(
-			"Vaznice – levý díl",
+			"Vaznice – pravý díl",
 			(street_purlins[0], garden_purlins[0]),
 			0,
 			{
@@ -3137,7 +3156,7 @@ if "roof" in sys.argv:
 			},
 		),
 		(
-			"Vaznice – pravý díl",
+			"Vaznice – levý díl",
 			(street_purlins[2], garden_purlins[2]),
 			0,
 			{
@@ -3147,31 +3166,47 @@ if "roof" in sys.argv:
 			},
 		),
 		(
-			"Hlavní krokve",
+			"Krokve – hlavní",
 			main_roof_rafters,
 			RAFTER_EXTRA_LENGTH,
-			{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+			{
+				"pattern": RAFTER_DRAWING_PATTERN,
+				"color": MAIN_RAFTER_DRAWING_COLOR,
+				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+			},
 		),
 		(
-			"Zkrácené krokve A",
+			"Krokve – zkrácené, roh",
 			corner_short_rafters,
 			RAFTER_EXTRA_LENGTH,
-			{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+			{
+				"pattern": RAFTER_DRAWING_PATTERN,
+				"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
+				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+			},
 		),
 		(
-			"Zkrácené krokve B",
+			"Krokve – zkrácené, vikýř",
 			dormer_short_rafters,
 			RAFTER_EXTRA_LENGTH,
-			{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+			{
+				"pattern": RAFTER_DRAWING_PATTERN,
+				"color": DORMER_SHORT_RAFTER_DRAWING_COLOR,
+				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+			},
 		),
 		(
-			"Krokve vikýře",
+			"Krokve – vikýř",
 			dormer_roof_rafters,
 			RAFTER_EXTRA_LENGTH,
-			{"drawing_order": DORMER_RAFTER_DRAWING_ORDER},
+			{
+				"pattern": RAFTER_DRAWING_PATTERN,
+				"color": DORMER_RAFTER_DRAWING_COLOR,
+				"drawing_order": DORMER_RAFTER_DRAWING_ORDER,
+			},
 		),
 		(
-			"Pozednice – uliční",
+			"Pozednice – ulice",
 			(beam3,),
 			0,
 			{
@@ -3191,7 +3226,7 @@ if "roof" in sys.argv:
 			},
 		),
 		(
-			"Pozednice – zahradní",
+			"Pozednice – zahrada",
 			(beam4_b,),
 			0,
 			{
@@ -3211,7 +3246,7 @@ if "roof" in sys.argv:
 			},
 		),
 		(
-			"Kleštiny A",
+			"Kleštiny – vikýř",
 			middle_collar_ties,
 			0,
 			{
@@ -3220,7 +3255,7 @@ if "roof" in sys.argv:
 			},
 		),
 		(
-			"Kleštiny B",
+			"Kleštiny – ostatní",
 			other_collar_ties,
 			0,
 			{
@@ -3238,19 +3273,47 @@ if "roof" in sys.argv:
 				{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
 			)
 		)
-	drawing1.add_timber_schedule(timber_schedule_rows)
+	drawing1.add_timber_schedule(timber_schedule_rows, layout_scale=0.5)
 
 	drawing1.render("roof.svg", png=True, png_dpi=600)
 
 if "ceiling" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Drawing 2", x=6, y=4, z=ground_floor_height+0.1, radius=8, storeys=[upper]
+		"Drawing 2",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=ground_floor_height+0.1,
+		radius=8.5,
+		storeys=[upper],
+		door_annotations=False,
+		automatic_plan_annotations=False,
+		right_panel_width=50,
 	)
 
 	drawing1.add_stair_annotation(main_stairs)
 	drawing1.add_stair_landing_annotation(middle_stair_landing)
 	drawing1.add_stair_annotation(gallery_stairs)
 	drawing1.add_chimney_annotation(chimney)
+	drawing1.add_miako_beam_dimensions(ceiling1, side="start", offset=0.8)
+	drawing1.add_miako_beam_dimensions(ceiling2, side="start", offset=-0.8)
+	drawing1.add_miako_beam_dimensions(ceiling3, side="end", offset=0.8)
+
+	outside_dims(drawing1)
+	drawing1.add_dimension(start=(BWT/2, HOUSE_DEPTH-BWT), end=(wall2_x-BWT/2, HOUSE_DEPTH-BWT), offset=0.8)
+	drawing1.add_dimension(start=(wall2_x-BWT/2, HOUSE_DEPTH-BWT), end=(wall3_x-BWT/2, HOUSE_DEPTH-BWT), offset=0.8)
+	drawing1.add_dimension(start=(wall3_x-BWT/2, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT/2, HOUSE_DEPTH-BWT), offset=0.8)
+	drawing1.add_miako_beam_schedule(
+		[
+			{"location": "Levá část", "slab": ceiling3, "length": 2.75},
+			{"location": "Střed", "slab": ceiling2, "length": 4.75},
+			{"location": "Pravá část", "slab": ceiling1, "length": 3.75},
+		]
+	)
+
+	common_wall_insulation(
+		drawing1,
+		wall_front_u, wall_1a_u, wall_1b_u, wall_gym_u, wall_dormer, wall_4_u
+	)
 
 	drawing1.render("ceiling.svg", png=True, png_dpi=600)
 

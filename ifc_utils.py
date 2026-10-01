@@ -2711,6 +2711,130 @@ def _lintel_legend_svg(
     return "\n    ".join(parts), height
 
 
+def _miako_beam_schedule_svg(
+    table: Mapping[str, object],
+    *,
+    x: float,
+    y: float,
+    width: float,
+    units_per_mm: float,
+    layout_scale: float | None = None,
+) -> tuple[str, float]:
+    """Return one MIAKO beam schedule and its SVG height."""
+    title = str(table.get("title", "SPECIFIKACE MIAKO NOSNÍKŮ"))
+    supplied_items = table.get("items", [])
+    items = supplied_items if isinstance(supplied_items, list) else []
+    width_mm = width / units_per_mm
+    if layout_scale is None:
+        layout_scale = min(1.0, width_mm / 50.0)
+
+    normalised_items: list[tuple[str, int, int]] = []
+    for supplied_item in items:
+        if not isinstance(supplied_item, dict):
+            continue
+        try:
+            location = str(supplied_item["location"])
+            length = int(supplied_item["length"])
+            count = int(supplied_item["count"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        normalised_items.append((location, length, count))
+
+    u = units_per_mm
+    title_height = 11.0 * layout_scale * u
+    heading_height = 8.0 * layout_scale * u
+    row_height = 8.0 * layout_scale * u
+    height = title_height + heading_height + len(normalised_items) * row_height
+    right = x + width
+    title_bottom = y + title_height
+    heading_bottom = title_bottom + heading_height
+    column_rights = (
+        x + width * 0.55,
+        x + width * 0.80,
+        right,
+    )
+    column_lefts = (x, *column_rights[:-1])
+    column_centres = tuple(
+        (left + right_edge) / 2
+        for left, right_edge in zip(column_lefts, column_rights)
+    )
+    parts = [
+        '<g class="right-panel-table miako-beam-schedule">',
+        (
+            f'<rect class="right-panel-table-outline" x="{x:.6g}" '
+            f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
+        ),
+        (
+            f'<text class="right-panel-table-title" '
+            f'x="{x + width / 2:.6g}" '
+            f'y="{y + title_height / 2:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{5.0 * layout_scale:.6g}px">'
+            f'{escape(title)}</text>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{title_bottom:.6g}"/>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{heading_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{heading_bottom:.6g}"/>'
+        ),
+    ]
+    for column_right in column_rights[:-1]:
+        parts.append(
+            f'<line class="right-panel-table-grid" '
+            f'x1="{column_right:.6g}" y1="{title_bottom:.6g}" '
+            f'x2="{column_right:.6g}" y2="{y + height:.6g}"/>'
+        )
+
+    heading_y = title_bottom + heading_height / 2
+    heading_font_size = 2.8 * layout_scale
+    for heading, centre in zip(
+        ("UMÍSTĚNÍ", "DÉLKA", "POČET"),
+        column_centres,
+    ):
+        parts.append(
+            f'<text class="miako-beam-schedule-heading" '
+            f'x="{centre:.6g}" y="{heading_y:.6g}" '
+            f'text-anchor="middle" dominant-baseline="middle" '
+            f'style="font-size:{heading_font_size:.6g}px">'
+            f'{heading}</text>'
+        )
+
+    row_y = heading_bottom
+    body_font_size = 3.4 * layout_scale
+    for location, length, count in normalised_items:
+        centre_y = row_y + row_height / 2
+        for column_index, (value, centre) in enumerate(
+            zip((location, str(length), str(count)), column_centres)
+        ):
+            text_anchor = "start" if column_index == 0 else "middle"
+            text_x = (
+                column_lefts[0] + 1.5 * layout_scale * u
+                if column_index == 0
+                else centre
+            )
+            parts.append(
+                f'<text class="miako-beam-schedule-text" '
+                f'x="{text_x:.6g}" y="{centre_y:.6g}" '
+                f'text-anchor="{text_anchor}" dominant-baseline="middle" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{escape(value)}</text>'
+            )
+        row_y += row_height
+        if row_y < y + height - 1e-9:
+            parts.append(
+                f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+                f'y1="{row_y:.6g}" x2="{right:.6g}" '
+                f'y2="{row_y:.6g}"/>'
+            )
+    parts.append("</g>")
+    return "\n    ".join(parts), height
+
+
 def _timber_schedule_svg(
     table: Mapping[str, object],
     *,
@@ -2727,6 +2851,13 @@ def _timber_schedule_svg(
     width_mm = width / units_per_mm
     if layout_scale is None:
         layout_scale = min(1.0, width_mm / 100.0)
+    requested_layout_scale = table.get("layout_scale")
+    if (
+        isinstance(requested_layout_scale, (int, float))
+        and not isinstance(requested_layout_scale, bool)
+        and requested_layout_scale > 0
+    ):
+        layout_scale = min(layout_scale, float(requested_layout_scale))
 
     normalised_items: list[
         tuple[str, str, int, int, int, int, str | None, str | None]
@@ -2764,15 +2895,21 @@ def _timber_schedule_svg(
     title_height = 11.0 * layout_scale * u
     heading_height = 8.0 * layout_scale * u
     row_height = 7.5 * layout_scale * u
-    height = title_height + heading_height + len(normalised_items) * row_height
+    height = (
+        title_height
+        + heading_height
+        + (len(normalised_items) + 1) * row_height
+    )
     right = x + width
     title_bottom = y + title_height
     heading_bottom = title_bottom + heading_height
     column_rights = (
-        x + width * 0.15,
-        x + width * 0.49,
-        x + width * 0.61,
-        x + width * 0.73,
+        x + width * 0.13,
+        x + width * 0.42,
+        x + width * 0.51,
+        x + width * 0.60,
+        x + width * 0.71,
+        x + width * 0.78,
         x + width * 0.89,
         right,
     )
@@ -2816,7 +2953,16 @@ def _timber_schedule_svg(
     heading_y = title_bottom + heading_height / 2
     heading_font_size = 2.6 * layout_scale
     for heading, centre in zip(
-        ("OZNAČENÍ", "NÁZEV", "ŠÍŘKA", "VÝŠKA", "DÉLKA", "POČET"),
+        (
+            "OZNAČENÍ",
+            "NÁZEV",
+            "ŠÍŘKA",
+            "VÝŠKA",
+            "DÉLKA",
+            "POČET",
+            "m³/kus",
+            "m³",
+        ),
         column_centres,
     ):
         parts.append(
@@ -2829,6 +2975,11 @@ def _timber_schedule_svg(
 
     row_y = heading_bottom
     body_font_size = 2.9 * layout_scale
+    total_volume = 0.0
+
+    def format_volume(value: float) -> str:
+        return f"{value:.3f}".replace(".", ",")
+
     for (
         mark,
         name,
@@ -2839,6 +2990,9 @@ def _timber_schedule_svg(
         pattern,
         color,
     ) in normalised_items:
+        volume_per_piece = member_width * member_height * length / 1_000_000_000
+        row_volume = volume_per_piece * count
+        total_volume += row_volume
         centre_y = row_y + row_height / 2
         if color is not None:
             swatch_inset = 0.55 * layout_scale * u
@@ -2869,6 +3023,8 @@ def _timber_schedule_svg(
             str(member_height),
             str(length),
             str(count),
+            format_volume(volume_per_piece),
+            format_volume(row_volume),
         )
         for column_index, (value, centre) in enumerate(
             zip(values, column_centres[1:]),
@@ -2894,6 +3050,23 @@ def _timber_schedule_svg(
                 f'y1="{row_y:.6g}" x2="{right:.6g}" '
                 f'y2="{row_y:.6g}"/>'
             )
+
+    total_centre_y = row_y + row_height / 2
+    parts.extend(
+        (
+            f'<text class="timber-schedule-total" '
+            f'x="{column_lefts[1] + 1.5 * layout_scale * u:.6g}" '
+            f'y="{total_centre_y:.6g}" text-anchor="start" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{body_font_size:.6g}px;font-weight:bold">'
+            "CELKEM</text>",
+            f'<text class="timber-schedule-total" '
+            f'x="{column_centres[-1]:.6g}" y="{total_centre_y:.6g}" '
+            f'text-anchor="middle" dominant-baseline="middle" '
+            f'style="font-size:{body_font_size:.6g}px;font-weight:bold">'
+            f'{format_volume(total_volume)}</text>',
+        )
+    )
     parts.append("</g>")
     return "\n    ".join(parts), height
 
@@ -3009,6 +3182,7 @@ def _postprocess_right_panel(
             "material_legend": _material_legend_svg,
             "room_legend": _room_legend_svg,
             "lintel_legend": _lintel_legend_svg,
+            "miako_beam_schedule": _miako_beam_schedule_svg,
             "timber_schedule": _timber_schedule_svg,
         }.get(table.get("kind"))
         if table_renderer is None:
@@ -3500,7 +3674,7 @@ SlabKind: TypeAlias = Literal[
     "USERDEFINED",
     "NOTDEFINED",
 ]
-MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow"]
+MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow", "axis"]
 
 _COLOR_NAMES = {
     "black": "#000000",
@@ -3573,6 +3747,7 @@ _MIAKO_WIDTHS = {
     "beam": 0.17,
     "wide": 0.455,
     "narrow": 0.33,
+    "axis": 0.0,
 }
 
 
@@ -6407,6 +6582,7 @@ class House:
         direction: Point3D | None = None,
         storeys: Sequence[Storey] | None = None,
         door_annotations: bool = True,
+        automatic_plan_annotations: bool = True,
         door_annotation_offset: Number = 0,
         doors_closed: bool = False,
         right_panel_width: Number = 0,
@@ -6434,6 +6610,10 @@ class House:
         every included door; disable it to place selected labels manually with
         :meth:`Drawing.add_door_annotation`.  ``door_annotation_offset`` moves
         every automatic label farther into the door swing in metres.
+        ``automatic_plan_annotations`` controls storey-scoped annotations
+        created by model elements, including dashed door/opening overheads and
+        furniture labels.  Drawing-specific annotations added explicitly are
+        unaffected.
         ``doors_closed`` renders the 3D door leaves closed in an elevation
         without changing their model geometry or plan swing symbols.
         ``right_panel_width`` adds paper space to the right of the camera view,
@@ -6463,6 +6643,7 @@ class House:
             direction=direction,
             storeys=storeys,
             door_annotations=door_annotations,
+            automatic_plan_annotations=automatic_plan_annotations,
             door_annotation_offset=door_annotation_offset,
             doors_closed=doors_closed,
             right_panel_width=right_panel_width,
@@ -6531,6 +6712,7 @@ class Drawing:
         direction: Point3D | None,
         storeys: Sequence[Storey] | None,
         door_annotations: bool,
+        automatic_plan_annotations: bool,
         door_annotation_offset: Number,
         doors_closed: bool,
         right_panel_width: Number,
@@ -6609,6 +6791,11 @@ class Drawing:
             raise TypeError("door_annotations must be a boolean")
         self._automatic_door_annotations = (
             door_annotations and self.view == "plan"
+        )
+        if not isinstance(automatic_plan_annotations, bool):
+            raise TypeError("automatic_plan_annotations must be a boolean")
+        self._automatic_plan_annotations = (
+            automatic_plan_annotations and self.view == "plan"
         )
         self._door_annotation_offset = _number(
             door_annotation_offset, "door_annotation_offset"
@@ -6736,7 +6923,7 @@ class Drawing:
                     ifcopenshell.util.element.get_container(annotation)
                 )
             ]
-            if self.view == "plan"
+            if self._automatic_plan_annotations
             else []
         )
         if plan_annotations:
@@ -6918,7 +7105,7 @@ class Drawing:
             raise ValueError("element must belong to this house")
 
         self._include_model_element(element)
-        if self.view == "plan":
+        if self._automatic_plan_annotations:
             annotations = [
                 related_object
                 for relation in element.ReferencedBy
@@ -7696,6 +7883,102 @@ class Drawing:
         )
         return self
 
+    def add_miako_beam_schedule(
+        self,
+        rows: Sequence[Mapping[str, object]],
+        *,
+        title: str = "SPECIFIKACE MIAKO NOSNÍKŮ",
+    ) -> Drawing:
+        """Add a MIAKO beam schedule to this drawing's right-side panel.
+
+        Each row is a mapping containing ``location``, ``slab``, and
+        ``length``.  Length is supplied in metres and displayed in rounded
+        millimetres.  The beam count is derived from the supplied
+        :class:`MiakoSlab`.
+        """
+        self._require_plan_view("add_miako_beam_schedule")
+        if self.right_panel_width <= 0:
+            raise ValueError(
+                "add_miako_beam_schedule requires right_panel_width on the "
+                "drawing"
+            )
+        if self.right_panel_width < 40:
+            raise ValueError(
+                "right_panel_width must be at least 40 mm for a MIAKO beam "
+                "schedule"
+            )
+        title = _name(title, "title")
+        if isinstance(rows, (str, bytes)):
+            raise TypeError("rows must be a sequence of MIAKO schedule rows")
+        try:
+            supplied_rows = list(rows)
+        except TypeError as error:
+            raise TypeError(
+                "rows must be a sequence of MIAKO schedule rows"
+            ) from error
+        if not supplied_rows:
+            raise ValueError("rows must contain at least one MIAKO slab")
+
+        items = []
+        for row_index, supplied_row in enumerate(supplied_rows, start=1):
+            if not isinstance(supplied_row, Mapping):
+                raise TypeError(f"row {row_index} must be a mapping")
+            missing_keys = {
+                "location",
+                "slab",
+                "length",
+            }.difference(supplied_row)
+            if missing_keys:
+                raise ValueError(
+                    f"row {row_index} must contain location, slab, and length"
+                )
+            location = _name(
+                supplied_row["location"],
+                f"row {row_index} location",
+            )
+            slab = supplied_row["slab"]
+            if not isinstance(slab, MiakoSlab):
+                raise TypeError(f"row {row_index} slab must be a MiakoSlab")
+            if slab.file is not self.house.model:
+                raise ValueError(
+                    f"row {row_index} slab must belong to this house"
+                )
+            length = _number(
+                supplied_row["length"],
+                f"row {row_index} length",
+            )
+            if length <= 0:
+                raise ValueError(
+                    f"row {row_index} length must be greater than zero"
+                )
+            items.append(
+                {
+                    "location": location,
+                    "length": round(length * 1000),
+                    "count": len(slab.beams),
+                    "slab_guid": slab.GlobalId,
+                }
+            )
+
+        self._right_panel_tables.append(
+            {
+                "kind": "miako_beam_schedule",
+                "title": title,
+                "items": items,
+            }
+        )
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model,
+            pset=self._drawing_pset,
+            properties={
+                "RightPanelTables": json.dumps(
+                    self._right_panel_tables,
+                    ensure_ascii=False,
+                )
+            },
+        )
+        return self
+
     def add_timber_schedule(
         self,
         rows: Sequence[
@@ -7704,6 +7987,7 @@ class Drawing:
         ],
         *,
         title: str = "SPECIFIKACE PRVKŮ KROVU",
+        layout_scale: Number | None = None,
     ) -> Drawing:
         """Add an automatically measured structural-timber schedule.
 
@@ -7719,17 +8003,22 @@ class Drawing:
         a rafter end-cut allowance.  Marks are assigned as A, B, C, ...; rows
         with an appearance show its hatch instead and apply it to those
         projected members in this plan.  All dimensions are rounded to
-        millimetres.
+        millimetres.  ``layout_scale`` may be used to cap the table's text and
+        row scale independently of the right-panel width.
         """
         if self.right_panel_width <= 0:
             raise ValueError(
                 "add_timber_schedule requires right_panel_width on the drawing"
             )
-        if self.right_panel_width < 70:
+        if self.right_panel_width < 50:
             raise ValueError(
-                "right_panel_width must be at least 70 mm for a timber schedule"
+                "right_panel_width must be at least 50 mm for a timber schedule"
             )
         title = _name(title, "title")
+        if layout_scale is not None:
+            layout_scale = _number(layout_scale, "layout_scale")
+            if not 0 < layout_scale <= 1:
+                raise ValueError("layout_scale must be greater than 0 and at most 1")
         if isinstance(rows, (str, bytes)):
             raise TypeError("rows must be a sequence of timber schedule rows")
         try:
@@ -7887,13 +8176,14 @@ class Drawing:
                 item.update(appearance)
             items.append(item)
 
-        self._right_panel_tables.append(
-            {
-                "kind": "timber_schedule",
-                "title": title,
-                "items": items,
-            }
-        )
+        table = {
+            "kind": "timber_schedule",
+            "title": title,
+            "items": items,
+        }
+        if layout_scale is not None:
+            table["layout_scale"] = layout_scale
+        self._right_panel_tables.append(table)
         ifcopenshell.api.pset.edit_pset(
             self.house.model,
             pset=self._drawing_pset,
@@ -8080,6 +8370,67 @@ class Drawing:
             products=drawing_products,
         )
         return dimension
+
+    def add_miako_beam_dimensions(
+        self,
+        slab: MiakoSlab,
+        *,
+        side: Literal["start", "end"] = "start",
+        offset: Number = 0.35,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Dimension the centre distances between consecutive MIAKO beams.
+
+        The dimension chain is perpendicular to the beams and is placed
+        outside their ``start`` or ``end`` ends.  ``offset`` is the signed
+        distance from that end in metres; a negative value moves the chain to
+        the opposite side.  Beam centres are derived from the slab's actual
+        ``structure`` sequence, so partial-width layouts are handled without
+        separately specifying the spacings.
+        """
+        self._require_plan_view("add_miako_beam_dimensions")
+        if not isinstance(slab, MiakoSlab):
+            raise TypeError(
+                "slab must be a MiakoSlab created by Storey.miako_slab"
+            )
+        if slab.file is not self.house.model:
+            raise ValueError("slab must belong to this house")
+        selected_side = _enum(side, "side", {"START", "END"}).lower()
+        offset = _number(offset, "offset")
+
+        endpoint_index = 0 if selected_side == "start" else 1
+        centre_points = tuple(
+            centreline[endpoint_index] for centreline in slab.beam_centerlines
+        )
+        if len(centre_points) < 2:
+            return ()
+
+        span_x = (slab.end[0] - slab.start[0]) / slab.length
+        span_y = (slab.end[1] - slab.start[1]) / slab.length
+        outward_x = -span_x if selected_side == "start" else span_x
+        outward_y = -span_y if selected_side == "start" else span_y
+        first_delta_x = centre_points[1][0] - centre_points[0][0]
+        first_delta_y = centre_points[1][1] - centre_points[0][1]
+        centre_distance = hypot(first_delta_x, first_delta_y)
+        left_normal_x = -first_delta_y / centre_distance
+        left_normal_y = first_delta_x / centre_distance
+        signed_offset = (
+            offset
+            if left_normal_x * outward_x + left_normal_y * outward_y >= 0
+            else -offset
+        )
+
+        return tuple(
+            self.add_dimension(
+                start,
+                end,
+                offset=signed_offset,
+                name=f"{slab.Name} Beam Center Distance {index}",
+            )
+            for index, (start, end) in enumerate(
+                zip(centre_points, centre_points[1:]),
+                start=1,
+            )
+        )
 
     def add_room_annotation(
         self,
@@ -12047,6 +12398,8 @@ class MiakoSlab(ifcopenshell.entity_instance):
         structure: tuple[str, ...],
         length: float,
         width: float,
+        width_before_axis: float,
+        width_after_axis: float,
         top: float,
         block_length: float,
         block_height: float,
@@ -12068,6 +12421,8 @@ class MiakoSlab(ifcopenshell.entity_instance):
         object.__setattr__(self, "structure", structure)
         object.__setattr__(self, "length", length)
         object.__setattr__(self, "width", width)
+        object.__setattr__(self, "width_before_axis", width_before_axis)
+        object.__setattr__(self, "width_after_axis", width_after_axis)
         object.__setattr__(self, "expected_width", expected_width)
         object.__setattr__(self, "top", top)
         object.__setattr__(self, "block_length", block_length)
@@ -12096,14 +12451,40 @@ class MiakoSlab(ifcopenshell.entity_instance):
     @property
     def footprint(self) -> tuple[tuple[float, float], ...]:
         """Return the four global XY corners covered by this slab."""
-        offset_x = self.direction[0] * self.width
-        offset_y = self.direction[1] * self.width
+        before_x = -self.direction[0] * self.width_before_axis
+        before_y = -self.direction[1] * self.width_before_axis
+        after_x = self.direction[0] * self.width_after_axis
+        after_y = self.direction[1] * self.width_after_axis
         return (
-            self.start,
-            self.end,
-            (self.end[0] + offset_x, self.end[1] + offset_y),
-            (self.start[0] + offset_x, self.start[1] + offset_y),
+            (self.start[0] + before_x, self.start[1] + before_y),
+            (self.end[0] + before_x, self.end[1] + before_y),
+            (self.end[0] + after_x, self.end[1] + after_y),
+            (self.start[0] + after_x, self.start[1] + after_y),
         )
+
+    @property
+    def beam_centerlines(
+        self,
+    ) -> tuple[tuple[tuple[float, float], tuple[float, float]], ...]:
+        """Return the global XY centreline endpoints of every MIAKO beam."""
+        centreline_endpoints = []
+        offset = -self.width_before_axis
+        for item in self.structure:
+            if item == "axis":
+                continue
+            item_width = _MIAKO_WIDTHS[item]
+            if item == "beam":
+                centre_offset = offset + item_width / 2
+                offset_x = self.direction[0] * centre_offset
+                offset_y = self.direction[1] * centre_offset
+                centreline_endpoints.append(
+                    (
+                        (self.start[0] + offset_x, self.start[1] + offset_y),
+                        (self.end[0] + offset_x, self.end[1] + offset_y),
+                    )
+                )
+            offset += item_width
+        return tuple(centreline_endpoints)
 
 
 class Stair(ifcopenshell.entity_instance):
@@ -12724,6 +13105,7 @@ class Wall(ifcopenshell.entity_instance):
         for drawing in house._drawings:
             if (
                 drawing.view == "plan"
+                and drawing._automatic_plan_annotations
                 and drawing._includes_storey(self.storey)
             ):
                 ifcopenshell.api.group.assign_group(
@@ -14984,7 +15366,11 @@ class Storey:
         )
         self.house._furniture_label_specs.append(label_spec)
         for drawing in self.house._drawings:
-            if drawing.view == "plan" and drawing._includes_storey(self):
+            if (
+                drawing.view == "plan"
+                and drawing._automatic_plan_annotations
+                and drawing._includes_storey(self)
+            ):
                 ifcopenshell.api.group.assign_group(
                     model,
                     group=drawing.group,
@@ -15270,13 +15656,20 @@ class Storey:
         """Create a detailed MIAKO floor slab from a crosswise strip layout.
 
         ``start`` and ``end`` define the joist span.  ``direction`` must be
-        perpendicular to that line and selects the side on which the slab is
-        constructed.  Items in ``structure`` are inserted successively in
-        that direction: ``"beam"`` is 0.17 m wide, ``"wide"`` is a 0.455 m
-        block bay, and ``"narrow"`` is a 0.33 m block bay.  Consequently a
-        wide bay plus a beam forms a 0.625 m module and a narrow bay plus a
-        beam forms a 0.5 m module.  When ``expected_width`` is supplied, a
-        warning is printed if the sum of those items does not match it.
+        perpendicular to that line and selects the positive layout side.
+        Items in ``structure`` are inserted successively in that direction:
+        ``"beam"`` is 0.17 m wide, ``"wide"`` is a 0.455 m block bay, and
+        ``"narrow"`` is a 0.33 m block bay.  One optional zero-width
+        ``"axis"`` marker makes the supplied start-end line an internal
+        divider: items after it remain on the positive side, while items
+        before it occupy the opposite side.  The array remains a physical
+        cross-section: the item immediately before the marker ends at the
+        axis and the item immediately after it starts there.  Without an axis
+        marker, the existing one-sided behaviour is retained.
+        Consequently a wide bay plus a beam forms a 0.625 m module and a
+        narrow bay plus a beam forms a 0.5 m module.  When ``expected_width``
+        is supplied, a warning is printed if the total width on both sides
+        does not match it.
 
         ``top`` is measured from this storey's elevation.  The whole assembly
         extends downward by ``block_height + topping``.  ``beam_height`` is
@@ -15359,6 +15752,7 @@ class Storey:
             raise ValueError("structure must contain at least one item")
         normalised_structure: list[str] = []
         previous_was_block = False
+        axis_count = 0
         for index, supplied_item in enumerate(supplied_structure, start=1):
             item = _name(supplied_item, f"structure item {index}").lower()
             if item not in _MIAKO_WIDTHS:
@@ -15366,6 +15760,13 @@ class Storey:
                 raise ValueError(
                     f"structure item {index} must be one of: {choices}"
                 )
+            if item == "axis":
+                axis_count += 1
+                if axis_count > 1:
+                    raise ValueError("structure must contain at most one axis")
+                normalised_structure.append(item)
+                previous_was_block = False
+                continue
             is_block = item in {"wide", "narrow"}
             if is_block and previous_was_block:
                 raise ValueError("MIAKO block bays must be separated by a beam")
@@ -15376,7 +15777,20 @@ class Storey:
         if not any(item in {"wide", "narrow"} for item in normalised_structure):
             raise ValueError("structure must contain at least one block bay")
         structure_tuple = tuple(normalised_structure)
-        width = sum(_MIAKO_WIDTHS[item] for item in structure_tuple)
+        if "axis" in structure_tuple:
+            axis_index = structure_tuple.index("axis")
+            before_axis_structure = structure_tuple[:axis_index]
+            after_axis_structure = structure_tuple[axis_index + 1 :]
+        else:
+            before_axis_structure = ()
+            after_axis_structure = structure_tuple
+        width_before_axis = sum(
+            _MIAKO_WIDTHS[item] for item in before_axis_structure
+        )
+        width_after_axis = sum(
+            _MIAKO_WIDTHS[item] for item in after_axis_structure
+        )
+        width = width_before_axis + width_after_axis
         if expected_width is not None and not isclose(
             width,
             expected_width,
@@ -15445,16 +15859,17 @@ class Storey:
             is_si=True,
         )
 
-        signed_width = layout_sign * width
+        signed_before_axis = -layout_sign * width_before_axis
+        signed_after_axis = layout_sign * width_after_axis
         plan = ifcopenshell.api.geometry.add_axis_representation(
             model,
             context=self.house._plan_body_context,
             axis=[
-                (0.0, 0.0),
-                (length, 0.0),
-                (length, signed_width),
-                (0.0, signed_width),
-                (0.0, 0.0),
+                (0.0, signed_before_axis),
+                (length, signed_before_axis),
+                (length, signed_after_axis),
+                (0.0, signed_after_axis),
+                (0.0, signed_before_axis),
             ],
         )
         ifcopenshell.api.geometry.assign_representation(
@@ -15485,6 +15900,8 @@ class Storey:
                 "Structure": ",".join(structure_tuple),
                 "SpanLength": length,
                 "OverallWidth": width,
+                "WidthBeforeAxis": width_before_axis,
+                "WidthAfterAxis": width_after_axis,
                 "BlockLength": block_length,
                 "BlockHeight": block_height,
                 "BeamHeight": beam_height,
@@ -15816,7 +16233,6 @@ class Storey:
         beam_shells: list[ifcopenshell.entity_instance] = []
         reinforcements: list[ifcopenshell.entity_instance] = []
         blocks: list[ifcopenshell.entity_instance] = []
-        offset = 0.0
         beam_number = 0
         bay_number = 0
         tolerance = 1e-9
@@ -15828,7 +16244,10 @@ class Storey:
             full_block_count += 1
             remainder = 0.0
 
+        offset = -width_before_axis
         for item in structure_tuple:
+            if item == "axis":
+                continue
             item_width = _MIAKO_WIDTHS[item]
             signed_offset = layout_sign * offset
             if item == "beam":
@@ -15966,11 +16385,16 @@ class Storey:
         # first/last beams; the 35 mm inset exists only beside a block bearing.
         # A single profile avoids an artificial horizontal joint at block
         # height.
-        cover_bottom_points: list[tuple[float, float]] = [(0.0, block_height)]
-        cover_offset = 0.0
+        physical_structure = tuple(
+            item for item in structure_tuple if item != "axis"
+        )
+        cover_bottom_points: list[tuple[float, float]] = [
+            (signed_before_axis, block_height)
+        ]
+        cover_offset = -width_before_axis
         item_index = 0
-        while item_index < len(structure_tuple):
-            item = structure_tuple[item_index]
+        while item_index < len(physical_structure):
+            item = physical_structure[item_index]
             if item != "beam":
                 cover_offset += _MIAKO_WIDTHS[item]
                 item_index += 1
@@ -15979,13 +16403,13 @@ class Storey:
             run_start = cover_offset
             run_starts_at_slab_edge = item_index == 0
             while (
-                item_index < len(structure_tuple)
-                and structure_tuple[item_index] == "beam"
+                item_index < len(physical_structure)
+                and physical_structure[item_index] == "beam"
             ):
                 cover_offset += _MIAKO_WIDTHS["beam"]
                 item_index += 1
             run_end = cover_offset
-            run_ends_at_slab_edge = item_index == len(structure_tuple)
+            run_ends_at_slab_edge = item_index == len(physical_structure)
             stem_start = run_start + (
                 0.0 if run_starts_at_slab_edge else beam_bearing
             )
@@ -16000,13 +16424,13 @@ class Storey:
             ):
                 if point != cover_bottom_points[-1]:
                     cover_bottom_points.append(point)
-        final_bottom_point = (signed_width, block_height)
+        final_bottom_point = (signed_after_axis, block_height)
         if final_bottom_point != cover_bottom_points[-1]:
             cover_bottom_points.append(final_bottom_point)
         cover_profile_points = [
             *cover_bottom_points,
-            (signed_width, block_height + topping),
-            (0.0, block_height + topping),
+            (signed_after_axis, block_height + topping),
+            (signed_before_axis, block_height + topping),
         ]
         cover_builder = ShapeBuilder(model)
         cover_profile = cover_builder.polyline(
@@ -16070,6 +16494,8 @@ class Storey:
             structure=structure_tuple,
             length=length,
             width=width,
+            width_before_axis=width_before_axis,
+            width_after_axis=width_after_axis,
             expected_width=expected_width,
             top=top,
             block_length=block_length,
