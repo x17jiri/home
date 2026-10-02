@@ -78,25 +78,20 @@ Pojistná hydroizolace:
 - Např. Sunflex Contact Pro
 
 MDF Záklop:
-- ρ ≥ 600 kg/m³
+- ρ ~ 600 kg/m³
 - λ ≤ 0.15 W/mK
 - μ ≤ 12
 - Např. EGGER DHF
 
-Mezikrokevní izolace:
+Mezikrokevní a podkrokevní izolace:
 - Minerální vata
-- ρ ≥ 12 kg/m³
+- 16 ≤ ρ ≤ 45 kg/m³
 - λ ≤ 0.039 W/mK
-- Např. Isover Domo
-
-Podkrokevní izolace:
-- Minerální vata
-- ρ ≥ 40 kg/m³
-- λ ≤ 0.039 W/mK
+- μ ~ 1
 - Např. Isover Uni
 
 OSB Záklop:
-- ρ ≥ 600 kg/m³
+- ρ ~ 600 kg/m³
 - λ ≤ 0.15 W/mK
 - μ ≥ 150
 - vzduchotěsně přelepené spoje
@@ -106,8 +101,10 @@ Pojistná parobrzda:
 - 4 m ≤ sd ≤ 15 m
 - Např. ISOCELL ÖKO Natur
 
-2xSDK podhled:
-- TODO
+2xSDK deska:
+- λ ≤ 0.5 W/mK
+- ρ >= 800 kg/m³
+- Např. Rigips MA (DF)
 
 ## SK4, SK5 - Obvodové Zdi a Fasáda
 
