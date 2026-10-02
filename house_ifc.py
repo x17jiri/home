@@ -8,6 +8,9 @@
 # ma 56 dB, jine jen 53
 
 # Strecha:
+#    - based on this:
+#        - https://www.dataholz.eu/download/en/sdrhzi09b-4.pdf
+#        - Rw+Ctr = 47 dB
 #    - taska:
 #        - KMB BETA Briliant cihlová
 #        - https://www.dek.cz/produkty/detail/1225121900-km-beta-briliant-t-zakladni-cc-252ks-pal
@@ -90,38 +93,51 @@ class SplitRafter:
 	x: float
 	y: float
 
+
+@dataclass(frozen=True)
+class StrongerRafter:
+	"""A main rafter line using the stronger standard thickness."""
+
+	x: float
+
 RAFTER_Z_OFFSET = -0.04
-RAFTER_THICKNESS = 0.10
-RAFTER_HEIGHT = 0.18
+RAFTER_THICKNESS = 0.08
+STRONGER_RAFTER_THICKNESS = 0.10
+RAFTER_HEIGHT = 0.20
 RAFTER_EXTRA_LENGTH = 1.75*RAFTER_HEIGHT
 RAFTER_SIZE = (RAFTER_THICKNESS, RAFTER_HEIGHT)
+STRONGER_RAFTER_SIZE = (STRONGER_RAFTER_THICKNESS, RAFTER_HEIGHT)
 SHORT_RAFTER_CUT_OVERLENGTH = 0.10
 ROOF_WINDOW_TRIMMER_OVERLAP = 0.001
 ROOF_WINDOW_OUTLINE_Y_MIN_INSET = 0.10
 ROOF_BATTING_CENTER_OFFSET = RAFTER_Z_OFFSET + RAFTER_SIZE[1] / 2
 ROOF_BATTING_THICKNESS = RAFTER_SIZE[1] - 0.06
 ROOF_BATTING_END_INSET = 0.03
-VAPOUR_BARRIER_THICKNESS = 0.001
-THERMAL_INSULATION_UNDER_RAFTERS = 0.12
+VAPOUR_BARRIER_THICKNESS = 0.015
+THERMAL_INSULATION_UNDER_RAFTERS = 0.14
 UNDER_RAFTER_BATTING_THICKNESS = max(
 	0,
 	THERMAL_INSULATION_UNDER_RAFTERS - 0.02,
 )
 UNDER_RAFTER_BATTING_END_INSET = 0.015
-INSTALLATION_SPACE_THICKNESS = 0.058
-GYPSUM_PLASTERBOARD_THICKNESS = 0.0125
-WOOD_FIBERBOARD_THICKNESS = 0.08
+INSTALLATION_SPACE_THICKNESS = 0.040
+GYPSUM_PLASTERBOARD_THICKNESS = 0.025
+WOOD_FIBERBOARD_THICKNESS = 0.015
+# Thermal conductivities used by calculate_roof_u_value(), in W/(m K).
+WOOD_FIBERBOARD_LAMBDA = 0.15
+RAFTER_WOOD_LAMBDA = 0.15
+BETWEEN_RAFTER_WOOL_LAMBDA = 0.04
+UNDER_RAFTER_WOOL_LAMBDA = 0.04
+# A closed air void is represented by an R-value instead of air lambda,
+# because convection and radiation make thickness / lambda inappropriate.
+INSTALLATION_SPACE_THERMAL_RESISTANCE = 0.16
+ROOF_THERMAL_RAFTER_SPACING = 0.80
 WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
-PAVATEX_BATTING_CENTER_OFFSET = (
-	WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS / 2
-)
-PAVATEX_BATTING_THICKNESS = WOOD_FIBERBOARD_THICKNESS - 0.03
-PAVATEX_BATTING_END_INSET = 0.03
 UNDERLAY_THICKNESS = 0.005
-COUNTER_BATTEN_SIZE = (0.04, 0.06)
+COUNTER_BATTEN_SIZE = (0.06, 0.05)
 TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
-ROOF_TILE_THICKNESS = 0.05
+ROOF_TILE_THICKNESS = 0.03
 RIDGE_TILE_WIDTH = 0.40
 RIDGE_TILE_RISE = 0.12
 RIDGE_TILE_THICKNESS = 0.025
@@ -129,7 +145,7 @@ GROUND_FLOOR_THICKNESS = 0.10
 UPPER_FLOOR_THICKNESS = 0.10
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
-CEILING_FINISH_THICKNESS = 0.02
+CEILING_FINISH_THICKNESS = 0.015
 CEILING_FINISH_MATERIAL = "Ceiling finish"
 FOUNDATION_BASE_PLATE_THICKNESS = 0.15
 FOUNDATION_WALL_HEIGHT = 0.80
@@ -153,6 +169,7 @@ SHORT_WALL_PLATE_DRAWING_COLOR = "#f4a261"
 GARDEN_WALL_PLATE_DRAWING_COLOR = "#f4d35e"
 DORMER_WALL_PLATE_DRAWING_COLOR = "#f4b6c2"
 RAFTER_DRAWING_PATTERN = "diagonal1"
+STRONGER_RAFTER_DRAWING_PATTERN = "crosshatch1"
 MAIN_RAFTER_DRAWING_COLOR = "#f4d35e"
 CORNER_SHORT_RAFTER_DRAWING_COLOR = "#f4a261"
 DORMER_SHORT_RAFTER_DRAWING_COLOR = "#f4b6c2"
@@ -186,6 +203,44 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 	- GYPSUM_PLASTERBOARD_THICKNESS
 )
 
+roof_u_value = calculate_roof_u_value(
+	wood_fiberboard_thickness=WOOD_FIBERBOARD_THICKNESS,
+	wood_fiberboard_lambda=WOOD_FIBERBOARD_LAMBDA,
+	rafter_height=RAFTER_HEIGHT,
+	rafter_width=RAFTER_THICKNESS,
+	rafter_spacing=ROOF_THERMAL_RAFTER_SPACING,
+	rafter_wood_lambda=RAFTER_WOOD_LAMBDA,
+	between_rafter_wool_lambda=BETWEEN_RAFTER_WOOL_LAMBDA,
+	under_rafter_wool_thickness=THERMAL_INSULATION_UNDER_RAFTERS,
+	under_rafter_wool_lambda=UNDER_RAFTER_WOOL_LAMBDA,
+	installation_space_resistance=(
+		INSTALLATION_SPACE_THERMAL_RESISTANCE
+		if INSTALLATION_SPACE_THICKNESS > 0
+		else 0
+	),
+)
+print("Roof thermal calculation (main layers only):")
+print(
+	f"  Wood fiberboard R = "
+	f"{roof_u_value.wood_fiberboard_resistance:.3f} m²K/W"
+)
+print(
+	f"  Between-rafter layer R = "
+	f"{roof_u_value.between_rafter_wool_resistance:.3f} m²K/W (wool), "
+	f"{roof_u_value.rafter_wood_resistance:.3f} m²K/W (wood; "
+	f"{roof_u_value.rafter_fraction:.1%} area)"
+)
+print(
+	f"  Under-rafter wool R = "
+	f"{roof_u_value.under_rafter_wool_resistance:.3f} m²K/W"
+)
+print(
+	f"  Installation-space R = "
+	f"{roof_u_value.installation_space_resistance:.3f} m²K/W"
+)
+print(f"  Effective R = {roof_u_value.effective_resistance:.3f} m²K/W")
+print(f"  U = {roof_u_value.u_value:.3f} W/(m²K)")
+
 BWT = 0.24 # Basic wall thickness
 POLYSTYRENE_INSULATION_NOMINAL_THICKNESS = 0.20
 POLYSTYRENE_INSULATION_THICKNESS = (
@@ -199,14 +254,13 @@ GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 3.0
+UNDER_HOLE = 3.0 - 0.125
 HOLE_HEIGHT = 0.195
-ABOVE_HOLE = 0.25
+ABOVE_HOLE = 0.25 + 0.125
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
-COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, RAFTER_HEIGHT)
+COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.2)
 COLLAR_TIE_EXTENSION = 1.5
-COLLAR_TIE_X_OFFSET = (RAFTER_SIZE[0] + COLLAR_TIE_SIZE[0]) / 2
 # The collar-tie tops meet the underside of the two central purlins and the
 # wall below them.  The horizontal vapour barrier is derived from the tie
 # underside so the two cannot drift apart when the framing changes.
@@ -304,28 +358,27 @@ oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 # Each number is the absolute X coordinate of a main rafter centre.
 # SplitRafter divides its garden-side rafter at an absolute Y coordinate inside
 # a roof opening; the opening then cuts the two parts back to its exact edges.
+# StrongerRafter uses the stronger thickness on both sides of the main roof.
 # A tuple also creates a touching dormer rafter on the requested side.  "before"
 # and "after" shorten the main rafter on the garden side; "+before" and
 # "+after" leave it full-length.
 rafters = [
 	-0.12,
-	-0.12+0.77,
-	-0.12+0.77+0.68,
-	1.63,
-	1.63+0.87,
-	1.63+0.87+RAFTER_THICKNESS,
+	StrongerRafter((-0.12+1.62)/2),
+	StrongerRafter(1.62),
+	StrongerRafter(1.62+0.93),
 	(3.35, "+before"),
-	(3.98, "after"),
-	(4.77, "after"),
-	(5.56, "after"),
-	(6.24, "after"),
-	(7.03, "after"),
-	(7.82, "after"),
+	(4.15, "before"),
+	(4.95, "before"),
+	(5.62, "before"),
+	(6.37, "after"),
+	(7.04, "after"),
+	(7.75, "after"),
 	(8.55, "+after"),
 
-	8.61+0.687,
-	8.61+0.687+0.687,
-	8.61+0.687+0.687+0.688,
+	8.55+0.67,
+	8.55+0.67+0.67,
+	8.55+0.67+0.67+0.67,
 	11.27,
 	]
 
@@ -340,7 +393,7 @@ CHIMNEY_Y_START = GALERY_START - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = (rafters[7][0] + rafters[8][0])/2 - 0.2
+CHIMNEY_X_START = (rafters[5][0] + rafters[6][0])/2 - 0.2
 
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
@@ -973,7 +1026,6 @@ ceiling1 = upper.miako_slab(
 	beam_height=0.06,
 	block_height=0.15,
     direction=(0, -1),
-	expected_width=HOUSE_DEPTH-3*BWT-GYM_DEPTH+0.08,
 	block_start_offset=0.125,
     block_end_offset=0.125,
 	structure=[
@@ -997,7 +1049,6 @@ ceiling2 = upper.miako_slab(
 	beam_height=0.06,
 	block_height=0.15,
     direction=(0, 1),
-	expected_width=HOUSE_DEPTH-2*BWT-CHODBA_DEPTH,
 	block_start_offset=0.125,
     block_end_offset=0.125,
     structure=[
@@ -1022,7 +1073,6 @@ ceiling3 = upper.miako_slab(
 	beam_height=0.06,
 	block_height=0.15,
     direction=(0, -1),
-	expected_width=HOUSE_DEPTH-2*BWT+0.08,
 	block_start_offset=0.125,
     block_end_offset=0.125,
     structure=[
@@ -1485,11 +1535,12 @@ window_sklad = wall_4_u.add_window(
 roof = upper.roof("Main roof")
 
 ROOF_WINDOW_Y1 = HOUSE_DEPTH - BWT - 0.25
+roof_window_x = (rafters[2].x + rafters[3].x) / 2.0
 roof_window_opening = roof.add_opening(
 	name="Bedroom roof window",
 	rectangle=(
-		(1.63+0.05, ROOF_WINDOW_Y1),
-		(1.63+0.87-0.05, ROOF_WINDOW_Y1 - 1.2),
+		(roof_window_x-0.39, ROOF_WINDOW_Y1),
+		(roof_window_x+0.39, ROOF_WINDOW_Y1 - 1.2),
 	),
 	trimmers=False,
 )
@@ -1505,7 +1556,7 @@ roof_inner_cuts = [
 	((HOUSE_WIDTH-BWT, 0, 0), (HOUSE_WIDTH-BWT, 10, 0), (HOUSE_WIDTH-BWT, 0, 10)),
 ]
 
-ROOF_EAVE_OVERHANG = 0.8
+ROOF_EAVE_OVERHANG = 0.75
 STREET_ROOF_EAVE_Y = -ROOF_EAVE_OVERHANG
 GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + ROOF_EAVE_OVERHANG
 street_roof = roof.plane(
@@ -1786,16 +1837,15 @@ roof_layer_storeys.update({
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
 })
-roof_fiberboards = {}
 roof_under_rafter_insulations = {}
 for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.ObjectType = "ROOF_LAYER"
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
 
-# The under-rafter insulation follows the roof slopes continuously through the
-# ridge and the garden/dormer joint.  The vapour barrier and plasterboard still
-# transition onto the horizontal ceiling, whose exceptional heights are
-# described relative to the upper-storey floor.
+# The under-rafter insulation follows each occupied roof slope only as far as
+# the top of the collar ties.  The vapour barrier and plasterboard transition
+# onto the horizontal ceiling, whose exceptional heights are described
+# relative to the upper-storey floor.
 SLOPED_INNER_LAYER_LAYOUT = {
 	"Thermal insulation under rafters": (
 		THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM,
@@ -1816,8 +1866,8 @@ FLAT_CEILING_LAYER_HEIGHTS = {
 	# The horizontal plasterboard remains on its lower suspended-ceiling plane;
 	# the space between it and the vapour barrier is the ceiling/service void.
 	"Gypsum plasterboard": (
-		UPPER_FLOOR_THICKNESS + 2.63,
-		UPPER_FLOOR_THICKNESS + 2.63 +  GYPSUM_PLASTERBOARD_THICKNESS,
+		UPPER_FLOOR_THICKNESS + 2.635,
+		UPPER_FLOOR_THICKNESS + 2.635 +  GYPSUM_PLASTERBOARD_THICKNESS,
 	),
 }
 FLAT_CEILING_INNER_LAYER_LAYOUT = {
@@ -1851,10 +1901,13 @@ for rafter in rafters:
 			raise ValueError(
 				"SplitRafter position must be inside a registered roof opening"
 			)
-		rafter_layout.append((rafter.x, "main", False, rafter.y))
+		rafter_layout.append((rafter.x, "main", False, rafter.y, False))
+		continue
+	if isinstance(rafter, StrongerRafter):
+		rafter_layout.append((rafter.x, "main", False, None, True))
 		continue
 	if not isinstance(rafter, tuple):
-		rafter_layout.append((rafter, "main", False, None))
+		rafter_layout.append((rafter, "main", False, None, False))
 		continue
 
 	rafter_x, dormer_side = rafter
@@ -1870,18 +1923,25 @@ for rafter in rafters:
 	)
 	rafter_layout.extend(
 		(
-			(rafter_x, "main", shorten_garden_side, None),
-			(rafter_x + dormer_offset, "dormer", False, None),
+			(rafter_x, "main", shorten_garden_side, None, False),
+			(rafter_x + dormer_offset, "dormer", False, None, False),
 		)
 	)
 
 rafter_layout.sort(key=lambda entry: entry[0])
-main_rafter_positions = [
-	x for x, kind, _, _ in rafter_layout if kind == "main"
+main_rafter_sections = [
+	(
+		x,
+		STRONGER_RAFTER_THICKNESS if is_stronger else RAFTER_THICKNESS,
+	)
+	for x, kind, _, _, is_stronger in rafter_layout
+	if kind == "main"
 ]
+main_rafter_positions = [x for x, _ in main_rafter_sections]
 dormer_rafter_positions = [
-	x for x, kind, _, _ in rafter_layout if kind == "dormer"
+	x for x, kind, _, _, _ in rafter_layout if kind == "dormer"
 ]
+main_rafter_thicknesses = dict(main_rafter_sections)
 dormer_x_min = min(dormer_rafter_positions)
 dormer_x_max = max(dormer_rafter_positions)
 
@@ -1890,30 +1950,18 @@ dormer_x_max = max(dormer_rafter_positions)
 # Paired dormer rafters are deliberately ignored here: their main rafter still
 # needs both collar ties.
 blocked_collar_tie_sides = set()
-for left_x, right_x in zip(
-	main_rafter_positions,
-	main_rafter_positions[1:],
+for (left_x, left_thickness), (right_x, right_thickness) in zip(
+	main_rafter_sections,
+	main_rafter_sections[1:],
 ):
 	if isclose(
 		right_x - left_x,
-		RAFTER_THICKNESS,
+		(left_thickness + right_thickness) / 2,
 		rel_tol=0,
 		abs_tol=1e-9,
 	):
 		blocked_collar_tie_sides.add((left_x, "right"))
 		blocked_collar_tie_sides.add((right_x, "left"))
-
-def print_rafter_center_distances(label, positions):
-	print(f"{label} rafter center distances:")
-	for previous_x, current_x in zip(positions, positions[1:]):
-		print(
-			f"  {current_x - previous_x:.3f} m "
-			f"({previous_x:.3f} -> {current_x:.3f})"
-		)
-
-print_rafter_center_distances("Main", main_rafter_positions)
-print_rafter_center_distances("Dormer", dormer_rafter_positions)
-
 
 ROOF_X_OVERHANG = 0.25
 roof_under_rafter_x_ranges = (
@@ -1942,6 +1990,7 @@ def add_continuous_roof_layers(
 	inner_y_limits=None,
 	inner_layout=SLOPED_INNER_LAYER_LAYOUT,
 	include_under_rafter_insulation=True,
+	under_rafter_top_z=None,
 	include_inner_finishes=True,
 	include_vapour_barrier=True,
 	include_gypsum=True,
@@ -1961,8 +2010,8 @@ def add_continuous_roof_layers(
 
 	def inner_outline(layer_name):
 		if layer_name == "Thermal insulation under rafters":
-			# This layer follows the same full sloping path as the insulation
-			# between the rafters and the wood-fibre insulation above them.
+			# Start with the full source slope; the horizontal collar-tie plane
+			# below trims its upper end without requiring a slope-local endpoint.
 			layer_y_min, layer_y_max = y_min, y_max
 		elif inner_y_limits is None:
 			layer_y_min, layer_y_max = y_min, y_max
@@ -1980,6 +2029,16 @@ def add_continuous_roof_layers(
 			"Thermal insulation under rafters"
 		]
 		if insulation_thickness > 0:
+			insulation_cuts = inner_cuts
+			if under_rafter_top_z is not None:
+				insulation_cuts = (
+					*inner_cuts,
+					(
+						(0, 0, under_rafter_top_z),
+						(1, 0, under_rafter_top_z),
+						(0, 1, under_rafter_top_z),
+					),
+				)
 			insulation = plane.layer(
 				f"{name} thermal insulation under rafters",
 				outline=inner_outline("Thermal insulation under rafters"),
@@ -1987,7 +2046,7 @@ def add_continuous_roof_layers(
 				thickness=insulation_thickness,
 				material="Thermal insulation",
 				color="#E8D36D",
-				extra_cuts=inner_cuts,
+				extra_cuts=insulation_cuts,
 			)
 			roof_under_rafter_insulations[name] = insulation
 			roof_layer_storeys["Thermal insulation under rafters"].add(
@@ -2030,7 +2089,6 @@ def add_continuous_roof_layers(
 			color="#C9B56D",
 		)
 		roof_layer_storeys["Wood fiberboard"].add(fiberboard)
-		roof_fiberboards[name] = fiberboard
 		underlay = plane.layer(
 			f"{name} roofing underlay",
 			outline=outer_outline,
@@ -2093,6 +2151,15 @@ def local_y_at_global_z(plane, global_z, *, local_z=0):
 		- plane.origin[2]
 		- local_z * plane.z_axis[2]
 	) / plane.y_axis[2]
+
+
+def local_y_at_global_y(plane, global_y, *, local_z=0):
+	"""Return the roof-local Y where one local-Z line reaches global Y."""
+	return (
+		global_y
+		- plane.origin[1]
+		- local_z * plane.z_axis[1]
+	) / plane.y_axis[1]
 
 
 def collar_tie_top_height_at(x):
@@ -2223,6 +2290,18 @@ def flat_inner_y_limits(left_boundaries, right_boundaries):
 	}
 
 
+normal_collar_tie_top_z = UPPER_FLOOR_START + COLLAR_TIE_TOP_HEIGHT
+# Leave a short source overshoot beyond the dormer wall so its vertical cut
+# defines the exact end.  The previous full-eave overshoot put the source
+# centroid outside that cut, causing the clipping helper to retain the eave
+# side instead of the interior side.
+dormer_under_rafter_y_max = local_y_at_global_y(
+	dormer_roof,
+	7.75,
+	local_z=THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM,
+) + 0.25
+
+
 add_continuous_roof_layers(
 	cut_street_roof,
 	"Street segment 0",
@@ -2236,6 +2315,7 @@ add_continuous_roof_layers(
 		cut_street_inner_boundaries,
 		BWT + GYM_DEPTH + 0.25,
 	),
+	under_rafter_top_z=normal_collar_tie_top_z,
 )
 for part_name, (x_min, x_max), outer_x_range in zip(
 	(
@@ -2253,6 +2333,8 @@ for part_name, (x_min, x_max), outer_x_range in zip(
 		inner_y_limits=sloped_inner_y_limits(
 			street_roof, street_inner_boundaries, 0.25
 		),
+		include_under_rafter_insulation=part_name != "Street segment 2",
+		under_rafter_top_z=normal_collar_tie_top_z,
 		include_vapour_barrier=part_name != "Street segment 2",
 	)
 add_continuous_roof_layers(
@@ -2263,6 +2345,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
+	under_rafter_top_z=normal_collar_tie_top_z,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 1", *roof_under_rafter_x_ranges[1],
@@ -2272,12 +2355,14 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
+	under_rafter_top_z=normal_collar_tie_top_z,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 2 above dormer",
 	*roof_under_rafter_x_ranges[2], roof_y_min, 0,
 	outer_x_range=roof_over_rafter_x_ranges[2],
 	inner_cuts=roof_inner_cuts,
+	include_under_rafter_insulation=False,
 	include_inner_finishes=False,
 )
 add_continuous_roof_layers(
@@ -2288,6 +2373,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		dormer_roof, dormer_inner_boundaries, 7.75
 	),
+	include_under_rafter_insulation=False,
 	include_vapour_barrier=False,
 )
 add_continuous_roof_layers(
@@ -2298,6 +2384,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
+	under_rafter_top_z=normal_collar_tie_top_z,
 )
 for (
 	part_name,
@@ -2343,9 +2430,9 @@ for (
 		include_outer=False,
 	)
 
-# Segment 2 crosses the taller middle purlin.  Its vapour barrier therefore
-# follows the two collar-tie elevations while the plasterboard remains on one
-# continuous plane below it.
+# Segment 2 crosses the taller middle purlin.  Its under-rafter insulation and
+# vapour barrier therefore follow the two collar-tie elevations while the
+# plasterboard remains on one continuous plane below them.
 for (
 	part_name,
 	x_min,
@@ -2379,6 +2466,34 @@ for (
 		dormer_inner_boundaries,
 	),
 ):
+	under_rafter_top_z = (
+		UPPER_FLOOR_START
+		+ collar_tie_top_height_at((x_min + x_max) / 2)
+	)
+	add_continuous_roof_layers(
+		street_roof,
+		f"Street segment 2 under-rafter {part_name}",
+		x_min,
+		x_max,
+		roof_y_min,
+		roof_y_max,
+		inner_cuts=roof_inner_cuts,
+		under_rafter_top_z=under_rafter_top_z,
+		include_inner_finishes=False,
+		include_outer=False,
+	)
+	add_continuous_roof_layers(
+		dormer_roof,
+		f"Dormer segment 2 under-rafter {part_name}",
+		x_min,
+		x_max,
+		0,
+		dormer_under_rafter_y_max,
+		inner_cuts=roof_inner_cuts,
+		under_rafter_top_z=under_rafter_top_z,
+		include_inner_finishes=False,
+		include_outer=False,
+	)
 	add_continuous_roof_layers(
 		street_roof,
 		f"Street segment 2 vapour barrier {part_name}",
@@ -2495,6 +2610,8 @@ add_tile_battens(
 
 main_roof_rafters = []
 corner_short_rafters = []
+stronger_main_roof_rafters = []
+stronger_corner_short_rafters = []
 dormer_short_rafters = []
 dormer_roof_rafters = []
 middle_collar_ties = []
@@ -2505,12 +2622,19 @@ for i, (
 	rafter_kind,
 	shorten_garden_side,
 	split_rafter_y,
+	is_stronger_rafter,
 ) in enumerate(rafter_layout):
 	is_dormer_rafter = rafter_kind == "dormer"
+	rafter_size = (
+		STRONGER_RAFTER_SIZE if is_stronger_rafter else RAFTER_SIZE
+	)
 	if not is_dormer_rafter:
+		collar_tie_x_offset = (
+			rafter_size[0] + COLLAR_TIE_SIZE[0]
+		) / 2
 		for side, x_offset in (
-			("left", -COLLAR_TIE_X_OFFSET),
-			("right", COLLAR_TIE_X_OFFSET),
+			("left", -collar_tie_x_offset),
+			("right", collar_tie_x_offset),
 		):
 			if (rafter_x, side) in blocked_collar_tie_sides:
 				continue
@@ -2567,14 +2691,22 @@ for i, (
 			start=(rafter_x, street_rafter_y_min),
 			end=(rafter_x, street_rafter_y_max),
 			z_offset=RAFTER_Z_OFFSET,
-			size=RAFTER_SIZE,
+			size=rafter_size,
 			kind="RAFTER",
 		)
 		roof_layer_storeys["Rafters"].add(rafter)
 		if street_side_plane is cut_street_roof:
-			corner_short_rafters.append(rafter)
+			(
+				stronger_corner_short_rafters
+				if is_stronger_rafter
+				else corner_short_rafters
+			).append(rafter)
 		else:
-			main_roof_rafters.append(rafter)
+			(
+				stronger_main_roof_rafters
+				if is_stronger_rafter
+				else main_roof_rafters
+			).append(rafter)
 		counter_batten = street_side_plane.beam(
 			f"Street counter-batten {i + 1}",
 			start=(rafter_x, street_counter_batten_y_min),
@@ -2592,7 +2724,7 @@ for i, (
 			start=(rafter_x, -0.5),
 			end=(rafter_x, 5),
 			z_offset=RAFTER_Z_OFFSET,
-			size=RAFTER_SIZE,
+			size=rafter_size,
 			kind="RAFTER",
 		)
 		roof_layer_storeys["Rafters"].add(rafter)
@@ -2662,7 +2794,7 @@ for i, (
 				start=(rafter_x, segment_start_y),
 				end=(rafter_x, segment_end_y),
 				z_offset=RAFTER_Z_OFFSET,
-				size=RAFTER_SIZE,
+				size=rafter_size,
 				kind="RAFTER",
 				extra_cuts=rafter_extra_cuts,
 			)
@@ -2670,7 +2802,11 @@ for i, (
 			if shorten_garden_side:
 				dormer_short_rafters.append(rafter)
 			else:
-				main_roof_rafters.append(rafter)
+				(
+					stronger_main_roof_rafters
+					if is_stronger_rafter
+					else main_roof_rafters
+				).append(rafter)
 		counter_batten = garden_roof.beam(
 			f"Garden counter-batten {i + 1}",
 			start=(rafter_x, counter_batten_y_min),
@@ -2696,10 +2832,12 @@ if roof_window_opening.trimmers:
 		x for x in main_rafter_positions if x > roof_window_x_max
 	)
 	roof_window_trimmer_x_min = (
-		roof_window_left_support_x + RAFTER_THICKNESS / 2
+		roof_window_left_support_x
+		+ main_rafter_thicknesses[roof_window_left_support_x] / 2
 	)
 	roof_window_trimmer_x_max = (
-		roof_window_right_support_x - RAFTER_THICKNESS / 2
+		roof_window_right_support_x
+		- main_rafter_thicknesses[roof_window_right_support_x] / 2
 	)
 	roof_window_center_x = (roof_window_x_min + roof_window_x_max) / 2
 	roof_window_local_y_min = garden_roof.to_local_xy(
@@ -3176,8 +3314,24 @@ if "roof" in sys.argv:
 				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
 			},
 		),
+		*(
+			(
+				(
+					"Krokve – zesílené",
+					stronger_main_roof_rafters,
+					RAFTER_EXTRA_LENGTH,
+					{
+						"pattern": STRONGER_RAFTER_DRAWING_PATTERN,
+						"color": MAIN_RAFTER_DRAWING_COLOR,
+						"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+					},
+				),
+			)
+			if stronger_main_roof_rafters
+			else ()
+		),
 		(
-			"Krokve – zkrácené, roh",
+			"Krokve – roh",
 			corner_short_rafters,
 			RAFTER_EXTRA_LENGTH,
 			{
@@ -3185,6 +3339,22 @@ if "roof" in sys.argv:
 				"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
 				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
 			},
+		),
+		*(
+			(
+				(
+					"Krokve – roh, zesílené",
+					stronger_corner_short_rafters,
+					RAFTER_EXTRA_LENGTH,
+					{
+						"pattern": STRONGER_RAFTER_DRAWING_PATTERN,
+						"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
+						"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+					},
+				),
+			)
+			if stronger_corner_short_rafters
+			else ()
 		),
 		(
 			"Krokve – zkrácené, vikýř",
@@ -3337,7 +3507,7 @@ if "cut1" in sys.argv:
 if "aa" in sys.argv:
 	drawing1 = house.add_drawing(
 		"aa",
-		x=wall2_x+0.4,
+		x=wall2_x+0.6,
 		y=4,
 		z=3.5,
 		radius=8,
@@ -3574,16 +3744,27 @@ if "aa" in sys.argv:
 		)
 
 	if THERMAL_INSULATION_UNDER_RAFTERS > 0:
-		under_rafter_ridge = roof_batting_intersection(
+		under_rafter_top_z = (
+			UPPER_FLOOR_START + collar_tie_top_height_at(aa_x)
+		)
+		under_rafter_street_top = roof_batting_local_point(
 			street_roof,
-			garden_roof,
 			x=aa_x,
+			local_y=local_y_at_global_z(
+				street_roof,
+				under_rafter_top_z,
+				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			),
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
-		under_rafter_garden_joint = roof_batting_intersection(
-			garden_roof,
+		under_rafter_dormer_top = roof_batting_local_point(
 			dormer_roof,
 			x=aa_x,
+			local_y=local_y_at_global_z(
+				dormer_roof,
+				under_rafter_top_z,
+				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			),
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
 		under_rafter_street_eave = roof_batting_point(
@@ -3598,26 +3779,30 @@ if "aa" in sys.argv:
 			y=7.75,
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
+		if aa_x < MIDDLE_PURLIN_X_MIN:
+			under_rafter_part_name = "left shoulder"
+		elif aa_x <= MIDDLE_PURLIN_X_MAX:
+			under_rafter_part_name = "lower middle"
+		else:
+			under_rafter_part_name = "right shoulder"
 		under_rafter_batting_segments = (
 			(
 				"AA street under-rafter batting",
 				under_rafter_street_eave,
-				under_rafter_ridge,
-				roof_under_rafter_insulations["Street segment 2"],
-			),
-			(
-				"AA garden under-rafter batting",
-				under_rafter_ridge,
-				under_rafter_garden_joint,
+				under_rafter_street_top,
 				roof_under_rafter_insulations[
-					"Garden segment 2 above dormer"
+					f"Street segment 2 under-rafter "
+					f"{under_rafter_part_name}"
 				],
 			),
 			(
 				"AA dormer under-rafter batting",
-				under_rafter_garden_joint,
+				under_rafter_dormer_top,
 				under_rafter_dormer_eave,
-				roof_under_rafter_insulations["Dormer segment 2"],
+				roof_under_rafter_insulations[
+					f"Dormer segment 2 under-rafter "
+					f"{under_rafter_part_name}"
+				],
 			),
 		)
 		for batting_name, batting_start, batting_end, insulation in (
@@ -3638,97 +3823,61 @@ if "aa" in sys.argv:
 				),
 			)
 
-	pavatex_ridge = roof_batting_intersection(
-		street_roof,
-		garden_roof,
-		x=aa_x,
-		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
-	)
-	pavatex_garden_joint = roof_batting_intersection(
-		garden_roof,
-		dormer_roof,
-		x=aa_x,
-		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
-	)
-	pavatex_street_eave = roof_batting_point(
-		street_roof,
-		x=aa_x,
-		y=STREET_ROOF_EAVE_Y,
-		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
-	)
-	pavatex_dormer_eave = roof_batting_point(
-		dormer_roof,
-		x=aa_x,
-		y=GARDEN_ROOF_EAVE_Y,
-		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
-	)
-
-	# Garden segment 3 is not cut by AA. Its near face is nevertheless visible
-	# below the dormer, so retain its real X depth and attach its batting to the
-	# projected PAVATEX product during SVG post-processing.
-	projected_garden_x = roof_over_rafter_x_ranges[3][0]
-	projected_pavatex_ridge = roof_batting_intersection(
-		street_roof,
-		garden_roof,
-		x=projected_garden_x,
-		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
-	)
-	projected_pavatex_eave = roof_batting_point(
-		garden_roof,
-		x=projected_garden_x,
-		y=GARDEN_ROOF_EAVE_Y,
-		center_offset=PAVATEX_BATTING_CENTER_OFFSET,
-	)
-	pavatex_batting_segments = (
-		(
-			"AA street PAVATEX batting",
-			pavatex_street_eave,
-			pavatex_ridge,
-			roof_fiberboards["Street segment 2"],
-			"cut",
-		),
-		(
-			"AA garden PAVATEX batting",
-			pavatex_ridge,
-			pavatex_garden_joint,
-			roof_fiberboards["Garden segment 2 above dormer"],
-			"cut",
-		),
-		(
-			"AA dormer PAVATEX batting",
-			pavatex_garden_joint,
-			pavatex_dormer_eave,
-			roof_fiberboards["Dormer segment 2"],
-			"cut",
-		),
-		(
-			"AA projected garden PAVATEX batting",
-			projected_pavatex_ridge,
-			projected_pavatex_eave,
-			roof_fiberboards["Garden segment 3"],
-			"projection",
-		),
-	)
-	for (
-		batting_name,
-		batting_start,
-		batting_end,
-		owner,
-		target,
-	) in pavatex_batting_segments:
-		drawing1.add_batting(
-			*inset_roof_batting_segment(
-				batting_start,
-				batting_end,
-				end_inset=PAVATEX_BATTING_END_INSET,
-			),
-			thickness=PAVATEX_BATTING_THICKNESS,
-			name=batting_name,
-			classes=(
-				f"pavatex-batting pavatex-target-{target} "
-				f"pavatex-owner-{owner.GlobalId}"
-			),
+		collar_tie_center_z = (
+			under_rafter_top_z - COLLAR_TIE_SIZE[1] / 2
 		)
+		collar_tie_batting_start = roof_batting_local_point(
+			street_roof,
+			x=aa_x,
+			local_y=local_y_at_global_z(
+				street_roof,
+				collar_tie_center_z,
+				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			),
+			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		)
+		collar_tie_batting_end = roof_batting_local_point(
+			dormer_roof,
+			x=aa_x,
+			local_y=local_y_at_global_z(
+				dormer_roof,
+				collar_tie_center_z,
+				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			),
+			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		)
+		drawing1.add_batting(
+			collar_tie_batting_start,
+			collar_tie_batting_end,
+			thickness=THERMAL_INSULATION_UNDER_RAFTERS,
+			name="AA collar-tie insulation batting",
+			classes="roof-batting collar-tie-insulation-batting",
+		)
+
+	# Nadezdivka
+	drawing1.add_dimension(
+		start=(BWT, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		end=(BWT, UPPER_FLOOR_START+normal_plasterboard_wall_height),
+		offset=-1)
+
+	# Nadezdivka dormer
+	drawing1.add_dimension(
+		start=(HOUSE_DEPTH-BWT, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		end=(HOUSE_DEPTH-BWT, UPPER_FLOOR_START+dormer_plasterboard_wall_height),
+		offset=1)
+
+	# Vyska stropu - podkrovi
+	drawing1.add_dimension(
+		start=(5.3, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		end=(5.3, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.635),
+		offset=0)
+
+	# Vyska stropu - prizemi
+	drawing1.add_dimension(
+		start=(5.3, GROUND_FLOOR_THICKNESS),
+		end=(5.3, GROUND_FLOOR_THICKNESS+2.635),
+		offset=0)
+
 	drawing1.render("aa.svg", png=True, png_dpi=600)
 
 # Drawing - cut3

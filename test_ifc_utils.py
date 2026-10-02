@@ -35,6 +35,7 @@ from ifc_utils import (
     RoofLayer,
     RoofOpening,
     RoofPlane,
+    RoofUValueResult,
     Stair,
     VerticalFrame,
     Wall,
@@ -61,6 +62,7 @@ from ifc_utils import (
     _postprocess_vapour_barrier_overlays,
     _postprocess_wall_insulation_backdrop,
     _postprocess_wall_insulation_batting,
+    calculate_roof_u_value,
     elliptic_stairs,
     generate_plan,
     offset_plane,
@@ -70,6 +72,45 @@ from ifc_utils import (
 
 
 class HouseTests(unittest.TestCase):
+    def test_calculates_roof_u_value_with_parallel_rafter_path(self) -> None:
+        result = calculate_roof_u_value(
+            wood_fiberboard_thickness=0.10,
+            wood_fiberboard_lambda=0.05,
+            rafter_height=0.20,
+            rafter_width=0.08,
+            rafter_spacing=0.80,
+            rafter_wood_lambda=0.10,
+            between_rafter_wool_lambda=0.04,
+            under_rafter_wool_thickness=0.05,
+            under_rafter_wool_lambda=0.04,
+            installation_space_resistance=0.15,
+        )
+
+        self.assertIsInstance(result, RoofUValueResult)
+        self.assertAlmostEqual(result.rafter_fraction, 0.10)
+        self.assertAlmostEqual(result.wood_fiberboard_resistance, 2.0)
+        self.assertAlmostEqual(result.rafter_wood_resistance, 2.0)
+        self.assertAlmostEqual(result.between_rafter_wool_resistance, 5.0)
+        self.assertAlmostEqual(result.under_rafter_wool_resistance, 1.25)
+        self.assertAlmostEqual(result.rafter_path_resistance, 5.4)
+        self.assertAlmostEqual(result.insulated_path_resistance, 8.4)
+        expected_u_value = 0.10 / 5.4 + 0.90 / 8.4
+        self.assertAlmostEqual(result.u_value, expected_u_value)
+        self.assertAlmostEqual(result.effective_resistance, 1 / expected_u_value)
+
+        with self.assertRaisesRegex(ValueError, "must not exceed"):
+            calculate_roof_u_value(
+                wood_fiberboard_thickness=0.10,
+                wood_fiberboard_lambda=0.05,
+                rafter_height=0.20,
+                rafter_width=0.81,
+                rafter_spacing=0.80,
+                rafter_wood_lambda=0.10,
+                between_rafter_wool_lambda=0.04,
+                under_rafter_wool_thickness=0.05,
+                under_rafter_wool_lambda=0.04,
+            )
+
     def test_creates_counter_clockwise_elliptic_stair_polygons(self) -> None:
         polygons = elliptic_stairs(
             center=(2, -1),
@@ -8955,8 +8996,62 @@ class HouseTests(unittest.TestCase):
             ).split(),
         )
         self.assertFalse(drawing._automatic_door_annotations)
-        with self.assertRaisesRegex(ValueError, "only supported for plan"):
-            drawing.add_dimension((0, 0), (1, 0))
+        elevation_dimension = drawing.add_dimension(
+            (0, 0),
+            (1, 0),
+            offset=0.5,
+            name="Elevation width",
+        )
+        elevation_dimension_placement = (
+            ifcopenshell.util.placement.get_local_placement(
+                elevation_dimension.ObjectPlacement
+            )
+        )
+        np.testing.assert_allclose(
+            elevation_dimension_placement,
+            np.array(
+                (
+                    (1, 0, 0, 0),
+                    (0, 0, -1, -1),
+                    (0, 1, 0, 0.5),
+                    (0, 0, 0, 1),
+                )
+            ),
+            atol=1e-12,
+        )
+        elevation_dimension_representation = (
+            ifcopenshell.util.representation.get_representation(
+                elevation_dimension, "Plan", "Annotation", "PLAN_VIEW"
+            )
+        )
+        np.testing.assert_allclose(
+            elevation_dimension_representation.Items[0].Points.CoordList,
+            ((0, 0), (1, 0)),
+            atol=1e-12,
+        )
+        elevation_extension = next(
+            annotation
+            for annotation in house.model.by_type("IfcAnnotation")
+            if annotation.Name == "Elevation width Extension Lines"
+        )
+        elevation_extension_representation = (
+            ifcopenshell.util.representation.get_representation(
+                elevation_extension, "Plan", "Annotation", "PLAN_VIEW"
+            )
+        )
+        elevation_extension_curves = (
+            elevation_extension_representation.Items[0].Elements
+        )
+        np.testing.assert_allclose(
+            elevation_extension_curves[0].Points.CoordList,
+            ((0, -0.5), (0, 0.1)),
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            elevation_extension_curves[1].Points.CoordList,
+            ((1, -0.5), (1, 0.1)),
+            atol=1e-12,
+        )
 
         with self.assertRaisesRegex(ValueError, "direction is required"):
             house.add_drawing("Missing direction", 0, 0, 0, 1, view="elevation")

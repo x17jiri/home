@@ -67,10 +67,12 @@ __all__ = [
     "RoofLayer",
     "RoofOpening",
     "RoofPlane",
+    "RoofUValueResult",
     "Stair",
     "Storey",
     "VerticalFrame",
     "Wall",
+    "calculate_roof_u_value",
     "elliptic_stairs",
     "generate_plan",
     "offset_plane",
@@ -139,6 +141,22 @@ class AssetInfo:
     category: str
     ifc_class: str
     ifc_type_class: str
+
+
+@dataclass(frozen=True)
+class RoofUValueResult:
+    """Thermal result for a roof with wool interrupted by timber rafters."""
+
+    rafter_fraction: float
+    wood_fiberboard_resistance: float
+    rafter_wood_resistance: float
+    between_rafter_wool_resistance: float
+    under_rafter_wool_resistance: float
+    installation_space_resistance: float
+    rafter_path_resistance: float
+    insulated_path_resistance: float
+    effective_resistance: float
+    u_value: float
 
 
 @dataclass(frozen=True)
@@ -4107,6 +4125,120 @@ def _number(value: Number, argument: str) -> float:
     if not isfinite(result):
         raise ValueError(f"{argument} must be finite")
     return result
+
+
+def calculate_roof_u_value(
+    *,
+    wood_fiberboard_thickness: Number,
+    wood_fiberboard_lambda: Number,
+    rafter_height: Number,
+    rafter_width: Number,
+    rafter_spacing: Number,
+    rafter_wood_lambda: Number,
+    between_rafter_wool_lambda: Number,
+    under_rafter_wool_thickness: Number,
+    under_rafter_wool_lambda: Number,
+    installation_space_resistance: Number = 0,
+) -> RoofUValueResult:
+    """Return a simple area-weighted U-value for the main roof layers.
+
+    Thicknesses and rafter spacing are in metres, lambdas are in W/(m K),
+    resistances are in m²K/W, and the resulting U-value is in W/(m²K).
+    The rafter layer is evaluated as parallel timber and insulated heat-flow
+    paths.  Wood fibreboard, under-rafter wool, and an optional enclosed-air
+    resistance are continuous across both paths.
+
+    Surface resistances, finishes, membranes, battens, and roof covering are
+    deliberately excluded.  An installation void should be supplied as a
+    tested or standard air-space resistance; using still-air lambda with
+    ``thickness / lambda`` would ignore convection and radiation.
+    """
+    dimensions = {
+        "wood_fiberboard_thickness": wood_fiberboard_thickness,
+        "rafter_height": rafter_height,
+        "rafter_width": rafter_width,
+        "rafter_spacing": rafter_spacing,
+        "under_rafter_wool_thickness": under_rafter_wool_thickness,
+    }
+    normalised_dimensions = {
+        name: _number(value, name) for name, value in dimensions.items()
+    }
+    for name, value in normalised_dimensions.items():
+        if value < 0:
+            raise ValueError(f"{name} must not be negative")
+    for name in ("rafter_height", "rafter_width", "rafter_spacing"):
+        if normalised_dimensions[name] <= 0:
+            raise ValueError(f"{name} must be greater than zero")
+
+    lambdas = {
+        "wood_fiberboard_lambda": wood_fiberboard_lambda,
+        "rafter_wood_lambda": rafter_wood_lambda,
+        "between_rafter_wool_lambda": between_rafter_wool_lambda,
+        "under_rafter_wool_lambda": under_rafter_wool_lambda,
+    }
+    normalised_lambdas = {
+        name: _number(value, name) for name, value in lambdas.items()
+    }
+    for name, value in normalised_lambdas.items():
+        if value <= 0:
+            raise ValueError(f"{name} must be greater than zero")
+
+    installation_space_resistance = _number(
+        installation_space_resistance,
+        "installation_space_resistance",
+    )
+    if installation_space_resistance < 0:
+        raise ValueError("installation_space_resistance must not be negative")
+
+    rafter_width = normalised_dimensions["rafter_width"]
+    rafter_spacing = normalised_dimensions["rafter_spacing"]
+    if rafter_width > rafter_spacing:
+        raise ValueError("rafter_width must not exceed rafter_spacing")
+    rafter_fraction = rafter_width / rafter_spacing
+
+    wood_fiberboard_resistance = (
+        normalised_dimensions["wood_fiberboard_thickness"]
+        / normalised_lambdas["wood_fiberboard_lambda"]
+    )
+    rafter_wood_resistance = (
+        normalised_dimensions["rafter_height"]
+        / normalised_lambdas["rafter_wood_lambda"]
+    )
+    between_rafter_wool_resistance = (
+        normalised_dimensions["rafter_height"]
+        / normalised_lambdas["between_rafter_wool_lambda"]
+    )
+    under_rafter_wool_resistance = (
+        normalised_dimensions["under_rafter_wool_thickness"]
+        / normalised_lambdas["under_rafter_wool_lambda"]
+    )
+    common_resistance = (
+        wood_fiberboard_resistance
+        + under_rafter_wool_resistance
+        + installation_space_resistance
+    )
+    rafter_path_resistance = common_resistance + rafter_wood_resistance
+    insulated_path_resistance = (
+        common_resistance + between_rafter_wool_resistance
+    )
+    u_value = (
+        rafter_fraction / rafter_path_resistance
+        + (1 - rafter_fraction) / insulated_path_resistance
+    )
+    effective_resistance = 1 / u_value
+
+    return RoofUValueResult(
+        rafter_fraction=rafter_fraction,
+        wood_fiberboard_resistance=wood_fiberboard_resistance,
+        rafter_wood_resistance=rafter_wood_resistance,
+        between_rafter_wool_resistance=between_rafter_wool_resistance,
+        under_rafter_wool_resistance=under_rafter_wool_resistance,
+        installation_space_resistance=installation_space_resistance,
+        rafter_path_resistance=rafter_path_resistance,
+        insulated_path_resistance=insulated_path_resistance,
+        effective_resistance=effective_resistance,
+        u_value=u_value,
+    )
 
 
 def _point(value: Point, argument: str) -> tuple[float, float]:
@@ -8544,16 +8676,17 @@ class Drawing:
         offset: Number = 0,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
-        """Add one linear plan dimension scoped only to this drawing.
+        """Add one linear dimension scoped only to this drawing.
 
-        ``start`` and ``end`` are the measured points in global model XY
-        coordinates.  ``offset`` moves the dimension line to its left when
-        positive and to its right when negative, looking from ``start`` to
-        ``end``.  Coordinates and offset are metres; Bonsai displays the
-        measured value in millimetres.  A non-zero offset adds extension lines
-        from the measured points to 1 mm beyond the dimension line at 1:100.
+        In a plan, ``start`` and ``end`` are world ``(x, y)``.  In an
+        elevation looking along X they are world ``(y, z)``; looking along Y
+        they are ``(x, z)``.  ``offset`` moves the dimension line to its left
+        when positive and to its right when negative, looking from ``start``
+        to ``end`` in that coordinate pair.  Coordinates and offset are
+        metres; Bonsai displays the measured value in millimetres.  A non-zero
+        offset adds extension lines from the measured points to 1 mm beyond
+        the dimension line at 1:100.
         """
-        self._require_plan_view("add_dimension")
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
         offset = _number(offset, "offset")
@@ -8576,19 +8709,52 @@ class Drawing:
         dimension_start = (start_x + offset_x, start_y + offset_y)
         dimension_end = (end_x + offset_x, end_y + offset_y)
 
-        selected_storeys_below = [
-            storey for storey in self.storeys if storey.elevation <= self.z
-        ]
-        annotation_z = (
-            max(
-                selected_storeys_below,
-                key=lambda storey: storey.elevation,
-            ).elevation
-            if selected_storeys_below
-            else 0.0
-        )
-        placement = np.eye(4)
-        placement[2, 3] = annotation_z
+        elevation_to_world = None
+        dimension_start_point = None
+        annotation_x = None
+        annotation_y = None
+        if self.view == "plan":
+            selected_storeys_below = [
+                storey for storey in self.storeys if storey.elevation <= self.z
+            ]
+            annotation_z = (
+                max(
+                    selected_storeys_below,
+                    key=lambda storey: storey.elevation,
+                ).elevation
+                if selected_storeys_below
+                else 0.0
+            )
+            placement = np.eye(4)
+            placement[2, 3] = annotation_z
+            dimension_axis = [dimension_start, dimension_end]
+        else:
+            direction_x, direction_y, _ = self.direction
+            if isclose(abs(direction_x), 1.0, abs_tol=1e-9):
+                def elevation_to_world(point: Point) -> np.ndarray:
+                    return np.array((self.x, point[0], point[1]), dtype=float)
+            elif isclose(abs(direction_y), 1.0, abs_tol=1e-9):
+                def elevation_to_world(point: Point) -> np.ndarray:
+                    return np.array((point[0], self.y, point[1]), dtype=float)
+            else:
+                raise ValueError(
+                    "add_dimension requires an axis-aligned elevation direction"
+                )
+
+            dimension_start_point = elevation_to_world(dimension_start)
+            dimension_end_point = elevation_to_world(dimension_end)
+            annotation_x = (
+                dimension_end_point - dimension_start_point
+            ) / length
+            annotation_normal = -np.array(self.direction, dtype=float)
+            annotation_y = np.cross(annotation_normal, annotation_x)
+            annotation_y /= np.linalg.norm(annotation_y)
+            placement = np.eye(4)
+            placement[:3, 0] = annotation_x
+            placement[:3, 1] = annotation_y
+            placement[:3, 2] = annotation_normal
+            placement[:3, 3] = dimension_start_point
+            dimension_axis = [(0.0, 0.0), (length, 0.0)]
 
         model = self.house.model
         dimension = ifcopenshell.api.root.create_entity(
@@ -8600,7 +8766,7 @@ class Drawing:
         dimension_representation = ifcopenshell.api.geometry.add_axis_representation(
             model,
             context=self.house._annotation_context,
-            axis=[dimension_start, dimension_end],
+            axis=dimension_axis,
         )
         ifcopenshell.api.geometry.assign_representation(
             model,
@@ -8652,18 +8818,45 @@ class Drawing:
             extension_length = 0.1
             beyond_x = normal_x * extension_direction * extension_length
             beyond_y = normal_y * extension_direction * extension_length
+            extension_segments = (
+                (
+                    (start_x, start_y),
+                    (
+                        dimension_start[0] + beyond_x,
+                        dimension_start[1] + beyond_y,
+                    ),
+                ),
+                (
+                    (end_x, end_y),
+                    (
+                        dimension_end[0] + beyond_x,
+                        dimension_end[1] + beyond_y,
+                    ),
+                ),
+            )
+            if self.view == "elevation":
+                assert elevation_to_world is not None
+                assert dimension_start_point is not None
+                assert annotation_x is not None
+                assert annotation_y is not None
+
+                def elevation_local(point: Point) -> Point:
+                    relative = elevation_to_world(point) - dimension_start_point
+                    return (
+                        float(np.dot(relative, annotation_x)),
+                        float(np.dot(relative, annotation_y)),
+                    )
+
+                extension_segments = tuple(
+                    (elevation_local(start), elevation_local(end))
+                    for start, end in extension_segments
+                )
             extension_curves = []
-            for measured_point, dimension_point in (
-                ((start_x, start_y), dimension_start),
-                ((end_x, end_y), dimension_end),
-            ):
+            for measured_point, beyond_dimension_point in extension_segments:
                 point_list = model.createIfcCartesianPointList2D(
                     [
                         measured_point,
-                        (
-                            dimension_point[0] + beyond_x,
-                            dimension_point[1] + beyond_y,
-                        ),
+                        beyond_dimension_point,
                     ]
                 )
                 extension_curves.append(
@@ -8708,6 +8901,11 @@ class Drawing:
             model,
             group=self.group,
             products=drawing_products,
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model,
+            pset=self._drawing_pset,
+            properties={"HasAnnotation": True},
         )
         return dimension
 

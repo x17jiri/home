@@ -20,7 +20,7 @@ from math import cos, isfinite, radians
 RAFTER_WIDTH_MM = 80.0
 RAFTER_HEIGHT_MM = 200.0
 MAX_DEFLECTION_RATIO = 300.0  # 300 means L/300
-RAFTER_SPACING_M = 0.92
+RAFTER_SPACING_M = 0.825
 
 PURLIN_SUPPORT_SPAN_M = 4.8  # middle span; retained as a convenient input
 if 1:
@@ -54,7 +54,7 @@ PURLIN_ADDITIONAL_PERMANENT_LOAD_KN_M = 0.0
 # Vertical roof snow load per square metre of HORIZONTAL projection. This is
 # treated as the selected roof load case; no snow shape, exposure, thermal,
 # drift, or partial-safety coefficient is applied automatically.
-SNOW_LOAD_KN_M2 = 2.0
+SNOW_LOAD_KN_M2 = 1.7
 
 # Permanent masses per square metre of ACTUAL SLOPING roof surface. Enter the
 # installed mass of every layer. Use 0 only when a listed layer is genuinely
@@ -63,9 +63,11 @@ ROOF_LAYERS_KG_M2: dict[str, float | None] = {
     "Roof tiles": 50,
     "Tile battens": 5,
     "Counter battens": 5,
-    "Wood fibreboard": 20,
+    "MDF": 10,
+	"vata": 20,
+	"OSB": 10,
     "Installation battens/services": 5,
-    "Gypsum plasterboard": 40,
+    "Gypsum plasterboard": 30,
 }
 
 # Deflection also depends on timber stiffness. 11 GPa is an illustrative
