@@ -470,7 +470,7 @@ class RafterLoadTests(unittest.TestCase):
                 rafter_checks=(("Main roof", 3.85, 35.83, check),),
             )
 
-            self.assertEqual(page_count, 3)
+            self.assertEqual(page_count, 4)
             pdf_data = report_path.read_bytes()
             self.assertTrue(pdf_data.startswith(b"%PDF-"))
             self.assertGreater(len(pdf_data), 10_000)

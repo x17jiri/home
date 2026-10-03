@@ -26,7 +26,7 @@ from matplotlib.figure import Figure
 RAFTER_WIDTH_MM = 80.0
 RAFTER_HEIGHT_MM = 200.0
 MAX_DEFLECTION_RATIO = 300.0  # 300 means L/300
-RAFTER_SPACING_M = 0.825
+RAFTER_SPACING_M = 0.9
 
 PURLIN_SUPPORT_SPAN_M = 4.8  # middle span; retained as a convenient input
 if 1:
@@ -119,7 +119,7 @@ BEARING_LENGTH_MM = 160.0
 BEARING_STRENGTH_FACTOR = 1.0  # conservative k_c,90 pending support detail
 SHEAR_EFFECTIVE_WIDTH_FACTOR = 0.67  # k_cr; verify selected EC5 edition
 
-GRAVITY_M_S2 = 9.80665
+GRAVITY_M_S2 = 10.0
 
 
 @dataclass(frozen=True)
@@ -386,8 +386,10 @@ class CalculationReport:
                     ) or ("",)
                 )
             lines = tuple(wrapped_lines)
-            minimum_height = 0.032 + min(1, len(lines)) * self._LINE_HEIGHT
-            if has_content and y - minimum_height < self._BOTTOM:
+            section_height = (
+                0.028 + len(lines) * self._LINE_HEIGHT + 0.008
+            )
+            if has_content and y - section_height < self._BOTTOM:
                 self._save_page(figure)
                 figure, y = self._start_page(
                     continued_title,
@@ -424,12 +426,18 @@ class CalculationReport:
                         va="top",
                     )
                     y -= 0.028
+                is_verdict_line = (
+                    "VYHOVUJE" in line
+                    or "NEVYHOVUJE" in line
+                )
                 figure.text(
                     0.085,
                     y,
                     line,
                     fontsize=8.4,
                     family="DejaVu Sans",
+                    fontweight="bold" if is_verdict_line else "normal",
+                    fontstyle="italic" if is_verdict_line else "normal",
                     va="top",
                 )
                 y -= self._LINE_HEIGHT
@@ -1869,13 +1877,6 @@ _REPORT_CASE_NAMES_CZ = {
     "Main roof": "hlavní střecha",
     "Dormer roof": "střecha vikýře",
 }
-_REPORT_STRENGTH_CHECK_NAMES_CZ = {
-    "bending": "ohyb",
-    "shear": "smyk",
-    "bearing": "otlačení v uložení",
-}
-
-
 _REPORT_ROOF_LAYER_NAMES_CZ = {
     "Roof tiles": "Střešní krytina",
     "Tile battens": "Střešní latě",
@@ -1904,24 +1905,6 @@ def _rafter_report_case_status(check: RoofCheckResult) -> str:
     if is_incomplete:
         return "CHECK INCOMPLETE"
     return "PASS"
-
-
-def _rafter_report_case_status_cz(check: RoofCheckResult) -> str:
-    """Return the detailed-page status in Czech."""
-    has_failure = max(
-        check.characteristic_deflection_utilization,
-        check.bending_utilization,
-        check.shear_utilization,
-        check.bearing_utilization,
-    ) > 1
-    is_incomplete = bool(check.missing_roof_layers)
-    if has_failure and is_incomplete:
-        return "NEVYHOVUJE; POSOUZENÍ JE NEÚPLNÉ"
-    if has_failure:
-        return "NEVYHOVUJE"
-    if is_incomplete:
-        return "POSOUZENÍ JE NEÚPLNÉ"
-    return "VYHOVUJE"
 
 
 def add_roof_load_table(
@@ -2149,10 +2132,6 @@ def add_rafter_report(
         bearing_area_m2 = width_m * BEARING_LENGTH_MM / 1000
 
         case_name_cz = _REPORT_CASE_NAMES_CZ.get(name, name)
-        governing_strength_check_cz = _REPORT_STRENGTH_CHECK_NAMES_CZ.get(
-            check.governing_strength_check,
-            check.governing_strength_check,
-        )
         report.add_sections(
             f"Krokev – {case_name_cz}",
             (
@@ -2172,11 +2151,10 @@ def add_rafter_report(
                 (
                     "Charakteristická liniová zatížení kolmá ke krokvi",
                     (
-                        "Všechna níže uvedená zatížení působí kolmo na krokev.",
                         f"Stálé plošné zatížení střešních vrstev gk = "
                         f"{roof_layer_surface_load_kn_m2:.3f} kN/m² "
                         f"({known_layer_total_kg_m2:.1f} kg/m²).",
-                        f"Osová vzdálenost krokví a = {spacing_m:.3f} m.",
+                        f"Maximální osová vzdálenost krokví a = {spacing_m:.3f} m.",
                         "Pro jednu krokev tedy použijeme liniové zatížení "
                         "vrstev kolmé ke krokvi:",
                         f"qG,k,vrstvy = gk × a × cos α = "
@@ -2198,68 +2176,84 @@ def add_rafter_report(
                     ),
                 ),
                 (
-                    "Okamžitý průhyb (MSP)",
+                    "Posouzení - namáhání ohybem",
                     (
-                        "Prostě podepřený nosník s rovnoměrným zatížením:",
-                        "winst = 5 qk L⁴ / (384 E I)",
-                        f"wG,inst = "
+                        "Mezní stav únosnosti (MSÚ).",
+                        f"Návrhové liniové zatížení qd = γG qG,k + "
+                        f"γQ qS,k = "
+                        f"{check.design_transverse_n_per_m / 1000:.3f} kN/m",
+                        f"Návrhový ohybový moment MEd = qd L² / 8 = "
+                        f"{check.design_bending_moment_nm / 1000:.3f} kNm",
+                        f"Průřezový modul W = "
+                        f"{result.section_modulus_m3:.8e} m³",
+                        f"Návrhová pevnost v ohybu fm,d = "
+                        f"fm,k × kmod / γM = {bending_strength_mpa:.2f} MPa",
+                        f"Mezní hodnota MRd = fm,d × W = "
+                        f"{check.bending_resistance_nm / 1000:.3f} kNm",
+                        f"{check.design_bending_moment_nm / 1000:.3f} kNm "
+                        f"<= {check.bending_resistance_nm / 1000:.3f} kNm, "
+                        f"{_status_cz(check.bending_utilization)}",
+                    ),
+                ),
+                (
+                    "Posouzení - namáhání smykem",
+                    (
+                        "Mezní stav únosnosti (MSÚ).",
+                        f"Návrhová posouvající síla VEd = qd L / 2 = "
+                        f"{check.design_shear_force_n / 1000:.3f} kN",
+                        f"Návrhová pevnost ve smyku fv,d = "
+                        f"fv,k × kmod / γM = {shear_strength_mpa:.2f} MPa",
+                        f"Účinná šířka bef = kcr × b = "
+                        f"{SHEAR_EFFECTIVE_WIDTH_FACTOR:g} × "
+                        f"{width_m * 1000:.0f} mm",
+                        f"Mezní hodnota VRd = fv,d × kcr × b × h / 1,5 = "
+                        f"{check.shear_resistance_n / 1000:.3f} kN",
+                        f"{check.design_shear_force_n / 1000:.3f} kN "
+                        f"<= {check.shear_resistance_n / 1000:.3f} kN, "
+                        f"{_status_cz(check.shear_utilization)}",
+                    ),
+                ),
+                (
+                    "Posouzení - otlačení v uložení",
+                    (
+                        "Mezní stav únosnosti (MSÚ), tlak kolmo k vláknům.",
+                        f"Návrhová reakce Fc,90,Ed = "
+                        f"{check.design_support_reaction_n / 1000:.3f} kN",
+                        f"Návrhová pevnost fc,90,d = "
+                        f"{bearing_strength_mpa:.2f} MPa",
+                        f"Plocha uložení A = b × l = "
+                        f"{width_m * 1000:.0f} × {BEARING_LENGTH_MM:g} = "
+                        f"{bearing_area_m2 * 1e6:.0f} mm²",
+                        f"Mezní hodnota Rc,90,d = fc,90,d × A = "
+                        f"{check.bearing_resistance_n / 1000:.3f} kN",
+                        f"{check.design_support_reaction_n / 1000:.3f} kN "
+                        f"<= {check.bearing_resistance_n / 1000:.3f} kN, "
+                        f"{_status_cz(check.bearing_utilization)}",
+                    ),
+                ),
+                (
+                    "Posouzení - okamžitý průhyb",
+                    (
+                        "Mezní stav použitelnosti (MSP).",
+                        f"Charakteristické liniové zatížení qk = qG,k + "
+                        f"qS,k = "
+                        f"{check.characteristic_transverse_n_per_m / 1000:.3f} "
+                        "kN/m",
+                        f"Modul pružnosti E = {elastic_modulus_gpa:.2f} GPa",
+                        f"Moment setrvačnosti I = "
+                        f"{result.second_moment_m4:.8e} m⁴",
+                        f"Průhyb od stálého zatížení wG,inst = "
                         f"{check.permanent_immediate_deflection_m * 1000:.2f} "
                         "mm",
-                        f"wS,inst = "
+                        f"Průhyb od sněhu wS,inst = "
                         f"{check.snow_immediate_deflection_m * 1000:.2f} mm",
-                        f"winst = "
+                        f"Celkový průhyb winst = 5 qk L⁴ / (384 E I) = "
                         f"{check.characteristic_deflection_m * 1000:.2f} mm",
-                        f"Mezní hodnota L/{deflection_ratio:g} = "
+                        f"Mezní hodnota wlim = L/{deflection_ratio:g} = "
                         f"{result.maximum_deflection_m * 1000:.2f} mm",
-                        f"Využití = "
-                        f"{_percent(check.characteristic_deflection_utilization)} "
-                        f"({_status_cz(check.characteristic_deflection_utilization)})",
-                    ),
-                ),
-                (
-                    "Účinky návrhového zatížení (MSÚ)",
-                    (
-                        "qd = γG qG,k + γQ qS,k",
-                        f"qd = {check.design_transverse_n_per_m / 1000:.3f} "
-                        "kN/m",
-                        f"MEd = qd L² / 8 = "
-                        f"{check.design_bending_moment_nm / 1000:.3f} kNm",
-                        f"VEd = reakce = qd L / 2 = "
-                        f"{check.design_shear_force_n / 1000:.3f} kN",
-                    ),
-                ),
-                (
-                    "Návrhové únosnosti (MSÚ)",
-                    (
-                        f"fm,d = fm,k × kmod / γM = "
-                        f"{bending_strength_mpa:.2f} MPa",
-                        f"MRd = fm,d × W = "
-                        f"{check.bending_resistance_nm / 1000:.3f} kNm; "
-                        f"využití "
-                        f"{_percent(check.bending_utilization)} "
-                        f"({_status_cz(check.bending_utilization)})",
-                        f"fv,d = fv,k × kmod / γM = "
-                        f"{shear_strength_mpa:.2f} MPa; účinná šířka = "
-                        f"{SHEAR_EFFECTIVE_WIDTH_FACTOR:g} b",
-                        f"VRd = fv,d × kcr b h / 1.5 = "
-                        f"{check.shear_resistance_n / 1000:.3f} kN; "
-                        f"využití {_percent(check.shear_utilization)} "
-                        f"({_status_cz(check.shear_utilization)})",
-                        f"fc,90,d = {bearing_strength_mpa:.2f} MPa; "
-                        f"plocha uložení = {bearing_area_m2 * 1e6:.0f} mm²",
-                        f"Rc,90,d = fc,90,d × A = "
-                        f"{check.bearing_resistance_n / 1000:.3f} kN; "
-                        f"využití {_percent(check.bearing_utilization)} "
-                        f"({_status_cz(check.bearing_utilization)})",
-                    ),
-                ),
-                (
-                    "Výsledek posouzení",
-                    (
-                        f"{_rafter_report_case_status_cz(check)}",
-                        f"Rozhodující posouzení MSÚ: "
-                        f"{governing_strength_check_cz}, "
-                        f"{_percent(check.governing_strength_utilization)}",
+                        f"{check.characteristic_deflection_m * 1000:.2f} mm "
+                        f"<= {result.maximum_deflection_m * 1000:.2f} mm, "
+                        f"{_status_cz(check.characteristic_deflection_utilization)}",
                     ),
                 ),
             ),
