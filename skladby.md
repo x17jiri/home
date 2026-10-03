@@ -74,13 +74,13 @@ Střešní taška:
 
 Pojistná hydroizolace:
 - Difůzně otevřená s reflexní vrstvou
-- sd ≤ 0.07
+- sd ≤ 0.1 m
 - Např. Sunflex Contact Pro
 
 MDF Záklop:
 - ρ ~ 600 kg/m³
-- λ ≤ 0.15 W/mK
-- μ ≤ 12
+- λ ≤ 0.2 W/mK
+- μ ≤ 15
 - Např. EGGER DHF
 
 Mezikrokevní a podkrokevní izolace:
@@ -92,8 +92,8 @@ Mezikrokevní a podkrokevní izolace:
 
 OSB Záklop:
 - ρ ~ 600 kg/m³
-- λ ≤ 0.15 W/mK
-- μ ≥ 150
+- λ ≤ 0.2 W/mK
+- 150 ≤ μ ≤ 300
 - vzduchotěsně přelepené spoje
 - Např. EGGER OSB 3
 
@@ -104,6 +104,7 @@ Pojistná parobrzda:
 2xSDK deska:
 - λ ≤ 0.5 W/mK
 - ρ >= 800 kg/m³
+- spodní vrstva s požární odolností (reakce na oheň A2)
 - Např. Rigips MA (DF)
 
 ## SK4, SK5 - Obvodové Zdi a Fasáda

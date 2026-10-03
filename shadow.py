@@ -17,7 +17,7 @@ SLOPE = 0.72
 WINDOW_HEIGHT = 1.5 + 0.75
 
 # Move the entire polygon by changing only this point.
-POLYGON_ORIGIN = (-3.7, 4.4+8.5/2)
+POLYGON_ORIGIN = (-3.73, 4.4+8.5/2)
 
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
 if 0:

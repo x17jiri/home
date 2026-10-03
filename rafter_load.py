@@ -11,9 +11,15 @@ structural design.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import cos, isfinite, radians
+from pathlib import Path
+from textwrap import wrap
+from typing import TypeAlias
+
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.figure import Figure
 
 
 # USER INPUTS
@@ -51,10 +57,15 @@ PURLIN_BEARING_LENGTH_MM = 240.0
 # really terminates at the purlin.
 PURLIN_ADDITIONAL_PERMANENT_LOAD_KN_M = 0.0
 
-# Vertical roof snow load per square metre of HORIZONTAL projection. This is
-# treated as the selected roof load case; no snow shape, exposure, thermal,
+# Conservative load used by the interactive terminal check. The official
+# report uses REPORT_SNOW_LOAD_KN_M2 below. Both are vertical roof snow loads
+# per square metre of HORIZONTAL projection. No snow shape, exposure, thermal,
 # drift, or partial-safety coefficient is applied automatically.
 SNOW_LOAD_KN_M2 = 1.7
+REPORT_SNOW_LOAD_KN_M2 = 1.5
+REPORT_SNOW_LOAD_STANDARD = "ČSN EN 1991-1-3:2005/Z1:2006"
+REPORT_SNOW_LOAD_ZONE = 3
+REPORT_PDF_PATH = "rafter_load_report.pdf"
 
 # Permanent masses per square metre of ACTUAL SLOPING roof surface. Enter the
 # installed mass of every layer. Use 0 only when a listed layer is genuinely
@@ -66,6 +77,20 @@ ROOF_LAYERS_KG_M2: dict[str, float | None] = {
     "MDF": 10,
 	"vata": 20,
 	"OSB": 10,
+    "Installation battens/services": 5,
+    "Gypsum plasterboard": 30,
+}
+
+# Values stated in the formal calculation report. Keep this as a distinct set
+# even where a value currently matches the conservative terminal input, so a
+# future safety margin cannot silently alter the documented design basis.
+REPORT_ROOF_LAYERS_KG_M2: dict[str, float | None] = {
+    "Roof tiles": 45,
+    "Tile battens": 5,
+    "Counter battens": 5,
+    "MDF": 10,
+    "vata": 20,
+    "OSB": 10,
     "Installation battens/services": 5,
     "Gypsum plasterboard": 30,
 }
@@ -236,6 +261,283 @@ class PurlinCheckResult:
         return max(self.independent_spans, key=lambda result: result.span_m)
 
 
+ReportSection: TypeAlias = tuple[str, Sequence[str]]
+
+
+class CalculationReport:
+    """Small reusable writer for calculation sections in one PDF.
+
+    Element-specific functions such as :func:`add_rafter_report` only prepare
+    headings and lines. This class owns pagination, page numbering, and the PDF
+    file, so future purlin or collar-tie functions can append their own pages.
+    """
+
+    _TOP = 0.915
+    _BOTTOM = 0.065
+    _LINE_HEIGHT = 0.0175
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        document_title: str = "Roof structural calculation",
+    ) -> None:
+        self.path = Path(path)
+        self.document_title = document_title
+        self._pdf: PdfPages | None = None
+        self._page_count = 0
+
+    @property
+    def page_count(self) -> int:
+        return self._page_count
+
+    def __enter__(self) -> "CalculationReport":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._pdf = PdfPages(
+            self.path,
+            metadata={
+                "Title": self.document_title,
+                "Creator": "rafter_load.py",
+                "Subject": "Preliminary timber member verification",
+            },
+        )
+        return self
+
+    def __exit__(self, exception_type, exception, traceback) -> None:
+        if self._pdf is not None:
+            self._pdf.close()
+            self._pdf = None
+
+    def _start_page(
+        self,
+        title: str,
+        *,
+        footer_title: str | None = None,
+        page_label: str = "Page",
+    ) -> tuple[Figure, float]:
+        self._page_count += 1
+        figure = Figure(figsize=(8.27, 11.69))
+        figure.text(
+            0.075,
+            0.957,
+            title,
+            fontsize=15,
+            fontweight="bold",
+            va="top",
+        )
+        figure.text(
+            0.075,
+            0.025,
+            footer_title or self.document_title,
+            fontsize=7,
+            color="#555555",
+            va="bottom",
+        )
+        figure.text(
+            0.925,
+            0.025,
+            f"{page_label} {self._page_count}",
+            fontsize=7,
+            color="#555555",
+            ha="right",
+            va="bottom",
+        )
+        return figure, self._TOP
+
+    def _save_page(self, figure: Figure) -> None:
+        if self._pdf is None:
+            raise RuntimeError(
+                "CalculationReport must be used as a context manager"
+            )
+        self._pdf.savefig(figure)
+
+    def add_sections(
+        self,
+        title: str,
+        sections: Sequence[ReportSection],
+        *,
+        footer_title: str | None = None,
+        page_label: str = "Page",
+        continuation_label: str = "continued",
+    ) -> None:
+        """Append one or more automatically paginated text pages."""
+        if self._pdf is None:
+            raise RuntimeError(
+                "CalculationReport must be used as a context manager"
+            )
+
+        continued_title = f"{title} ({continuation_label})"
+        figure, y = self._start_page(
+            title,
+            footer_title=footer_title,
+            page_label=page_label,
+        )
+        has_content = False
+        for heading, supplied_lines in sections:
+            wrapped_lines: list[str] = []
+            for supplied_line in supplied_lines:
+                line = str(supplied_line)
+                wrapped_lines.extend(
+                    wrap(
+                        line,
+                        width=105,
+                        break_long_words=False,
+                        break_on_hyphens=False,
+                    ) or ("",)
+                )
+            lines = tuple(wrapped_lines)
+            minimum_height = 0.032 + min(1, len(lines)) * self._LINE_HEIGHT
+            if has_content and y - minimum_height < self._BOTTOM:
+                self._save_page(figure)
+                figure, y = self._start_page(
+                    continued_title,
+                    footer_title=footer_title,
+                    page_label=page_label,
+                )
+                has_content = False
+
+            figure.text(
+                0.075,
+                y,
+                heading,
+                fontsize=10,
+                fontweight="bold",
+                va="top",
+            )
+            y -= 0.028
+            has_content = True
+
+            for line in lines:
+                if y < self._BOTTOM:
+                    self._save_page(figure)
+                    figure, y = self._start_page(
+                        continued_title,
+                        footer_title=footer_title,
+                        page_label=page_label,
+                    )
+                    figure.text(
+                        0.075,
+                        y,
+                        f"{heading} ({continuation_label})",
+                        fontsize=10,
+                        fontweight="bold",
+                        va="top",
+                    )
+                    y -= 0.028
+                figure.text(
+                    0.085,
+                    y,
+                    line,
+                    fontsize=8.4,
+                    family="DejaVu Sans",
+                    va="top",
+                )
+                y -= self._LINE_HEIGHT
+
+            y -= 0.008
+
+        self._save_page(figure)
+
+
+    def add_table(
+        self,
+        title: str,
+        *,
+        column_labels: Sequence[str],
+        rows: Sequence[Sequence[str]],
+        column_widths: Sequence[float] | None = None,
+        intro_lines: Sequence[str] = (),
+        bold_last_row: bool = False,
+        footer_title: str | None = None,
+        page_label: str = "Page",
+    ) -> None:
+        """Append a single table page to the report."""
+        if self._pdf is None:
+            raise RuntimeError(
+                "CalculationReport must be used as a context manager"
+            )
+
+        labels = tuple(str(label) for label in column_labels)
+        if not labels:
+            raise ValueError("column_labels must not be empty")
+        normalized_rows = tuple(
+            tuple(str(value) for value in row)
+            for row in rows
+        )
+        if any(len(row) != len(labels) for row in normalized_rows):
+            raise ValueError("every table row must match column_labels")
+
+        if column_widths is None:
+            widths = tuple(1 / len(labels) for _ in labels)
+        else:
+            widths = tuple(float(width) for width in column_widths)
+            if len(widths) != len(labels):
+                raise ValueError(
+                    "column_widths must match column_labels"
+                )
+            if any(width <= 0 for width in widths):
+                raise ValueError("column widths must be greater than zero")
+            total_width = sum(widths)
+            widths = tuple(width / total_width for width in widths)
+
+        figure, y = self._start_page(
+            title,
+            footer_title=footer_title,
+            page_label=page_label,
+        )
+        for supplied_line in intro_lines:
+            for line in wrap(
+                str(supplied_line),
+                width=105,
+                break_long_words=False,
+                break_on_hyphens=False,
+            ) or ("",):
+                figure.text(
+                    0.075,
+                    y,
+                    line,
+                    fontsize=8.4,
+                    family="DejaVu Sans",
+                    va="top",
+                )
+                y -= self._LINE_HEIGHT
+        y -= 0.014
+
+        table_bottom = 0.11
+        axes = figure.add_axes(
+            (0.075, table_bottom, 0.85, max(0.10, y - table_bottom))
+        )
+        axes.set_axis_off()
+        table = axes.table(
+            cellText=normalized_rows,
+            colLabels=labels,
+            colWidths=widths,
+            cellLoc="left",
+            colLoc="center",
+            loc="upper center",
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(8.4)
+        table.scale(1, 1.5)
+
+        final_row_index = len(normalized_rows)
+        for (row_index, column_index), cell in table.get_celld().items():
+            cell.set_edgecolor("#333333")
+            cell.set_linewidth(0.55)
+            text = cell.get_text()
+            text.set_fontfamily("DejaVu Sans")
+            if row_index == 0:
+                cell.set_facecolor("#e5e5e5")
+                text.set_fontweight("bold")
+            elif column_index > 0:
+                text.set_ha("right")
+            if bold_last_row and row_index == final_row_index:
+                cell.set_facecolor("#f2f2f2")
+                text.set_fontweight("bold")
+
+        self._save_page(figure)
+
+
 def _positive(value: float, name: str) -> float:
     try:
         result = float(value)
@@ -267,6 +569,41 @@ def _non_negative(value: float, name: str) -> float:
         raise ValueError(f"{name} must be a finite number not less than zero")
     return result
 
+
+def assert_terminal_inputs_are_conservative(
+    *,
+    terminal_snow_load_kn_m2: float,
+    report_snow_load_kn_m2: float,
+    terminal_roof_layers_kg_m2: Mapping[str, float | None],
+    report_roof_layers_kg_m2: Mapping[str, float | None],
+) -> None:
+    """Assert that terminal loads are no lower than documented report loads."""
+    terminal_snow = _non_negative(
+        terminal_snow_load_kn_m2,
+        "terminal_snow_load_kn_m2",
+    )
+    report_snow = _non_negative(
+        report_snow_load_kn_m2,
+        "report_snow_load_kn_m2",
+    )
+    assert terminal_snow >= report_snow, (
+        "terminal snow load must be at least the official report snow load"
+    )
+    assert terminal_roof_layers_kg_m2.keys() == (
+        report_roof_layers_kg_m2.keys()
+    ), "terminal and report roof-layer sets must contain the same layers"
+
+    for name in terminal_roof_layers_kg_m2:
+        terminal_mass = terminal_roof_layers_kg_m2[name]
+        report_mass = report_roof_layers_kg_m2[name]
+        assert (terminal_mass is None) == (report_mass is None), (
+            f'roof layer "{name}" must be specified in both load sets'
+        )
+        if terminal_mass is not None and report_mass is not None:
+            assert terminal_mass >= report_mass, (
+                f'terminal roof layer "{name}" must be at least the '
+                "official report value"
+            )
 
 def calculate_rafter_load(
     *,
@@ -1416,7 +1753,10 @@ def _parser() -> argparse.ArgumentParser:
         "--snow-load",
         type=float,
         default=SNOW_LOAD_KN_M2,
-        help="vertical roof snow load in kN/m^2 of horizontal projection",
+        help=(
+            "conservative terminal-check snow load in kN/m^2 of horizontal "
+            "projection; the PDF uses REPORT_SNOW_LOAD_KN_M2"
+        ),
     )
     parser.add_argument(
         "--purlin-width",
@@ -1492,12 +1832,474 @@ def _parser() -> argparse.ArgumentParser:
             "(for example a separately supported ceiling)"
         ),
     )
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=Path(REPORT_PDF_PATH),
+        help=(
+            "write the official-input rafter calculation to this PDF "
+            f"(default: {REPORT_PDF_PATH})"
+        ),
+    )
+    parser.add_argument(
+        "--no-report",
+        dest="report",
+        action="store_const",
+        const=None,
+        help="skip PDF report generation",
+    )
     return parser
 
 
 def _status(utilization: float) -> str:
     return "PASS" if utilization <= 1 else "FAIL"
 
+
+def _percent(utilization: float) -> str:
+    return f"{utilization * 100:.1f}%"
+
+
+def _status_cz(utilization: float) -> str:
+    return "VYHOVUJE" if utilization <= 1 else "NEVYHOVUJE"
+
+
+RafterReportCase: TypeAlias = tuple[str, float, float, RoofCheckResult]
+
+_REPORT_CASE_NAMES_CZ = {
+    "Main roof": "hlavní střecha",
+    "Dormer roof": "střecha vikýře",
+}
+_REPORT_STRENGTH_CHECK_NAMES_CZ = {
+    "bending": "ohyb",
+    "shear": "smyk",
+    "bearing": "otlačení v uložení",
+}
+
+
+_REPORT_ROOF_LAYER_NAMES_CZ = {
+    "Roof tiles": "Střešní krytina",
+    "Tile battens": "Střešní latě",
+    "Counter battens": "Kontralatě",
+    "MDF": "Dřevovláknitá deska (MDF)",
+    "vata": "Minerální vata",
+    "OSB": "OSB deska",
+    "Installation battens/services": "Instalační rošt a rozvody",
+    "Gypsum plasterboard": "Sádrokarton",
+}
+
+
+def _rafter_report_case_status(check: RoofCheckResult) -> str:
+    """Return the report status without considering long-term deflection."""
+    has_failure = max(
+        check.characteristic_deflection_utilization,
+        check.bending_utilization,
+        check.shear_utilization,
+        check.bearing_utilization,
+    ) > 1
+    is_incomplete = bool(check.missing_roof_layers)
+    if has_failure and is_incomplete:
+        return "FAIL; CHECK INCOMPLETE"
+    if has_failure:
+        return "FAIL"
+    if is_incomplete:
+        return "CHECK INCOMPLETE"
+    return "PASS"
+
+
+def _rafter_report_case_status_cz(check: RoofCheckResult) -> str:
+    """Return the detailed-page status in Czech."""
+    has_failure = max(
+        check.characteristic_deflection_utilization,
+        check.bending_utilization,
+        check.shear_utilization,
+        check.bearing_utilization,
+    ) > 1
+    is_incomplete = bool(check.missing_roof_layers)
+    if has_failure and is_incomplete:
+        return "NEVYHOVUJE; POSOUZENÍ JE NEÚPLNÉ"
+    if has_failure:
+        return "NEVYHOVUJE"
+    if is_incomplete:
+        return "POSOUZENÍ JE NEÚPLNÉ"
+    return "VYHOVUJE"
+
+
+def add_roof_load_table(
+    report: CalculationReport,
+    roof_layers_kg_m2: Mapping[str, float | None],
+    *,
+    snow_load_kn_m2: float,
+    snow_load_standard: str = REPORT_SNOW_LOAD_STANDARD,
+    snow_load_zone: int = REPORT_SNOW_LOAD_ZONE,
+) -> None:
+    """Append the report-wide roof-layer permanent-load table."""
+    rows: list[tuple[str, str, str]] = []
+    total_mass_kg_m2 = 0.0
+    has_missing_layer = False
+
+    snow_load = _non_negative(snow_load_kn_m2, "snow_load_kn_m2")
+    snow_load_text = f"{snow_load:.2f}".replace(".", ",")
+    if snow_load_zone <= 0:
+        raise ValueError("snow_load_zone must be greater than zero")
+    if not snow_load_standard.strip():
+        raise ValueError("snow_load_standard must not be empty")
+
+    for supplied_name, supplied_mass in roof_layers_kg_m2.items():
+        display_name = _REPORT_ROOF_LAYER_NAMES_CZ.get(
+            supplied_name,
+            supplied_name,
+        )
+        if supplied_mass is None:
+            has_missing_layer = True
+            rows.append((display_name, "NEZADÁNO", "NEZADÁNO"))
+            continue
+
+        mass_kg_m2 = _non_negative(
+            supplied_mass,
+            f'roof layer "{supplied_name}" mass',
+        )
+        total_mass_kg_m2 += mass_kg_m2
+        rows.append(
+            (
+                display_name,
+                f"{mass_kg_m2:.1f}",
+                f"{mass_kg_m2 * GRAVITY_M_S2 / 1000:.3f}",
+            )
+        )
+
+    total_label = "Stálé zatížení celkem"
+    if has_missing_layer:
+        total_label = "Součet zadaných vrstev (neúplný)"
+    rows.append(
+        (
+            total_label,
+            f"{total_mass_kg_m2:.1f}",
+            f"{total_mass_kg_m2 * GRAVITY_M_S2 / 1000:.3f}",
+        )
+    )
+
+    report.add_table(
+        "Zatížení střechy",
+        column_labels=(
+            "Vrstva",
+            "Hmotnost [kg/m²]",
+            "gk [kN/m²]",
+        ),
+        rows=rows,
+        column_widths=(0.50, 0.22, 0.28),
+        intro_lines=(
+            f"Zatížení sněhem dle {snow_load_standard}: "
+            f"{snow_load_zone}. sněhová oblast, "
+            f"sk = {snow_load_text} kN/m².",
+            "Hmotnosti vrstev jsou vztaženy k 1 m² skutečné šikmé "
+            "plochy střechy.",
+            f"Přepočet: gk = m × g / 1000; g = {GRAVITY_M_S2:g} m/s².",
+        ),
+        bold_last_row=True,
+        footer_title="Předběžný statický výpočet střechy",
+        page_label="Strana",
+    )
+
+
+def add_rafter_report(
+    report: CalculationReport,
+    *,
+    width_mm: float,
+    height_mm: float,
+    rafter_spacing_m: float,
+    deflection_ratio: float,
+    elastic_modulus_gpa: float,
+    timber_density_kg_m3: float,
+    snow_load_kn_m2: float,
+    roof_layers_kg_m2: Mapping[str, float | None],
+    rafter_checks: Sequence[RafterReportCase],
+) -> None:
+    """Append a traceable rafter calculation to an open PDF report.
+
+    The report deliberately checks immediate deflection only. The interactive
+    terminal calculation remains the conservative check and also includes
+    creep/final deflection.
+    """
+    if not rafter_checks:
+        raise ValueError("rafter_checks must contain at least one case")
+
+    width_m = _positive(width_mm, "width_mm") / 1000
+    height_m = _positive(height_mm, "height_mm") / 1000
+    spacing_m = _positive(rafter_spacing_m, "rafter_spacing_m")
+    _positive(elastic_modulus_gpa, "elastic_modulus_gpa")
+    density = _positive(timber_density_kg_m3, "timber_density_kg_m3")
+    snow_load = _non_negative(snow_load_kn_m2, "snow_load_kn_m2")
+    deflection_ratio = _positive(deflection_ratio, "deflection_ratio")
+
+    known_layer_total_kg_m2 = 0.0
+    for name, mass in roof_layers_kg_m2.items():
+        if mass is not None:
+            known_layer_total_kg_m2 += _non_negative(
+                mass,
+                f'roof layer "{name}" mass',
+            )
+    roof_layer_surface_load_kn_m2 = (
+        known_layer_total_kg_m2 * GRAVITY_M_S2 / 1000
+    )
+
+    case_summary_lines: list[str] = []
+    for name, span_m, angle_degrees, check in rafter_checks:
+        case_summary_lines.append(
+            f"{name}: {_rafter_report_case_status(check)}; "
+            f"immediate deflection "
+            f"{check.characteristic_deflection_m * 1000:.2f} mm "
+            f"({_percent(check.characteristic_deflection_utilization)}); "
+            f"governing ULS {check.governing_strength_check} "
+            f"({_percent(check.governing_strength_utilization)})"
+        )
+
+    report.add_sections(
+        "Rafter calculation – design basis and summary",
+        (
+            (
+                "Purpose and structural model",
+                (
+                    "Preliminary verification of timber rafters as simply "
+                    "supported beams.",
+                    "The support span is the real length measured along the "
+                    "sloping rafter.",
+                    "Snow is a vertical action per horizontal roof projection; "
+                    "roof-layer masses are per actual sloping surface.",
+                    "This PDF uses the official input set. A separate, more "
+                    "conservative input set is used by the terminal check.",
+                ),
+            ),
+            (
+                "Shared geometry and material",
+                (
+                    f"Cross-section b × h = {width_mm:.0f} × "
+                    f"{height_mm:.0f} mm",
+                    f"Rafter centre spacing a = {spacing_m:.3f} m",
+                    f"Mean modulus E = {elastic_modulus_gpa:.2f} GPa",
+                    f"Timber density = {density:.1f} kg/m³",
+                    f"Deflection criterion = L/{deflection_ratio:g}",
+                    f"C24 characteristic strengths: fm,k = "
+                    f"{C24_BENDING_STRENGTH_MPA:g} MPa, fv,k = "
+                    f"{C24_SHEAR_STRENGTH_MPA:g} MPa, fc,90,k = "
+                    f"{C24_COMPRESSION_PERPENDICULAR_MPA:g} MPa",
+                    f"kmod = {TIMBER_MODIFICATION_FACTOR:g}; "
+                    f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g}; "
+                    f"kcr = {SHEAR_EFFECTIVE_WIDTH_FACTOR:g}",
+                    f"Assumed bearing length = {BEARING_LENGTH_MM:g} mm",
+                ),
+            ),
+            (
+                "Characteristic actions",
+                (
+                    f"Official roof snow load sk = {snow_load:.3f} kN/m²",
+                    f"ULS factors: γG = {PERMANENT_LOAD_FACTOR:g}; "
+                    f"γQ = {SNOW_LOAD_FACTOR:g}",
+                    f"Official roof-layer permanent load gk = "
+                    f"{known_layer_total_kg_m2:.1f} kg/m² = "
+                    f"{roof_layer_surface_load_kn_m2:.3f} kN/m²",
+                    "The layer breakdown is shown in the following table.",
+                ),
+            ),
+            ("Result summary", tuple(case_summary_lines)),
+            (
+                "Scope and limitations",
+                (
+                    "Serviceability in this PDF includes immediate deflection "
+                    "from permanent load and snow only.",
+                    "Creep/final deflection is intentionally omitted from this "
+                    "PDF; it remains included in the conservative terminal "
+                    "check.",
+                    "The calculation does not replace project-specific "
+                    "structural design. Verify load combinations, national "
+                    "annex choices, stability, notches, connections, fire, "
+                    "moisture, and local load effects.",
+                ),
+            ),
+        ),
+    )
+
+    add_roof_load_table(
+        report,
+        roof_layers_kg_m2,
+        snow_load_kn_m2=snow_load,
+    )
+
+    for name, supplied_span_m, angle_degrees, check in rafter_checks:
+        span_m = _positive(supplied_span_m, f"{name} support span")
+        angle = _roof_angle(angle_degrees)
+        result = check.rafter
+        layer_transverse_n_per_m = (
+            check.permanent_transverse_n_per_m
+            - result.self_transverse_n_per_m
+        )
+        design_strength_multiplier = (
+            TIMBER_MODIFICATION_FACTOR / TIMBER_MATERIAL_PARTIAL_FACTOR
+        )
+        bending_strength_mpa = (
+            C24_BENDING_STRENGTH_MPA * design_strength_multiplier
+        )
+        shear_strength_mpa = (
+            C24_SHEAR_STRENGTH_MPA * design_strength_multiplier
+        )
+        bearing_strength_mpa = (
+            C24_COMPRESSION_PERPENDICULAR_MPA
+            * design_strength_multiplier
+            * BEARING_STRENGTH_FACTOR
+        )
+        bearing_area_m2 = width_m * BEARING_LENGTH_MM / 1000
+
+        case_name_cz = _REPORT_CASE_NAMES_CZ.get(name, name)
+        governing_strength_check_cz = _REPORT_STRENGTH_CHECK_NAMES_CZ.get(
+            check.governing_strength_check,
+            check.governing_strength_check,
+        )
+        report.add_sections(
+            f"Krokev – {case_name_cz}",
+            (
+                (
+                    "Geometrie a průřezové charakteristiky",
+                    (
+                        f"Rozpětí mezi podporami L = {span_m:.3f} m podél krokve",
+                        f"Sklon střechy α = {angle:.2f}°; cos α = "
+                        f"{result.roof_cosine:.5f}",
+                        f"b = {width_m:.3f} m; h = {height_m:.3f} m",
+                        f"I = b h³ / 12 = "
+                        f"{result.second_moment_m4:.8e} m⁴",
+                        f"W = b h² / 6 = "
+                        f"{result.section_modulus_m3:.8e} m³",
+                    ),
+                ),
+                (
+                    "Charakteristická liniová zatížení kolmá ke krokvi",
+                    (
+                        "Všechna níže uvedená zatížení působí kolmo na krokev.",
+                        f"Stálé plošné zatížení střešních vrstev gk = "
+                        f"{roof_layer_surface_load_kn_m2:.3f} kN/m² "
+                        f"({known_layer_total_kg_m2:.1f} kg/m²).",
+                        f"Osová vzdálenost krokví a = {spacing_m:.3f} m.",
+                        "Pro jednu krokev tedy použijeme liniové zatížení "
+                        "vrstev kolmé ke krokvi:",
+                        f"qG,k,vrstvy = gk × a × cos α = "
+                        f"{roof_layer_surface_load_kn_m2:.3f} × "
+                        f"{spacing_m:.3f} × {result.roof_cosine:.5f} = "
+                        f"{layer_transverse_n_per_m / 1000:.3f} kN/m.",
+                        f"Vlastní tíha krokve qG,k,krokev = "
+                        f"{width_m:.3f} × {height_m:.3f} × "
+                        f"{density:.1f} × g × cos α = "
+                        f"{result.self_transverse_n_per_m / 1000:.3f} kN/m.",
+                        f"Stálé liniové zatížení celkem qG,k = "
+                        f"{check.permanent_transverse_n_per_m / 1000:.3f} "
+                        "kN/m.",
+                        f"Zatížení od sněhu qS,k = sk × a × cos² α = "
+                        f"{result.snow_transverse_n_per_m / 1000:.3f} kN/m",
+                        f"Charakteristické zatížení celkem qk = qG,k + qS,k = "
+                        f"{check.characteristic_transverse_n_per_m / 1000:.3f} "
+                        "kN/m",
+                    ),
+                ),
+                (
+                    "Okamžitý průhyb (MSP)",
+                    (
+                        "Prostě podepřený nosník s rovnoměrným zatížením:",
+                        "winst = 5 qk L⁴ / (384 E I)",
+                        f"wG,inst = "
+                        f"{check.permanent_immediate_deflection_m * 1000:.2f} "
+                        "mm",
+                        f"wS,inst = "
+                        f"{check.snow_immediate_deflection_m * 1000:.2f} mm",
+                        f"winst = "
+                        f"{check.characteristic_deflection_m * 1000:.2f} mm",
+                        f"Mezní hodnota L/{deflection_ratio:g} = "
+                        f"{result.maximum_deflection_m * 1000:.2f} mm",
+                        f"Využití = "
+                        f"{_percent(check.characteristic_deflection_utilization)} "
+                        f"({_status_cz(check.characteristic_deflection_utilization)})",
+                    ),
+                ),
+                (
+                    "Účinky návrhového zatížení (MSÚ)",
+                    (
+                        "qd = γG qG,k + γQ qS,k",
+                        f"qd = {check.design_transverse_n_per_m / 1000:.3f} "
+                        "kN/m",
+                        f"MEd = qd L² / 8 = "
+                        f"{check.design_bending_moment_nm / 1000:.3f} kNm",
+                        f"VEd = reakce = qd L / 2 = "
+                        f"{check.design_shear_force_n / 1000:.3f} kN",
+                    ),
+                ),
+                (
+                    "Návrhové únosnosti (MSÚ)",
+                    (
+                        f"fm,d = fm,k × kmod / γM = "
+                        f"{bending_strength_mpa:.2f} MPa",
+                        f"MRd = fm,d × W = "
+                        f"{check.bending_resistance_nm / 1000:.3f} kNm; "
+                        f"využití "
+                        f"{_percent(check.bending_utilization)} "
+                        f"({_status_cz(check.bending_utilization)})",
+                        f"fv,d = fv,k × kmod / γM = "
+                        f"{shear_strength_mpa:.2f} MPa; účinná šířka = "
+                        f"{SHEAR_EFFECTIVE_WIDTH_FACTOR:g} b",
+                        f"VRd = fv,d × kcr b h / 1.5 = "
+                        f"{check.shear_resistance_n / 1000:.3f} kN; "
+                        f"využití {_percent(check.shear_utilization)} "
+                        f"({_status_cz(check.shear_utilization)})",
+                        f"fc,90,d = {bearing_strength_mpa:.2f} MPa; "
+                        f"plocha uložení = {bearing_area_m2 * 1e6:.0f} mm²",
+                        f"Rc,90,d = fc,90,d × A = "
+                        f"{check.bearing_resistance_n / 1000:.3f} kN; "
+                        f"využití {_percent(check.bearing_utilization)} "
+                        f"({_status_cz(check.bearing_utilization)})",
+                    ),
+                ),
+                (
+                    "Výsledek posouzení",
+                    (
+                        f"{_rafter_report_case_status_cz(check)}",
+                        f"Rozhodující posouzení MSÚ: "
+                        f"{governing_strength_check_cz}, "
+                        f"{_percent(check.governing_strength_utilization)}",
+                    ),
+                ),
+            ),
+            footer_title="Předběžný statický výpočet střechy",
+            page_label="Strana",
+            continuation_label="pokračování",
+        )
+
+
+def generate_rafter_report(
+    path: str | Path,
+    *,
+    width_mm: float,
+    height_mm: float,
+    rafter_spacing_m: float,
+    deflection_ratio: float,
+    elastic_modulus_gpa: float,
+    timber_density_kg_m3: float,
+    snow_load_kn_m2: float,
+    roof_layers_kg_m2: Mapping[str, float | None],
+    rafter_checks: Sequence[RafterReportCase],
+) -> int:
+    """Write one rafter report and return its number of pages."""
+    with CalculationReport(
+        path,
+        document_title="Preliminary roof structural calculation",
+    ) as report:
+        add_rafter_report(
+            report,
+            width_mm=width_mm,
+            height_mm=height_mm,
+            rafter_spacing_m=rafter_spacing_m,
+            deflection_ratio=deflection_ratio,
+            elastic_modulus_gpa=elastic_modulus_gpa,
+            timber_density_kg_m3=timber_density_kg_m3,
+            snow_load_kn_m2=snow_load_kn_m2,
+            roof_layers_kg_m2=roof_layers_kg_m2,
+            rafter_checks=rafter_checks,
+        )
+        return report.page_count
 
 def _overall_result(
     rafter_checks: list[tuple[str, float, float, RoofCheckResult]],
@@ -1884,6 +2686,13 @@ def _print_independent_purlin_spans(
 
 def main() -> None:
     arguments = _parser().parse_args()
+    assert_terminal_inputs_are_conservative(
+        terminal_snow_load_kn_m2=arguments.snow_load,
+        report_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
+        terminal_roof_layers_kg_m2=ROOF_LAYERS_KG_M2,
+        report_roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
+    )
+
     shared_rafter_check_arguments = {
         "width_mm": arguments.width,
         "height_mm": arguments.height,
@@ -1939,6 +2748,44 @@ def main() -> None:
     purlin_check = calculate_purlin_check(
         **shared_purlin_check_arguments,
     )
+
+    report_page_count: int | None = None
+    if arguments.report is not None:
+        official_rafter_arguments = {
+            "width_mm": arguments.width,
+            "height_mm": arguments.height,
+            "deflection_ratio": arguments.deflection_ratio,
+            "elastic_modulus_gpa": arguments.modulus,
+            "timber_density_kg_m3": arguments.density,
+            "rafter_spacing_m": arguments.spacing,
+            "snow_load_kn_m2": REPORT_SNOW_LOAD_KN_M2,
+            "roof_layers_kg_m2": REPORT_ROOF_LAYERS_KG_M2,
+        }
+        official_rafter_checks = [
+            (
+                name,
+                span,
+                angle,
+                calculate_roof_check(
+                    support_span_m=span,
+                    roof_angle_degrees=angle,
+                    **official_rafter_arguments,
+                ),
+            )
+            for name, span, angle in roof_cases
+        ]
+        report_page_count = generate_rafter_report(
+            arguments.report,
+            width_mm=arguments.width,
+            height_mm=arguments.height,
+            rafter_spacing_m=arguments.spacing,
+            deflection_ratio=arguments.deflection_ratio,
+            elastic_modulus_gpa=arguments.modulus,
+            timber_density_kg_m3=arguments.density,
+            snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
+            roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
+            rafter_checks=official_rafter_checks,
+        )
 
     print(
         f"Shared rafter: {arguments.width:g} × {arguments.height:g} mm, "
@@ -2046,6 +2893,13 @@ def main() -> None:
         f"{_independent_purlin_status(purlin_check)}"
     )
 
+
+    if arguments.report is not None:
+        print()
+        print(
+            f"OFFICIAL RAFTER REPORT: {arguments.report} "
+            f"({report_page_count} pages)"
+        )
 
 if __name__ == "__main__":
     main()

@@ -2,6 +2,8 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from math import cos, radians
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from rafter_load import (
@@ -12,10 +14,16 @@ from rafter_load import (
     PURLIN_SPANS_M,
     PURLIN_SUPPORT_SPAN_M,
     PURLIN_WIDTH_MM,
+    REPORT_ROOF_LAYERS_KG_M2,
+    REPORT_SNOW_LOAD_KN_M2,
+    ROOF_LAYERS_KG_M2,
+    SNOW_LOAD_KN_M2,
+    assert_terminal_inputs_are_conservative,
     calculate_continuous_beam_response,
     calculate_rafter_load,
     calculate_purlin_check,
     calculate_roof_check,
+    generate_rafter_report,
     main,
 )
 
@@ -348,6 +356,7 @@ class RafterLoadTests(unittest.TestCase):
             "120",
             "--purlin-right-height",
             "220",
+            "--no-report",
         ]
         with patch("sys.argv", arguments), redirect_stdout(output):
             main()
@@ -395,6 +404,7 @@ class RafterLoadTests(unittest.TestCase):
             "60",
             "--purlin-height",
             "100",
+            "--no-report",
         ]
         with patch("sys.argv", arguments), redirect_stdout(output):
             main()
@@ -406,6 +416,65 @@ class RafterLoadTests(unittest.TestCase):
             "  THERE ARE FAILURES. Review the checks marked FAIL above.",
             report,
         )
+
+    def test_terminal_inputs_must_not_be_less_conservative(self) -> None:
+        self.assertGreaterEqual(
+            SNOW_LOAD_KN_M2,
+            REPORT_SNOW_LOAD_KN_M2,
+        )
+        for name, report_mass in REPORT_ROOF_LAYERS_KG_M2.items():
+            terminal_mass = ROOF_LAYERS_KG_M2[name]
+            if report_mass is not None:
+                self.assertIsNotNone(terminal_mass)
+                self.assertGreaterEqual(terminal_mass, report_mass)
+
+        assert_terminal_inputs_are_conservative(
+            terminal_snow_load_kn_m2=SNOW_LOAD_KN_M2,
+            report_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
+            terminal_roof_layers_kg_m2=ROOF_LAYERS_KG_M2,
+            report_roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
+        )
+        with self.assertRaisesRegex(AssertionError, "terminal snow load"):
+            assert_terminal_inputs_are_conservative(
+                terminal_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2 - 0.1,
+                report_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
+                terminal_roof_layers_kg_m2=ROOF_LAYERS_KG_M2,
+                report_roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
+            )
+
+    def test_generates_paginated_rafter_pdf_report(self) -> None:
+        check = calculate_roof_check(
+            width_mm=80,
+            height_mm=200,
+            support_span_m=3.85,
+            deflection_ratio=300,
+            elastic_modulus_gpa=11,
+            timber_density_kg_m3=450,
+            roof_angle_degrees=35.83,
+            rafter_spacing_m=0.825,
+            snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
+            roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
+        )
+        with TemporaryDirectory() as temporary_directory:
+            report_path = Path(temporary_directory) / "nested" / "report.pdf"
+            page_count = generate_rafter_report(
+                report_path,
+                width_mm=80,
+                height_mm=200,
+                rafter_spacing_m=0.825,
+                deflection_ratio=300,
+                elastic_modulus_gpa=11,
+                timber_density_kg_m3=450,
+                snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
+                roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
+                rafter_checks=(("Main roof", 3.85, 35.83, check),),
+            )
+
+            self.assertEqual(page_count, 3)
+            pdf_data = report_path.read_bytes()
+            self.assertTrue(pdf_data.startswith(b"%PDF-"))
+            self.assertGreater(len(pdf_data), 10_000)
+
 
     def test_roof_defaults_are_valid_inputs(self) -> None:
         self.assertGreater(DORMER_SUPPORT_SPAN_M, 0)
