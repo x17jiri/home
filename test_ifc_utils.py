@@ -6713,6 +6713,50 @@ class HouseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
             no_panel.add_lintel_legend()
 
+    def test_persists_notes_in_right_panel(self) -> None:
+        house = House("Notes")
+        drawing = house.add_drawing(
+            "Roof plan",
+            2,
+            3,
+            5,
+            5,
+            right_panel_width=65,
+        )
+
+        result = drawing.add_notes(
+            ["First note", "Second note > threshold"],
+            layout_scale=0.5,
+        )
+
+        self.assertIs(result, drawing)
+        properties = ifcopenshell.util.element.get_pset(
+            drawing.element,
+            "EPset_Drawing",
+        )
+        self.assertEqual(
+            json.loads(properties["RightPanelTables"]),
+            [
+                {
+                    "kind": "notes",
+                    "title": "POZNÁMKY",
+                    "items": [
+                        {"text": "First note"},
+                        {"text": "Second note > threshold"},
+                    ],
+                    "layout_scale": 0.5,
+                }
+            ],
+        )
+
+        no_panel = house.add_drawing("No panel", 2, 3, 5, 5)
+        with self.assertRaisesRegex(ValueError, "requires right_panel_width"):
+            no_panel.add_notes(["Note"])
+        with self.assertRaisesRegex(TypeError, "sequence of strings"):
+            drawing.add_notes("Not a list")
+        with self.assertRaisesRegex(ValueError, "at least one note"):
+            drawing.add_notes([])
+
     def test_builds_timber_schedule_from_finished_beams(self) -> None:
         house = House("Timber schedule")
         roof = house.storey("Roof", elevation=0)
@@ -8708,6 +8752,58 @@ class HouseTests(unittest.TestCase):
             self.assertIn(">1000 mm</text>", svg)
             self.assertIn(">125 mm</text>", svg)
             self.assertEqual(svg.count('class="lintel-legend-symbol"'), 2)
+
+    def test_appends_wrapped_notes_to_right_panel(self) -> None:
+        with TemporaryDirectory() as directory:
+            svg_path = Path(directory) / "drawing.svg"
+            svg_path.write_text(
+                '<svg width="160mm" height="80mm" '
+                'viewBox="0 0 160 80">\n'
+                '  <g id="model-view"/>\n'
+                "</svg>\n",
+                encoding="utf-8",
+            )
+            properties = {
+                "RightPanelWidth": 65,
+                "RightPanelTables": json.dumps(
+                    [
+                        {
+                            "kind": "notes",
+                            "title": "POZNÁMKY",
+                            "layout_scale": 0.5,
+                            "items": [
+                                {
+                                    "text": (
+                                        "Hlavní krokve které maji osovou "
+                                        "vzdálenost od sousedních krokví "
+                                        "> 75 cm musí mít pevnostní třídu "
+                                        "C24. Pro ostatní prvky dostačuje C22"
+                                    )
+                                }
+                            ],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+            }
+
+            _postprocess_right_panel(svg_path, properties)
+            _postprocess_right_panel(svg_path, properties)
+
+            svg = svg_path.read_text(encoding="utf-8")
+            self.assertEqual(svg.count('class="right-side-panel"'), 1)
+            self.assertEqual(
+                svg.count('class="right-panel-table notes-section"'),
+                1,
+            )
+            self.assertIn("POZNÁMKY", svg)
+            self.assertIn('class="notes-bullet"', svg)
+            self.assertIn("&gt;", svg)
+            self.assertIn("75 cm", svg)
+            self.assertGreaterEqual(svg.count("<tspan "), 2)
+            self.assertIn(
+                'style="font-size:1.6px">Hlavní', svg
+            )
 
     def test_appends_timber_schedule_to_right_panel(self) -> None:
         with TemporaryDirectory() as directory:

@@ -1,34 +1,35 @@
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
-from math import cos, radians
+from math import cos, radians, sin
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
-
 from rafter_load import (
-    DORMER_ROOF_ANGLE_DEGREES,
-    DORMER_SUPPORT_SPAN_M,
     GRAVITY_M_S2,
-    PURLIN_HEIGHT_MM,
-    PURLIN_SPANS_M,
-    PURLIN_SUPPORT_SPAN_M,
-    PURLIN_WIDTH_MM,
-    REPORT_ROOF_LAYERS_KG_M2,
-    REPORT_SNOW_LOAD_KN_M2,
     ROOF_LAYERS_KG_M2,
     SNOW_LOAD_KN_M2,
-    assert_terminal_inputs_are_conservative,
+    _status,
+    _status_cz,
     calculate_continuous_beam_response,
     calculate_rafter_load,
     calculate_purlin_check,
+    check_continuous_purlin,
     calculate_roof_check,
-    generate_rafter_report,
-    main,
+    calculation_report,
+    check_purlin,
+    check_rafter,
 )
 
 
 class RafterLoadTests(unittest.TestCase):
+    def test_utilization_must_be_strictly_below_one(self) -> None:
+        self.assertEqual(_status(0.999), "PASS")
+        self.assertEqual(_status(1.0), "FAIL")
+        self.assertEqual(_status(1.001), "FAIL")
+        self.assertEqual(_status_cz(0.999), "VYHOVUJE")
+        self.assertEqual(_status_cz(1.0), "NEVYHOVUJE")
+        self.assertEqual(_status_cz(1.001), "NEVYHOVUJE")
+
     def test_calculates_deflection_limited_uniform_load(self) -> None:
         result = calculate_rafter_load(
             width_mm=80,
@@ -145,6 +146,18 @@ class RafterLoadTests(unittest.TestCase):
         expected_permanent = (
             check.rafter.self_transverse_n_per_m + layer_transverse
         )
+        bearing_angle = radians(90 - 36.65)
+        compression_parallel_pa = (
+            21.0 * 1e6 * 0.8 / 1.3
+        )
+        compression_perpendicular_pa = (
+            2.5 * 1e6 * 0.8 / 1.3
+        )
+        expected_bearing_strength_pa = compression_parallel_pa / (
+            compression_parallel_pa / compression_perpendicular_pa
+            * sin(bearing_angle) ** 2
+            + cos(bearing_angle) ** 2
+        )
         self.assertEqual(check.roof_layer_mass_kg_m2, 70)
         self.assertEqual(check.missing_roof_layers, ())
         self.assertAlmostEqual(
@@ -163,7 +176,55 @@ class RafterLoadTests(unittest.TestCase):
         )
         self.assertGreater(check.bending_resistance_nm, 0)
         self.assertGreater(check.shear_resistance_n, 0)
+        self.assertAlmostEqual(check.bearing_angle_degrees, 90 - 36.65)
+        self.assertAlmostEqual(
+            check.design_support_reaction_n,
+            check.design_shear_force_n / cosine,
+        )
+        self.assertAlmostEqual(
+            check.design_bearing_strength_pa,
+            expected_bearing_strength_pa,
+        )
+        self.assertAlmostEqual(
+            check.bearing_area_m2,
+            0.08 * 50 / 1000,
+        )
+        self.assertAlmostEqual(
+            check.bearing_resistance_n,
+            expected_bearing_strength_pa * check.bearing_area_m2,
+        )
+        self.assertAlmostEqual(
+            check.bearing_utilization,
+            check.design_support_reaction_n / check.bearing_resistance_n,
+        )
         self.assertGreater(check.bearing_resistance_n, 0)
+
+    def test_rafter_bearing_length_is_configurable(self) -> None:
+        shared_arguments = {
+            "width_mm": 80,
+            "height_mm": 180,
+            "support_span_m": 3.75,
+            "deflection_ratio": 300,
+            "elastic_modulus_gpa": 11,
+            "roof_angle_degrees": 36.65,
+            "rafter_spacing_m": 0.8,
+            "snow_load_kn_m2": 1.5,
+            "roof_layers_kg_m2": {"Layers": 70},
+        }
+        default_check = calculate_roof_check(**shared_arguments)
+        double_bearing_check = calculate_roof_check(
+            **shared_arguments,
+            bearing_length_mm=2 * 50,
+        )
+
+        self.assertAlmostEqual(
+            double_bearing_check.bearing_resistance_n,
+            2 * default_check.bearing_resistance_n,
+        )
+        self.assertAlmostEqual(
+            double_bearing_check.bearing_utilization,
+            default_check.bearing_utilization / 2,
+        )
 
     def test_marks_unentered_roof_layers_as_missing(self) -> None:
         check = calculate_roof_check(
@@ -188,7 +249,6 @@ class RafterLoadTests(unittest.TestCase):
             width_mm=160,
             height_mm=280,
             support_spans_m=(3.7, 4.75, 2.75),
-            segment_sizes_mm=((120, 200), (160, 280), (100, 180)),
             upper_rafter_length_m=1.08,
             lower_rafter_span_m=3.7,
             roof_angle_degrees=35.84,
@@ -242,39 +302,33 @@ class RafterLoadTests(unittest.TestCase):
         self.assertLess(min(check.design_response.support_moments_nm), 0)
         self.assertEqual(len(check.final_deflection_utilizations), 3)
         self.assertEqual(check.missing_roof_layers, ("Unknown",))
-        self.assertEqual(len(check.independent_spans), 3)
-        self.assertEqual(
-            tuple(
-                (span.width_mm, span.height_mm)
-                for span in check.independent_spans
-            ),
-            ((120, 200), (160, 280), (100, 180)),
-        )
-        self.assertAlmostEqual(
-            check.purlin_self_mass_kg_m,
-            450 * 0.16 * 0.28,
-        )
-        self.assertAlmostEqual(
-            check.independent_spans[0].self_mass_kg_m,
-            450 * 0.12 * 0.20,
-        )
-        self.assertAlmostEqual(
-            check.independent_spans[0].bending_resistance_nm
-            / check.independent_spans[1].bending_resistance_nm,
-            (0.12 * 0.20**2) / (0.16 * 0.28**2),
-        )
-        self.assertAlmostEqual(
-            check.independent_spans[0].bearing_resistance_n
-            / check.independent_spans[1].bearing_resistance_n,
-            0.12 / 0.16,
+
+
+    def test_simple_purlin_is_one_simply_supported_span(self) -> None:
+        span = 4.75
+        check = calculate_purlin_check(
+            width_mm=160,
+            height_mm=280,
+            support_spans_m=(span,),
+            upper_rafter_length_m=1.08,
+            lower_rafter_span_m=3.7,
+            roof_angle_degrees=35.84,
+            rafter_width_mm=100,
+            rafter_height_mm=180,
+            rafter_spacing_m=0.82,
+            deflection_ratio=300,
+            elastic_modulus_gpa=11,
+            snow_load_kn_m2=1.7,
+            roof_layers_kg_m2={"Layers": 100},
+            additional_permanent_load_kn_m=0.2,
+            timber_density_kg_m3=450,
+            bearing_length_mm=120,
         )
 
-        independent = check.independent_longest_span
-        independent_span = 4.75
-        design_line_load_kn_m = (
+        design_line_load_n_m = (
             1.35 * check.permanent_line_load_kn_m
             + 1.5 * check.roof_snow_line_load_kn_m
-        )
+        ) * 1000
         second_moment_m4 = 0.16 * 0.28**3 / 12
         expected_immediate_deflection = (
             5
@@ -283,26 +337,23 @@ class RafterLoadTests(unittest.TestCase):
                 + check.roof_snow_line_load_kn_m
             )
             * 1000
-            * independent_span**4
+            * span**4
             / (384 * 11e9 * second_moment_m4)
         )
-        self.assertEqual(independent.span_m, independent_span)
-        self.assertEqual(independent.bearing_length_mm, 120)
+
+        self.assertEqual(check.span_lengths_m, (span,))
+        self.assertEqual(check.design_response.support_moments_nm, (0.0, 0.0))
         self.assertAlmostEqual(
-            independent.immediate_deflection_m,
+            check.immediate_response.span_max_abs_deflections_m[0],
             expected_immediate_deflection,
         )
         self.assertAlmostEqual(
-            independent.design_bending_moment_nm,
-            design_line_load_kn_m * 1000 * independent_span**2 / 8,
+            check.design_response.span_positive_moments_nm[0],
+            design_line_load_n_m * span**2 / 8,
         )
         self.assertAlmostEqual(
-            independent.design_support_reaction_n,
-            design_line_load_kn_m * 1000 * independent_span / 2,
-        )
-        self.assertAlmostEqual(
-            independent.bearing_resistance_n,
-            check.bearing_resistance_n / 2,
+            max(check.design_response.support_reactions_n),
+            design_line_load_n_m * span / 2,
         )
 
     def test_continuous_beam_matches_two_equal_span_solution(self) -> None:
@@ -332,161 +383,149 @@ class RafterLoadTests(unittest.TestCase):
             5 * load * span / 4,
         )
 
-    def test_main_checks_main_and_dormer_with_shared_parameters(self) -> None:
+    def test_check_calls_print_and_append_the_same_results(self) -> None:
         output = StringIO()
-        arguments = [
-            "rafter_load.py",
-            "--width",
-            "100",
-            "--height",
-            "180",
-            "--span",
-            "3.75",
-            "--angle",
-            "36.65",
-            "--dormer-span",
-            "3.1",
-            "--dormer-angle",
-            "17.03",
-            "--purlin-left-width",
-            "140",
-            "--purlin-left-height",
-            "240",
-            "--purlin-right-width",
-            "120",
-            "--purlin-right-height",
-            "220",
-            "--no-report",
-        ]
-        with patch("sys.argv", arguments), redirect_stdout(output):
-            main()
-
-        report = output.getvalue()
-        self.assertIn("Shared rafter: 100 × 180 mm", report)
-        self.assertIn("Main roof:\n  Support span: 3.75 m", report)
-        self.assertIn(
-            "Dormer roof:\n  Support span: 3.1 m; roof angle: 17.03°",
-            report,
-        )
-        self.assertIn("Governing rafter cases:", report)
-        self.assertIn(
-            "Continuous purlin section (middle-segment size): "
-            f"{PURLIN_WIDTH_MM:g} × "
-            f"{PURLIN_HEIGHT_MM:g} mm",
-            report,
-        )
-        self.assertIn("Street-side continuous purlin:", report)
-        self.assertIn("Independent purlin pieces:", report)
-        self.assertIn("Segment 1: 3.74 m, 140 × 240 mm", report)
-        self.assertIn(
-            f"Segment 2: 4.8 m, {PURLIN_WIDTH_MM:g} × "
-            f"{PURLIN_HEIGHT_MM:g} mm",
-            report,
-        )
-        self.assertIn("Segment 3: 2.75 m, 120 × 220 mm", report)
-        self.assertIn("SPLIT OPTION RESULT:", report)
-        self.assertNotIn("Dormer roof onto purlin:", report)
-        self.assertIn("Support moments:", report)
-        self.assertIn(
-            "OVERALL RESULT FOR RAFTERS AND CONTINUOUS PURLIN:",
-            report,
-        )
-
-    def test_main_reports_failures_in_overall_result(self) -> None:
-        output = StringIO()
-        arguments = [
-            "rafter_load.py",
-            "--width",
-            "40",
-            "--height",
-            "80",
-            "--purlin-width",
-            "60",
-            "--purlin-height",
-            "100",
-            "--no-report",
-        ]
-        with patch("sys.argv", arguments), redirect_stdout(output):
-            main()
-
-        report = output.getvalue()
-        self.assertIn("FAIL", report)
-        self.assertIn(
-            "OVERALL RESULT FOR RAFTERS AND CONTINUOUS PURLIN:\n"
-            "  THERE ARE FAILURES. Review the checks marked FAIL above.",
-            report,
-        )
-
-    def test_terminal_inputs_must_not_be_less_conservative(self) -> None:
-        self.assertGreaterEqual(
-            SNOW_LOAD_KN_M2,
-            REPORT_SNOW_LOAD_KN_M2,
-        )
-        for name, report_mass in REPORT_ROOF_LAYERS_KG_M2.items():
-            terminal_mass = ROOF_LAYERS_KG_M2[name]
-            if report_mass is not None:
-                self.assertIsNotNone(terminal_mass)
-                self.assertGreaterEqual(terminal_mass, report_mass)
-
-        assert_terminal_inputs_are_conservative(
-            terminal_snow_load_kn_m2=SNOW_LOAD_KN_M2,
-            report_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
-            terminal_roof_layers_kg_m2=ROOF_LAYERS_KG_M2,
-            report_roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
-        )
-        with self.assertRaisesRegex(AssertionError, "terminal snow load"):
-            assert_terminal_inputs_are_conservative(
-                terminal_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2 - 0.1,
-                report_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
-                terminal_roof_layers_kg_m2=ROOF_LAYERS_KG_M2,
-                report_roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
-            )
-
-    def test_generates_paginated_rafter_pdf_report(self) -> None:
-        check = calculate_roof_check(
-            width_mm=80,
-            height_mm=200,
-            support_span_m=3.85,
-            deflection_ratio=300,
-            elastic_modulus_gpa=11,
-            timber_density_kg_m3=450,
-            roof_angle_degrees=35.83,
-            rafter_spacing_m=0.825,
-            snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
-            roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
-        )
         with TemporaryDirectory() as temporary_directory:
-            report_path = Path(temporary_directory) / "nested" / "report.pdf"
-            page_count = generate_rafter_report(
-                report_path,
-                width_mm=80,
-                height_mm=200,
-                rafter_spacing_m=0.825,
-                deflection_ratio=300,
-                elastic_modulus_gpa=11,
-                timber_density_kg_m3=450,
-                snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
-                roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
-                rafter_checks=(("Main roof", 3.85, 35.83, check),),
-            )
+            report_path = Path(temporary_directory) / "roof.pdf"
+            with redirect_stdout(output):
+                with calculation_report(report_path):
+                    c22_rafter = check_rafter(
+                        title="Krokve C22",
+                        material="c22",
+                        width=0.08,
+                        height=0.20,
+                        span=3.85,
+                        spacing=0.75,
+                        roof_angle=35.83,
+                        max_deflection=300,
+                        snow_load=1.5,
+                        roof_layers={"Layers": 130},
+                    )
+                    c24_rafter = check_rafter(
+                        title="Krokve C24",
+                        material="c24",
+                        width=0.08,
+                        height=0.20,
+                        span=3.85,
+                        spacing=0.75,
+                        roof_angle=35.83,
+                        max_deflection=300,
+                        snow_load=1.5,
+                        roof_layers={"Layers": 130},
+                    )
+                    purlin = check_purlin(
+                        title="Vaznice C22",
+                        material="c22",
+                        width=0.24,
+                        height=0.32,
+                        span=4.80,
+                        rafter_length_above=1.05,
+                        lower_rafter_span=3.85,
+                        roof_angle=35.83,
+                        rafter_width=0.08,
+                        rafter_height=0.20,
+                        rafter_spacing=0.75,
+                        max_deflection=300,
+                        snow_load=1.5,
+                        roof_layers={"Layers": 130},
+                        bearing_length=0.12,
+                    )
+                    continuous_purlin = check_continuous_purlin(
+                        title="Souvislá vaznice C22",
+                        material="c22",
+                        width=0.24,
+                        height=0.32,
+                        spans=(3.74, 4.80, 2.75),
+                        rafter_length_above=1.05,
+                        lower_rafter_span=3.85,
+                        roof_angle=35.83,
+                        rafter_width=0.08,
+                        rafter_height=0.20,
+                        rafter_spacing=0.75,
+                        max_deflection=300,
+                        snow_load=1.5,
+                        roof_layers={"Layers": 130},
+                        bearing_length=0.24,
+                    )
 
-            self.assertEqual(page_count, 4)
-            pdf_data = report_path.read_bytes()
-            self.assertTrue(pdf_data.startswith(b"%PDF-"))
-            self.assertGreater(len(pdf_data), 10_000)
+            terminal = output.getvalue()
+            self.assertIn("Krokve C22:", terminal)
+            self.assertIn("Krokve C24:", terminal)
+            self.assertIn("Vaznice C22:", terminal)
+            self.assertIn("Souvislá vaznice C22:", terminal)
+            self.assertIn("Final deflection with k_def=0.8", terminal)
+            self.assertNotIn("Independent purlin pieces:", terminal)
+            self.assertIn("OVERALL RESULT:", terminal)
+            self.assertIn("PDF REPORT:", terminal)
+            self.assertTrue(report_path.read_bytes().startswith(b"%PDF-"))
+            self.assertGreater(report_path.stat().st_size, 10_000)
 
+        self.assertAlmostEqual(c22_rafter.rafter.self_mass_kg_per_m, 7.2)
+        self.assertGreater(
+            c24_rafter.bending_resistance_nm,
+            c22_rafter.bending_resistance_nm,
+        )
+        self.assertLess(
+            c24_rafter.characteristic_deflection_m,
+            c22_rafter.characteristic_deflection_m,
+        )
+        self.assertAlmostEqual(
+            purlin.roof_snow_line_load_kn_m,
+            1.5 * purlin.tributary_horizontal_width_m,
+        )
+        self.assertEqual(purlin.span_lengths_m, (4.8,))
+        self.assertEqual(
+            continuous_purlin.span_lengths_m,
+            (3.74, 4.8, 2.75),
+        )
 
-    def test_roof_defaults_are_valid_inputs(self) -> None:
-        self.assertGreater(DORMER_SUPPORT_SPAN_M, 0)
-        self.assertGreater(DORMER_ROOF_ANGLE_DEGREES, 0)
+    def test_checks_require_one_consistent_report_context(self) -> None:
+        arguments = {
+            "title": "Krokve",
+            "material": "c22",
+            "width": 0.08,
+            "height": 0.20,
+            "span": 3.85,
+            "spacing": 0.75,
+            "roof_angle": 35.83,
+            "max_deflection": 300,
+            "snow_load": 1.5,
+            "roof_layers": {"Layers": 130},
+        }
+        with self.assertRaisesRegex(RuntimeError, "calculation_report"):
+            check_rafter(**arguments)
 
-    def test_purlin_defaults_match_the_modeled_beam(self) -> None:
-        self.assertGreater(PURLIN_WIDTH_MM, 0)
-        self.assertGreater(PURLIN_HEIGHT_MM, 0)
-        self.assertEqual(PURLIN_SPANS_M[1], PURLIN_SUPPORT_SPAN_M)
-        self.assertEqual(len(PURLIN_SPANS_M), 3)
-        self.assertTrue(all(span > 0 for span in PURLIN_SPANS_M))
+        with TemporaryDirectory() as temporary_directory:
+            report_path = Path(temporary_directory) / "roof.pdf"
+            with redirect_stdout(StringIO()):
+                with calculation_report(report_path):
+                    check_rafter(**arguments)
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "same snow_load",
+                    ):
+                        check_rafter(
+                            **{
+                                **arguments,
+                                "title": "Jiná krokev",
+                                "snow_load": 1.6,
+                            }
+                        )
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "unknown timber material",
+                    ):
+                        check_rafter(
+                            **{
+                                **arguments,
+                                "title": "Neznámý materiál",
+                                "material": "c99",
+                            }
+                        )
 
-
+    def test_project_uses_one_snow_load(self) -> None:
+        self.assertEqual(SNOW_LOAD_KN_M2, 1.5)
 if __name__ == "__main__":
+
+
     unittest.main()

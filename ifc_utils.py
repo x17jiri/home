@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
+from textwrap import wrap
 from time import monotonic
 from typing import Literal, Sequence, TypeAlias
 
@@ -3066,6 +3067,126 @@ def _lintel_legend_svg(
     return "\n    ".join(parts), height
 
 
+def _notes_svg(
+    table: Mapping[str, object],
+    *,
+    x: float,
+    y: float,
+    width: float,
+    units_per_mm: float,
+    layout_scale: float | None = None,
+) -> tuple[str, float]:
+    """Return one automatically wrapped notes section and its SVG height."""
+    title = str(table.get("title", "POZNÁMKY"))
+    supplied_items = table.get("items", [])
+    items = supplied_items if isinstance(supplied_items, list) else []
+    width_mm = width / units_per_mm
+    if layout_scale is None:
+        layout_scale = min(1.0, width_mm / 90.0)
+    requested_layout_scale = table.get("layout_scale")
+    if (
+        isinstance(requested_layout_scale, (int, float))
+        and not isinstance(requested_layout_scale, bool)
+        and requested_layout_scale > 0
+    ):
+        layout_scale = min(layout_scale, float(requested_layout_scale))
+
+    body_font_size = 3.2 * layout_scale
+    padding_mm = 2.0 * layout_scale
+    bullet_indent_mm = 3.5 * layout_scale
+    line_height_mm = 4.4 * layout_scale
+    item_gap_mm = 1.5 * layout_scale
+    available_text_width_mm = max(
+        1.0,
+        width_mm - 2 * padding_mm - bullet_indent_mm,
+    )
+    approximate_character_width_mm = max(0.1, body_font_size * 0.55)
+    wrap_width = max(
+        12,
+        int(available_text_width_mm / approximate_character_width_mm),
+    )
+
+    normalised_items: list[list[str]] = []
+    for supplied_item in items:
+        if not isinstance(supplied_item, dict):
+            continue
+        text = str(supplied_item.get("text", ""))
+        lines: list[str] = []
+        for paragraph in text.splitlines() or [""]:
+            lines.extend(
+                wrap(
+                    paragraph,
+                    width=wrap_width,
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+                or [""]
+            )
+        normalised_items.append(lines)
+
+    u = units_per_mm
+    title_height = 11.0 * layout_scale * u
+    padding = padding_mm * u
+    bullet_indent = bullet_indent_mm * u
+    line_height = line_height_mm * u
+    item_gap = item_gap_mm * u
+    body_height = (
+        2 * padding
+        + sum(len(lines) * line_height for lines in normalised_items)
+        + max(0, len(normalised_items) - 1) * item_gap
+    )
+    height = title_height + body_height
+    right = x + width
+    title_bottom = y + title_height
+    parts = [
+        '<g class="right-panel-table notes-section">',
+        (
+            f'<rect class="right-panel-table-outline" x="{x:.6g}" '
+            f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
+        ),
+        (
+            f'<text class="right-panel-table-title" '
+            f'x="{x + width / 2:.6g}" '
+            f'y="{y + title_height / 2:.6g}" text-anchor="middle" '
+            f'dominant-baseline="middle" '
+            f'style="font-size:{5.0 * layout_scale:.6g}px">'
+            f'{escape(title)}</text>'
+        ),
+        (
+            f'<line class="right-panel-table-grid" x1="{x:.6g}" '
+            f'y1="{title_bottom:.6g}" x2="{right:.6g}" '
+            f'y2="{title_bottom:.6g}"/>'
+        ),
+    ]
+
+    item_y = title_bottom + padding
+    text_x = x + padding + bullet_indent
+    for lines in normalised_items:
+        first_baseline = item_y + 0.8 * line_height
+        parts.append(
+            f'<text class="notes-bullet" x="{x + padding:.6g}" '
+            f'y="{first_baseline:.6g}" dominant-baseline="auto" '
+            f'style="font-size:{body_font_size:.6g}px">•</text>'
+        )
+        tspans = "".join(
+            (
+                f'<tspan x="{text_x:.6g}" '
+                f'y="{first_baseline + index * line_height:.6g}" '
+                f'style="font-size:{body_font_size:.6g}px">'
+                f'{escape(line)}</tspan>'
+            )
+            for index, line in enumerate(lines)
+        )
+        parts.append(
+            f'<text class="notes-text" '
+            f'style="font-size:{body_font_size:.6g}px">{tspans}</text>'
+        )
+        item_y += len(lines) * line_height + item_gap
+
+    parts.append("</g>")
+    return "\n    ".join(parts), height
+
+
 def _miako_beam_schedule_svg(
     table: Mapping[str, object],
     *,
@@ -3537,6 +3658,7 @@ def _postprocess_right_panel(
             "material_legend": _material_legend_svg,
             "room_legend": _room_legend_svg,
             "lintel_legend": _lintel_legend_svg,
+            "notes": _notes_svg,
             "miako_beam_schedule": _miako_beam_schedule_svg,
             "timber_schedule": _timber_schedule_svg,
         }.get(table.get("kind"))
@@ -8353,6 +8475,63 @@ class Drawing:
             },
         )
         return self
+
+    def add_notes(
+        self,
+        notes: Sequence[str],
+        *,
+        title: str = "POZNÁMKY",
+        layout_scale: Number | None = None,
+    ) -> Drawing:
+        """Add an automatically wrapped bulleted notes section to the panel."""
+        if self.right_panel_width <= 0:
+            raise ValueError(
+                "add_notes requires right_panel_width on the drawing"
+            )
+        if self.right_panel_width < 40:
+            raise ValueError(
+                "right_panel_width must be at least 40 mm for notes"
+            )
+        title = _name(title, "title")
+        if layout_scale is not None:
+            layout_scale = _number(layout_scale, "layout_scale")
+            if not 0 < layout_scale <= 1:
+                raise ValueError(
+                    "layout_scale must be greater than 0 and at most 1"
+                )
+        if isinstance(notes, (str, bytes)):
+            raise TypeError("notes must be a sequence of strings")
+        try:
+            supplied_notes = list(notes)
+        except TypeError as error:
+            raise TypeError("notes must be a sequence of strings") from error
+        if not supplied_notes:
+            raise ValueError("notes must contain at least one note")
+
+        items = [
+            {"text": _name(note, f"note {index}")}
+            for index, note in enumerate(supplied_notes, start=1)
+        ]
+        table: dict[str, object] = {
+            "kind": "notes",
+            "title": title,
+            "items": items,
+        }
+        if layout_scale is not None:
+            table["layout_scale"] = layout_scale
+        self._right_panel_tables.append(table)
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model,
+            pset=self._drawing_pset,
+            properties={
+                "RightPanelTables": json.dumps(
+                    self._right_panel_tables,
+                    ensure_ascii=False,
+                )
+            },
+        )
+        return self
+
 
     def add_miako_beam_schedule(
         self,

@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """Preliminary checks of the roof rafters and their supporting purlin.
 
-Edit the values in the USER INPUTS section or pass command-line overrides.
-Rafters are treated as simply supported beams. The street-side purlin is
-checked both as one continuous beam over four supports and, as an alternative,
-as separate simply supported pieces. It is a quick comparison tool, not a
-structural design.
+Edit the check calls in ``main()`` to describe each structural member.
+Rafters are treated as simply supported beams. Purlins can be checked either
+as individual simply supported pieces or as one uniform continuous member over
+four supports. It is a quick comparison tool, not a structural design.
 """
 
 from __future__ import annotations
 
-import argparse
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
-from math import cos, isfinite, radians
+from math import cos, isfinite, radians, sin
 from pathlib import Path
 from textwrap import wrap
 from typing import TypeAlias
@@ -22,50 +21,16 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
 
-# USER INPUTS
-RAFTER_WIDTH_MM = 80.0
-RAFTER_HEIGHT_MM = 200.0
+# Shared project inputs used by the checks in main().
+ROOF_ANGLE_DEGREES = 35.83
 MAX_DEFLECTION_RATIO = 300.0  # 300 means L/300
-RAFTER_SPACING_M = 0.9
+SNOW_LOAD_KN_M2 = 1.7  # vertical load per horizontal roof projection
 
-PURLIN_SUPPORT_SPAN_M = 4.8  # middle span; retained as a convenient input
-if 1:
-  SUPPORT_SPAN_M = 3.85
-  ROOF_ANGLE_DEGREES = 35.83
-  DORMER_SUPPORT_SPAN_M = 3.25
-  DORMER_ROOF_ANGLE_DEGREES = 17.22
-  RAFTER_LENGTH_ABOVE_PURLIN_M = 1.05
-  PURLIN_SPANS_M = (3.740, 4.8, 2.750)
-
-# RAFTER_LENGTH_ABOVE_PURLIN_M is the part assigned to one purlin by the user;
-# copy the geometry-derived value printed by house_ifc.py when it changes.
-# RAFTER_LENGTH_ABOVE_PURLIN_M is measured along the main roof slope, from the
-# purlin support towards the ridge.
-# Width × height for the left, middle, and right purlin segments. The
-# continuous-purlin alternative uses the middle size for the entire member;
-# the split-purlin alternative uses all three sizes independently.
-PURLIN_SEGMENT_SIZES_MM = (
-    (240.0, 240.0),
-    (240.0, 320.0),
-    (240.0, 240.0),
-)
-PURLIN_WIDTH_MM, PURLIN_HEIGHT_MM = PURLIN_SEGMENT_SIZES_MM[1]
-PURLIN_BEARING_LENGTH_MM = 240.0
-
-# Add any permanent vertical line load carried by the purlin but not included
-# in ROOF_LAYERS_KG_M2, for example a ceiling/collar-tie load whose load path
-# really terminates at the purlin.
-PURLIN_ADDITIONAL_PERMANENT_LOAD_KN_M = 0.0
-
-# Conservative load used by the interactive terminal check. The official
-# report uses REPORT_SNOW_LOAD_KN_M2 below. Both are vertical roof snow loads
-# per square metre of HORIZONTAL projection. No snow shape, exposure, thermal,
-# drift, or partial-safety coefficient is applied automatically.
-SNOW_LOAD_KN_M2 = 1.7
-REPORT_SNOW_LOAD_KN_M2 = 1.5
 REPORT_SNOW_LOAD_STANDARD = "ČSN EN 1991-1-3:2005/Z1:2006"
 REPORT_SNOW_LOAD_ZONE = 3
-REPORT_PDF_PATH = "rafter_load_report.pdf"
+REPORT_BASIS_STANDARD = "ČSN EN 1990 a příslušná národní příloha"
+REPORT_TIMBER_STANDARD = "ČSN EN 1995-1-1 a příslušná národní příloha"
+REPORT_TIMBER_GRADES_STANDARD = "ČSN EN 338"
 
 # Permanent masses per square metre of ACTUAL SLOPING roof surface. Enter the
 # installed mass of every layer. Use 0 only when a listed layer is genuinely
@@ -75,51 +40,40 @@ ROOF_LAYERS_KG_M2: dict[str, float | None] = {
     "Tile battens": 5,
     "Counter battens": 5,
     "MDF": 10,
-	"vata": 20,
-	"OSB": 10,
-    "Installation battens/services": 5,
-    "Gypsum plasterboard": 30,
-}
-
-# Values stated in the formal calculation report. Keep this as a distinct set
-# even where a value currently matches the conservative terminal input, so a
-# future safety margin cannot silently alter the documented design basis.
-REPORT_ROOF_LAYERS_KG_M2: dict[str, float | None] = {
-    "Roof tiles": 45,
-    "Tile battens": 5,
-    "Counter battens": 5,
-    "MDF": 10,
     "vata": 20,
     "OSB": 10,
     "Installation battens/services": 5,
     "Gypsum plasterboard": 30,
 }
 
-# Deflection also depends on timber stiffness. 11 GPa is an illustrative
-# mean modulus for C24 timber; replace it with the value appropriate to the
-# actual species, grade, moisture condition, and load duration.
-ELASTIC_MODULUS_GPA = 11.0
-
-# Used only to subtract the rafter's own mass from the total line load.
+# Shared calculation assumptions. These are model/code properties rather than
+# project geometry, so keeping them together as constants is useful.
 TIMBER_DENSITY_KG_M3 = 450.0
-
-# Preliminary EN 1995 / C24 inputs. These are exposed rather than hidden so
-# they can be matched to the selected timber declaration and Czech National
-# Annex before treating the output as a design check.
-C24_BENDING_STRENGTH_MPA = 24.0
-C24_SHEAR_STRENGTH_MPA = 4.0
-C24_COMPRESSION_PERPENDICULAR_MPA = 2.5
 TIMBER_MATERIAL_PARTIAL_FACTOR = 1.30
 TIMBER_MODIFICATION_FACTOR = 0.80  # solid timber, service class 2, snow
 TIMBER_CREEP_FACTOR = 0.80  # k_def, solid timber, service class 2
 SNOW_CREEP_COMBINATION_FACTOR = 0.0  # psi_2; verify for the project/NA
 PERMANENT_LOAD_FACTOR = 1.35
 SNOW_LOAD_FACTOR = 1.50
-BEARING_LENGTH_MM = 160.0
 BEARING_STRENGTH_FACTOR = 1.0  # conservative k_c,90 pending support detail
 SHEAR_EFFECTIVE_WIDTH_FACTOR = 0.67  # k_cr; verify selected EC5 edition
-
 GRAVITY_M_S2 = 10.0
+
+
+@dataclass(frozen=True)
+class TimberGrade:
+    name: str
+    elastic_modulus_gpa: float
+    bending_strength_mpa: float
+    shear_strength_mpa: float
+    compression_parallel_mpa: float
+    compression_perpendicular_mpa: float
+
+
+_TIMBER_GRADES = {
+    "c22": TimberGrade("C22", 10.0, 22.0, 3.8, 20.0, 2.4),
+    "c24": TimberGrade("C24", 11.0, 24.0, 4.0, 21.0, 2.5),
+}
 
 
 @dataclass(frozen=True)
@@ -165,6 +119,9 @@ class RoofCheckResult:
     design_bending_moment_nm: float
     design_shear_force_n: float
     design_support_reaction_n: float
+    bearing_angle_degrees: float
+    design_bearing_strength_pa: float
+    bearing_area_m2: float
     bending_resistance_nm: float
     shear_resistance_n: float
     bearing_resistance_n: float
@@ -189,40 +146,10 @@ class ContinuousBeamResponse:
     span_max_abs_deflections_m: tuple[float, ...]
 
 
-@dataclass(frozen=True)
-class IndependentPurlinSpanResult:
-    """One purlin segment checked without continuity into adjacent spans."""
-
-    segment_index: int
-    span_m: float
-    width_mm: float
-    height_mm: float
-    bearing_length_mm: float
-    self_mass_kg_m: float
-    permanent_line_load_kn_m: float
-    immediate_deflection_m: float
-    final_deflection_m: float
-    deflection_limit_m: float
-    immediate_deflection_utilization: float
-    final_deflection_utilization: float
-    maximum_roof_snow_immediate_kn_m2: float
-    maximum_roof_snow_final_kn_m2: float
-    design_bending_moment_nm: float
-    design_shear_force_n: float
-    design_support_reaction_n: float
-    bending_resistance_nm: float
-    shear_resistance_n: float
-    bearing_resistance_n: float
-    bending_utilization: float
-    shear_utilization: float
-    bearing_utilization: float
-    governing_strength_check: str
-    governing_strength_utilization: float
-
 
 @dataclass(frozen=True)
 class PurlinCheckResult:
-    """Three-span street-side purlin check and its tributary roof load."""
+    """One- or three-span purlin check and its tributary roof load."""
 
     span_lengths_m: tuple[float, ...]
     upper_rafter_length_m: float
@@ -252,13 +179,7 @@ class PurlinCheckResult:
     bearing_utilization: float
     governing_strength_check: str
     governing_strength_utilization: float
-    independent_spans: tuple[IndependentPurlinSpanResult, ...]
     missing_roof_layers: tuple[str, ...]
-
-    @property
-    def independent_longest_span(self) -> IndependentPurlinSpanResult:
-        """Retain convenient access to the geometrically longest piece."""
-        return max(self.independent_spans, key=lambda result: result.span_m)
 
 
 ReportSection: TypeAlias = tuple[str, Sequence[str]]
@@ -366,7 +287,7 @@ class CalculationReport:
                 "CalculationReport must be used as a context manager"
             )
 
-        continued_title = f"{title} ({continuation_label})"
+        continued_title = None
         figure, y = self._start_page(
             title,
             footer_title=footer_title,
@@ -578,41 +499,6 @@ def _non_negative(value: float, name: str) -> float:
     return result
 
 
-def assert_terminal_inputs_are_conservative(
-    *,
-    terminal_snow_load_kn_m2: float,
-    report_snow_load_kn_m2: float,
-    terminal_roof_layers_kg_m2: Mapping[str, float | None],
-    report_roof_layers_kg_m2: Mapping[str, float | None],
-) -> None:
-    """Assert that terminal loads are no lower than documented report loads."""
-    terminal_snow = _non_negative(
-        terminal_snow_load_kn_m2,
-        "terminal_snow_load_kn_m2",
-    )
-    report_snow = _non_negative(
-        report_snow_load_kn_m2,
-        "report_snow_load_kn_m2",
-    )
-    assert terminal_snow >= report_snow, (
-        "terminal snow load must be at least the official report snow load"
-    )
-    assert terminal_roof_layers_kg_m2.keys() == (
-        report_roof_layers_kg_m2.keys()
-    ), "terminal and report roof-layer sets must contain the same layers"
-
-    for name in terminal_roof_layers_kg_m2:
-        terminal_mass = terminal_roof_layers_kg_m2[name]
-        report_mass = report_roof_layers_kg_m2[name]
-        assert (terminal_mass is None) == (report_mass is None), (
-            f'roof layer "{name}" must be specified in both load sets'
-        )
-        if terminal_mass is not None and report_mass is not None:
-            assert terminal_mass >= report_mass, (
-                f'terminal roof layer "{name}" must be at least the '
-                "official report value"
-            )
-
 def calculate_rafter_load(
     *,
     width_mm: float,
@@ -751,10 +637,13 @@ def calculate_roof_check(
     snow_load_kn_m2: float,
     roof_layers_kg_m2: Mapping[str, float | None] | None = None,
     timber_density_kg_m3: float = TIMBER_DENSITY_KG_M3,
-    bending_strength_mpa: float = C24_BENDING_STRENGTH_MPA,
-    shear_strength_mpa: float = C24_SHEAR_STRENGTH_MPA,
+    bending_strength_mpa: float = _TIMBER_GRADES["c24"].bending_strength_mpa,
+    shear_strength_mpa: float = _TIMBER_GRADES["c24"].shear_strength_mpa,
+    compression_parallel_mpa: float = (
+        _TIMBER_GRADES["c24"].compression_parallel_mpa
+    ),
     compression_perpendicular_mpa: float = (
-        C24_COMPRESSION_PERPENDICULAR_MPA
+        _TIMBER_GRADES["c24"].compression_perpendicular_mpa
     ),
     material_partial_factor: float = TIMBER_MATERIAL_PARTIAL_FACTOR,
     modification_factor: float = TIMBER_MODIFICATION_FACTOR,
@@ -762,7 +651,7 @@ def calculate_roof_check(
     snow_creep_combination_factor: float = SNOW_CREEP_COMBINATION_FACTOR,
     permanent_load_factor: float = PERMANENT_LOAD_FACTOR,
     snow_load_factor: float = SNOW_LOAD_FACTOR,
-    bearing_length_mm: float = BEARING_LENGTH_MM,
+    bearing_length_mm: float = 50.0,
     bearing_strength_factor: float = BEARING_STRENGTH_FACTOR,
     shear_effective_width_factor: float = SHEAR_EFFECTIVE_WIDTH_FACTOR,
 ) -> RoofCheckResult:
@@ -772,6 +661,9 @@ def calculate_roof_check(
     projection. Strength checks use a fundamental combination of factored
     permanent and snow actions. Final deflection applies ``k_def`` to the
     permanent action and ``psi_2 * k_def`` to snow.
+    Rafter bearing assumes a horizontal seat: the transverse beam reaction is
+    converted to its full vertical value and checked as compression at an
+    angle to the grain. The support notch itself is not checked.
     """
     rafter = calculate_rafter_load(
         width_mm=width_mm,
@@ -879,7 +771,9 @@ def calculate_roof_check(
     )
     design_bending_moment_nm = design_transverse_n_per_m * span_m**2 / 8
     design_shear_force_n = design_transverse_n_per_m * span_m / 2
-    design_support_reaction_n = design_shear_force_n
+    bearing_angle_degrees = 90 - _roof_angle(roof_angle_degrees)
+    bearing_angle_radians = radians(bearing_angle_degrees)
+    design_support_reaction_n = design_shear_force_n / rafter.roof_cosine
 
     material_partial_factor = _positive(
         material_partial_factor,
@@ -914,14 +808,36 @@ def calculate_roof_check(
     bearing_area_m2 = (
         width_m * _positive(bearing_length_mm, "bearing_length_mm") / 1000
     )
-    design_bearing_strength_pa = (
+    design_compression_parallel_pa = (
+        _positive(
+            compression_parallel_mpa,
+            "compression_parallel_mpa",
+        )
+        * 1e6
+        * design_strength_multiplier
+    )
+    design_compression_perpendicular_pa = (
         _positive(
             compression_perpendicular_mpa,
             "compression_perpendicular_mpa",
         )
         * 1e6
         * design_strength_multiplier
-        * _positive(bearing_strength_factor, "bearing_strength_factor")
+    )
+    compression_perpendicular_factor = _positive(
+        bearing_strength_factor,
+        "bearing_strength_factor",
+    )
+    design_bearing_strength_pa = design_compression_parallel_pa / (
+        (
+            design_compression_parallel_pa
+            / (
+                compression_perpendicular_factor
+                * design_compression_perpendicular_pa
+            )
+        )
+        * sin(bearing_angle_radians) ** 2
+        + cos(bearing_angle_radians) ** 2
     )
     bearing_resistance_n = design_bearing_strength_pa * bearing_area_m2
 
@@ -958,6 +874,9 @@ def calculate_roof_check(
         design_bending_moment_nm=design_bending_moment_nm,
         design_shear_force_n=design_shear_force_n,
         design_support_reaction_n=design_support_reaction_n,
+        bearing_angle_degrees=bearing_angle_degrees,
+        design_bearing_strength_pa=design_bearing_strength_pa,
+        bearing_area_m2=bearing_area_m2,
         bending_resistance_nm=bending_resistance_nm,
         shear_resistance_n=shear_resistance_n,
         bearing_resistance_n=bearing_resistance_n,
@@ -1191,11 +1110,7 @@ def calculate_purlin_check(
     *,
     width_mm: float,
     height_mm: float,
-    support_spans_m: tuple[float, float, float],
-    segment_sizes_mm: (
-        tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
-        | None
-    ) = None,
+    support_spans_m: Sequence[float],
     upper_rafter_length_m: float,
     lower_rafter_span_m: float,
     roof_angle_degrees: float,
@@ -1208,10 +1123,10 @@ def calculate_purlin_check(
     roof_layers_kg_m2: Mapping[str, float | None] | None = None,
     additional_permanent_load_kn_m: float = 0,
     timber_density_kg_m3: float = TIMBER_DENSITY_KG_M3,
-    bending_strength_mpa: float = C24_BENDING_STRENGTH_MPA,
-    shear_strength_mpa: float = C24_SHEAR_STRENGTH_MPA,
+    bending_strength_mpa: float = _TIMBER_GRADES["c24"].bending_strength_mpa,
+    shear_strength_mpa: float = _TIMBER_GRADES["c24"].shear_strength_mpa,
     compression_perpendicular_mpa: float = (
-        C24_COMPRESSION_PERPENDICULAR_MPA
+        _TIMBER_GRADES["c24"].compression_perpendicular_mpa
     ),
     material_partial_factor: float = TIMBER_MATERIAL_PARTIAL_FACTOR,
     modification_factor: float = TIMBER_MODIFICATION_FACTOR,
@@ -1219,18 +1134,17 @@ def calculate_purlin_check(
     snow_creep_combination_factor: float = SNOW_CREEP_COMBINATION_FACTOR,
     permanent_load_factor: float = PERMANENT_LOAD_FACTOR,
     snow_load_factor: float = SNOW_LOAD_FACTOR,
-    bearing_length_mm: float = PURLIN_BEARING_LENGTH_MM,
-    split_bearing_length_mm: float | None = None,
+    bearing_length_mm: float = 240.0,
     bearing_strength_factor: float = BEARING_STRENGTH_FACTOR,
     shear_effective_width_factor: float = SHEAR_EFFECTIVE_WIDTH_FACTOR,
 ) -> PurlinCheckResult:
-    """Check the street-side purlin as one continuous three-span beam.
+    """Check one simply supported span or one continuous three-span member.
 
-    Permanent load and the selected street-roof snow load are uniform over all
-    three spans. The rafter reactions are smeared into a purlin line load.
+    Loads are uniform over every span. Rafter reactions are represented as a
+    uniformly distributed purlin line load.
     """
-    if len(support_spans_m) != 3:
-        raise ValueError("support_spans_m must contain exactly three spans")
+    if len(support_spans_m) not in (1, 3):
+        raise ValueError("support_spans_m must contain one or three spans")
     spans = tuple(
         _positive(value, f"support_spans_m[{index}]")
         for index, value in enumerate(support_spans_m)
@@ -1244,45 +1158,14 @@ def calculate_purlin_check(
     spacing_m = _positive(rafter_spacing_m, "rafter_spacing_m")
     rafter_width_m = _positive(rafter_width_mm, "rafter_width_mm") / 1000
     rafter_height_m = _positive(rafter_height_mm, "rafter_height_mm") / 1000
-    default_width_mm = _positive(width_mm, "width_mm")
-    default_height_mm = _positive(height_mm, "height_mm")
-    if segment_sizes_mm is None:
-        segment_sizes = tuple(
-            (default_width_mm, default_height_mm) for _ in spans
-        )
-    else:
-        if len(segment_sizes_mm) != len(spans):
-            raise ValueError(
-                "segment_sizes_mm must contain one (width, height) pair "
-                "for every purlin span"
-            )
-        validated_segment_sizes = []
-        for index, size in enumerate(segment_sizes_mm):
-            if not isinstance(size, (tuple, list)) or len(size) != 2:
-                raise ValueError(
-                    f"segment_sizes_mm[{index}] must contain width and height"
-                )
-            validated_segment_sizes.append(
-                (
-                    _positive(size[0], f"segment_sizes_mm[{index}][0]"),
-                    _positive(size[1], f"segment_sizes_mm[{index}][1]"),
-                )
-            )
-        segment_sizes = tuple(validated_segment_sizes)
-    continuous_width_mm, continuous_height_mm = segment_sizes[1]
-    purlin_width_m = continuous_width_mm / 1000
-    purlin_height_m = continuous_height_mm / 1000
-    continuous_bearing_length_mm = _positive(
+    purlin_width_mm = _positive(width_mm, "width_mm")
+    purlin_height_mm = _positive(height_mm, "height_mm")
+    purlin_width_m = purlin_width_mm / 1000
+    purlin_height_m = purlin_height_mm / 1000
+    purlin_bearing_length_mm = _positive(
         bearing_length_mm,
         "bearing_length_mm",
     )
-    if split_bearing_length_mm is None:
-        independent_bearing_length_mm = continuous_bearing_length_mm / 2
-    else:
-        independent_bearing_length_mm = _positive(
-            split_bearing_length_mm,
-            "split_bearing_length_mm",
-        )
     density_kg_m3 = _positive(timber_density_kg_m3, "timber_density_kg_m3")
     modulus_pa = _positive(elastic_modulus_gpa, "elastic_modulus_gpa") * 1e9
     ratio = _positive(deflection_ratio, "deflection_ratio")
@@ -1456,7 +1339,7 @@ def calculate_purlin_check(
 
     bearing_resistance_n = bearing_resistance(
         purlin_width_m,
-        continuous_bearing_length_mm
+        purlin_bearing_length_mm
     )
 
     maximum_positive_moment_nm = max(
@@ -1475,192 +1358,22 @@ def calculate_purlin_check(
     )
     shear_utilization = maximum_shear_n / shear_resistance_n
     bearing_utilization = maximum_reaction_n / bearing_resistance_n
+    bending_check_name = (
+        "positive bending" if len(spans) == 3 else "bending"
+    )
     strength_utilizations = {
-        "positive bending": positive_bending_utilization,
-        "negative bending": negative_bending_utilization,
+        bending_check_name: positive_bending_utilization,
         "shear": shear_utilization,
         "bearing": bearing_utilization,
     }
+    if len(spans) == 3:
+        strength_utilizations["negative bending"] = (
+            negative_bending_utilization
+        )
     governing_strength_check = max(
         strength_utilizations,
         key=strength_utilizations.__getitem__,
     )
-
-    # Alternative construction: cut the purlin at its supports and check each
-    # piece as a simply supported beam using its own section. None of the
-    # pieces receives a continuity benefit from its neighbours.
-    independent_spans: list[IndependentPurlinSpanResult] = []
-    transferred_permanent_line_load_kn_m = (
-        (roof_layer_line_mass_kg_m + rafter_line_mass_kg_m)
-        * GRAVITY_M_S2
-        / 1000
-        + extra_line_load_kn_m
-    )
-    for index, (independent_span_m, segment_size) in enumerate(
-        zip(spans, segment_sizes),
-        start=1,
-    ):
-        segment_width_mm, segment_height_mm = segment_size
-        segment_width_m = segment_width_mm / 1000
-        segment_height_m = segment_height_mm / 1000
-        segment_self_mass_kg_m = (
-            density_kg_m3 * segment_width_m * segment_height_m
-        )
-        segment_permanent_line_load_kn_m = (
-            transferred_permanent_line_load_kn_m
-            + segment_self_mass_kg_m * GRAVITY_M_S2 / 1000
-        )
-        segment_immediate_line_load_kn_m = (
-            segment_permanent_line_load_kn_m + roof_snow_line_load_kn_m
-        )
-        segment_final_line_load_kn_m = (
-            segment_permanent_line_load_kn_m * (1 + creep_factor)
-            + roof_snow_line_load_kn_m
-            * (1 + snow_creep_combination_factor * creep_factor)
-        )
-        segment_design_line_load_kn_m = (
-            permanent_factor * segment_permanent_line_load_kn_m
-            + snow_factor * roof_snow_line_load_kn_m
-        )
-        segment_second_moment_m4 = (
-            segment_width_m * segment_height_m**3 / 12
-        )
-        segment_section_modulus_m3 = (
-            segment_width_m * segment_height_m**2 / 6
-        )
-
-        def independent_deflection(line_load_kn_m: float) -> float:
-            return (
-                5
-                * line_load_kn_m
-                * 1000
-                * independent_span_m**4
-                / (384 * modulus_pa * segment_second_moment_m4)
-            )
-
-        independent_limit_m = independent_span_m / ratio
-        independent_permanent_deflection_m = independent_deflection(
-            segment_permanent_line_load_kn_m
-        )
-        independent_unit_snow_deflection_m = independent_deflection(
-            tributary_horizontal_width_m
-        )
-        independent_immediate_deflection_m = independent_deflection(
-            segment_immediate_line_load_kn_m
-        )
-        independent_final_deflection_m = independent_deflection(
-            segment_final_line_load_kn_m
-        )
-        independent_immediate_snow_capacity = (
-            max(
-                0.0,
-                independent_limit_m
-                - independent_permanent_deflection_m,
-            )
-            / independent_unit_snow_deflection_m
-        )
-        independent_final_snow_capacity = (
-            max(
-                0.0,
-                independent_limit_m
-                - independent_permanent_deflection_m * (1 + creep_factor),
-            )
-            / (
-                independent_unit_snow_deflection_m
-                * (1 + snow_creep_combination_factor * creep_factor)
-            )
-        )
-        independent_design_load_n_m = (
-            segment_design_line_load_kn_m * 1000
-        )
-        independent_design_bending_nm = (
-            independent_design_load_n_m * independent_span_m**2 / 8
-        )
-        independent_design_reaction_n = (
-            independent_design_load_n_m * independent_span_m / 2
-        )
-        independent_bending_resistance_nm = (
-            design_bending_strength_pa * segment_section_modulus_m3
-        )
-        independent_shear_resistance_n = (
-            design_shear_strength_pa
-            * segment_width_m
-            * _positive(
-                shear_effective_width_factor,
-                "shear_effective_width_factor",
-            )
-            * segment_height_m
-            / 1.5
-        )
-        independent_bearing_resistance_n = bearing_resistance(
-            segment_width_m,
-            independent_bearing_length_mm,
-        )
-        independent_strength_utilizations = {
-            "bending": (
-                independent_design_bending_nm
-                / independent_bending_resistance_nm
-            ),
-            "shear": (
-                independent_design_reaction_n
-                / independent_shear_resistance_n
-            ),
-            "bearing": (
-                independent_design_reaction_n
-                / independent_bearing_resistance_n
-            ),
-        }
-        independent_governing_strength_check = max(
-            independent_strength_utilizations,
-            key=independent_strength_utilizations.__getitem__,
-        )
-        independent_spans.append(
-            IndependentPurlinSpanResult(
-                segment_index=index,
-                span_m=independent_span_m,
-                width_mm=segment_width_mm,
-                height_mm=segment_height_mm,
-                bearing_length_mm=independent_bearing_length_mm,
-                self_mass_kg_m=segment_self_mass_kg_m,
-                permanent_line_load_kn_m=segment_permanent_line_load_kn_m,
-                immediate_deflection_m=independent_immediate_deflection_m,
-                final_deflection_m=independent_final_deflection_m,
-                deflection_limit_m=independent_limit_m,
-                immediate_deflection_utilization=(
-                    independent_immediate_deflection_m / independent_limit_m
-                ),
-                final_deflection_utilization=(
-                    independent_final_deflection_m / independent_limit_m
-                ),
-                maximum_roof_snow_immediate_kn_m2=(
-                    independent_immediate_snow_capacity
-                ),
-                maximum_roof_snow_final_kn_m2=(
-                    independent_final_snow_capacity
-                ),
-                design_bending_moment_nm=independent_design_bending_nm,
-                design_shear_force_n=independent_design_reaction_n,
-                design_support_reaction_n=independent_design_reaction_n,
-                bending_resistance_nm=independent_bending_resistance_nm,
-                shear_resistance_n=independent_shear_resistance_n,
-                bearing_resistance_n=independent_bearing_resistance_n,
-                bending_utilization=(
-                    independent_strength_utilizations["bending"]
-                ),
-                shear_utilization=independent_strength_utilizations["shear"],
-                bearing_utilization=(
-                    independent_strength_utilizations["bearing"]
-                ),
-                governing_strength_check=(
-                    independent_governing_strength_check
-                ),
-                governing_strength_utilization=(
-                    independent_strength_utilizations[
-                        independent_governing_strength_check
-                    ]
-                ),
-            )
-        )
 
     return PurlinCheckResult(
         span_lengths_m=spans,
@@ -1693,190 +1406,20 @@ def calculate_purlin_check(
         governing_strength_utilization=strength_utilizations[
             governing_strength_check
         ],
-        independent_spans=tuple(independent_spans),
         missing_roof_layers=tuple(missing_roof_layers),
     )
 
 
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Check main-roof and dormer rafters, plus continuous and split "
-            "street-side purlin options, under uniformly distributed loads."
-        )
-    )
-    parser.add_argument("--width", type=float, default=RAFTER_WIDTH_MM,
-                        help="rafter width in mm")
-    parser.add_argument("--height", type=float, default=RAFTER_HEIGHT_MM,
-                        help="rafter height in mm")
-    parser.add_argument(
-        "--span",
-        type=float,
-        default=SUPPORT_SPAN_M,
-        help="main rafter distance between supports in m",
-    )
-    parser.add_argument(
-        "--deflection-ratio",
-        type=float,
-        default=MAX_DEFLECTION_RATIO,
-        help="denominator N of the L/N deflection limit",
-    )
-    parser.add_argument(
-        "--modulus",
-        type=float,
-        default=ELASTIC_MODULUS_GPA,
-        help="effective modulus of elasticity in GPa",
-    )
-    parser.add_argument(
-        "--density",
-        type=float,
-        default=TIMBER_DENSITY_KG_M3,
-        help="timber density in kg/m^3",
-    )
-    parser.add_argument(
-        "--angle",
-        type=float,
-        default=ROOF_ANGLE_DEGREES,
-        help="main roof angle above horizontal in degrees",
-    )
-    parser.add_argument(
-        "--dormer-span",
-        type=float,
-        default=DORMER_SUPPORT_SPAN_M,
-        help="dormer rafter distance between supports in m",
-    )
-    parser.add_argument(
-        "--dormer-angle",
-        type=float,
-        default=DORMER_ROOF_ANGLE_DEGREES,
-        help="dormer roof angle above horizontal in degrees",
-    )
-    parser.add_argument(
-        "--spacing",
-        type=float,
-        default=RAFTER_SPACING_M,
-        help="rafter centre spacing in m",
-    )
-    parser.add_argument(
-        "--snow-load",
-        type=float,
-        default=SNOW_LOAD_KN_M2,
-        help=(
-            "conservative terminal-check snow load in kN/m^2 of horizontal "
-            "projection; the PDF uses REPORT_SNOW_LOAD_KN_M2"
-        ),
-    )
-    parser.add_argument(
-        "--purlin-width",
-        type=float,
-        default=PURLIN_WIDTH_MM,
-        help="middle-segment purlin width in mm",
-    )
-    parser.add_argument(
-        "--purlin-height",
-        type=float,
-        default=PURLIN_HEIGHT_MM,
-        help="middle-segment purlin height in mm",
-    )
-    parser.add_argument(
-        "--purlin-left-width",
-        type=float,
-        default=PURLIN_SEGMENT_SIZES_MM[0][0],
-        help="left independent purlin width in mm",
-    )
-    parser.add_argument(
-        "--purlin-left-height",
-        type=float,
-        default=PURLIN_SEGMENT_SIZES_MM[0][1],
-        help="left independent purlin height in mm",
-    )
-    parser.add_argument(
-        "--purlin-right-width",
-        type=float,
-        default=PURLIN_SEGMENT_SIZES_MM[2][0],
-        help="right independent purlin width in mm",
-    )
-    parser.add_argument(
-        "--purlin-right-height",
-        type=float,
-        default=PURLIN_SEGMENT_SIZES_MM[2][1],
-        help="right independent purlin height in mm",
-    )
-    parser.add_argument(
-        "--purlin-spans",
-        type=float,
-        nargs=3,
-        metavar=("LEFT", "MIDDLE", "RIGHT"),
-        default=PURLIN_SPANS_M,
-        help="three consecutive purlin support spans in m",
-    )
-    parser.add_argument(
-        "--upper-rafter-length",
-        type=float,
-        default=RAFTER_LENGTH_ABOVE_PURLIN_M,
-        help="rafter length along the main slope from purlin to ridge in m",
-    )
-    parser.add_argument(
-        "--purlin-bearing-length",
-        type=float,
-        default=PURLIN_BEARING_LENGTH_MM,
-        help="purlin bearing length along its axis at a support in mm",
-    )
-    parser.add_argument(
-        "--purlin-split-bearing-length",
-        type=float,
-        default=None,
-        help=(
-            "end bearing length for each independently supported purlin "
-            "piece in mm; defaults to half --purlin-bearing-length"
-        ),
-    )
-    parser.add_argument(
-        "--purlin-extra-load",
-        type=float,
-        default=PURLIN_ADDITIONAL_PERMANENT_LOAD_KN_M,
-        help=(
-            "additional permanent vertical purlin line load in kN/m "
-            "(for example a separately supported ceiling)"
-        ),
-    )
-    parser.add_argument(
-        "--report",
-        type=Path,
-        default=Path(REPORT_PDF_PATH),
-        help=(
-            "write the official-input rafter calculation to this PDF "
-            f"(default: {REPORT_PDF_PATH})"
-        ),
-    )
-    parser.add_argument(
-        "--no-report",
-        dest="report",
-        action="store_const",
-        const=None,
-        help="skip PDF report generation",
-    )
-    return parser
-
-
 def _status(utilization: float) -> str:
-    return "PASS" if utilization <= 1 else "FAIL"
-
-
-def _percent(utilization: float) -> str:
-    return f"{utilization * 100:.1f}%"
+    return "PASS" if utilization < 1 else "FAIL"
 
 
 def _status_cz(utilization: float) -> str:
-    return "VYHOVUJE" if utilization <= 1 else "NEVYHOVUJE"
+    return "VYHOVUJE" if utilization < 1 else "NEVYHOVUJE"
 
 
 RafterReportCase: TypeAlias = tuple[str, float, float, RoofCheckResult]
 
-_REPORT_CASE_NAMES_CZ = {
-    "Main roof": "hlavní střecha",
-    "Dormer roof": "střecha vikýře",
-}
 _REPORT_ROOF_LAYER_NAMES_CZ = {
     "Roof tiles": "Střešní krytina",
     "Tile battens": "Střešní latě",
@@ -1889,14 +1432,21 @@ _REPORT_ROOF_LAYER_NAMES_CZ = {
 }
 
 
-def _rafter_report_case_status(check: RoofCheckResult) -> str:
-    """Return the report status without considering long-term deflection."""
-    has_failure = max(
+def _rafter_report_case_status(
+    check: RoofCheckResult,
+    *,
+    include_creep: bool = False,
+) -> str:
+    """Return the status for the checks included in the PDF report."""
+    utilizations = [
         check.characteristic_deflection_utilization,
         check.bending_utilization,
         check.shear_utilization,
         check.bearing_utilization,
-    ) > 1
+    ]
+    if include_creep:
+        utilizations.append(check.final_deflection_utilization)
+    has_failure = max(utilizations) >= 1
     is_incomplete = bool(check.missing_roof_layers)
     if has_failure and is_incomplete:
         return "FAIL; CHECK INCOMPLETE"
@@ -1996,13 +1546,11 @@ def add_rafter_report(
     snow_load_kn_m2: float,
     roof_layers_kg_m2: Mapping[str, float | None],
     rafter_checks: Sequence[RafterReportCase],
+    timber_grade: TimberGrade = _TIMBER_GRADES["c24"],
+    include_creep: bool = False,
+    bearing_length_mm: float = 50.0,
 ) -> None:
-    """Append a traceable rafter calculation to an open PDF report.
-
-    The report deliberately checks immediate deflection only. The interactive
-    terminal calculation remains the conservative check and also includes
-    creep/final deflection.
-    """
+    """Append one or more traceable rafter checks to an open PDF report."""
     if not rafter_checks:
         raise ValueError("rafter_checks must contain at least one case")
 
@@ -2011,6 +1559,7 @@ def add_rafter_report(
     spacing_m = _positive(rafter_spacing_m, "rafter_spacing_m")
     _positive(elastic_modulus_gpa, "elastic_modulus_gpa")
     density = _positive(timber_density_kg_m3, "timber_density_kg_m3")
+    bearing_length = _positive(bearing_length_mm, "bearing_length_mm")
     snow_load = _non_negative(snow_load_kn_m2, "snow_load_kn_m2")
     deflection_ratio = _positive(deflection_ratio, "deflection_ratio")
 
@@ -2025,88 +1574,6 @@ def add_rafter_report(
         known_layer_total_kg_m2 * GRAVITY_M_S2 / 1000
     )
 
-    case_summary_lines: list[str] = []
-    for name, span_m, angle_degrees, check in rafter_checks:
-        case_summary_lines.append(
-            f"{name}: {_rafter_report_case_status(check)}; "
-            f"immediate deflection "
-            f"{check.characteristic_deflection_m * 1000:.2f} mm "
-            f"({_percent(check.characteristic_deflection_utilization)}); "
-            f"governing ULS {check.governing_strength_check} "
-            f"({_percent(check.governing_strength_utilization)})"
-        )
-
-    report.add_sections(
-        "Rafter calculation – design basis and summary",
-        (
-            (
-                "Purpose and structural model",
-                (
-                    "Preliminary verification of timber rafters as simply "
-                    "supported beams.",
-                    "The support span is the real length measured along the "
-                    "sloping rafter.",
-                    "Snow is a vertical action per horizontal roof projection; "
-                    "roof-layer masses are per actual sloping surface.",
-                    "This PDF uses the official input set. A separate, more "
-                    "conservative input set is used by the terminal check.",
-                ),
-            ),
-            (
-                "Shared geometry and material",
-                (
-                    f"Cross-section b × h = {width_mm:.0f} × "
-                    f"{height_mm:.0f} mm",
-                    f"Rafter centre spacing a = {spacing_m:.3f} m",
-                    f"Mean modulus E = {elastic_modulus_gpa:.2f} GPa",
-                    f"Timber density = {density:.1f} kg/m³",
-                    f"Deflection criterion = L/{deflection_ratio:g}",
-                    f"C24 characteristic strengths: fm,k = "
-                    f"{C24_BENDING_STRENGTH_MPA:g} MPa, fv,k = "
-                    f"{C24_SHEAR_STRENGTH_MPA:g} MPa, fc,90,k = "
-                    f"{C24_COMPRESSION_PERPENDICULAR_MPA:g} MPa",
-                    f"kmod = {TIMBER_MODIFICATION_FACTOR:g}; "
-                    f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g}; "
-                    f"kcr = {SHEAR_EFFECTIVE_WIDTH_FACTOR:g}",
-                    f"Assumed bearing length = {BEARING_LENGTH_MM:g} mm",
-                ),
-            ),
-            (
-                "Characteristic actions",
-                (
-                    f"Official roof snow load sk = {snow_load:.3f} kN/m²",
-                    f"ULS factors: γG = {PERMANENT_LOAD_FACTOR:g}; "
-                    f"γQ = {SNOW_LOAD_FACTOR:g}",
-                    f"Official roof-layer permanent load gk = "
-                    f"{known_layer_total_kg_m2:.1f} kg/m² = "
-                    f"{roof_layer_surface_load_kn_m2:.3f} kN/m²",
-                    "The layer breakdown is shown in the following table.",
-                ),
-            ),
-            ("Result summary", tuple(case_summary_lines)),
-            (
-                "Scope and limitations",
-                (
-                    "Serviceability in this PDF includes immediate deflection "
-                    "from permanent load and snow only.",
-                    "Creep/final deflection is intentionally omitted from this "
-                    "PDF; it remains included in the conservative terminal "
-                    "check.",
-                    "The calculation does not replace project-specific "
-                    "structural design. Verify load combinations, national "
-                    "annex choices, stability, notches, connections, fire, "
-                    "moisture, and local load effects.",
-                ),
-            ),
-        ),
-    )
-
-    add_roof_load_table(
-        report,
-        roof_layers_kg_m2,
-        snow_load_kn_m2=snow_load,
-    )
-
     for name, supplied_span_m, angle_degrees, check in rafter_checks:
         span_m = _positive(supplied_span_m, f"{name} support span")
         angle = _roof_angle(angle_degrees)
@@ -2119,26 +1586,38 @@ def add_rafter_report(
             TIMBER_MODIFICATION_FACTOR / TIMBER_MATERIAL_PARTIAL_FACTOR
         )
         bending_strength_mpa = (
-            C24_BENDING_STRENGTH_MPA * design_strength_multiplier
+            timber_grade.bending_strength_mpa * design_strength_multiplier
         )
         shear_strength_mpa = (
-            C24_SHEAR_STRENGTH_MPA * design_strength_multiplier
+            timber_grade.shear_strength_mpa * design_strength_multiplier
         )
-        bearing_strength_mpa = (
-            C24_COMPRESSION_PERPENDICULAR_MPA
+        compression_parallel_strength_mpa = (
+            timber_grade.compression_parallel_mpa
             * design_strength_multiplier
-            * BEARING_STRENGTH_FACTOR
         )
-        bearing_area_m2 = width_m * BEARING_LENGTH_MM / 1000
+        compression_perpendicular_strength_mpa = (
+            timber_grade.compression_perpendicular_mpa
+            * design_strength_multiplier
+        )
+        bearing_strength_mpa = check.design_bearing_strength_pa / 1e6
+        bearing_area_m2 = check.bearing_area_m2
 
-        case_name_cz = _REPORT_CASE_NAMES_CZ.get(name, name)
         report.add_sections(
-            f"Krokev – {case_name_cz}",
+            name,
             (
                 (
                     "Geometrie a průřezové charakteristiky",
                     (
-                        f"Rozpětí mezi podporami L = {span_m:.3f} m podél krokve",
+                        f"Materiál: {timber_grade.name}; "
+                        f"E = {elastic_modulus_gpa:.2f} GPa; "
+                        f"fm,k = {timber_grade.bending_strength_mpa:g} MPa; "
+                        f"fv,k = {timber_grade.shear_strength_mpa:g} MPa; "
+                        f"fc,0,k = "
+                        f"{timber_grade.compression_parallel_mpa:g} MPa; "
+                        f"fc,90,k = "
+                        f"{timber_grade.compression_perpendicular_mpa:g} MPa.",
+                        f"Rozpětí mezi podporami L = {span_m:.3f} m "
+                        "podél krokve",
                         f"Sklon střechy α = {angle:.2f}°; cos α = "
                         f"{result.roof_cosine:.5f}",
                         f"b = {width_m:.3f} m; h = {height_m:.3f} m",
@@ -2191,7 +1670,7 @@ def add_rafter_report(
                         f"Mezní hodnota MRd = fm,d × W = "
                         f"{check.bending_resistance_nm / 1000:.3f} kNm",
                         f"{check.design_bending_moment_nm / 1000:.3f} kNm "
-                        f"<= {check.bending_resistance_nm / 1000:.3f} kNm, "
+                        f"< {check.bending_resistance_nm / 1000:.3f} kNm, "
                         f"{_status_cz(check.bending_utilization)}",
                     ),
                 ),
@@ -2209,26 +1688,37 @@ def add_rafter_report(
                         f"Mezní hodnota VRd = fv,d × kcr × b × h / 1,5 = "
                         f"{check.shear_resistance_n / 1000:.3f} kN",
                         f"{check.design_shear_force_n / 1000:.3f} kN "
-                        f"<= {check.shear_resistance_n / 1000:.3f} kN, "
+                        f"< {check.shear_resistance_n / 1000:.3f} kN, "
                         f"{_status_cz(check.shear_utilization)}",
                     ),
                 ),
                 (
-                    "Posouzení - otlačení v uložení",
+                    "Posouzení - tlak šikmo k vláknům v uložení",
                     (
-                        "Mezní stav únosnosti (MSÚ), tlak kolmo k vláknům.",
-                        f"Návrhová reakce Fc,90,Ed = "
-                        f"{check.design_support_reaction_n / 1000:.3f} kN",
-                        f"Návrhová pevnost fc,90,d = "
+                        "Mezní stav únosnosti (MSÚ), tlak šikmo k vláknům.",
+                        f"Úhel síly k vláknům β = 90° − α = "
+                        f"{check.bearing_angle_degrees:.2f}°.",
+                        f"Návrhová svislá reakce Fc,β,Ed = VEd / cos α = "
+                        f"{check.design_shear_force_n / 1000:.3f} / "
+                        f"{result.roof_cosine:.5f} = "
+                        f"{check.design_support_reaction_n / 1000:.3f} kN.",
+                        f"Návrhové pevnosti fc,0,d = "
+                        f"{compression_parallel_strength_mpa:.2f} MPa; "
+                        f"fc,90,d = "
+                        f"{compression_perpendicular_strength_mpa:.2f} MPa; "
+                        f"kc,90 = {BEARING_STRENGTH_FACTOR:g}.",
+                        "fc,β,d = fc,0,d / [(fc,0,d / (kc,90 × fc,90,d)) "
+                        "× sin² β + cos² β] = "
                         f"{bearing_strength_mpa:.2f} MPa",
                         f"Plocha uložení A = b × l = "
-                        f"{width_m * 1000:.0f} × {BEARING_LENGTH_MM:g} = "
+                        f"{width_m * 1000:.0f} × {bearing_length:g} = "
                         f"{bearing_area_m2 * 1e6:.0f} mm²",
-                        f"Mezní hodnota Rc,90,d = fc,90,d × A = "
+                        f"Mezní hodnota Rc,β,d = fc,β,d × A = "
                         f"{check.bearing_resistance_n / 1000:.3f} kN",
                         f"{check.design_support_reaction_n / 1000:.3f} kN "
-                        f"<= {check.bearing_resistance_n / 1000:.3f} kN, "
+                        f"< {check.bearing_resistance_n / 1000:.3f} kN, "
                         f"{_status_cz(check.bearing_utilization)}",
+                        "Samostatné posouzení zářezu krokve není zahrnuto.",
                     ),
                 ),
                 (
@@ -2252,9 +1742,36 @@ def add_rafter_report(
                         f"Mezní hodnota wlim = L/{deflection_ratio:g} = "
                         f"{result.maximum_deflection_m * 1000:.2f} mm",
                         f"{check.characteristic_deflection_m * 1000:.2f} mm "
-                        f"<= {result.maximum_deflection_m * 1000:.2f} mm, "
+                        f"< {result.maximum_deflection_m * 1000:.2f} mm, "
                         f"{_status_cz(check.characteristic_deflection_utilization)}",
                     ),
+                ),
+                *(
+                    (
+                        (
+                            "Posouzení - konečný průhyb včetně dotvarování",
+                            (
+                                "Mezní stav použitelnosti (MSP).",
+                                f"Součinitel dotvarování kdef = "
+                                f"{TIMBER_CREEP_FACTOR:g}",
+                                f"Kombinační součinitel sněhu ψ2 = "
+                                f"{SNOW_CREEP_COMBINATION_FACTOR:g}",
+                                "wfin = wG,inst × (1 + kdef) + "
+                                "wS,inst × (1 + ψ2 × kdef)",
+                                f"wfin = "
+                                f"{check.final_deflection_m * 1000:.2f} mm",
+                                f"Mezní hodnota wlim = L/"
+                                f"{deflection_ratio:g} = "
+                                f"{result.maximum_deflection_m * 1000:.2f} mm",
+                                f"{check.final_deflection_m * 1000:.2f} mm "
+                                f"< "
+                                f"{result.maximum_deflection_m * 1000:.2f} mm, "
+                                f"{_status_cz(check.final_deflection_utilization)}",
+                            ),
+                        ),
+                    )
+                    if include_creep
+                    else ()
                 ),
             ),
             footer_title="Předběžný statický výpočet střechy",
@@ -2263,76 +1780,759 @@ def add_rafter_report(
         )
 
 
-def generate_rafter_report(
-    path: str | Path,
+def add_roof_report_overview(
+    report: CalculationReport,
     *,
-    width_mm: float,
-    height_mm: float,
-    rafter_spacing_m: float,
-    deflection_ratio: float,
-    elastic_modulus_gpa: float,
-    timber_density_kg_m3: float,
-    snow_load_kn_m2: float,
-    roof_layers_kg_m2: Mapping[str, float | None],
-    rafter_checks: Sequence[RafterReportCase],
-) -> int:
-    """Write one rafter report and return its number of pages."""
+    snow_load: float,
+    roof_layers: Mapping[str, float | None],
+    include_creep: bool,
+) -> None:
+    """Append the common design basis and roof-load table once."""
+    report.add_sections(
+        "Roof calculation – design basis",
+        (
+            (
+                "Purpose and structural models",
+                (
+                    "Preliminary verification of timber roof members.",
+                    "Rafters are modelled as simply supported sloping beams; "
+                    "purlins are modelled either as one simply supported "
+                    "piece or as one uniform member continuous over four "
+                    "supports.",
+                    "Snow is a vertical action per horizontal roof projection; "
+                    "roof-layer masses are per actual sloping surface.",
+                ),
+            ),
+            (
+                "Standards and characteristic material values",
+                (
+                    f"Basis and combinations of actions: "
+                    f"{REPORT_BASIS_STANDARD}.",
+                    f"Timber resistance and deformation model: "
+                    f"{REPORT_TIMBER_STANDARD}.",
+                    f"Characteristic strengths fm,k, fv,k, fc,0,k and "
+                    f"fc,90,k and mean modulus E0,mean for C22/C24: "
+                    f"{REPORT_TIMBER_GRADES_STANDARD}.",
+                    "The strength class values used by each member are "
+                    "printed again in its analysis chapter.",
+                ),
+            ),
+            (
+                "Ultimate limit state (ULS) factors and criteria",
+                (
+                    f"Fundamental action combination used here: qd = "
+                    f"γG Gk + γQ Sk, with γG = {PERMANENT_LOAD_FACTOR:g} "
+                    f"and γQ = {SNOW_LOAD_FACTOR:g}.",
+                    "Only permanent action and snow as the leading variable "
+                    "action are included in this preliminary model.",
+                    f"Service class 2 and a medium-term governing action are "
+                    f"assumed: kmod = {TIMBER_MODIFICATION_FACTOR:g}; "
+                    f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g}.",
+                    "Design strengths are calculated from characteristic "
+                    "strengths as fd = kmod × fk / γM.",
+                    "Bending criterion: MEd < MRd = fm,d × W.",
+                    f"Shear criterion: VEd < VRd = fv,d × kcr × b × h / "
+                    f"1.5, with kcr = {SHEAR_EFFECTIVE_WIDTH_FACTOR:g}.",
+                    f"Bearing uses the entered contact area A = b × l and "
+                    f"kc,90 = {BEARING_STRENGTH_FACTOR:g}. Rafters are "
+                    "checked in compression at an angle to grain; purlins "
+                    "are checked perpendicular to grain.",
+                    "Every ULS result is accepted only when the design action "
+                    "Ed is strictly smaller than the design resistance Rd.",
+                ),
+            ),
+            (
+                "Serviceability scope",
+                (
+                    "The deflection limit L/300 is a selected project "
+                    "criterion supplied to the checks; it is not a timber "
+                    "strength-class property.",
+                    "The same strict criterion w < L/300 is applied to "
+                    "immediate deflection in every chapter.",
+                    (
+                        "Final deflection is also checked against L/300: "
+                        "wfin = wG,inst(1 + kdef) + "
+                        "wS,inst(1 + ψ2 kdef), with "
+                        f"kdef = {TIMBER_CREEP_FACTOR:g} and "
+                        f"ψ2 = {SNOW_CREEP_COMBINATION_FACTOR:g}."
+                        if include_creep
+                        else "Final deflection including creep is omitted "
+                        "from this report."
+                    ),
+                ),
+            ),
+            (
+                "Explicit preliminary-model assumptions",
+                (
+                    f"Solid-timber density for self-weight is "
+                    f"{TIMBER_DENSITY_KG_M3:g} kg/m³ and g = "
+                    f"{GRAVITY_M_S2:g} m/s².",
+                    "kcr, kc,90, load-duration class, service class, ψ2, "
+                    "bearing lengths and nationally determined parameters "
+                    "must be confirmed for the final project and chosen "
+                    "standard edition.",
+                    "The model does not verify connections, notches, member "
+                    "stability, wind/uplift, concentrated loads or all "
+                    "possible asymmetric snow arrangements.",
+                ),
+            ),
+        ),
+    )
+    add_roof_load_table(
+        report,
+        roof_layers,
+        snow_load_kn_m2=snow_load,
+    )
+
+
+
+def _resolve_timber_grade(material: str | TimberGrade) -> TimberGrade:
+    if isinstance(material, TimberGrade):
+        return material
+    if not isinstance(material, str):
+        raise TypeError("material must be 'c22', 'c24', or a TimberGrade")
+    try:
+        return _TIMBER_GRADES[material.strip().lower()]
+    except KeyError as error:
+        choices = ", ".join(sorted(_TIMBER_GRADES))
+        raise ValueError(f"unknown timber material; choose {choices}") from error
+
+
+class RoofCalculationSession:
+    """One terminal run and the PDF assembled from the same results."""
+
+    def __init__(
+        self,
+        report: CalculationReport,
+        *,
+        include_creep: bool,
+    ) -> None:
+        self.report = report
+        self.include_creep = include_creep
+        self.entries: list[
+            tuple[str, str, RoofCheckResult | PurlinCheckResult]
+        ] = []
+        self._snow_load: float | None = None
+        self._roof_layers: dict[str, float | None] | None = None
+
+    def prepare_inputs(
+        self,
+        *,
+        snow_load: float,
+        roof_layers: Mapping[str, float | None],
+    ) -> None:
+        normalized_snow = _non_negative(snow_load, "snow_load")
+        normalized_layers = dict(roof_layers)
+        if self._snow_load is None:
+            self._snow_load = normalized_snow
+            self._roof_layers = normalized_layers
+            add_roof_report_overview(
+                self.report,
+                snow_load=normalized_snow,
+                roof_layers=normalized_layers,
+                include_creep=self.include_creep,
+            )
+            return
+        if normalized_snow != self._snow_load:
+            raise ValueError(
+                "all checks in one report must use the same snow_load"
+            )
+        if normalized_layers != self._roof_layers:
+            raise ValueError(
+                "all checks in one report must use the same roof_layers"
+            )
+
+    def add_result(
+        self,
+        title: str,
+        kind: str,
+        result: RoofCheckResult | PurlinCheckResult,
+    ) -> None:
+        self.entries.append((title, kind, result))
+
+    def _entry_status(
+        self,
+        kind: str,
+        result: RoofCheckResult | PurlinCheckResult,
+    ) -> str:
+        if kind == "rafter":
+            assert isinstance(result, RoofCheckResult)
+            return _rafter_report_case_status(
+                result,
+                include_creep=self.include_creep,
+            )
+        assert isinstance(result, PurlinCheckResult)
+        return _purlin_report_status(
+            result,
+            include_creep=self.include_creep,
+        )
+
+    def finish(self) -> None:
+        if not self.entries:
+            return
+        status_lines = tuple(
+            f"{title}: {self._entry_status(kind, result)}"
+            for title, kind, result in self.entries
+        )
+        self.report.add_sections(
+            "Souhrn výsledků",
+            (("Posouzené prvky", status_lines),),
+            footer_title="Předběžný statický výpočet střechy",
+            page_label="Strana",
+        )
+        print()
+        print("OVERALL RESULT:")
+        for line in status_lines:
+            print(f"  {line}")
+
+
+_ACTIVE_SESSION: RoofCalculationSession | None = None
+
+
+@contextmanager
+def calculation_report(
+    path: str | Path = "rafter_load_report.pdf",
+    *,
+    include_creep: bool = True,
+):
+    """Collect check calls into one PDF while printing the same calculations."""
+    global _ACTIVE_SESSION
+    if _ACTIVE_SESSION is not None:
+        raise RuntimeError("calculation_report contexts cannot be nested")
+    report_path = Path(path)
     with CalculationReport(
-        path,
+        report_path,
         document_title="Preliminary roof structural calculation",
     ) as report:
-        add_rafter_report(
+        session = RoofCalculationSession(
             report,
-            width_mm=width_mm,
-            height_mm=height_mm,
-            rafter_spacing_m=rafter_spacing_m,
-            deflection_ratio=deflection_ratio,
-            elastic_modulus_gpa=elastic_modulus_gpa,
-            timber_density_kg_m3=timber_density_kg_m3,
-            snow_load_kn_m2=snow_load_kn_m2,
-            roof_layers_kg_m2=roof_layers_kg_m2,
-            rafter_checks=rafter_checks,
+            include_creep=include_creep,
         )
-        return report.page_count
+        _ACTIVE_SESSION = session
+        try:
+            yield session
+        except Exception:
+            raise
+        else:
+            session.finish()
+        finally:
+            _ACTIVE_SESSION = None
+    print(f"PDF REPORT: {report_path} ({report.page_count} pages)")
 
-def _overall_result(
-    rafter_checks: list[tuple[str, float, float, RoofCheckResult]],
-    purlin_check: PurlinCheckResult,
-) -> str:
-    """Summarize every SLS and ULS utilization reported by the script."""
-    utilizations = [
-        utilization
-        for _, _, _, check in rafter_checks
-        for utilization in (
-            check.characteristic_deflection_utilization,
-            check.final_deflection_utilization,
-            check.bending_utilization,
-            check.shear_utilization,
-            check.bearing_utilization,
+
+def _active_session() -> RoofCalculationSession:
+    if _ACTIVE_SESSION is None:
+        raise RuntimeError(
+            "check functions must be called inside calculation_report()"
         )
-    ]
-    utilizations.extend(purlin_check.immediate_deflection_utilizations)
-    utilizations.extend(purlin_check.final_deflection_utilizations)
-    utilizations.extend(
+    return _ACTIVE_SESSION
+
+
+def check_rafter(
+    *,
+    title: str,
+    material: str | TimberGrade,
+    width: float,
+    height: float,
+    span: float,
+    spacing: float,
+    roof_angle: float,
+    max_deflection: float,
+    snow_load: float,
+    roof_layers: Mapping[str, float | None] | None = None,
+    bearing_length: float = 0.05,
+    elastic_modulus: float | None = None,
+    timber_density: float = TIMBER_DENSITY_KG_M3,
+) -> RoofCheckResult:
+    """Check one rafter, print diagnostics, and append its PDF pages.
+
+    All geometric arguments use metres. max_deflection=300 means L/300.
+    """
+    session = _active_session()
+    normalized_title = str(title).strip()
+    if not normalized_title:
+        raise ValueError("title must be a non-empty string")
+    grade = _resolve_timber_grade(material)
+    layers = ROOF_LAYERS_KG_M2 if roof_layers is None else roof_layers
+    width_mm = _positive(width, "width") * 1000
+    height_mm = _positive(height, "height") * 1000
+    bearing_length_mm = _positive(bearing_length, "bearing_length") * 1000
+    modulus = (
+        grade.elastic_modulus_gpa
+        if elastic_modulus is None
+        else _positive(elastic_modulus, "elastic_modulus")
+    )
+    check = calculate_roof_check(
+        width_mm=width_mm,
+        height_mm=height_mm,
+        support_span_m=span,
+        deflection_ratio=max_deflection,
+        elastic_modulus_gpa=modulus,
+        timber_density_kg_m3=timber_density,
+        roof_angle_degrees=roof_angle,
+        rafter_spacing_m=spacing,
+        snow_load_kn_m2=snow_load,
+        roof_layers_kg_m2=layers,
+        bending_strength_mpa=grade.bending_strength_mpa,
+        shear_strength_mpa=grade.shear_strength_mpa,
+        compression_parallel_mpa=grade.compression_parallel_mpa,
+        compression_perpendicular_mpa=(
+            grade.compression_perpendicular_mpa
+        ),
+        bearing_length_mm=bearing_length_mm,
+    )
+    session.prepare_inputs(snow_load=snow_load, roof_layers=layers)
+    add_rafter_report(
+        session.report,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        rafter_spacing_m=spacing,
+        deflection_ratio=max_deflection,
+        elastic_modulus_gpa=modulus,
+        timber_density_kg_m3=timber_density,
+        snow_load_kn_m2=snow_load,
+        roof_layers_kg_m2=layers,
+        rafter_checks=((normalized_title, span, roof_angle, check),),
+        timber_grade=grade,
+        include_creep=session.include_creep,
+        bearing_length_mm=bearing_length_mm,
+    )
+    _print_roof_check(
+        normalized_title,
+        support_span_m=span,
+        roof_angle_degrees=roof_angle,
+        deflection_ratio=max_deflection,
+        check=check,
+        timber_grade_name=grade.name,
+    )
+    session.add_result(normalized_title, "rafter", check)
+    return check
+
+
+def _add_purlin_evaluation(
+    report: CalculationReport,
+    *,
+    chapter_title: str,
+    material: TimberGrade,
+    width_mm: float,
+    height_mm: float,
+    deflection_ratio: float,
+    elastic_modulus_gpa: float,
+    bearing_length_mm: float,
+    include_creep: bool,
+    check: PurlinCheckResult,
+) -> None:
+    """Append a simple- or continuous-purlin evaluation."""
+    is_continuous = len(check.span_lengths_m) == 3
+    if len(check.span_lengths_m) not in (1, 3):
+        raise ValueError("purlin report needs one or three spans")
+    member_name = "spojité vaznice" if is_continuous else "vaznice"
+    field_suffix = ", pole {index}" if is_continuous else ""
+    purlin_width_mm = _positive(width_mm, "width_mm")
+    purlin_height_mm = _positive(height_mm, "height_mm")
+    purlin_width_m = purlin_width_mm / 1000
+    purlin_height_m = purlin_height_mm / 1000
+    second_moment_m4 = purlin_width_m * purlin_height_m**3 / 12
+    section_modulus_m3 = purlin_width_m * purlin_height_m**2 / 6
+    ratio = _positive(deflection_ratio, "deflection_ratio")
+    bearing_length = _positive(bearing_length_mm, "bearing_length_mm")
+    grade = _resolve_timber_grade(material)
+    design_strength_multiplier = (
+        TIMBER_MODIFICATION_FACTOR / TIMBER_MATERIAL_PARTIAL_FACTOR
+    )
+    bending_strength_mpa = (
+        grade.bending_strength_mpa * design_strength_multiplier
+    )
+    shear_strength_mpa = (
+        grade.shear_strength_mpa * design_strength_multiplier
+    )
+    compression_strength_mpa = (
+        grade.compression_perpendicular_mpa
+        * design_strength_multiplier
+        * BEARING_STRENGTH_FACTOR
+    )
+    design_line_load_kn_m = (
+        PERMANENT_LOAD_FACTOR * check.permanent_line_load_kn_m
+        + SNOW_LOAD_FACTOR * check.roof_snow_line_load_kn_m
+    )
+    maximum_positive_moment_nm = max(
+        check.design_response.span_positive_moments_nm
+    )
+    maximum_negative_moment_nm = abs(
+        min(check.design_response.support_moments_nm)
+    )
+    maximum_shear_n = max(check.design_response.span_max_abs_shears_n)
+    maximum_reaction_n = max(
+        abs(value) for value in check.design_response.support_reactions_n
+    )
+
+    sections: list[ReportSection] = [
         (
-            purlin_check.positive_bending_utilization,
-            purlin_check.negative_bending_utilization,
-            purlin_check.shear_utilization,
-            purlin_check.bearing_utilization,
+            "Geometrie, materiál a zatížení",
+            (
+                f"Materiál: {grade.name}; E = {elastic_modulus_gpa:.2f} GPa.",
+                f"Charakteristické pevnosti: fm,k = "
+                f"{grade.bending_strength_mpa:g} MPa; fv,k = "
+                f"{grade.shear_strength_mpa:g} MPa; fc,90,k = "
+                f"{grade.compression_perpendicular_mpa:g} MPa.",
+                f"Průřez {member_name} b × h = "
+                f"{purlin_width_mm:g} × {purlin_height_mm:g} mm.",
+                f"I = b h³ / 12 = {second_moment_m4:.8e} m⁴; "
+                f"W = b h² / 6 = {section_modulus_m3:.8e} m³.",
+                "Rozpětí L = "
+                + " + ".join(f"{span:g} m" for span in check.span_lengths_m)
+                + ".",
+                f"Plocha střechy připadající na vaznici: "
+                f"{check.tributary_slope_width_m:.3f} m po sklonu; "
+                f"{check.tributary_horizontal_width_m:.3f} m vodorovně.",
+                f"Stálé liniové zatížení gk = "
+                f"{check.permanent_line_load_kn_m:.3f} kN/m.",
+                f"Zatížení sněhem sk = "
+                f"{check.roof_snow_line_load_kn_m:.3f} kN/m.",
+                f"Návrhové liniové zatížení qd = γG gk + γQ sk = "
+                f"{design_line_load_kn_m:.3f} kN/m.",
+                f"Použité součinitele: γG = {PERMANENT_LOAD_FACTOR:g}; "
+                f"γQ = {SNOW_LOAD_FACTOR:g}; "
+                f"kmod = {TIMBER_MODIFICATION_FACTOR:g}; "
+                f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g}.",
+                f"Mez průhybu = L/{ratio:g}.",
+                *(
+                    (
+                        "Výpočet je neúplný; chybí hmotnosti vrstev: "
+                        + ", ".join(check.missing_roof_layers),
+                    )
+                    if check.missing_roof_layers
+                    else ()
+                ),
+            ),
+        ),
+    ]
+
+    for index, (
+        span,
+        deflection,
+        limit,
+        utilization,
+    ) in enumerate(
+        zip(
+            check.span_lengths_m,
+            check.immediate_response.span_max_abs_deflections_m,
+            check.deflection_limits_m,
+            check.immediate_deflection_utilizations,
+        ),
+        start=1,
+    ):
+        sections.append(
+            (
+                f"Posouzení - okamžitý průhyb {member_name}"
+                + field_suffix.format(index=index),
+                (
+                    "Mezní stav použitelnosti (MSP).",
+                    f"Rozpětí L = {span:.3f} m.",
+                    f"Okamžitý průhyb winst = {deflection * 1000:.2f} mm.",
+                    f"Mezní hodnota wlim = L/{ratio:g} = "
+                    f"{limit * 1000:.2f} mm.",
+                    f"{deflection * 1000:.2f} mm < "
+                    f"{limit * 1000:.2f} mm, "
+                    f"{_status_cz(utilization)}",
+                ),
+            )
+        )
+
+    if include_creep:
+        for index, (
+            span,
+            deflection,
+            limit,
+            utilization,
+        ) in enumerate(
+            zip(
+                check.span_lengths_m,
+                check.final_response.span_max_abs_deflections_m,
+                check.deflection_limits_m,
+                check.final_deflection_utilizations,
+            ),
+            start=1,
+        ):
+            sections.append(
+                (
+                    f"Posouzení - konečný průhyb {member_name}"
+                    + field_suffix.format(index=index),
+                    (
+                        "Mezní stav použitelnosti (MSP), včetně dotvarování.",
+                        f"Rozpětí L = {span:.3f} m.",
+                        f"Konečný průhyb wfin = "
+                        f"{deflection * 1000:.2f} mm.",
+                        f"Mezní hodnota wlim = L/{ratio:g} = "
+                        f"{limit * 1000:.2f} mm.",
+                        f"{deflection * 1000:.2f} mm < "
+                        f"{limit * 1000:.2f} mm, "
+                        f"{_status_cz(utilization)}",
+                    ),
+                )
+            )
+
+    sections.extend(
+        (
+            (
+                f"Posouzení - kladný ohybový moment {member_name}",
+                (
+                    "Mezní stav únosnosti (MSÚ).",
+                    f"Návrhová pevnost fm,d = fm,k × kmod / γM = "
+                    f"{bending_strength_mpa:.2f} MPa.",
+                    f"Maximální kladný moment MEd,+ = "
+                    f"{maximum_positive_moment_nm / 1000:.3f} kNm.",
+                    f"Mezní hodnota MRd = fm,d × W = "
+                    f"{check.bending_resistance_nm / 1000:.3f} kNm.",
+                    f"{maximum_positive_moment_nm / 1000:.3f} kNm < "
+                    f"{check.bending_resistance_nm / 1000:.3f} kNm, "
+                    f"{_status_cz(check.positive_bending_utilization)}",
+                ),
+            ),
+            *(
+                (
+                    (
+                        f"Posouzení - záporný ohybový moment {member_name}",
+                        (
+                            "Mezní stav únosnosti (MSÚ).",
+                            f"Maximální záporný moment |MEd,-| = "
+                            f"{maximum_negative_moment_nm / 1000:.3f} kNm.",
+                            f"Mezní hodnota MRd = fm,d × W = "
+                            f"{check.bending_resistance_nm / 1000:.3f} kNm.",
+                            f"{maximum_negative_moment_nm / 1000:.3f} kNm < "
+                            f"{check.bending_resistance_nm / 1000:.3f} kNm, "
+                            f"{_status_cz(check.negative_bending_utilization)}",
+                        ),
+                    ),
+                )
+                if is_continuous
+                else ()
+            ),
+            (
+                f"Posouzení - namáhání {member_name} smykem",
+                (
+                    "Mezní stav únosnosti (MSÚ).",
+                    f"Návrhová pevnost fv,d = fv,k × kmod / γM = "
+                    f"{shear_strength_mpa:.2f} MPa.",
+                    f"Maximální posouvající síla VEd = "
+                    f"{maximum_shear_n / 1000:.3f} kN.",
+                    f"Mezní hodnota VRd = fv,d × kcr × b × h / 1,5; "
+                    f"kcr = {SHEAR_EFFECTIVE_WIDTH_FACTOR:g}; VRd = "
+                    f"{check.shear_resistance_n / 1000:.3f} kN.",
+                    f"{maximum_shear_n / 1000:.3f} kN < "
+                    f"{check.shear_resistance_n / 1000:.3f} kN, "
+                    f"{_status_cz(check.shear_utilization)}",
+                ),
+            ),
+            (
+                f"Posouzení - otlačení {member_name} v uložení",
+                (
+                    "Mezní stav únosnosti (MSÚ), tlak kolmo k vláknům.",
+                    f"Návrhová pevnost fc,90,d = "
+                    f"kc,90 × fc,90,k × kmod / γM = "
+                    f"{compression_strength_mpa:.2f} MPa; "
+                    f"kc,90 = {BEARING_STRENGTH_FACTOR:g}.",
+                    f"Plocha uložení A = b × l = "
+                    f"{purlin_width_mm:g} × {bearing_length:g} = "
+                    f"{purlin_width_mm * bearing_length:.0f} mm².",
+                    f"Maximální reakce Fc,90,Ed = "
+                    f"{maximum_reaction_n / 1000:.3f} kN.",
+                    f"Mezní hodnota Rc,90,d = fc,90,d × A = "
+                    f"{check.bearing_resistance_n / 1000:.3f} kN.",
+                    f"{maximum_reaction_n / 1000:.3f} kN < "
+                    f"{check.bearing_resistance_n / 1000:.3f} kN, "
+                    f"{_status_cz(check.bearing_utilization)}",
+                ),
+            ),
         )
     )
-    has_failures = any(utilization > 1 for utilization in utilizations)
-    is_incomplete = any(
-        check.missing_roof_layers for _, _, _, check in rafter_checks
-    ) or bool(purlin_check.missing_roof_layers)
 
-    if has_failures and is_incomplete:
-        return "THERE ARE FAILURES, AND THE CHECK IS INCOMPLETE."
-    if has_failures:
-        return "THERE ARE FAILURES. Review the checks marked FAIL above."
-    if is_incomplete:
-        return "CHECK INCOMPLETE. Enter all missing roof-layer masses."
-    return "EVERYTHING PASSED."
+    report.add_sections(
+        chapter_title,
+        tuple(sections),
+        footer_title="Předběžný statický výpočet střechy",
+        page_label="Strana",
+        continuation_label="pokračování",
+    )
+
+
+def _check_purlin(
+    *,
+    title: str,
+    material: str | TimberGrade,
+    width: float,
+    height: float,
+    spans: Sequence[float],
+    rafter_length_above: float,
+    lower_rafter_span: float,
+    roof_angle: float,
+    rafter_width: float,
+    rafter_height: float,
+    rafter_spacing: float,
+    max_deflection: float,
+    snow_load: float,
+    roof_layers: Mapping[str, float | None] | None = None,
+    additional_load: float = 0,
+    bearing_length: float | None = None,
+    elastic_modulus: float | None = None,
+    timber_density: float = TIMBER_DENSITY_KG_M3,
+) -> PurlinCheckResult:
+    """Check one purlin, print diagnostics, and append its PDF pages.
+
+    All geometric arguments use metres. max_deflection=300 means L/300.
+    """
+    session = _active_session()
+    normalized_title = str(title).strip()
+    if not normalized_title:
+        raise ValueError("title must be a non-empty string")
+    grade = _resolve_timber_grade(material)
+    layers = ROOF_LAYERS_KG_M2 if roof_layers is None else roof_layers
+    width_mm = _positive(width, "width") * 1000
+    height_mm = _positive(height, "height") * 1000
+    rafter_width_mm = _positive(rafter_width, "rafter_width") * 1000
+    rafter_height_mm = _positive(rafter_height, "rafter_height") * 1000
+    bearing_m = width if bearing_length is None else bearing_length
+    bearing_length_mm = _positive(bearing_m, "bearing_length") * 1000
+    modulus = (
+        grade.elastic_modulus_gpa
+        if elastic_modulus is None
+        else _positive(elastic_modulus, "elastic_modulus")
+    )
+    check = calculate_purlin_check(
+        width_mm=width_mm,
+        height_mm=height_mm,
+        support_spans_m=spans,
+        upper_rafter_length_m=rafter_length_above,
+        lower_rafter_span_m=lower_rafter_span,
+        roof_angle_degrees=roof_angle,
+        rafter_width_mm=rafter_width_mm,
+        rafter_height_mm=rafter_height_mm,
+        rafter_spacing_m=rafter_spacing,
+        deflection_ratio=max_deflection,
+        elastic_modulus_gpa=modulus,
+        snow_load_kn_m2=snow_load,
+        roof_layers_kg_m2=layers,
+        additional_permanent_load_kn_m=additional_load,
+        timber_density_kg_m3=timber_density,
+        bending_strength_mpa=grade.bending_strength_mpa,
+        shear_strength_mpa=grade.shear_strength_mpa,
+        compression_perpendicular_mpa=(
+            grade.compression_perpendicular_mpa
+        ),
+        bearing_length_mm=bearing_length_mm,
+    )
+    session.prepare_inputs(snow_load=snow_load, roof_layers=layers)
+    _add_purlin_evaluation(
+        session.report,
+        chapter_title=normalized_title,
+        material=grade,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        deflection_ratio=max_deflection,
+        elastic_modulus_gpa=modulus,
+        bearing_length_mm=bearing_length_mm,
+        include_creep=session.include_creep,
+        check=check,
+    )
+    _print_purlin_check(
+        title=normalized_title,
+        deflection_ratio=max_deflection,
+        check=check,
+        timber_grade_name=grade.name,
+    )
+    session.add_result(normalized_title, "purlin", check)
+    return check
+
+
+def check_purlin(
+    *,
+    title: str,
+    material: str | TimberGrade,
+    width: float,
+    height: float,
+    span: float,
+    rafter_length_above: float,
+    lower_rafter_span: float,
+    roof_angle: float,
+    rafter_width: float,
+    rafter_height: float,
+    rafter_spacing: float,
+    max_deflection: float,
+    snow_load: float,
+    roof_layers: Mapping[str, float | None] | None = None,
+    additional_load: float = 0,
+    bearing_length: float | None = None,
+    elastic_modulus: float | None = None,
+    timber_density: float = TIMBER_DENSITY_KG_M3,
+) -> PurlinCheckResult:
+    """Check one simply supported purlin span between two supports."""
+    return _check_purlin(
+        title=title,
+        material=material,
+        width=width,
+        height=height,
+        spans=(span,),
+        rafter_length_above=rafter_length_above,
+        lower_rafter_span=lower_rafter_span,
+        roof_angle=roof_angle,
+        rafter_width=rafter_width,
+        rafter_height=rafter_height,
+        rafter_spacing=rafter_spacing,
+        max_deflection=max_deflection,
+        snow_load=snow_load,
+        roof_layers=roof_layers,
+        additional_load=additional_load,
+        bearing_length=bearing_length,
+        elastic_modulus=elastic_modulus,
+        timber_density=timber_density,
+    )
+
+
+def check_continuous_purlin(
+    *,
+    title: str,
+    material: str | TimberGrade,
+    width: float,
+    height: float,
+    spans: tuple[float, float, float],
+    rafter_length_above: float,
+    lower_rafter_span: float,
+    roof_angle: float,
+    rafter_width: float,
+    rafter_height: float,
+    rafter_spacing: float,
+    max_deflection: float,
+    snow_load: float,
+    roof_layers: Mapping[str, float | None] | None = None,
+    additional_load: float = 0,
+    bearing_length: float | None = None,
+    elastic_modulus: float | None = None,
+    timber_density: float = TIMBER_DENSITY_KG_M3,
+) -> PurlinCheckResult:
+    """Check one uniform purlin continuous across four supports."""
+    if len(spans) != 3:
+        raise ValueError("spans must contain exactly three spans")
+    return _check_purlin(
+        title=title,
+        material=material,
+        width=width,
+        height=height,
+        spans=spans,
+        rafter_length_above=rafter_length_above,
+        lower_rafter_span=lower_rafter_span,
+        roof_angle=roof_angle,
+        rafter_width=rafter_width,
+        rafter_height=rafter_height,
+        rafter_spacing=rafter_spacing,
+        max_deflection=max_deflection,
+        snow_load=snow_load,
+        roof_layers=roof_layers,
+        additional_load=additional_load,
+        bearing_length=bearing_length,
+        elastic_modulus=elastic_modulus,
+        timber_density=timber_density,
+    )
+
 
 
 def _print_roof_check(
@@ -2342,6 +2542,7 @@ def _print_roof_check(
     roof_angle_degrees: float,
     deflection_ratio: float,
     check: RoofCheckResult,
+    timber_grade_name: str = "C24",
 ) -> None:
     """Print the case-specific results for one roof rafter."""
     result = check.rafter
@@ -2391,7 +2592,7 @@ def _print_roof_check(
     )
 
     print(
-        "  Ultimate strength (ULS, preliminary C24; "
+        f"  Ultimate strength (ULS, preliminary {timber_grade_name}; "
         f"{PERMANENT_LOAD_FACTOR:g}G + {SNOW_LOAD_FACTOR:g}S):"
     )
     for check_name, demand, resistance, utilization, unit_scale, unit in (
@@ -2412,7 +2613,7 @@ def _print_roof_check(
             "kN",
         ),
         (
-            "Bearing",
+            "Bearing at angle to grain",
             check.design_support_reaction_n,
             check.bearing_resistance_n,
             check.bearing_utilization,
@@ -2434,16 +2635,22 @@ def _print_roof_check(
 
 def _print_purlin_check(
     *,
+    title: str,
     deflection_ratio: float,
     check: PurlinCheckResult,
+    timber_grade_name: str = "C24",
 ) -> None:
-    """Print the continuous street-side purlin results."""
+    """Print simple- or continuous-purlin results."""
+    is_continuous = len(check.span_lengths_m) == 3
     print()
-    print("Street-side continuous purlin:")
-    print(
-        "  Support spans: "
-        + " + ".join(f"{span:g} m" for span in check.span_lengths_m)
-    )
+    print(f"{title}:")
+    if is_continuous:
+        print(
+            "  Support spans: "
+            + " + ".join(f"{span:g} m" for span in check.span_lengths_m)
+        )
+    else:
+        print(f"  Support span: {check.span_lengths_m[0]:g} m")
     print(
         "  Rafter tributary length: "
         f"{check.upper_rafter_length_m:.3f} m above + "
@@ -2470,7 +2677,7 @@ def _print_purlin_check(
     )
     print(
         f"  Snow line load on purlin: {check.roof_snow_line_load_kn_m:.3f} "
-        "kN/m vertical, uniformly on all spans"
+        "kN/m vertical"
     )
 
     print("  Serviceability (SLS):")
@@ -2492,8 +2699,9 @@ def _print_purlin_check(
         ),
         start=1,
     ):
+        span_label = f"Span {index}" if is_continuous else "Span"
         print(
-            f"    Span {index} ({span:g} m), L/{deflection_ratio:g} = "
+            f"    {span_label} ({span:g} m), L/{deflection_ratio:g} = "
             f"{limit * 1000:.1f} mm: immediate "
             f"{immediate_deflection * 1000:.1f} mm "
             f"({immediate_utilization * 100:.1f}%, "
@@ -2512,7 +2720,7 @@ def _print_purlin_check(
     )
 
     print(
-        "  Ultimate strength (ULS, preliminary C24; "
+        f"  Ultimate strength (ULS, preliminary {timber_grade_name}; "
         f"{PERMANENT_LOAD_FACTOR:g}G + {SNOW_LOAD_FACTOR:g}S):"
     )
     for index, (moment, location) in enumerate(
@@ -2522,23 +2730,34 @@ def _print_purlin_check(
         ),
         start=1,
     ):
+        moment_label = (
+            f"Span {index} positive moment"
+            if is_continuous
+            else "Bending moment"
+        )
         print(
-            f"    Span {index} positive moment: {moment / 1000:.2f} "
+            f"    {moment_label}: {moment / 1000:.2f} "
             f"kN·m at {location:.2f} m"
         )
-    support_moments = ", ".join(
-        f"{moment / 1000:.2f}"
-        for moment in check.design_response.support_moments_nm
-    )
-    print(f"    Support moments: {support_moments} kN·m")
-    print(
+    if is_continuous:
+        support_moments = ", ".join(
+            f"{moment / 1000:.2f}"
+            for moment in check.design_response.support_moments_nm
+        )
+        print(f"    Support moments: {support_moments} kN·m")
+    bending_line = (
         "    Bending resistance: "
-        f"{check.bending_resistance_nm / 1000:.2f} kN·m; positive "
+        f"{check.bending_resistance_nm / 1000:.2f} kN·m; "
         f"{check.positive_bending_utilization * 100:.1f}% "
-        f"({_status(check.positive_bending_utilization)}), negative "
-        f"{check.negative_bending_utilization * 100:.1f}% "
-        f"({_status(check.negative_bending_utilization)})"
+        f"({_status(check.positive_bending_utilization)})"
     )
+    if is_continuous:
+        bending_line += (
+            ", negative "
+            f"{check.negative_bending_utilization * 100:.1f}% "
+            f"({_status(check.negative_bending_utilization)})"
+        )
+    print(bending_line)
     maximum_shear_n = max(check.design_response.span_max_abs_shears_n)
     print(
         f"    Shear: {maximum_shear_n / 1000:.2f} / "
@@ -2567,23 +2786,26 @@ def _print_purlin_check(
     )
 
 
-def _independent_span_has_failure(
-    span: IndependentPurlinSpanResult,
-) -> bool:
-    return max(
-        span.immediate_deflection_utilization,
-        span.final_deflection_utilization,
-        span.bending_utilization,
-        span.shear_utilization,
-        span.bearing_utilization,
-    ) > 1
 
-
-def _independent_purlin_status(check: PurlinCheckResult) -> str:
-    has_failure = any(
-        _independent_span_has_failure(span)
-        for span in check.independent_spans
-    )
+def _purlin_report_status(
+    check: PurlinCheckResult,
+    *,
+    include_creep: bool,
+) -> str:
+    """Return a purlin status using only checks included in the PDF."""
+    utilizations = [
+        *check.immediate_deflection_utilizations,
+        *(
+            check.final_deflection_utilizations
+            if include_creep
+            else ()
+        ),
+        check.positive_bending_utilization,
+        check.negative_bending_utilization,
+        check.shear_utilization,
+        check.bearing_utilization,
+    ]
+    has_failure = max(utilizations) >= 1
     if has_failure and check.missing_roof_layers:
         return "FAIL; CHECK INCOMPLETE"
     if has_failure:
@@ -2593,307 +2815,142 @@ def _independent_purlin_status(check: PurlinCheckResult) -> str:
     return "PASS"
 
 
-def _print_independent_purlin_spans(
-    *,
-    deflection_ratio: float,
-    check: PurlinCheckResult,
-) -> None:
-    """Print the alternative with every purlin segment split off."""
-    print()
-    print("Independent purlin pieces:")
-    print("  Each segment is simply supported with no continuity benefit.")
-    print(
-        "  End bearing length used per piece: "
-        f"{check.independent_spans[0].bearing_length_mm:g} mm "
-        "(override with --purlin-split-bearing-length; default is half the "
-        "continuous-purlin bearing length)"
-    )
-    for span in check.independent_spans:
-        print()
-        print(
-            f"  Segment {span.segment_index}: {span.span_m:g} m, "
-            f"{span.width_mm:g} × {span.height_mm:g} mm"
-        )
-        print(
-            f"    Self-mass: {span.self_mass_kg_m:.1f} kg/m; permanent "
-            f"line load: {span.permanent_line_load_kn_m:.3f} kN/m"
-        )
-        print("    Serviceability (SLS):")
-        print(
-            f"      L/{deflection_ratio:g} = "
-            f"{span.deflection_limit_m * 1000:.1f} mm: immediate "
-            f"{span.immediate_deflection_m * 1000:.1f} mm "
-            f"({span.immediate_deflection_utilization * 100:.1f}%, "
-            f"{_status(span.immediate_deflection_utilization)}); final "
-            f"{span.final_deflection_m * 1000:.1f} mm "
-            f"({span.final_deflection_utilization * 100:.1f}%, "
-            f"{_status(span.final_deflection_utilization)})"
-        )
-        print(
-            "      Maximum roof snow from immediate/final deflection: "
-            f"{span.maximum_roof_snow_immediate_kn_m2:.2f} / "
-            f"{span.maximum_roof_snow_final_kn_m2:.2f} kN/m²"
-        )
-        print(
-            "    Ultimate strength (ULS, preliminary C24; "
-            f"{PERMANENT_LOAD_FACTOR:g}G + {SNOW_LOAD_FACTOR:g}S):"
-        )
-        for check_name, demand, resistance, utilization, unit in (
-            (
-                "Bending",
-                span.design_bending_moment_nm,
-                span.bending_resistance_nm,
-                span.bending_utilization,
-                "kN·m",
-            ),
-            (
-                "Shear",
-                span.design_shear_force_n,
-                span.shear_resistance_n,
-                span.shear_utilization,
-                "kN",
-            ),
-            (
-                "Bearing",
-                span.design_support_reaction_n,
-                span.bearing_resistance_n,
-                span.bearing_utilization,
-                "kN",
-            ),
-        ):
-            print(
-                f"      {check_name}: {demand / 1000:.2f} / "
-                f"{resistance / 1000:.2f} {unit}, "
-                f"{utilization * 100:.1f}% ({_status(utilization)})"
-            )
-        print(
-            f"      Governing strength: {span.governing_strength_check}, "
-            f"{span.governing_strength_utilization * 100:.1f}% "
-            f"({_status(span.governing_strength_utilization)})"
-        )
-        print(
-            "    SEGMENT RESULT: "
-            f"{'FAIL' if _independent_span_has_failure(span) else 'PASS'}"
-        )
-    print(f"  SPLIT OPTION RESULT: {_independent_purlin_status(check)}")
 
 
 def main() -> None:
-    arguments = _parser().parse_args()
-    assert_terminal_inputs_are_conservative(
-        terminal_snow_load_kn_m2=arguments.snow_load,
-        report_snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
-        terminal_roof_layers_kg_m2=ROOF_LAYERS_KG_M2,
-        report_roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
-    )
-
-    shared_rafter_check_arguments = {
-        "width_mm": arguments.width,
-        "height_mm": arguments.height,
-        "deflection_ratio": arguments.deflection_ratio,
-        "elastic_modulus_gpa": arguments.modulus,
-        "timber_density_kg_m3": arguments.density,
-        "rafter_spacing_m": arguments.spacing,
-        "snow_load_kn_m2": arguments.snow_load,
-        "roof_layers_kg_m2": ROOF_LAYERS_KG_M2,
-    }
-    roof_cases = (
-        ("Main roof", arguments.span, arguments.angle),
-        ("Dormer roof", arguments.dormer_span, arguments.dormer_angle),
-    )
-    rafter_checks = [
-        (
-            name,
-            span,
-            angle,
-            calculate_roof_check(
-                support_span_m=span,
-                roof_angle_degrees=angle,
-                **shared_rafter_check_arguments,
-            ),
+    with calculation_report(
+        "rafter_load_report.pdf",
+        include_creep=True,
+    ):
+        check_rafter(
+            title="Hlavní krokve, C22",
+            material="c22",
+            width=0.08,
+            height=0.20,
+            span=3.85,
+            spacing=0.75,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.05,
         )
-        for name, span, angle in roof_cases
-    ]
-
-    shared_purlin_check_arguments = {
-        "width_mm": arguments.purlin_width,
-        "height_mm": arguments.purlin_height,
-        "support_spans_m": tuple(arguments.purlin_spans),
-        "segment_sizes_mm": (
-            (arguments.purlin_left_width, arguments.purlin_left_height),
-            (arguments.purlin_width, arguments.purlin_height),
-            (arguments.purlin_right_width, arguments.purlin_right_height),
-        ),
-        "upper_rafter_length_m": arguments.upper_rafter_length,
-        "lower_rafter_span_m": arguments.span,
-        "roof_angle_degrees": arguments.angle,
-        "rafter_width_mm": arguments.width,
-        "rafter_height_mm": arguments.height,
-        "rafter_spacing_m": arguments.spacing,
-        "deflection_ratio": arguments.deflection_ratio,
-        "elastic_modulus_gpa": arguments.modulus,
-        "snow_load_kn_m2": arguments.snow_load,
-        "roof_layers_kg_m2": ROOF_LAYERS_KG_M2,
-        "additional_permanent_load_kn_m": arguments.purlin_extra_load,
-        "timber_density_kg_m3": arguments.density,
-        "bearing_length_mm": arguments.purlin_bearing_length,
-        "split_bearing_length_mm": arguments.purlin_split_bearing_length,
-    }
-    purlin_check = calculate_purlin_check(
-        **shared_purlin_check_arguments,
-    )
-
-    report_page_count: int | None = None
-    if arguments.report is not None:
-        official_rafter_arguments = {
-            "width_mm": arguments.width,
-            "height_mm": arguments.height,
-            "deflection_ratio": arguments.deflection_ratio,
-            "elastic_modulus_gpa": arguments.modulus,
-            "timber_density_kg_m3": arguments.density,
-            "rafter_spacing_m": arguments.spacing,
-            "snow_load_kn_m2": REPORT_SNOW_LOAD_KN_M2,
-            "roof_layers_kg_m2": REPORT_ROOF_LAYERS_KG_M2,
-        }
-        official_rafter_checks = [
-            (
-                name,
-                span,
-                angle,
-                calculate_roof_check(
-                    support_span_m=span,
-                    roof_angle_degrees=angle,
-                    **official_rafter_arguments,
-                ),
-            )
-            for name, span, angle in roof_cases
-        ]
-        report_page_count = generate_rafter_report(
-            arguments.report,
-            width_mm=arguments.width,
-            height_mm=arguments.height,
-            rafter_spacing_m=arguments.spacing,
-            deflection_ratio=arguments.deflection_ratio,
-            elastic_modulus_gpa=arguments.modulus,
-            timber_density_kg_m3=arguments.density,
-            snow_load_kn_m2=REPORT_SNOW_LOAD_KN_M2,
-            roof_layers_kg_m2=REPORT_ROOF_LAYERS_KG_M2,
-            rafter_checks=official_rafter_checks,
+        check_rafter(
+            title="Hlavní krokve, C24",
+            material="c24",
+            width=0.08,
+            height=0.20,
+            span=3.85,
+            spacing=0.85,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.05,
         )
-
-    print(
-        f"Shared rafter: {arguments.width:g} × {arguments.height:g} mm, "
-        f"spacing {arguments.spacing:g} m"
-    )
-    print(
-        f"Shared timber: E={arguments.modulus:g} GPa, "
-        f"density {arguments.density:g} kg/m³"
-    )
-    print(
-        "Rafter self-mass: "
-        f"{rafter_checks[0][3].rafter.self_mass_kg_per_m:.1f} kg/m"
-    )
-
-    print()
-    print("Shared permanent roof layers (actual sloping surface):")
-    for layer_name, mass in ROOF_LAYERS_KG_M2.items():
-        value = "MISSING" if mass is None else f"{mass:.1f} kg/m²"
-        print(f"  {layer_name}: {value}")
-    print(
-        "  Known layer total: "
-        f"{rafter_checks[0][3].roof_layer_mass_kg_m2:.1f} kg/m²"
-    )
-    if rafter_checks[0][3].missing_roof_layers:
-        print(
-            "CHECK INCOMPLETE: enter a mass for every layer listed as MISSING."
+        check_rafter(
+            title="Hlavní krokve, zesílené, C22",
+            material="c24",
+            width=0.10,
+            height=0.20,
+            span=3.85,
+            spacing=1.0,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.05,
         )
-
-    print()
-    print(
-        f"Shared snow load: {arguments.snow_load:g} kN/m² on horizontal "
-        f"projection ({arguments.snow_load * 1000 / GRAVITY_M_S2:.1f} "
-        "kg/m² equivalent)"
-    )
-    for name, span, angle, check in rafter_checks:
-        _print_roof_check(
-            name,
-            support_span_m=span,
-            roof_angle_degrees=angle,
-            deflection_ratio=arguments.deflection_ratio,
-            check=check,
+        check_rafter(
+            title="Krokve vikýře, C22",
+            material="c22",
+            width=0.08,
+            height=0.20,
+            span=3.25,
+            spacing=0.75,
+            roof_angle=17.22,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.05,
+        )
+        check_purlin(
+            title="Vaznice A, C22",
+            material="c22",
+            width=0.24,
+            height=0.24,
+            span=3.74,
+            rafter_length_above=1.05,
+            lower_rafter_span=3.85,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            rafter_width=0.08,
+            rafter_height=0.20,
+            rafter_spacing=0.75,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.12,
+        )
+        check_purlin(
+            title="Vaznice B, C22",
+            material="c22",
+            width=0.24,
+            height=0.32,
+            span=4.80,
+            rafter_length_above=1.05,
+            lower_rafter_span=3.85,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            rafter_width=0.08,
+            rafter_height=0.20,
+            rafter_spacing=0.75,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.12,
+        )
+        check_purlin(
+            title="Vaznice B, C22, tenka",
+            material="c22",
+            width=0.24,
+            height=0.28,
+            span=4.80,
+            rafter_length_above=1.05,
+            lower_rafter_span=3.85,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            rafter_width=0.08,
+            rafter_height=0.20,
+            rafter_spacing=0.75,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.12,
+        )
+        check_purlin(
+            title="Vaznice C, C22",
+            material="c22",
+            width=0.24,
+            height=0.24,
+            span=2.75,
+            rafter_length_above=1.05,
+            lower_rafter_span=3.85,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            rafter_width=0.08,
+            rafter_height=0.20,
+            rafter_spacing=0.75,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.12,
+        )
+        check_continuous_purlin(
+            title="Souvislá vaznice, C22",
+            material="c22",
+            width=0.24,
+            height=0.32,
+            spans=(3.74, 4.80, 2.75),
+            rafter_length_above=1.05,
+            lower_rafter_span=3.85,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            rafter_width=0.08,
+            rafter_height=0.20,
+            rafter_spacing=0.75,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.24,
         )
 
-    governing_rafter_sls = max(
-        rafter_checks,
-        key=lambda case: case[3].final_deflection_utilization,
-    )
-    governing_rafter_uls = max(
-        rafter_checks,
-        key=lambda case: case[3].governing_strength_utilization,
-    )
-    print()
-    print("Governing rafter cases:")
-    print(
-        f"  Final deflection: {governing_rafter_sls[0]}, "
-        f"{governing_rafter_sls[3].final_deflection_utilization * 100:.1f}% "
-        f"({_status(governing_rafter_sls[3].final_deflection_utilization)})"
-    )
-    print(
-        f"  Strength: {governing_rafter_uls[0]} "
-        f"{governing_rafter_uls[3].governing_strength_check}, "
-        f"{governing_rafter_uls[3].governing_strength_utilization * 100:.1f}% "
-        f"({_status(governing_rafter_uls[3].governing_strength_utilization)})"
-    )
-
-    print()
-    print(
-        "Continuous purlin section (middle-segment size): "
-        f"{arguments.purlin_width:g} × "
-        f"{arguments.purlin_height:g} mm, bearing length "
-        f"{arguments.purlin_bearing_length:g} mm"
-    )
-    print(
-        "Only the simple street roof is applied to the purlin. It carries "
-        f"the entered {arguments.upper_rafter_length:g} m above it and half "
-        "of the street-side lower rafter span."
-    )
-    _print_purlin_check(
-        deflection_ratio=arguments.deflection_ratio,
-        check=purlin_check,
-    )
-    _print_independent_purlin_spans(
-        deflection_ratio=arguments.deflection_ratio,
-        check=purlin_check,
-    )
-
-    print()
-    print(
-        "WARNING: Preliminary member check only. Confirm material values and "
-        "National Annex factors. Axial force, lateral buckling/restraint, "
-        "notches, holes, connections, wind uplift, fire, and snow drift/shape "
-        "cases still require separate checks. The primary purlin model assumes "
-        "continuity over all four supports and uses the middle segment's "
-        "section throughout. The split alternative treats every segment as a "
-        "separate simply supported piece with its specified section. Discrete "
-        "rafter reactions are smeared into a uniform load. The garden/dormer "
-        "purlin, end overhangs, concentrated-load effects, and the design of "
-        "any splice or connection are not checked."
-    )
-    print()
-    print("OVERALL RESULT FOR RAFTERS AND CONTINUOUS PURLIN:")
-    print(f"  {_overall_result(rafter_checks, purlin_check)}")
-    print(
-        "SPLIT-PURLIN ALTERNATIVE: "
-        f"{_independent_purlin_status(purlin_check)}"
-    )
-
-
-    if arguments.report is not None:
-        print()
-        print(
-            f"OFFICIAL RAFTER REPORT: {arguments.report} "
-            f"({report_page_count} pages)"
-        )
 
 if __name__ == "__main__":
     main()

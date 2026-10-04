@@ -370,9 +370,9 @@ rafters = [
 	(3.35, "+before"),
 	(4.15, "before"),
 	(4.95, "before"),
-	(5.62, "before"),
-	(6.37, "after"),
-	(7.04, "after"),
+	(5.70, "after"),
+	(6.41, "after"),
+	(7.08, "after"),
 	(7.75, "after"),
 	(8.55, "+after"),
 
@@ -3445,7 +3445,15 @@ if "roof" in sys.argv:
 			)
 		)
 	drawing1.add_timber_schedule(timber_schedule_rows, layout_scale=0.5)
-
+	drawing1.add_notes(
+		[
+			"Zesílené krokve a hlavní krokve (nezkrácené), které "
+			"maji součet osových vzdáleností od sousedních krokví "
+			"víc než 1.4 m musí mít pevnostní třídu C24. "
+			"Pro všechny ostatní prvky krovu dostačuje C22."
+		],
+		layout_scale=0.5,
+	)
 	drawing1.render("roof.svg", png=True, png_dpi=600)
 
 if "ceiling" in sys.argv:
