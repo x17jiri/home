@@ -14,17 +14,28 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from math import cos, isfinite, radians, sin
 from pathlib import Path
+import re
 from textwrap import wrap
 from typing import TypeAlias
 
+from matplotlib import rcParams
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
+from matplotlib.patches import Rectangle
+from matplotlib.text import Text
+
+
+# Type 3 fonts render correctly but do not contain a reliable Unicode map,
+# which breaks copying Czech and Greek characters from the generated PDF.
+rcParams["pdf.fonttype"] = 42
+rcParams["mathtext.fontset"] = "dejavusans"
 
 
 # Shared project inputs used by the checks in main().
 ROOF_ANGLE_DEGREES = 35.83
 MAX_DEFLECTION_RATIO = 300.0  # 300 means L/300
-SNOW_LOAD_KN_M2 = 1.7  # vertical load per horizontal roof projection
+SNOW_LOAD_KN_M2 = 1.5  # vertical load per horizontal roof projection
 
 REPORT_SNOW_LOAD_STANDARD = "ČSN EN 1991-1-3:2005/Z1:2006"
 REPORT_SNOW_LOAD_ZONE = 3
@@ -36,7 +47,7 @@ REPORT_TIMBER_GRADES_STANDARD = "ČSN EN 338"
 # installed mass of every layer. Use 0 only when a listed layer is genuinely
 # absent; None keeps the overall check explicitly incomplete.
 ROOF_LAYERS_KG_M2: dict[str, float | None] = {
-    "Roof tiles": 50,
+    "Roof tiles": 45,
     "Tile battens": 5,
     "Counter battens": 5,
     "MDF": 10,
@@ -182,7 +193,119 @@ class PurlinCheckResult:
     missing_roof_layers: tuple[str, ...]
 
 
-ReportSection: TypeAlias = tuple[str, Sequence[str]]
+REPORT_RESULT_PASS_TINT = "#d8f0dc"
+REPORT_RESULT_FAIL_TINT = "#f7d3d3"
+REPORT_LIMIT_TINT = "#fff1ad"
+
+
+@dataclass(frozen=True)
+class ReportHighlight:
+    text: str
+    color: str
+
+
+@dataclass(frozen=True)
+class ReportLine:
+    text: str
+    highlights: tuple[ReportHighlight, ...] = ()
+
+
+ReportSection: TypeAlias = tuple[str, Sequence[str | ReportLine]]
+
+
+# Keep equations as plain text in the calculation code. Only the PDF renderer
+# turns these known variable names into mathematical notation; explicit names
+# and word boundaries prevent changing Czech prose or units such as kg/m².
+_REPORT_VARIABLE_SUFFIXES = {
+    "w": ("fin,max", "inst,max", "G,inst", "S,inst", "fin", "inst", "lim"),
+    "q": ("G,k,vrstvy", "G,k,krokev", "G,k", "S,k", "inst", "fin", "k", "d"),
+    "f": ("c,0,k", "c,90,k", "c,0,d", "c,90,d", "c,β,d", "m,k", "v,k",
+          "m,d", "v,d", "k", "d"),
+    "k": ("mod", "def", "cr", "c,90"),
+    "γ": ("G", "Q", "M"),
+    "ψ": ("2",),
+    "M": ("Ed,+,max", "Ed,-,max", "Ed", "Rd"),
+    "V": ("Ed,max", "Ed", "Rd"),
+    "F": ("c,90,Ed,max", "c,90,Ed", "c,β,Ed", "c,Ed"),
+    "σ": ("c,90,d", "c,β,d", "c,d", "m,d"),
+    "τ": ("d",),
+    "R": ("c,90,d", "c,β,d", "d"),
+    "E": ("0,mean", "d"),
+    "G": ("k",),
+    "S": ("k",),
+    "g": ("k", "dod"),
+    "s": ("line,k", "k"),
+    "b": ("ef", "t,s", "t,h", "k"),
+    "h": ("k",),
+    "L": ("up", "dol"),
+    "m": ("vrstvy", "krokve", "A", "v"),
+}
+_REPORT_VARIABLE_MATH = {
+    base + suffix: rf"${base}_{{\mathrm{{{suffix}}}}}$"
+    for base, suffixes in _REPORT_VARIABLE_SUFFIXES.items()
+    for suffix in suffixes
+}
+_REPORT_VARIABLE_PATTERN = re.compile(
+    r"(?<!\w)(?:"
+    + "|".join(
+        re.escape(variable)
+        for variable in sorted(_REPORT_VARIABLE_MATH, key=len, reverse=True)
+    )
+    + r")(?!\w)"
+)
+
+
+def _report_math_text(text: str) -> str:
+    """Render variable suffixes upright and subscripted, not as baseline text.
+
+    Wrap the original text before calling this helper so a math expression is
+    never split between lines. Leave any existing math spans untouched.
+    """
+    return "".join(
+        part if index % 2 else _REPORT_VARIABLE_PATTERN.sub(
+            lambda match: _REPORT_VARIABLE_MATH[match.group()], part
+        )
+        for index, part in enumerate(re.split(r"(\$[^$]*\$)", text))
+    )
+
+
+def _highlighted_line(
+    text: str,
+    *highlights: tuple[str, str],
+) -> ReportLine:
+    return ReportLine(
+        text,
+        tuple(
+            ReportHighlight(highlight_text, color)
+            for highlight_text, color in highlights
+        ),
+    )
+
+
+def _result_tint(utilization: float) -> str:
+    return (
+        REPORT_RESULT_PASS_TINT
+        if utilization < 1
+        else REPORT_RESULT_FAIL_TINT
+    )
+
+
+def _highlight_check_values(
+    lines: Sequence[str | ReportLine],
+    *,
+    demand: str,
+    limit: str,
+    utilization: float,
+) -> tuple[ReportLine, ...]:
+    """Link the calculated values to their final comparison."""
+    return tuple(
+        _highlighted_line(
+            line.text if isinstance(line, ReportLine) else line,
+            (demand, _result_tint(utilization)),
+            (limit, REPORT_LIMIT_TINT),
+        )
+        for line in lines
+    )
 
 
 class CalculationReport:
@@ -207,6 +330,10 @@ class CalculationReport:
         self.document_title = document_title
         self._pdf: PdfPages | None = None
         self._page_count = 0
+        self._pending_highlights: dict[
+            Figure,
+            list[tuple[Text, tuple[ReportHighlight, ...]]],
+        ] = {}
 
     @property
     def page_count(self) -> int:
@@ -270,7 +397,80 @@ class CalculationReport:
             raise RuntimeError(
                 "CalculationReport must be used as a context manager"
             )
+        self._add_highlight_rectangles(figure)
         self._pdf.savefig(figure)
+
+    def add_figure(self, figure: Figure) -> None:
+        """Append a caller-prepared diagram page to the calculation report."""
+        if self._pdf is None:
+            raise RuntimeError("CalculationReport must be used as a context manager")
+        self._page_count += 1
+        figure.text(0.925, 0.025, f"Strana {self._page_count}", fontsize=7,
+                    color="#555555", ha="right", va="bottom")
+        self._save_page(figure)
+
+    def _add_highlight_rectangles(self, figure: Figure) -> None:
+        pending = self._pending_highlights.pop(figure, ())
+        if not pending:
+            return
+
+        canvas = FigureCanvasAgg(figure)
+        canvas.draw()
+        renderer = canvas.get_renderer()
+        inverse = figure.transFigure.inverted()
+        padding_x_px = figure.dpi * 1.2 / 72
+        padding_y_px = figure.dpi * 0.7 / 72
+
+        for artist, highlights in pending:
+            full_text = artist.get_text()
+            full_bounds = artist.get_window_extent(renderer)
+            font_properties = artist.get_fontproperties()
+            for highlight in highlights:
+                search_from = 0
+                while True:
+                    start = full_text.find(highlight.text, search_from)
+                    if start < 0:
+                        break
+                    prefix_width = renderer.get_text_width_height_descent(
+                        full_text[:start],
+                        font_properties,
+                        ismath="$" in full_text[:start],
+                    )[0]
+                    # Measure the actual formatted prefix: subscripts have a
+                    # smaller font and cannot be measured as literal markup.
+                    end = start + len(highlight.text)
+                    through_highlight_width = renderer.get_text_width_height_descent(
+                        full_text[:end],
+                        font_properties,
+                        ismath="$" in full_text[:end],
+                    )[0]
+                    highlight_width = through_highlight_width - prefix_width
+                    lower_left = inverse.transform(
+                        (
+                            full_bounds.x0 + prefix_width - padding_x_px,
+                            full_bounds.y0 - padding_y_px,
+                        )
+                    )
+                    upper_right = inverse.transform(
+                        (
+                            full_bounds.x0
+                            + prefix_width
+                            + highlight_width
+                            + padding_x_px,
+                            full_bounds.y1 + padding_y_px,
+                        )
+                    )
+                    rectangle = Rectangle(
+                        lower_left,
+                        upper_right[0] - lower_left[0],
+                        upper_right[1] - lower_left[1],
+                        transform=figure.transFigure,
+                        facecolor=highlight.color,
+                        edgecolor="none",
+                        zorder=artist.get_zorder() - 0.1,
+                    )
+                    figure.add_artist(rectangle)
+                    search_from = start + len(highlight.text)
 
     def add_sections(
         self,
@@ -295,17 +495,40 @@ class CalculationReport:
         )
         has_content = False
         for heading, supplied_lines in sections:
-            wrapped_lines: list[str] = []
+            wrapped_lines: list[ReportLine] = []
             for supplied_line in supplied_lines:
-                line = str(supplied_line)
-                wrapped_lines.extend(
+                if isinstance(supplied_line, ReportLine):
+                    line = supplied_line.text
+                    highlights = supplied_line.highlights
+                else:
+                    line = str(supplied_line)
+                    highlights = ()
+                # Keep highlighted values and their units on the same line.
+                for highlight in highlights:
+                    line = line.replace(
+                        highlight.text,
+                        highlight.text.replace(" ", "\u00a0"),
+                    )
+                for wrapped_line in (
                     wrap(
                         line,
                         width=105,
                         break_long_words=False,
                         break_on_hyphens=False,
-                    ) or ("",)
-                )
+                    )
+                    or ("",)
+                ):
+                    wrapped_line = wrapped_line.replace("\u00a0", " ")
+                    wrapped_lines.append(
+                        ReportLine(
+                            wrapped_line,
+                            tuple(
+                                highlight
+                                for highlight in highlights
+                                if highlight.text in wrapped_line
+                            ),
+                        )
+                    )
             lines = tuple(wrapped_lines)
             section_height = (
                 0.028 + len(lines) * self._LINE_HEIGHT + 0.008
@@ -330,7 +553,8 @@ class CalculationReport:
             y -= 0.028
             has_content = True
 
-            for line in lines:
+            for report_line in lines:
+                line = report_line.text
                 if y < self._BOTTOM:
                     self._save_page(figure)
                     figure, y = self._start_page(
@@ -351,16 +575,20 @@ class CalculationReport:
                     "VYHOVUJE" in line
                     or "NEVYHOVUJE" in line
                 )
-                figure.text(
+                artist = figure.text(
                     0.085,
                     y,
-                    line,
+                    _report_math_text(line),
                     fontsize=8.4,
                     family="DejaVu Sans",
                     fontweight="bold" if is_verdict_line else "normal",
                     fontstyle="italic" if is_verdict_line else "normal",
                     va="top",
                 )
+                if report_line.highlights:
+                    self._pending_highlights.setdefault(figure, []).append(
+                        (artist, report_line.highlights)
+                    )
                 y -= self._LINE_HEIGHT
 
             y -= 0.008
@@ -386,11 +614,11 @@ class CalculationReport:
                 "CalculationReport must be used as a context manager"
             )
 
-        labels = tuple(str(label) for label in column_labels)
+        labels = tuple(_report_math_text(str(label)) for label in column_labels)
         if not labels:
             raise ValueError("column_labels must not be empty")
         normalized_rows = tuple(
-            tuple(str(value) for value in row)
+            tuple(_report_math_text(str(value)) for value in row)
             for row in rows
         )
         if any(len(row) != len(labels) for row in normalized_rows):
@@ -424,7 +652,7 @@ class CalculationReport:
                 figure.text(
                     0.075,
                     y,
-                    line,
+                    _report_math_text(line),
                     fontsize=8.4,
                     family="DejaVu Sans",
                     va="top",
@@ -1418,6 +1646,22 @@ def _status_cz(utilization: float) -> str:
     return "VYHOVUJE" if utilization < 1 else "NEVYHOVUJE"
 
 
+def _comparison_cz(demand: str, limit: str, utilization: float) -> str:
+    """Use the unrounded result for both the relation and the strict verdict."""
+    relation = "<" if utilization < 1 else ">" if utilization > 1 else "="
+    return f"{demand} {relation} {limit}, {_status_cz(utilization)}"
+
+
+def _cz(value: float, decimals: int) -> str:
+    """Format a report number with a Czech decimal comma."""
+    return f"{value:.{decimals}f}".replace(".", ",")
+
+
+def _cz_scientific(value: float, decimals: int = 8) -> str:
+    """Format scientific notation with a Czech decimal comma."""
+    return f"{value:.{decimals}e}".replace(".", ",")
+
+
 RafterReportCase: TypeAlias = tuple[str, float, float, RoofCheckResult]
 
 _REPORT_ROOF_LAYER_NAMES_CZ = {
@@ -1471,7 +1715,7 @@ def add_roof_load_table(
     has_missing_layer = False
 
     snow_load = _non_negative(snow_load_kn_m2, "snow_load_kn_m2")
-    snow_load_text = f"{snow_load:.2f}".replace(".", ",")
+    snow_load_text = _cz(snow_load, 2)
     if snow_load_zone <= 0:
         raise ValueError("snow_load_zone must be greater than zero")
     if not snow_load_standard.strip():
@@ -1495,8 +1739,10 @@ def add_roof_load_table(
         rows.append(
             (
                 display_name,
-                f"{mass_kg_m2:.1f}",
-                f"{mass_kg_m2 * GRAVITY_M_S2 / 1000:.3f}",
+                _cz(mass_kg_m2, 1),
+                f"{_cz(mass_kg_m2, 1)} × "
+                f"{_cz(GRAVITY_M_S2, 2)} / 1000 = "
+                f"{_cz(mass_kg_m2 * GRAVITY_M_S2 / 1000, 3)}",
             )
         )
 
@@ -1506,8 +1752,10 @@ def add_roof_load_table(
     rows.append(
         (
             total_label,
-            f"{total_mass_kg_m2:.1f}",
-            f"{total_mass_kg_m2 * GRAVITY_M_S2 / 1000:.3f}",
+            _cz(total_mass_kg_m2, 1),
+            f"{_cz(total_mass_kg_m2, 1)} × "
+            f"{_cz(GRAVITY_M_S2, 2)} / 1000 = "
+            f"{_cz(total_mass_kg_m2 * GRAVITY_M_S2 / 1000, 3)}",
         )
     )
 
@@ -1516,17 +1764,18 @@ def add_roof_load_table(
         column_labels=(
             "Vrstva",
             "Hmotnost [kg/m²]",
-            "gk [kN/m²]",
+            "Výpočet gk [kN/m²]",
         ),
         rows=rows,
-        column_widths=(0.50, 0.22, 0.28),
+        column_widths=(0.40, 0.19, 0.41),
         intro_lines=(
             f"Zatížení sněhem dle {snow_load_standard}: "
             f"{snow_load_zone}. sněhová oblast, "
             f"sk = {snow_load_text} kN/m².",
             "Hmotnosti vrstev jsou vztaženy k 1 m² skutečné šikmé "
             "plochy střechy.",
-            f"Přepočet: gk = m × g / 1000; g = {GRAVITY_M_S2:g} m/s².",
+            f"Přepočet: gk = m × g / 1000; "
+            f"g = {_cz(GRAVITY_M_S2, 2)} m/s².",
         ),
         bold_last_row=True,
         footer_title="Předběžný statický výpočet střechy",
@@ -1601,6 +1850,32 @@ def add_rafter_report(
         )
         bearing_strength_mpa = check.design_bearing_strength_pa / 1e6
         bearing_area_m2 = check.bearing_area_m2
+        bending_stress_mpa = (
+            abs(check.design_bending_moment_nm) / result.section_modulus_m3 / 1e6
+        )
+        shear_stress_mpa = (
+            1.5 * abs(check.design_shear_force_n)
+            / (SHEAR_EFFECTIVE_WIDTH_FACTOR * width_m * height_m) / 1e6
+        )
+        bending_demand = f"{_cz(bending_stress_mpa, 4)} MPa"
+        bending_limit = f"{_cz(bending_strength_mpa, 4)} MPa"
+        shear_demand = f"{_cz(shear_stress_mpa, 4)} MPa"
+        shear_limit = f"{_cz(shear_strength_mpa, 4)} MPa"
+        bearing_reaction = (
+            f"{_cz(check.design_support_reaction_n / 1000, 3)} kN"
+        )
+        bearing_stress_mpa = (
+            check.design_support_reaction_n / bearing_area_m2 / 1e6
+        )
+        bearing_demand = f"{_cz(bearing_stress_mpa, 4)} MPa"
+        bearing_limit = f"{_cz(bearing_strength_mpa, 4)} MPa"
+        immediate_deflection = (
+            f"{_cz(check.characteristic_deflection_m * 1000, 2)} mm"
+        )
+        final_deflection = f"{_cz(check.final_deflection_m * 1000, 2)} mm"
+        deflection_limit = (
+            f"{_cz(result.maximum_deflection_m * 1000, 2)} mm"
+        )
 
         report.add_sections(
             name,
@@ -1609,49 +1884,66 @@ def add_rafter_report(
                     "Geometrie a průřezové charakteristiky",
                     (
                         f"Materiál: {timber_grade.name}; "
-                        f"E = {elastic_modulus_gpa:.2f} GPa; "
-                        f"fm,k = {timber_grade.bending_strength_mpa:g} MPa; "
-                        f"fv,k = {timber_grade.shear_strength_mpa:g} MPa; "
+                        f"E = {_cz(elastic_modulus_gpa, 2)} GPa; "
+                        f"fm,k = {_cz(timber_grade.bending_strength_mpa, 2)} MPa; "
+                        f"fv,k = {_cz(timber_grade.shear_strength_mpa, 2)} MPa; "
                         f"fc,0,k = "
-                        f"{timber_grade.compression_parallel_mpa:g} MPa; "
+                        f"{_cz(timber_grade.compression_parallel_mpa, 2)} MPa; "
                         f"fc,90,k = "
-                        f"{timber_grade.compression_perpendicular_mpa:g} MPa.",
-                        f"Rozpětí mezi podporami L = {span_m:.3f} m "
+                        f"{_cz(timber_grade.compression_perpendicular_mpa, 2)} MPa.",
+                        f"Rozpětí mezi podporami L = {_cz(span_m, 3)} m "
                         "podél krokve",
-                        f"Sklon střechy α = {angle:.2f}°; cos α = "
-                        f"{result.roof_cosine:.5f}",
-                        f"b = {width_m:.3f} m; h = {height_m:.3f} m",
-                        f"I = b h³ / 12 = "
-                        f"{result.second_moment_m4:.8e} m⁴",
-                        f"W = b h² / 6 = "
-                        f"{result.section_modulus_m3:.8e} m³",
+                        f"Sklon střechy α = {_cz(angle, 2)}°; cos α = "
+                        f"{_cz(result.roof_cosine, 5)}",
+                        f"b = {_cz(width_m, 3)} m; "
+                        f"h = {_cz(height_m, 3)} m",
+                        f"I = b h³ / 12 = {_cz(width_m, 3)} × "
+                        f"{_cz(height_m, 3)}³ / 12 = "
+                        f"{_cz_scientific(result.second_moment_m4)} m⁴",
+                        f"W = b h² / 6 = {_cz(width_m, 3)} × "
+                        f"{_cz(height_m, 3)}² / 6 = "
+                        f"{_cz_scientific(result.section_modulus_m3)} m³",
                     ),
                 ),
                 (
                     "Charakteristická liniová zatížení kolmá ke krokvi",
                     (
-                        f"Stálé plošné zatížení střešních vrstev gk = "
-                        f"{roof_layer_surface_load_kn_m2:.3f} kN/m² "
-                        f"({known_layer_total_kg_m2:.1f} kg/m²).",
-                        f"Maximální osová vzdálenost krokví a = {spacing_m:.3f} m.",
+                        f"Stálé plošné zatížení střešních vrstev "
+                        f"gk = m × g / 1000 = "
+                        f"{_cz(known_layer_total_kg_m2, 1)} kg/m² × "
+                        f"{_cz(GRAVITY_M_S2, 2)} m/s² / 1000 = "
+                        f"{_cz(roof_layer_surface_load_kn_m2, 3)} kN/m².",
+                        f"Maximální osová vzdálenost krokví "
+                        f"a = {_cz(spacing_m, 3)} m.",
                         "Pro jednu krokev tedy použijeme liniové zatížení "
                         "vrstev kolmé ke krokvi:",
                         f"qG,k,vrstvy = gk × a × cos α = "
-                        f"{roof_layer_surface_load_kn_m2:.3f} × "
-                        f"{spacing_m:.3f} × {result.roof_cosine:.5f} = "
-                        f"{layer_transverse_n_per_m / 1000:.3f} kN/m.",
+                        f"{_cz(roof_layer_surface_load_kn_m2, 3)} kN/m² × "
+                        f"{_cz(spacing_m, 3)} m × cos {_cz(angle, 2)}° = "
+                        f"{_cz(layer_transverse_n_per_m / 1000, 3)} kN/m.",
                         f"Vlastní tíha krokve qG,k,krokev = "
-                        f"{width_m:.3f} × {height_m:.3f} × "
-                        f"{density:.1f} × g × cos α = "
-                        f"{result.self_transverse_n_per_m / 1000:.3f} kN/m.",
+                        f"b × h × ρ × g × cos α / 1000 = "
+                        f"{_cz(width_m, 3)} m × {_cz(height_m, 3)} m × "
+                        f"{_cz(density, 1)} kg/m³ × "
+                        f"{_cz(GRAVITY_M_S2, 2)} m/s² × "
+                        f"cos {_cz(angle, 2)}° / 1000 = "
+                        f"{_cz(result.self_transverse_n_per_m / 1000, 3)} kN/m.",
                         f"Stálé liniové zatížení celkem qG,k = "
-                        f"{check.permanent_transverse_n_per_m / 1000:.3f} "
+                        f"qG,k,vrstvy + qG,k,krokev = "
+                        f"{_cz(layer_transverse_n_per_m / 1000, 3)} + "
+                        f"{_cz(result.self_transverse_n_per_m / 1000, 3)} = "
+                        f"{_cz(check.permanent_transverse_n_per_m / 1000, 3)} "
                         "kN/m.",
                         f"Zatížení od sněhu qS,k = sk × a × cos² α = "
-                        f"{result.snow_transverse_n_per_m / 1000:.3f} kN/m",
+                        f"{_cz(snow_load, 2)} kN/m² × "
+                        f"{_cz(spacing_m, 3)} m × "
+                        f"cos² {_cz(angle, 2)}° = "
+                        f"{_cz(result.snow_transverse_n_per_m / 1000, 3)} kN/m.",
                         f"Charakteristické zatížení celkem qk = qG,k + qS,k = "
-                        f"{check.characteristic_transverse_n_per_m / 1000:.3f} "
-                        "kN/m",
+                        f"{_cz(check.permanent_transverse_n_per_m / 1000, 3)} + "
+                        f"{_cz(result.snow_transverse_n_per_m / 1000, 3)} = "
+                        f"{_cz(check.characteristic_transverse_n_per_m / 1000, 3)} "
+                        "kN/m.",
                     ),
                 ),
                 (
@@ -1659,19 +1951,44 @@ def add_rafter_report(
                     (
                         "Mezní stav únosnosti (MSÚ).",
                         f"Návrhové liniové zatížení qd = γG qG,k + "
-                        f"γQ qS,k = "
-                        f"{check.design_transverse_n_per_m / 1000:.3f} kN/m",
+                        f"γQ qS,k = {_cz(PERMANENT_LOAD_FACTOR, 2)} × "
+                        f"{_cz(check.permanent_transverse_n_per_m / 1000, 3)} + "
+                        f"{_cz(SNOW_LOAD_FACTOR, 2)} × "
+                        f"{_cz(result.snow_transverse_n_per_m / 1000, 3)} = "
+                        f"{_cz(check.design_transverse_n_per_m / 1000, 3)} kN/m.",
                         f"Návrhový ohybový moment MEd = qd L² / 8 = "
-                        f"{check.design_bending_moment_nm / 1000:.3f} kNm",
+                        f"{_cz(check.design_transverse_n_per_m / 1000, 3)} kN/m × "
+                        f"{_cz(span_m, 3)}² m² / 8 = "
+                        f"{_cz(check.design_bending_moment_nm / 1000, 3)} kNm.",
                         f"Průřezový modul W = "
-                        f"{result.section_modulus_m3:.8e} m³",
-                        f"Návrhová pevnost v ohybu fm,d = "
-                        f"fm,k × kmod / γM = {bending_strength_mpa:.2f} MPa",
-                        f"Mezní hodnota MRd = fm,d × W = "
-                        f"{check.bending_resistance_nm / 1000:.3f} kNm",
-                        f"{check.design_bending_moment_nm / 1000:.3f} kNm "
-                        f"< {check.bending_resistance_nm / 1000:.3f} kNm, "
-                        f"{_status_cz(check.bending_utilization)}",
+                        f"{_cz_scientific(result.section_modulus_m3)} m³ = "
+                        f"{_cz(result.section_modulus_m3 * 1e9, 3)} mm³.",
+                        _highlighted_line(
+                            f"Návrhové napětí v ohybu σm,d = |MEd| / W = "
+                            f"{_cz(abs(check.design_bending_moment_nm) / 1000, 3)} kNm "
+                            f"× 10⁶ / {_cz(result.section_modulus_m3 * 1e9, 3)} mm³ "
+                            f"= {bending_demand}.",
+                            (bending_demand, _result_tint(check.bending_utilization)),
+                        ),
+                        _highlighted_line(
+                            f"Mezní hodnota fm,d = fm,k × kmod / γM = "
+                            f"{_cz(timber_grade.bending_strength_mpa, 2)} MPa × "
+                            f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
+                            f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                            f"{bending_limit}.",
+                            (bending_limit, REPORT_LIMIT_TINT),
+                        ),
+                        _highlighted_line(
+                            _comparison_cz(
+                                bending_demand, bending_limit,
+                                check.bending_utilization,
+                            ),
+                            (
+                                bending_demand,
+                                _result_tint(check.bending_utilization),
+                            ),
+                            (bending_limit, REPORT_LIMIT_TINT),
+                        ),
                     ),
                 ),
                 (
@@ -1679,17 +1996,40 @@ def add_rafter_report(
                     (
                         "Mezní stav únosnosti (MSÚ).",
                         f"Návrhová posouvající síla VEd = qd L / 2 = "
-                        f"{check.design_shear_force_n / 1000:.3f} kN",
-                        f"Návrhová pevnost ve smyku fv,d = "
-                        f"fv,k × kmod / γM = {shear_strength_mpa:.2f} MPa",
+                        f"{_cz(check.design_transverse_n_per_m / 1000, 3)} kN/m × "
+                        f"{_cz(span_m, 3)} m / 2 = "
+                        f"{_cz(check.design_shear_force_n / 1000, 3)} kN.",
                         f"Účinná šířka bef = kcr × b = "
-                        f"{SHEAR_EFFECTIVE_WIDTH_FACTOR:g} × "
-                        f"{width_m * 1000:.0f} mm",
-                        f"Mezní hodnota VRd = fv,d × kcr × b × h / 1,5 = "
-                        f"{check.shear_resistance_n / 1000:.3f} kN",
-                        f"{check.design_shear_force_n / 1000:.3f} kN "
-                        f"< {check.shear_resistance_n / 1000:.3f} kN, "
-                        f"{_status_cz(check.shear_utilization)}",
+                        f"{_cz(SHEAR_EFFECTIVE_WIDTH_FACTOR, 2)} × "
+                        f"{_cz(width_m * 1000, 0)} mm = "
+                        f"{_cz(SHEAR_EFFECTIVE_WIDTH_FACTOR * width_m * 1000, 1)} mm.",
+                        _highlighted_line(
+                            "Návrhové smykové napětí τd = 1,5 |VEd| / "
+                            "(kcr × b × h) = "
+                            f"1,5 × {_cz(abs(check.design_shear_force_n) / 1000, 3)} kN "
+                            f"× 1000 / ({_cz(SHEAR_EFFECTIVE_WIDTH_FACTOR, 2)} × "
+                            f"{_cz(width_m * 1000, 0)} mm × "
+                            f"{_cz(height_m * 1000, 0)} mm) = {shear_demand}.",
+                            (shear_demand, _result_tint(check.shear_utilization)),
+                        ),
+                        _highlighted_line(
+                            f"Mezní hodnota fv,d = fv,k × kmod / γM = "
+                            f"{_cz(timber_grade.shear_strength_mpa, 2)} MPa × "
+                            f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
+                            f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = {shear_limit}.",
+                            (shear_limit, REPORT_LIMIT_TINT),
+                        ),
+                        _highlighted_line(
+                            _comparison_cz(
+                                shear_demand, shear_limit,
+                                check.shear_utilization,
+                            ),
+                            (
+                                shear_demand,
+                                _result_tint(check.shear_utilization),
+                            ),
+                            (shear_limit, REPORT_LIMIT_TINT),
+                        ),
                     ),
                 ),
                 (
@@ -1697,27 +2037,60 @@ def add_rafter_report(
                     (
                         "Mezní stav únosnosti (MSÚ), tlak šikmo k vláknům.",
                         f"Úhel síly k vláknům β = 90° − α = "
-                        f"{check.bearing_angle_degrees:.2f}°.",
+                        f"90° − {_cz(angle, 2)}° = "
+                        f"{_cz(check.bearing_angle_degrees, 2)}°.",
                         f"Návrhová svislá reakce Fc,β,Ed = VEd / cos α = "
-                        f"{check.design_shear_force_n / 1000:.3f} / "
-                        f"{result.roof_cosine:.5f} = "
-                        f"{check.design_support_reaction_n / 1000:.3f} kN.",
-                        f"Návrhové pevnosti fc,0,d = "
-                        f"{compression_parallel_strength_mpa:.2f} MPa; "
-                        f"fc,90,d = "
-                        f"{compression_perpendicular_strength_mpa:.2f} MPa; "
-                        f"kc,90 = {BEARING_STRENGTH_FACTOR:g}.",
+                        f"{_cz(check.design_shear_force_n / 1000, 3)} kN / "
+                        f"cos {_cz(angle, 2)}° = {bearing_reaction}.",
+                        f"fc,0,d = fc,0,k × kmod / γM = "
+                        f"{_cz(timber_grade.compression_parallel_mpa, 2)} × "
+                        f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
+                        f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                        f"{_cz(compression_parallel_strength_mpa, 4)} MPa.",
+                        f"fc,90,d = fc,90,k × kmod / γM = "
+                        f"{_cz(timber_grade.compression_perpendicular_mpa, 2)} × "
+                        f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
+                        f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                        f"{_cz(compression_perpendicular_strength_mpa, 4)} MPa; "
+                        f"kc,90 = {_cz(BEARING_STRENGTH_FACTOR, 2)}.",
                         "fc,β,d = fc,0,d / [(fc,0,d / (kc,90 × fc,90,d)) "
-                        "× sin² β + cos² β] = "
-                        f"{bearing_strength_mpa:.2f} MPa",
+                        f"× sin² β + cos² β] = "
+                        f"{_cz(compression_parallel_strength_mpa, 4)} / "
+                        f"[({_cz(compression_parallel_strength_mpa, 4)} / "
+                        f"({_cz(BEARING_STRENGTH_FACTOR, 2)} × "
+                        f"{_cz(compression_perpendicular_strength_mpa, 4)})) × "
+                        f"sin² {_cz(check.bearing_angle_degrees, 2)}° + "
+                        f"cos² {_cz(check.bearing_angle_degrees, 2)}°] = "
+                        f"{_cz(bearing_strength_mpa, 4)} MPa.",
                         f"Plocha uložení A = b × l = "
-                        f"{width_m * 1000:.0f} × {bearing_length:g} = "
-                        f"{bearing_area_m2 * 1e6:.0f} mm²",
-                        f"Mezní hodnota Rc,β,d = fc,β,d × A = "
-                        f"{check.bearing_resistance_n / 1000:.3f} kN",
-                        f"{check.design_support_reaction_n / 1000:.3f} kN "
-                        f"< {check.bearing_resistance_n / 1000:.3f} kN, "
-                        f"{_status_cz(check.bearing_utilization)}",
+                        f"{_cz(width_m * 1000, 0)} mm × "
+                        f"{_cz(bearing_length, 0)} mm = "
+                        f"{_cz(bearing_area_m2 * 1e6, 0)} mm².",
+                        _highlighted_line(
+                            f"Návrhové tlakové napětí σc,β,d = Fc,β,Ed / A = "
+                            f"{bearing_reaction} × 1000 / "
+                            f"{_cz(bearing_area_m2 * 1e6, 0)} mm² = "
+                            f"{bearing_demand}.",
+                            (
+                                bearing_demand,
+                                _result_tint(check.bearing_utilization),
+                            ),
+                        ),
+                        _highlighted_line(
+                            f"Mezní hodnota fc,β,d = {bearing_limit}.",
+                            (bearing_limit, REPORT_LIMIT_TINT),
+                        ),
+                        _highlighted_line(
+                            _comparison_cz(
+                                bearing_demand, bearing_limit,
+                                check.bearing_utilization,
+                            ),
+                            (
+                                bearing_demand,
+                                _result_tint(check.bearing_utilization),
+                            ),
+                            (bearing_limit, REPORT_LIMIT_TINT),
+                        ),
                         "Samostatné posouzení zářezu krokve není zahrnuto.",
                     ),
                 ),
@@ -1727,23 +2100,57 @@ def add_rafter_report(
                         "Mezní stav použitelnosti (MSP).",
                         f"Charakteristické liniové zatížení qk = qG,k + "
                         f"qS,k = "
-                        f"{check.characteristic_transverse_n_per_m / 1000:.3f} "
-                        "kN/m",
-                        f"Modul pružnosti E = {elastic_modulus_gpa:.2f} GPa",
+                        f"{_cz(check.permanent_transverse_n_per_m / 1000, 3)} + "
+                        f"{_cz(result.snow_transverse_n_per_m / 1000, 3)} = "
+                        f"{_cz(check.characteristic_transverse_n_per_m / 1000, 3)} "
+                        "kN/m.",
+                        f"Modul pružnosti E = {_cz(elastic_modulus_gpa, 2)} GPa.",
                         f"Moment setrvačnosti I = "
-                        f"{result.second_moment_m4:.8e} m⁴",
-                        f"Průhyb od stálého zatížení wG,inst = "
-                        f"{check.permanent_immediate_deflection_m * 1000:.2f} "
-                        "mm",
-                        f"Průhyb od sněhu wS,inst = "
-                        f"{check.snow_immediate_deflection_m * 1000:.2f} mm",
-                        f"Celkový průhyb winst = 5 qk L⁴ / (384 E I) = "
-                        f"{check.characteristic_deflection_m * 1000:.2f} mm",
-                        f"Mezní hodnota wlim = L/{deflection_ratio:g} = "
-                        f"{result.maximum_deflection_m * 1000:.2f} mm",
-                        f"{check.characteristic_deflection_m * 1000:.2f} mm "
-                        f"< {result.maximum_deflection_m * 1000:.2f} mm, "
-                        f"{_status_cz(check.characteristic_deflection_utilization)}",
+                        f"{_cz_scientific(result.second_moment_m4)} m⁴.",
+                        f"wG,inst = 5 qG,k L⁴ / (384 E I) = 5 × "
+                        f"({_cz(check.permanent_transverse_n_per_m / 1000, 3)} × 10³ N/m) × "
+                        f"{_cz(span_m, 3)}⁴ m⁴ / [384 × "
+                        f"({_cz(elastic_modulus_gpa, 2)} × 10⁹ N/m²) × "
+                        f"{_cz_scientific(result.second_moment_m4)} m⁴] × 1000 = "
+                        f"{_cz(check.permanent_immediate_deflection_m * 1000, 2)} mm.",
+                        f"wS,inst = 5 qS,k L⁴ / (384 E I) = 5 × "
+                        f"({_cz(result.snow_transverse_n_per_m / 1000, 3)} × 10³ N/m) × "
+                        f"{_cz(span_m, 3)}⁴ m⁴ / [384 × "
+                        f"({_cz(elastic_modulus_gpa, 2)} × 10⁹ N/m²) × "
+                        f"{_cz_scientific(result.second_moment_m4)} m⁴] × 1000 = "
+                        f"{_cz(check.snow_immediate_deflection_m * 1000, 2)} mm.",
+                        _highlighted_line(
+                            f"Celkový průhyb winst = wG,inst + wS,inst = "
+                            f"{_cz(check.permanent_immediate_deflection_m * 1000, 2)} + "
+                            f"{_cz(check.snow_immediate_deflection_m * 1000, 2)} = "
+                            f"{immediate_deflection}.",
+                            (
+                                immediate_deflection,
+                                _result_tint(
+                                    check.characteristic_deflection_utilization
+                                ),
+                            ),
+                        ),
+                        _highlighted_line(
+                            f"Mezní hodnota wlim = L/{_cz(deflection_ratio, 0)} = "
+                            f"{_cz(span_m, 3)} m / "
+                            f"{_cz(deflection_ratio, 0)} × 1000 = "
+                            f"{deflection_limit}.",
+                            (deflection_limit, REPORT_LIMIT_TINT),
+                        ),
+                        _highlighted_line(
+                            _comparison_cz(
+                                immediate_deflection, deflection_limit,
+                                check.characteristic_deflection_utilization,
+                            ),
+                            (
+                                immediate_deflection,
+                                _result_tint(
+                                    check.characteristic_deflection_utilization
+                                ),
+                            ),
+                            (deflection_limit, REPORT_LIMIT_TINT),
+                        ),
                     ),
                 ),
                 *(
@@ -1753,20 +2160,46 @@ def add_rafter_report(
                             (
                                 "Mezní stav použitelnosti (MSP).",
                                 f"Součinitel dotvarování kdef = "
-                                f"{TIMBER_CREEP_FACTOR:g}",
+                                f"{_cz(TIMBER_CREEP_FACTOR, 2)}.",
                                 f"Kombinační součinitel sněhu ψ2 = "
-                                f"{SNOW_CREEP_COMBINATION_FACTOR:g}",
-                                "wfin = wG,inst × (1 + kdef) + "
-                                "wS,inst × (1 + ψ2 × kdef)",
-                                f"wfin = "
-                                f"{check.final_deflection_m * 1000:.2f} mm",
-                                f"Mezní hodnota wlim = L/"
-                                f"{deflection_ratio:g} = "
-                                f"{result.maximum_deflection_m * 1000:.2f} mm",
-                                f"{check.final_deflection_m * 1000:.2f} mm "
-                                f"< "
-                                f"{result.maximum_deflection_m * 1000:.2f} mm, "
-                                f"{_status_cz(check.final_deflection_utilization)}",
+                                f"{_cz(SNOW_CREEP_COMBINATION_FACTOR, 2)}.",
+                                _highlighted_line(
+                                    "wfin = wG,inst × (1 + kdef) + "
+                                    "wS,inst × (1 + ψ2 × kdef) = "
+                                    f"{_cz(check.permanent_immediate_deflection_m * 1000, 2)} × "
+                                    f"(1 + {_cz(TIMBER_CREEP_FACTOR, 2)}) + "
+                                    f"{_cz(check.snow_immediate_deflection_m * 1000, 2)} × "
+                                    f"(1 + {_cz(SNOW_CREEP_COMBINATION_FACTOR, 2)} × "
+                                    f"{_cz(TIMBER_CREEP_FACTOR, 2)}) = "
+                                    f"{final_deflection}.",
+                                    (
+                                        final_deflection,
+                                        _result_tint(
+                                            check.final_deflection_utilization
+                                        ),
+                                    ),
+                                ),
+                                _highlighted_line(
+                                    f"Mezní hodnota wlim = L/"
+                                    f"{_cz(deflection_ratio, 0)} = "
+                                    f"{_cz(span_m, 3)} m / "
+                                    f"{_cz(deflection_ratio, 0)} × 1000 = "
+                                    f"{deflection_limit}.",
+                                    (deflection_limit, REPORT_LIMIT_TINT),
+                                ),
+                                _highlighted_line(
+                                    _comparison_cz(
+                                        final_deflection, deflection_limit,
+                                        check.final_deflection_utilization,
+                                    ),
+                                    (
+                                        final_deflection,
+                                        _result_tint(
+                                            check.final_deflection_utilization
+                                        ),
+                                    ),
+                                    (deflection_limit, REPORT_LIMIT_TINT),
+                                ),
                             ),
                         ),
                     )
@@ -1830,13 +2263,15 @@ def add_roof_report_overview(
                     f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g}.",
                     "Design strengths are calculated from characteristic "
                     "strengths as fd = kmod × fk / γM.",
-                    "Bending criterion: MEd < MRd = fm,d × W.",
-                    f"Shear criterion: VEd < VRd = fv,d × kcr × b × h / "
-                    f"1.5, with kcr = {SHEAR_EFFECTIVE_WIDTH_FACTOR:g}.",
+                    "Bending criterion: σm,d = |MEd| / W < fm,d.",
+                    "Shear criterion: τd = 1.5 |VEd| / (kcr × b × h) < fv,d, "
+                    f"with kcr = {SHEAR_EFFECTIVE_WIDTH_FACTOR:g}.",
                     f"Bearing uses the entered contact area A = b × l and "
                     f"kc,90 = {BEARING_STRENGTH_FACTOR:g}. Rafters are "
                     "checked in compression at an angle to grain; purlins "
                     "are checked perpendicular to grain.",
+                    "Bearing criterion: compressive stress σc,d = Fc,Ed / A "
+                    "must be strictly smaller than the design bearing strength.",
                     "Every ULS result is accepted only when the design action "
                     "Ed is strictly smaller than the design resistance Rd.",
                 ),
@@ -2119,6 +2554,13 @@ def _add_purlin_evaluation(
     deflection_ratio: float,
     elastic_modulus_gpa: float,
     bearing_length_mm: float,
+    roof_angle_degrees: float,
+    rafter_width_mm: float,
+    rafter_height_mm: float,
+    rafter_spacing_m: float,
+    snow_load_kn_m2: float,
+    roof_layer_mass_kg_m2: float,
+    timber_density_kg_m3: float,
     include_creep: bool,
     check: PurlinCheckResult,
 ) -> None:
@@ -2136,6 +2578,13 @@ def _add_purlin_evaluation(
     section_modulus_m3 = purlin_width_m * purlin_height_m**2 / 6
     ratio = _positive(deflection_ratio, "deflection_ratio")
     bearing_length = _positive(bearing_length_mm, "bearing_length_mm")
+    roof_angle = _roof_angle(roof_angle_degrees)
+    rafter_width_m = _positive(rafter_width_mm, "rafter_width_mm") / 1000
+    rafter_height_m = _positive(rafter_height_mm, "rafter_height_mm") / 1000
+    rafter_spacing = _positive(rafter_spacing_m, "rafter_spacing_m")
+    snow_load = _non_negative(snow_load_kn_m2, "snow_load_kn_m2")
+    layer_mass = _non_negative(roof_layer_mass_kg_m2, "roof_layer_mass_kg_m2")
+    density = _positive(timber_density_kg_m3, "timber_density_kg_m3")
     grade = _resolve_timber_grade(material)
     design_strength_multiplier = (
         TIMBER_MODIFICATION_FACTOR / TIMBER_MATERIAL_PARTIAL_FACTOR
@@ -2155,6 +2604,17 @@ def _add_purlin_evaluation(
         PERMANENT_LOAD_FACTOR * check.permanent_line_load_kn_m
         + SNOW_LOAD_FACTOR * check.roof_snow_line_load_kn_m
     )
+    immediate_line_load_kn_m = (
+        check.permanent_line_load_kn_m + check.roof_snow_line_load_kn_m
+    )
+    final_line_load_kn_m = (
+        check.permanent_line_load_kn_m * (1 + TIMBER_CREEP_FACTOR)
+        + check.roof_snow_line_load_kn_m
+        * (1 + SNOW_CREEP_COMBINATION_FACTOR * TIMBER_CREEP_FACTOR)
+    )
+    spans_text = " + ".join(
+        f"{_cz(span, 3)} m" for span in check.span_lengths_m
+    )
     maximum_positive_moment_nm = max(
         check.design_response.span_positive_moments_nm
     )
@@ -2165,37 +2625,151 @@ def _add_purlin_evaluation(
     maximum_reaction_n = max(
         abs(value) for value in check.design_response.support_reactions_n
     )
+    positive_bending_stress_mpa = maximum_positive_moment_nm / section_modulus_m3 / 1e6
+    negative_bending_stress_mpa = maximum_negative_moment_nm / section_modulus_m3 / 1e6
+    shear_stress_mpa = (
+        1.5 * maximum_shear_n
+        / (SHEAR_EFFECTIVE_WIDTH_FACTOR * purlin_width_m * purlin_height_m) / 1e6
+    )
+    positive_bending_demand = f"{_cz(positive_bending_stress_mpa, 4)} MPa"
+    negative_bending_demand = f"{_cz(negative_bending_stress_mpa, 4)} MPa"
+    bending_limit = f"{_cz(bending_strength_mpa, 4)} MPa"
+    shear_demand = f"{_cz(shear_stress_mpa, 4)} MPa"
+    shear_limit = f"{_cz(shear_strength_mpa, 4)} MPa"
+    bearing_area_mm2 = purlin_width_mm * bearing_length
+    bearing_stress_mpa = maximum_reaction_n / bearing_area_mm2
+    bearing_demand = f"{_cz(bearing_stress_mpa, 4)} MPa"
+    bearing_limit = f"{_cz(compression_strength_mpa, 4)} MPa"
+    bearing_force_symbol = "Fc,90,Ed,max" if is_continuous else "Fc,90,Ed"
+
+    def beam_model_inputs(line_load_kn_m: float) -> str:
+        return (
+            "K(EI,L) u = F(q,L), "
+            f"E = {_cz(elastic_modulus_gpa, 2)} × 10⁹ N/m², "
+            f"I = {_cz_scientific(second_moment_m4)} m⁴, "
+            f"L = ({spans_text}), q = "
+            f"{_cz(line_load_kn_m, 3)} × 10³ N/m"
+        )
+
+    bending_limit_calculation = (
+        "Mezní hodnota fm,d = fm,k × kmod / γM = "
+        f"{_cz(grade.bending_strength_mpa, 2)} MPa × "
+        f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
+        f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = {bending_limit}."
+    )
+
+    def bending_stress_calculation(moment_nm: float, symbol: str) -> str:
+        return (
+            f"Návrhové napětí v ohybu σm,d = |{symbol}| / W = "
+            f"{_cz(abs(moment_nm) / 1000, 3)} kNm × 10⁶ / "
+            f"{_cz(section_modulus_m3 * 1e9, 3)} mm³ = "
+            f"{_cz(abs(moment_nm) / section_modulus_m3 / 1e6, 4)} MPa."
+        )
+
+    def deflection_calculation(
+        *,
+        span: float,
+        line_load_kn_m: float,
+        deflection_m: float,
+        symbol: str,
+    ) -> str:
+        result_text = f"{_cz(deflection_m * 1000, 2)} mm"
+        if is_continuous:
+            text = (
+                f"{symbol} z prutového modelu {beam_model_inputs(line_load_kn_m)}: "
+                f"{symbol},max = {result_text}."
+            )
+        else:
+            text = (
+                f"{symbol} = 5 q L⁴ / (384 E I) = 5 × "
+                f"({_cz(line_load_kn_m, 3)} × 10³ N/m) × "
+                f"{_cz(span, 3)}⁴ m⁴ / [384 × "
+                f"({_cz(elastic_modulus_gpa, 2)} × 10⁹ N/m²) × "
+                f"{_cz_scientific(second_moment_m4)} m⁴] × 1000 = "
+                f"{result_text}."
+            )
+        return text
 
     sections: list[ReportSection] = [
         (
             "Geometrie, materiál a zatížení",
             (
-                f"Materiál: {grade.name}; E = {elastic_modulus_gpa:.2f} GPa.",
+                f"Materiál: {grade.name}; "
+                f"E = {_cz(elastic_modulus_gpa, 2)} GPa.",
                 f"Charakteristické pevnosti: fm,k = "
-                f"{grade.bending_strength_mpa:g} MPa; fv,k = "
-                f"{grade.shear_strength_mpa:g} MPa; fc,90,k = "
-                f"{grade.compression_perpendicular_mpa:g} MPa.",
+                f"{_cz(grade.bending_strength_mpa, 2)} MPa; fv,k = "
+                f"{_cz(grade.shear_strength_mpa, 2)} MPa; fc,90,k = "
+                f"{_cz(grade.compression_perpendicular_mpa, 2)} MPa.",
                 f"Průřez {member_name} b × h = "
-                f"{purlin_width_mm:g} × {purlin_height_mm:g} mm.",
-                f"I = b h³ / 12 = {second_moment_m4:.8e} m⁴; "
-                f"W = b h² / 6 = {section_modulus_m3:.8e} m³.",
-                "Rozpětí L = "
-                + " + ".join(f"{span:g} m" for span in check.span_lengths_m)
-                + ".",
-                f"Plocha střechy připadající na vaznici: "
-                f"{check.tributary_slope_width_m:.3f} m po sklonu; "
-                f"{check.tributary_horizontal_width_m:.3f} m vodorovně.",
+                f"{_cz(purlin_width_mm, 0)} × "
+                f"{_cz(purlin_height_mm, 0)} mm.",
+                f"I = b h³ / 12 = {_cz(purlin_width_m, 3)} × "
+                f"{_cz(purlin_height_m, 3)}³ / 12 = "
+                f"{_cz_scientific(second_moment_m4)} m⁴.",
+                f"W = b h² / 6 = {_cz(purlin_width_m, 3)} × "
+                f"{_cz(purlin_height_m, 3)}² / 6 = "
+                f"{_cz_scientific(section_modulus_m3)} m³.",
+                f"Rozpětí L = {spans_text}.",
+                f"Šířka připadající na vaznici po sklonu "
+                f"bt,s = Lup + Ldol / 2 = "
+                f"{_cz(check.upper_rafter_length_m, 3)} m + "
+                f"{_cz(check.lower_rafter_span_m, 3)} m / 2 = "
+                f"{_cz(check.tributary_slope_width_m, 3)} m.",
+                f"Vodorovná šířka pro sníh bt,h = bt,s × cos α = "
+                f"{_cz(check.tributary_slope_width_m, 3)} m × "
+                f"cos {_cz(roof_angle, 2)}° = "
+                f"{_cz(check.tributary_horizontal_width_m, 3)} m.",
+                f"Hmotnost vrstev na metr vaznice mvrstvy = "
+                f"mA × bt,s = {_cz(layer_mass, 1)} kg/m² × "
+                f"{_cz(check.tributary_slope_width_m, 3)} m = "
+                f"{_cz(check.roof_layer_line_mass_kg_m, 1)} kg/m.",
+                f"Hmotnost krokví na metr vaznice mkrokve = "
+                f"ρ × bk × hk × bt,s / a = {_cz(density, 1)} kg/m³ × "
+                f"{_cz(rafter_width_m, 3)} m × "
+                f"{_cz(rafter_height_m, 3)} m × "
+                f"{_cz(check.tributary_slope_width_m, 3)} m / "
+                f"{_cz(rafter_spacing, 3)} m = "
+                f"{_cz(check.rafter_line_mass_kg_m, 1)} kg/m.",
+                f"Vlastní hmotnost vaznice mv = ρ × b × h = "
+                f"{_cz(density, 1)} kg/m³ × {_cz(purlin_width_m, 3)} m × "
+                f"{_cz(purlin_height_m, 3)} m = "
+                f"{_cz(check.purlin_self_mass_kg_m, 1)} kg/m.",
                 f"Stálé liniové zatížení gk = "
-                f"{check.permanent_line_load_kn_m:.3f} kN/m.",
-                f"Zatížení sněhem sk = "
-                f"{check.roof_snow_line_load_kn_m:.3f} kN/m.",
-                f"Návrhové liniové zatížení qd = γG gk + γQ sk = "
-                f"{design_line_load_kn_m:.3f} kN/m.",
-                f"Použité součinitele: γG = {PERMANENT_LOAD_FACTOR:g}; "
-                f"γQ = {SNOW_LOAD_FACTOR:g}; "
-                f"kmod = {TIMBER_MODIFICATION_FACTOR:g}; "
-                f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g}.",
-                f"Mez průhybu = L/{ratio:g}.",
+                f"(mvrstvy + mkrokve + mv) × g / 1000 + gdod = "
+                f"({_cz(check.roof_layer_line_mass_kg_m, 1)} + "
+                f"{_cz(check.rafter_line_mass_kg_m, 1)} + "
+                f"{_cz(check.purlin_self_mass_kg_m, 1)}) kg/m × "
+                f"{_cz(GRAVITY_M_S2, 2)} m/s² / 1000 + "
+                f"{_cz(check.additional_permanent_load_kn_m, 3)} kN/m = "
+                f"{_cz(check.permanent_line_load_kn_m, 3)} kN/m.",
+                f"Zatížení sněhem sline,k = sk × bt,h = "
+                f"{_cz(snow_load, 2)} kN/m² × "
+                f"{_cz(check.tributary_horizontal_width_m, 3)} m = "
+                f"{_cz(check.roof_snow_line_load_kn_m, 3)} kN/m.",
+                f"Okamžité liniové zatížení qinst = gk + sline,k = "
+                f"{_cz(check.permanent_line_load_kn_m, 3)} + "
+                f"{_cz(check.roof_snow_line_load_kn_m, 3)} = "
+                f"{_cz(immediate_line_load_kn_m, 3)} kN/m.",
+                f"Konečné ekvivalentní zatížení qfin = "
+                f"gk × (1 + kdef) + sline,k × (1 + ψ2 × kdef) = "
+                f"{_cz(check.permanent_line_load_kn_m, 3)} × "
+                f"(1 + {_cz(TIMBER_CREEP_FACTOR, 2)}) + "
+                f"{_cz(check.roof_snow_line_load_kn_m, 3)} × "
+                f"(1 + {_cz(SNOW_CREEP_COMBINATION_FACTOR, 2)} × "
+                f"{_cz(TIMBER_CREEP_FACTOR, 2)}) = "
+                f"{_cz(final_line_load_kn_m, 3)} kN/m.",
+                f"Návrhové liniové zatížení qd = γG gk + γQ sline,k = "
+                f"{_cz(PERMANENT_LOAD_FACTOR, 2)} × "
+                f"{_cz(check.permanent_line_load_kn_m, 3)} + "
+                f"{_cz(SNOW_LOAD_FACTOR, 2)} × "
+                f"{_cz(check.roof_snow_line_load_kn_m, 3)} = "
+                f"{_cz(design_line_load_kn_m, 3)} kN/m.",
+                f"Použité součinitele: "
+                f"γG = {_cz(PERMANENT_LOAD_FACTOR, 2)}; "
+                f"γQ = {_cz(SNOW_LOAD_FACTOR, 2)}; "
+                f"kmod = {_cz(TIMBER_MODIFICATION_FACTOR, 2)}; "
+                f"γM = {_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)}.",
+                f"Mez průhybu = L/{_cz(ratio, 0)}.",
                 *(
                     (
                         "Výpočet je neúplný; chybí hmotnosti vrstev: "
@@ -2224,17 +2798,28 @@ def _add_purlin_evaluation(
     ):
         sections.append(
             (
-                f"Posouzení - okamžitý průhyb {member_name}"
+                "Posouzení - okamžitý průhyb"
                 + field_suffix.format(index=index),
-                (
+                _highlight_check_values((
                     "Mezní stav použitelnosti (MSP).",
-                    f"Rozpětí L = {span:.3f} m.",
-                    f"Okamžitý průhyb winst = {deflection * 1000:.2f} mm.",
-                    f"Mezní hodnota wlim = L/{ratio:g} = "
-                    f"{limit * 1000:.2f} mm.",
-                    f"{deflection * 1000:.2f} mm < "
-                    f"{limit * 1000:.2f} mm, "
-                    f"{_status_cz(utilization)}",
+                    f"Rozpětí L = {_cz(span, 3)} m.",
+                    deflection_calculation(
+                        span=span,
+                        line_load_kn_m=immediate_line_load_kn_m,
+                        deflection_m=deflection,
+                        symbol="winst",
+                    ),
+                    f"Mezní hodnota wlim = L/{_cz(ratio, 0)} = "
+                    f"{_cz(span, 3)} m / {_cz(ratio, 0)} × 1000 = "
+                    f"{_cz(limit * 1000, 2)} mm.",
+                    _comparison_cz(
+                        f"{_cz(deflection * 1000, 2)} mm",
+                        f"{_cz(limit * 1000, 2)} mm", utilization,
+                    ),
+                ),
+                    demand=f"{_cz(deflection * 1000, 2)} mm",
+                    limit=f"{_cz(limit * 1000, 2)} mm",
+                    utilization=utilization,
                 ),
             )
         )
@@ -2256,18 +2841,28 @@ def _add_purlin_evaluation(
         ):
             sections.append(
                 (
-                    f"Posouzení - konečný průhyb {member_name}"
+                    "Posouzení - konečný průhyb včetně dotvarování"
                     + field_suffix.format(index=index),
-                    (
-                        "Mezní stav použitelnosti (MSP), včetně dotvarování.",
-                        f"Rozpětí L = {span:.3f} m.",
-                        f"Konečný průhyb wfin = "
-                        f"{deflection * 1000:.2f} mm.",
-                        f"Mezní hodnota wlim = L/{ratio:g} = "
-                        f"{limit * 1000:.2f} mm.",
-                        f"{deflection * 1000:.2f} mm < "
-                        f"{limit * 1000:.2f} mm, "
-                        f"{_status_cz(utilization)}",
+                    _highlight_check_values((
+                        "Mezní stav použitelnosti (MSP).",
+                        f"Rozpětí L = {_cz(span, 3)} m.",
+                        deflection_calculation(
+                            span=span,
+                            line_load_kn_m=final_line_load_kn_m,
+                            deflection_m=deflection,
+                            symbol="wfin",
+                        ),
+                        f"Mezní hodnota wlim = L/{_cz(ratio, 0)} = "
+                        f"{_cz(span, 3)} m / {_cz(ratio, 0)} × 1000 = "
+                        f"{_cz(limit * 1000, 2)} mm.",
+                        _comparison_cz(
+                            f"{_cz(deflection * 1000, 2)} mm",
+                            f"{_cz(limit * 1000, 2)} mm", utilization,
+                        ),
+                    ),
+                        demand=f"{_cz(deflection * 1000, 2)} mm",
+                        limit=f"{_cz(limit * 1000, 2)} mm",
+                        utilization=utilization,
                     ),
                 )
             )
@@ -2275,33 +2870,51 @@ def _add_purlin_evaluation(
     sections.extend(
         (
             (
-                f"Posouzení - kladný ohybový moment {member_name}",
+                "Posouzení - namáhání ohybem",
                 (
                     "Mezní stav únosnosti (MSÚ).",
-                    f"Návrhová pevnost fm,d = fm,k × kmod / γM = "
-                    f"{bending_strength_mpa:.2f} MPa.",
-                    f"Maximální kladný moment MEd,+ = "
-                    f"{maximum_positive_moment_nm / 1000:.3f} kNm.",
-                    f"Mezní hodnota MRd = fm,d × W = "
-                    f"{check.bending_resistance_nm / 1000:.3f} kNm.",
-                    f"{maximum_positive_moment_nm / 1000:.3f} kNm < "
-                    f"{check.bending_resistance_nm / 1000:.3f} kNm, "
-                    f"{_status_cz(check.positive_bending_utilization)}",
+                    (
+                        f"Maximální kladný moment z prutového modelu "
+                        f"{beam_model_inputs(design_line_load_kn_m)}: "
+                        f"MEd,+,max = "
+                        f"{_cz(maximum_positive_moment_nm / 1000, 3)} kNm."
+                        if is_continuous
+                        else f"Návrhový moment MEd = qd L² / 8 = "
+                        f"{_cz(design_line_load_kn_m, 3)} kN/m × "
+                        f"{_cz(check.span_lengths_m[0], 3)}² m² / 8 = "
+                        f"{_cz(maximum_positive_moment_nm / 1000, 3)} kNm."
+                    ),
+                    f"Průřezový modul W = {_cz_scientific(section_modulus_m3)} m³ = "
+                    f"{_cz(section_modulus_m3 * 1e9, 3)} mm³.",
+                    bending_stress_calculation(
+                        maximum_positive_moment_nm,
+                        "MEd,+,max" if is_continuous else "MEd",
+                    ),
+                    bending_limit_calculation,
+                    _comparison_cz(
+                        positive_bending_demand, bending_limit,
+                        check.positive_bending_utilization,
+                    ),
                 ),
             ),
             *(
                 (
                     (
-                        f"Posouzení - záporný ohybový moment {member_name}",
+                        "Posouzení - namáhání ohybem - negativní moment",
                         (
                             "Mezní stav únosnosti (MSÚ).",
-                            f"Maximální záporný moment |MEd,-| = "
-                            f"{maximum_negative_moment_nm / 1000:.3f} kNm.",
-                            f"Mezní hodnota MRd = fm,d × W = "
-                            f"{check.bending_resistance_nm / 1000:.3f} kNm.",
-                            f"{maximum_negative_moment_nm / 1000:.3f} kNm < "
-                            f"{check.bending_resistance_nm / 1000:.3f} kNm, "
-                            f"{_status_cz(check.negative_bending_utilization)}",
+                            f"Maximální záporný moment z prutového modelu "
+                            f"{beam_model_inputs(design_line_load_kn_m)}: "
+                            f"|MEd,-,max| = "
+                            f"{_cz(maximum_negative_moment_nm / 1000, 3)} kNm.",
+                            f"Průřezový modul W = {_cz_scientific(section_modulus_m3)} m³ = "
+                            f"{_cz(section_modulus_m3 * 1e9, 3)} mm³.",
+                            bending_stress_calculation(maximum_negative_moment_nm, "MEd,-,max"),
+                            bending_limit_calculation,
+                            _comparison_cz(
+                                negative_bending_demand, bending_limit,
+                                check.negative_bending_utilization,
+                            ),
                         ),
                     ),
                 )
@@ -2309,43 +2922,109 @@ def _add_purlin_evaluation(
                 else ()
             ),
             (
-                f"Posouzení - namáhání {member_name} smykem",
+                "Posouzení - namáhání smykem",
                 (
                     "Mezní stav únosnosti (MSÚ).",
-                    f"Návrhová pevnost fv,d = fv,k × kmod / γM = "
-                    f"{shear_strength_mpa:.2f} MPa.",
-                    f"Maximální posouvající síla VEd = "
-                    f"{maximum_shear_n / 1000:.3f} kN.",
-                    f"Mezní hodnota VRd = fv,d × kcr × b × h / 1,5; "
-                    f"kcr = {SHEAR_EFFECTIVE_WIDTH_FACTOR:g}; VRd = "
-                    f"{check.shear_resistance_n / 1000:.3f} kN.",
-                    f"{maximum_shear_n / 1000:.3f} kN < "
-                    f"{check.shear_resistance_n / 1000:.3f} kN, "
-                    f"{_status_cz(check.shear_utilization)}",
+                    (
+                        f"Maximální posouvající síla z prutového modelu "
+                        f"{beam_model_inputs(design_line_load_kn_m)}: "
+                        f"VEd,max = {_cz(maximum_shear_n / 1000, 3)} kN."
+                        if is_continuous
+                        else f"Návrhová posouvající síla VEd = qd L / 2 = "
+                        f"{_cz(design_line_load_kn_m, 3)} kN/m × "
+                        f"{_cz(check.span_lengths_m[0], 3)} m / 2 = "
+                        f"{_cz(maximum_shear_n / 1000, 3)} kN."
+                    ),
+                    f"Účinná šířka bef = kcr × b = "
+                    f"{_cz(SHEAR_EFFECTIVE_WIDTH_FACTOR, 2)} × "
+                    f"{_cz(purlin_width_mm, 0)} mm = "
+                    f"{_cz(SHEAR_EFFECTIVE_WIDTH_FACTOR * purlin_width_mm, 1)} mm.",
+                    "Návrhové smykové napětí τd = 1,5 |VEd| / (kcr × b × h) = "
+                    f"1,5 × {_cz(maximum_shear_n / 1000, 3)} kN × 1000 / "
+                    f"({_cz(SHEAR_EFFECTIVE_WIDTH_FACTOR, 2)} × "
+                    f"{_cz(purlin_width_mm, 0)} mm × {_cz(purlin_height_mm, 0)} mm) = "
+                    f"{shear_demand}.",
+                    f"Mezní hodnota fv,d = fv,k × kmod / γM = "
+                    f"{_cz(grade.shear_strength_mpa, 2)} MPa × "
+                    f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
+                    f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = {shear_limit}.",
+                    _comparison_cz(
+                        shear_demand, shear_limit,
+                        check.shear_utilization,
+                    ),
                 ),
             ),
             (
-                f"Posouzení - otlačení {member_name} v uložení",
+                "Posouzení - tlak kolmo k vláknům v uložení",
                 (
                     "Mezní stav únosnosti (MSÚ), tlak kolmo k vláknům.",
-                    f"Návrhová pevnost fc,90,d = "
+                    f"Mezní hodnota fc,90,d = "
                     f"kc,90 × fc,90,k × kmod / γM = "
-                    f"{compression_strength_mpa:.2f} MPa; "
-                    f"kc,90 = {BEARING_STRENGTH_FACTOR:g}.",
+                    f"{_cz(BEARING_STRENGTH_FACTOR, 2)} × "
+                    f"{_cz(grade.compression_perpendicular_mpa, 2)} MPa × "
+                    f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
+                    f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                    f"{bearing_limit}.",
                     f"Plocha uložení A = b × l = "
-                    f"{purlin_width_mm:g} × {bearing_length:g} = "
-                    f"{purlin_width_mm * bearing_length:.0f} mm².",
-                    f"Maximální reakce Fc,90,Ed = "
-                    f"{maximum_reaction_n / 1000:.3f} kN.",
-                    f"Mezní hodnota Rc,90,d = fc,90,d × A = "
-                    f"{check.bearing_resistance_n / 1000:.3f} kN.",
-                    f"{maximum_reaction_n / 1000:.3f} kN < "
-                    f"{check.bearing_resistance_n / 1000:.3f} kN, "
-                    f"{_status_cz(check.bearing_utilization)}",
+                    f"{_cz(purlin_width_mm, 0)} mm × "
+                    f"{_cz(bearing_length, 0)} mm = "
+                    f"{_cz(bearing_area_mm2, 0)} mm².",
+                    (
+                        f"Maximální reakce z prutového modelu "
+                        f"{beam_model_inputs(design_line_load_kn_m)}: "
+                        f"Fc,90,Ed,max = "
+                        f"{_cz(maximum_reaction_n / 1000, 3)} kN."
+                        if is_continuous
+                        else f"Reakce Fc,90,Ed = qd L / 2 = "
+                        f"{_cz(design_line_load_kn_m, 3)} kN/m × "
+                        f"{_cz(check.span_lengths_m[0], 3)} m / 2 = "
+                        f"{_cz(maximum_reaction_n / 1000, 3)} kN."
+                    ),
+                    f"Návrhové tlakové napětí σc,90,d = {bearing_force_symbol} / A = "
+                    f"{_cz(maximum_reaction_n / 1000, 3)} kN × 1000 / "
+                    f"{_cz(bearing_area_mm2, 0)} mm² = {bearing_demand}.",
+                    _comparison_cz(
+                        bearing_demand, bearing_limit, check.bearing_utilization,
+                    ),
                 ),
             ),
         )
     )
+
+    strength_checks = {
+        "Posouzení - namáhání ohybem": (
+            positive_bending_demand,
+            bending_limit,
+            check.positive_bending_utilization,
+        ),
+        "Posouzení - namáhání ohybem - negativní moment": (
+            negative_bending_demand,
+            bending_limit,
+            check.negative_bending_utilization,
+        ),
+        "Posouzení - namáhání smykem": (
+            shear_demand,
+            shear_limit,
+            check.shear_utilization,
+        ),
+        "Posouzení - tlak kolmo k vláknům v uložení": (
+            bearing_demand,
+            bearing_limit,
+            check.bearing_utilization,
+        ),
+    }
+    for index, (heading, lines) in enumerate(sections):
+        if heading in strength_checks:
+            demand, limit, utilization = strength_checks[heading]
+            sections[index] = (
+                heading,
+                _highlight_check_values(
+                    lines,
+                    demand=demand,
+                    limit=limit,
+                    utilization=utilization,
+                ),
+            )
 
     report.add_sections(
         chapter_title,
@@ -2431,6 +3110,16 @@ def _check_purlin(
         deflection_ratio=max_deflection,
         elastic_modulus_gpa=modulus,
         bearing_length_mm=bearing_length_mm,
+        roof_angle_degrees=roof_angle,
+        rafter_width_mm=rafter_width_mm,
+        rafter_height_mm=rafter_height_mm,
+        rafter_spacing_m=rafter_spacing,
+        snow_load_kn_m2=snow_load,
+        roof_layer_mass_kg_m2=(
+            check.roof_layer_line_mass_kg_m
+            / check.tributary_slope_width_m
+        ),
+        timber_density_kg_m3=timber_density,
         include_creep=session.include_creep,
         check=check,
     )

@@ -453,6 +453,20 @@ drawing.add_ridge_tile(
 The curved, terracotta-filled annotation is scoped to that drawing and stays
 attached to the model when its camera or scale changes.
 
+## 2D roof-frame model
+
+Run `python3 roof_frame.py` to compare a normal roof section with horizontally
+free versus restrained purlin supports. It reads geometry from `house_ifc.py`
+without importing it or generating an IFC. Dimensions/materials/spacing are
+set in `roof_frame.py:main()`; masses and snow are shared with `rafter_load.py`.
+
+It prints forces/reactions and generates `roof_frame_report.pdf`, including
+a comparison table, assumptions, and frame/N/M diagrams. Both collar-tie
+heights are tested; the lowered case is not a dormer analysis. This is a
+preliminary force model, not a complete roof safety verification. See
+[roof_frame.md](roof_frame.md) for the interfaces, support assumptions,
+load conventions and remaining checks.
+
 ## Rafter load helper
 
 `rafter_load.py` checks the main and dormer rafters as simply supported

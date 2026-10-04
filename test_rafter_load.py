@@ -3,11 +3,28 @@ from contextlib import redirect_stdout
 from io import StringIO
 from math import cos, radians, sin
 from pathlib import Path
+from shutil import which
+import subprocess
 from tempfile import TemporaryDirectory
+
+from matplotlib import rcParams
+from matplotlib.colors import to_hex
+from matplotlib.mathtext import MathTextParser
+
 from rafter_load import (
+    CalculationReport,
+    REPORT_LIMIT_TINT,
+    REPORT_RESULT_FAIL_TINT,
+    REPORT_RESULT_PASS_TINT,
+    ReportHighlight,
+    ReportLine,
     GRAVITY_M_S2,
     ROOF_LAYERS_KG_M2,
     SNOW_LOAD_KN_M2,
+    _report_math_text,
+    _comparison_cz,
+    _add_purlin_evaluation,
+    _resolve_timber_grade,
     _status,
     _status_cz,
     calculate_continuous_beam_response,
@@ -15,6 +32,7 @@ from rafter_load import (
     calculate_purlin_check,
     check_continuous_purlin,
     calculate_roof_check,
+    add_rafter_report,
     calculation_report,
     check_purlin,
     check_rafter,
@@ -22,6 +40,228 @@ from rafter_load import (
 
 
 class RafterLoadTests(unittest.TestCase):
+    def test_pdf_embeds_unicode_mapped_truetype_fonts(self) -> None:
+        self.assertEqual(rcParams["pdf.fonttype"], 42)
+
+    def assert_stress_section(self, lines, *, symbol, strength_symbol,
+                              stress_mpa, strength_mpa, utilization) -> None:
+        demand = f"{stress_mpa:.4f} MPa".replace(".", ",")
+        limit = f"{strength_mpa:.4f} MPa".replace(".", ",")
+        text = "\n".join(
+            line.text if isinstance(line, ReportLine) else line for line in lines
+        )
+        self.assertIn(symbol + " = ", text)
+        self.assertIn("Mezní hodnota " + strength_symbol + " = ", text)
+        self.assertNotIn("MRd", text)
+        self.assertNotIn("VRd", text)
+        self.assertAlmostEqual(stress_mpa / strength_mpa, utilization)
+        relation = "<" if utilization < 1 else ">" if utilization > 1 else "="
+        self.assertEqual(
+            lines[-1].text,
+            f"{demand} {relation} {limit}, " + _status_cz(utilization),
+        )
+        for value, color in (
+            (demand, REPORT_RESULT_PASS_TINT if utilization < 1 else REPORT_RESULT_FAIL_TINT),
+            (limit, REPORT_LIMIT_TINT),
+        ):
+            matching_lines = [
+                line for line in lines
+                if isinstance(line, ReportLine) and value in line.text
+            ]
+            self.assertEqual(len(matching_lines), 2)
+            for line in matching_lines:
+                self.assertIn(ReportHighlight(value, color), line.highlights)
+
+    def test_stress_variable_subscripts(self) -> None:
+        self.assertEqual(
+            _report_math_text("σm,d < fm,d; τd < fv,d"),
+            r"$σ_{\mathrm{m,d}}$ < $f_{\mathrm{m,d}}$; "
+            r"$τ_{\mathrm{d}}$ < $f_{\mathrm{v,d}}$",
+        )
+
+    def test_report_subscripts_only_known_variable_names(self) -> None:
+        self.assertEqual(
+            _report_math_text("wfin = wG,inst + wS,inst; qS,k; fc,β,d; MEd,-,max"),
+            r"$w_{\mathrm{fin}}$ = $w_{\mathrm{G,inst}}$ + "
+            r"$w_{\mathrm{S,inst}}$; $q_{\mathrm{S,k}}$; "
+            r"$f_{\mathrm{c,β,d}}$; $M_{\mathrm{Ed,-,max}}$",
+        )
+        prose = "Zatížení střechy, vrstvy, krokve, kg/m²; qk_extra; sklon"
+        self.assertEqual(_report_math_text(prose), prose)
+        existing_math = r"$w_{\mathrm{fin}}$ = 8,91 mm"
+        self.assertEqual(_report_math_text(existing_math), existing_math)
+
+    @unittest.skipUnless(which("pdftotext"), "PDF text extraction needs pdftotext")
+    def test_subscripts_preserve_pdf_text_and_highlight_positions(self) -> None:
+        class RecordingPdf(CalculationReport):
+            def _save_page(self, figure) -> None:
+                super()._save_page(figure)
+                self.saved_figure = figure
+
+        with TemporaryDirectory() as temporary_directory:
+            pdf_path = Path(temporary_directory) / "subscripts.pdf"
+            with RecordingPdf(pdf_path) as report:
+                report.add_sections(
+                    "Zatížení střechy",
+                    (("Průhyb", (
+                        ReportLine(
+                            "Celkový průhyb wfin = 8,91 mm.",
+                            (ReportHighlight("8,91 mm", REPORT_RESULT_PASS_TINT),),
+                        ),
+                        ReportLine(
+                            "Mezní hodnota wlim = 12,83 mm.",
+                            (ReportHighlight("12,83 mm", REPORT_LIMIT_TINT),),
+                        ),
+                        ReportLine(
+                            "8,91 mm < 12,83 mm, VYHOVUJE",
+                            (ReportHighlight("8,91 mm", REPORT_RESULT_PASS_TINT),
+                             ReportHighlight("12,83 mm", REPORT_LIMIT_TINT)),
+                        ),
+                        "qS,k = sk × a × cos² α; fc,β,d; MEd,-,max; σm,d; τd",
+                    )),),
+                )
+                figure = report.saved_figure
+                artist = next(
+                    artist for artist in figure.texts
+                    if artist.get_text().startswith("Celkový průhyb")
+                )
+                glyphs = MathTextParser("path").parse(
+                    artist.get_text(), figure.dpi, artist.get_fontproperties()
+                ).glyphs
+                # Verify actual glyph placement, not just the presence of markup.
+                w = next(glyph for glyph in glyphs if glyph[2] == ord("w"))
+                f = next(glyph for glyph in glyphs if glyph[2] == ord("f"))
+                self.assertLess(f[1], w[1])  # font size
+                self.assertLess(f[4], w[4])  # baseline
+                result_first_glyph = next(
+                    glyph for glyph in glyphs if glyph[2] == ord("8")
+                )
+                renderer = figure.canvas.get_renderer()
+                bounds = artist.get_window_extent(renderer)
+                rectangle = figure.artists[0].get_window_extent(renderer)
+                # The tint must sit under the number even after a subscript.
+                number_x = bounds.x0 + result_first_glyph[3]
+                self.assertLessEqual(rectangle.x0, number_x)
+                self.assertLess(number_x - rectangle.x0, 4)
+                self.assertCountEqual(
+                    [to_hex(item.get_facecolor()) for item in figure.artists],
+                    [REPORT_RESULT_PASS_TINT, REPORT_LIMIT_TINT] * 2,
+                )
+
+            copied_text = subprocess.run(
+                ["pdftotext", "-layout", str(pdf_path), "-"],
+                check=True, capture_output=True, text=True,
+            ).stdout
+            self.assertIn("Zatížení střechy", copied_text)
+            self.assertIn("Celkový průhyb wfin", copied_text)
+            self.assertIn("Mezní hodnota wlim", copied_text)
+            self.assertIn("σ", copied_text)
+            self.assertIn("τ", copied_text)
+            self.assertEqual(copied_text.count("8,91 mm"), 2)
+            self.assertEqual(copied_text.count("12,83 mm"), 2)
+            self.assertNotIn(r"\mathrm", copied_text)
+            self.assertNotIn("$", copied_text)
+
+    def test_rafter_report_substitutes_exact_values_into_formulas(self) -> None:
+        check = calculate_roof_check(
+            width_mm=80,
+            height_mm=200,
+            support_span_m=3.85,
+            deflection_ratio=300,
+            elastic_modulus_gpa=11,
+            roof_angle_degrees=35.83,
+            rafter_spacing_m=0.85,
+            snow_load_kn_m2=1.5,
+            roof_layers_kg_m2={"Layers": 135},
+        )
+
+        class RecordingReport:
+            sections = ()
+
+            def add_sections(self, title, sections, **kwargs) -> None:
+                self.sections = tuple(sections)
+
+        report = RecordingReport()
+        add_rafter_report(
+            report,
+            width_mm=80,
+            height_mm=200,
+            rafter_spacing_m=0.85,
+            deflection_ratio=300,
+            elastic_modulus_gpa=11,
+            timber_density_kg_m3=450,
+            snow_load_kn_m2=1.5,
+            roof_layers_kg_m2={"Layers": 135},
+            rafter_checks=(("Krokev", 3.85, 35.83, check),),
+        )
+        text = "\n".join(
+            line.text if isinstance(line, ReportLine) else line
+            for _, lines in report.sections
+            for line in lines
+        )
+
+        self.assertIn(
+            "Zatížení od sněhu qS,k = sk × a × cos² α = "
+            "1,50 kN/m² × 0,850 m × cos² 35,83° = 0,838 kN/m.",
+            text,
+        )
+        deflection_lines = dict(report.sections)["Posouzení - okamžitý průhyb"]
+        for value, color in (
+            ("8,91 mm", REPORT_RESULT_PASS_TINT),
+            ("12,83 mm", REPORT_LIMIT_TINT),
+        ):
+            matching_lines = [
+                line
+                for line in deflection_lines
+                if isinstance(line, ReportLine) and value in line.text
+            ]
+            self.assertEqual(len(matching_lines), 2)
+            for line in matching_lines:
+                self.assertIn(
+                    (value, color),
+                    [
+                        (highlight.text, highlight.color)
+                        for highlight in line.highlights
+                    ],
+                )
+
+    def test_highlights_survive_wrapping_and_bold_verdicts(self) -> None:
+        class RecordingPdf(CalculationReport):
+            def _save_page(self, figure) -> None:
+                super()._save_page(figure)
+                self.saved_text = "\n".join(
+                    artist.get_text() for artist in figure.texts
+                )
+                self.saved_colors = [
+                    to_hex(artist.get_facecolor())
+                    for artist in figure.artists
+                ]
+
+        result = ReportHighlight("8,91 mm", REPORT_RESULT_PASS_TINT)
+        limit = ReportHighlight("12,83 mm", REPORT_LIMIT_TINT)
+        with TemporaryDirectory() as temporary_directory:
+            with RecordingPdf(
+                Path(temporary_directory) / "highlights.pdf"
+            ) as report:
+                report.add_sections(
+                    "Zatížení střechy",
+                    (("Průhyb", (
+                        ReportLine("x" * 95 + " = 8,91 mm.", (result,)),
+                        ReportLine("Mezní hodnota = 12,83 mm.", (limit,)),
+                        ReportLine(
+                            "8,91 mm < 12,83 mm, VYHOVUJE",
+                            (result, limit),
+                        ),
+                    )),),
+                )
+                self.assertEqual(report.saved_text.count("8,91 mm"), 2)
+                self.assertEqual(report.saved_text.count("12,83 mm"), 2)
+                self.assertIn("Zatížení střechy", report.saved_text)
+                self.assertCountEqual(
+                    report.saved_colors,
+                    [REPORT_RESULT_PASS_TINT, REPORT_LIMIT_TINT] * 2,
+                )
+
     def test_utilization_must_be_strictly_below_one(self) -> None:
         self.assertEqual(_status(0.999), "PASS")
         self.assertEqual(_status(1.0), "FAIL")
@@ -29,6 +269,185 @@ class RafterLoadTests(unittest.TestCase):
         self.assertEqual(_status_cz(0.999), "VYHOVUJE")
         self.assertEqual(_status_cz(1.0), "NEVYHOVUJE")
         self.assertEqual(_status_cz(1.001), "NEVYHOVUJE")
+
+    def test_report_comparisons_show_the_actual_relation(self) -> None:
+        self.assertEqual(
+            _comparison_cz("8,91 mm", "12,83 mm", 8.91 / 12.83),
+            "8,91 mm < 12,83 mm, VYHOVUJE",
+        )
+        self.assertEqual(
+            _comparison_cz("18,32 mm", "16,00 mm", 18.32 / 16),
+            "18,32 mm > 16,00 mm, NEVYHOVUJE",
+        )
+        self.assertEqual(
+            _comparison_cz("16,00 mm", "16,00 mm", 1.0),
+            "16,00 mm = 16,00 mm, NEVYHOVUJE",
+        )
+
+    def test_rafter_bearing_report_compares_stresses_and_failures(self) -> None:
+        class RecordingReport:
+            def add_sections(self, title, sections, **kwargs) -> None:
+                self.sections = dict(sections)
+
+        for mass in (130, 3000):
+            with self.subTest(layer_mass=mass):
+                check = calculate_roof_check(
+                    width_mm=80, height_mm=200, support_span_m=3.85,
+                    deflection_ratio=300, elastic_modulus_gpa=11,
+                    roof_angle_degrees=35.83, rafter_spacing_m=0.85,
+                    snow_load_kn_m2=1.5, roof_layers_kg_m2={"Layers": mass},
+                    bearing_length_mm=50,
+                )
+                report = RecordingReport()
+                add_rafter_report(
+                    report, width_mm=80, height_mm=200, rafter_spacing_m=0.85,
+                    deflection_ratio=300, elastic_modulus_gpa=11,
+                    timber_density_kg_m3=450, snow_load_kn_m2=1.5,
+                    roof_layers_kg_m2={"Layers": mass},
+                    rafter_checks=(("Krokev", 3.85, 35.83, check),),
+                    include_creep=True, bearing_length_mm=50,
+                )
+                lines = report.sections["Posouzení - tlak šikmo k vláknům v uložení"]
+                text = "\n".join(
+                    line.text if isinstance(line, ReportLine) else line
+                    for line in lines
+                )
+                # N / mm² = MPa, with the configured 80 × 50 mm contact area.
+                stress = check.design_support_reaction_n / (80 * 50)
+                strength = check.design_bearing_strength_pa / 1e6
+                demand = f"{stress:.4f} MPa".replace(".", ",")
+                limit = f"{strength:.4f} MPa".replace(".", ",")
+                self.assertIn("σc,β,d = Fc,β,Ed / A = ", text)
+                self.assertIn("kN × 1000 / 4000 mm² = " + demand, text)
+                self.assertIn("Mezní hodnota fc,β,d = " + limit, text)
+                self.assertNotIn("Rc,β,d", text)
+                self.assertAlmostEqual(stress / strength, check.bearing_utilization)
+                verdict = lines[-2]
+                self.assertIn(" < " if mass == 130 else " > ", verdict.text)
+                self.assertIn(
+                    ReportHighlight(demand, REPORT_RESULT_PASS_TINT if mass == 130
+                                    else REPORT_RESULT_FAIL_TINT),
+                    verdict.highlights,
+                )
+                self.assertIn(ReportHighlight(limit, REPORT_LIMIT_TINT), verdict.highlights)
+                # Work independently in N·mm and mm³, rather than the renderer's SI units.
+                section_modulus_mm3 = 80 * 200**2 / 6
+                self.assert_stress_section(
+                    report.sections["Posouzení - namáhání ohybem"],
+                    symbol="σm,d", strength_symbol="fm,d",
+                    stress_mpa=abs(check.design_bending_moment_nm) * 1000 / section_modulus_mm3,
+                    strength_mpa=check.bending_resistance_nm * 1000 / section_modulus_mm3,
+                    utilization=check.bending_utilization,
+                )
+                effective_area_mm2 = 0.67 * 80 * 200
+                self.assert_stress_section(
+                    report.sections["Posouzení - namáhání smykem"],
+                    symbol="τd", strength_symbol="fv,d",
+                    stress_mpa=1.5 * abs(check.design_shear_force_n) / effective_area_mm2,
+                    strength_mpa=1.5 * check.shear_resistance_n / effective_area_mm2,
+                    utilization=check.shear_utilization,
+                )
+                shear_text = "\n".join(
+                    line.text if isinstance(line, ReportLine) else line
+                    for line in report.sections["Posouzení - namáhání smykem"]
+                )
+                self.assertIn("(kcr × b × h)", shear_text)
+                self.assertIn("kN × 1000 / (0,67 × 80 mm × 200 mm)", shear_text)
+                if mass == 3000:
+                    verdicts = [
+                        line.text
+                        for section in report.sections.values()
+                        for line in section
+                        if isinstance(line, ReportLine) and "NEVYHOVUJE" in line.text
+                    ]
+                    self.assertEqual(len(verdicts), 5)
+                    self.assertTrue(all(" > " in line for line in verdicts))
+
+    def test_purlin_report_stresses_headings_and_failure_relations(self) -> None:
+        class RecordingReport:
+            def add_sections(self, title, sections, **kwargs) -> None:
+                self.sections = dict(sections)
+
+        for spans in ((4.8,), (3.74, 4.8, 2.75)):
+            with self.subTest(spans=spans):
+                check = calculate_purlin_check(
+                    width_mm=160, height_mm=200, support_spans_m=spans,
+                    upper_rafter_length_m=1.05, lower_rafter_span_m=3.85,
+                    roof_angle_degrees=35.83, rafter_width_mm=80,
+                    rafter_height_mm=200, rafter_spacing_m=0.75,
+                    deflection_ratio=300, elastic_modulus_gpa=10,
+                    snow_load_kn_m2=1.5, roof_layers_kg_m2={"Layers": 3000},
+                    bearing_length_mm=120,
+                )
+                report = RecordingReport()
+                _add_purlin_evaluation(
+                    report, chapter_title="Vaznice", material=_resolve_timber_grade("c24"),
+                    width_mm=160, height_mm=200, deflection_ratio=300,
+                    elastic_modulus_gpa=10, bearing_length_mm=120,
+                    roof_angle_degrees=35.83, rafter_width_mm=80, rafter_height_mm=200,
+                    rafter_spacing_m=0.75, snow_load_kn_m2=1.5,
+                    roof_layer_mass_kg_m2=3000, timber_density_kg_m3=450,
+                    include_creep=True, check=check,
+                )
+                self.assertIn("Posouzení - namáhání ohybem", report.sections)
+                if len(spans) == 3:
+                    self.assertIn(
+                        "Posouzení - namáhání ohybem - negativní moment", report.sections,
+                    )
+                for index in range(1, len(spans) + 1):
+                    suffix = f", pole {index}" if len(spans) == 3 else ""
+                    self.assertIn("Posouzení - okamžitý průhyb" + suffix, report.sections)
+                    self.assertIn(
+                        "Posouzení - konečný průhyb včetně dotvarování" + suffix,
+                        report.sections,
+                    )
+                bearing = report.sections["Posouzení - tlak kolmo k vláknům v uložení"]
+                text = "\n".join(line.text for line in bearing)
+                force = max(abs(value) for value in check.design_response.support_reactions_n)
+                stress = force / (160 * 120)
+                limit = check.bearing_resistance_n / (160 * 120)
+                self.assertIn("σc,90,d = Fc,90,Ed", text)
+                self.assertIn("kN × 1000 / 19200 mm²", text)
+                self.assertIn(f"{stress:.4f} MPa".replace(".", ","), text)
+                self.assertNotIn("Rc,90,d", text)
+                self.assertAlmostEqual(stress / limit, check.bearing_utilization)
+                section_modulus_mm3 = 160 * 200**2 / 6
+                positive_moment = max(check.design_response.span_positive_moments_nm)
+                self.assert_stress_section(
+                    report.sections["Posouzení - namáhání ohybem"],
+                    symbol="σm,d", strength_symbol="fm,d",
+                    stress_mpa=positive_moment * 1000 / section_modulus_mm3,
+                    strength_mpa=check.bending_resistance_nm * 1000 / section_modulus_mm3,
+                    utilization=check.positive_bending_utilization,
+                )
+                if len(spans) == 3:
+                    negative_moment = abs(min(check.design_response.support_moments_nm))
+                    negative_lines = report.sections[
+                        "Posouzení - namáhání ohybem - negativní moment"
+                    ]
+                    self.assert_stress_section(
+                        negative_lines, symbol="σm,d", strength_symbol="fm,d",
+                        stress_mpa=negative_moment * 1000 / section_modulus_mm3,
+                        strength_mpa=check.bending_resistance_nm * 1000 / section_modulus_mm3,
+                        utilization=check.negative_bending_utilization,
+                    )
+                    self.assertIn("σm,d = |MEd,-,max| / W", "\n".join(
+                        line.text for line in negative_lines
+                    ))
+                effective_area_mm2 = 0.67 * 160 * 200
+                self.assert_stress_section(
+                    report.sections["Posouzení - namáhání smykem"],
+                    symbol="τd", strength_symbol="fv,d",
+                    stress_mpa=1.5 * max(check.design_response.span_max_abs_shears_n) / effective_area_mm2,
+                    strength_mpa=1.5 * check.shear_resistance_n / effective_area_mm2,
+                    utilization=check.shear_utilization,
+                )
+                verdicts = [
+                    line.text for section in report.sections.values() for line in section
+                    if isinstance(line, ReportLine) and "NEVYHOVUJE" in line.text
+                ]
+                self.assertEqual(len(verdicts), 2 * len(spans) + (4 if len(spans) == 3 else 3))
+                self.assertTrue(all(" > " in line for line in verdicts))
 
     def test_calculates_deflection_limited_uniform_load(self) -> None:
         result = calculate_rafter_load(
