@@ -4,14 +4,26 @@ Run `python3 roof_frame.py`. It prints diagnostics and creates
 `roof_frame_report.pdf`, separate from `rafter_load_report.pdf`.
 
 This is an elastic **normal roof cross-section**, not an IFC modification or
-a complete structural verification. The lowered-collar variant is a sensitivity
-test of that same normal section, **not a dormer model**.
+a complete structural verification. The default runs compare that same actual
+section with and without collars and with horizontally free/fixed purlins.
+It is **not a dormer model** and does not remove anything from the IFC.
 
 ## Inputs and implementation
 
-- `roof_frame.py:main()` contains the member dimensions, material classes and
-  rafter spacing. Defaults: C22 rafters 80 × 200 mm at 750 mm; two C22 collar
-  boards, each 50 × 200 mm. Wider spacings/materials need their own runs.
+- `HouseRoofSection.from_house()` reads timber sizes and the `rafters` array
+  from `house_ifc.py`, selecting an interior uncut normal main-rafter line with
+  the largest tributary width among eligible lines. Its width is half the sum
+  of the two neighbouring main-rafter centre distances, not a hard-coded 750 mm.
+  It excludes the cut corner, roof-window split lines, paired dormer lines and
+  the dormer region. `StrongerRafter` is supported as a data wrapper; arbitrary
+  Python calls are never executed. The number of collar boards accounts for
+  touching main rafters and their heights follow the appropriate purlin part.
+  Pass `rafter_x=...` to select another eligible line explicitly.
+- `roof_frame.py:main()` keeps material classes explicit: C24 rafters and C22
+  collars. The current selected line is x = 2.55 m, tributary width 0.865 m,
+  rafters 80 × 200 mm and two collar boards each 50 × 200 mm. C24 matches the
+  current roof-drawing note for this wider strip. Strength grades and support
+  stiffnesses cannot be inferred from the IFC geometry.
 - `RoofGeometry.from_house()` reads the current roof planes, wall-plate/purlin
   positions, eave overhang and collar heights from `house_ifc.py`. It evaluates
   only arithmetic and tuples using the Python syntax tree, never imports or
@@ -20,6 +32,8 @@ test of that same normal section, **not a dormer model**.
   idealised away. Geometry assumes symmetric normal roof slopes.
 - `build_roof_frame()` defines the member continuity, hinges and supports.
 - `roof_loads()` converts the vertical gravity loads into distributed loads.
+- `ceiling_nodal_loads()` defines the explicitly chosen alternative ceiling
+  load path for a no-collar frame.
 - `Frame.solve()` assembles the plane-frame stiffness matrix with axial and
   bending deformation and consistent distributed-load vectors.
 - `check_roof_frame()` solves the load cases, prints diagnostics and optionally
@@ -30,6 +44,23 @@ sections, number of collar boards, spacing, roof/ceiling masses, roof snow load,
 and `restrain_purlins`. Geometry and the chosen section heights must describe
 the same centre lines. A caller can set `maximum_element_length` to refine the
 mesh. The normal/lowered collar geometry is selected with `lowered=False/True`.
+
+Use `include_collar_ties=False` in `check_roof_frame()` to remove the member
+entirely (not just reduce its stiffness). You must also specify
+`ceiling_support_without_collars`:
+
+- `"rafter_end_reactions"`: retain the horizontal ceiling mass as equal vertical
+  loads at the former collar ends, without a horizontal tie between those ends.
+  This represents an unspecified alternative ceiling arrangement with no
+  horizontal coupling. It is a **sensitivity assumption, not a designed
+  replacement ceiling**, and is the default main-program comparison.
+- `"independent_support"`: the horizontal ceiling is supported elsewhere, so
+  its load leaves this roof frame. Sloping ceiling finishes remain on rafters.
+
+In both modes the removed collar timber's own weight disappears. No unknown
+replacement member's self-weight is invented or added. With collars present,
+passing either alternative is rejected to prevent double-counting. The ceiling
+footprint and load distribution remain an idealisation of the roof section.
 
 ## Supports and connections
 
@@ -89,9 +120,18 @@ must not be treated as coincident values for a combined N + M check. Vertical
 displacement maxima are sampled within elements; no L/300 comparison is made
 because displacement relative to the moving supports must be distinguished.
 
-The leading comparison table shows independent design-force envelopes. Detail
-pages include a schematic/deformed shape and N/M diagrams for the design case
-with largest collar axial force.
+The leading comparison table shows independent design-force envelopes. A second
+table gives signed loads **ON each purlin**, their maximum absolute kN/m values,
+and horizontal movements of the rafter support nodes. Positive horizontal load
+is toward the garden (+y): inward on the left purlin, outward on the right.
+For a horizontally free support, its horizontal reaction is zero **by model
+definition**. This does not establish safety or adequate spatial restraint.
+The node movement is not a prediction of the purlin's transverse bending.
+
+Detail pages include a schematic/deformed shape and N/M diagrams for the design
+case with largest collar axial force, or largest purlin horizontal reaction
+when no collars are present. Absence of the collar is shown as a dash in its
+force columns, not a zero-force member still drawn in the model.
 
 ## What this model does not verify
 
@@ -114,3 +154,9 @@ sloping-cantilever analytical solutions, a three-span continuous beam against
 the independent existing solver, released-end moments, rafter continuity,
 global force/moment equilibrium, mirrored snow, mesh convergence, load scaling,
 snow projection, ceiling load accounting and PDF generation.
+
+Additional tests cover IFC-input section selection, variable spacing and
+stronger rafters, touching-rafter collar counts, unsupported geometry rejection,
+actual collar removal, preservation of ceiling loads, the removed timber's
+self-weight, no-collar equilibrium/mesh convergence, signed purlin envelopes,
+and PDF generation without any collar member.

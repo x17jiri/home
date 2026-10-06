@@ -154,7 +154,7 @@ FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 0.803 # Vzdalenost vaznice od hrebene
+VAZNICE_DIST = 1.073 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.24
 VAZNICE_EXTRA_HEIGHT = 0.08
 VAZNICE_BASE = 0.24
@@ -254,9 +254,9 @@ GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 3.0 - 0.125
-HOLE_HEIGHT = 0.195
-ABOVE_HOLE = 0.25 + 0.125
+UNDER_HOLE = 2.75
+HOLE_HEIGHT = 0.25
+ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.2)
@@ -349,7 +349,7 @@ pokoj_dole = ground.floor_layer(
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.535
+CHODBA_DEPTH = 2.5
 GALERY_START = BWT+2.5
 
 wall_zachod_nahore_y = BWT+1.2+1+0.1
@@ -364,9 +364,9 @@ oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 # "+after" leave it full-length.
 rafters = [
 	-0.12,
-	StrongerRafter((-0.12+1.62)/2),
-	StrongerRafter(1.62),
-	StrongerRafter(1.62+0.93),
+	(-0.12+1.62)/2,
+	1.62,
+	1.62+0.93,
 	(3.35, "+before"),
 	(4.15, "before"),
 	(4.95, "before"),
@@ -812,10 +812,6 @@ wall_kitchen_2 = ground.wall(
 	(wall2_x+1, BWT+CHODBA_DEPTH+0.75),
 	(wall2_x+1, BWT+CHODBA_DEPTH),
 	wall_type=partition_wall, height=ground_floor_height)
-#wall_kitchen_3 = ground.wall(
-#	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH+0.5),
-#	(wall2_x+1.15+0.15+0.9, BWT+CHODBA_DEPTH),
-#	wall_type=partition_wall, height=ground_floor_height)
 kitchen_door = wall_kitchen_1.add_door(
 	at=1.25,
 	opening_width=1.0, width=0.9,
@@ -1325,16 +1321,17 @@ sklad_opening = wall_3.add_opening(
 
 def add_purlin_wall_recess(wall, *, side, wall_name):
 	"""Lower one half of a wall along its full length for the larger purlin."""
-	return wall.add_recess(
-		at=0,
-		width=wall.length,
-		depth=BWT / 2,
-		height=VAZNICE_EXTRA_HEIGHT,
-		sill_height=PURLIN_WALL_TOP_HEIGHT - VAZNICE_EXTRA_HEIGHT,
-		side=side,
-		top_extension=0.01,
-		name=f"{wall_name} purlin recess",
-	)
+	if VAZNICE_EXTRA_HEIGHT > 0.0:
+		return wall.add_recess(
+			at=0,
+			width=wall.length,
+			depth=BWT / 2,
+			height=VAZNICE_EXTRA_HEIGHT,
+			sill_height=PURLIN_WALL_TOP_HEIGHT - VAZNICE_EXTRA_HEIGHT,
+			side=side,
+			top_extension=0.01,
+			name=f"{wall_name} purlin recess",
+		)
 
 
 add_purlin_wall_recess(wall_2, side="right", wall_name="Wall 2")
@@ -1535,7 +1532,7 @@ window_sklad = wall_4_u.add_window(
 roof = upper.roof("Main roof")
 
 ROOF_WINDOW_Y1 = HOUSE_DEPTH - BWT - 0.25
-roof_window_x = (rafters[2].x + rafters[3].x) / 2.0
+roof_window_x = (rafters[2] + rafters[3]) / 2.0
 roof_window_opening = roof.add_opening(
 	name="Bedroom roof window",
 	rectangle=(
@@ -3447,9 +3444,9 @@ if "roof" in sys.argv:
 	drawing1.add_timber_schedule(timber_schedule_rows, layout_scale=0.5)
 	drawing1.add_notes(
 		[
-			"Zesílené krokve a hlavní krokve (nezkrácené), které "
-			"maji součet osových vzdáleností od sousedních krokví "
-			"víc než 1.4 m musí mít pevnostní třídu C24. "
+			"Hlavní krokve (nezkrácené), které mají "
+			"součet osových vzdáleností od sousedních krokví "
+			"1.7 m nebo více, musí mít pevnostní třídu C24. "
 			"Pro všechny ostatní prvky krovu dostačuje C22."
 		],
 		layout_scale=0.5,

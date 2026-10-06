@@ -456,16 +456,51 @@ attached to the model when its camera or scale changes.
 ## 2D roof-frame model
 
 Run `python3 roof_frame.py` to compare a normal roof section with horizontally
-free versus restrained purlin supports. It reads geometry from `house_ifc.py`
-without importing it or generating an IFC. Dimensions/materials/spacing are
-set in `roof_frame.py:main()`; masses and snow are shared with `rafter_load.py`.
+free versus restrained purlin supports, with and without kleštiny. It reads
+geometry, member dimensions and tributary widths from `house_ifc.py` without
+importing it or generating an IFC. The default selects an actual interior
+uncut normal main-rafter line; material classes remain explicit in `main()`.
+Masses and snow are shared with `rafter_load.py`.
 
 It prints forces/reactions and generates `roof_frame_report.pdf`, including
-a comparison table, assumptions, and frame/N/M diagrams. Both collar-tie
-heights are tested; the lowered case is not a dormer analysis. This is a
-preliminary force model, not a complete roof safety verification. See
+a comparison table, signed horizontal purlin loads, assumptions, and frame/N/M
+diagrams. The no-collar comparison keeps the ceiling mass as vertical loads at
+the former collar ends; a replacement ceiling is not designed. This is a
+preliminary normal-section model, not a dormer or complete roof safety verification. See
 [roof_frame.md](roof_frame.md) for the interfaces, support assumptions,
 load conventions and remaining checks.
+
+## 3D roof-frame model (PyNite)
+
+`roof_frame_3d.py` models rafters (including the dormer), the six independent
+purlin pieces and five wall plates, **without kleštiny**. It safely reads the
+current `house_ifc.py` input geometry without regenerating the IFC. Purlins bend
+between their actual wall bearings, rather than being fixed at each rafter.
+
+Install the optional dependencies in a separate environment (PyNite uses NumPy
+2), then run:
+
+```bash
+python3 -m venv .venv-roof3d
+.venv-roof3d/bin/python -m pip install -r requirements-roof3d.txt
+.venv-roof3d/bin/python roof_frame_3d.py
+```
+
+It uses one shared horizontal support spring stiffness for wall plates and
+purlin bearings, defaulting to 0.12 kN/mm per node/direction. With 135 kg/m²
+roof layers and the current geometry, this sensitivity calibration gives about
+39 kN on the street middle purlin; it is **not verified connection stiffness**.
+Use `--horizontal-stiffness rigid` for the old fixed-support comparison, or
+`--purlin-lateral both` to compare free/sprung lateral purlin bearings.
+It exports timber forces, support/ring-beam loads and movements, input
+assumptions and a deformed 3D image. It retains
+absolute displacement and also screens rafter and purlin departure from their
+displaced endpoint/bearing line against L/300 and L/500. Rafters without a
+wall-plate–ridge pair use their actual two supports by default. All timber
+defaults to C22. Suspended ceiling loads are omitted because their replacement
+support is unspecified.
+This is a preliminary force model, not a roof safety assessment. See
+[roof_frame_3d.md](roof_frame_3d.md) for assumptions, options and regression tests.
 
 ## Rafter load helper
 

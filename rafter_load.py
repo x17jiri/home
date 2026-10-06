@@ -3511,13 +3511,19 @@ def main() -> None:
         "rafter_load_report.pdf",
         include_creep=True,
     ):
+#  SUPPORT_SPAN_M = 3.576
+#  ROOF_ANGLE_DEGREES = 35.84
+#  DORMER_SUPPORT_SPAN_M = 3.014
+#  DORMER_ROOF_ANGLE_DEGREES = 15.91
+#  RAFTER_LENGTH_ABOVE_PURLIN_M = 1.204
+#  PURLIN_SPANS_M = (3.710, 4.720, 2.720)
         check_rafter(
             title="Hlavní krokve, C22",
             material="c22",
             width=0.08,
             height=0.20,
-            span=3.85,
-            spacing=0.75,
+            span=3.6,
+            spacing=0.95,
             roof_angle=ROOF_ANGLE_DEGREES,
             max_deflection=MAX_DEFLECTION_RATIO,
             snow_load=SNOW_LOAD_KN_M2,
@@ -3528,8 +3534,8 @@ def main() -> None:
             material="c24",
             width=0.08,
             height=0.20,
-            span=3.85,
-            spacing=0.85,
+            span=3.6,
+            spacing=1.0,
             roof_angle=ROOF_ANGLE_DEGREES,
             max_deflection=MAX_DEFLECTION_RATIO,
             snow_load=SNOW_LOAD_KN_M2,
@@ -3579,10 +3585,10 @@ def main() -> None:
             title="Vaznice B, C22",
             material="c22",
             width=0.24,
-            height=0.32,
-            span=4.80,
-            rafter_length_above=1.05,
-            lower_rafter_span=3.85,
+            height=0.28,
+            span=4.48+0.24,
+            rafter_length_above=1.25,
+            lower_rafter_span=3.6,
             roof_angle=ROOF_ANGLE_DEGREES,
             rafter_width=0.08,
             rafter_height=0.20,
@@ -3627,10 +3633,10 @@ def main() -> None:
             title="Souvislá vaznice, C22",
             material="c22",
             width=0.24,
-            height=0.32,
+            height=0.24,
             spans=(3.74, 4.80, 2.75),
-            rafter_length_above=1.05,
-            lower_rafter_span=3.85,
+            rafter_length_above=1.25,
+            lower_rafter_span=3.60,
             roof_angle=ROOF_ANGLE_DEGREES,
             rafter_width=0.08,
             rafter_height=0.20,

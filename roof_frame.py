@@ -415,7 +415,96 @@ class RoofGeometry:
         return left, 2*self.ridge-left
 
 
-def build_roof_frame(geometry: RoofGeometry, rafter: Section, collar: Section, *,
+@dataclass(frozen=True)
+class HouseRoofSection:
+    """An actual normal main-rafter line and its tributary roof strip."""
+
+    x: float
+    spacing: float
+    width: float
+    height: float
+    collar_width: float
+    collar_height: float
+    collar_pieces: int
+    geometry: RoofGeometry
+
+    @classmethod
+    def from_house(cls, path: str | Path, *, rafter_x: float | None = None):
+        values = _HouseConstants(path)
+        entries = values.expressions.get("rafters")
+        if not isinstance(entries, (ast.List, ast.Tuple)):
+            raise ValueError("rafters must be an explicit list for the section reader")
+        normal_width, height = values.get("RAFTER_SIZE")
+        collar_width, collar_height = values.get("COLLAR_TIE_SIZE")
+        for value, name in ((normal_width, "rafter width"), (height, "rafter height"),
+                            (collar_width, "collar width"), (collar_height, "collar height")):
+            _positive(value, name)
+        layout = []
+        paired_positions = []
+        for entry in entries.elts:
+            width, paired, split = normal_width, False, False
+            position = entry
+            if isinstance(entry, ast.Tuple):
+                if (len(entry.elts) != 2 or not isinstance(entry.elts[1], ast.Constant)
+                        or entry.elts[1].value not in {"before", "after", "+before", "+after"}):
+                    raise ValueError("unsupported paired rafter definition")
+                position, paired = entry.elts[0], True
+            elif isinstance(entry, ast.Call):
+                # Recognise data wrappers, never execute them or arbitrary calls.
+                if not isinstance(entry.func, ast.Name) or entry.keywords:
+                    raise ValueError("unsupported rafter wrapper")
+                if entry.func.id == "StrongerRafter" and len(entry.args) == 1:
+                    position = entry.args[0]
+                    width, stronger_height = values.get("STRONGER_RAFTER_SIZE")
+                    if stronger_height != height:
+                        raise ValueError("stronger rafter height must match the normal height")
+                elif entry.func.id == "SplitRafter" and len(entry.args) == 2:
+                    position, split = entry.args[0], True
+                else:
+                    raise ValueError("unsupported rafter wrapper")
+            x = values.evaluate(position, {"rafters"})
+            if not isfinite(x):
+                raise ValueError("rafter x must be finite")
+            layout.append((x, width, paired, split))
+            if paired:
+                paired_positions.append(x)
+        layout.sort()
+        if any(a[0] == b[0] for a, b in zip(layout, layout[1:])):
+            raise ValueError("duplicate main rafter positions")
+        candidates = []
+        for index, (x, width, paired, split) in enumerate(layout):
+            if index == 0 or index == len(layout)-1:
+                continue  # Roof-edge tributary widths require a separate model.
+            if x < values.get("CUT_WIDTH") or x > values.get("HOUSE_WIDTH"):
+                continue
+            if paired or split or (paired_positions and min(paired_positions) < x < max(paired_positions)):
+                continue  # No cut-corner/window/dormer geometry in this normal section.
+            left, right = layout[index-1], layout[index+1]
+            spacing = (right[0]-left[0])/2
+            pieces = sum(abs(neighbour[0]-x-(width+neighbour[1])/2*sign) > 1e-9
+                         for neighbour, sign in ((left, -1), (right, 1)))
+            board_xs = [x+sign*(width+collar_width)/2
+                        for neighbour, sign in ((left, -1), (right, 1))
+                        if abs(neighbour[0]-x-(width+neighbour[1])/2*sign) > 1e-9]
+            lowered = [values.get("MIDDLE_PURLIN_X_MIN") <= board_x <= values.get("MIDDLE_PURLIN_X_MAX")
+                       for board_x in board_xs]
+            if not lowered or len(set(lowered)) != 1:
+                continue  # Two different collar elevations need two actual members.
+            geometry = RoofGeometry.from_house(path, rafter_height=height, lowered=lowered[0])
+            candidates.append(cls(x, spacing, width, height, collar_width, collar_height, pieces, geometry))
+        if rafter_x is not None:
+            for candidate in candidates:
+                if abs(candidate.x-rafter_x) < 1e-9:
+                    return candidate
+            raise ValueError("selected rafter is not an interior, uncut normal roof section")
+        if not candidates:
+            raise ValueError("no supported normal roof section in the current rafters layout")
+        # Largest tributary width among eligible actual lines, not a fictitious
+        # 750 mm spacing. This is not an envelope of the dormer/corner sections.
+        return max(candidates, key=lambda item: item.spacing)
+
+
+def build_roof_frame(geometry: RoofGeometry, rafter: Section, collar: Section | None, *,
                      restrain_purlins: bool, maximum_element_length=0.35):
     """Physical continuous rafters + pinned collar boards + hinged ridge.
 
@@ -446,8 +535,9 @@ def build_roof_frame(geometry: RoofGeometry, rafter: Section, collar: Section, *
             model.add_element(f"{side} {len(model.elements)}", start, end, rafter, member=side,
                               start_rotation=side if model.nodes[start].y == geometry.ridge else "continuous",
                               end_rotation=side if model.nodes[end].y == geometry.ridge else "continuous")
-    model.add_element("Kleštiny", physical[geometry.collar_y[0]], physical[geometry.collar_y[1]],
-                      collar, member="collar", start_rotation="collar_pin", end_rotation="collar_pin")
+    if collar is not None:
+        model.add_element("Kleštiny", physical[geometry.collar_y[0]], physical[geometry.collar_y[1]],
+                          collar, member="collar", start_rotation="collar_pin", end_rotation="collar_pin")
     for y in (geometry.left_wall, geometry.right_wall):
         model.fix_node(physical[y])
     for y in (geometry.left_purlin, geometry.right_purlin):
@@ -477,6 +567,8 @@ class RoofFrameCheck:
     restrain_purlins: bool
     rafter_grade: str
     collar_grade: str
+    include_collar_ties: bool = True
+    ceiling_support_without_collars: str | None = None
 
 
 def roof_loads(model: Frame, geometry: RoofGeometry, *, spacing: float, roof_mass: float,
@@ -516,18 +608,49 @@ def roof_loads(model: Frame, geometry: RoofGeometry, *, spacing: float, roof_mas
     return result
 
 
+def ceiling_nodal_loads(model: Frame, geometry: RoofGeometry, *, spacing: float,
+                       ceiling_mass: float, case: LoadCase, ceiling_support: str):
+    """Optional no-collar ceiling load path, WITHOUT a horizontal tie.
+
+    ``rafter_end_reactions`` represents an unspecified alternative ceiling
+    spanning to the same rafter points, but transmitting only vertical loads.
+    ``independent_support`` transfers the flat-ceiling load elsewhere, outside
+    this frame. Sloping finishes remain on rafters in either mode.
+    The absent collar timber's own weight is not retained.
+    """
+    if ceiling_support not in {"rafter_end_reactions", "independent_support"}:
+        raise ValueError("choose ceiling_support_without_collars: rafter_end_reactions or independent_support")
+    if any(element.member == "collar" for element in model.elements):
+        raise ValueError("ceiling nodal loads would double-count the present collar load")
+    _positive(spacing, "spacing")
+    if not isfinite(ceiling_mass) or ceiling_mass < 0 or not isfinite(case.permanent_factor) or case.permanent_factor < 0:
+        raise ValueError("ceiling mass and permanent factor must be finite and non-negative")
+    if ceiling_support == "independent_support":
+        return {}
+    force = -case.permanent_factor*ceiling_mass*GRAVITY_M_S2*spacing*(geometry.collar_y[1]-geometry.collar_y[0])/2
+    nodes = [next(i for i, node in enumerate(model.nodes) if abs(node.y-y) < 1e-9)
+             for y in geometry.collar_y]
+    return {node: (0., force) for node in nodes}
+
+
 def check_roof_frame(*, title: str, geometry: RoofGeometry, material: str,
                      width: float, height: float, spacing: float, collar_material: str,
                      collar_width: float, collar_height: float, collar_pieces: int,
                      roof_mass: float, ceiling_mass: float, snow_load: float,
                      restrain_purlins: bool, report: CalculationReport | None = None,
-                     maximum_element_length=0.35):
+                     maximum_element_length=0.35, include_collar_ties=True,
+                     ceiling_support_without_collars: str | None = None):
     rafter_grade = _resolve_timber_grade(material)
     collar_grade = _resolve_timber_grade(collar_material)
     rafter = Section(width, height, rafter_grade.elastic_modulus_gpa*1e9)
     collar = Section(collar_width, collar_height, collar_grade.elastic_modulus_gpa*1e9,
                      collar_pieces)
-    model = build_roof_frame(geometry, rafter, collar, restrain_purlins=restrain_purlins,
+    if include_collar_ties and ceiling_support_without_collars is not None:
+        raise ValueError("ceiling_support_without_collars applies only when collars are absent")
+    if not include_collar_ties and ceiling_support_without_collars is None:
+        raise ValueError("removing collars requires an explicit alternative ceiling load path")
+    model = build_roof_frame(geometry, rafter, collar if include_collar_ties else None,
+                             restrain_purlins=restrain_purlins,
                              maximum_element_length=maximum_element_length)
     results = []
     # Symmetric and two uneven snow screens. These are NOT a complete EC1/NA
@@ -539,10 +662,14 @@ def check_roof_frame(*, title: str, geometry: RoofGeometry, material: str,
             case = LoadCase(f"{label}, {name}", *factors, left, right)
             loads = roof_loads(model, geometry, spacing=spacing, roof_mass=roof_mass,
                                ceiling_mass=ceiling_mass, snow_load=snow_load, case=case)
-            results.append((case, model.solve(loads)))
+            nodal_loads = {} if include_collar_ties else ceiling_nodal_loads(
+                model, geometry, spacing=spacing, ceiling_mass=ceiling_mass, case=case,
+                ceiling_support=ceiling_support_without_collars)
+            results.append((case, model.solve(loads, nodal_loads=nodal_loads)))
     check = RoofFrameCheck(title, geometry, model, tuple(results), spacing, roof_mass,
                            ceiling_mass, snow_load, restrain_purlins,
-                           rafter_grade.name, collar_grade.name)
+                           rafter_grade.name, collar_grade.name, include_collar_ties,
+                           ceiling_support_without_collars)
     print_diagnostics(check)
     if report is not None:
         add_frame_report(report, check)
@@ -554,29 +681,55 @@ def print_diagnostics(check: RoofFrameCheck):
     print(f"  Normal roof: angle {check.geometry.angle:.3f}°, collar span "
           f"{check.geometry.collar_y[1]-check.geometry.collar_y[0]:.3f} m")
     print("  HORIZONTAL restraint at purlins: " + ("YES" if check.restrain_purlins else "NO"))
+    if not check.include_collar_ties:
+        print("  NO COLLAR TIES. Alternative flat-ceiling load path: "
+              + check.ceiling_support_without_collars + " (sensitivity assumption, not a design).")
     print("  N: positive=tension; negative=compression. Reactions: forces ON timber.")
     for case, result in check.results:
-        collar = result.member_extrema(check.model, "collar")
-        print(f"  {case.title}: collar N = {-collar['compression']/1000:.3f} .. "
-              f"{collar['tension']/1000:.3f} kN; |M| = {collar['moment']/1000:.3f} kNm; "
-              f"max vertical movement = {result.maximum_displacement(check.model, 'collar')*1000:.2f} mm")
+        if check.include_collar_ties:
+            collar = result.member_extrema(check.model, "collar")
+            print(f"  {case.title}: collar N = {-collar['compression']/1000:.3f} .. "
+                  f"{collar['tension']/1000:.3f} kN; |M| = {collar['moment']/1000:.3f} kNm; "
+                  f"max vertical movement = {result.maximum_displacement(check.model, 'collar')*1000:.2f} mm")
+        else:
+            movement = max(result.maximum_displacement(check.model, member)
+                           for member in ("rafter_left", "rafter_right"))
+            print(f"  {case.title}: NO COLLARS; max rafter vertical movement = {movement*1000:.2f} mm")
         for node, (horizontal, vertical) in result.reactions.items():
             print(f"    {check.model.nodes[node].name}: H={horizontal/1000:+.3f} kN, "
                   f"V={vertical/1000:+.3f} kN; "
                   f"on support: H/spacing={-horizontal/check.spacing/1000:+.3f} kN/m, "
                   f"V/spacing={-vertical/check.spacing/1000:+.3f} kN/m")
+            if check.model.nodes[node].y in (check.geometry.left_purlin, check.geometry.right_purlin):
+                print(f"      Purlin horizontal movement = {result.displacements[2*node]*1000:+.3f} mm")
             if vertical < -1e-5:
                 print("      WARNING: uplift; gravity contact alone cannot supply this reaction")
     print("  Analysis only: no overall PASS/FAIL (connections, stability, wind etc. unchecked).")
 
 
 def _cz(value, digits=3):
+    if round(value, digits) == 0:
+        value = 0.
     return f"{value:.{digits}f}".replace(".", ",")
 
 
 def add_frame_report(report, check):
     geometry, model = check.geometry, check.model
-    rafter, collar = model.elements[0].section, model.elements[-1].section
+    rafter = model.elements[0].section
+    collar = next((element.section for element in model.elements if element.member == "collar"), None)
+    collar_lines = ([
+        "Kleštiny: klouby pouze na krokvích; žádná přímá podpora na vaznicích. Spoje bez prokluzu.",
+        "Součet EA a EI jednotlivých prken, rovnoměrné rozdělení sil. Žádné spřažení pro příčnou stabilitu.",
+        f"Kleštiny: {check.collar_grade}, {collar.pieces} × {_cz(collar.width*1000, 0)} × "
+        f"{_cz(collar.height*1000, 0)} mm; E = {_cz(collar.elastic_modulus/1e9, 2)} GPa.",
+    ] if collar is not None else [
+        "BEZ KLEŠTIN: žádný vodorovný spoj mezi krokvemi v původní výšce kleštin.",
+        "Vlastní tíha odstraněných kleštin se nezapočítává. Náhradní nosná konstrukce stropu není navržena.",
+        ("Vodorovný strop: tíha OSB, SDK a instalační vrstvy rozdělena napůl do původních konců kleštin; "
+         "náhradní nosník nepřenáší vodorovné síly. Jde pouze o citlivostní předpoklad."
+         if check.ceiling_support_without_collars == "rafter_end_reactions" else
+         "Vodorovný strop je předpokládán na samostatných podporách mimo tento rám. Jeho tíha zde nepůsobí."),
+    ])
     report.add_sections(check.title, [
         ("Model a okrajové podmínky", [
             "Normální příčný řez bez vikýře. Přímé pružné pruty, malé deformace, teorie 1. řádu.",
@@ -586,20 +739,17 @@ def add_frame_report(report, check):
             "Krokve jsou průběžné přes vaznice i uzly kleštin. Pozednice: pevné posuny H a V, volné natočení.",
             "Vaznice: pevný posun V; posun H " + ("pevný." if check.restrain_purlins else "volný."),
             "Vaznice jsou zde podpory, nikoliv podélné nosníky; jejich průhyb se neuvažuje.",
-            "Kleštiny: klouby pouze na krokvích; žádná přímá podpora na vaznicích. Spoje bez prokluzu.",
-            "Dvě prkna: součet EA a EI, rovnoměrné rozdělení sil. Žádné spřažení pro příčnou stabilitu.",
+            *collar_lines,
             f"Krokve: {check.rafter_grade}, {_cz(rafter.width*1000, 0)} × {_cz(rafter.height*1000, 0)} mm; "
             f"E = {_cz(rafter.elastic_modulus/1e9, 2)} GPa; rozteč a = {_cz(check.spacing)} m.",
-            f"Kleštiny: {check.collar_grade}, {collar.pieces} × {_cz(collar.width*1000, 0)} × "
-            f"{_cz(collar.height*1000, 0)} mm; E = {_cz(collar.elastic_modulus/1e9, 2)} GPa.",
             f"Sklon α = {_cz(geometry.angle, 3)}°; rozpětí kleštin = "
             f"{_cz(geometry.collar_y[1]-geometry.collar_y[0])} m; osa kleštin nad podlahou patra "
             f"= {_cz(geometry.collar_z-geometry.floor_z)} m.",
         ]),
         ("Zatížení a kombinace", [
             f"Střešní vrstvy bez vnitřních povrchů: {_cz(check.roof_mass, 1)} kg/m² skutečné šikmé plochy.",
-            f"Vnitřní povrchy: {_cz(check.ceiling_mass, 1)} kg/m² na kleštinách a šikminách pod nimi; "
-            "jen mezi pozednicemi, bez dvojího započtení.",
+            f"Vnitřní povrchy: {_cz(check.ceiling_mass, 1)} kg/m², šikmé plochy pod úrovní kleštin "
+            "a vodorovný strop dle popsaného uložení; jen mezi pozednicemi, bez dvojího započtení.",
             "Střešní vrstvy jsou pro jednoduchost rovnoměrné i na přesazích. Vlastní tíha dřeva se přičítá.",
             f"g = {GRAVITY_M_S2:g} m/s²; hustota dřeva = {TIMBER_DENSITY_KG_M3:g} kg/m³.",
             f"Sníh s = {_cz(check.snow_load, 2)} kN/m² vodorovného půdorysu (střešní vstup, nikoliv sk).",
@@ -620,7 +770,10 @@ def add_frame_report(report, check):
     ], page_label="Strana")
     rows = []
     for case, result in check.results:
-        for member, label in (("rafter_left", "Krokev L"), ("rafter_right", "Krokev P"), ("collar", "Kleštiny")):
+        members = [("rafter_left", "Krokev L"), ("rafter_right", "Krokev P")]
+        if check.include_collar_ties:
+            members.append(("collar", "Kleštiny"))
+        for member, label in members:
             ext = result.member_extrema(model, member)
             rows.append((case.title, label, _cz(ext["tension"]/1000), _cz(ext["compression"]/1000),
                          _cz(ext["moment"]/1000), _cz(ext["shear"]/1000),
@@ -643,14 +796,21 @@ def add_frame_report(report, check):
 
 
 def add_frame_diagram(report, check):
-    """A schematic and force diagrams for the largest collar axial force."""
+    """Diagrams for largest collar force, or purlin H if collars are absent."""
     candidates = [(case, result) for case, result in check.results if case.title.startswith("MSÚ")]
-    case, result = max(candidates, key=lambda item: max(
-        item[1].member_extrema(check.model, "collar")[name] for name in ("tension", "compression")))
+    if check.include_collar_ties:
+        case, result = max(candidates, key=lambda item: max(
+            item[1].member_extrema(check.model, "collar")[name] for name in ("tension", "compression")))
+        selection = "největší |N| kleštin"
+    else:
+        case, result = max(candidates, key=lambda item: max(
+            abs(horizontal) for node, (horizontal, _) in item[1].reactions.items()
+            if check.model.nodes[node].y in (check.geometry.left_purlin, check.geometry.right_purlin)))
+        selection = "největší |H| ve vaznicích"
     model = check.model
     figure = Figure(figsize=(8.27, 11.69))
     figure.text(.075, .96, check.title, fontsize=13, fontweight="bold", va="top")
-    figure.text(.075, .926, f"Schéma a vnitřní síly: {case.title} (největší |N| kleštin)", fontsize=9)
+    figure.text(.075, .926, f"Schéma a vnitřní síly: {case.title} ({selection})", fontsize=9)
     axes = [figure.add_axes((.10, bottom, .82, .21)) for bottom in (.68, .385, .09)]
     for ax, (title, quantity, divisor) in zip(axes, (("Model; deformace zvětšeny 25×", None, 1),
                                                    ("N [kN], kladně tah", 0, 1000),
@@ -705,11 +865,14 @@ def comparison_rows(checks):
                     wall_h = max(wall_h, abs(horizontal))
                 else:
                     purlin_h = max(purlin_h, abs(horizontal))
-            ext = result.member_extrema(check.model, "collar")
-            tension, compression = max(tension, ext["tension"]), max(compression, ext["compression"])
-        rows.append(("Snížené" if check.geometry.collar_lowering else "Běžné",
+            if check.include_collar_ties:
+                ext = result.member_extrema(check.model, "collar")
+                tension, compression = max(tension, ext["tension"]), max(compression, ext["compression"])
+        rows.append((("Snížené" if check.geometry.collar_lowering else "Běžné") if check.include_collar_ties else "Bez kleštin",
                      "H pevné" if check.restrain_purlins else "H volné",
-                     _cz(wall_h/1000), _cz(purlin_h/1000), _cz(compression/1000), _cz(tension/1000)))
+                     _cz(wall_h/1000), _cz(purlin_h/1000),
+                     _cz(compression/1000) if check.include_collar_ties else "—",
+                     _cz(tension/1000) if check.include_collar_ties else "—"))
     return rows
 
 
@@ -726,9 +889,54 @@ def add_comparison(report, checks):
                          "H = vodorovná síla v rovině řezu. U kleštin jsou síly celkem za obě prkna.",
                          "Síly na jednu dvojici krokví; pro liniové zatížení podpory dělit osovou roztečí.",
                          "Pevná podpora vaznice nezajišťuje automaticky její stabilitu proti klopení.",
-                         "Snížená varianta pouze zkoumá vliv výšky kleštin, nenahrazuje model vikýře.",
+                         "Bez kleštin je nutné určit náhradní uložení stropu; použité uložení je popsáno u každé varianty.",
                          "Toto není úplné normové posouzení; výsledky závisejí na reálné tuhosti podpor a spojů.",
                      ], page_label="Strana")
+
+
+def purlin_envelopes(check: RoofFrameCheck):
+    """Signed loads ON each purlin, in global +y, from design cases only."""
+    results = [result for case, result in check.results if case.title.startswith("MSÚ")]
+    envelopes = []
+    for node in check.model.supports:
+        if check.model.nodes[node].y not in (check.geometry.left_purlin, check.geometry.right_purlin):
+            continue
+        forces = [-result.reactions[node][0] for result in results]
+        # Numerical residue at an unrestrained DOF is not a physical reaction.
+        forces = [0. if abs(force) < 1e-6 else force for force in forces]
+        envelopes.append(dict(
+            support=check.model.nodes[node].name,
+            minimum_n=min(forces), maximum_n=max(forces),
+            maximum_abs_n=max(abs(force) for force in forces),
+            maximum_abs_n_per_m=max(abs(force) for force in forces)/check.spacing,
+            maximum_abs_movement_m=max(abs(result.displacements[2*node]) for result in results),
+        ))
+    return envelopes
+
+
+def add_purlin_comparison(report, checks):
+    rows = []
+    print("\nPURLIN HORIZONTAL LOADS: signed forces ON purlins, +y toward garden")
+    for check in checks:
+        label = ("S kleštinami" if check.include_collar_ties else "Bez kleštin")
+        label += "; H " + ("pevné" if check.restrain_purlins else "volné")
+        for value in purlin_envelopes(check):
+            print(f"  {label}; {value['support']}: H = {value['minimum_n']/1000:+.3f} .. "
+                  f"{value['maximum_n']/1000:+.3f} kN; |H|/a = {value['maximum_abs_n_per_m']/1000:.3f} kN/m; "
+                  f"|uy| = {value['maximum_abs_movement_m']*1000:.3f} mm")
+            rows.append((label, value["support"], _cz(value["minimum_n"]/1000),
+                         _cz(value["maximum_n"]/1000), _cz(value["maximum_abs_n_per_m"]/1000),
+                         _cz(value["maximum_abs_movement_m"]*1000)))
+    report.add_table("Kleštiny a vodorovné zatížení vaznic", column_labels=(
+        "Varianta", "Podpora", "H min\nkN", "H max\nkN", "max |H|/a\nkN/m", "max |uy|\nmm"),
+        rows=rows, column_widths=(.30, .15, .12, .12, .16, .15), intro_lines=[
+            "Síly NA vaznice (opačné znaménko než reakce podpory NA krokve). Obálky případů MSÚ.",
+            "+H: směrem do zahrady (+y). Na levé vaznici +H míří dovnitř domu; na pravé vaznici −H míří dovnitř.",
+            "H volné: reakce je nulová z definice modelu, nikoliv důkaz bezpečnosti či dostatečného ztužení.",
+            "Posuny jsou posuny uzlů krokví; nesimulují podélný průhyb ani skutečný příčný ohyb vaznice.",
+            "Bez kleštin je zatížení vodorovného stropu ponecháno jako svislé síly v původních koncích kleštin.",
+            "Alternativní stropní konstrukce a její vlastní tíha nejsou navrženy; výsledky jsou pouze srovnávací.",
+        ], page_label="Strana")
 
 
 def main():
@@ -746,23 +954,36 @@ def main():
     print(f"Roof frame, geometry read from {house_path.name}; no IFC generation.")
     print(f"Roof layers {roof_mass:g} kg/m² slope; ceiling finishes {ceiling_mass:g} kg/m².")
     print(f"Snow input {SNOW_LOAD_KN_M2:g} kN/m² horizontal roof area, not ground sk.")
+    section = HouseRoofSection.from_house(house_path)
+    print(f"Selected actual normal main rafter x={section.x:.3f} m, tributary width={section.spacing:.3f} m.")
+    print(f"IFC input sizes: rafters {section.width*1000:g} × {section.height*1000:g} mm; "
+          f"collars {section.collar_pieces} × {section.collar_width*1000:g} × {section.collar_height*1000:g} mm.")
+    print(f"Purlin axes y={section.geometry.left_purlin:.3f}/{section.geometry.right_purlin:.3f} m; "
+          f"collar axis z={section.geometry.collar_z:.3f} m.")
     checks = []
-    for lowered, collar_label in ((False, "B"), (True, "A – snížené")):
-        geometry = RoofGeometry.from_house(house_path, rafter_height=.20, lowered=lowered)
+    for include_collars, collar_label in ((True, "s kleštinami"), (False, "bez kleštin")):
         for restraint, support_label in ((False, "H volné"), (True, "H pevné")):
             checks.append(check_roof_frame(
-                title=f"Normální řez {collar_label}; vaznice {support_label}",
-                geometry=geometry, material="c22", width=.08, height=.20, spacing=.75,
-                collar_material="c22", collar_width=.05, collar_height=.20, collar_pieces=2,
+                title=f"Řez x={section.x:g}; {collar_label}; vaznice {support_label}",
+                # Grades remain explicit: IFC inputs do not contain strength
+                # grades. C24 matches the current drawing note for this wider
+                # main-rafter tributary strip; collar boards are assumed C22.
+                geometry=section.geometry, material="c24", width=section.width,
+                height=section.height, spacing=section.spacing,
+                collar_material="c22", collar_width=section.collar_width,
+                collar_height=section.collar_height, collar_pieces=section.collar_pieces,
                 roof_mass=roof_mass, ceiling_mass=ceiling_mass, snow_load=SNOW_LOAD_KN_M2,
                 restrain_purlins=restraint,
+                include_collar_ties=include_collars,
+                ceiling_support_without_collars=None if include_collars else "rafter_end_reactions",
             ))
     with CalculationReport(report_path, document_title="Předběžný 2D model krovu") as report:
         add_comparison(report, checks)
+        add_purlin_comparison(report, checks)
         for check in checks:
             add_frame_report(report, check)
     print(f"\nPDF: {report_path}")
-    print("Lowered-collar case is a normal-roof sensitivity test, NOT a dormer analysis.")
+    print("Normal roof section only; NOT a dormer/corner or ring-beam analysis.")
 
 
 if __name__ == "__main__":
