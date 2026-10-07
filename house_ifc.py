@@ -174,9 +174,6 @@ MAIN_RAFTER_DRAWING_COLOR = "#f4d35e"
 CORNER_SHORT_RAFTER_DRAWING_COLOR = "#f4a261"
 DORMER_SHORT_RAFTER_DRAWING_COLOR = "#f4b6c2"
 DORMER_RAFTER_DRAWING_COLOR = "#5ed3f4"
-COLLAR_TIE_A_DRAWING_COLOR = "#5ef4d3"
-COLLAR_TIE_B_DRAWING_COLOR = "#516fe7"
-COLLAR_TIE_DRAWING_ORDER = 0
 PURLIN_AND_WALL_PLATE_DRAWING_ORDER = 1
 MAIN_RAFTER_DRAWING_ORDER = 2
 DORMER_WALL_PLATE_DRAWING_ORDER = 3
@@ -260,10 +257,9 @@ ABOVE_HOLE = 0.25
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.2)
-COLLAR_TIE_EXTENSION = 1.5
-# The collar-tie tops meet the underside of the two central purlins and the
-# wall below them.  The horizontal vapour barrier is derived from the tie
-# underside so the two cannot drift apart when the framing changes.
+# Retained reference dimensions for the existing ceiling/insulation levels,
+# shortened-rafter cut and the older 2D comparison model. No collar-tie beams
+# are generated. Ceiling support must be designed separately.
 COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
 COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
 NADEZDIVKA = 1.375
@@ -1175,16 +1171,6 @@ GARDEN_ROOF_PLANE_POINTS = (
 	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(0, HOUSE_DEPTH-0.125+0.08, UPPER_FLOOR_START+NADEZDIVKA+0.12),
 )
-COLLAR_TIE_CUTS = (
-	offset_plane(
-		*STREET_ROOF_PLANE_POINTS,
-		offset=RAFTER_Z_OFFSET + RAFTER_SIZE[1],
-	),
-	offset_plane(
-		*GARDEN_ROOF_PLANE_POINTS,
-		offset=RAFTER_Z_OFFSET + RAFTER_SIZE[1],
-	),
-)
 DORMER_WALL_HEIGHT = 2.625
 DORMER_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -1825,8 +1811,6 @@ roof_layer_storeys.update({
 	"Gypsum plasterboard": house.storey(
 		"Roof - -3: Gypsum plasterboard", elevation=upper.elevation),
 	"Rafters": house.storey("Roof - 0: Rafters", elevation=upper.elevation),
-	"Collar ties": house.storey(
-		"Roof - 0a: Collar ties", elevation=upper.elevation),
 	"Wood fiberboard": house.storey(
 		"Roof - +1: Wood fiberboard", elevation=upper.elevation),
 	"Roofing underlay": house.storey("Roof - +2: Underlay", elevation=upper.elevation),
@@ -1840,7 +1824,7 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
 
 # The under-rafter insulation follows each occupied roof slope only as far as
-# the top of the collar ties.  The vapour barrier and plasterboard transition
+# the former collar-tie top level. The vapour barrier and plasterboard transition
 # onto the horizontal ceiling, whose exceptional heights are described
 # relative to the upper-storey floor.
 SLOPED_INNER_LAYER_LAYOUT = {
@@ -1941,24 +1925,6 @@ dormer_rafter_positions = [
 main_rafter_thicknesses = dict(main_rafter_sections)
 dormer_x_min = min(dormer_rafter_positions)
 dormer_x_max = max(dormer_rafter_positions)
-
-# Collar ties flank ordinary isolated main rafters.  Where two consecutive
-# main rafters touch, neither inward-facing side has room for a collar tie.
-# Paired dormer rafters are deliberately ignored here: their main rafter still
-# needs both collar ties.
-blocked_collar_tie_sides = set()
-for (left_x, left_thickness), (right_x, right_thickness) in zip(
-	main_rafter_sections,
-	main_rafter_sections[1:],
-):
-	if isclose(
-		right_x - left_x,
-		(left_thickness + right_thickness) / 2,
-		rel_tol=0,
-		abs_tol=1e-9,
-	):
-		blocked_collar_tie_sides.add((left_x, "right"))
-		blocked_collar_tie_sides.add((right_x, "left"))
 
 ROOF_X_OVERHANG = 0.25
 roof_under_rafter_x_ranges = (
@@ -2160,7 +2126,10 @@ def local_y_at_global_y(plane, global_y, *, local_z=0):
 
 
 def collar_tie_top_height_at(x):
-	"""Return a collar-tie top height relative to the upper-storey floor."""
+	"""Retained ceiling/roof transition level above the upper-storey floor.
+
+	The reference name is kept for existing callers; no ties are generated.
+	"""
 	height = COLLAR_TIE_TOP_HEIGHT
 	if MIDDLE_PURLIN_X_MIN <= x <= MIDDLE_PURLIN_X_MAX:
 		height -= VAZNICE_EXTRA_HEIGHT
@@ -2428,7 +2397,7 @@ for (
 	)
 
 # Segment 2 crosses the taller middle purlin.  Its under-rafter insulation and
-# vapour barrier therefore follow the two collar-tie elevations while the
+# vapour barrier retain their two existing elevations while the
 # plasterboard remains on one continuous plane below them.
 for (
 	part_name,
@@ -2611,8 +2580,6 @@ stronger_main_roof_rafters = []
 stronger_corner_short_rafters = []
 dormer_short_rafters = []
 dormer_roof_rafters = []
-middle_collar_ties = []
-other_collar_ties = []
 
 for i, (
 	rafter_x,
@@ -2626,44 +2593,6 @@ for i, (
 		STRONGER_RAFTER_SIZE if is_stronger_rafter else RAFTER_SIZE
 	)
 	if not is_dormer_rafter:
-		collar_tie_x_offset = (
-			rafter_size[0] + COLLAR_TIE_SIZE[0]
-		) / 2
-		for side, x_offset in (
-			("left", -collar_tie_x_offset),
-			("right", collar_tie_x_offset),
-		):
-			if (rafter_x, side) in blocked_collar_tie_sides:
-				continue
-			collar_tie_x = rafter_x + x_offset
-			collar_tie_top_height = collar_tie_top_height_at(collar_tie_x)
-			collar_tie_center_z = (
-				UPPER_FLOOR_START
-				+ collar_tie_top_height
-				- COLLAR_TIE_SIZE[1] / 2
-			)
-			collar_tie = upper.beam(
-				f"Collar tie {i + 1} {side}",
-				start=(
-					collar_tie_x,
-					STREET_ROOF_JOINT_Y - COLLAR_TIE_EXTENSION,
-					collar_tie_center_z,
-				),
-				end=(
-					collar_tie_x,
-					GARDEN_ROOF_JOINT_Y + COLLAR_TIE_EXTENSION,
-					collar_tie_center_z,
-				),
-				size=COLLAR_TIE_SIZE,
-				material="Wood",
-				kind="BEAM",
-				cuts=COLLAR_TIE_CUTS,
-			)
-			roof_layer_storeys["Collar ties"].add(collar_tie)
-			if MIDDLE_PURLIN_X_MIN <= collar_tie_x <= MIDDLE_PURLIN_X_MAX:
-				middle_collar_ties.append(collar_tie)
-			else:
-				other_collar_ties.append(collar_tie)
 		street_side_plane = (
 			cut_street_roof
 			if rafter_x < roof_over_rafter_x_ranges[0][1]
@@ -3211,7 +3140,6 @@ if "roof" in sys.argv:
 		radius=8.5,
 		storeys=[
 			roof_layer_storeys["Rafters"],
-			roof_layer_storeys["Collar ties"],
 		],
 		door_annotations=False,
 		projected_wood_color="#f4d35e",
@@ -3411,24 +3339,6 @@ if "roof" in sys.argv:
 				"pattern": WALL_PLATE_DRAWING_PATTERN,
 				"color": DORMER_WALL_PLATE_DRAWING_COLOR,
 				"drawing_order": DORMER_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Kleštiny – vikýř",
-			middle_collar_ties,
-			0,
-			{
-				"color": COLLAR_TIE_A_DRAWING_COLOR,
-				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Kleštiny – ostatní",
-			other_collar_ties,
-			0,
-			{
-				"color": COLLAR_TIE_B_DRAWING_COLOR,
-				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
 			},
 		),
 	]
@@ -3855,8 +3765,8 @@ if "aa" in sys.argv:
 			collar_tie_batting_start,
 			collar_tie_batting_end,
 			thickness=THERMAL_INSULATION_UNDER_RAFTERS,
-			name="AA collar-tie insulation batting",
-			classes="roof-batting collar-tie-insulation-batting",
+			name="AA horizontal ceiling insulation batting",
+			classes="roof-batting horizontal-ceiling-insulation-batting",
 		)
 
 	# Nadezdivka

@@ -473,9 +473,12 @@ load conventions and remaining checks.
 ## 3D roof-frame model (PyNite)
 
 `roof_frame_3d.py` models rafters (including the dormer), the six independent
-purlin pieces and five wall plates, **without kleštiny**. It safely reads the
+purlin pieces and five wall plates, **without kleštiny by default**. It safely reads the
 current `house_ifc.py` input geometry without regenerating the IFC. Purlins bend
 between their actual wall bearings, rather than being fixed at each rafter.
+The IFC roof no longer generates collar-tie beams or their timber-schedule rows.
+Existing ceiling/insulation heights and shortened-rafter cuts are retained;
+replacement ceiling support is not designed by this change.
 
 Install the optional dependencies in a separate environment (PyNite uses NumPy
 2), then run:
@@ -484,12 +487,21 @@ Install the optional dependencies in a separate environment (PyNite uses NumPy
 python3 -m venv .venv-roof3d
 .venv-roof3d/bin/python -m pip install -r requirements-roof3d.txt
 .venv-roof3d/bin/python roof_frame_3d.py
+.venv-roof3d/bin/python roof_frame_3d.py --collar-ties
 ```
 
+The optional ties use pinned axial tension/compression links. Edit their
+`COLLAR_TIE_*` dimensions and placement parameters near the top of this script,
+independent of the IFC collar definitions. Ties add their own weight but not
+suspended-ceiling loads; bending, buckling and joint capacity are not checked.
+Reports with ties use `_collars_restrained` (or `_collars_free`) filenames so
+they do not overwrite the baseline. The terminal/CSV include signed axial
+forces, positive for tension and negative for compression.
+
 It uses one shared horizontal support spring stiffness for wall plates and
-purlin bearings, defaulting to 0.12 kN/mm per node/direction. With 135 kg/m²
-roof layers and the current geometry, this sensitivity calibration gives about
-39 kN on the street middle purlin; it is **not verified connection stiffness**.
+purlin bearings, set by `HORIZONTAL_SUPPORT_STIFFNESS_KN_MM`. The original
+0.12 kN/mm sensitivity calibration gave about 39 kN on the street middle
+purlin with 135 kg/m² roof layers; it is **not verified connection stiffness**.
 Use `--horizontal-stiffness rigid` for the old fixed-support comparison, or
 `--purlin-lateral both` to compare free/sprung lateral purlin bearings.
 It exports timber forces, support/ring-beam loads and movements, input
@@ -501,6 +513,16 @@ defaults to C22. Suspended ceiling loads are omitted because their replacement
 support is unspecified.
 This is a preliminary force model, not a roof safety assessment. See
 [roof_frame_3d.md](roof_frame_3d.md) for assumptions, options and regression tests.
+
+It also generates `roof_frame_3d_restrained_plan.png`: a top view coloured
+green/orange/red by the worst SLS L/500 and L/300 chord checks. Unassessed
+members, including wall plates, are grey. Optional collar ties have magenta
+outlines and axial force labels between two inward (compression) or outward
+(tension) arrows; magenta does not indicate a passed check. Signed outward force arrows in kN
+mark every rafter/wall-plate connection for ULS symmetric snow; use
+`--plan-force-combination SLS_symmetric` for service loads. These are rafter
+seat loads before redistribution through wall plates, not ring-beam bearing
+reactions. `--no-plot` suppresses both images.
 
 ## Rafter load helper
 
