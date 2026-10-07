@@ -473,12 +473,17 @@ load conventions and remaining checks.
 ## 3D roof-frame model (PyNite)
 
 `roof_frame_3d.py` models rafters (including the dormer), the six independent
-purlin pieces and five wall plates, **without kleštiny by default**. It safely reads the
+purlin pieces, **without kleštiny by default**. The five wall-plate outlines represent
+one immovable rigid wall plate/ring-beam support, not elastic timber members.
+It safely reads the
 current `house_ifc.py` input geometry without regenerating the IFC. Purlins bend
 between their actual wall bearings, rather than being fixed at each rafter.
 The IFC roof no longer generates collar-tie beams or their timber-schedule rows.
-Existing ceiling/insulation heights and shortened-rafter cuts are retained;
-replacement ceiling support is not designed by this change.
+Shortened dormer-side rafters and sloped under-rafter insulation end at the
+purlin bottoms. The horizontal insulation fits directly below the purlins;
+its vapour barrier is one `THERMAL_INSULATION_UNDER_RAFTERS` thickness below
+their underside. The plasterboard ceiling height is unchanged, and replacement
+ceiling support is not designed by these changes.
 
 Install the optional dependencies in a separate environment (PyNite uses NumPy
 2), then run:
@@ -498,12 +503,21 @@ Reports with ties use `_collars_restrained` (or `_collars_free`) filenames so
 they do not overwrite the baseline. The terminal/CSV include signed axial
 forces, positive for tension and negative for compression.
 
-It uses one shared horizontal support spring stiffness for wall plates and
-purlin bearings, set by `HORIZONTAL_SUPPORT_STIFFNESS_KN_MM`. The original
+It uses a shared horizontal spring stiffness **only for the rafter connections to
+the rigid wall plate/ring beam**, set by
+`HORIZONTAL_SUPPORT_STIFFNESS_KN_MM`. Rafter motion at a wall plate is connection
+slip; the supporting structure does not move. Purlin bearings are rigid and do
+not use this setting. `DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM` separately
+controls only dormer seats in both horizontal directions: `"inherit"`,
+a positive kN/mm value, or `None` for rigid. The CLI equivalent is
+`--dormer-horizontal-stiffness 0.12` (or `inherit` / `rigid`). Normal-roof and
+house-cut seats keep the general value. Reports record both effective values.
+The original
 0.12 kN/mm sensitivity calibration gave about 39 kN on the street middle
-purlin with 135 kg/m² roof layers; it is **not verified connection stiffness**.
-Use `--horizontal-stiffness rigid` for the old fixed-support comparison, or
-`--purlin-lateral both` to compare free/sprung lateral purlin bearings.
+purlin with 135 kg/m² roof layers in the previous elastic wall-plate model;
+that calibration is historical, **not verified connection stiffness**.
+Use `--horizontal-stiffness rigid` for a fixed-connection comparison, or
+`--purlin-lateral both` to compare explicitly free/rigid lateral purlin bearings.
 It exports timber forces, support/ring-beam loads and movements, input
 assumptions and a deformed 3D image. It retains
 absolute displacement and also screens rafter and purlin departure from their
@@ -516,13 +530,14 @@ This is a preliminary force model, not a roof safety assessment. See
 
 It also generates `roof_frame_3d_restrained_plan.png`: a top view coloured
 green/orange/red by the worst SLS L/500 and L/300 chord checks. Unassessed
-members, including wall plates, are grey. Optional collar ties have magenta
+members and rigid wall-plate/ring-beam outlines are grey. Optional collar ties have magenta
 outlines and axial force labels between two inward (compression) or outward
 (tension) arrows; magenta does not indicate a passed check. Signed outward force arrows in kN
 mark every rafter/wall-plate connection for ULS symmetric snow; use
-`--plan-force-combination SLS_symmetric` for service loads. These are rafter
-seat loads before redistribution through wall plates, not ring-beam bearing
-reactions. `--no-plot` suppresses both images.
+`--plan-force-combination SLS_symmetric` for service loads. These are **direct
+connection reactions delivered to the rigid wall plate/ring beam**, identical
+to terminal/support CSV values for the same combination. `--no-plot` suppresses
+both images.
 
 ## Rafter load helper
 

@@ -17,12 +17,24 @@ from roof_frame_3d import (
     Settings,
     Timber,
     CollarTieParameters,
+    SaddleParameters,
+    SaddleBoltParameters,
+    saddle_bolt_stiffness,
+    saddle_bolt_rows,
+    bolt_face_terms,
+    bolt_face_slip,
+    bolt_shear_assembly,
+    solve_saddle_contact,
+    add_purlin_saddles,
+    saddle_contact_stiffness,
+    saddle_contact_rows,
     add_collar_ties,
     build_roof_model,
     check_equilibrium,
     chord_result_columns,
     deformed_member_point,
     horizontal_stiffness_argument,
+    dormer_horizontal_stiffness_argument,
     main,
     maximum_chord_departure,
     member_rows,
@@ -228,6 +240,11 @@ class InputTests(unittest.TestCase):
                 Settings(joint_stiffness_factor=bad)
             with self.assertRaises(ValueError):
                 Settings(horizontal_stiffness_kn_mm=bad)
+            with self.assertRaises(ValueError):
+                Settings(dormer_horizontal_stiffness_kn_mm=bad)
+        for bad in ("wrong", "rigid", "0.12"):
+            with self.assertRaises(ValueError):
+                Settings(dormer_horizontal_stiffness_kn_mm=bad)
         with self.assertRaises(ValueError):
             Settings(snow_load=-1)
         area, iy, iz, j = Timber(0.08, 0.2).properties
@@ -247,6 +264,28 @@ class InputTests(unittest.TestCase):
         for bad in ("0", "-1", "nan", "inf", "wrong"):
             with self.assertRaises(argparse.ArgumentTypeError):
                 horizontal_stiffness_argument(bad)
+            with self.assertRaises(argparse.ArgumentTypeError):
+                dormer_horizontal_stiffness_argument(bad)
+
+    def test_dormer_stiffness_inheritance_and_explicit_rigid(self):
+        self.assertEqual(dormer_horizontal_stiffness_argument("inherit"), "inherit")
+        self.assertEqual(dormer_horizontal_stiffness_argument("0.015"), 0.015)
+        self.assertIsNone(dormer_horizontal_stiffness_argument("rigid"))
+        for general in (0.12, None):
+            settings = Settings(
+                horizontal_stiffness_kn_mm=general, dormer_horizontal_stiffness_kn_mm="inherit"
+            )
+            self.assertEqual(settings.wall_plate_stiffness("dormer_wall_plate"), general)
+            for dormer in (0.015, None):
+                settings = replace(settings, dormer_horizontal_stiffness_kn_mm=dormer)
+                self.assertEqual(settings.wall_plate_stiffness("dormer_wall_plate"), dormer)
+                for plate in (
+                    "street_wall_plate",
+                    "cut_street_wall_plate",
+                    "garden_wall_plate_left",
+                    "garden_wall_plate_right",
+                ):
+                    self.assertEqual(settings.wall_plate_stiffness(plate), general)
 
 
 class PlanReportTests(unittest.TestCase):
@@ -329,10 +368,18 @@ class SolverTests(unittest.TestCase):
     def setUpClass(cls):
         cls.layout = RoofLayout.from_house(HOUSE)
         cls.free = build_roof_model(
-            cls.layout, Settings(purlin_lateral_restraint=False, horizontal_stiffness_kn_mm=None)
+            cls.layout,
+            Settings(
+                purlin_lateral_restraint=False,
+                horizontal_stiffness_kn_mm=None,
+                dormer_horizontal_stiffness_kn_mm="inherit",
+            ),
         )
         cls.free_residuals = solve_roof_model(cls.free)
-        cls.fixed = build_roof_model(cls.layout, Settings(horizontal_stiffness_kn_mm=None))
+        cls.fixed = build_roof_model(
+            cls.layout,
+            Settings(horizontal_stiffness_kn_mm=None, dormer_horizontal_stiffness_kn_mm="inherit"),
+        )
         solve_roof_model(cls.fixed)
 
     def test_simple_beam_matches_hand_calculation(self):
@@ -554,6 +601,8 @@ class SolverTests(unittest.TestCase):
 
     def test_strong_section_axis_follows_global_up(self):
         for beam in self.layout.beams:
+            if beam.category == "wall_plate":
+                continue
             member = self.free.model.members[beam.name]
             local_x, local_y, _ = member.T()[:3, :3]
             expected = np.array((0.0, 0.0, 1.0)) - local_x[2] * local_x
@@ -585,7 +634,15 @@ class SolverTests(unittest.TestCase):
                 cosine = abs(beam.end[1] - beam.start[1]) / beam.length
                 area += width * (patch.y_max - patch.y_min) / cosine
         actual = -sum(q * (b - a) for _, case, q, a, b in self.free.loads if case == "G")
-        timber = sum(b.length * b.timber.properties[0] for b in self.layout.beams) * 450 * 10
+        timber = (
+            sum(
+                b.length * b.timber.properties[0]
+                for b in self.layout.beams
+                if b.category != "wall_plate"
+            )
+            * 450
+            * 10
+        )
         self.assertAlmostEqual(actual, area * self.free.settings.roof_mass * 10 + timber, places=6)
         self.assertFalse(any(name.startswith("seat_") for name, case, q, a, b in self.free.loads))
 
@@ -624,6 +681,7 @@ class SolverTests(unittest.TestCase):
                 joint_stiffness_factor=100,
                 purlin_lateral_restraint=False,
                 horizontal_stiffness_kn_mm=None,
+                dormer_horizontal_stiffness_kn_mm="inherit",
             ),
         )
         solve_roof_model(roof)
@@ -641,7 +699,10 @@ class SolverTests(unittest.TestCase):
 
     def test_csv_results_and_plot(self):
         members, supports = member_rows(self.free), support_rows(self.free)
-        self.assertEqual(len(members), len(self.layout.beams) * 6)
+        self.assertEqual(
+            len(members), sum(b.category != "wall_plate" for b in self.layout.beams) * 6
+        )
+        self.assertFalse(any(row["category"] == "wall_plate" for row in members))
         self.assertEqual(len(supports), len(self.free.supports) * 6)
         self.assertTrue(all(isfinite_number(row["Mz_max_kNm"]) for row in members))
         self.assertFalse(any(row["chord_L300_status"] == "N/A" for row in members))
@@ -689,21 +750,30 @@ class SpringSupportTests(unittest.TestCase):
         cls.layout = RoofLayout.from_house(HOUSE)
         # Use a deliberately flexible case, independent of the user's chosen
         # default stiffness for subsequent roof experiments.
-        cls.roof = build_roof_model(cls.layout, Settings(horizontal_stiffness_kn_mm=0.12))
+        cls.roof = build_roof_model(
+            cls.layout,
+            Settings(horizontal_stiffness_kn_mm=0.12, dormer_horizontal_stiffness_kn_mm="inherit"),
+        )
         cls.residuals = solve_roof_model(cls.roof)
 
-    def test_all_horizontal_bearings_share_stiffness_vertical_and_roll_unchanged(self):
+    def test_configurable_stiffness_only_at_rafter_connections_purlin_bearings_rigid(self):
         roof = self.roof
         expected = roof.settings.horizontal_stiffness_kn_mm * 1e6
-        for name in roof.supports:
+        for name, beam in roof.supports.items():
             node = roof.model.nodes[name]
-            self.assertFalse(node.support_DX)
-            self.assertFalse(node.support_DY)
+            purlin = "purlin" in beam
+            self.assertEqual(node.support_DX, purlin)
+            self.assertEqual(node.support_DY, purlin)
             self.assertTrue(node.support_DZ)
-            self.assertTrue(node.support_RX)
+            self.assertEqual(node.support_RX, "purlin" in beam)
             self.assertFalse(node.support_RY)
-            self.assertFalse(node.support_RZ)
+            self.assertEqual(node.support_RZ, "wall_plate" in beam)
             for axis in ("DX", "DY"):
+                if purlin:
+                    self.assertIsNone(getattr(node, "spring_" + axis)[0])
+                    for combo in roof.model.load_combos:
+                        self.assertEqual(getattr(node, axis)[combo], 0)
+                    continue
                 self.assertEqual(getattr(node, "spring_" + axis), [expected, None, True])
                 for combo in roof.model.load_combos:
                     # Reaction ON timber is -k * movement; exported load TO
@@ -715,20 +785,105 @@ class SpringSupportTests(unittest.TestCase):
                     )
         self.assertLess(max(self.residuals.values()), 1e-8)
 
-    def test_free_purlin_option_keeps_y_free_but_still_springs_x(self):
-        roof = build_roof_model(self.layout, Settings(purlin_lateral_restraint=False))
+    def test_free_purlin_option_only_frees_y_and_keeps_x_rigid(self):
+        roof = build_roof_model(
+            self.layout,
+            Settings(purlin_lateral_restraint=False, dormer_horizontal_stiffness_kn_mm="inherit"),
+        )
         for name, beam in roof.supports.items():
             node = roof.model.nodes[name]
-            self.assertIsNotNone(node.spring_DX[0])
             if "purlin" in beam:
+                self.assertTrue(node.support_DX)
+                self.assertTrue(node.support_DZ)
+                self.assertIsNone(node.spring_DX[0])
                 self.assertFalse(node.support_DY)
                 self.assertIsNone(node.spring_DY[0])
             else:
+                self.assertIsNotNone(node.spring_DX[0])
                 self.assertIsNotNone(node.spring_DY[0])
 
+    def test_dormer_override_changes_only_dormer_connection_dofs(self):
+        for general, dormer in ((120.0, 0.015), (None, 0.015), (0.12, None)):
+            with self.subTest(general=general, dormer=dormer):
+                roof = build_roof_model(
+                    self.layout,
+                    Settings(
+                        horizontal_stiffness_kn_mm=general, dormer_horizontal_stiffness_kn_mm=dormer
+                    ),
+                )
+                dormer_nodes = []
+                for name, plate in roof.supports.items():
+                    node = roof.model.nodes[name]
+                    if "purlin" in plate:
+                        expected = None  # purlin translations always rigid
+                    elif plate == "dormer_wall_plate":
+                        expected = dormer
+                        dormer_nodes.append(name)
+                    else:
+                        expected = general
+                    for axis in ("DX", "DY"):
+                        self.assertEqual(getattr(node, "support_" + axis), expected is None)
+                        self.assertEqual(
+                            getattr(node, "spring_" + axis)[0],
+                            None if expected is None else expected * 1e6,
+                        )
+                    self.assertTrue(node.support_DZ)
+                    self.assertFalse(node.support_RY)
+                self.assertTrue(dormer_nodes)
+                self.assertEqual(roof.connections, self.roof.connections)
+                self.assertEqual(roof.loads, self.roof.loads)
+
+    def test_soft_dormer_connections_export_actual_stiffness_and_reduce_thrust(self):
+        roof = build_roof_model(
+            self.layout,
+            Settings(horizontal_stiffness_kn_mm=0.12, dormer_horizontal_stiffness_kn_mm=1.2e-6),
+        )
+        residuals = solve_roof_model(roof)
+        self.assertLess(max(residuals.values()), 1e-8)
+        rows = support_rows(roof)
+        baseline = support_rows(self.roof)
+        dormer_rows = [r for r in rows if r["member"] == "dormer_wall_plate"]
+        self.assertTrue(dormer_rows)
+        self.assertLess(
+            max(abs(r["outward_kN"]) for r in dormer_rows),
+            0.01
+            * max(abs(r["outward_kN"]) for r in baseline if r["member"] == "dormer_wall_plate"),
+        )
+        for row in rows:
+            if row["support_kind"] == "purlin_bearing":
+                self.assertEqual(row["horizontal_X_stiffness_kn_mm"], "rigid")
+                self.assertEqual(row["horizontal_Y_stiffness_kn_mm"], "rigid")
+                continue
+            expected = 1.2e-6 if row["member"] == "dormer_wall_plate" else 0.12
+            for axis in ("X", "Y"):
+                self.assertEqual(row[f"horizontal_{axis}_stiffness_kn_mm"], expected)
+                self.assertAlmostEqual(
+                    row[f"F{axis.lower()}_kN"], expected * row[f"D{axis.lower()}_mm"], places=8
+                )
+        output = StringIO()
+        with redirect_stdout(output):
+            print_summary(roof, member_rows(roof), rows, residuals)
+        self.assertIn("other=0.12 kN/mm; dormer=1.2e-06 kN/mm", output.getvalue())
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.png"
+            figure = plot_plan_report(roof, member_rows(roof), path)
+            self.assertGreater(path.stat().st_size, 20000)
+            self.assertTrue(
+                any(
+                    "other 0.12 kN/mm, dormer 1.2e-06 kN/mm" in text.get_text()
+                    for text in figure.texts
+                )
+            )
+
     def test_stiff_springs_converge_to_rigid_and_flexible_supports_change_load_path(self):
-        rigid = build_roof_model(self.layout, Settings(horizontal_stiffness_kn_mm=None))
-        stiff = build_roof_model(self.layout, Settings(horizontal_stiffness_kn_mm=1e4))
+        rigid = build_roof_model(
+            self.layout,
+            Settings(horizontal_stiffness_kn_mm=None, dormer_horizontal_stiffness_kn_mm="inherit"),
+        )
+        stiff = build_roof_model(
+            self.layout,
+            Settings(horizontal_stiffness_kn_mm=1e4, dormer_horizontal_stiffness_kn_mm="inherit"),
+        )
         for roof in (rigid, stiff):
             self.assertLess(max(solve_roof_model(roof).values()), 1e-8)
 
@@ -759,6 +914,10 @@ class SpringSupportTests(unittest.TestCase):
         for row in rows:
             node = roof.model.nodes[row["support"]]
             for axis in ("X", "Y"):
+                if row["support_kind"] == "purlin_bearing":
+                    self.assertEqual(row[f"horizontal_{axis}_stiffness_kn_mm"], "rigid")
+                    self.assertEqual(row[f"D{axis.lower()}_mm"], 0)
+                    continue
                 self.assertEqual(
                     row[f"horizontal_{axis}_stiffness_kn_mm"],
                     roof.settings.horizontal_stiffness_kn_mm,
@@ -771,7 +930,7 @@ class SpringSupportTests(unittest.TestCase):
                 )
             self.assertEqual(row["Dz_mm"], 0.0)
 
-    def test_per_rafter_ring_beam_print_uses_support_reactions_and_labels_missing_bearings(self):
+    def test_per_rafter_ring_beam_print_uses_direct_connection_reactions(self):
         roof = self.roof
         supports = support_rows(roof)
         output = StringIO()
@@ -799,10 +958,7 @@ class SpringSupportTests(unittest.TestCase):
                     for r in supports
                     if r["member"] == plate and abs(r["x_m"] - beam.start[0]) < 1e-8
                 ]
-                if not rows:
-                    self.assertIn("load redistributed", line)
-                    self.assertNotIn("Hout=", line)
-                    continue
+                self.assertTrue(rows)
                 symmetric = next(r for r in rows if r["combination"] == "SLS_symmetric")
                 self.assertIn(f"SLS symmetric Hout={symmetric['outward_kN']:+.3f}", line)
                 ultimate = max(
@@ -850,14 +1006,67 @@ class SpringSupportTests(unittest.TestCase):
                 basis["settings"]["horizontal_stiffness_kn_mm"],
                 Settings().horizontal_stiffness_kn_mm,
             )
+            self.assertEqual(
+                basis["settings"]["dormer_horizontal_stiffness_kn_mm"],
+                Settings().dormer_horizontal_stiffness_kn_mm,
+            )
+            self.assertEqual(
+                basis["wall_plate_connection_stiffness_kn_mm"]["dormer_wall_plate"],
+                Settings().wall_plate_stiffness("dormer_wall_plate"),
+            )
             self.assertTrue(basis["settings"]["purlin_lateral_restraint"])
+            self.assertTrue(basis["saddles"]["enabled"])
+            self.assertEqual(basis["saddles"]["parameters"]["length"], 1.5)
+            self.assertTrue(Path(prefix + "_restrained_saddle_contacts.csv").exists())
+            self.assertTrue(basis["saddles"]["bolt_model"]["enabled"])
+            self.assertEqual(basis["saddles"]["bolt_model"]["count"], 16)
+            self.assertEqual(basis["saddles"]["parameters"]["bolts"]["count_per_end"], 2)
+            self.assertTrue(Path(prefix + "_restrained_saddle_bolts.csv").exists())
             self.assertIn("NOT verified", output.getvalue())
             self.assertIn("vertical load to wall bearings", output.getvalue())
             self.assertFalse(Path(prefix + "_free_basis.json").exists())
             self.assertEqual(basis["plan_report"]["force_combination"], "ULS_symmetric")
             self.assertFalse(Path(prefix + "_restrained_plan.png").exists())
 
-    def test_wall_plate_connection_forces_include_all_seats_and_balance_bearing_reactions(self):
+    def test_cli_dormer_override_is_recorded_in_basis_and_support_csv(self):
+        import csv
+        import json
+
+        with TemporaryDirectory() as directory:
+            prefix = str(Path(directory) / "roof")
+            output = StringIO()
+            with redirect_stdout(output):
+                main(
+                    [
+                        "--house",
+                        str(HOUSE),
+                        "--output",
+                        prefix,
+                        "--no-plot",
+                        "--horizontal-stiffness",
+                        "rigid",
+                        "--dormer-horizontal-stiffness",
+                        "0.015",
+                    ]
+                )
+            basis = json.loads(Path(prefix + "_restrained_basis.json").read_text())
+            self.assertIsNone(basis["settings"]["horizontal_stiffness_kn_mm"])
+            self.assertEqual(basis["settings"]["dormer_horizontal_stiffness_kn_mm"], 0.015)
+            self.assertEqual(
+                basis["wall_plate_connection_stiffness_kn_mm"]["dormer_wall_plate"], 0.015
+            )
+            self.assertIsNone(
+                basis["wall_plate_connection_stiffness_kn_mm"]["cut_street_wall_plate"]
+            )
+            with Path(prefix + "_restrained_supports.csv").open() as stream:
+                rows = list(csv.DictReader(stream))
+            for row in rows:
+                expected = "0.015" if row["member"] == "dormer_wall_plate" else "rigid"
+                for axis in ("X", "Y"):
+                    self.assertEqual(row[f"horizontal_{axis}_stiffness_kn_mm"], expected)
+            self.assertIn("other=rigid; dormer=0.015 kN/mm", output.getvalue())
+
+    def test_wall_plate_connection_forces_match_support_reactions_point_by_point(self):
         roof = self.roof
         expected = sum(
             category == "wall_plate"
@@ -868,11 +1077,18 @@ class SpringSupportTests(unittest.TestCase):
             rows = wall_plate_connection_rows(roof, combo)
             self.assertEqual(len(rows), expected)
             for row in rows:
-                arm = roof.model.members[row["seat"]]
+                node = roof.model.nodes[row["seat"]]
                 np.testing.assert_allclose(
-                    (row["x_m"], row["y_m"], row["z_m"]), (arm.i_node.X, arm.i_node.Y, arm.i_node.Z)
+                    (row["x_m"], row["y_m"], row["z_m"]), (node.X, node.Y, node.Z)
                 )
                 self.assertAlmostEqual(row["outward_kN"], row["outward_direction"] * row["Fy_kN"])
+                reaction = next(
+                    r
+                    for r in support_rows(roof)
+                    if r["support"] == row["seat"] and r["combination"] == combo
+                )
+                for field in ("Fx_kN", "Fy_kN", "Fz_kN", "outward_kN"):
+                    self.assertEqual(row[field], reaction[field])
             for plate in (b for b in roof.layout.beams if b.category == "wall_plate"):
                 for axis in ("X", "Y"):
                     seat_total = sum(
@@ -888,6 +1104,46 @@ class SpringSupportTests(unittest.TestCase):
                     self.assertAlmostEqual(seat_total, bearing_total, places=6)
         with self.assertRaisesRegex(ValueError, "unknown connection-force combination"):
             wall_plate_connection_rows(roof, "not_a_case")
+
+    def test_wall_plate_is_rigid_reference_not_a_second_elastic_structure(self):
+        roof = self.roof
+        for beam in roof.layout.beams:
+            if beam.category == "wall_plate":
+                self.assertNotIn(beam.name, roof.model.members)
+        self.assertTrue(roof.wall_plate_connections)
+        for (rafter, plate), name in roof.wall_plate_connections.items():
+            self.assertNotIn((rafter, plate), roof.seat_members)
+            node = roof.model.nodes[name]
+            member = roof.model.members[rafter]
+            rafter_nodes = {
+                n.name for sub in member.sub_members.values() for n in (sub.i_node, sub.j_node)
+            }
+            self.assertIn(name, rafter_nodes)
+            self.assertFalse(node.support_RX)
+            self.assertFalse(node.support_RY)
+            for combo in roof.model.load_combos:
+                self.assertAlmostEqual(node.RxnMX[combo], 0)
+                self.assertAlmostEqual(node.RxnMY[combo], 0)
+
+    def test_very_soft_connections_have_no_hidden_wall_plate_thrust(self):
+        roof = build_roof_model(
+            self.layout,
+            Settings(
+                horizontal_stiffness_kn_mm=1.2e-6, dormer_horizontal_stiffness_kn_mm="inherit"
+            ),
+        )
+        self.assertLess(max(solve_roof_model(roof).values()), 1e-8)
+        for combo in roof.model.load_combos:
+            rows = wall_plate_connection_rows(roof, combo)
+            self.assertTrue(rows)
+            self.assertLess(max(abs(row["outward_kN"]) for row in rows), 0.0001)
+            for row in rows:
+                node = roof.model.nodes[row["seat"]]
+                self.assertAlmostEqual(
+                    row["Fy_kN"],
+                    roof.settings.horizontal_stiffness_kn_mm * node.DY[combo] * 1000,
+                    places=12,
+                )
 
     def test_plan_image_draws_all_members_and_connection_arrows(self):
         roof = self.roof
@@ -1021,10 +1277,13 @@ class CollarGeometryTests(unittest.TestCase):
 class CollarSolverTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.base = build_roof_model(RoofLayout.from_house(HOUSE), Settings())
+        settings = Settings(
+            horizontal_stiffness_kn_mm=0.12, dormer_horizontal_stiffness_kn_mm="inherit"
+        )
+        cls.base = build_roof_model(RoofLayout.from_house(HOUSE), settings)
         solve_roof_model(cls.base)
         cls.roof = build_roof_model(
-            RoofLayout.from_house(HOUSE, collar_ties=CollarTieParameters()), Settings()
+            RoofLayout.from_house(HOUSE, collar_ties=CollarTieParameters()), settings
         )
         cls.residuals = solve_roof_model(cls.roof)
 
@@ -1154,6 +1413,356 @@ class CollarSolverTests(unittest.TestCase):
             )
             self.assertNotIn("kleštiny", basis["omitted"])
             self.assertFalse(Path(prefix + "_restrained_basis.json").exists())
+
+
+class SaddleGeometryTests(unittest.TestCase):
+    def test_four_same_section_bolsters_below_the_internal_joints(self):
+        original = RoofLayout.from_house(HOUSE)
+        layout = add_purlin_saddles(original)
+        saddles = [b for b in layout.beams if b.category == "saddle"]
+        self.assertEqual(len(saddles), 4)
+        self.assertEqual(layout.beams[:-4], original.beams)
+        by_name = {b.name: b for b in layout.beams}
+        for saddle in saddles:
+            self.assertAlmostEqual(saddle.length, 1.5)
+            self.assertAlmostEqual(sum((saddle.start[0], saddle.end[0])) / 2, saddle.bearings[0])
+            for name in saddle.supported_purlins:
+                purlin = by_name[name]
+                self.assertEqual(saddle.timber, purlin.timber)
+                self.assertAlmostEqual(
+                    saddle.start[2] + saddle.timber.height / 2,
+                    purlin.start[2] - purlin.timber.height / 2,
+                )
+        with self.assertRaisesRegex(ValueError, "already present"):
+            add_purlin_saddles(layout)
+
+    def test_unequal_purlin_sections_are_rejected(self):
+        original = RoofLayout.from_house(HOUSE)
+        for dimension in ("width", "height"):
+            beams = list(original.beams)
+            index = next(i for i, b in enumerate(beams) if b.category == "purlin")
+            beams[index] = replace(
+                beams[index],
+                timber=replace(
+                    beams[index].timber,
+                    **{dimension: getattr(beams[index].timber, dimension) + 0.01},
+                ),
+            )
+            with self.assertRaisesRegex(AssertionError, "same width and height"):
+                add_purlin_saddles(replace(original, beams=tuple(beams)))
+
+    def test_contact_stiffness_series_compression_and_parameter_validation(self):
+        timber = Timber(0.24, 0.24, "C22")
+        self.assertAlmostEqual(saddle_contact_stiffness(timber, timber, 0.024), 16.5e6)
+        self.assertAlmostEqual(saddle_contact_stiffness(timber, timber, 0.024, 0.1), 1.65e6)
+        mixed = Timber(0.24, 0.24, "C24")
+        self.assertAlmostEqual(
+            saddle_contact_stiffness(timber, mixed, 0.024), 0.024 / (0.24 / 330e6 + 0.24 / 370e6)
+        )
+        for name in ("length", "contact_spacing", "contact_stiffness_factor"):
+            for value in (0, -1, float("nan"), float("inf")):
+                with self.assertRaises(ValueError):
+                    SaddleParameters(**{name: value})
+
+
+@unittest.skipUnless(HAS_PYNITE, "optional PyNite environment")
+class SaddleSolverTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.roof = build_roof_model(
+            add_purlin_saddles(RoofLayout.from_house(HOUSE)),
+            Settings(horizontal_stiffness_kn_mm=0.12, dormer_horizontal_stiffness_kn_mm="inherit"),
+        )
+        cls.residuals = solve_roof_model(cls.roof)
+        cls.contacts = saddle_contact_rows(cls.roof)
+
+    def test_contacts_cover_area_once_and_internal_bearings_do_not_bypass_saddles(self):
+        roof = self.roof
+        for saddle in (b for b in roof.layout.beams if b.category == "saddle"):
+            contacts = [c for c in roof.saddle_contacts if c["saddle"] == saddle.name]
+            self.assertAlmostEqual(
+                sum(c["area_m2"] for c in contacts), saddle.length * saddle.timber.width
+            )
+            for name, beam_name in roof.supports.items():
+                node = roof.model.nodes[name]
+                if (
+                    beam_name in saddle.supported_purlins
+                    and abs(node.X - saddle.bearings[0]) < 1e-9
+                ):
+                    self.assertFalse(node.support_DZ)
+                    self.assertTrue(node.support_DX)
+            self.assertAlmostEqual(roof.model.members[saddle.name].L(), 1.5)
+        guides = [r for r in support_rows(roof) if r["support_kind"] == "purlin_horizontal_guide"]
+        self.assertEqual(len(guides), 8 * 6)
+        self.assertTrue(all(abs(r["Fz_kN"]) < 1e-7 for r in guides))
+
+    def test_equilibrium_compression_only_contact_and_fixed_chord_span(self):
+        self.assertLess(max(self.residuals.values()), 1e-5)
+        self.assertTrue(all(r["compression_kN"] >= -1e-8 for r in self.contacts))
+        self.assertTrue(any(not r["active"] for r in self.contacts))
+        self.assertTrue(
+            all(
+                r["compression_kN"] == 0 and r["gap_mm"] >= -1e-5
+                for r in self.contacts
+                if not r["active"]
+            )
+        )
+        for r in self.contacts:
+            if r["active"]:
+                self.assertAlmostEqual(
+                    r["compression_kN"], -r["gap_mm"] * r["stiffness_kN_mm"], places=7
+                )
+        middle = next(b for b in self.roof.layout.beams if b.name == "street_purlin_middle")
+        chord = purlin_chord(self.roof, middle)
+        self.assertAlmostEqual(chord.end_m - chord.start_m, 4.72)
+        for combo in self.roof.model.load_combos:
+            for saddle in (b for b in self.roof.layout.beams if b.category == "saddle"):
+                weight = (
+                    self.roof.settings.timber_density
+                    * self.roof.settings.gravity
+                    * (saddle.timber.properties[0] * saddle.length)
+                    * self.roof.model.load_combos[combo].factors["G"]
+                )
+                reaction = sum(
+                    self.roof.model.nodes[n].RxnFZ[combo]
+                    for n, owner in self.roof.supports.items()
+                    if owner == saddle.name
+                )
+                contact_force = sum(
+                    r["compression_kN"] * 1000
+                    for r in self.contacts
+                    if r["saddle"] == saddle.name and r["combination"] == combo
+                )
+                self.assertAlmostEqual(reaction, weight + contact_force, places=3)
+
+    def test_finer_mesh_recloses_contact_and_has_converged_purlin_deflection(self):
+        # This geometry/material combination exposes PyNite 3.2's missing
+        # reactivation: a deactivated spring penetrates again by ~0.02 mm.
+        layout = RoofLayout.from_house(HOUSE, beam_material="C24")
+        departures = []
+        for spacing in (0.1, 0.05):
+            roof = build_roof_model(
+                add_purlin_saddles(layout, SaddleParameters(contact_spacing=spacing)),
+                Settings(horizontal_stiffness_kn_mm=120, dormer_horizontal_stiffness_kn_mm=0.01),
+            )
+            residuals = solve_roof_model(roof)
+            rows = saddle_contact_rows(roof)
+            self.assertLess(max(residuals.values()), 1e-5)
+            self.assertTrue(all(r["gap_mm"] >= -1e-5 for r in rows if not r["active"]))
+            middle = next(b for b in layout.beams if b.name == "street_purlin_middle")
+            departures.append(
+                chord_result_columns(roof, middle, "SLS_symmetric", fallback="supports")[
+                    "chord_max_departure_mm"
+                ]
+            )
+        self.assertLess(abs(departures[1] / departures[0] - 1), 0.01)
+
+
+class SaddleBoltTests(unittest.TestCase):
+    def test_ec5_stiffness_per_bolt_one_shear_plane_and_uls_reduction(self):
+        timber = Timber(0.24, 0.24, "C24")
+        k = saddle_bolt_stiffness(timber, timber, 12.0, "SLS_symmetric")
+        self.assertAlmostEqual(k / 1e6, 4.490837553081424)
+        self.assertAlmostEqual(
+            saddle_bolt_stiffness(timber, timber, 12.0, "ULS_symmetric"), k * 2 / 3
+        )
+        mixed = Timber(0.24, 0.24, "C22")
+        self.assertAlmostEqual(
+            saddle_bolt_stiffness(timber, mixed, 12.0, "SLS_symmetric"),
+            (420 * 410) ** 0.75 * 12 / 23 * 1000,
+        )
+
+    def test_trial_parameter_validation(self):
+        for value in (0, -1, float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                SaddleBoltParameters(diameter_mm=value)
+        for value in (0, -1, True, 2.5):
+            with self.assertRaises(ValueError):
+                SaddleBoltParameters(count_per_end=value)
+        for value in (-1, float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                SaddleBoltParameters(slip_gap_mm=value)
+        with self.assertRaises(ValueError):
+            SaddleBoltParameters(hold_down="rigid")
+
+    def test_face_slip_includes_rotation_but_rejects_rigid_body_movement(self):
+        bolt = dict(
+            upper_node="upper", lower_node="lower", purlin_height_m=0.24, saddle_height_m=0.24
+        )
+        upper = SimpleNamespace(
+            DX={"SLS": 0.003 + 0.001 * 0.24},
+            DY={"SLS": 0.004 - 0.002 * 0.24},
+            RY={"SLS": 0.001},
+            RX={"SLS": 0.002},
+        )
+        lower = SimpleNamespace(
+            DX={"SLS": 0.003}, DY={"SLS": 0.004}, RY={"SLS": 0.001}, RX={"SLS": 0.002}
+        )
+        model = SimpleNamespace(nodes={"upper": upper, "lower": lower})
+        for direction in ("X", "Y"):
+            self.assertAlmostEqual(bolt_face_slip(model, bolt, direction, "SLS"), 0.0)
+        upper.RY["SLS"] += 0.01
+        self.assertAlmostEqual(bolt_face_slip(model, bolt, "X", "SLS"), -0.0012)
+        upper.RX["SLS"] += 0.01
+        self.assertAlmostEqual(bolt_face_slip(model, bolt, "Y", "SLS"), 0.0012)
+
+
+@unittest.skipUnless(HAS_PYNITE, "optional PyNite environment")
+class SaddleBoltSolverTests(unittest.TestCase):
+    def test_deadband_matches_hand_solution_and_recovers_fixed_node_reactions(self):
+        from Pynite import FEModel3D
+
+        for gap_mm in (0.0, 1.0):
+            model = FEModel3D()
+            model.add_node("lower", 0.0, 0.0, 0.0)
+            model.add_node("upper", 0.0, 0.0, 0.24)
+            model.add_node("anchor", -1.0, 0.0, 0.24)
+            model.def_support("lower", True, True, True, True, True, True)
+            model.def_support("anchor", True, True, True, True, True, True)
+            model.def_support("upper", False, True, True, True, True, True)
+            base_k, bolt_k = 1e6, 4.490837553081424e6
+            model.add_spring("base", "anchor", "upper", base_k)
+            for combo, force in (
+                ("SLS_small", 500.0),
+                ("SLS_large", 5000.0),
+                ("SLS_negative", -5000.0),
+            ):
+                model.add_node_load("upper", "FX", force, case=combo)
+                model.add_load_combo(combo, {combo: 1})
+            bolt = dict(
+                bolt="bolt",
+                saddle="saddle",
+                purlin="purlin",
+                x_m=0.0,
+                y_m=0.0,
+                upper_node="upper",
+                lower_node="lower",
+                purlin_height_m=0.24,
+                saddle_height_m=0.24,
+                Kser_N_m=bolt_k,
+                slip_gap_m=gap_mm / 1000,
+                hold_down_spring=None,
+            )
+            roof = SimpleNamespace(model=model, saddle_contacts=[], saddle_bolts=[bolt])
+            solve_saddle_contact(roof)
+            for combo, force in (
+                ("SLS_small", 500.0),
+                ("SLS_large", 5000.0),
+                ("SLS_negative", -5000.0),
+            ):
+                if abs(force) / base_k <= gap_mm / 1000:
+                    expected = force / base_k
+                else:
+                    expected = (
+                        np.sign(force) * (abs(force) + bolt_k * gap_mm / 1000) / (base_k + bolt_k)
+                    )
+                self.assertAlmostEqual(model.nodes["upper"].DX[combo], expected, places=12)
+                reaction = sum(n.RxnFX[combo] for n in model.nodes.values())
+                self.assertAlmostEqual(reaction, -force, places=6)
+                moment = sum(
+                    n.RxnMY[combo] + n.Z * n.RxnFX[combo] - n.X * n.RxnFZ[combo]
+                    for n in model.nodes.values()
+                )
+                self.assertAlmostEqual(moment, -0.24 * force, places=6)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.layout = RoofLayout.from_house(HOUSE, beam_material="C24")
+        cls.roof = build_roof_model(
+            add_purlin_saddles(cls.layout, SaddleParameters(bolts=SaddleBoltParameters())),
+            Settings(horizontal_stiffness_kn_mm=120, dormer_horizontal_stiffness_kn_mm=0.01),
+        )
+        cls.residuals = solve_roof_model(cls.roof)
+
+    def test_two_per_purlin_end_four_per_saddle_and_face_force_equilibrium(self):
+        roof = self.roof
+        self.assertEqual(len(roof.saddle_bolts), 16)
+        saddles = [b for b in roof.layout.beams if b.category == "saddle"]
+        for saddle in saddles:
+            bolts = [b for b in roof.saddle_bolts if b["saddle"] == saddle.name]
+            self.assertEqual(len(bolts), 4)
+            for purlin in saddle.supported_purlins:
+                side = [b for b in bolts if b["purlin"] == purlin]
+                self.assertEqual(len(side), 2)
+                distances = sorted(abs(b["x_m"] - saddle.bearings[0]) for b in side)
+                np.testing.assert_allclose(distances, [0.25, 0.5])
+        self.assertLess(max(self.residuals.values()), 1e-5)
+        rows = saddle_bolt_rows(roof)
+        self.assertTrue(all(r["hold_down_tension_kN"] == 0 for r in rows))
+        self.assertTrue(any(r["shear_resultant_kN"] > 0.01 for r in rows))
+        for r in rows:
+            self.assertAlmostEqual(
+                r["Fx_to_purlin_kN"], -r["shear_stiffness_kN_mm"] * r["slip_X_mm"]
+            )
+            self.assertAlmostEqual(
+                r["Fy_to_purlin_kN"], -r["shear_stiffness_kN_mm"] * r["slip_Y_mm"]
+            )
+
+    def test_generalised_connector_matrix_is_symmetric_and_balances_internal_moments(self):
+        roof = self.roof
+        states = {(b["bolt"], d): 1 for b in roof.saddle_bolts for d in ("X", "Y")}
+        matrix, offset = bolt_shear_assembly(roof, "SLS_symmetric", states)
+        self.assertLess(np.linalg.norm((matrix - matrix.T).data), 1e-8)
+        np.testing.assert_array_equal(offset, 0)
+        for bolt in roof.saddle_bolts:
+            for direction in ("X", "Y"):
+                force, moment = np.zeros(3), np.zeros(3)
+                for node_name, dof, coefficient in bolt_face_terms(bolt, direction):
+                    node = roof.model.nodes[node_name]
+                    if dof.startswith("D"):
+                        vector = np.eye(3)[("DX", "DY", "DZ").index(dof)] * coefficient
+                        force += vector
+                        moment += np.cross((node.X, node.Y, node.Z), vector)
+                    else:
+                        moment += np.eye(3)[("RX", "RY", "RZ").index(dof)] * coefficient
+                np.testing.assert_allclose(force, 0, atol=1e-12)
+                np.testing.assert_allclose(moment, 0, atol=1e-12)
+
+    def test_clearance_and_ideal_hold_down_are_separate_and_stable(self):
+        for gap, hold in ((1.0, "free"), (0.0, "ideal")):
+            roof = build_roof_model(
+                add_purlin_saddles(
+                    self.layout,
+                    SaddleParameters(bolts=SaddleBoltParameters(slip_gap_mm=gap, hold_down=hold)),
+                ),
+                Settings(
+                    purlin_lateral_restraint=False,
+                    horizontal_stiffness_kn_mm=120,
+                    dormer_horizontal_stiffness_kn_mm=0.01,
+                ),
+            )
+            self.assertLess(max(solve_roof_model(roof).values()), 1e-5)
+            for row in saddle_bolt_rows(roof):
+                for d in ("X", "Y"):
+                    slip = row[f"slip_{d}_mm"]
+                    expected = (
+                        -row["shear_stiffness_kN_mm"] * np.sign(slip) * max(abs(slip) - gap, 0)
+                    )
+                    self.assertAlmostEqual(row[f"F{d.lower()}_to_purlin_kN"], expected)
+                if hold == "free":
+                    self.assertEqual(row["hold_down_tension_kN"], 0)
+                else:
+                    self.assertGreaterEqual(row["hold_down_tension_kN"], -1e-8)
+                    # Ideal bound is engaged in tension only, never compression.
+                    self.assertAlmostEqual(
+                        row["hold_down_tension_kN"], 1000 * max(row["separation_mm"], 0), places=5
+                    )
+
+    def test_bearing_only_switch_export_and_plot_bolt_markers(self):
+        import json
+
+        with TemporaryDirectory() as directory:
+            prefix = str(Path(directory) / "bearing")
+            with redirect_stdout(StringIO()):
+                main(["--house", str(HOUSE), "--output", prefix, "--no-plot", "--no-saddle-bolts"])
+            basis = json.loads(Path(prefix + "_restrained_basis.json").read_text())
+            self.assertFalse(basis["saddles"]["bolt_model"]["enabled"])
+            self.assertIsNone(basis["saddles"]["parameters"]["bolts"])
+            self.assertFalse(Path(prefix + "_restrained_saddle_bolts.csv").exists())
+            rows = member_rows(self.roof)
+            figure = plot_plan_report(self.roof, rows, Path(directory) / "bolts.png")
+            markers = [line.get_gid() for line in figure.axes[0].lines]
+            self.assertTrue(all(b["bolt"] in markers for b in self.roof.saddle_bolts))
 
 
 def isfinite_number(value):

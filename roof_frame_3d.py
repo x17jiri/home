@@ -14,14 +14,35 @@ import csv
 import json
 from dataclasses import dataclass, field, replace, asdict
 from importlib.metadata import version
-from math import atan2, degrees, isfinite, sqrt
+from math import atan2, ceil, degrees, isfinite, sqrt
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 
-# Sensitivity-model calibration, NOT a measured connection stiffness. Applied
-# independently to every formerly fixed horizontal support DOF (X and Y).
-HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12 * 10.0  ################
+# Sensitivity parameter, NOT a measured connection stiffness. Applied per X/Y
+# direction ONLY to rafter connections to the rigid wall plate/ring beam.
+# Purlin wall guides are rigid (Y can be explicitly freed for comparison).
+# Internal vertical loads pass through flexible saddle contact by default.
+HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12 * 1  ################
+# Dormer seats only: positive kN/mm, None for rigid, or "inherit" to use the
+# general value above. Does not change the house-cut or normal-roof seats.
+DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.01
+
+# Four longitudinal bolsters under the internal purlin joints. The factor is
+# for sensitivity studies, NOT a measured connection or bolt stiffness.
+SADDLE_LENGTH_M = 1.5
+SADDLE_CONTACT_SPACING_M = 0.10
+SADDLE_CONTACT_STIFFNESS_FACTOR = 1.0
+TIMBER_E90_MEAN_PA = {"C22": 330e6, "C24": 370e6}
+TIMBER_MEAN_DENSITY_KG_M3 = {"C22": 410.0, "C24": 420.0}
+# Trial fastening, NOT a bolt specification/capacity check. Each end has two
+# bolts at 1/3 and 2/3 of its overlap with the saddle (four per saddle).
+SADDLE_BOLT_DIAMETER_MM = 12.0
+SADDLE_BOLTS_PER_PURLIN_END = 2
+SADDLE_BOLT_SLIP_GAP_MM = 0.0  # assumed relative slip before engagement
+SADDLE_BOLT_HOLD_DOWN = "free"  # or "ideal", a tension-only rigid-limit trial
+IDEAL_BOLT_HOLD_DOWN_N_M = 1e9  # numerical penalty, NOT physical axial stiffness
 
 # Independent trial parameters; never read collar-tie dimensions from the IFC.
 COLLAR_TIE_WIDTH_M = 0.05  # width of ONE board
@@ -182,6 +203,7 @@ class BeamSpec:
     wall_extent: tuple[float, float] | None = None
     pieces: int = 1  # separate boards represented by one axial collar member
     attached_rafters: tuple[str, ...] = ()
+    supported_purlins: tuple[str, ...] = ()
 
     @property
     def length(self):
@@ -210,6 +232,7 @@ class RoofLayout:
     patches: tuple[RoofPatch, ...]
     source: Path
     collar_parameters: CollarTieParameters | None = None
+    saddle_parameters: SaddleParameters | None = None
 
     def __post_init__(self):
         if not self.beams or len({b.name for b in self.beams}) != len(self.beams):
@@ -221,7 +244,7 @@ class RoofLayout:
             positive(beam.length, f"length of {beam.name}")
             if beam.category == "rafter" and beam.start[1] >= beam.end[1]:
                 raise ValueError(f"rafter must run in positive Y: {beam.name}")
-            if beam.category not in {"rafter", "purlin", "wall_plate", "collar"}:
+            if beam.category not in {"rafter", "purlin", "wall_plate", "collar", "saddle"}:
                 raise ValueError(f"unsupported physical member: {beam.category}")
             if beam.category == "collar" and (
                 len(beam.attached_rafters) != 2
@@ -231,6 +254,12 @@ class RoofLayout:
                 raise ValueError(f"invalid collar attachments/board count: {beam.name}")
             if any(not beam.start[0] <= x <= beam.end[0] for x in beam.bearings):
                 raise ValueError(f"bearing outside {beam.name}")
+            if beam.category == "saddle" and (
+                len(beam.bearings) != 1
+                or len(beam.supported_purlins) != 2
+                or not set(beam.supported_purlins) <= names
+            ):
+                raise ValueError(f"invalid saddle attachments: {beam.name}")
         for patch in self.patches:
             if patch.x_min >= patch.x_max or patch.y_min >= patch.y_max:
                 raise ValueError(f"invalid roof patch: {patch.name}")
@@ -574,13 +603,150 @@ def add_collar_ties(layout, parameters, *, upper_floor_z):
 
 
 @dataclass(frozen=True)
+class SaddleBoltParameters:
+    diameter_mm: float = SADDLE_BOLT_DIAMETER_MM
+    count_per_end: int = SADDLE_BOLTS_PER_PURLIN_END
+    slip_gap_mm: float = SADDLE_BOLT_SLIP_GAP_MM
+    hold_down: Literal["free", "ideal"] = SADDLE_BOLT_HOLD_DOWN
+
+    def __post_init__(self):
+        positive(self.diameter_mm, "bolt diameter")
+        if type(self.count_per_end) is not int or self.count_per_end < 1:
+            raise ValueError("bolts per end must be a positive integer")
+        if not isfinite(self.slip_gap_mm) or self.slip_gap_mm < 0:
+            raise ValueError("bolt slip gap must be finite and non-negative")
+        if self.hold_down not in ("free", "ideal"):
+            raise ValueError("bolt hold-down must be 'free' or 'ideal'")
+
+
+def saddle_bolt_stiffness(purlin, saddle, diameter_mm, combination):
+    """EC5 approximate lateral slip modulus per bolt, ONE shear plane, N/m.
+
+    Mean density (not characteristic or the conservative self-weight density).
+    Geometric mean for dissimilar timbers. Ku=2/3 Kser in ULS. Does NOT
+    describe axial hold-down, friction, capacity or a tested fastening detail.
+    """
+    positive(diameter_mm, "bolt diameter")
+    density = sqrt(
+        TIMBER_MEAN_DENSITY_KG_M3[purlin.material] * TIMBER_MEAN_DENSITY_KG_M3[saddle.material]
+    )
+    return density**1.5 * diameter_mm / 23 * 1000 * (2 / 3 if combination.startswith("ULS_") else 1)
+
+
+def bolt_face_terms(bolt, direction):
+    """Relative displacement at the actual contacting faces, including rotation."""
+    upper, lower = bolt["upper_node"], bolt["lower_node"]
+    if direction == "X":
+        return (
+            (upper, "DX", 1.0),
+            (lower, "DX", -1.0),
+            (upper, "RY", -bolt["purlin_height_m"] / 2),
+            (lower, "RY", -bolt["saddle_height_m"] / 2),
+        )
+    if direction == "Y":
+        return (
+            (upper, "DY", 1.0),
+            (lower, "DY", -1.0),
+            (upper, "RX", bolt["purlin_height_m"] / 2),
+            (lower, "RX", bolt["saddle_height_m"] / 2),
+        )
+    raise ValueError("bolt shear direction must be X or Y")
+
+
+def bolt_face_slip(model, bolt, direction, combo):
+    return sum(
+        c * getattr(model.nodes[node], dof)[combo]
+        for node, dof, c in bolt_face_terms(bolt, direction)
+    )
+
+
+@dataclass(frozen=True)
+class SaddleParameters:
+    length: float = SADDLE_LENGTH_M
+    contact_spacing: float = SADDLE_CONTACT_SPACING_M
+    contact_stiffness_factor: float = SADDLE_CONTACT_STIFFNESS_FACTOR
+    bolts: SaddleBoltParameters | None = None  # API can still request bearing-only
+
+    def __post_init__(self):
+        for name in ("length", "contact_spacing", "contact_stiffness_factor"):
+            positive(getattr(self, name), "saddle " + name)
+
+
+def add_purlin_saddles(layout, parameters=SaddleParameters()):
+    """Four bolsters centred under the two internal joints on each roof side."""
+    if layout.saddle_parameters or any(b.category == "saddle" for b in layout.beams):
+        raise ValueError("saddles already present")
+    purlins = [b for b in layout.beams if b.category == "purlin"]
+    assert len(purlins) == 6, "expected three purlin pieces on each of two sides"
+    reference = purlins[0].timber
+    assert all(
+        np.allclose(
+            (b.timber.width, b.timber.height),
+            (reference.width, reference.height),
+            rtol=0,
+            atol=1e-9,
+        )
+        for b in purlins
+    ), "all purlins must have the same width and height to add saddles"
+    saddles = []
+    for side in ("street", "garden"):
+        pieces = sorted(
+            (b for b in purlins if b.name.startswith(side + "_")), key=lambda b: b.start[0]
+        )
+        assert len(pieces) == 3, f"expected three {side} purlin pieces"
+        for wall, (left, right) in enumerate(zip(pieces, pieces[1:]), 2):
+            assert np.allclose(left.end, right.start, rtol=0, atol=1e-9), "purlin joint must meet"
+            x, y, z = left.end
+            assert all(
+                any(abs(x - bearing) < 1e-9 for bearing in b.bearings) for b in (left, right)
+            ), "joint must be over a wall bearing"
+            half = parameters.length / 2
+            if x - half < left.start[0] or x + half > right.end[0]:
+                raise ValueError("saddle extends past its adjacent purlins")
+            saddles.append(
+                BeamSpec(
+                    f"{side}_saddle_wall{wall}",
+                    "saddle",
+                    (x - half, y, z - reference.height),
+                    (x + half, y, z - reference.height),
+                    left.timber,
+                    bearings=(x,),
+                    supported_purlins=(left.name, right.name),
+                )
+            )
+    return replace(layout, beams=(*layout.beams, *saddles), saddle_parameters=parameters)
+
+
+def saddle_contact_stiffness(purlin, saddle, area, factor=1.0):
+    """N/m: two nominal full-depth E90 compression layers in series.
+
+    An elastic starting estimate only: stress spreading, real contact area,
+    gaps, fasteners and long-term compression are not calibrated here.
+    """
+    positive(area, "contact area")
+    positive(factor, "contact stiffness factor")
+    return (
+        factor
+        * area
+        / (
+            purlin.height / TIMBER_E90_MEAN_PA[purlin.material]
+            + saddle.height / TIMBER_E90_MEAN_PA[saddle.material]
+        )
+    )
+
+
+@dataclass(frozen=True)
 class Settings:
     roof_mass: float = 150.0  # kg/m² actual slope; excludes suspended ceiling
-    snow_load: float = 3.0  # kN/m² horizontal roof projection, NOT ground sk
+    snow_load: float = 1.5  # kN/m² horizontal roof projection, NOT ground sk
     timber_density: float = 450.0
     gravity: float = 10.0
     purlin_lateral_restraint: bool = True
+    # Rafter -> wall plate/ring beam connections only, NOT purlin bearings.
     horizontal_stiffness_kn_mm: float | None = HORIZONTAL_SUPPORT_STIFFNESS_KN_MM
+    dormer_horizontal_stiffness_kn_mm: float | None | Literal["inherit"] = (
+        DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM
+    )
     joint_stiffness_factor: float = 1000.0
 
     def __post_init__(self):
@@ -588,9 +754,25 @@ class Settings:
             positive(getattr(self, name), name)
         if self.horizontal_stiffness_kn_mm is not None:
             positive(self.horizontal_stiffness_kn_mm, "horizontal_stiffness_kn_mm")
+        dormer_stiffness = self.dormer_horizontal_stiffness_kn_mm
+        if dormer_stiffness is not None and dormer_stiffness != "inherit":
+            if isinstance(dormer_stiffness, str):
+                raise ValueError(
+                    "dormer_horizontal_stiffness_kn_mm must be positive, None or 'inherit'"
+                )
+            positive(dormer_stiffness, "dormer_horizontal_stiffness_kn_mm")
         for name in ("roof_mass", "snow_load"):
             if not isfinite(getattr(self, name)) or getattr(self, name) < 0:
                 raise ValueError(f"{name} must be finite and non-negative")
+
+    def wall_plate_stiffness(self, plate_name):
+        """Effective X/Y stiffness per rafter seat; None means rigid."""
+        if (
+            plate_name == "dormer_wall_plate"
+            and self.dormer_horizontal_stiffness_kn_mm != "inherit"
+        ):
+            return self.dormer_horizontal_stiffness_kn_mm
+        return self.horizontal_stiffness_kn_mm
 
 
 @dataclass
@@ -602,12 +784,17 @@ class RoofModel:
     connections: list[str] = field(default_factory=list)
     # Actual seats: longitudinal member, category, station on the rafter.
     rafter_seats: dict[str, list[tuple[str, str, float]]] = field(default_factory=dict)
-    # Physical rafter/longitudinal-member pair -> numerical seat arm.
+    # Physical rafter/purlin pair -> numerical offset arm.
     seat_members: dict[tuple[str, str], str] = field(default_factory=dict)
+    # Rafter -> rigid wall plate/ring beam: direct nodal support, no offset arm
+    # or deformable wall-plate member in the FE model.
+    wall_plate_connections: dict[tuple[str, str], str] = field(default_factory=dict)
     # member name, load case, global vertical q, interval along member
     loads: list[tuple[str, str, float, float, float]] = field(default_factory=list)
     # Nodal collar self-weight (halved between its two rafter connections).
     nodal_loads: list[tuple[str, str, tuple[float, float, float]]] = field(default_factory=list)
+    saddle_contacts: list[dict] = field(default_factory=list)
+    saddle_bolts: list[dict] = field(default_factory=list)
 
     def add_load(self, name, case, q, start=0.0, end=None):
         member = self.model.members[name]
@@ -664,12 +851,20 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
     model.add_section("JOINT", 0.16 * 0.12, 0.12 * 0.16**3 / 12, 0.16 * 0.12**3 / 12, 0.00005)
     nodes = {}
 
-    def bearing_support(name, *, lateral):
-        rigid = settings.horizontal_stiffness_kn_mm is None
-        model.def_support(name, rigid, lateral and rigid, True, True, False, False)
+    def bearing_support(name, *, lateral, rafter_connection=False, connection_stiffness=None):
+        rigid = not rafter_connection or connection_stiffness is None
+        model.def_support(
+            name,
+            rigid,
+            lateral and rigid,
+            True,
+            not rafter_connection,
+            False,
+            rafter_connection,
+        )
         if not rigid:
-            # kN/mm -> N/m. Keep vertical support and roll restraint unchanged.
-            stiffness = settings.horizontal_stiffness_kn_mm * 1e6
+            # kN/mm -> N/m. Vertical seating and rotational DOFs are independent.
+            stiffness = connection_stiffness * 1e6
             model.def_support_spring(name, "DX", stiffness)
             if lateral:
                 model.def_support_spring(name, "DY", stiffness)
@@ -685,6 +880,11 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
         return nodes[key]
 
     for beam in layout.beams:
+        if beam.category == "wall_plate":
+            # The wall plate/ring beam is one exactly rigid support structure.
+            # Keep its outline for the drawings, not as a second elastic beam.
+            # Its own weight acts directly on that structure, not the rafters.
+            continue
         if beam.category == "collar":
             a, b = node(beam.start), node(beam.end)
             area = beam.timber.properties[0] * beam.pieces
@@ -697,7 +897,7 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
                 model.add_node_load(end, "FZ", -weight / 2, case="G")
                 result.nodal_loads.append((end, "G", (0.0, 0.0, -weight / 2)))
             continue
-        owner = beam.name if beam.category == "purlin" else None
+        owner = beam.name if beam.category in {"purlin", "saddle"} else None
         section_name = f"{beam.timber.width:.9g}x{beam.timber.height:.9g}"
         if section_name not in model.sections:
             model.add_section(section_name, *beam.timber.properties)
@@ -712,6 +912,79 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
         result.add_load(
             beam.name, "G", -settings.timber_density * settings.gravity * beam.timber.properties[0]
         )
+
+    saddles = [b for b in layout.beams if b.category == "saddle"]
+    by_name = {b.name: b for b in layout.beams}
+    saddle_bearings = {
+        (purlin, saddle.bearings[0]) for saddle in saddles for purlin in saddle.supported_purlins
+    }
+    for saddle in saddles:
+        parameters = layout.saddle_parameters
+        centre = node((saddle.bearings[0], *saddle.start[1:]), owner=saddle.name)
+        # A pinned vertical-plane bolster, not a clamped or composite beam.
+        # Out-of-plane rigid-body DOFs are restrained on the bolster. They
+        # stabilise the bearing-only model; with bolts they are an explicit
+        # assumed saddle wall restraint, and can resist lateral bolt forces.
+        # Vertical-only bearing contacts cannot restrain purlin Y motion.
+        model.def_support(centre, True, True, True, True, False, True)
+        result.supports[centre] = saddle.name
+        for purlin_name in saddle.supported_purlins:
+            purlin = by_name[purlin_name]
+            lo, hi = max(saddle.start[0], purlin.start[0]), min(saddle.end[0], purlin.end[0])
+            stations = np.linspace(lo, hi, max(1, ceil((hi - lo) / parameters.contact_spacing)) + 1)
+            edges = np.array((lo, *((stations[:-1] + stations[1:]) / 2), hi))
+            for x, width in zip(stations, np.diff(edges)):
+                lower = node((x, *saddle.start[1:]), owner=saddle.name)
+                upper = node((x, *purlin.start[1:]), owner=purlin.name)
+                area = min(purlin.timber.width, saddle.timber.width) * width
+                stiffness = saddle_contact_stiffness(
+                    purlin.timber, saddle.timber, area, parameters.contact_stiffness_factor
+                )
+                name = f"saddle_contact_{len(result.saddle_contacts):03d}"
+                model.add_spring(name, lower, upper, stiffness, comp_only=True)
+                result.saddle_contacts.append(
+                    dict(
+                        contact=name,
+                        saddle=saddle.name,
+                        purlin=purlin.name,
+                        x_m=float(x),
+                        area_m2=float(area),
+                        stiffness_N_m=float(stiffness),
+                    )
+                )
+            if parameters.bolts:
+                bolt_parameters = parameters.bolts
+                for x in np.linspace(lo, hi, bolt_parameters.count_per_end + 2)[1:-1]:
+                    lower = node((x, *saddle.start[1:]), owner=saddle.name)
+                    upper = node((x, *purlin.start[1:]), owner=purlin.name)
+                    name = f"saddle_bolt_{len(result.saddle_bolts):02d}"
+                    hold_down = None
+                    if bolt_parameters.hold_down == "ideal":
+                        hold_down = name + "_hold_down"
+                        model.add_spring(
+                            hold_down, lower, upper, IDEAL_BOLT_HOLD_DOWN_N_M, tension_only=True
+                        )
+                    result.saddle_bolts.append(
+                        dict(
+                            bolt=name,
+                            saddle=saddle.name,
+                            purlin=purlin.name,
+                            x_m=float(x),
+                            y_m=saddle.start[1],
+                            upper_node=upper,
+                            lower_node=lower,
+                            purlin_height_m=purlin.timber.height,
+                            saddle_height_m=saddle.timber.height,
+                            Kser_N_m=saddle_bolt_stiffness(
+                                purlin.timber,
+                                saddle.timber,
+                                bolt_parameters.diameter_mm,
+                                "SLS_symmetric",
+                            ),
+                            slip_gap_m=bolt_parameters.slip_gap_mm / 1000,
+                            hold_down_spring=hold_down,
+                        )
+                    )
 
     rafters = [b for b in layout.beams if b.category == "rafter"]
     longitudinal = [b for b in layout.beams if b.category in {"purlin", "wall_plate"}]
@@ -738,30 +1011,44 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
                 continue
             if beam.category == "purlin" and not 0 < separation < 0.6:
                 raise ValueError(f"unexpected seat offset at {rafter.name}/{beam.name}")
-            xs.append(x)
-            lower = node((x, bearing_y, beam.start[2]), owner=owner)
             upper = node((x, bearing_y, rafter_z))
-            name = f"seat_{len(result.connections):03d}"
-            model.add_member(name, lower, upper, "JOINT", "JOINT")
-            # Vertical offset arm: hinged for GLOBAL X/Y rotations at the
-            # rafter. Local x is vertical, so retaining Rxj restrains yaw.
-            # No rafter bending moment is transferred in its roof plane.
-            model.def_releases(name, Ryj=True, Rzj=True)
-            result.connections.append(name)
-            result.seat_members[(rafter.name, beam.name)] = name
+            if beam.category == "wall_plate":
+                # Springs act on the rafter, relative to the immovable support.
+                # Vertical seating is rigid; roof-plane rotations remain free.
+                # Retain only the existing global-Z seat-yaw restraint.
+                bearing_support(
+                    upper,
+                    lateral=True,
+                    rafter_connection=True,
+                    connection_stiffness=settings.wall_plate_stiffness(beam.name),
+                )
+                result.supports[upper] = beam.name
+                result.wall_plate_connections[(rafter.name, beam.name)] = upper
+            else:
+                xs.append(x)
+                lower = node((x, bearing_y, beam.start[2]), owner=owner)
+                name = f"seat_{len(result.connections):03d}"
+                model.add_member(name, lower, upper, "JOINT", "JOINT")
+                # Purlin offset arms retain their existing hinged rafter end.
+                model.def_releases(name, Ryj=True, Rzj=True)
+                result.connections.append(name)
+                result.seat_members[(rafter.name, beam.name)] = name
             station = (
                 (bearing_y - rafter.start[1]) / (rafter.end[1] - rafter.start[1]) * rafter.length
             )
             result.rafter_seats.setdefault(rafter.name, []).append(
                 (beam.name, beam.category, station)
             )
+        if beam.category == "wall_plate":
+            continue
         for x in sorted(set(xs)):
             name = node((x, beam.start[1], beam.start[2]), owner=owner)
-            if beam.wall_extent and beam.wall_extent[0] - 1e-9 <= x <= beam.wall_extent[1] + 1e-9:
-                bearing_support(name, lateral=True)
-                result.supports[name] = beam.name
-            elif any(abs(x - bearing) < 1e-9 for bearing in beam.bearings):
+            if any(abs(x - bearing) < 1e-9 for bearing in beam.bearings):
                 bearing_support(name, lateral=settings.purlin_lateral_restraint)
+                if (beam.name, x) in saddle_bearings:
+                    # Keep the original rigid horizontal guides and roll
+                    # restraint, but vertical load MUST pass through the saddle.
+                    model.nodes[name].support_DZ = False
                 result.supports[name] = beam.name
 
     # The ridge is a translation-only joint, NOT a ridge beam. Its unused
@@ -858,10 +1145,140 @@ def check_equilibrium(roof: RoofModel):
     return residuals
 
 
+def bolt_shear_assembly(roof, combo, states):
+    """Face-slip connector stiffness and deadband offset, in GLOBAL DOFs.
+
+    Each direction has an independent symmetric slip deadband (not an exact
+    circular bolt-hole model). Generalised forces include the face-offset
+    moments, so internal forces AND moments balance without rigid offset arms.
+    """
+    from scipy.sparse import coo_matrix
+
+    size = 6 * len(roof.model.nodes)
+    rows, columns, values = [], [], []
+    offset = np.zeros((size, 1))
+    dofs = {name: index for index, name in enumerate(("DX", "DY", "DZ", "RX", "RY", "RZ"))}
+    for bolt in roof.saddle_bolts:
+        stiffness = bolt["Kser_N_m"] * (2 / 3 if combo.startswith("ULS_") else 1)
+        for direction in ("X", "Y"):
+            state = states[(bolt["bolt"], direction)]
+            if not state:
+                continue
+            terms = [
+                (6 * roof.model.nodes[node].ID + dofs[dof], coefficient)
+                for node, dof, coefficient in bolt_face_terms(bolt, direction)
+            ]
+            for i, a in terms:
+                offset[i, 0] += stiffness * state * bolt["slip_gap_m"] * a
+                for j, b in terms:
+                    rows.append(i)
+                    columns.append(j)
+                    values.append(stiffness * a * b)
+    return coo_matrix((values, (rows, columns)), shape=(size, size)).tocsr(), offset
+
+
+def solve_saddle_contact(roof):
+    """First-order active-set solve, including reopening AND reclosing contact.
+
+    PyNite 3.2's two-node TC springs only deactivate, never reactivate. A
+    previously opened contact can close after redistribution, so its built-in
+    solve is insufficient here. Use its stiffness assembly, displacement solve
+    and reaction recovery unchanged, with an opening/reclosing active-set update.
+    These Analysis helpers are covered by the pinned-version regression tests.
+    """
+    from Pynite import Analysis
+
+    model = roof.model
+    Analysis._prepare_model(model)
+    free, fixed, known = Analysis._partition_D(model)
+    contacts = [model.springs[c["contact"]] for c in roof.saddle_contacts]
+    contacts += [
+        model.springs[b["hold_down_spring"]] for b in roof.saddle_bolts if b["hold_down_spring"]
+    ]
+    for combo in model.load_combos.values():
+        force, _ = Analysis._partition(model, model.P(combo.name), free, fixed)
+        fer, _ = Analysis._partition(model, model.FER(combo.name), free, fixed)
+        bolt_states = {
+            (b["bolt"], direction): 1 if not b["slip_gap_m"] else 0
+            for b in roof.saddle_bolts
+            for direction in ("X", "Y")
+        }
+        for iteration in range(100):
+            bolt_k, bolt_offset = bolt_shear_assembly(roof, combo.name, bolt_states)
+            offset, _ = Analysis._partition(model, bolt_offset, free, fixed)
+            k11, k12, _, _ = Analysis._partition(
+                model,
+                # Check stability after adding connector stiffness, not before.
+                model.Ke(combo.name, check_stability=False, sparse=True).tocsr() + bolt_k,
+                free,
+                fixed,
+            )
+            displacement = Analysis._solve_unknown_disp(
+                k11, force - fer + offset - k12 @ known, sparse=True, check_stability=True
+            )
+            Analysis._store_displacements(model, displacement, known, free, fixed, combo)
+            changes = []
+            for spring in contacts:
+                gap = spring.j_node.DZ[combo.name] - spring.i_node.DZ[combo.name]
+                # Small force deadband avoids numerical chatter at zero force.
+                trial_force = -spring.ks * gap
+                # Native spring axial force is positive in compression.
+                allowed_force = trial_force if spring.comp_only else -trial_force
+                if spring.active[combo.name] and allowed_force < -1e-5:
+                    changes.append((spring, False))
+                elif not spring.active[combo.name] and allowed_force > 1e-5:
+                    changes.append((spring, True))
+            bolt_changes = {}
+            for bolt in roof.saddle_bolts:
+                if not bolt["slip_gap_m"]:
+                    continue
+                for direction in ("X", "Y"):
+                    slip = bolt_face_slip(model, bolt, direction, combo.name)
+                    state = (
+                        1
+                        if slip > bolt["slip_gap_m"]
+                        else (-1 if slip < -bolt["slip_gap_m"] else 0)
+                    )
+                    key = (bolt["bolt"], direction)
+                    if bolt_states[key] != state:
+                        bolt_changes[key] = state
+            if not changes and not bolt_changes:
+                break
+            for spring, active in changes:
+                spring.active[combo.name] = active
+            bolt_states.update(bolt_changes)
+        else:
+            raise ValueError(f"saddle contact did not converge: {combo.name}")
+    Analysis._calc_reactions(model, log=False)
+    # The shear connectors are assembled locally rather than registered as
+    # PyNite springs. Recover their fixed-DOF reactions too (usually zero:
+    # trial bolt stations lie away from wall bearings). Elastic support-spring
+    # reactions are already recovered from node movement by PyNite.
+    for bolt in roof.saddle_bolts:
+        for combo in model.load_combos:
+            stiffness = bolt["Kser_N_m"] * (2 / 3 if combo.startswith("ULS_") else 1)
+            for direction in ("X", "Y"):
+                slip = bolt_face_slip(model, bolt, direction, combo)
+                force = stiffness * np.sign(slip) * max(abs(slip) - bolt["slip_gap_m"], 0.0)
+                for name, dof, coefficient in bolt_face_terms(bolt, direction):
+                    node = model.nodes[name]
+                    if getattr(node, "support_" + dof):
+                        reaction = "Rxn" + ("F" if dof.startswith("D") else "M") + dof[-1]
+                        getattr(node, reaction)[combo] += force * coefficient
+    model.solution = "Nonlinear TC"
+    saddle_contact_rows(roof)  # check the final contact complementarity
+    saddle_bolt_rows(roof)
+
+
 def solve_roof_model(roof):
     # Start with verified first-order equilibrium. Second-order behaviour,
     # instability and nonlinear connection slip need a validated extension.
-    roof.model.analyze_linear(check_stability=True, log=False)
+    if roof.saddle_contacts:
+        # First-order contact active-set solve: separation is permitted,
+        # tension is not. This is not P-delta or nonlinear timber analysis.
+        solve_saddle_contact(roof)
+    else:
+        roof.model.analyze_linear(check_stability=True, log=False)
     return check_equilibrium(roof)
 
 
@@ -911,7 +1328,10 @@ def rafter_chord(roof, beam, *, fallback="supports"):
 
 
 def purlin_chord(roof, beam):
-    """Reference the two actual wall-bearing nodes, not the timber's free ends."""
+    """Reference purlin centreline above wall centres, not its free ends.
+
+    At internal joints these nodes move vertically on the flexible saddles.
+    """
     member = roof.model.members[beam.name]
     start = np.array((member.i_node.X, member.i_node.Y, member.i_node.Z))
     axis = member.T()[0, :3]
@@ -1069,6 +1489,8 @@ def chord_result_columns(roof, beam, combo, *, fallback="supports"):
 def member_rows(roof, *, chord_fallback="supports"):
     rows = []
     for beam in roof.layout.beams:
+        if beam.category == "wall_plate":
+            continue  # rigid support outline, not an analysed elastic timber
         if beam.category == "collar":
             spring = roof.model.springs[beam.name]
             for combo in roof.model.load_combos:
@@ -1156,6 +1578,15 @@ def support_rows(roof):
                 dict(
                     support=name,
                     member=beam,
+                    support_kind=(
+                        "rafter_connection"
+                        if "wall_plate" in beam
+                        else (
+                            "saddle_bearing"
+                            if "saddle" in beam
+                            else "purlin_horizontal_guide" if not n.support_DZ else "purlin_bearing"
+                        )
+                    ),
                     combination=combo,
                     x_m=n.X,
                     y_m=n.Y,
@@ -1182,9 +1613,11 @@ def support_rows(roof):
 
 
 def print_ring_beam_rafter_forces(roof, supports):
-    """Ring-beam reactions at rafter-aligned bearings, not rafter seat forces."""
+    """Direct connection loads delivered to the rigid wall plate/ring beam."""
     print("  Ring-beam horizontal loads at each rafter (kN; +outward, -inward):")
-    print("    Wall-plate redistribution included; values are loads TO ring-beam supports.")
+    print(
+        "    Direct connection forces TO the single rigid wall plate/ring beam; no redistribution."
+    )
     print("    Fx is signed along the house, shown for the governing ULS outward case.")
     for beam in (b for b in roof.layout.beams if b.category == "rafter"):
         x = beam.start[0]
@@ -1197,7 +1630,7 @@ def print_ring_beam_rafter_forces(roof, supports):
             rows = [r for r in supports if r["member"] == plate and abs(r["x_m"] - x) < 1e-8]
             label = f"    {beam.name} x={x:.3f} m -> {plate}"
             if not rows:
-                print(label + ": no bearing here; load redistributed through wall plate.")
+                print(label + ": no modelled connection here.")
                 continue
             symmetric = next(r for r in rows if r["combination"] == "SLS_symmetric")
             service = max(
@@ -1214,23 +1647,93 @@ def print_ring_beam_rafter_forces(roof, supports):
                 f"ULS max Hout={ultimate['outward_kN']:+.3f} ({ultimate['combination']}, "
                 f"Fx={ultimate['Fx_kN']:+.3f})."
             )
-    print("    Per-rafter maxima are not simultaneous; totals also include wall-end bearings.")
+    print("    Per-rafter maxima are not simultaneous; totals sum all rafter connections.")
+
+
+def saddle_contact_rows(roof):
+    """Compression positive; gap positive means separation of contact faces."""
+    rows = []
+    for contact in roof.saddle_contacts:
+        spring = roof.model.springs[contact["contact"]]
+        for combo in roof.model.load_combos:
+            active = spring.active[combo]
+            force = float(spring.axial(combo)) if active else 0.0
+            gap = spring.j_node.DZ[combo] - spring.i_node.DZ[combo]
+            if force < -1e-5 or (not active and gap < -1e-8):
+                raise ValueError(f"invalid compression contact: {contact['contact']}/{combo}")
+            rows.append(
+                dict(
+                    **contact,
+                    combination=combo,
+                    active=bool(active),
+                    stiffness_kN_mm=contact["stiffness_N_m"] / 1e6,
+                    compression_kN=force / 1000,
+                    pressure_MPa=force / contact["area_m2"] / 1e6,
+                    gap_mm=float(gap * 1000),
+                )
+            )
+    return rows
+
+
+def saddle_bolt_rows(roof):
+    """Forces delivered to purlin faces; shear and hold-down are separate."""
+    rows = []
+    for bolt in roof.saddle_bolts:
+        for combo in roof.model.load_combos:
+            stiffness = bolt["Kser_N_m"] * (2 / 3 if combo.startswith("ULS_") else 1)
+            slips = {d: bolt_face_slip(roof.model, bolt, d, combo) for d in ("X", "Y")}
+            force = {
+                d: -stiffness * np.sign(slip) * max(abs(slip) - bolt["slip_gap_m"], 0.0)
+                for d, slip in slips.items()
+            }
+            upper, lower = (roof.model.nodes[bolt[n]] for n in ("upper_node", "lower_node"))
+            gap = upper.DZ[combo] - lower.DZ[combo]
+            tension = 0.0
+            if bolt["hold_down_spring"]:
+                spring = roof.model.springs[bolt["hold_down_spring"]]
+                tension = -float(spring.axial(combo)) if spring.active[combo] else 0.0
+                if tension < -1e-5 or (not spring.active[combo] and gap > 1e-8):
+                    raise ValueError(f"invalid bolt hold-down: {bolt['bolt']}/{combo}")
+            rows.append(
+                dict(
+                    bolt=bolt["bolt"],
+                    saddle=bolt["saddle"],
+                    purlin=bolt["purlin"],
+                    x_m=bolt["x_m"],
+                    y_m=bolt["y_m"],
+                    combination=combo,
+                    shear_stiffness_kN_mm=stiffness / 1e6,
+                    slip_gap_mm=bolt["slip_gap_m"] * 1000,
+                    slip_X_mm=slips["X"] * 1000,
+                    slip_Y_mm=slips["Y"] * 1000,
+                    Fx_to_purlin_kN=force["X"] / 1000,
+                    Fy_to_purlin_kN=force["Y"] / 1000,
+                    shear_resultant_kN=float(np.hypot(force["X"], force["Y"]) / 1000),
+                    separation_mm=float(gap * 1000),
+                    hold_down_tension_kN=tension / 1000,
+                    hold_down="ideal" if bolt["hold_down_spring"] else "free",
+                )
+            )
+    return rows
 
 
 def timber_categories(layout):
     return tuple(
         category
-        for category in ("rafter", "purlin", "wall_plate", "collar")
+        for category in ("rafter", "purlin", "wall_plate", "collar", "saddle")
         if any(b.category == category for b in layout.beams)
     )
 
 
 def print_summary(roof, members, supports, residuals):
     print(
-        f"\n3D roof: purlin bearings laterally {'RESTRAINED' if roof.settings.purlin_lateral_restraint else 'FREE'}"
+        f"\n3D roof: direct purlin Y guides {'RESTRAINED' if roof.settings.purlin_lateral_restraint else 'FREE'}"
     )
     print(
-        f"  {len(roof.layout.beams)} timbers; {len(roof.connections)} idealized seats; {len(roof.model.nodes)} nodes"
+        f"  {sum(b.category != 'wall_plate' for b in roof.layout.beams)} analysed timbers; "
+        f"{len(roof.connections)} purlin seats; "
+        f"{len(roof.wall_plate_connections)} rafter-to-rigid-ring-beam seats; "
+        f"{len(roof.model.nodes)} nodes"
     )
     collars = [b for b in roof.layout.beams if b.category == "collar"]
     if collars:
@@ -1254,22 +1757,75 @@ def print_summary(roof, members, supports, residuals):
     )
     print("  NO suspended ceiling/OSB/SDK load; its replacement support is not designed.")
     print("  Snow is vertical per horizontal ROOF area, not ground sk; drift/wind omitted.")
-    if roof.settings.horizontal_stiffness_kn_mm is None:
-        print("  Horizontal supports RIGID (comparison model).")
-    else:
+    print(
+        "  Rafter-to-wall-plate/ring-beam connection stiffness per X/Y direction: "
+        f"other={format_horizontal_stiffness(roof.settings.horizontal_stiffness_kn_mm)}; "
+        f"dormer={format_horizontal_stiffness(roof.settings.wall_plate_stiffness('dormer_wall_plate'))}."
+    )
+    print("  Sensitivity parameters, NOT verified connection/anchorage stiffness.")
+    print("  Wall/post vertical supports rigid; purlin roll restrained; seat yaw restrained.")
+    print("  Wall plate/ring beam is one immovable rigid structure, not an elastic timber member.")
+    print("  Wall-plate spring movements are rafter connection slip, not ring-beam movement.")
+    contacts = saddle_contact_rows(roof)
+    bolts = saddle_bolt_rows(roof)
+    if contacts:
+        parameters = roof.layout.saddle_parameters
         print(
-            f"  Horizontal support springs: k={roof.settings.horizontal_stiffness_kn_mm:g} kN/mm "
-            "per restrained X/Y direction, per bearing node."
+            f"  Four {parameters.length:g} m sedla, same section as purlins; flexible timber beams."
         )
-        print("  Calibrated sensitivity parameter, NOT verified anchorage/ring-beam stiffness.")
-    print("  Vertical supports rigid; purlin roll restrained at bearings; seat yaw restrained.")
-    print("  Purlin supports at wall centre lines; adjacent pieces remain independent.")
+        print("  Internal purlin vertical loads pass through compression-only saddle contact.")
+        print("  Pieces have separate end rotations; saddles couple them through bearing contact.")
+        print("  Contact k = factor × A / (h_p/E90,p + h_s/E90,s), nominal full-depth compression.")
+        print(
+            f"  Contact stiffness factor={parameters.contact_stiffness_factor:g}; "
+            f"maximum mesh spacing={parameters.contact_spacing:g} m; elastic ESTIMATE, not calibrated."
+        )
+        print("  No friction or glued/full-composite constraint; saddle centre vertically pinned.")
+        if bolts:
+            parameters = roof.layout.saddle_parameters.bolts
+            print(
+                f"  Trial bolts: {parameters.count_per_end} per purlin end, "
+                f"{len(roof.saddle_bolts)} total; diameter {parameters.diameter_mm:g} mm; "
+                f"assumed relative slip gap {parameters.slip_gap_mm:g} mm; "
+                f"vertical hold-down={parameters.hold_down}."
+            )
+            print(
+                "  Face-slip springs include timber rotations; partial composite action, NOT rigid bonding."
+            )
+            print("  Kser=rho_mean^1.5 × d / 23 N/mm per bolt/shear plane; ULS Ku=2/3 Kser.")
+            print(
+                "  Bolts can also transfer lateral Y load into saddle wall supports, even with direct Y guides free."
+            )
+            print(
+                "  Saddle wall support assumes fixed DX/DY/roll/yaw, free vertical-plane bending rotation."
+            )
+            if parameters.hold_down == "ideal":
+                print(
+                    "  Ideal hold-down is a tension-only numerical rigid-limit bound, NOT calibrated bolt stiffness."
+                )
+            worst = max(bolts, key=lambda r: r["shear_resultant_kN"])
+            print(
+                f"  Max trial bolt shear={worst['shear_resultant_kN']:.3f} kN "
+                f"({worst['bolt']}, {worst['combination']}); NO bolt capacity/spacing check."
+            )
+        else:
+            print("  NO bolt action (bearing-only comparison).")
+        for saddle in (b for b in roof.layout.beams if b.category == "saddle"):
+            group = [r for r in contacts if r["saddle"] == saddle.name]
+            worst = max(group, key=lambda r: r["pressure_MPa"])
+            print(
+                f"    {saddle.name}: max contact pressure {worst['pressure_MPa']:.3f} MPa "
+                f"({worst['combination']}); NOT a bearing-capacity check."
+            )
+    else:
+        print("  Purlin supports at wall centre lines; adjacent pieces remain independent.")
+    print("  Purlin X translation rigid; Y rigid unless --purlin-lateral free.")
     print("  Outward positive = load delivered to support, not reaction on timber.")
     print("  Member N: positive=tension; negative=compression.")
     sls_supports = [r for r in supports if r["combination"].startswith("SLS_")]
     moving = max(sls_supports, key=lambda r: max(abs(r["Dx_mm"]), abs(r["Dy_mm"])))
     print(
-        f"  Max SLS horizontal support movement: "
+        f"  Max SLS horizontal connection/bearing movement: "
         f"{max(abs(moving['Dx_mm']), abs(moving['Dy_mm'])):.3f} mm "
         f"({moving['member']}, {moving['combination']}, x={moving['x_m']:.3f} m)."
     )
@@ -1278,6 +1834,16 @@ def print_summary(roof, members, supports, residuals):
             r["Fz_kN"]
             for r in supports
             if r["member"] == beam.name and r["combination"] == "SLS_symmetric"
+        )
+        load += sum(
+            r["compression_kN"]
+            for r in contacts
+            if r["purlin"] == beam.name and r["combination"] == "SLS_symmetric"
+        )
+        load -= sum(
+            r["hold_down_tension_kN"]
+            for r in bolts
+            if r["purlin"] == beam.name and r["combination"] == "SLS_symmetric"
         )
         print(f"  {beam.name}: SLS_symmetric vertical load to wall bearings={load:.3f} kN.")
     print(
@@ -1330,7 +1896,7 @@ def print_summary(roof, members, supports, residuals):
             f"  WARNING: uplift {govern['Fz_kN']:.3f} kN at {govern['member']} "
             f"({govern['combination']}, x={govern['x_m']:.3f} m); gravity contact alone cannot carry it."
         )
-    for category in ("rafter", "purlin", "wall_plate"):
+    for category in ("rafter", "purlin", *(("saddle",) if contacts else ())):
         rows = [
             r for r in members if r["category"] == category and r["combination"].startswith("ULS")
         ]
@@ -1400,6 +1966,17 @@ def horizontal_stiffness_argument(value):
         raise argparse.ArgumentTypeError("use a positive stiffness in kN/mm, or 'rigid'") from exc
 
 
+def dormer_horizontal_stiffness_argument(value):
+    """Dormer override, or explicit inheritance of the general connection setting."""
+    if value.lower() == "inherit":
+        return "inherit"
+    return horizontal_stiffness_argument(value)
+
+
+def format_horizontal_stiffness(value):
+    return "rigid" if value is None else f"{value:g} kN/mm"
+
+
 def plan_deflection_status(rows):
     """Classify existing chord checks over ALL SLS cases, never from ULS."""
     service = [r for r in rows if r["combination"].startswith("SLS_")]
@@ -1413,33 +1990,27 @@ def plan_deflection_status(rows):
 
 
 def wall_plate_connection_rows(roof, combo):
-    """Forces delivered by rafter seat arms TO wall plates, at every seat.
+    """Direct rafter-connection forces TO the single rigid wall plate/ring beam.
 
-    These are not ground-bearing reactions: longitudinal redistribution may
-    move the ring-beam force to other bearings, especially for overhang seats.
+    These are the same support reactions used by the terminal and support CSV.
+    The spring displacement is rafter slip relative to the immovable structure.
     """
     if combo not in roof.model.load_combos:
         raise ValueError(f"unknown connection-force combination: {combo}")
     rows = []
-    for (rafter, plate), seat_name in roof.seat_members.items():
-        if not any(
-            p == plate and category == "wall_plate" for p, category, _ in roof.rafter_seats[rafter]
-        ):
-            continue
-        seat = roof.model.members[seat_name]
-        # Lower end is attached to the wall plate. F is the global end force
-        # ON the arm; reverse it to get the load delivered TO the wall plate.
-        force = -seat.F(combo)[:3, 0] / 1000
+    for (rafter, plate), node_name in roof.wall_plate_connections.items():
+        node = roof.model.nodes[node_name]
+        force = -np.array([getattr(node, "RxnF" + axis)[combo] for axis in ("X", "Y", "Z")]) / 1000
         outward_direction = -1 if "street" in plate else 1
         rows.append(
             dict(
                 rafter=rafter,
                 wall_plate=plate,
-                seat=seat_name,
+                seat=node_name,
                 combination=combo,
-                x_m=seat.i_node.X,
-                y_m=seat.i_node.Y,
-                z_m=seat.i_node.Z,
+                x_m=node.X,
+                y_m=node.Y,
+                z_m=node.Z,
                 Fx_kN=float(force[0]),
                 Fy_kN=float(force[1]),
                 Fz_kN=float(force[2]),
@@ -1509,20 +2080,21 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
     figure.subplots_adjust(left=0.065, right=0.98, bottom=0.19, top=0.90)
     classifications = {}
     # Draw all physical timbers. Offset arms are numerical joints, not timber.
-    order = {"collar": 0, "wall_plate": 1, "purlin": 2, "rafter": 3}
+    order = {"collar": 0, "wall_plate": 1, "purlin": 2, "rafter": 3, "saddle": 4}
     for beam in sorted(roof.layout.beams, key=lambda b: order[b.category]):
         rows = [r for r in members if r["member"] == beam.name]
         status = classifications[beam.name] = plan_deflection_status(rows)
         is_collar = beam.category == "collar"
+        is_saddle = beam.category == "saddle"
         artist = Polygon(
             plan_member_polygon(beam),
             closed=True,
             # Outline-only overlay preserves the rafter deflection colour
             # underneath these coincident equivalent axial links.
-            facecolor="none" if is_collar else palette[status],
-            edgecolor=collar_colour if is_collar else "#333333",
-            linewidth=1.5 if is_collar else 0.6,
-            alpha=1.0 if is_collar else 0.88,
+            facecolor="none" if is_collar or is_saddle else palette[status],
+            edgecolor=collar_colour if is_collar else "#1678d2" if is_saddle else "#333333",
+            linewidth=1.5 if is_collar or is_saddle else 0.6,
+            alpha=1.0 if is_collar or is_saddle else 0.88,
             zorder=6 if is_collar else order[beam.category] + 2,
         )
         artist.set_gid(beam.name)
@@ -1600,6 +2172,18 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
                 bbox=dict(facecolor="white", alpha=0.85, edgecolor="none", pad=0.5),
             )
 
+    for bolt in roof.saddle_bolts:
+        (marker,) = axes.plot(
+            bolt["x_m"],
+            bolt["y_m"],
+            marker="o",
+            markersize=3.2,
+            color="#123a68",
+            linestyle="none",
+            zorder=11,
+        )
+        marker.set_gid(bolt["bolt"])
+
     forces = wall_plate_connection_rows(roof, force_combo)
     for row in forces:
         start, end = plan_force_arrow(row)
@@ -1637,23 +2221,29 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
     figure.suptitle(
         "Roof deflection report — top view (undeformed XY projection)", fontsize=15, y=0.975
     )
-    stiffness = roof.settings.horizontal_stiffness_kn_mm
     grades = "/".join(sorted({b.timber.material for b in roof.layout.beams}))
     restraint = (
-        f"horizontal support k={stiffness:g} kN/mm"
-        if stiffness is not None
-        else "rigid horizontal supports"
+        "wall-plate connection k: "
+        f"other {format_horizontal_stiffness(roof.settings.horizontal_stiffness_kn_mm)}, "
+        f"dormer {format_horizontal_stiffness(roof.settings.wall_plate_stiffness('dormer_wall_plate'))}"
     )
     subtitle = (
         f"Timber {grades} | roof layers {roof.settings.roof_mass:g} kg/m² | "
         f"roof snow {roof.settings.snow_load:g} kN/m² | {restraint}"
     )
-    figure.text(0.5, 0.945, subtitle, ha="center", fontsize=9)
+    if roof.saddle_bolts:
+        parameters = roof.layout.saddle_parameters.bolts
+        subtitle += (
+            f"\nTrial bolts: {parameters.count_per_end}/end × {parameters.diameter_mm:g} mm; "
+            f"slip gap {parameters.slip_gap_mm:g} mm; hold-down {parameters.hold_down} "
+            "(capacity not checked)"
+        )
+    figure.text(0.5, 0.945, subtitle, ha="center", va="top", fontsize=9)
     descriptions = {
         "L500": "Green: all SLS cases < L/500",
         "L300": "Orange: all SLS cases < L/300, but not L/500",
         "fail": "Red: at least one SLS case ≥ L/300",
-        "not_assessed": "Grey: unassessed (wall plates / missing chord)",
+        "not_assessed": "Grey: rigid wall plate/ring beam / missing chord",
     }
     handles = [
         Patch(facecolor=palette[key], edgecolor="#333333", label=descriptions[key])
@@ -1665,6 +2255,18 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
                 facecolor="none",
                 edgecolor=collar_colour,
                 label="Magenta: axial ties (unassessed); + tension / − compression",
+            )
+        )
+    if roof.layout.saddle_parameters:
+        handles.append(
+            Patch(
+                facecolor="none",
+                edgecolor="#1678d2",
+                label=(
+                    "Blue: sedla; dots: trial bolts (strength not assessed)"
+                    if roof.saddle_bolts
+                    else "Blue outline: sedla (strength not assessed)"
+                ),
             )
         )
     figure.legend(
@@ -1686,9 +2288,9 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
     figure.text(
         0.5,
         0.055,
-        f"Arrows: rafter → wall plate outward horizontal component Hout [kN], {force_combo}. "
+        f"Arrows: force TO rigid wall plate/ring beam, Hout [kN], {force_combo}. "
         "+ outward / − inward; fixed-length arrows show direction only.\n"
-        "Seat forces include overhang connections; ring-beam bearing reactions can differ after wall-plate redistribution.",
+        "Direct connection reactions; identical to the terminal/support CSV for the same load combination.",
         ha="center",
         fontsize=8,
     )
@@ -1715,9 +2317,17 @@ def plot_model(roof, path, *, combo="SLS_symmetric", scale=20.0):
         "purlin": "#d44936",
         "wall_plate": "#2789b0",
         "collar": "#8d5aa9",
+        "saddle": "#1678d2",
     }
     labelled = set()
     for beam in roof.layout.beams:
+        if beam.category == "wall_plate":
+            label = "rigid wall plate/ring beam" if "wall_plate" not in labelled else None
+            axes.plot(
+                *np.array((beam.start, beam.end)).T, color=colors[beam.category], lw=2, label=label
+            )
+            labelled.add(beam.category)
+            continue
         member = (
             roof.model.springs[beam.name]
             if beam.category == "collar"
@@ -1771,13 +2381,19 @@ def main(argv=None):
         "--purlin-lateral",
         choices=("free", "restrained", "both"),
         default="restrained",
-        help="restrained uses the common spring (default); free omits purlin Y restraint",
+        help="direct purlin Y guides: restrained (default) or free; enabled bolts can still transfer Y load through sedla",
     )
     parser.add_argument(
         "--horizontal-stiffness",
         type=horizontal_stiffness_argument,
         default=HORIZONTAL_SUPPORT_STIFFNESS_KN_MM,
-        help="kN/mm per formerly fixed horizontal support DOF; use 'rigid' for comparison",
+        help="kN/mm per wall-plate/rafter X/Y connection DOF only; purlin horizontal guides rigid; use 'rigid' for comparison",
+    )
+    parser.add_argument(
+        "--dormer-horizontal-stiffness",
+        type=dormer_horizontal_stiffness_argument,
+        default=DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM,
+        help="override dormer rafter-to-wall-plate X/Y stiffness only: positive kN/mm, 'rigid', or 'inherit' to use the general value",
     )
     parser.add_argument(
         "--snow",
@@ -1791,8 +2407,42 @@ def main(argv=None):
         help="kg/m² actual roof slope, EXCLUDING suspended ceiling; default 135",
     )
     parser.add_argument("--rafter-material", choices=("C22", "C24"), default="C22")
-    parser.add_argument("--beam-material", choices=("C22", "C24"), default="C22")
+    parser.add_argument("--beam-material", choices=("C22", "C24"), default="C24")
     parser.add_argument("--no-plot", action="store_true")
+    parser.add_argument(
+        "--no-saddles",
+        action="store_true",
+        help="omit the four 1.5 m sedla for comparison; direct purlin wall bearings",
+    )
+    parser.add_argument(
+        "--saddle-contact-factor",
+        type=float,
+        default=SADDLE_CONTACT_STIFFNESS_FACTOR,
+        help="sensitivity multiplier on estimated E90 bearing stiffness; not bolt stiffness",
+    )
+    parser.add_argument(
+        "--saddle-contact-spacing",
+        type=float,
+        default=SADDLE_CONTACT_SPACING_M,
+        help="maximum bearing contact discretisation spacing in m",
+    )
+    parser.add_argument(
+        "--no-saddle-bolts",
+        action="store_true",
+        help="bearing-only saddles, without trial bolt shear/hold-down",
+    )
+    parser.add_argument(
+        "--saddle-bolt-slip-gap",
+        type=float,
+        default=SADDLE_BOLT_SLIP_GAP_MM,
+        help="assumed relative slip before engagement in mm (not literal hole diameter clearance)",
+    )
+    parser.add_argument(
+        "--saddle-bolt-hold-down",
+        choices=("free", "ideal"),
+        default=SADDLE_BOLT_HOLD_DOWN,
+        help="free omits axial clamping; ideal adds a tension-only numerical rigid-limit bound",
+    )
     parser.add_argument(
         "--collar-ties",
         action="store_true",
@@ -1825,6 +2475,22 @@ def main(argv=None):
         beam_material=args.beam_material,
         collar_ties=CollarTieParameters() if args.collar_ties else None,
     )
+    if not args.no_saddles:
+        layout = add_purlin_saddles(
+            layout,
+            SaddleParameters(
+                contact_spacing=args.saddle_contact_spacing,
+                contact_stiffness_factor=args.saddle_contact_factor,
+                bolts=(
+                    None
+                    if args.no_saddle_bolts
+                    else SaddleBoltParameters(
+                        slip_gap_mm=args.saddle_bolt_slip_gap,
+                        hold_down=args.saddle_bolt_hold_down,
+                    )
+                ),
+            ),
+        )
     variants = (
         (False, True) if args.purlin_lateral == "both" else (args.purlin_lateral == "restrained",)
     )
@@ -1836,6 +2502,7 @@ def main(argv=None):
                 #                snow_load=args.snow,
                 purlin_lateral_restraint=restrained,
                 horizontal_stiffness_kn_mm=args.horizontal_stiffness,
+                dormer_horizontal_stiffness_kn_mm=args.dormer_horizontal_stiffness,
             ),
         )
         residuals = solve_roof_model(roof)
@@ -1849,6 +2516,10 @@ def main(argv=None):
         )
         write_csv(prefix + "_members.csv", members)
         write_csv(prefix + "_supports.csv", supports)
+        if roof.saddle_contacts:
+            write_csv(prefix + "_saddle_contacts.csv", saddle_contact_rows(roof))
+        if roof.saddle_bolts:
+            write_csv(prefix + "_saddle_bolts.csv", saddle_bolt_rows(roof))
         metadata = dict(
             source=str(layout.source),
             versions={
@@ -1857,13 +2528,54 @@ def main(argv=None):
                 "matplotlib": version("matplotlib"),
             },
             settings=roof.settings.__dict__,
+            wall_plate_connection_stiffness_kn_mm={
+                beam.name: roof.settings.wall_plate_stiffness(beam.name)
+                for beam in layout.beams
+                if beam.category == "wall_plate"
+            },
             timber_materials={
                 category: sorted(
                     {b.timber.material for b in roof.layout.beams if b.category == category}
                 )
                 for category in timber_categories(layout)
             },
-            analysis="first-order elastic",
+            analysis=(
+                "first-order elastic with compression-only saddle contact"
+                + (" and trial bolt face-slip" if roof.saddle_bolts else "")
+                if roof.saddle_contacts
+                else "first-order elastic"
+            ),
+            saddles=dict(
+                enabled=bool(layout.saddle_parameters),
+                parameters=asdict(layout.saddle_parameters) if layout.saddle_parameters else None,
+                stiffness="factor * A / (h_p/E90,p + h_s/E90,s); two full-depth compression layers",
+                E90_mean_Pa=TIMBER_E90_MEAN_PA,
+                model="flexible longitudinal timber; central vertical pin; compression-only vertical contact",
+                purlin_guides="original rigid X/roll, optional Y restraint retained; internal DZ released",
+                not_modelled=[
+                    "bolt capacity/spacing/group effects",
+                    "friction",
+                    "glued/full-composite constraint",
+                    "contact gaps/preload",
+                    "wall contact width/rotation",
+                    "bearing creep",
+                ],
+                stiffness_status="elastic estimate, not calibrated to this joint",
+                bolt_model=dict(
+                    enabled=bool(roof.saddle_bolts),
+                    count=len(roof.saddle_bolts),
+                    shear="two independent face-slip springs per bolt, including rotational offsets; one shear plane",
+                    Kser="rho_mean^1.5 * diameter_mm / 23 N/mm; geometric mean for dissimilar timbers",
+                    mean_density_kg_m3=TIMBER_MEAN_DENSITY_KG_M3,
+                    ULS_stiffness="Ku = 2/3 Kser",
+                    clearance="independent symmetric X/Y slip deadbands; not an exact circular hole model",
+                    positions="equally spaced within each purlin end's saddle overlap",
+                    hold_down="free, or ideal tension-only bound; NOT a physical axial stiffness estimate",
+                    ideal_hold_down_penalty_N_m=IDEAL_BOLT_HOLD_DOWN_N_M,
+                    lateral_path="Y load can pass to rigid saddle wall support even when direct purlin Y guides are free",
+                    saddle_wall_restraint="DX/DY/DZ/RX/RZ fixed, RY free; assumed, not a verified support detail",
+                ),
+            ),
             collar_ties=dict(
                 enabled=args.collar_ties,
                 parameters=asdict(layout.collar_parameters) if layout.collar_parameters else None,
@@ -1878,9 +2590,9 @@ def main(argv=None):
                 ],
             ),
             plan_report=dict(
-                colours="existing chord checks over all SLS cases: L/500 green, L/300 orange, otherwise red; unassessed grey; axial ties magenta (unassessed)",
+                colours="existing chord checks over all SLS cases: L/500 green, L/300 orange, otherwise red; unassessed grey; axial ties magenta, saddles blue outline (unassessed)",
                 force_combination=args.plan_force_combination,
-                arrows="rafter-to-wall-plate seat force outward component in kN, not ground-bearing reaction",
+                arrows="direct reaction delivered TO rigid wall plate/ring beam in kN; same as support CSV",
                 arrow_length="constant; direction only, not proportional to magnitude",
                 collar_arrows="same selected combination; inward compression, outward tension; signed axial kN between arrows, total for grouped boards",
             ),
@@ -1895,8 +2607,13 @@ def main(argv=None):
                 not_complete_EC5_check=True,
             ),
             purlin_chord=dict(
-                reference="line through displaced purlin-centreline points at the two wall bearings",
+                reference="line through displaced purlin-centreline points above the two wall centres",
                 support_locations="wall centre lines; independent nodes for adjacent pieces",
+                internal_vertical_support=(
+                    "flexible compression-only saddle contact"
+                    if roof.saddle_contacts
+                    else "direct rigid bearing"
+                ),
                 measure="maximum 3D perpendicular distance between bearings; includes lateral bending",
                 length="original bearing-to-bearing length; timber end overhangs excluded",
                 ratios=[300, 500],
@@ -1915,13 +2632,11 @@ def main(argv=None):
                 "concrete/anchors",
             ],
             assumptions=[
-                (
-                    "rigid horizontal support (comparison model)"
-                    if args.horizontal_stiffness is None
-                    else "independent equal horizontal X/Y bearing springs; calibrated sensitivity, not verified stiffness"
-                ),
-                "vertical supports rigid; wall-plate spring locations follow existing analysis nodes, not actual anchor spacing",
+                "horizontal X/Y stiffness at rafter-to-wall-plate/ring-beam connections ONLY; separate dormer override; None means rigid; sensitivity, not verified stiffness",
+                "one immovable rigid wall plate/ring beam; no elastic wall-plate member or wall-plate offset arms",
+                "vertical supports rigid; wall-plate springs act directly at each rafter centre-line seat; displacement is connection slip",
                 "purlin bearings at wall centre lines; adjacent pieces have separate end nodes",
+                "purlin bearing X/Z translations rigid; Y rigid in restrained variant, free in free variant; no configurable support springs",
                 "purlin rolling restrained at bearings",
                 "seat yaw restrained; roof-plane rafter bending released",
                 "linear effective timber/support stiffness; no creep or nonlinear slip",
@@ -1938,6 +2653,8 @@ def main(argv=None):
             )
         print(
             f"  Output: {prefix}_members.csv, _supports.csv, _basis.json"
+            + (", _saddle_contacts.csv" if roof.saddle_contacts else "")
+            + (", _saddle_bolts.csv" if roof.saddle_bolts else "")
             + (", _model.png, _plan.png" if not args.no_plot else "")
         )
 

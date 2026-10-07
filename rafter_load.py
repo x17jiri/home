@@ -3582,11 +3582,11 @@ def main() -> None:
             bearing_length=0.12,
         )
         check_purlin(
-            title="Vaznice B, C22",
-            material="c22",
+            title="Vaznice B, C24",
+            material="c24",
             width=0.24,
             height=0.28,
-            span=4.48+0.24,
+            span=4.50,
             rafter_length_above=1.25,
             lower_rafter_span=3.6,
             roof_angle=ROOF_ANGLE_DEGREES,

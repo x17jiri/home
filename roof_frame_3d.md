@@ -15,19 +15,34 @@ python3 -m venv .venv-roof3d
 .venv-roof3d/bin/python -m unittest test_roof_frame_3d -v
 ```
 
-The default uses equal horizontal support springs for wall plates and purlin
-bearings, with C22 for all timber and actual endpoint pairs for all rafters.
+The wall plate/ring beam is one immovable rigid support, not a second elastic
+beam. Horizontal springs act directly at each rafter connection to this
+support **only**, with a separate optional dormer stiffness. Purlin horizontal
+guides are rigid, independently of those stiffnesses. Four 1.5 m **sedla** are
+included by default under the internal purlin joints; their flexible contact
+replaces direct vertical support at those joints. See the saddle assumptions below.
+Trial bolt shear connections are also on by default: two 12 mm bolts per
+purlin end (four per sedlo). Vertical hold-down is a separate assumption.
+Timber grades are selected independently by `--rafter-material` and
+`--beam-material`. Actual endpoint pairs are used for all rafters.
 Roof-layer mass and snow are configured in `Settings` in this script (currently
-150 kg/m² and 3 kN/m²). Collar ties are off by default.
+150 kg/m² and 1.5 kN/m²). Collar ties are off by default.
 Options:
 
 ```bash
 python roof_frame_3d.py --purlin-lateral free
 python roof_frame_3d.py --horizontal-stiffness 0.12
+python roof_frame_3d.py --horizontal-stiffness 120 --dormer-horizontal-stiffness 0.12
 python roof_frame_3d.py --horizontal-stiffness rigid --output roof_frame_3d_rigid
 python roof_frame_3d.py --purlin-lateral both
 python roof_frame_3d.py --rafter-material C24 --beam-material C22
 python roof_frame_3d.py --collar-ties
+python roof_frame_3d.py --no-saddles --output /tmp/roof_without_saddles
+python roof_frame_3d.py --saddle-contact-factor 0.1 --output /tmp/roof_soft_contact
+python roof_frame_3d.py --saddle-contact-spacing 0.05 --output /tmp/roof_fine_contact
+python roof_frame_3d.py --no-saddle-bolts --output /tmp/roof_bearing_only
+python roof_frame_3d.py --saddle-bolt-slip-gap 1 --output /tmp/roof_bolt_clearance
+python roof_frame_3d.py --saddle-bolt-hold-down ideal --output /tmp/roof_bolt_hold_down
 python roof_frame_3d.py --output /tmp/roof3d
 python roof_frame_3d.py --rafter-chord-fallback na
 python roof_frame_3d.py --plan-force-combination SLS_symmetric
@@ -37,33 +52,46 @@ For each variant it writes (the default produces `_restrained`; `_free` is
 only produced when explicitly requested):
 
 - `roof_frame_3d_free_members.csv`: local axial forces, shear, both bending axes,
-  and sampled absolute global vertical displacement, for every timber and
+  and sampled absolute global vertical displacement, for every analysed timber and
   combination. Also includes each rafter's and purlin's maximum departure from
   its displaced endpoint/bearing chord and SLS L/300 and L/500 screening results
   (see below).
   N is tension-positive/compression-negative (converted from
   PyNite to match the 2D script). `_restrained` is the other support variant.
+  Rigid wall-plate outlines are not elastic members and have no member rows.
 - `roof_frame_3d_free_supports.csv`: signed forces/moments **delivered to** wall
-  plates' underlying ring beams and purlins' wall bearings. These are the
+  plate/ring-beam structure and purlins' wall bearings. These are the
   negatives of the solver's support reactions. `outward_kN` is positive toward
   the street for street bearings, toward the garden for garden/dormer bearings.
   Negative means inward. The terminal totals are simultaneous signed sums,
   **not** a design force for the concrete ring beam; inspect individual loads.
-  `Dx_mm`, `Dy_mm`, `Dz_mm` record support movements. The two
+  `support_kind` distinguishes `rafter_connection`, `purlin_bearing`,
+  `purlin_horizontal_guide` (internal joint, no direct vertical reaction), and
+  `saddle_bearing` (vertical reaction delivered to the wall under the saddle).
+  `Dx_mm`, `Dy_mm`, `Dz_mm` record movements of the supported timber node:
+  at a wall plate these are **rafter connection slip**, not ring-beam movement.
+  The rigid wall plate/ring beam never moves. The two
   `horizontal_*_stiffness_kn_mm` columns contain the spring stiffness, `rigid`
   for an ideal fixed direction, or zero for a free direction. Spring force
   delivered to a support satisfies `F = k × displacement` with these units.
   The terminal also lists the ring-beam horizontal load at every rafter-aligned
-  wall-plate bearing: signed outward `Hout` in kN for symmetric SLS, the maximum
+  wall-plate connection: signed outward `Hout` in kN for symmetric SLS, the maximum
   outward SLS/ULS values with their combinations, and signed global-X force
-  for the governing outward ULS case. These are **support reactions after
-  redistribution through the wall plate**, not isolated rafter/bracket forces.
-  Rafters without a wall-plate seat, and seats beyond the supporting wall, are
-  explicitly labelled rather than given invented zero reactions. Per-rafter
-  maxima must not be added as simultaneous forces; wall-end bearings without
-  a rafter are retained in the existing totals and support CSV.
+  for the governing outward ULS case. These are **direct rafter-connection
+  reactions delivered to the rigid structure**, also used by the PNG arrows.
+  Rafters without a wall-plate seat are explicitly labelled rather than given
+  invented zero reactions. Existing seats on wall-plate overhangs also attach
+  to the idealized rigid structure. Per-rafter maxima must not be added as
+  simultaneous forces; the totals sum all direct rafter connections.
 - `roof_frame_3d_free_basis.json`: inputs, assumptions, load combinations and
   library versions and independent global force/moment equilibrium residuals.
+- `roof_frame_3d_free_saddle_contacts.csv`: active/open contact, tributary area,
+  estimated stiffness, compression force, pressure and relative gap for each
+  contact station/combination. Compression and opening are positive; negative
+  gap denotes elastic contact compression. Not a bearing-capacity check.
+- `roof_frame_3d_free_saddle_bolts.csv`: per-bolt face slips, shear stiffness,
+  X/Y forces delivered to the purlin, resultant shear, face separation and
+  ideal hold-down tension, for all combinations. **No bolt capacity check.**
 - `roof_frame_3d_free_model.png`: original geometry faint, SLS deformed geometry
   amplified 20 times, and support positions. Displacement is absolute, including
   support/member movement; the image is not the chord-relative check.
@@ -146,14 +174,12 @@ positive pushes outward, negative points inward. Arrow length is constant,
 showing direction only, not force magnitude. The along-house Fx component is
 not represented by these arrows.
 
-To include *every* actual connection, including seats beyond a wall bearing,
-image forces are taken from the numerical seat arm's lower global end force,
-reversed to give the force delivered **from the rafter to the wall plate**.
-These differ from the terminal's **ring-beam support reactions at rafter
-positions**, because the wall plate redistributes force between bearings.
-`wall_plate_connection_rows` returns these values and the exact connection
-positions. Regression tests check that each wall plate's summed horizontal
-seat forces match its summed ring-beam bearing forces for every load case.
+Image forces are the direct rafter-node support reactions, reversed to give
+the force delivered **to the rigid wall plate/ring beam**. They are identical
+to the terminal/support CSV for the same load combination, point by point.
+`wall_plate_connection_rows` returns these values and the rafter-centreline
+connection positions. Regression tests also check `F = k × slip` and that
+very soft connections have correspondingly tiny horizontal reactions.
 
 Top-view overlaps are diagrammatic: these are projected member-width strips,
 not a hidden-surface rendering or cutting drawing. Numerical offset arms are
@@ -199,8 +225,10 @@ outside this model. A PASS is only a pass of the indicated chord criterion.
 
 ## Purlin chord-relative displacement
 
-Each of the six independent purlin pieces uses the **displaced centre-line
-points at its two actual wall-bearing nodes** as its chord endpoints. The
+Each of the six separately modelled purlin pieces uses the **displaced centre-line
+points above its two wall centres** as its chord endpoints. At internal joints
+these are horizontally guided nodes vertically supported through a saddle,
+not vertically fixed purlin nodes. The
 maximum 3D perpendicular distance is calculated by the same method as for
 rafters. It includes both vertical and lateral bending, while removing the
 straight-line movement of the bearings. `L` is the original bearing-to-bearing
@@ -250,29 +278,52 @@ This first version does not include trimmers, chimney bearing/loads or cut-outs.
 
 ## Seat and support assumptions (important)
 
-Rafters and longitudinal beams keep their different physical centre-line
-elevations. A short, high-stiffness, massless numerical offset arm connects
-each seat. It carries three translations, transfers the eccentric force to
-the longitudinal beam, and releases rotations about global X/Y at the rafter.
+Rafters and purlins keep their different physical centre-line elevations.
+A short, high-stiffness, massless numerical offset arm connects each purlin
+seat. It carries three translations, transfers the eccentric force to
+the purlin, and releases rotations about global X/Y at the rafter.
 It therefore does **not** weld the continuous rafter's roof-plane bending to
 the purlin. Rotation about global Z (seat yaw) is retained, representing an
 assumed seat/bracket restraint. This is a modelling assumption, not an assessed
 connection. The arms have finite stiffness (1000× reference wood stiffness),
 with a convergence regression test. They are not additional physical timbers.
 
-Wall plates have rigid vertical supports and independent horizontal X/Y springs
-at the existing analysis nodes within the supporting wall extent; no support
-is added beyond the wall, on their overhangs. Every spring uses the same
-`Settings.horizontal_stiffness_kn_mm` parameter. Wall-plate roll about X remains
-restrained. The high-stiffness rafter seat arms themselves are unchanged: the
-bearing springs represent the combined flexibility of the attachment and its
-supporting structure, rather than literal brackets in the IFC.
+The wall plate/ring beam is **one exactly rigid, immovable reference structure**.
+Its geometry is retained for drawings, but no elastic wall-plate members or
+wall-plate offset arms are added to the FE model. Each rafter centreline is
+supported directly where it crosses the matching wall-plate line. This includes
+existing overhang seats: their supporting outline is idealized as rigid too.
+Vertical translation is fixed, global X/Y translation has independent springs,
+global X/Y rotations are free, and the existing global-Z seat-yaw restraint
+is retained. Horizontal node motion is attachment slip relative to the stationary
+structure, not movement of the structure. No hidden bending or torsional path
+through a separate elastic wall plate bypasses those horizontal springs.
 
-The spring locations are **analysis points, not actual anchor spacing**. They
-include rafter-seat locations and wall-extent endpoints. Consequently, the
-parameter is per support node/direction, not a total ring-beam stiffness; adding
-support nodes would add stiffness. These independent ground springs do not
-model the coupling between adjacent anchors through a real ring beam.
+Only rafter-to-wall-plate/ring-beam connections use
+`Settings.horizontal_stiffness_kn_mm`, in kN/mm **per connection and direction**,
+not a total ring-beam stiffness. It affects both global X and Y at those
+connections, not the purlin bearings, purlin offset arms, ridge joint or collar
+ties. `rigid` fixes the connection translations directly. Very small positive
+values approach a sliding connection; the current interface accepts only
+positive stiffness or `rigid`, not zero. The model does not design the concrete
+ring beam, individual brackets or anchors.
+
+`DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM` (or
+`Settings.dormer_horizontal_stiffness_kn_mm`) overrides **only** connections to
+`dormer_wall_plate`. It accepts a positive value in kN/mm, `None` for rigid
+connections, or `"inherit"` to use the general stiffness. Inheritance preserves
+the previous shared-stiffness behaviour and makes changes to the general
+setting apply to the dormer too. The script constant sets the CLI/API default.
+The override affects both global X and Y at each dormer seat. Normal-roof,
+house-cut and main garden-roof seats retain the general setting. Purlin bearings,
+purlin/rafter offset arms and ridge joints are unchanged.
+
+CLI equivalent: `--dormer-horizontal-stiffness 0.12`, `rigid`, or `inherit`.
+Terminal and top-view reports show both effective stiffnesses; the basis JSON
+also records the effective value for every wall plate. Support CSV stiffnesses
+are those actually applied at each node. Softening a connection is a sensitivity
+experiment, not proof that a buildable sliding detail has sufficient capacity
+or travel; check redistributed forces and displacements elsewhere too.
 
 Each purlin piece has **two** wall bearings at the **wall centre lines**.
 The middle span is therefore `wall3_x - wall2_x` (currently 4.72 m), rather than
@@ -280,25 +331,149 @@ the clear opening or the distance between half-wall bearing centres. Outer
 bearings are at `BWT/2` and `HOUSE_WIDTH - BWT/2`. This is the analysis-span
 convention; it does not enlarge the physical bearing area used in other checks.
 Adjacent pieces are not spliced together: each has its own nodes, including at
-coincident endpoints/bearings on a shared wall. They do not share translations
-or rotations and cannot accidentally become a continuous purlin when their
-sections have the same height.
-Their Z translation and roll about X are fixed, X has the shared spring, and
-Y has the shared spring by default (`--purlin-lateral restrained`).
+coincident endpoints/bearings on a shared wall. They do not share rotations or
+accidentally become a continuous purlin. With saddles, their vertical
+translations interact through the common saddle and bearing contact.
+Their X translation and roll about X are fixed, and Y translation is fixed
+by default (`--purlin-lateral restrained`), with no horizontal bearing springs.
 `--purlin-lateral free` deliberately leaves purlin Y free while retaining
-the X springs and both directions of the wall-plate springs. Bending rotations
+rigid X and the independent wall-plate connection springs. Direct vertical
+support remains at outer walls; internal vertical support is through saddles
+(or directly fixed with `--no-saddles`). Bending rotations
 are free. Thus "laterally free" means free horizontal Y translation, **not**
 freedom to roll/twist. `--horizontal-stiffness rigid` (or `None` in Settings)
-restores the previous ideal fixed horizontal directions for comparison.
+makes general connections rigid; the dormer follows unless explicitly
+overridden. Use `--dormer-horizontal-stiffness rigid` to fix the dormer separately.
 Actual rolling restraint, brackets and anchorage need verification.
 
-### Calibration for the purlin/rafter deflection experiment
+### Purlin saddles (sedla)
 
-`HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12` in `roof_frame_3d.py` is the single
-default stiffness (120,000 N/m). It was tuned against the **SLS symmetric total
+`add_purlin_saddles()` asserts equal width and height for all six purlin pieces.
+It adds four longitudinal 1.5 m beams, centred at wall2/wall3 on the street and
+garden purlin lines. Each has the adjacent purlin's section and grade, and its
+top touches the purlin underside. IFC geometry is not modified. Saddle bending
+uses the normal along-grain timber modulus; self-weight is included once.
+
+Saddles are vertically pinned at the wall centre, with free bending rotation.
+Distributed **compression-only vertical** springs connect the stacked timbers.
+Contact can open and reclose. Internal purlin vertical support is released so
+the load cannot bypass these springs. The existing purlin horizontal/roll
+restraints are retained; out-of-plane saddle DOFs are restrained but
+vertical contacts do not add purlin lateral restraint. Finite wall-bearing
+width, wall rotational compliance, friction, preloads and glued/full-composite
+action are **not** modelled. Trial bolt shear/hold-down is described below;
+`--no-saddle-bolts` retains the original bearing-only experiment. Neither model
+is a complete representation or design of the reference connection.
+
+The starting elastic stiffness for tributary contact area `A` is
+
+```
+k [N/m] = factor × A / (h_purlin / E90,purlin + h_saddle / E90,saddle)
+```
+
+This treats the two nominal full timber depths as compression layers in
+series. `TIMBER_E90_MEAN_PA` is 330 MPa for C22 and 370 MPa for C24.
+For two 240 mm deep C22 timbers and a 240 × 100 mm contact area it gives
+16.5 kN/mm. Each mesh cell has its own area/stiffness; contact areas sum to
+the actual saddle footprint, including the two half contributions at a joint.
+**This is an estimate, not a calibrated or code-prescribed joint stiffness.**
+Stress spreading, actual contact/gaps, moisture, creep and fastening can change
+it. [Bearing-stiffness research](https://doi.org/10.1016/j.engstruct.2015.07.032)
+supports using geometry and perpendicular-grain properties but does not
+validate this simplified formula for our saddle. EN338 property values are
+tabulated in the academic chapter
+[Timber and wood-based products](https://napier-repository.worktribe.com/OutputFile/2762670).
+
+`SADDLE_CONTACT_STIFFNESS_FACTOR` / `--saddle-contact-factor` is only a
+sensitivity multiplier, separate from rafter horizontal support stiffness.
+Use softer/stiffer contact variants and a finer `--saddle-contact-spacing`
+to assess sensitivity, not to tune a desired result. Realistic calibration
+requires a specified joint detail and suitable test/manufacturer data or a
+validated bearing model; bolt stiffness needs its own fastening specification.
+
+The pinned PyNite 3.2 two-node compression-only solver deactivates springs but
+does not reactivate them after redistribution. `solve_saddle_contact()` uses
+its stiffness assembly, solve and reaction recovery with an active-set
+update that allows both opening and reclosing. Trial bolt face-slip stiffness
+and deadband offsets are added locally; fixed-DOF bolt reactions are recovered
+separately. Contact complementarity and
+independent global force/moment equilibrium are checked after convergence.
+This remains first-order analysis, not a second-order/nonlinear timber model.
+Saddles are blue outlines in the plan image; their strength is not assessed.
+
+### Simplified trial bolting
+
+`SADDLE_BOLT_DIAMETER_MM = 12` and `SADDLE_BOLTS_PER_PURLIN_END = 2`
+are the only fastening-size inputs. Positions are equally spaced within each
+purlin end's overlap: currently 0.25 and 0.50 m from the joint on each side.
+There are four bolts per sedlo and sixteen in the roof. These are illustrative
+trial dimensions/locations, **not a verified fastening specification**.
+Programmatic bearing-only layouts remain possible with `SaddleParameters()`;
+use `SaddleParameters(bolts=SaddleBoltParameters())` to enable the trial links.
+
+The approximate EC5 shear slip modulus per bolt and **one shear plane** is
+
+```
+Kser [N/mm] = rho_mean^1.5 × diameter_mm / 23
+Ku = (2/3) × Kser  # ULS combinations
+```
+
+Mean densities from timber grade are C22=410 and C24=420 kg/m³, independently
+of the deliberately conservative 450 kg/m³ self-weight setting. Dissimilar
+timbers use the geometric mean. A 12 mm bolt joining two C24 timbers gives
+4.491 kN/mm in SLS and 2.994 kN/mm in ULS. See
+[bolted-connection stiffness research](https://www.sciencedirect.com/science/article/pii/S0950061821022510)
+for these EC5 approximations, and the timber-property chapter linked above.
+
+Two directional shear springs act at the **touching faces**, not the neutral
+axes. For longitudinal X slip, the relative displacement is
+`DX_p - DX_s - h_p/2 × RY_p - h_s/2 × RY_s`; the Y connector similarly
+includes roll offsets. Their generalised forces supply the corresponding
+face-offset moments, giving partial composite action without rigid bonding.
+Rigid-body translation/rotation creates no false connection strain.
+
+`SADDLE_BOLT_SLIP_GAP_MM` / `--saddle-bolt-slip-gap` selects an assumed
+relative-slip deadband (default zero = close-fitting trial). A 1 mm trial
+means no shear force until relative slip exceeds ±1 mm in that direction.
+It is **not literal bolt-hole diameter clearance**, nor an exact circular-hole
+model: X/Y deadbands are independent. Engagement and force reversal are solved
+separately for every load combination, without load superposition.
+
+Axial clamping is **not** inferred from shear stiffness. Default hold-down
+`free` permits contact opening; `--saddle-bolt-hold-down ideal` adds tension-only
+links at the bolt stations with a 1000 kN/mm numerical penalty, an approximate
+rigid-limit comparison, **not an estimate of actual axial bolt/washer stiffness**.
+The hold-down links never replace compression contact. Contact load minus
+hold-down tension is used when reporting the purlin's net vertical bearing load.
+
+Saddle wall supports retain their existing DX/DY/DZ/RX/RZ restraints, with RY
+free for vertical-plane bending. RZ was only rigid-body stabilisation in the
+bearing-only model; with lateral bolt shear it is an **assumed lateral
+orientation restraint**, not a verified wall/anchorage detail.
+Consequently bolts can transfer **Y load into the saddle wall support even
+with `--purlin-lateral free`**: that option now frees only the direct purlin Y
+guides, not the bolted load path. Use `--no-saddle-bolts` for the previous
+unbolted comparison. Bolt dots and the gap/hold-down assumptions appear in PNGs;
+CSV/JSON and terminal output record the model and bolt-force results.
+
+No bolt yielding/capacity, washer bearing, withdrawal, group effects, minimum
+spacing/end-distance, friction, preload, fastener creep or local timber failure
+is checked. The purpose is sensitivity of roof forces/deflections to a plausible
+elastic connection, not approval to construct the trial fastening.
+
+### Historical calibration for the purlin/rafter deflection experiment
+
+The values below were obtained with the **previous elastic wall-plate model**.
+They are historical comparison data, not results or a calibration for the
+current rigid-structure/direct-connection model. The script preserves the user's
+chosen stiffness rather than automatically retuning it after this change.
+
+The previous model used a common default stiffness of
+`HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12` kN/mm (120,000 N/m).
+It was tuned against the **SLS symmetric total
 vertical load delivered by `street_purlin_middle` to its two wall bearings**,
-including its self-weight. With the current IFC C22 240×320 mm middle purlin,
-4.72 m bearing span, 135 kg/m² roof layers and 1.5 kN/m² roof snow, it gives
+including its self-weight. With the then-current C22 240×320 mm middle purlin,
+4.72 m bearing span, 135 kg/m² roof layers and 1.5 kN/m² roof snow, it gave
 **39.064 kN**, close to the requested approximately 39 kN standalone reference.
 It does not fit every purlin or snow pattern, nor reproduce a uniform load.
 It is not automatically retuned when geometry or loads change.
@@ -344,7 +519,9 @@ an automatic layer calculation. **The flat ceiling and its supporting structure
 are not loaded or designed here.** Do not include its OSB/SDK/services mass a
 second time. Comparisons against the standalone script must use a matched load
 basis. Timber self-weight is added once to actual members, never to numerical
-seat arms. Defaults are 450 kg/m³ and g=10 m/s².
+seat arms. The rigid wall plate/ring beam's own weight is not a roof-frame load:
+it goes directly to the supporting structure and does not load the rafters.
+Defaults are 450 kg/m³ and g=10 m/s².
 
 Roof surface patches distribute loads through neighbour midpoint tributary
 widths, bounded at roof edges and transitions: cut/normal street; garden upper;
@@ -365,7 +542,9 @@ behaviour requires a separately validated extension. It does not perform
 EC5 strength/combined-stress/buckling checks, notch or
 connection design, or concrete/anchor checks. Seats/bearings are bilateral:
 uplift requires anchorage and cannot be carried by gravity contact alone.
-Any predicted uplift is flagged. Support reactions depend on these assumptions;
+The new saddle contacts are compression-only, unlike the existing bilateral
+rafter seats/direct outer bearings. Any predicted support uplift is flagged.
+Support reactions depend on these assumptions;
 a structural engineer must validate them before relying on the forces.
 
 ## Code locations
@@ -375,6 +554,12 @@ a structural engineer must validate them before relying on the forces.
   dimensions, placement and board grouping; `SHORT_GARDEN_RAFTER_CUT_HEIGHT_M`
   controls the existing shortened-rafter cut separately.
 - `Timber.properties`, `orient_section`: section stiffness and orientation.
+- `SADDLE_*`, `SaddleParameters`, `add_purlin_saddles`,
+  `saddle_contact_stiffness`, `solve_saddle_contact`: saddle geometry and elastic
+  bearing-contact estimate/active-set solve; `saddle_contact_rows`: exports.
+- `SaddleBoltParameters`, `saddle_bolt_stiffness`, `bolt_face_terms`,
+  `bolt_shear_assembly`, `saddle_bolt_rows`: trial bolt slip, face offsets,
+  independent hold-down assumption and per-bolt exports.
 - `build_roof_model`: connectivity, seat releases, supports, tributary loads
   and load combinations.
 - `solve_roof_model`, `check_equilibrium`: solver and independent balance check.

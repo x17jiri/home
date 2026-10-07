@@ -111,13 +111,14 @@ SHORT_RAFTER_CUT_OVERLENGTH = 0.10
 ROOF_WINDOW_TRIMMER_OVERLAP = 0.001
 ROOF_WINDOW_OUTLINE_Y_MIN_INSET = 0.10
 ROOF_BATTING_CENTER_OFFSET = RAFTER_Z_OFFSET + RAFTER_SIZE[1] / 2
-ROOF_BATTING_THICKNESS = RAFTER_SIZE[1] - 0.06
+# Keep the symbols centred, with clearance from both layer boundaries.
+ROOF_BATTING_SIZE_FACTOR = 0.70
+ROOF_BATTING_THICKNESS = RAFTER_SIZE[1] * ROOF_BATTING_SIZE_FACTOR
 ROOF_BATTING_END_INSET = 0.03
 VAPOUR_BARRIER_THICKNESS = 0.015
 THERMAL_INSULATION_UNDER_RAFTERS = 0.14
-UNDER_RAFTER_BATTING_THICKNESS = max(
-	0,
-	THERMAL_INSULATION_UNDER_RAFTERS - 0.02,
+UNDER_RAFTER_BATTING_THICKNESS = (
+	THERMAL_INSULATION_UNDER_RAFTERS * ROOF_BATTING_SIZE_FACTOR
 )
 UNDER_RAFTER_BATTING_END_INSET = 0.015
 INSTALLATION_SPACE_THICKNESS = 0.040
@@ -156,7 +157,7 @@ RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 1.073 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.24
-VAZNICE_EXTRA_HEIGHT = 0.08
+VAZNICE_EXTRA_HEIGHT = 0.00
 VAZNICE_BASE = 0.24
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
 PURLIN_DRAWING_PATTERN = "brick"
@@ -251,17 +252,16 @@ GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.75
-HOLE_HEIGHT = 0.25
-ABOVE_HOLE = 0.25
+UNDER_HOLE = 2.85
+HOLE_HEIGHT = 0.20
+ABOVE_HOLE = 0.20
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.2)
-# Retained reference dimensions for the existing ceiling/insulation levels,
-# shortened-rafter cut and the older 2D comparison model. No collar-tie beams
-# are generated. Ceiling support must be designed separately.
+# Reference dimensions for the older 2D collar-tie comparison model only.
+# No collar-tie beams are generated, and these do not set roof-layer heights.
+# Ceiling support must be designed separately.
 COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
-COLLAR_TIE_BOTTOM_HEIGHT = COLLAR_TIE_TOP_HEIGHT - COLLAR_TIE_SIZE[1]
 NADEZDIVKA = 1.375
 
 house = House(
@@ -1396,6 +1396,16 @@ PURLIN_X_SEGMENTS = (
 	),
 	("right", MIDDLE_PURLIN_X_MAX, HOUSE_WIDTH + 0.2, VAZNICE_HEIGHT),
 )
+PURLIN_BOTTOM_Z = PURLIN_TOP_Z - VAZNICE_HEIGHT
+
+
+def purlin_bottom_z_at(x):
+	"""Actual purlin underside, including the deeper middle segment."""
+	return PURLIN_BOTTOM_Z - (
+		VAZNICE_EXTRA_HEIGHT
+		if MIDDLE_PURLIN_X_MIN <= x <= MIDDLE_PURLIN_X_MAX
+		else 0
+	)
 
 
 def add_purlin_segments(name, y):
@@ -1824,7 +1834,7 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
 
 # The under-rafter insulation follows each occupied roof slope only as far as
-# the former collar-tie top level. The vapour barrier and plasterboard transition
+# the purlin underside. The vapour barrier and plasterboard transition
 # onto the horizontal ceiling, whose exceptional heights are described
 # relative to the upper-storey floor.
 SLOPED_INNER_LAYER_LAYOUT = {
@@ -1841,8 +1851,10 @@ SLOPED_INNER_LAYER_LAYOUT = {
 FLAT_CEILING_LAYER_HEIGHTS = {
 	# Values are (bottom, top), measured from the upper-storey floor.
 	"Vapour barrier": (
-		COLLAR_TIE_BOTTOM_HEIGHT - VAPOUR_BARRIER_THICKNESS,
-		COLLAR_TIE_BOTTOM_HEIGHT,
+		PURLIN_BOTTOM_Z - UPPER_FLOOR_START
+		- THERMAL_INSULATION_UNDER_RAFTERS - VAPOUR_BARRIER_THICKNESS,
+		PURLIN_BOTTOM_Z - UPPER_FLOOR_START
+		- THERMAL_INSULATION_UNDER_RAFTERS,
 	),
 	# The horizontal plasterboard remains on its lower suspended-ceiling plane;
 	# the space between it and the vapour barrier is the ceiling/service void.
@@ -1973,9 +1985,20 @@ def add_continuous_roof_layers(
 
 	def inner_outline(layer_name):
 		if layer_name == "Thermal insulation under rafters":
-			# Start with the full source slope; the horizontal collar-tie plane
-			# below trims its upper end without requiring a slope-local endpoint.
 			layer_y_min, layer_y_max = y_min, y_max
+			if under_rafter_top_z is not None:
+				bottom, thickness = inner_layout[layer_name]
+				crossings = [
+					local_y_at_global_z(plane, under_rafter_top_z, local_z=z)
+					for z in (bottom, bottom + thickness)
+				]
+				# Leave only a short source overlap above the cut. The clipping
+				# helper keeps the centroid side; a long ridge-side overshoot
+				# previously made the cut-street layer keep the wrong half.
+				if plane.y_axis[2] < 0:
+					layer_y_min = max(layer_y_min, min(crossings) - 0.10)
+				else:
+					layer_y_max = min(layer_y_max, max(crossings) + 0.10)
 		elif inner_y_limits is None:
 			layer_y_min, layer_y_max = y_min, y_max
 		else:
@@ -2125,17 +2148,6 @@ def local_y_at_global_y(plane, global_y, *, local_z=0):
 	) / plane.y_axis[1]
 
 
-def collar_tie_top_height_at(x):
-	"""Retained ceiling/roof transition level above the upper-storey floor.
-
-	The reference name is kept for existing callers; no ties are generated.
-	"""
-	height = COLLAR_TIE_TOP_HEIGHT
-	if MIDDLE_PURLIN_X_MIN <= x <= MIDDLE_PURLIN_X_MAX:
-		height -= VAZNICE_EXTRA_HEIGHT
-	return height
-
-
 def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 	row = 1
 	y = y_min + TILE_BATTEN_SPACING / 2
@@ -2256,7 +2268,7 @@ def flat_inner_y_limits(left_boundaries, right_boundaries):
 	}
 
 
-normal_collar_tie_top_z = UPPER_FLOOR_START + COLLAR_TIE_TOP_HEIGHT
+normal_under_rafter_top_z = PURLIN_BOTTOM_Z
 # Leave a short source overshoot beyond the dormer wall so its vertical cut
 # defines the exact end.  The previous full-eave overshoot put the source
 # centroid outside that cut, causing the clipping helper to retain the eave
@@ -2281,7 +2293,7 @@ add_continuous_roof_layers(
 		cut_street_inner_boundaries,
 		BWT + GYM_DEPTH + 0.25,
 	),
-	under_rafter_top_z=normal_collar_tie_top_z,
+	under_rafter_top_z=normal_under_rafter_top_z,
 )
 for part_name, (x_min, x_max), outer_x_range in zip(
 	(
@@ -2300,7 +2312,7 @@ for part_name, (x_min, x_max), outer_x_range in zip(
 			street_roof, street_inner_boundaries, 0.25
 		),
 		include_under_rafter_insulation=part_name != "Street segment 2",
-		under_rafter_top_z=normal_collar_tie_top_z,
+		under_rafter_top_z=normal_under_rafter_top_z,
 		include_vapour_barrier=part_name != "Street segment 2",
 	)
 add_continuous_roof_layers(
@@ -2311,7 +2323,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
-	under_rafter_top_z=normal_collar_tie_top_z,
+	under_rafter_top_z=normal_under_rafter_top_z,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 1", *roof_under_rafter_x_ranges[1],
@@ -2321,7 +2333,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
-	under_rafter_top_z=normal_collar_tie_top_z,
+	under_rafter_top_z=normal_under_rafter_top_z,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 2 above dormer",
@@ -2350,7 +2362,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
-	under_rafter_top_z=normal_collar_tie_top_z,
+	under_rafter_top_z=normal_under_rafter_top_z,
 )
 for (
 	part_name,
@@ -2397,7 +2409,7 @@ for (
 	)
 
 # Segment 2 crosses the taller middle purlin.  Its under-rafter insulation and
-# vapour barrier retain their two existing elevations while the
+# vapour barrier follow its underside while the
 # plasterboard remains on one continuous plane below them.
 for (
 	part_name,
@@ -2432,10 +2444,7 @@ for (
 		dormer_inner_boundaries,
 	),
 ):
-	under_rafter_top_z = (
-		UPPER_FLOOR_START
-		+ collar_tie_top_height_at((x_min + x_max) / 2)
-	)
+	under_rafter_top_z = purlin_bottom_z_at((x_min + x_max) / 2)
 	add_continuous_roof_layers(
 		street_roof,
 		f"Street segment 2 under-rafter {part_name}",
@@ -2669,24 +2678,20 @@ for i, (
 		rafter_y_min = -2
 		rafter_extra_cuts = ()
 		if shorten_garden_side:
-			collar_tie_bottom_z = (
-				UPPER_FLOOR_START
-				+ collar_tie_top_height_at(rafter_x)
-				- COLLAR_TIE_SIZE[1]
-			)
+			short_rafter_cut_z = purlin_bottom_z_at(rafter_x)
 			# Carry the uncut rafter completely past the horizontal cutting
 			# plane.  Using its upper roof-local face here ensures the plane,
 			# rather than the source beam's square end, defines the whole end.
 			rafter_y_max = local_y_at_global_z(
 				garden_roof,
-				collar_tie_bottom_z,
+				short_rafter_cut_z,
 				local_z=RAFTER_Z_OFFSET + RAFTER_SIZE[1],
 			) + SHORT_RAFTER_CUT_OVERLENGTH
 			rafter_extra_cuts = (
 				(
-					(0, 0, collar_tie_bottom_z),
-					(1, 0, collar_tie_bottom_z),
-					(0, 1, collar_tie_bottom_z),
+					(0, 0, short_rafter_cut_z),
+					(1, 0, short_rafter_cut_z),
+					(0, 1, short_rafter_cut_z),
 				),
 			)
 		else:
@@ -3659,9 +3664,7 @@ if "aa" in sys.argv:
 		)
 
 	if THERMAL_INSULATION_UNDER_RAFTERS > 0:
-		under_rafter_top_z = (
-			UPPER_FLOOR_START + collar_tie_top_height_at(aa_x)
-		)
+		under_rafter_top_z = purlin_bottom_z_at(aa_x)
 		under_rafter_street_top = roof_batting_local_point(
 			street_roof,
 			x=aa_x,
@@ -3738,33 +3741,35 @@ if "aa" in sys.argv:
 				),
 			)
 
-		collar_tie_center_z = (
-			under_rafter_top_z - COLLAR_TIE_SIZE[1] / 2
+		# Keep the symbol centred in the insulation between the purlin underside
+		# and the vapour barrier, with the same clearance as the sloped symbols.
+		horizontal_batting_center_z = (
+			under_rafter_top_z - THERMAL_INSULATION_UNDER_RAFTERS / 2
 		)
-		collar_tie_batting_start = roof_batting_local_point(
+		horizontal_batting_start = roof_batting_local_point(
 			street_roof,
 			x=aa_x,
 			local_y=local_y_at_global_z(
 				street_roof,
-				collar_tie_center_z,
+				horizontal_batting_center_z,
 				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 			),
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
-		collar_tie_batting_end = roof_batting_local_point(
+		horizontal_batting_end = roof_batting_local_point(
 			dormer_roof,
 			x=aa_x,
 			local_y=local_y_at_global_z(
 				dormer_roof,
-				collar_tie_center_z,
+				horizontal_batting_center_z,
 				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 			),
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
 		drawing1.add_batting(
-			collar_tie_batting_start,
-			collar_tie_batting_end,
-			thickness=THERMAL_INSULATION_UNDER_RAFTERS,
+			horizontal_batting_start,
+			horizontal_batting_end,
+			thickness=UNDER_RAFTER_BATTING_THICKNESS,
 			name="AA horizontal ceiling insulation batting",
 			classes="roof-batting horizontal-ceiling-insulation-batting",
 		)
