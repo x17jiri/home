@@ -29,6 +29,8 @@ from roof_frame_3d import (
     saddle_contact_stiffness,
     saddle_contact_rows,
     add_collar_ties,
+    add_purlin_spacers,
+    spacer_rows,
     build_roof_model,
     check_equilibrium,
     chord_result_columns,
@@ -1021,6 +1023,9 @@ class SpringSupportTests(unittest.TestCase):
             self.assertTrue(basis["saddles"]["bolt_model"]["enabled"])
             self.assertEqual(basis["saddles"]["bolt_model"]["count"], 16)
             self.assertEqual(basis["saddles"]["parameters"]["bolts"]["count_per_end"], 2)
+            self.assertTrue(basis["spacers"]["enabled"])
+            self.assertEqual(basis["spacers"]["count"], 16)
+            self.assertTrue(Path(prefix + "_restrained_spacers.csv").exists())
             self.assertTrue(Path(prefix + "_restrained_saddle_bolts.csv").exists())
             self.assertIn("NOT verified", output.getvalue())
             self.assertIn("vertical load to wall bearings", output.getvalue())
@@ -1771,6 +1776,153 @@ class SaddleBoltSolverTests(unittest.TestCase):
             figure = plot_plan_report(self.roof, rows, Path(directory) / "bolts.png")
             markers = [line.get_gid() for line in figure.axes[0].lines]
             self.assertTrue(all(b["bolt"] in markers for b in self.roof.saddle_bolts))
+
+
+class SpacerGeometryTests(unittest.TestCase):
+    def test_matches_ifc_dimensions_and_main_rafter_positions(self):
+        original = RoofLayout.from_house(HOUSE, beam_material="C24")
+        layout = add_purlin_spacers(original)
+        spacers = [b for b in layout.beams if b.category == "spacer"]
+        main = [b for b in original.beams if b.category == "rafter" and b.name.endswith("_street")]
+        data = HouseInputs(HOUSE)
+        self.assertEqual(len(spacers), len(main))
+        self.assertEqual(len(spacers), 16)
+        self.assertEqual([b.start[0] for b in spacers], [b.start[0] for b in main])
+        for beam in spacers:
+            self.assertEqual(
+                (beam.timber.width, beam.timber.height), data.get("PURLIN_SPACER_SIZE")
+            )
+            self.assertEqual(beam.timber.material, "C24")
+            self.assertAlmostEqual(beam.length, data.get("PURLIN_SPACER_LENGTH"))
+            self.assertAlmostEqual(beam.start[2] + beam.timber.height / 2, data.get("PURLIN_TOP_Z"))
+        with self.assertRaisesRegex(ValueError, "already present"):
+            add_purlin_spacers(layout)
+
+
+@unittest.skipUnless(HAS_PYNITE, "optional PyNite dependency")
+class SpacerSolverTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.layout = add_purlin_spacers(RoofLayout.from_house(HOUSE))
+        cls.roof = build_roof_model(
+            add_purlin_saddles(cls.layout, SaddleParameters(bolts=SaddleBoltParameters())),
+            Settings(purlin_lateral_restraint=False),
+        )
+        cls.residuals = solve_roof_model(cls.roof)
+
+    def test_physical_length_stiffness_weight_and_purlin_attachments(self):
+        roof = build_roof_model(self.layout)
+        by_name = {b.name: b for b in self.layout.beams}
+        expected_weight = 0
+        for link in roof.spacer_links:
+            beam = by_name[link["spacer"]]
+            spring = roof.model.springs[beam.name]
+            self.assertTrue(spring.comp_only)
+            self.assertAlmostEqual(spring.ks, 10e9 * 0.08 * 0.20 / beam.length)
+            self.assertNotAlmostEqual(spring.L(), beam.length)
+            for endpoint, purlin_name in zip(
+                (spring.i_node, spring.j_node), beam.supported_purlins
+            ):
+                purlin = by_name[purlin_name]
+                self.assertAlmostEqual(endpoint.X, beam.start[0])
+                self.assertAlmostEqual(endpoint.Y, purlin.start[1])
+                self.assertAlmostEqual(endpoint.Z, purlin.start[2])
+                self.assertFalse(endpoint.support_DZ)
+            expected_weight += (
+                roof.settings.timber_density * roof.settings.gravity * 0.08 * 0.20 * beam.length
+            )
+        self.assertAlmostEqual(
+            -sum(force[2] for _, case, force in roof.nodal_loads if case == "G"), expected_weight
+        )
+
+    def test_free_purlin_model_equilibrium_and_compression_only_forces(self):
+        self.assertLess(max(self.residuals.values()), 1e-5)
+        rows = spacer_rows(self.roof)
+        self.assertEqual(len(rows), 16 * len(self.roof.model.load_combos))
+        for row in rows:
+            self.assertGreaterEqual(row["compression_kN"], 0)
+            if row["active"]:
+                self.assertAlmostEqual(
+                    row["compression_kN"], -row["stiffness_N_m"] * row["opening_mm"] / 1e6, places=7
+                )
+            else:
+                self.assertEqual(row["compression_kN"], 0)
+                self.assertGreaterEqual(row["opening_mm"], -1e-8)
+        for row in member_rows(self.roof):
+            if row["category"] == "spacer":
+                self.assertLessEqual(row["N_min_kN"], 1e-8)
+                self.assertEqual(row["chord_L300_status"], "")
+
+    def test_axial_opening_and_closing_match_hand_solution(self):
+        from Pynite import FEModel3D
+
+        # X and Y orientations catch inactive-spring displacement/force bugs
+        # in the pinned library; the active-set solver must use raw movement.
+        for direction, point in (("X", (2.0, 0.0, 0.0)), ("Y", (0.0, 2.0, 0.0))):
+            model = FEModel3D()
+            model.add_node("a", 0.0, 0.0, 0.0)
+            model.add_node("b", *point)
+            model.def_support("a", True, True, True, True, True, True)
+            model.def_support("b", direction != "X", direction != "Y", True, True, True, True)
+            model.def_support_spring("b", "D" + direction, 1000.0)
+            model.add_spring("spacer", "a", "b", 4000.0, comp_only=True)
+            for combo, force in (("close", -100.0), ("open", 100.0)):
+                model.add_node_load("b", "F" + direction, force, case=combo)
+                model.add_load_combo(combo, {combo: 1})
+            roof = SimpleNamespace(
+                model=model,
+                saddle_contacts=[],
+                saddle_bolts=[],
+                spacer_links=[dict(spacer="spacer", stiffness_N_m=4000.0)],
+            )
+            solve_saddle_contact(roof)
+            self.assertAlmostEqual(getattr(model.nodes["b"], "D" + direction)["close"], -0.02)
+            self.assertAlmostEqual(getattr(model.nodes["b"], "D" + direction)["open"], 0.1)
+            rows = {r["combination"]: r for r in spacer_rows(roof)}
+            self.assertAlmostEqual(rows["close"]["compression_kN"], 0.08)
+            self.assertEqual(rows["open"]["compression_kN"], 0)
+            self.assertFalse(rows["open"]["active"])
+
+    def test_report_and_plots_include_spacers_without_deflection_pass_claim(self):
+        with TemporaryDirectory() as directory:
+            rows = member_rows(self.roof)
+            figure = plot_plan_report(self.roof, rows, Path(directory) / "plan.png")
+            identifiers = {artist.get_gid() for artist in figure.axes[0].get_children()}
+            self.assertTrue(all(link["spacer"] in identifiers for link in self.roof.spacer_links))
+            self.assertTrue(
+                all(
+                    link["spacer"] + "_axial_force" in identifiers
+                    for link in self.roof.spacer_links
+                )
+            )
+            plot_model(self.roof, Path(directory) / "model.png")
+            output = StringIO()
+            with redirect_stdout(output):
+                print_summary(self.roof, rows, support_rows(self.roof), self.residuals)
+            self.assertIn("16 purlin spacers", output.getvalue())
+            self.assertIn("spacer_01", output.getvalue())
+
+    def test_no_spacers_cli_comparison_is_separate(self):
+        import json
+
+        with TemporaryDirectory() as directory:
+            prefix = str(Path(directory) / "comparison")
+            with redirect_stdout(StringIO()):
+                main(
+                    [
+                        "--house",
+                        str(HOUSE),
+                        "--output",
+                        prefix,
+                        "--no-plot",
+                        "--no-spacers",
+                        "--no-saddles",
+                    ]
+                )
+            basis = json.loads(Path(prefix + "_no_spacers_restrained_basis.json").read_text())
+            self.assertFalse(basis["spacers"]["enabled"])
+            self.assertEqual(basis["spacers"]["count"], 0)
+            self.assertFalse(Path(prefix + "_restrained_basis.json").exists())
 
 
 def isfinite_number(value):

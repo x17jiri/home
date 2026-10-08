@@ -26,7 +26,7 @@ purlin end (four per sedlo). Vertical hold-down is a separate assumption.
 Timber grades are selected independently by `--rafter-material` and
 `--beam-material`. Actual endpoint pairs are used for all rafters.
 Roof-layer mass and snow are configured in `Settings` in this script (currently
-150 kg/m² and 1.5 kN/m²). Collar ties are off by default.
+150 kg/m² and 3.0 kN/m²). Collar ties are off by default.
 Options:
 
 ```bash
@@ -37,6 +37,7 @@ python roof_frame_3d.py --horizontal-stiffness rigid --output roof_frame_3d_rigi
 python roof_frame_3d.py --purlin-lateral both
 python roof_frame_3d.py --rafter-material C24 --beam-material C22
 python roof_frame_3d.py --collar-ties
+python roof_frame_3d.py --no-spacers
 python roof_frame_3d.py --no-saddles --output /tmp/roof_without_saddles
 python roof_frame_3d.py --saddle-contact-factor 0.1 --output /tmp/roof_soft_contact
 python roof_frame_3d.py --saddle-contact-spacing 0.05 --output /tmp/roof_fine_contact
@@ -47,6 +48,32 @@ python roof_frame_3d.py --output /tmp/roof3d
 python roof_frame_3d.py --rafter-chord-fallback na
 python roof_frame_3d.py --plan-force-combination SLS_symmetric
 ```
+
+### Purlin spacers (rozpěry vaznic)
+
+Spacers are included by default at each **main** rafter station, using
+`PURLIN_SPACER_SIZE` from `house_ifc.py` (currently 80 × 200 mm). Offset
+dormer rafters do not add duplicate spacers. Physical length is the clear
+distance between the purlin faces (currently 1.906 m), with tops aligned.
+Their timber grade follows `--beam-material`.
+
+The simple model uses a compression-only axial link, stiffness
+`E_parallel × A / physical length`, attached at the two purlin centrelines.
+There is no tensile attachment: the link releases if the purlins move apart,
+and can re-engage if they move back together. The existing contact active-set
+solver handles this (a linear solve cannot handle unilateral links; see
+[PyNite analysis documentation](https://pynite.readthedocs.io/en/latest/analysis.html)).
+Self-weight is shared equally between the endpoints, included once.
+This assumes a snug fit and supported ends; it omits gaps/preload, eccentricity,
+end-bearing compliance, friction and transverse bending. **Compression strength,
+buckling, end bearing and fastening capacity are not checked.**
+
+Terminal output lists maximum compression for every spacer. `_spacers.csv`
+lists compression-positive forces, axial opening (negative when compressed),
+active state and stiffness for every combination. `_members.csv` uses the usual
+compression-negative sign. Teal outlines and force arrows identify spacers in
+the plan PNG; they are not classified as passing a deflection check.
+`--no-spacers` omits them and adds `_no_spacers` to filenames for comparison.
 
 For each variant it writes (the default produces `_restrained`; `_free` is
 only produced when explicitly requested):

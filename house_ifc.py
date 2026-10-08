@@ -160,6 +160,8 @@ VAZNICE_HEIGHT = 0.24
 VAZNICE_BASE = 0.24
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
 SEDLO_LENGTH = 1.5
+PURLIN_SPACER_SIZE = (0.08, 0.20)
+PURLIN_SPACER_LENGTH = 2 * (VAZNICE_DIST - VAZNICE_HALF_BASE)
 PURLIN_DRAWING_PATTERN = "brick"
 PURLIN_LEFT_DRAWING_COLOR = "#f4a261"
 PURLIN_MIDDLE_DRAWING_COLOR = "#e76f51"
@@ -252,9 +254,9 @@ GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 2.85
-HOLE_HEIGHT = 0.20
-ABOVE_HOLE = 0.20
+UNDER_HOLE = 3.25
+HOLE_HEIGHT = 0.0
+ABOVE_HOLE = 0.0
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.2)
@@ -1364,6 +1366,7 @@ PURLIN_X_SEGMENTS = (
 	("right", MIDDLE_PURLIN_X_MAX, HOUSE_WIDTH + 0.2, VAZNICE_HEIGHT),
 )
 PURLIN_BOTTOM_Z = PURLIN_TOP_Z - VAZNICE_HEIGHT
+SEDLO_BOTTOM_Z = PURLIN_BOTTOM_Z - VAZNICE_HEIGHT
 
 
 def purlin_bottom_z_at(x):
@@ -1848,10 +1851,8 @@ SLOPED_INNER_LAYER_LAYOUT = {
 FLAT_CEILING_LAYER_HEIGHTS = {
 	# Values are (bottom, top), measured from the upper-storey floor.
 	"Vapour barrier": (
-		PURLIN_BOTTOM_Z - UPPER_FLOOR_START
-		- THERMAL_INSULATION_UNDER_RAFTERS - VAPOUR_BARRIER_THICKNESS,
-		PURLIN_BOTTOM_Z - UPPER_FLOOR_START
-		- THERMAL_INSULATION_UNDER_RAFTERS,
+		SEDLO_BOTTOM_Z - UPPER_FLOOR_START - VAPOUR_BARRIER_THICKNESS,
+		SEDLO_BOTTOM_Z - UPPER_FLOOR_START,
 	),
 	# The horizontal plasterboard remains on its lower suspended-ceiling plane;
 	# the space between it and the vapour barrier is the ceiling/service void.
@@ -1923,6 +1924,25 @@ main_rafter_sections = [
 	if kind == "main"
 ]
 main_rafter_positions = [x for x, _ in main_rafter_sections]
+# One transverse spacer for each main-rafter line. Paired dormer rafters lie
+# outside the purlins and do not need a second spacer at their offset X.
+purlin_spacers = tuple(
+	upper.beam(
+		f"Purlin spacer {index}",
+		start=(
+			x, HALF_DEPTH - PURLIN_SPACER_LENGTH / 2,
+			PURLIN_TOP_Z - PURLIN_SPACER_SIZE[1] / 2,
+		),
+		end=(
+			x, HALF_DEPTH + PURLIN_SPACER_LENGTH / 2,
+			PURLIN_TOP_Z - PURLIN_SPACER_SIZE[1] / 2,
+		),
+		size=PURLIN_SPACER_SIZE,
+		material="Wood",
+		kind="BEAM",
+	)
+	for index, x in enumerate(main_rafter_positions, start=1)
+)
 dormer_rafter_positions = [
 	x for x, kind, _, _, _ in rafter_layout if kind == "dormer"
 ]
@@ -3170,6 +3190,7 @@ if "roof" in sys.argv:
 		*garden_purlins,
 		*street_sedla,
 		*garden_sedla,
+		*purlin_spacers,
 		beam3,
 		beam_cut_street,
 		beam4_a,
@@ -3367,6 +3388,14 @@ if "roof" in sys.argv:
 			(*street_sedla, *garden_sedla),
 			0,
 			{"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER - 1},
+		)
+	)
+	timber_schedule_rows.append(
+		(
+			"Rozpěry vaznic",
+			purlin_spacers,
+			0,
+			{"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER},
 		)
 	)
 	drawing1.add_timber_schedule(timber_schedule_rows, layout_scale=0.5)
@@ -3665,7 +3694,6 @@ if "aa" in sys.argv:
 		)
 
 	if THERMAL_INSULATION_UNDER_RAFTERS > 0:
-		under_rafter_top_z = purlin_bottom_z_at(aa_x)
 		under_rafter_street_top = roof_batting_point(
 			street_roof,
 			x=aa_x,
@@ -3734,30 +3762,16 @@ if "aa" in sys.argv:
 				),
 			)
 
-		# Keep the symbol centred in the insulation between the purlin underside
-		# and the vapour barrier, with the same clearance as the sloped symbols.
+		# The horizontal symbol spans purlin centre to purlin centre above their
+		# tops, retaining the same thickness clearance as the sloped symbols.
 		horizontal_batting_center_z = (
-			under_rafter_top_z - THERMAL_INSULATION_UNDER_RAFTERS / 2
+			PURLIN_TOP_Z + THERMAL_INSULATION_UNDER_RAFTERS / 2
 		)
-		horizontal_batting_start = roof_batting_local_point(
-			street_roof,
-			x=aa_x,
-			local_y=local_y_at_global_z(
-				street_roof,
-				horizontal_batting_center_z,
-				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
-			),
-			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		horizontal_batting_start = (
+			aa_x, HALF_DEPTH - VAZNICE_DIST, horizontal_batting_center_z,
 		)
-		horizontal_batting_end = roof_batting_local_point(
-			dormer_roof,
-			x=aa_x,
-			local_y=local_y_at_global_z(
-				dormer_roof,
-				horizontal_batting_center_z,
-				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
-			),
-			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+		horizontal_batting_end = (
+			aa_x, HALF_DEPTH + VAZNICE_DIST, horizontal_batting_center_z,
 		)
 		drawing1.add_batting(
 			horizontal_batting_start,

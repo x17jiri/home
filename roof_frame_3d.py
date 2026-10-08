@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preliminary PyNite roof frame; optional axial collar ties, no IFC generation.
+"""Preliminary PyNite roof frame; compression spacers and optional collar ties.
 
 Geometry is read from the arithmetic/data definitions in house_ifc.py without
 executing that module. Units: m, N, Pa. Global Z is up, X along the house.
@@ -246,8 +246,19 @@ class RoofLayout:
             positive(beam.length, f"length of {beam.name}")
             if beam.category == "rafter" and beam.start[1] >= beam.end[1]:
                 raise ValueError(f"rafter must run in positive Y: {beam.name}")
-            if beam.category not in {"rafter", "purlin", "wall_plate", "collar", "saddle"}:
+            if beam.category not in {
+                "rafter",
+                "purlin",
+                "wall_plate",
+                "collar",
+                "saddle",
+                "spacer",
+            }:
                 raise ValueError(f"unsupported physical member: {beam.category}")
+            if beam.category == "spacer" and (
+                len(beam.supported_purlins) != 2 or not set(beam.supported_purlins) <= names
+            ):
+                raise ValueError(f"invalid spacer attachments: {beam.name}")
             if beam.category == "collar" and (
                 len(beam.attached_rafters) != 2
                 or not set(beam.attached_rafters) <= names
@@ -538,6 +549,55 @@ class RoofLayout:
         )
 
 
+def add_purlin_spacers(layout):
+    """Snug, unbolted compression struts at the IFC main-rafter stations.
+
+    Physical length is face-to-face; numerical attachments are at the purlin
+    axes. End eccentricity and end-bearing compliance are not modelled.
+    """
+    if any(b.category == "spacer" for b in layout.beams):
+        raise ValueError("purlin spacers already present")
+    width, height = HouseInputs(layout.source).get("PURLIN_SPACER_SIZE")
+    purlins = [b for b in layout.beams if b.category == "purlin"]
+    spacers = []
+    for rafter in layout.beams:
+        if rafter.category != "rafter" or not rafter.name.endswith("_street"):
+            continue
+        x = rafter.start[0]
+        ends = []
+        for side in ("street", "garden"):
+            matches = [
+                b
+                for b in purlins
+                if b.name.startswith(side + "_") and b.start[0] - 1e-9 <= x <= b.end[0] + 1e-9
+            ]
+            if len(matches) != 1:
+                raise ValueError(f"spacer at x={x:g} needs one {side} purlin, got {len(matches)}")
+            ends.append(matches[0])
+        street, garden = ends
+        tops = [b.start[2] + b.timber.height / 2 for b in ends]
+        if abs(tops[0] - tops[1]) > 1e-9 or any(height > b.timber.height for b in ends):
+            raise ValueError("spacer requires aligned purlin tops and must fit their height")
+        if street.timber.material != garden.timber.material:
+            raise ValueError("specify a common purlin/spacer timber grade")
+        z = tops[0] - height / 2
+        spacers.append(
+            BeamSpec(
+                "spacer_" + rafter.name.split("_")[1],
+                "spacer",
+                (x, street.start[1] + street.timber.width / 2, z),
+                (x, garden.start[1] - garden.timber.width / 2, z),
+                Timber(width, height, street.timber.material),
+                supported_purlins=(street.name, garden.name),
+            )
+        )
+        if spacers[-1].start[1] >= spacers[-1].end[1]:
+            raise ValueError("no face-to-face space for purlin spacer")
+    if not spacers:
+        raise ValueError("no main-rafter stations for purlin spacers")
+    return replace(layout, beams=(*layout.beams, *spacers))
+
+
 def add_collar_ties(layout, parameters, *, upper_floor_z):
     """Equivalent axial members on MAIN rafter axes, not dormer duplicates.
 
@@ -794,6 +854,7 @@ class RoofModel:
     nodal_loads: list[tuple[str, str, tuple[float, float, float]]] = field(default_factory=list)
     saddle_contacts: list[dict] = field(default_factory=list)
     saddle_bolts: list[dict] = field(default_factory=list)
+    spacer_links: list[dict] = field(default_factory=list)
 
     def add_load(self, name, case, q, start=0.0, end=None):
         member = self.model.members[name]
@@ -879,6 +940,8 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
         return nodes[key]
 
     for beam in layout.beams:
+        if beam.category == "spacer":
+            continue  # Attach to separately owned purlin axes below.
         if beam.category == "wall_plate":
             # The wall plate/ring beam is one exactly rigid support structure.
             # Keep its outline for the drawings, not as a second elastic beam.
@@ -914,6 +977,17 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
 
     saddles = [b for b in layout.beams if b.category == "saddle"]
     by_name = {b.name: b for b in layout.beams}
+    for beam in (b for b in layout.beams if b.category == "spacer"):
+        ends = [by_name[name] for name in beam.supported_purlins]
+        a, b = [node((beam.start[0], *p.start[1:]), owner=p.name) for p in ends]
+        area = beam.timber.properties[0]
+        stiffness = model.materials[beam.timber.material].E * area / beam.length
+        model.add_spring(beam.name, a, b, stiffness, comp_only=True)
+        result.spacer_links.append(dict(spacer=beam.name, stiffness_N_m=stiffness))
+        weight = settings.timber_density * settings.gravity * area * beam.length
+        for end in (a, b):
+            model.add_node_load(end, "FZ", -weight / 2, case="G")
+            result.nodal_loads.append((end, "G", (0.0, 0.0, -weight / 2)))
     saddle_bearings = {
         (purlin, saddle.bearings[0]) for saddle in saddles for purlin in saddle.supported_purlins
     }
@@ -1176,6 +1250,18 @@ def bolt_shear_assembly(roof, combo, states):
     return coo_matrix((values, (rows, columns)), shape=(size, size)).tocsr(), offset
 
 
+def spring_axial_gap(spring, combo):
+    # Read raw nodal movement: PyNite Spring.D zeros global DX when inactive,
+    # which is inappropriate for testing reclosure of an arbitrary-axis link.
+    delta = np.array(
+        [
+            getattr(spring.j_node, d)[combo] - getattr(spring.i_node, d)[combo]
+            for d in ("DX", "DY", "DZ")
+        ]
+    )
+    return float(spring.T()[0, :3] @ delta)
+
+
 def solve_saddle_contact(roof):
     """First-order active-set solve, including reopening AND reclosing contact.
 
@@ -1191,6 +1277,7 @@ def solve_saddle_contact(roof):
     Analysis._prepare_model(model)
     free, fixed, known = Analysis._partition_D(model)
     contacts = [model.springs[c["contact"]] for c in roof.saddle_contacts]
+    contacts += [model.springs[c["spacer"]] for c in getattr(roof, "spacer_links", [])]
     contacts += [
         model.springs[b["hold_down_spring"]] for b in roof.saddle_bolts if b["hold_down_spring"]
     ]
@@ -1218,7 +1305,7 @@ def solve_saddle_contact(roof):
             Analysis._store_displacements(model, displacement, known, free, fixed, combo)
             changes = []
             for spring in contacts:
-                gap = spring.j_node.DZ[combo.name] - spring.i_node.DZ[combo.name]
+                gap = spring_axial_gap(spring, combo.name)
                 # Small force deadband avoids numerical chatter at zero force.
                 trial_force = -spring.ks * gap
                 # Native spring axial force is positive in compression.
@@ -1247,7 +1334,7 @@ def solve_saddle_contact(roof):
                 spring.active[combo.name] = active
             bolt_states.update(bolt_changes)
         else:
-            raise ValueError(f"saddle contact did not converge: {combo.name}")
+            raise ValueError(f"unilateral roof contact did not converge: {combo.name}")
     Analysis._calc_reactions(model, log=False)
     # The shear connectors are assembled locally rather than registered as
     # PyNite springs. Recover their fixed-DOF reactions too (usually zero:
@@ -1267,12 +1354,13 @@ def solve_saddle_contact(roof):
     model.solution = "Nonlinear TC"
     saddle_contact_rows(roof)  # check the final contact complementarity
     saddle_bolt_rows(roof)
+    spacer_rows(roof)
 
 
 def solve_roof_model(roof):
     # Start with verified first-order equilibrium. Second-order behaviour,
     # instability and nonlinear connection slip need a validated extension.
-    if roof.saddle_contacts:
+    if roof.saddle_contacts or roof.spacer_links:
         # First-order contact active-set solve: separation is permitted,
         # tension is not. This is not P-delta or nonlinear timber analysis.
         solve_saddle_contact(roof)
@@ -1490,10 +1578,10 @@ def member_rows(roof, *, chord_fallback="supports"):
     for beam in roof.layout.beams:
         if beam.category == "wall_plate":
             continue  # rigid support outline, not an analysed elastic timber
-        if beam.category == "collar":
+        if beam.category in {"collar", "spacer"}:
             spring = roof.model.springs[beam.name]
             for combo in roof.model.load_combos:
-                axial = -float(spring.axial(combo)) / 1000
+                axial = -float(spring.axial(combo)) / 1000 if spring.active[combo] else 0.0
                 vertical = [n.DZ[combo] * 1000 for n in (spring.i_node, spring.j_node)]
                 rows.append(
                     dict(
@@ -1716,10 +1804,32 @@ def saddle_bolt_rows(roof):
     return rows
 
 
+def spacer_rows(roof):
+    """Compression-positive strut forces; opening is positive axial end slip."""
+    rows = []
+    for link in getattr(roof, "spacer_links", []):
+        spring = roof.model.springs[link["spacer"]]
+        for combo in roof.model.load_combos:
+            gap = spring_axial_gap(spring, combo)
+            force = -spring.ks * gap if spring.active[combo] else 0.0
+            if force < -1e-5 or (not spring.active[combo] and gap < -1e-5 / spring.ks):
+                raise ValueError(f"invalid spacer contact: {link['spacer']}, {combo}")
+            rows.append(
+                dict(
+                    **link,
+                    combination=combo,
+                    active=spring.active[combo],
+                    compression_kN=max(force, 0.0) / 1000,
+                    opening_mm=gap * 1000,
+                )
+            )
+    return rows
+
+
 def timber_categories(layout):
     return tuple(
         category
-        for category in ("rafter", "purlin", "wall_plate", "collar", "saddle")
+        for category in ("rafter", "purlin", "wall_plate", "collar", "saddle", "spacer")
         if any(b.category == category for b in layout.beams)
     )
 
@@ -1735,6 +1845,20 @@ def print_summary(roof, members, supports, residuals):
         f"{len(roof.model.nodes)} nodes"
     )
     collars = [b for b in roof.layout.beams if b.category == "collar"]
+    if roof.spacer_links:
+        print(
+            f"  {len(roof.spacer_links)} purlin spacers: compression-only EA/L, physical face-to-face length."
+        )
+        print("  Spacer self-weight included; NO buckling, bearing or joint-capacity check.")
+        rows = spacer_rows(roof)
+        for link in roof.spacer_links:
+            worst = max(
+                (r for r in rows if r["spacer"] == link["spacer"]),
+                key=lambda r: r["compression_kN"],
+            )
+            print(
+                f"    {link['spacer']}: max compression {worst['compression_kN']:.3f} kN ({worst['combination']})"
+            )
     if collars:
         parameters = roof.layout.collar_parameters
         print(
@@ -2073,27 +2197,34 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
 
     palette = {"L500": "#39a852", "L300": "#f4a340", "fail": "#d9534f", "not_assessed": "#c8ccd0"}
     collar_colour = "#d000d0"
+    spacer_colour = "#008080"
     has_collars = any(b.category == "collar" for b in roof.layout.beams)
+    has_spacers = bool(roof.spacer_links)
     figure = Figure(figsize=(15, 12))
     axes = figure.add_subplot()
     figure.subplots_adjust(left=0.065, right=0.98, bottom=0.19, top=0.90)
     classifications = {}
     # Draw all physical timbers. Offset arms are numerical joints, not timber.
-    order = {"collar": 0, "wall_plate": 1, "purlin": 2, "rafter": 3, "saddle": 4}
+    order = {"collar": 0, "wall_plate": 1, "purlin": 2, "rafter": 3, "saddle": 4, "spacer": 5}
     for beam in sorted(roof.layout.beams, key=lambda b: order[b.category]):
         rows = [r for r in members if r["member"] == beam.name]
         status = classifications[beam.name] = plan_deflection_status(rows)
         is_collar = beam.category == "collar"
         is_saddle = beam.category == "saddle"
+        is_spacer = beam.category == "spacer"
+        axial_colour = spacer_colour if is_spacer else collar_colour
+        outline = is_collar or is_saddle or is_spacer
         artist = Polygon(
             plan_member_polygon(beam),
             closed=True,
             # Outline-only overlay preserves the rafter deflection colour
             # underneath these coincident equivalent axial links.
-            facecolor="none" if is_collar or is_saddle else palette[status],
-            edgecolor=collar_colour if is_collar else "#1678d2" if is_saddle else "#333333",
-            linewidth=1.5 if is_collar or is_saddle else 0.6,
-            alpha=1.0 if is_collar or is_saddle else 0.88,
+            facecolor="none" if outline else palette[status],
+            edgecolor=(
+                axial_colour if is_collar or is_spacer else "#1678d2" if is_saddle else "#333333"
+            ),
+            linewidth=1.5 if outline else 0.6,
+            alpha=1.0 if outline else 0.88,
             zorder=6 if is_collar else order[beam.category] + 2,
         )
         artist.set_gid(beam.name)
@@ -2115,24 +2246,22 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
                 zorder=10,
                 bbox=dict(facecolor="white", alpha=0.8, edgecolor="none", pad=0.5),
             )
-        elif beam.category == "collar":
+        elif beam.category in {"collar", "spacer"}:
             centre = (np.array(beam.start[:2]) + np.array(beam.end[:2])) / 2
             axes.text(
                 *centre,
-                beam.name.replace("collar_", "C"),
+                beam.name.replace("collar_", "C").replace("spacer_", "P"),
                 fontsize=6,
                 ha="center",
                 va="center",
                 rotation=90,
-                color=collar_colour,
+                color=axial_colour,
                 zorder=10,
                 bbox=dict(facecolor="white", alpha=0.85, edgecolor="none", pad=0.5),
             )
             selected = [r for r in rows if r["combination"] == force_combo]
             if len(selected) != 1:
-                raise ValueError(
-                    f"missing or duplicate collar force for {beam.name}: {force_combo}"
-                )
+                raise ValueError(f"missing or duplicate axial force for {beam.name}: {force_combo}")
             axial = float(selected[0]["N_min_kN"])
             label_position, arrows = plan_collar_force_arrows(beam, axial)
             for number, (tail, head) in enumerate(arrows, 1):
@@ -2140,7 +2269,7 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
                     "",
                     xy=head,
                     xytext=tail,
-                    arrowprops=dict(arrowstyle="-|>", color=collar_colour, lw=1.2),
+                    arrowprops=dict(arrowstyle="-|>", color=axial_colour, lw=1.2),
                     zorder=12,
                 )
                 arrow.set_gid(f"{beam.name}_axial_arrow_{number}")
@@ -2148,7 +2277,7 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
             label = axes.text(
                 *label_position,
                 f"{axial:+.2f} kN",
-                color=collar_colour,
+                color=axial_colour,
                 fontsize=7,
                 rotation=angle,
                 ha="center",
@@ -2248,6 +2377,14 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
         Patch(facecolor=palette[key], edgecolor="#333333", label=descriptions[key])
         for key in palette
     ]
+    if has_spacers:
+        handles.append(
+            Patch(
+                facecolor="none",
+                edgecolor=spacer_colour,
+                label="Teal: compression-only spacers (unassessed); − compression",
+            )
+        )
     if has_collars:
         handles.append(
             Patch(
@@ -2317,6 +2454,7 @@ def plot_model(roof, path, *, combo="SLS_symmetric", scale=20.0):
         "wall_plate": "#2789b0",
         "collar": "#8d5aa9",
         "saddle": "#1678d2",
+        "spacer": "#008080",
     }
     labelled = set()
     for beam in roof.layout.beams:
@@ -2329,14 +2467,14 @@ def plot_model(roof, path, *, combo="SLS_symmetric", scale=20.0):
             continue
         member = (
             roof.model.springs[beam.name]
-            if beam.category == "collar"
+            if beam.category in {"collar", "spacer"}
             else roof.model.members[beam.name]
         )
         points = np.linspace(0, member.L(), 31)
         start, end = np.array(beam.start), np.array(beam.end)
         original = np.array([start + (end - start) * x / member.L() for x in points])
         transform = member.T()[:3, :3]
-        if beam.category == "collar":
+        if beam.category in {"collar", "spacer"}:
             first = np.array([getattr(member.i_node, axis)[combo] for axis in ("DX", "DY", "DZ")])
             last = np.array([getattr(member.j_node, axis)[combo] for axis in ("DX", "DY", "DZ")])
             disp = np.array([first + (last - first) * x / member.L() for x in points])
@@ -2409,6 +2547,11 @@ def main(argv=None):
     parser.add_argument("--beam-material", choices=("C22", "C24"), default="C24")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument(
+        "--no-spacers",
+        action="store_true",
+        help="omit the compression-only purlin spacers for comparison",
+    )
+    parser.add_argument(
         "--no-saddles",
         action="store_true",
         help="omit the four 1.5 m sedla for comparison; direct purlin wall bearings",
@@ -2474,6 +2617,8 @@ def main(argv=None):
         beam_material=args.beam_material,
         collar_ties=CollarTieParameters() if args.collar_ties else None,
     )
+    if not args.no_spacers:
+        layout = add_purlin_spacers(layout)
     if not args.no_saddles:
         layout = add_purlin_saddles(
             layout,
@@ -2512,10 +2657,13 @@ def main(argv=None):
         prefix = (
             str(args.output)
             + ("_collars" if args.collar_ties else "")
+            + ("_no_spacers" if args.no_spacers else "")
             + ("_restrained" if restrained else "_free")
         )
         write_csv(prefix + "_members.csv", members)
         write_csv(prefix + "_supports.csv", supports)
+        if roof.spacer_links:
+            write_csv(prefix + "_spacers.csv", spacer_rows(roof))
         if roof.saddle_contacts:
             write_csv(prefix + "_saddle_contacts.csv", saddle_contact_rows(roof))
         if roof.saddle_bolts:
@@ -2544,6 +2692,38 @@ def main(argv=None):
                 + (" and trial bolt face-slip" if roof.saddle_bolts else "")
                 if roof.saddle_contacts
                 else "first-order elastic"
+            )
+            + (" with compression-only purlin spacers" if roof.spacer_links else ""),
+            spacers=dict(
+                enabled=bool(roof.spacer_links),
+                count=len(roof.spacer_links),
+                members=[
+                    dict(
+                        name=b.name,
+                        width_m=b.timber.width,
+                        height_m=b.timber.height,
+                        length_m=b.length,
+                        material=b.timber.material,
+                        purlins=b.supported_purlins,
+                    )
+                    for b in layout.beams
+                    if b.category == "spacer"
+                ],
+                stiffness="E_parallel * A / physical face-to-face timber length",
+                model="compression-only axial links on purlin axes; snug fit, no tension connection",
+                self_weight="shared equally between purlin endpoints; included once",
+                not_modelled=[
+                    "end eccentricity",
+                    "end-bearing compliance",
+                    "gap/preload",
+                    "bending",
+                ],
+                not_checked=[
+                    "compression strength",
+                    "buckling",
+                    "end bearing",
+                    "fastening capacity",
+                ],
             ),
             saddles=dict(
                 enabled=bool(layout.saddle_parameters),
@@ -2590,7 +2770,7 @@ def main(argv=None):
                 ],
             ),
             plan_report=dict(
-                colours="existing chord checks over all SLS cases: L/500 green, L/300 orange, otherwise red; unassessed grey; axial ties magenta, saddles blue outline (unassessed)",
+                colours="existing chord checks over all SLS cases: L/500 green, L/300 orange, otherwise red; unassessed grey; axial ties magenta, saddles blue and compression-only spacers teal outline (unassessed)",
                 force_combination=args.plan_force_combination,
                 arrows="direct reaction delivered TO rigid wall plate/ring beam in kN; same as support CSV",
                 arrow_length="constant; direction only, not proportional to magnitude",
@@ -2625,6 +2805,7 @@ def main(argv=None):
             combinations={name: combo.factors for name, combo in roof.model.load_combos.items()},
             omitted=[
                 *([] if args.collar_ties else ["kleštiny"]),
+                *(["purlin spacers"] if args.no_spacers else []),
                 "suspended ceiling",
                 "wind",
                 "snow drift",
@@ -2655,6 +2836,7 @@ def main(argv=None):
             f"  Output: {prefix}_members.csv, _supports.csv, _basis.json"
             + (", _saddle_contacts.csv" if roof.saddle_contacts else "")
             + (", _saddle_bolts.csv" if roof.saddle_bolts else "")
+            + (", _spacers.csv" if roof.spacer_links else "")
             + (", _model.png, _plan.png" if not args.no_plot else "")
         )
 
