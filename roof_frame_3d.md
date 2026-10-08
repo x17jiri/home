@@ -254,8 +254,8 @@ horizontal force capacity of walls/anchors or timber stability.
 
 - all main rafters (including the shortened street corner and shortened garden
   rafters), `StrongerRafter` widths and the touching offset dormer rafters;
-- the two purlins' three **independent** pieces with their actual sections,
-  downward extension of the middle pieces, and common top elevation;
+- the two purlins' three **independent** pieces with a uniform section and
+  common top elevation;
 - the five actual wall-plate pieces: street, cut street, garden left/right and
   dormer. Every matching physical seat is connected, including the cut-street
   plate where it crosses full-length rafters;
@@ -266,8 +266,8 @@ horizontal force capacity of walls/anchors or timber stability.
 Finished member endpoints use centre-line intersections with the IFC cutting
 planes (not the stock/cutting-list extra length). The existing horizontal
 short-rafter cut is controlled by `SHORT_GARDEN_RAFTER_CUT_HEIGHT_M` (3.05 m
-above the upper-storey floor), with the IFC middle-purlin lowering retained.
-It no longer reads IFC collar-tie dimensions, and changing the optional trial
+above the upper-storey floor). There is no longer a deeper middle purlin offset.
+It does not read IFC collar-tie dimensions, and changing the optional trial
 ties does not move this cut. Do not infer that this is a buildable end detail.
 Dormer upper ends follow the current source local Y=-0.5 position.
 
@@ -349,9 +349,13 @@ Actual rolling restraint, brackets and anchorage need verification.
 ### Purlin saddles (sedla)
 
 `add_purlin_saddles()` asserts equal width and height for all six purlin pieces.
-It adds four longitudinal 1.5 m beams, centred at wall2/wall3 on the street and
+It adds four longitudinal beams, centred at wall2/wall3 on the street and
 garden purlin lines. Each has the adjacent purlin's section and grade, and its
-top touches the purlin underside. IFC geometry is not modified. Saddle bending
+top touches the purlin underside. Their length follows `SEDLO_LENGTH` in
+`house_ifc.py` (currently 1.5 m); `SADDLE_LENGTH_M` is the fallback for synthetic
+layouts. The IFC generator also creates these four beams and shortens the
+inner support walls by `VAZNICE_HEIGHT`, so the sedla rest on the wall tops
+without local wall openings. Purlin and sedlo elevations stay unchanged. Saddle bending
 uses the normal along-grain timber modulus; self-weight is included once.
 
 Saddles are vertically pinned at the wall centre, with free bending rotation.

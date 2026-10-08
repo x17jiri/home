@@ -1416,6 +1416,14 @@ class CollarSolverTests(unittest.TestCase):
 
 
 class SaddleGeometryTests(unittest.TestCase):
+    def test_saddle_length_follows_the_ifc_source(self):
+        original = RoofLayout.from_house(HOUSE)
+        source = HouseInputs(HOUSE)
+        self.assertAlmostEqual(original.saddle_length_m, source.get("SEDLO_LENGTH"))
+        for beam in add_purlin_saddles(replace(original, saddle_length_m=1.8)).beams:
+            if beam.category == "saddle":
+                self.assertAlmostEqual(beam.length, 1.8)
+
     def test_four_same_section_bolsters_below_the_internal_joints(self):
         original = RoofLayout.from_house(HOUSE)
         layout = add_purlin_saddles(original)

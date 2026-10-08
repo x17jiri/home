@@ -24,14 +24,14 @@ import numpy as np
 # direction ONLY to rafter connections to the rigid wall plate/ring beam.
 # Purlin wall guides are rigid (Y can be explicitly freed for comparison).
 # Internal vertical loads pass through flexible saddle contact by default.
-HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12 * 1  ################
+HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12 * 0.01  ################
 # Dormer seats only: positive kN/mm, None for rigid, or "inherit" to use the
 # general value above. Does not change the house-cut or normal-roof seats.
 DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.01
 
 # Four longitudinal bolsters under the internal purlin joints. The factor is
 # for sensitivity studies, NOT a measured connection or bolt stiffness.
-SADDLE_LENGTH_M = 1.5
+SADDLE_LENGTH_M = 1.5  # fallback for synthetic layouts; IFC uses SEDLO_LENGTH
 SADDLE_CONTACT_SPACING_M = 0.10
 SADDLE_CONTACT_STIFFNESS_FACTOR = 1.0
 TIMBER_E90_MEAN_PA = {"C22": 330e6, "C24": 370e6}
@@ -233,8 +233,10 @@ class RoofLayout:
     source: Path
     collar_parameters: CollarTieParameters | None = None
     saddle_parameters: SaddleParameters | None = None
+    saddle_length_m: float = SADDLE_LENGTH_M
 
     def __post_init__(self):
+        positive(self.saddle_length_m, "IFC saddle length")
         if not self.beams or len({b.name for b in self.beams}) != len(self.beams):
             raise ValueError("roof must have uniquely named members")
         names = {b.name for b in self.beams}
@@ -395,12 +397,7 @@ class RoofLayout:
             short = pair is not None and not pair.startswith("+")
             high_y = g("GARDEN_ROOF_EAVE_Y")
             if short:
-                lowering = (
-                    g("VAZNICE_EXTRA_HEIGHT")
-                    if g("MIDDLE_PURLIN_X_MIN") <= entry.x <= g("MIDDLE_PURLIN_X_MAX")
-                    else 0.0
-                )
-                cut_z = g("UPPER_FLOOR_START") + SHORT_GARDEN_RAFTER_CUT_HEIGHT_M - lowering
+                cut_z = g("UPPER_FLOOR_START") + SHORT_GARDEN_RAFTER_CUT_HEIGHT_M
                 high_y = garden.y_at_z(cut_z, offset)
             beams.append(
                 BeamSpec(
@@ -533,7 +530,7 @@ class RoofLayout:
                         raise ValueError(
                             f"roof opening cuts {name}; trimmer/split modelling is required"
                         )
-        layout = cls(tuple(beams), tuple(patches), Path(path))
+        layout = cls(tuple(beams), tuple(patches), Path(path), saddle_length_m=g("SEDLO_LENGTH"))
         return (
             layout
             if collar_ties is None
@@ -672,8 +669,10 @@ class SaddleParameters:
             positive(getattr(self, name), "saddle " + name)
 
 
-def add_purlin_saddles(layout, parameters=SaddleParameters()):
+def add_purlin_saddles(layout, parameters=None):
     """Four bolsters centred under the two internal joints on each roof side."""
+    if parameters is None:
+        parameters = SaddleParameters(length=layout.saddle_length_m)
     if layout.saddle_parameters or any(b.category == "saddle" for b in layout.beams):
         raise ValueError("saddles already present")
     purlins = [b for b in layout.beams if b.category == "purlin"]
@@ -738,7 +737,7 @@ def saddle_contact_stiffness(purlin, saddle, area, factor=1.0):
 @dataclass(frozen=True)
 class Settings:
     roof_mass: float = 150.0  # kg/m² actual slope; excludes suspended ceiling
-    snow_load: float = 1.5  # kN/m² horizontal roof projection, NOT ground sk
+    snow_load: float = 3.0  # kN/m² horizontal roof projection, NOT ground sk
     timber_density: float = 450.0
     gravity: float = 10.0
     purlin_lateral_restraint: bool = True
@@ -2479,6 +2478,7 @@ def main(argv=None):
         layout = add_purlin_saddles(
             layout,
             SaddleParameters(
+                length=layout.saddle_length_m,
                 contact_spacing=args.saddle_contact_spacing,
                 contact_stiffness_factor=args.saddle_contact_factor,
                 bolts=(

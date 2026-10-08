@@ -157,9 +157,9 @@ RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_DIST = 1.073 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.24
-VAZNICE_EXTRA_HEIGHT = 0.00
 VAZNICE_BASE = 0.24
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
+SEDLO_LENGTH = 1.5
 PURLIN_DRAWING_PATTERN = "brick"
 PURLIN_LEFT_DRAWING_COLOR = "#f4a261"
 PURLIN_MIDDLE_DRAWING_COLOR = "#e76f51"
@@ -1158,6 +1158,8 @@ zachod_nahore = upper.floor_layer(
 STREET_ROOF_JOINT_Y = HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE
 GARDEN_ROOF_JOINT_Y = HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE
 PURLIN_WALL_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
+# The sedla sit on the shortened inner walls; keep the roof/purlin datum above.
+INNER_SUPPORT_WALL_HEIGHT = PURLIN_WALL_TOP_HEIGHT - VAZNICE_HEIGHT
 ROOF_JOINT_Z = (
 	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
 )
@@ -1248,11 +1250,6 @@ wall_cuts_1_4 = [
 wall_cuts_2_3 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*DORMER_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
-	(
-		(0, HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
-		(0, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
-		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
-	),
 ]
 
 wall_dormer = upper.wall(
@@ -1279,24 +1276,12 @@ wall_gym_u = upper.wall(
 wall_2 = upper.wall(
 	(wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
-	wall_type=load_bearing_wall, height=4)
-wall_2.add_opening(
-	at=3.625-BWT-GYM_DEPTH, width=0.75, height=UNDER_HOLE+HOLE_HEIGHT, sill_height=UNDER_HOLE)
+	wall_type=load_bearing_wall, height=INNER_SUPPORT_WALL_HEIGHT)
 
 wall_3 = upper.wall(
 	(wall3_x, BWT), (wall3_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
-	wall_type=load_bearing_wall, height=4)
-WALL_3_INSTALLATION_OPENING_AT = 3.625-BWT
-WALL_3_INSTALLATION_OPENING_WIDTH = 0.75
-WALL_3_INSTALLATION_OPENING_TOP = UNDER_HOLE+HOLE_HEIGHT
-wall_3.add_opening(
-	at=WALL_3_INSTALLATION_OPENING_AT,
-	width=WALL_3_INSTALLATION_OPENING_WIDTH,
-	height=WALL_3_INSTALLATION_OPENING_TOP,
-	sill_height=UNDER_HOLE,
-	name="Instalační otvor pro vedení rekuperace",
-)
+	wall_type=load_bearing_wall, height=INNER_SUPPORT_WALL_HEIGHT)
 
 sklad_opening = wall_3.add_opening(
     at=GALERY_START-BWT,
@@ -1304,24 +1289,6 @@ sklad_opening = wall_3.add_opening(
     height=2.25,
 )
 
-
-def add_purlin_wall_recess(wall, *, side, wall_name):
-	"""Lower one half of a wall along its full length for the larger purlin."""
-	if VAZNICE_EXTRA_HEIGHT > 0.0:
-		return wall.add_recess(
-			at=0,
-			width=wall.length,
-			depth=BWT / 2,
-			height=VAZNICE_EXTRA_HEIGHT,
-			sill_height=PURLIN_WALL_TOP_HEIGHT - VAZNICE_EXTRA_HEIGHT,
-			side=side,
-			top_extension=0.01,
-			name=f"{wall_name} purlin recess",
-		)
-
-
-add_purlin_wall_recess(wall_2, side="right", wall_name="Wall 2")
-add_purlin_wall_recess(wall_3, side="left", wall_name="Wall 3")
 
 wall_4_u = upper.wall(
 	(HOUSE_WIDTH, BWT), (HOUSE_WIDTH, HOUSE_DEPTH-BWT),
@@ -1392,7 +1359,7 @@ PURLIN_X_SEGMENTS = (
 		"middle",
 		MIDDLE_PURLIN_X_MIN,
 		MIDDLE_PURLIN_X_MAX,
-		VAZNICE_HEIGHT + VAZNICE_EXTRA_HEIGHT,
+		VAZNICE_HEIGHT,
 	),
 	("right", MIDDLE_PURLIN_X_MAX, HOUSE_WIDTH + 0.2, VAZNICE_HEIGHT),
 )
@@ -1400,12 +1367,8 @@ PURLIN_BOTTOM_Z = PURLIN_TOP_Z - VAZNICE_HEIGHT
 
 
 def purlin_bottom_z_at(x):
-	"""Actual purlin underside, including the deeper middle segment."""
-	return PURLIN_BOTTOM_Z - (
-		VAZNICE_EXTRA_HEIGHT
-		if MIDDLE_PURLIN_X_MIN <= x <= MIDDLE_PURLIN_X_MAX
-		else 0
-	)
+	"""Common underside of all three purlin pieces; retain the positional API."""
+	return PURLIN_BOTTOM_Z
 
 
 def add_purlin_segments(name, y):
@@ -1432,6 +1395,40 @@ garden_purlins = add_purlin_segments(
 	"Garden",
 	HALF_DEPTH + VAZNICE_DIST,
 )
+
+
+def add_purlin_sedla(purlins, *, side_name):
+	"""Bolsters below the two internal joints, resting on the shortened walls."""
+	assert all(
+		beam.width == VAZNICE_BASE and beam.height == VAZNICE_HEIGHT
+		for beam in (*street_purlins, *garden_purlins)
+	), "All purlins must have the same section as the sedla"
+	if not math.isfinite(SEDLO_LENGTH) or SEDLO_LENGTH <= BWT:
+		raise ValueError("SEDLO_LENGTH must be finite and longer than the support wall thickness")
+	sedla = []
+	for index, (left, right) in enumerate(
+		zip(purlins, purlins[1:]), start=2
+	):
+		joint_x, y, _ = left.end
+		assert left.end == right.start, "Purlin pieces must meet at the wall centre"
+		x_start, x_end = joint_x - SEDLO_LENGTH / 2, joint_x + SEDLO_LENGTH / 2
+		if x_start < left.start[0] or x_end > right.end[0]:
+			raise ValueError("SEDLO_LENGTH extends beyond the adjacent purlins")
+		centre_z = PURLIN_BOTTOM_Z - VAZNICE_HEIGHT / 2
+		sedla.append(upper.beam(
+			f"{side_name} sedlo wall {index}",
+			start=(x_start, y, centre_z),
+			end=(x_end, y, centre_z),
+			size=(VAZNICE_BASE, VAZNICE_HEIGHT),
+			material="Wood",
+			kind="BEAM",
+		))
+	return tuple(sedla)
+
+
+street_sedla = add_purlin_sedla(street_purlins, side_name="Street")
+garden_sedla = add_purlin_sedla(garden_purlins, side_name="Garden")
+
 beam3 = upper.beam(
     "Beam",
 	start=(CUT_WIDTH-0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
@@ -1834,7 +1831,7 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
 
 # The under-rafter insulation follows each occupied roof slope only as far as
-# the purlin underside. The vapour barrier and plasterboard transition
+# the outer vertical face of the purlin. The vapour barrier and plasterboard transition
 # onto the horizontal ceiling, whose exceptional heights are described
 # relative to the upper-storey floor.
 SLOPED_INNER_LAYER_LAYOUT = {
@@ -1872,11 +1869,6 @@ FLAT_CEILING_INNER_LAYER_LAYOUT = {
 }
 MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT = {
 	**FLAT_CEILING_INNER_LAYER_LAYOUT,
-	"Vapour barrier": (
-		FLAT_CEILING_INNER_LAYER_LAYOUT["Vapour barrier"][0]
-		- VAZNICE_EXTRA_HEIGHT,
-		VAPOUR_BARRIER_THICKNESS,
-	),
 }
 UNDERLAY_BOTTOM = WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
@@ -1965,7 +1957,7 @@ def add_continuous_roof_layers(
 	inner_y_limits=None,
 	inner_layout=SLOPED_INNER_LAYER_LAYOUT,
 	include_under_rafter_insulation=True,
-	under_rafter_top_z=None,
+	under_rafter_end_y=None,
 	include_inner_finishes=True,
 	include_vapour_barrier=True,
 	include_gypsum=True,
@@ -1986,19 +1978,32 @@ def add_continuous_roof_layers(
 	def inner_outline(layer_name):
 		if layer_name == "Thermal insulation under rafters":
 			layer_y_min, layer_y_max = y_min, y_max
-			if under_rafter_top_z is not None:
+			if under_rafter_end_y is not None:
 				bottom, thickness = inner_layout[layer_name]
 				crossings = [
-					local_y_at_global_z(plane, under_rafter_top_z, local_z=z)
+					local_y_at_global_y(plane, under_rafter_end_y, local_z=z)
 					for z in (bottom, bottom + thickness)
 				]
-				# Leave only a short source overlap above the cut. The clipping
+				# Leave only a short source overlap beyond the cut. The clipping
 				# helper keeps the centroid side; a long ridge-side overshoot
 				# previously made the cut-street layer keep the wrong half.
 				if plane.y_axis[2] < 0:
 					layer_y_min = max(layer_y_min, min(crossings) - 0.10)
 				else:
 					layer_y_max = min(layer_y_max, max(crossings) + 0.10)
+				# Bound the eave overshoot too: otherwise the source centroid can
+				# fall outside the wall cut and retain the outside half instead.
+				for cut in (*plane.cuts, *inner_cuts):
+					if max(p[1] for p in cut) - min(p[1] for p in cut) > 1e-9:
+						continue
+					wall_crossings = [
+						local_y_at_global_y(plane, cut[0][1], local_z=z)
+						for z in (bottom, bottom + thickness)
+					]
+					if plane.y_axis[2] < 0 and min(wall_crossings) > max(crossings):
+						layer_y_max = min(layer_y_max, max(wall_crossings) + 0.10)
+					elif plane.y_axis[2] > 0 and max(wall_crossings) < min(crossings):
+						layer_y_min = max(layer_y_min, min(wall_crossings) - 0.10)
 		elif inner_y_limits is None:
 			layer_y_min, layer_y_max = y_min, y_max
 		else:
@@ -2016,13 +2021,13 @@ def add_continuous_roof_layers(
 		]
 		if insulation_thickness > 0:
 			insulation_cuts = inner_cuts
-			if under_rafter_top_z is not None:
+			if under_rafter_end_y is not None:
 				insulation_cuts = (
 					*inner_cuts,
 					(
-						(0, 0, under_rafter_top_z),
-						(1, 0, under_rafter_top_z),
-						(0, 1, under_rafter_top_z),
+						(0, under_rafter_end_y, 0),
+						(1, under_rafter_end_y, 0),
+						(0, under_rafter_end_y, 1),
 					),
 				)
 			insulation = plane.layer(
@@ -2268,7 +2273,6 @@ def flat_inner_y_limits(left_boundaries, right_boundaries):
 	}
 
 
-normal_under_rafter_top_z = PURLIN_BOTTOM_Z
 # Leave a short source overshoot beyond the dormer wall so its vertical cut
 # defines the exact end.  The previous full-eave overshoot put the source
 # centroid outside that cut, causing the clipping helper to retain the eave
@@ -2293,7 +2297,7 @@ add_continuous_roof_layers(
 		cut_street_inner_boundaries,
 		BWT + GYM_DEPTH + 0.25,
 	),
-	under_rafter_top_z=normal_under_rafter_top_z,
+	under_rafter_end_y=STREET_ROOF_JOINT_Y,
 )
 for part_name, (x_min, x_max), outer_x_range in zip(
 	(
@@ -2312,7 +2316,7 @@ for part_name, (x_min, x_max), outer_x_range in zip(
 			street_roof, street_inner_boundaries, 0.25
 		),
 		include_under_rafter_insulation=part_name != "Street segment 2",
-		under_rafter_top_z=normal_under_rafter_top_z,
+		under_rafter_end_y=STREET_ROOF_JOINT_Y,
 		include_vapour_barrier=part_name != "Street segment 2",
 	)
 add_continuous_roof_layers(
@@ -2323,7 +2327,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
-	under_rafter_top_z=normal_under_rafter_top_z,
+	under_rafter_end_y=GARDEN_ROOF_JOINT_Y,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 1", *roof_under_rafter_x_ranges[1],
@@ -2333,7 +2337,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
-	under_rafter_top_z=normal_under_rafter_top_z,
+	under_rafter_end_y=GARDEN_ROOF_JOINT_Y,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 2 above dormer",
@@ -2362,7 +2366,7 @@ add_continuous_roof_layers(
 	inner_y_limits=sloped_inner_y_limits(
 		garden_roof, garden_inner_boundaries, 7.75
 	),
-	under_rafter_top_z=normal_under_rafter_top_z,
+	under_rafter_end_y=GARDEN_ROOF_JOINT_Y,
 )
 for (
 	part_name,
@@ -2408,8 +2412,8 @@ for (
 		include_outer=False,
 	)
 
-# Segment 2 crosses the taller middle purlin.  Its under-rafter insulation and
-# vapour barrier follow its underside while the
+# Segment 2 crosses the middle purlin. Sloped insulation ends at its outer
+# vertical face; the horizontal vapour barrier follows its underside while the
 # plasterboard remains on one continuous plane below them.
 for (
 	part_name,
@@ -2444,7 +2448,6 @@ for (
 		dormer_inner_boundaries,
 	),
 ):
-	under_rafter_top_z = purlin_bottom_z_at((x_min + x_max) / 2)
 	add_continuous_roof_layers(
 		street_roof,
 		f"Street segment 2 under-rafter {part_name}",
@@ -2453,7 +2456,7 @@ for (
 		roof_y_min,
 		roof_y_max,
 		inner_cuts=roof_inner_cuts,
-		under_rafter_top_z=under_rafter_top_z,
+		under_rafter_end_y=STREET_ROOF_JOINT_Y,
 		include_inner_finishes=False,
 		include_outer=False,
 	)
@@ -2465,7 +2468,7 @@ for (
 		0,
 		dormer_under_rafter_y_max,
 		inner_cuts=roof_inner_cuts,
-		under_rafter_top_z=under_rafter_top_z,
+		under_rafter_end_y=GARDEN_ROOF_JOINT_Y,
 		include_inner_finishes=False,
 		include_outer=False,
 	)
@@ -3165,6 +3168,8 @@ if "roof" in sys.argv:
 		wall_zachod_nahore,
 		*street_purlins,
 		*garden_purlins,
+		*street_sedla,
+		*garden_sedla,
 		beam3,
 		beam_cut_street,
 		beam4_a,
@@ -3356,6 +3361,14 @@ if "roof" in sys.argv:
 				{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
 			)
 		)
+	timber_schedule_rows.append(
+		(
+			"Sedla vaznic",
+			(*street_sedla, *garden_sedla),
+			0,
+			{"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER - 1},
+		)
+	)
 	drawing1.add_timber_schedule(timber_schedule_rows, layout_scale=0.5)
 	drawing1.add_notes(
 		[
@@ -3439,18 +3452,6 @@ if "aa" in sys.argv:
 	)
 	drawing1.add_furniture_label(kamna)
 	#drawing1.add_furniture_label(gauc)
-	drawing1.add_note(
-		point=(
-			wall_3.start[1]
-			+ WALL_3_INSTALLATION_OPENING_AT
-			+ WALL_3_INSTALLATION_OPENING_WIDTH,
-			UPPER_FLOOR_START + WALL_3_INSTALLATION_OPENING_TOP,
-		),
-		angle=60,
-		distance=1.7,
-		text=" Instalační otvor pro\n vedení rekuperace",
-		name="AA note - instalační otvor pro vedení rekuperace",
-	)
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď\nVPC Cihla 240 mm, λ = 0.75"),
 		(
@@ -3665,24 +3666,16 @@ if "aa" in sys.argv:
 
 	if THERMAL_INSULATION_UNDER_RAFTERS > 0:
 		under_rafter_top_z = purlin_bottom_z_at(aa_x)
-		under_rafter_street_top = roof_batting_local_point(
+		under_rafter_street_top = roof_batting_point(
 			street_roof,
 			x=aa_x,
-			local_y=local_y_at_global_z(
-				street_roof,
-				under_rafter_top_z,
-				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
-			),
+			y=STREET_ROOF_JOINT_Y,
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
-		under_rafter_dormer_top = roof_batting_local_point(
+		under_rafter_dormer_top = roof_batting_point(
 			dormer_roof,
 			x=aa_x,
-			local_y=local_y_at_global_z(
-				dormer_roof,
-				under_rafter_top_z,
-				local_z=UNDER_RAFTER_BATTING_CENTER_OFFSET,
-			),
+			y=GARDEN_ROOF_JOINT_Y,
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
 		under_rafter_street_eave = roof_batting_point(

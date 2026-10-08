@@ -392,7 +392,9 @@ class RoofGeometry:
         axis_z = (p2[2]+slope*(left_wall-p2[1])
                   + (values.get("RAFTER_Z_OFFSET")+rafter_height/2)/cos(angle))
         floor_z = values.get("UPPER_FLOOR_START")
-        lowering = values.get("VAZNICE_EXTRA_HEIGHT") if lowered else 0.
+        # Uniform purlin height: retain the old 'lowered' keyword for callers,
+        # but there is no longer a deeper-middle-purlin collar offset.
+        lowering = 0.
         collar_z = (floor_z+values.get("COLLAR_TIE_TOP_HEIGHT")
                     - values.get("COLLAR_TIE_SIZE")[1]/2 - lowering)
         return cls(left_wall, right_wall,
@@ -486,11 +488,9 @@ class HouseRoofSection:
             board_xs = [x+sign*(width+collar_width)/2
                         for neighbour, sign in ((left, -1), (right, 1))
                         if abs(neighbour[0]-x-(width+neighbour[1])/2*sign) > 1e-9]
-            lowered = [values.get("MIDDLE_PURLIN_X_MIN") <= board_x <= values.get("MIDDLE_PURLIN_X_MAX")
-                       for board_x in board_xs]
-            if not lowered or len(set(lowered)) != 1:
-                continue  # Two different collar elevations need two actual members.
-            geometry = RoofGeometry.from_house(path, rafter_height=height, lowered=lowered[0])
+            if not board_xs:
+                continue
+            geometry = RoofGeometry.from_house(path, rafter_height=height)
             candidates.append(cls(x, spacing, width, height, collar_width, collar_height, pieces, geometry))
         if rafter_x is not None:
             for candidate in candidates:

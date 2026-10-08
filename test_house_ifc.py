@@ -51,6 +51,81 @@ class CollarRemovalTests(unittest.TestCase):
         self.assertTrue(any("Vaznice" in name for name in names))
         self.assertTrue(any("Krokve" in name for name in names))
         self.assertTrue(any("Pozednice" in name for name in names))
+        self.assertIn("Sedla vaznic", names)
+
+    def test_uniform_purlins_and_four_sedla_rest_on_shortened_walls(self):
+        values = self.values
+        self.assertNotIn("VAZNICE_EXTRA_HEIGHT", values)
+        self.assertNotIn("add_purlin_wall_recess", values)
+        self.assertFalse(values["wall_2"]._recesses)
+        self.assertFalse(values["wall_3"]._recesses)
+        for beam in (*values["street_purlins"], *values["garden_purlins"]):
+            self.assertEqual(
+                (beam.width, beam.height), (values["VAZNICE_BASE"], values["VAZNICE_HEIGHT"])
+            )
+            self.assertAlmostEqual(beam.start[2] + beam.height / 2, values["PURLIN_TOP_Z"])
+        for side in ("street", "garden"):
+            beams = values[side + "_purlins"]
+            sedla = values[side + "_sedla"]
+            self.assertEqual(len(sedla), 2)
+            for wall, left, right, sedlo in zip(
+                (values["wall_2"], values["wall_3"]), beams, beams[1:], sedla
+            ):
+                self.assertEqual((sedlo.width, sedlo.height), (left.width, left.height))
+                self.assertEqual(left.end, right.start)
+                self.assertAlmostEqual((sedlo.start[0] + sedlo.end[0]) / 2, left.end[0])
+                self.assertAlmostEqual(sedlo.end[0] - sedlo.start[0], values["SEDLO_LENGTH"])
+                self.assertAlmostEqual(sedlo.start[2] + sedlo.height / 2, values["PURLIN_BOTTOM_Z"])
+                self.assertFalse(sedlo.FillsVoids)
+                self.assertAlmostEqual(
+                    self.finished_vertices(wall)[:, 2].max(),
+                    sedlo.start[2] - sedlo.height / 2,
+                )
+        schedule = next(row for row in values["timber_schedule_rows"] if row[0] == "Sedla vaznic")
+        self.assertEqual(len(schedule[1]), 4)
+
+    def test_sedla_are_mirrored_once_and_stay_under_their_purlin_joints(self):
+        values = self.values
+        exported = values["house"]._export_model()
+        for side in ("street", "garden"):
+            for left, sedlo in zip(
+                values[side + "_purlins"],
+                values[side + "_sedla"],
+            ):
+                self.assertEqual(
+                    sedlo.ObjectPlacement.PlacementRelTo,
+                    values["upper"].element.ObjectPlacement,
+                )
+                vertices = self.finished_vertices(exported.by_guid(sedlo.GlobalId))
+                low, high = vertices.min(axis=0), vertices.max(axis=0)
+                np.testing.assert_allclose(
+                    (low + high) / 2,
+                    (-left.end[0], left.end[1], values["PURLIN_BOTTOM_Z"] - sedlo.height / 2),
+                    atol=1e-8,
+                )
+                np.testing.assert_allclose(
+                    high - low, (values["SEDLO_LENGTH"], sedlo.width, sedlo.height), atol=1e-8
+                )
+
+    def test_inner_walls_have_lower_top_without_sedlo_openings_or_recesses(self):
+        values = self.values
+        expected = values["PURLIN_WALL_TOP_HEIGHT"] - values["VAZNICE_HEIGHT"]
+        for name in ("wall_2", "wall_3"):
+            wall = values[name]
+            self.assertAlmostEqual(wall.height, expected)
+            self.assertFalse(wall._recesses)
+            self.assertAlmostEqual(
+                self.finished_vertices(wall)[:, 2].max(),
+                values["UPPER_FLOOR_START"] + expected,
+            )
+        openings = values["house"].model.by_type("IfcOpeningElement")
+        self.assertFalse(any("sedlo" in (opening.Name or "").lower() for opening in openings))
+        self.assertIn(values["sklad_opening"], openings)
+        self.assertEqual(len(values["wall_cuts_2_3"]), 2)
+        # Outer/gable walls and the roof datum are not lowered.
+        self.assertAlmostEqual(
+            self.finished_vertices(values["wall_4_u"])[:, 2].max(), values["PURLIN_BOTTOM_Z"]
+        )
 
     @staticmethod
     def finished_vertices(element):
@@ -79,18 +154,46 @@ class CollarRemovalTests(unittest.TestCase):
             expected = beam.start[2] - beam.height / 2
             self.assertAlmostEqual(values["purlin_bottom_z_at"](x), expected)
 
-    def test_sloped_insulation_is_clipped_at_actual_purlin_bottom(self):
+    def test_sloped_insulation_is_clipped_at_purlin_outer_vertical_face(self):
         values = self.values
         for layer in values["roof_under_rafter_insulations"].values():
-            xs = [point[0] for point in layer.outline]
-            expected = values["purlin_bottom_z_at"]((min(xs) + max(xs)) / 2)
-            self.assertTrue(
-                any(
-                    all(abs(point[2] - expected) < 1e-8 for point in cut)
-                    for cut in layer.extra_cuts
+            with self.subTest(layer=layer.Name):
+                street = layer.Name.startswith("Street")
+                expected = values["STREET_ROOF_JOINT_Y" if street else "GARDEN_ROOF_JOINT_Y"]
+                self.assertTrue(
+                    any(
+                        all(abs(point[1] - expected) < 1e-8 for point in cut)
+                        for cut in layer.extra_cuts
+                    )
                 )
+                self.assertFalse(
+                    any(
+                        max(p[2] for p in cut) - min(p[2] for p in cut) < 1e-8
+                        for cut in layer.extra_cuts
+                    )
+                )
+                vertices = self.finished_vertices(layer)
+                actual = vertices[:, 1].max() if street else vertices[:, 1].min()
+                self.assertAlmostEqual(actual, expected, places=6)
+
+    def test_sloped_batting_ends_at_the_same_vertical_faces_with_existing_insets(self):
+        values = self.values
+        for name, end in (
+            ("AA street under-rafter batting", values["under_rafter_street_top"]),
+            ("AA dormer under-rafter batting", values["under_rafter_dormer_top"]),
+        ):
+            annotation = next(
+                e for e in values["house"].model.by_type("IfcAnnotation") if e.Name == name
             )
-            self.assertLessEqual(self.finished_vertices(layer)[:, 2].max(), expected + 1e-6)
+            placement = ifcopenshell.util.placement.get_local_placement(annotation.ObjectPlacement)
+            curve = annotation.Representation.Representations[0].Items[0]
+            axis = np.array(
+                [(placement @ np.array((*point, 0.0, 1.0)))[:3] for point in curve.Points.CoordList]
+            )
+            inset = values["UNDER_RAFTER_BATTING_END_INSET"]
+            self.assertAlmostEqual(min(np.linalg.norm(axis - end, axis=1)), inset)
+        self.assertAlmostEqual(values["under_rafter_street_top"][1], values["STREET_ROOF_JOINT_Y"])
+        self.assertAlmostEqual(values["under_rafter_dormer_top"][1], values["GARDEN_ROOF_JOINT_Y"])
 
     def test_horizontal_batting_fits_between_purlin_and_vapour_barrier(self):
         values = self.values
@@ -125,16 +228,12 @@ class CollarRemovalTests(unittest.TestCase):
         between_rafter_ratio = values["ROOF_BATTING_THICKNESS"] / values["RAFTER_SIZE"][1]
         for annotation in annotations:
             with self.subTest(annotation=annotation.Name):
-                symbol_thickness = ifcopenshell.util.element.get_psets(annotation)[
-                    "BBIM_Batting"
-                ]["Thickness"]
-                self.assertAlmostEqual(
-                    symbol_thickness, values["UNDER_RAFTER_BATTING_THICKNESS"]
-                )
+                symbol_thickness = ifcopenshell.util.element.get_psets(annotation)["BBIM_Batting"][
+                    "Thickness"
+                ]
+                self.assertAlmostEqual(symbol_thickness, values["UNDER_RAFTER_BATTING_THICKNESS"])
                 self.assertLess(symbol_thickness, physical_thickness)
-                self.assertAlmostEqual(
-                    symbol_thickness / physical_thickness, between_rafter_ratio
-                )
+                self.assertAlmostEqual(symbol_thickness / physical_thickness, between_rafter_ratio)
 
     def test_horizontal_vapour_barrier_is_one_insulation_thickness_below_purlins(self):
         values = self.values

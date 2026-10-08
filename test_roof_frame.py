@@ -187,13 +187,11 @@ class RoofFrameTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "height must match"):
                 HouseRoofSection.from_house(self.house_path)
 
-    def test_house_geometry_and_collar_lowering(self):
+    def test_house_geometry_has_no_deeper_middle_purlin_collar_offset(self):
         self.assertAlmostEqual(self.geometry.angle, 35.84, delta=.03)
-        values = _HouseConstants(self.house_path)
         lower = RoofGeometry.from_house(self.house_path, rafter_height=.2, lowered=True)
-        self.assertAlmostEqual(lower.collar_z, self.geometry.collar_z-values.get("VAZNICE_EXTRA_HEIGHT"))
-        self.assertGreater(lower.collar_y[1]-lower.collar_y[0],
-                           self.geometry.collar_y[1]-self.geometry.collar_y[0])
+        self.assertEqual(lower, self.geometry)
+        self.assertEqual(lower.collar_lowering, 0.)
 
     def test_constant_reader_does_not_execute_calls(self):
         reader = _HouseConstants(self.house_path)

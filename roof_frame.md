@@ -43,7 +43,8 @@ The reusable check accepts a `RoofGeometry`, both timber material classes and
 sections, number of collar boards, spacing, roof/ceiling masses, roof snow load,
 and `restrain_purlins`. Geometry and the chosen section heights must describe
 the same centre lines. A caller can set `maximum_element_length` to refine the
-mesh. The normal/lowered collar geometry is selected with `lowered=False/True`.
+mesh. All purlin pieces now have the same height, so `lowered=False/True` is
+retained for compatibility but no longer changes the collar geometry.
 
 Use `include_collar_ties=False` in `check_roof_frame()` to remove the member
 entirely (not just reduce its stiffness). You must also specify
