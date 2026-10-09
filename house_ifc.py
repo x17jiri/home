@@ -100,11 +100,11 @@ class StrongerRafter:
 
 	x: float
 
-RAFTER_Z_OFFSET = -0.04
+RAFTER_Z_OFFSET = -0.05
 RAFTER_THICKNESS = 0.08
 STRONGER_RAFTER_THICKNESS = 0.10
 RAFTER_HEIGHT = 0.20
-RAFTER_EXTRA_LENGTH = 1.75*RAFTER_HEIGHT
+RAFTER_EXTRA_LENGTH = 0.0
 RAFTER_SIZE = (RAFTER_THICKNESS, RAFTER_HEIGHT)
 STRONGER_RAFTER_SIZE = (STRONGER_RAFTER_THICKNESS, RAFTER_HEIGHT)
 SHORT_RAFTER_CUT_OVERLENGTH = 0.10
@@ -155,11 +155,11 @@ FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 1.073 # Vzdalenost vaznice od hrebene
-VAZNICE_HEIGHT = 0.24
-VAZNICE_BASE = 0.24
+VAZNICE_DIST = 1.079 # Vzdalenost vaznice od hrebene
+VAZNICE_HEIGHT = 0.32
+VAZNICE_BASE = 0.20
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
-SEDLO_LENGTH = 1.5
+SEDLO_LENGTH = 1.5  # Retained for the force simulator's sedlo variant, not IFC geometry.
 PURLIN_SPACER_SIZE = (0.08, 0.20)
 PURLIN_SPACER_LENGTH = 2 * (VAZNICE_DIST - VAZNICE_HALF_BASE)
 PURLIN_DRAWING_PATTERN = "brick"
@@ -178,9 +178,11 @@ CORNER_SHORT_RAFTER_DRAWING_COLOR = "#f4a261"
 DORMER_SHORT_RAFTER_DRAWING_COLOR = "#f4b6c2"
 DORMER_RAFTER_DRAWING_COLOR = "#5ed3f4"
 PURLIN_AND_WALL_PLATE_DRAWING_ORDER = 1
-MAIN_RAFTER_DRAWING_ORDER = 2
-DORMER_WALL_PLATE_DRAWING_ORDER = 3
-DORMER_RAFTER_DRAWING_ORDER = 4
+COLLAR_TIE_DRAWING_COLOR = "#516fe7"
+COLLAR_TIE_DRAWING_ORDER = 2
+MAIN_RAFTER_DRAWING_ORDER = 3
+DORMER_WALL_PLATE_DRAWING_ORDER = 4
+DORMER_RAFTER_DRAWING_ORDER = 5
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.005
 FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.005
 PERIMETER_INSULATION_MATERIAL = "XPS"
@@ -254,16 +256,13 @@ GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 3.25
+UNDER_HOLE = 3.5 - VAZNICE_HEIGHT
 HOLE_HEIGHT = 0.0
 ABOVE_HOLE = 0.0
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
-COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.2)
-# Reference dimensions for the older 2D collar-tie comparison model only.
-# No collar-tie beams are generated, and these do not set roof-layer heights.
-# Ceiling support must be designed separately.
-COLLAR_TIE_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
+COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.15)
+COLLAR_TIE_EXTENSION = 1.5  # uncut overlength; roof planes define finished ends
 NADEZDIVKA = 1.375
 
 house = House(
@@ -379,6 +378,12 @@ rafters = [
 	8.55+0.67+0.67+0.67,
 	11.27,
 	]
+
+GERBER_JOINT_1 = (wall2_x + rafters[5][0]) / 2.0
+GERBER_JOINT_2 = (rafters[10][0] + wall3_x - BWT) / 2.0
+
+print("GERBER_JOINT_1 = ", GERBER_JOINT_1)
+print("GERBER_JOINT_2 = ", GERBER_JOINT_2)
 
 # chimney
 CHIMNEY_DIST=0.47
@@ -1160,8 +1165,8 @@ zachod_nahore = upper.floor_layer(
 STREET_ROOF_JOINT_Y = HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE
 GARDEN_ROOF_JOINT_Y = HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE
 PURLIN_WALL_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
-# The sedla sit on the shortened inner walls; keep the roof/purlin datum above.
-INNER_SUPPORT_WALL_HEIGHT = PURLIN_WALL_TOP_HEIGHT - VAZNICE_HEIGHT
+# Inner walls now reach the same purlin bearing level as the outer gable walls.
+INNER_SUPPORT_WALL_HEIGHT = PURLIN_WALL_TOP_HEIGHT
 ROOF_JOINT_Z = (
 	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
 )
@@ -1355,18 +1360,29 @@ upper.asset(
 PURLIN_TOP_Z = (
 	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
 )
+if (
+	not math.isfinite(GERBER_JOINT_1)
+	or not math.isfinite(GERBER_JOINT_2)
+	or not MIDDLE_PURLIN_X_MIN <= GERBER_JOINT_1 < GERBER_JOINT_2 <= MIDDLE_PURLIN_X_MAX
+):
+	raise ValueError("GERBER_JOINT_1 and GERBER_JOINT_2 must be ordered between the inner-wall centres")
 PURLIN_X_SEGMENTS = (
-	("left", -0.2, MIDDLE_PURLIN_X_MIN, VAZNICE_HEIGHT),
+	("left", -0.2, GERBER_JOINT_1, VAZNICE_HEIGHT),
 	(
 		"middle",
-		MIDDLE_PURLIN_X_MIN,
-		MIDDLE_PURLIN_X_MAX,
+		GERBER_JOINT_1,
+		GERBER_JOINT_2,
 		VAZNICE_HEIGHT,
 	),
-	("right", MIDDLE_PURLIN_X_MAX, HOUSE_WIDTH + 0.2, VAZNICE_HEIGHT),
+	("right", GERBER_JOINT_2, HOUSE_WIDTH + 0.2, VAZNICE_HEIGHT),
 )
 PURLIN_BOTTOM_Z = PURLIN_TOP_Z - VAZNICE_HEIGHT
-SEDLO_BOTTOM_Z = PURLIN_BOTTOM_Z - VAZNICE_HEIGHT
+# Keep the existing suspended-ceiling datum after removing the sedla.
+FLAT_VAPOUR_BARRIER_TOP_Z = PURLIN_BOTTOM_Z - VAZNICE_HEIGHT
+# Paired boards sit directly above the purlins. These dimensions do not move
+# the separately defined insulation, vapour barrier or plasterboard ceiling.
+COLLAR_TIE_BOTTOM_HEIGHT = PURLIN_TOP_Z - UPPER_FLOOR_START
+COLLAR_TIE_TOP_HEIGHT = COLLAR_TIE_BOTTOM_HEIGHT + COLLAR_TIE_SIZE[1]
 
 
 def purlin_bottom_z_at(x):
@@ -1399,38 +1415,6 @@ garden_purlins = add_purlin_segments(
 	HALF_DEPTH + VAZNICE_DIST,
 )
 
-
-def add_purlin_sedla(purlins, *, side_name):
-	"""Bolsters below the two internal joints, resting on the shortened walls."""
-	assert all(
-		beam.width == VAZNICE_BASE and beam.height == VAZNICE_HEIGHT
-		for beam in (*street_purlins, *garden_purlins)
-	), "All purlins must have the same section as the sedla"
-	if not math.isfinite(SEDLO_LENGTH) or SEDLO_LENGTH <= BWT:
-		raise ValueError("SEDLO_LENGTH must be finite and longer than the support wall thickness")
-	sedla = []
-	for index, (left, right) in enumerate(
-		zip(purlins, purlins[1:]), start=2
-	):
-		joint_x, y, _ = left.end
-		assert left.end == right.start, "Purlin pieces must meet at the wall centre"
-		x_start, x_end = joint_x - SEDLO_LENGTH / 2, joint_x + SEDLO_LENGTH / 2
-		if x_start < left.start[0] or x_end > right.end[0]:
-			raise ValueError("SEDLO_LENGTH extends beyond the adjacent purlins")
-		centre_z = PURLIN_BOTTOM_Z - VAZNICE_HEIGHT / 2
-		sedla.append(upper.beam(
-			f"{side_name} sedlo wall {index}",
-			start=(x_start, y, centre_z),
-			end=(x_end, y, centre_z),
-			size=(VAZNICE_BASE, VAZNICE_HEIGHT),
-			material="Wood",
-			kind="BEAM",
-		))
-	return tuple(sedla)
-
-
-street_sedla = add_purlin_sedla(street_purlins, side_name="Street")
-garden_sedla = add_purlin_sedla(garden_purlins, side_name="Garden")
 
 beam3 = upper.beam(
     "Beam",
@@ -1821,6 +1805,8 @@ roof_layer_storeys.update({
 	"Gypsum plasterboard": house.storey(
 		"Roof - -3: Gypsum plasterboard", elevation=upper.elevation),
 	"Rafters": house.storey("Roof - 0: Rafters", elevation=upper.elevation),
+	"Collar ties": house.storey(
+		"Roof - 0a: Collar ties", elevation=upper.elevation),
 	"Wood fiberboard": house.storey(
 		"Roof - +1: Wood fiberboard", elevation=upper.elevation),
 	"Roofing underlay": house.storey("Roof - +2: Underlay", elevation=upper.elevation),
@@ -1851,8 +1837,8 @@ SLOPED_INNER_LAYER_LAYOUT = {
 FLAT_CEILING_LAYER_HEIGHTS = {
 	# Values are (bottom, top), measured from the upper-storey floor.
 	"Vapour barrier": (
-		SEDLO_BOTTOM_Z - UPPER_FLOOR_START - VAPOUR_BARRIER_THICKNESS,
-		SEDLO_BOTTOM_Z - UPPER_FLOOR_START,
+		FLAT_VAPOUR_BARRIER_TOP_Z - UPPER_FLOOR_START - VAPOUR_BARRIER_THICKNESS,
+		FLAT_VAPOUR_BARRIER_TOP_Z - UPPER_FLOOR_START,
 	),
 	# The horizontal plasterboard remains on its lower suspended-ceiling plane;
 	# the space between it and the vapour barrier is the ceiling/service void.
@@ -1924,6 +1910,45 @@ main_rafter_sections = [
 	if kind == "main"
 ]
 main_rafter_positions = [x for x, _ in main_rafter_sections]
+
+
+def add_collar_ties():
+	"""Two flanking boards per main-rafter pair, bearing on the purlin tops."""
+	# Preserve the existing rule for touching MAIN rafters. Offset dormer
+	# rafters do not suppress a board or create another collar-tie pair.
+	blocked_sides = set()
+	for (left_x, left_width), (right_x, right_width) in zip(
+		main_rafter_sections, main_rafter_sections[1:]
+	):
+		if isclose(right_x - left_x, (left_width + right_width) / 2,
+				   rel_tol=0, abs_tol=1e-9):
+			blocked_sides.update(((left_x, "right"), (right_x, "left")))
+	cuts = tuple(
+		offset_plane(*points, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT)
+		for points in (STREET_ROOF_PLANE_POINTS, GARDEN_ROOF_PLANE_POINTS)
+	)
+	centre_z = PURLIN_TOP_Z + COLLAR_TIE_SIZE[1] / 2
+	ties = []
+	for index, (x, rafter_width) in enumerate(main_rafter_sections, start=1):
+		x_offset = (rafter_width + COLLAR_TIE_THICKNESS) / 2
+		for side, offset in (("left", -x_offset), ("right", x_offset)):
+			if (x, side) in blocked_sides:
+				continue
+			tie = upper.beam(
+				f"Collar tie {index} {side}",
+				start=(x + offset, STREET_ROOF_JOINT_Y - COLLAR_TIE_EXTENSION, centre_z),
+				end=(x + offset, GARDEN_ROOF_JOINT_Y + COLLAR_TIE_EXTENSION, centre_z),
+				size=COLLAR_TIE_SIZE,
+				material="Wood",
+				kind="BEAM",
+				cuts=cuts,
+			)
+			roof_layer_storeys["Collar ties"].add(tie)
+			ties.append(tie)
+	return tuple(ties)
+
+
+collar_ties = add_collar_ties()
 # One transverse spacer for each main-rafter line. Paired dormer rafters lie
 # outside the purlins and do not need a second spacer at their offset X.
 purlin_spacers = tuple(
@@ -3168,6 +3193,7 @@ if "roof" in sys.argv:
 		radius=8.5,
 		storeys=[
 			roof_layer_storeys["Rafters"],
+			roof_layer_storeys["Collar ties"],
 		],
 		door_annotations=False,
 		projected_wood_color="#f4d35e",
@@ -3188,8 +3214,6 @@ if "roof" in sys.argv:
 		wall_zachod_nahore,
 		*street_purlins,
 		*garden_purlins,
-		*street_sedla,
-		*garden_sedla,
 		*purlin_spacers,
 		beam3,
 		beam_cut_street,
@@ -3372,6 +3396,15 @@ if "roof" in sys.argv:
 				"drawing_order": DORMER_WALL_PLATE_DRAWING_ORDER,
 			},
 		),
+		(
+			"Kleštiny",
+			collar_ties,
+			0,
+			{
+				"color": COLLAR_TIE_DRAWING_COLOR,
+				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
+			},
+		),
 	]
 	if roof_window_trimmers:
 		timber_schedule_rows.append(
@@ -3382,14 +3415,6 @@ if "roof" in sys.argv:
 				{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
 			)
 		)
-	timber_schedule_rows.append(
-		(
-			"Sedla vaznic",
-			(*street_sedla, *garden_sedla),
-			0,
-			{"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER - 1},
-		)
-	)
 	timber_schedule_rows.append(
 		(
 			"Rozpěry vaznic",

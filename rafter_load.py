@@ -42,6 +42,7 @@ REPORT_SNOW_LOAD_ZONE = 3
 REPORT_BASIS_STANDARD = "ČSN EN 1990 a příslušná národní příloha"
 REPORT_TIMBER_STANDARD = "ČSN EN 1995-1-1 a příslušná národní příloha"
 REPORT_TIMBER_GRADES_STANDARD = "ČSN EN 338"
+REPORT_GLULAM_GRADES_STANDARD = "ČSN EN 14080"
 
 # Permanent masses per square metre of ACTUAL SLOPING roof surface. Enter the
 # installed mass of every layer. Use 0 only when a listed layer is genuinely
@@ -61,8 +62,8 @@ ROOF_LAYERS_KG_M2: dict[str, float | None] = {
 # project geometry, so keeping them together as constants is useful.
 TIMBER_DENSITY_KG_M3 = 450.0
 TIMBER_MATERIAL_PARTIAL_FACTOR = 1.30
-TIMBER_MODIFICATION_FACTOR = 0.80  # solid timber, service class 2, snow
-TIMBER_CREEP_FACTOR = 0.80  # k_def, solid timber, service class 2
+TIMBER_MODIFICATION_FACTOR = 0.80  # solid timber/glulam, service class 2, snow
+TIMBER_CREEP_FACTOR = 0.80  # k_def, solid timber/glulam, service class 2
 SNOW_CREEP_COMBINATION_FACTOR = 0.0  # psi_2; verify for the project/NA
 PERMANENT_LOAD_FACTOR = 1.35
 SNOW_LOAD_FACTOR = 1.50
@@ -79,11 +80,15 @@ class TimberGrade:
     shear_strength_mpa: float
     compression_parallel_mpa: float
     compression_perpendicular_mpa: float
+    material_partial_factor: float = TIMBER_MATERIAL_PARTIAL_FACTOR
 
 
 _TIMBER_GRADES = {
+    "c18": TimberGrade("C18", 9.0, 18.0, 3.4, 18.0, 2.2),
     "c22": TimberGrade("C22", 10.0, 22.0, 3.8, 20.0, 2.4),
     "c24": TimberGrade("C24", 11.0, 24.0, 4.0, 21.0, 2.5),
+    # Homogeneous glulam, EN 14080; EN 1995-1-1 recommended gamma_M.
+    "gl28h": TimberGrade("GL28h", 12.6, 28.0, 3.5, 28.0, 2.5, 1.25),
 }
 
 
@@ -1832,7 +1837,7 @@ def add_rafter_report(
             - result.self_transverse_n_per_m
         )
         design_strength_multiplier = (
-            TIMBER_MODIFICATION_FACTOR / TIMBER_MATERIAL_PARTIAL_FACTOR
+            TIMBER_MODIFICATION_FACTOR / timber_grade.material_partial_factor
         )
         bending_strength_mpa = (
             timber_grade.bending_strength_mpa * design_strength_multiplier
@@ -1974,7 +1979,7 @@ def add_rafter_report(
                             f"Mezní hodnota fm,d = fm,k × kmod / γM = "
                             f"{_cz(timber_grade.bending_strength_mpa, 2)} MPa × "
                             f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
-                            f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                            f"{_cz(timber_grade.material_partial_factor, 2)} = "
                             f"{bending_limit}.",
                             (bending_limit, REPORT_LIMIT_TINT),
                         ),
@@ -2016,7 +2021,7 @@ def add_rafter_report(
                             f"Mezní hodnota fv,d = fv,k × kmod / γM = "
                             f"{_cz(timber_grade.shear_strength_mpa, 2)} MPa × "
                             f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
-                            f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = {shear_limit}.",
+                            f"{_cz(timber_grade.material_partial_factor, 2)} = {shear_limit}.",
                             (shear_limit, REPORT_LIMIT_TINT),
                         ),
                         _highlighted_line(
@@ -2045,12 +2050,12 @@ def add_rafter_report(
                         f"fc,0,d = fc,0,k × kmod / γM = "
                         f"{_cz(timber_grade.compression_parallel_mpa, 2)} × "
                         f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
-                        f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                        f"{_cz(timber_grade.material_partial_factor, 2)} = "
                         f"{_cz(compression_parallel_strength_mpa, 4)} MPa.",
                         f"fc,90,d = fc,90,k × kmod / γM = "
                         f"{_cz(timber_grade.compression_perpendicular_mpa, 2)} × "
                         f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
-                        f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                        f"{_cz(timber_grade.material_partial_factor, 2)} = "
                         f"{_cz(compression_perpendicular_strength_mpa, 4)} MPa; "
                         f"kc,90 = {_cz(BEARING_STRENGTH_FACTOR, 2)}.",
                         "fc,β,d = fc,0,d / [(fc,0,d / (kc,90 × fc,90,d)) "
@@ -2244,8 +2249,10 @@ def add_roof_report_overview(
                     f"Timber resistance and deformation model: "
                     f"{REPORT_TIMBER_STANDARD}.",
                     f"Characteristic strengths fm,k, fv,k, fc,0,k and "
-                    f"fc,90,k and mean modulus E0,mean for C22/C24: "
+                    f"fc,90,k and mean modulus E0,mean for C18/C22/C24: "
                     f"{REPORT_TIMBER_GRADES_STANDARD}.",
+                    f"Homogeneous glulam GL28h characteristic strengths "
+                    f"and mean modulus: {REPORT_GLULAM_GRADES_STANDARD}.",
                     "The strength class values used by each member are "
                     "printed again in its analysis chapter.",
                 ),
@@ -2260,7 +2267,9 @@ def add_roof_report_overview(
                     "action are included in this preliminary model.",
                     f"Service class 2 and a medium-term governing action are "
                     f"assumed: kmod = {TIMBER_MODIFICATION_FACTOR:g}; "
-                    f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g}.",
+                    f"γM = {TIMBER_MATERIAL_PARTIAL_FACTOR:g} for solid "
+                    f"timber and {_TIMBER_GRADES['gl28h'].material_partial_factor:g} "
+                    "for glulam; the selected grade determines γM.",
                     "Design strengths are calculated from characteristic "
                     "strengths as fd = kmod × fk / γM.",
                     "Bending criterion: σm,d = |MEd| / W < fm,d.",
@@ -2299,9 +2308,11 @@ def add_roof_report_overview(
             (
                 "Explicit preliminary-model assumptions",
                 (
-                    f"Solid-timber density for self-weight is "
+                    f"Default timber density for self-weight is "
                     f"{TIMBER_DENSITY_KG_M3:g} kg/m³ and g = "
                     f"{GRAVITY_M_S2:g} m/s².",
+                    "Density can be overridden per member; confirm the "
+                    "selected timber product's self-weight.",
                     "kcr, kc,90, load-duration class, service class, ψ2, "
                     "bearing lengths and nationally determined parameters "
                     "must be confirmed for the final project and chosen "
@@ -2325,7 +2336,8 @@ def _resolve_timber_grade(material: str | TimberGrade) -> TimberGrade:
     if isinstance(material, TimberGrade):
         return material
     if not isinstance(material, str):
-        raise TypeError("material must be 'c22', 'c24', or a TimberGrade")
+        choices = ", ".join(repr(name) for name in sorted(_TIMBER_GRADES))
+        raise TypeError(f"material must be {choices}, or a TimberGrade")
     try:
         return _TIMBER_GRADES[material.strip().lower()]
     except KeyError as error:
@@ -2514,6 +2526,7 @@ def check_rafter(
         compression_perpendicular_mpa=(
             grade.compression_perpendicular_mpa
         ),
+        material_partial_factor=grade.material_partial_factor,
         bearing_length_mm=bearing_length_mm,
     )
     session.prepare_inputs(snow_load=snow_load, roof_layers=layers)
@@ -2587,7 +2600,7 @@ def _add_purlin_evaluation(
     density = _positive(timber_density_kg_m3, "timber_density_kg_m3")
     grade = _resolve_timber_grade(material)
     design_strength_multiplier = (
-        TIMBER_MODIFICATION_FACTOR / TIMBER_MATERIAL_PARTIAL_FACTOR
+        TIMBER_MODIFICATION_FACTOR / grade.material_partial_factor
     )
     bending_strength_mpa = (
         grade.bending_strength_mpa * design_strength_multiplier
@@ -2655,7 +2668,7 @@ def _add_purlin_evaluation(
         "Mezní hodnota fm,d = fm,k × kmod / γM = "
         f"{_cz(grade.bending_strength_mpa, 2)} MPa × "
         f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
-        f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = {bending_limit}."
+        f"{_cz(grade.material_partial_factor, 2)} = {bending_limit}."
     )
 
     def bending_stress_calculation(moment_nm: float, symbol: str) -> str:
@@ -2768,7 +2781,7 @@ def _add_purlin_evaluation(
                 f"γG = {_cz(PERMANENT_LOAD_FACTOR, 2)}; "
                 f"γQ = {_cz(SNOW_LOAD_FACTOR, 2)}; "
                 f"kmod = {_cz(TIMBER_MODIFICATION_FACTOR, 2)}; "
-                f"γM = {_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)}.",
+                f"γM = {_cz(grade.material_partial_factor, 2)}.",
                 f"Mez průhybu = L/{_cz(ratio, 0)}.",
                 *(
                     (
@@ -2947,7 +2960,7 @@ def _add_purlin_evaluation(
                     f"Mezní hodnota fv,d = fv,k × kmod / γM = "
                     f"{_cz(grade.shear_strength_mpa, 2)} MPa × "
                     f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
-                    f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = {shear_limit}.",
+                    f"{_cz(grade.material_partial_factor, 2)} = {shear_limit}.",
                     _comparison_cz(
                         shear_demand, shear_limit,
                         check.shear_utilization,
@@ -2963,7 +2976,7 @@ def _add_purlin_evaluation(
                     f"{_cz(BEARING_STRENGTH_FACTOR, 2)} × "
                     f"{_cz(grade.compression_perpendicular_mpa, 2)} MPa × "
                     f"{_cz(TIMBER_MODIFICATION_FACTOR, 2)} / "
-                    f"{_cz(TIMBER_MATERIAL_PARTIAL_FACTOR, 2)} = "
+                    f"{_cz(grade.material_partial_factor, 2)} = "
                     f"{bearing_limit}.",
                     f"Plocha uložení A = b × l = "
                     f"{_cz(purlin_width_mm, 0)} mm × "
@@ -3098,6 +3111,7 @@ def _check_purlin(
         compression_perpendicular_mpa=(
             grade.compression_perpendicular_mpa
         ),
+        material_partial_factor=grade.material_partial_factor,
         bearing_length_mm=bearing_length_mm,
     )
     session.prepare_inputs(snow_load=snow_load, roof_layers=layers)
@@ -3519,10 +3533,10 @@ def main() -> None:
 #  PURLIN_SPANS_M = (3.710, 4.720, 2.720)
         check_rafter(
             title="Hlavní krokve, C22",
-            material="c22",
-            width=0.08,
-            height=0.20,
-            span=3.6,
+            material="c18",
+            width=0.10,
+            height=0.18,
+            span=3.5,
             spacing=0.95,
             roof_angle=ROOF_ANGLE_DEGREES,
             max_deflection=MAX_DEFLECTION_RATIO,
@@ -3566,27 +3580,27 @@ def main() -> None:
             bearing_length=0.05,
         )
         check_purlin(
-            title="Vaznice A, C22",
-            material="c22",
-            width=0.24,
-            height=0.24,
-            span=3.74,
-            rafter_length_above=1.05,
-            lower_rafter_span=3.85,
+            title="Vaznice A, c24",
+            material="c24",
+            width=0.20,
+            height=0.32,
+            span=4.5,
+            rafter_length_above=1.4,
+            lower_rafter_span=3.5,
             roof_angle=ROOF_ANGLE_DEGREES,
             rafter_width=0.08,
             rafter_height=0.20,
             rafter_spacing=0.75,
             max_deflection=MAX_DEFLECTION_RATIO,
             snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.12,
+            bearing_length=0.1,
         )
         check_purlin(
-            title="Vaznice B, C24",
-            material="c24",
+            title="Vaznice B, C18",
+            material="c18",
             width=0.24,
-            height=0.28,
-            span=4.50,
+            height=0.24,
+            span=3.75,
             rafter_length_above=1.25,
             lower_rafter_span=3.6,
             roof_angle=ROOF_ANGLE_DEGREES,

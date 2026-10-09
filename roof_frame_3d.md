@@ -18,15 +18,40 @@ python3 -m venv .venv-roof3d
 The wall plate/ring beam is one immovable rigid support, not a second elastic
 beam. Horizontal springs act directly at each rafter connection to this
 support **only**, with a separate optional dormer stiffness. Purlin horizontal
-guides are rigid, independently of those stiffnesses. Four 1.5 m **sedla** are
-included by default under the internal purlin joints; their flexible contact
-replaces direct vertical support at those joints. See the saddle assumptions below.
-Trial bolt shear connections are also on by default: two 12 mm bolts per
-purlin end (four per sedlo). Vertical hold-down is a separate assumption.
+guides are rigid, independently of those stiffnesses. **Gerber purlins** are
+the default: `GERBER_JOINT_1` and `GERBER_JOINT_2` are absolute design X
+coordinates, before mirroring. Hinges may lie in the middle span or one in each
+side span; wall bearings are assigned to the pieces containing the actual wall
+centres. There are no sedla or invented supports under cantilever-tip hinges.
+See the Gerber assumptions below.
+Purlin-to-wall bearings are **vertically attached** by default: upward movement
+is prevented, and an upward force delivered to the wall is reported in kN as
+the required hold-down demand. Red circles identify these supports in both PNGs.
+This is an ideal attachment, not a fastener-capacity check. The same rule applies
+to the saddle-to-wall bearing in the legacy sedlo model.
+Use `--allow-purlin-lift-off` for the previous compression-only comparison
+(`Settings.purlin_bearing_uplift=True`): closed contact uses a numerical rigid-limit
+stiffness of 1e9 N/m, not measured wood compression. Open contact retains the
+horizontal/roll guides but releases vertical restraint. `--fixed-purlin-bearings`
+explicitly selects the default attached model (`purlin_bearing_uplift=False`).
+When a rafter crosses two wall plates, only the lower/eave-side plate is a
+connected seat. The intermediate plate remains as **vertical compression-only
+bearing**: it prevents downward sagging but allows separation, horizontal
+sliding and free rotation. No friction or hold-down is assumed there. This is
+implemented as a unilateral spring to the immovable structure, using a numerical
+rigid-limit stiffness of 1e9 N/m (not a measured connection stiffness). The
+contact starts with zero gap and can open/reclose independently in each load case.
+Rafters with only one wall-plate seat retain the existing connected-seat model.
+The old sedlo and independent-piece arrangements remain available as explicit
+comparisons; trial sedlo bolts apply only to the saddle arrangement.
 Timber grades are selected independently by `--rafter-material` and
-`--beam-material`. Actual endpoint pairs are used for all rafters.
-Roof-layer mass and snow are configured in `Settings` in this script (currently
-150 kg/m² and 3.0 kN/m²). Collar ties are off by default.
+`--beam-material`; both accept C18, C22 and C24. The beam grade also applies to
+sedla and purlin spacers. Collar ties use their separate `COLLAR_TIE_MATERIAL`
+setting (also accepting C18). Existing default grades are unchanged.
+Actual endpoint pairs are used for all rafters.
+Roof-layer mass and snow are configured in `Settings` in this script and
+printed in every run. Paired 50 × 150 mm collar ties above the purlins
+are included by default; use `--no-collar-ties` for comparison.
 Options:
 
 ```bash
@@ -35,19 +60,111 @@ python roof_frame_3d.py --horizontal-stiffness 0.12
 python roof_frame_3d.py --horizontal-stiffness 120 --dormer-horizontal-stiffness 0.12
 python roof_frame_3d.py --horizontal-stiffness rigid --output roof_frame_3d_rigid
 python roof_frame_3d.py --purlin-lateral both
+python roof_frame_3d.py --middle-snow --purlin-lateral both
+python roof_frame_3d.py --fixed-purlin-bearings --output /tmp/roof_fixed_bearings
+python roof_frame_3d.py --middle-snow --allow-purlin-lift-off --output /tmp/roof_lift_off
 python roof_frame_3d.py --rafter-material C24 --beam-material C22
+python roof_frame_3d.py --rafter-material C18 --beam-material C18
 python roof_frame_3d.py --collar-ties
+python roof_frame_3d.py --no-collar-ties
 python roof_frame_3d.py --no-spacers
-python roof_frame_3d.py --no-saddles --output /tmp/roof_without_saddles
-python roof_frame_3d.py --saddle-contact-factor 0.1 --output /tmp/roof_soft_contact
-python roof_frame_3d.py --saddle-contact-spacing 0.05 --output /tmp/roof_fine_contact
-python roof_frame_3d.py --no-saddle-bolts --output /tmp/roof_bearing_only
-python roof_frame_3d.py --saddle-bolt-slip-gap 1 --output /tmp/roof_bolt_clearance
-python roof_frame_3d.py --saddle-bolt-hold-down ideal --output /tmp/roof_bolt_hold_down
+python roof_frame_3d.py --purlin-system gerber
+python roof_frame_3d.py --purlin-system simple --output /tmp/roof_independent_pieces
+python roof_frame_3d.py --purlin-system saddles --output /tmp/roof_with_sedla
+python roof_frame_3d.py --purlin-system saddles --saddle-contact-factor 0.1 --output /tmp/roof_soft_contact
+python roof_frame_3d.py --purlin-system saddles --saddle-contact-spacing 0.05 --output /tmp/roof_fine_contact
+python roof_frame_3d.py --purlin-system saddles --no-saddle-bolts --output /tmp/roof_bearing_only
+python roof_frame_3d.py --purlin-system saddles --saddle-bolt-slip-gap 1 --output /tmp/roof_bolt_clearance
+python roof_frame_3d.py --purlin-system saddles --saddle-bolt-hold-down ideal --output /tmp/roof_bolt_hold_down
 python roof_frame_3d.py --output /tmp/roof3d
 python roof_frame_3d.py --rafter-chord-fallback na
 python roof_frame_3d.py --plan-force-combination SLS_symmetric
 ```
+
+### Gerber purlins (default)
+
+`RoofLayout.from_house()` reads the actual `PURLIN_X_SEGMENTS` from the IFC
+script. The four **wall-centre** bearings stay at their real coordinates and
+belong to whichever piece contains them. Changing joint positions automatically
+changes the load path; no additional mode switch is necessary:
+
+- **Both joints between the inner walls:** the outer pieces each have two wall
+  bearings and cantilever inward to support a suspended middle piece. Its local
+  chord runs hinge-to-hinge; the outer chords run wall-to-wall.
+- **One joint in each side span:** the middle piece has both inner-wall bearings
+  and cantilevers outward to support the side pieces. Its chord runs wall-to-wall
+  (4.72 m for this house); each side chord runs between its outer wall and hinge.
+- **One side-span joint and one middle-span joint:** the load path is evaluated
+  in sequence, with each local chord using its actual wall/hinge support pair.
+
+Example side-span coordinates are `GERBER_JOINT_1 = 2.84` and
+`GERBER_JOINT_2 = 9.06` (0.75 m outside the inner-wall centres). Set these in
+`house_ifc.py`, then run the simulator normally. Two hinges in one side span
+are rejected as unstable. A hinge exactly at an inner-wall centre retains the
+outer-piece wall bearing, without duplicating the ground restraint.
+
+Four shared hinge nodes have continuous translations. Both bending rotations
+are released **only at hinge ends**, using
+[PyNite member end releases](https://pynite.readthedocs.io/en/latest/member.html).
+The carrying piece stays continuous through its wall bearings. Hinge displacement
+comes from that flexible carrying piece, not an invented ground restraint.
+
+In addition, each middle piece gets a **complete wall-to-wall bay check**:
+draw a line through the displaced inner-wall bearings and check every portion
+of the three pieces lying within that bay. This includes cantilever-tip sag
+when the middle piece is suspended; with side-span hinges, it coincides with
+the middle piece's ordinary wall-to-wall check. Its L/300 and L/500 limits use
+the original inner-wall centre distance, regardless of the hinge spacing.
+Both local and complete-bay checks govern the middle piece's PNG colour;
+either L/300 failure makes it red. Overhangs outside the bay are excluded from
+that check, but remain in the bending/shear and absolute-displacement results.
+Cantilever-tip movement is also reported separately.
+
+Torsion continuity at the joints and roll restraint at wall bearings are
+retained as explicit idealisations. The hinges transfer axial and shear forces
+bilaterally, with no assumed connection slip. **Gerber joint strength, fastener
+capacity and uplift/separation are not checked**; this is not a connection design.
+These idealisations must be validated against the proposed physical detail.
+
+Blue diamonds identify the four hinges in the plan PNG; white circles remain
+actual wall supports. `_gerber_joints.csv` reports their displacements and forces
+delivered to the named `carrier` by the named `supported` piece, using the
+`*_to_carrier_*` columns. Older `suspended` and `*_to_outer_*` columns remain
+compatibility aliases; their names do not describe the new side-span arrangement.
+Forces use global axes, for every load case. Global-Y/Z bending moments should
+be zero; global-X torsion can be nonzero. The basis JSON records the connection
+assumptions and joint locations.
+The additional check is printed separately in the terminal and stored as
+`wall_chord_*` columns in the member CSV, including the peak member and its
+station measured from the left inner wall. Existing `chord_*` columns retain
+the local actual-support-pair result. Both are immediate SLS checks with strict `<`;
+they do not replace strength, creep, stability or connection checks.
+
+`--purlin-system saddles` and `--purlin-system simple` reconstruct the old
+piece boundaries over the wall centres for comparison; they do not mistake the
+new hinge locations for wall supports. `--no-saddles` is retained as an alias
+for the simple independent-piece comparison.
+
+### Middle-only snow (optional sensitivity case)
+
+`--middle-snow` adds `SLS_middle` (1G + 1S) and `ULS_middle` (1.35G + 1.5S).
+In these two cases snow is applied on both roof sides, including the dormer,
+only between `wall2_x - BWT/2` and `wall3_x - BWT/2`. There is no snow outside
+that X strip. Roof layers and timber self-weight remain everywhere, and the
+usual symmetric/street/garden cases remain in the report and deflection envelope.
+Boundary rafters receive their actual overlapping tributary area, not an
+all-or-nothing load based on their centre position.
+
+The boundaries are the **inner-wall centres**, not the shortened middle purlin's
+Gerber hinges. They are stored in `RoofLayout.middle_snow_bounds`; the switch is
+also available as `Settings.middle_snow=True`. This is an artificial load-pattern
+experiment, not a code-prescribed snow distribution or a complete uplift check.
+Snow intensity remains `Settings.snow_load`.
+
+With the switch, force arrows default to `ULS_middle` and the deformation PNG
+shows `SLS_middle`. Red lift-off circles still include **all** analysed cases.
+Use `--plan-force-combination SLS_middle` to show service-case force arrows.
+Output names receive `_middle_snow` so the usual reports are not overwritten.
 
 ### Purlin spacers (rozpěry vaznic)
 
@@ -92,11 +209,21 @@ only produced when explicitly requested):
   the street for street bearings, toward the garden for garden/dormer bearings.
   Negative means inward. The terminal totals are simultaneous signed sums,
   **not** a design force for the concrete ring beam; inspect individual loads.
-  `support_kind` distinguishes `rafter_connection`, `purlin_bearing`,
+  `support_kind` distinguishes `rafter_connection`, `rafter_bearing_only`, `purlin_bearing`,
   `purlin_horizontal_guide` (internal joint, no direct vertical reaction), and
   `saddle_bearing` (vertical reaction delivered to the wall under the saddle).
   `Dx_mm`, `Dy_mm`, `Dz_mm` record movements of the supported timber node:
   at a wall plate these are **rafter connection slip**, not ring-beam movement.
+  `horizontal_movement_mm = sqrt(Dx_mm² + Dy_mm²)` is the horizontal resultant.
+  The terminal reports the largest rafter-to-wall-plate movement over all
+  connections and load combinations, plus a separate SLS maximum, naming the
+  rafter, wall plate and governing combination. Purlin bearings are excluded
+  from these connection maxima.
+  Bearing-only seats are excluded from connection-slip maxima; their movements
+  are nevertheless listed in the CSV. `vertical_contact_active` identifies closed
+  versus open intermediate seats; positive `Dz_mm` is the separation gap there,
+  and small negative values are numerical bearing compression. Their forces come
+  from the fixed end of the contact spring, not the unrestrained rafter node.
   The rigid wall plate/ring beam never moves. The two
   `horizontal_*_stiffness_kn_mm` columns contain the spring stiffness, `rigid`
   for an ideal fixed direction, or zero for a free direction. Spring force
@@ -127,20 +254,21 @@ only produced when explicitly requested):
   legend and signed horizontal-force arrows at every rafter/wall-plate seat.
   `_free_plan.png` is produced when the free variant is requested.
 
-### Optional collar ties (kleštiny)
+### Collar ties (kleštiny)
 
-Use `--collar-ties` to compare the same roof with pinned axial collar links.
+Paired pinned axial collar links are enabled by default. Use `--no-collar-ties`
+to compare the same roof without them (`--collar-ties` remains an explicit alias).
 Edit the `COLLAR_TIE_*` constants near the top of `roof_frame_3d.py`; their
 dimensions and placement do **not** depend on IFC collar-tie definitions:
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
 | `COLLAR_TIE_WIDTH_M` | 0.05 | Width of one board, m |
-| `COLLAR_TIE_HEIGHT_M` | 0.20 | Height of one board, m |
+| `COLLAR_TIE_HEIGHT_M` | 0.15 | Height of one board, m |
 | `COLLAR_TIE_BOARDS_PER_PAIR` | 2 | One or two boards per main rafter pair |
 | `COLLAR_TIE_MATERIAL` | C22 | C22 or C24 |
-| `COLLAR_TIE_TOP_HEIGHT_M` | 3.25 | Board top above the upper-storey floor, m |
-| `COLLAR_TIE_MIDDLE_LOWERING_M` | 0.08 | Lowering in the middle purlin region, m |
+| `COLLAR_TIE_TOP_HEIGHT_M` | None | Bottom follows purlin tops; a number overrides the board top above the upper-storey floor, m |
+| `COLLAR_TIE_MIDDLE_LOWERING_M` | 0.0 | Optional lowering in the middle purlin region, m |
 | `COLLAR_TIE_OMIT_TOUCHING_SIDES` | True | Omit boards between touching main rafters |
 
 Programmatic callers can pass `collar_ties=CollarTieParameters(...)` to
@@ -165,8 +293,9 @@ in the top-view report and are purple in the 3D model image. Magenta is a catego
 colour, **not a successful deflection or strength check**. Their top-view strips
 are diagrammatic equivalents on the rafter axes, not the separate side boards.
 
-Runs with ties use a separate `_collars` prefix, for example
-`roof_frame_3d_collars_restrained_plan.png`, so the no-tie reports are preserved.
+Default runs include ties and retain the usual filenames, for example
+`roof_frame_3d_restrained_plan.png`. Runs with `--no-collar-ties` use a separate
+`_no_collars` prefix so they do not overwrite the default reports.
 
 ### Top-view report
 
@@ -174,6 +303,24 @@ Normal runs generate the image automatically alongside the existing 3D image.
 `--no-plot` suppresses both. `plot_plan_report(roof, members, path,
 force_combo="ULS_symmetric")` can also be called directly with a solved model
 and its existing `member_rows` results.
+
+Both PNGs mark uplift locations with hollow **red circles** at the undeformed
+support positions. The check matches the terminal warning: upward load delivered
+to the support `Fz_kN > 1e-6`, over **all** SLS/ULS combinations, independently
+of the image's selected arrow/deformation case. Each support has one circle;
+both PNGs label its maximum uplift in kN and governing combination. Red circles
+indicate uplift, not the red member fill used for failed deflection checks.
+Bearing-only wall-plate seats are also circled when the rafter separates from
+the plate, even though the transmitted uplift force is zero. These markers use
+the largest positive `Dz_mm > 1e-6` over all load cases and are labelled
+`lift-off ... mm` with the governing combination in both PNGs. This is an actual
+opening displacement, distinct from an attached seat's hold-down force in kN.
+Purlin and legacy saddle wall bearings use force labels in kN by default, because
+they are attached and cannot lift. With `--allow-purlin-lift-off`, the same circles
+instead mark open wall contacts with `lift-off ... mm`. Open contact transmits zero vertical force;
+`Dz_mm` and `vertical_contact_active` in the support CSV identify the opening.
+Vertical reactions are recovered at the ground end of the contact spring,
+while horizontal forces and moments remain those of the timber's wall guide.
 
 Colours use the **existing immediate chord-relative checks over all SLS load
 combinations**, not ULS deflections or absolute settlement:
@@ -252,10 +399,12 @@ outside this model. A PASS is only a pass of the indicated chord criterion.
 
 ## Purlin chord-relative displacement
 
-Each of the six separately modelled purlin pieces uses the **displaced centre-line
-points above its two wall centres** as its chord endpoints. At internal joints
-these are horizontally guided nodes vertically supported through a saddle,
-not vertically fixed purlin nodes. The
+Outer Gerber purlin pieces use the **displaced centre-line points above their
+two wall centres** as chord endpoints. The suspended middle pieces use their
+**displaced Gerber hinge endpoints**, labelled `gerber_hinge_to_hinge`.
+For legacy simple/saddle layouts all six pieces use wall-centre references;
+in the saddle comparison the internal endpoints move through flexible contact.
+The
 maximum 3D perpendicular distance is calculated by the same method as for
 rafters. It includes both vertical and lateral bending, while removing the
 straight-line movement of the bearings. `L` is the original bearing-to-bearing
@@ -267,7 +416,8 @@ its load combination, L/300 and L/500 limits and strict PASS/FAIL comparisons.
 Its maximum sampled absolute vertical displacement and governing combination
 are also printed separately; these two maxima need not have the same location
 or load combination. The CSV uses the shared `chord_*` columns with
-`chord_reference=bearing_to_bearing` and the actual bearing node names. Basis
+`chord_reference=bearing_to_bearing` or `gerber_hinge_to_hinge`, with the
+actual reference node names. Basis
 JSON records the reference and assumptions.
 
 These purlin comparisons have the same immediate-deflection screening scope
@@ -364,25 +514,26 @@ translations interact through the common saddle and bearing contact.
 Their X translation and roll about X are fixed, and Y translation is fixed
 by default (`--purlin-lateral restrained`), with no horizontal bearing springs.
 `--purlin-lateral free` deliberately leaves purlin Y free while retaining
-rigid X and the independent wall-plate connection springs. Direct vertical
-support remains at outer walls; internal vertical support is through saddles
-(or directly fixed with `--no-saddles`). Bending rotations
+rigid X and the independent wall-plate connection springs. Direct wall supports
+are vertically attached by default; internal vertical support is through saddles
+(or directly attached to the wall with `--no-saddles`).
+`--allow-purlin-lift-off` changes wall attachment to compression-only contact. Bending rotations
 are free. Thus "laterally free" means free horizontal Y translation, **not**
 freedom to roll/twist. `--horizontal-stiffness rigid` (or `None` in Settings)
 makes general connections rigid; the dormer follows unless explicitly
 overridden. Use `--dormer-horizontal-stiffness rigid` to fix the dormer separately.
 Actual rolling restraint, brackets and anchorage need verification.
 
-### Purlin saddles (sedla)
+### Purlin saddles (sedla, legacy comparison only)
 
 `add_purlin_saddles()` asserts equal width and height for all six purlin pieces.
 It adds four longitudinal beams, centred at wall2/wall3 on the street and
 garden purlin lines. Each has the adjacent purlin's section and grade, and its
 top touches the purlin underside. Their length follows `SEDLO_LENGTH` in
 `house_ifc.py` (currently 1.5 m); `SADDLE_LENGTH_M` is the fallback for synthetic
-layouts. The IFC generator also creates these four beams and shortens the
-inner support walls by `VAZNICE_HEIGHT`, so the sedla rest on the wall tops
-without local wall openings. Purlin and sedlo elevations stay unchanged. Saddle bending
+layouts. This is now a **simulator-only legacy comparison**: the current IFC
+has no sedla and its inner walls reach the purlin underside. Purlin and sedlo
+elevations in the comparison stay unchanged. Saddle bending
 uses the normal along-grain timber modulus; self-weight is included once.
 
 Saddles are vertically pinned at the wall centre, with free bending rotation.
@@ -593,6 +744,8 @@ a structural engineer must validate them before relying on the forces.
   independent hold-down assumption and per-bolt exports.
 - `build_roof_model`: connectivity, seat releases, supports, tributary loads
   and load combinations.
+- `RoofLayout.purlin_system`, `RoofLayout.gerber_joints`, `gerber_joint_rows`:
+  Gerber/legacy layout choice, bending-hinge connectivity and hinge exports.
 - `solve_roof_model`, `check_equilibrium`: solver and independent balance check.
 - `rafter_chord`, `purlin_chord`, `maximum_chord_departure`, `chord_result_columns`: physical
   endpoint selection, maximum chord-relative displacement and SLS limit checks.

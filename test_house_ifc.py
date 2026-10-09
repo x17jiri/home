@@ -15,7 +15,7 @@ import numpy as np
 from ifc_utils import Drawing, House
 
 
-class CollarRemovalTests(unittest.TestCase):
+class RoofFramingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         source = Path(__file__).with_name("house_ifc.py")
@@ -28,13 +28,13 @@ class CollarRemovalTests(unittest.TestCase):
             cls.values = runpy.run_path(str(source))
             cls.rendered = [call.args[0] for call in render.call_args_list]
 
-    def test_no_collar_tie_beams_or_visibility_storey(self):
+    def test_paired_collar_ties_above_purlins_and_visibility_storey(self):
         model = self.values["house"].model
         beams = model.by_type("IfcBeam")
         self.assertTrue(beams)
-        self.assertFalse(any((beam.Name or "").startswith("Collar tie ") for beam in beams))
-        self.assertNotIn("Collar ties", self.values["roof_layer_storeys"])
-        self.assertFalse(
+        self.assertEqual(sum((beam.Name or "").startswith("Collar tie ") for beam in beams), 32)
+        self.assertIn("Collar ties", self.values["roof_layer_storeys"])
+        self.assertTrue(
             any(
                 "Collar ties" in (storey.Name or "")
                 for storey in model.by_type("IfcBuildingStorey")
@@ -43,16 +43,51 @@ class CollarRemovalTests(unittest.TestCase):
         self.assertTrue(self.values["main_roof_rafters"])
         self.assertEqual(len(self.values["street_purlins"]), 3)
         self.assertEqual(len(self.values["garden_purlins"]), 3)
+        values = self.values
+        ties = values["collar_ties"]
+        self.assertEqual(len(ties), 2 * len(values["main_rafter_sections"]))
+        for index, (x, width) in enumerate(values["main_rafter_sections"]):
+            left, right = ties[index * 2 : index * 2 + 2]
+            for tie, sign in ((left, -1), (right, 1)):
+                with self.subTest(tie=tie.Name):
+                    self.assertEqual((tie.width, tie.height), (0.05, 0.15))
+                    self.assertAlmostEqual(tie.start[0], x + sign * (width + tie.width) / 2)
+                    vertices = self.finished_vertices(tie)
+                    self.assertAlmostEqual(vertices[:, 2].min(), values["PURLIN_TOP_Z"])
+                    self.assertAlmostEqual(vertices[:, 2].max(), values["PURLIN_TOP_Z"] + 0.15)
+                    # The sloped finished ends span both complete purlin widths.
+                    self.assertLess(vertices[:, 1].min(), values["STREET_ROOF_JOINT_Y"])
+                    self.assertGreater(vertices[:, 1].max(), values["GARDEN_ROOF_JOINT_Y"])
+                    self.assertEqual(
+                        ifcopenshell.util.element.get_container(tie),
+                        values["roof_layer_storeys"]["Collar ties"].element,
+                    )
 
-    def test_roof_and_aa_drawings_build_and_schedule_omits_collar_rows(self):
+    def test_roof_and_aa_drawings_build_and_schedule_includes_collar_rows(self):
         self.assertEqual(self.rendered, ["roof.svg", "aa.svg"])
         names = [row[0] for row in self.values["timber_schedule_rows"]]
-        self.assertFalse(any("Kleštiny" in name for name in names))
+        self.assertIn("Kleštiny", names)
         self.assertTrue(any("Vaznice" in name for name in names))
         self.assertTrue(any("Krokve" in name for name in names))
         self.assertTrue(any("Pozednice" in name for name in names))
-        self.assertIn("Sedla vaznic", names)
+        self.assertNotIn("Sedla vaznic", names)
         self.assertIn("Rozpěry vaznic", names)
+        row = next(row for row in self.values["timber_schedule_rows"] if row[0] == "Kleštiny")
+        self.assertEqual(tuple(row[1]), self.values["collar_ties"])
+        self.assertGreater(
+            row[3]["drawing_order"], self.values["PURLIN_AND_WALL_PLATE_DRAWING_ORDER"]
+        )
+        self.assertLess(row[3]["drawing_order"], self.values["MAIN_RAFTER_DRAWING_ORDER"])
+
+    def test_collar_ties_are_mirrored_once(self):
+        exported = self.values["house"]._export_model()
+        for tie in self.values["collar_ties"]:
+            original = self.finished_vertices(tie)
+            mirrored = self.finished_vertices(exported.by_guid(tie.GlobalId))
+            np.testing.assert_allclose(mirrored[:, 1:].min(axis=0), original[:, 1:].min(axis=0))
+            np.testing.assert_allclose(mirrored[:, 1:].max(axis=0), original[:, 1:].max(axis=0))
+            self.assertAlmostEqual(mirrored[:, 0].min(), -original[:, 0].max())
+            self.assertAlmostEqual(mirrored[:, 0].max(), -original[:, 0].min())
 
     def test_purlin_spacers_follow_main_rafter_positions_and_touch_inner_faces(self):
         values = self.values
@@ -96,7 +131,7 @@ class CollarRemovalTests(unittest.TestCase):
                 atol=1e-8,
             )
 
-    def test_uniform_purlins_and_four_sedla_rest_on_shortened_walls(self):
+    def test_uniform_purlins_have_inset_gerber_joints_and_no_sedla(self):
         values = self.values
         self.assertNotIn("VAZNICE_EXTRA_HEIGHT", values)
         self.assertNotIn("add_purlin_wall_recess", values)
@@ -109,50 +144,55 @@ class CollarRemovalTests(unittest.TestCase):
             self.assertAlmostEqual(beam.start[2] + beam.height / 2, values["PURLIN_TOP_Z"])
         for side in ("street", "garden"):
             beams = values[side + "_purlins"]
-            sedla = values[side + "_sedla"]
-            self.assertEqual(len(sedla), 2)
-            for wall, left, right, sedlo in zip(
-                (values["wall_2"], values["wall_3"]), beams, beams[1:], sedla
-            ):
-                self.assertEqual((sedlo.width, sedlo.height), (left.width, left.height))
-                self.assertEqual(left.end, right.start)
-                self.assertAlmostEqual((sedlo.start[0] + sedlo.end[0]) / 2, left.end[0])
-                self.assertAlmostEqual(sedlo.end[0] - sedlo.start[0], values["SEDLO_LENGTH"])
-                self.assertAlmostEqual(sedlo.start[2] + sedlo.height / 2, values["PURLIN_BOTTOM_Z"])
-                self.assertFalse(sedlo.FillsVoids)
-                self.assertAlmostEqual(
-                    self.finished_vertices(wall)[:, 2].max(),
-                    sedlo.start[2] - sedlo.height / 2,
-                )
-        schedule = next(row for row in values["timber_schedule_rows"] if row[0] == "Sedla vaznic")
-        self.assertEqual(len(schedule[1]), 4)
+            self.assertEqual(len(beams), 3)
+            left, middle, right = beams
+            self.assertEqual(left.end, middle.start)
+            self.assertEqual(middle.end, right.start)
+            self.assertAlmostEqual(middle.start[0], values["GERBER_JOINT_1"])
+            self.assertAlmostEqual(middle.end[0], values["GERBER_JOINT_2"])
+            self.assertAlmostEqual(
+                middle.length, values["GERBER_JOINT_2"] - values["GERBER_JOINT_1"]
+            )
+            self.assertAlmostEqual(left.start[0], -0.2)
+            self.assertAlmostEqual(right.end[0], values["HOUSE_WIDTH"] + 0.2)
+            self.assertAlmostEqual(left.length, values["GERBER_JOINT_1"] + 0.2)
+            self.assertAlmostEqual(
+                right.length, values["HOUSE_WIDTH"] + 0.2 - values["GERBER_JOINT_2"]
+            )
+        self.assertNotIn("add_purlin_sedla", values)
+        self.assertNotIn("street_sedla", values)
+        self.assertNotIn("garden_sedla", values)
+        self.assertFalse(
+            any("sedlo" in (beam.Name or "").lower() for beam in values["house"].model.by_type("IfcBeam"))
+        )
 
-    def test_sedla_are_mirrored_once_and_stay_under_their_purlin_joints(self):
+    def test_gerber_purlins_are_mirrored_once_and_have_no_joint_gaps(self):
         values = self.values
         exported = values["house"]._export_model()
         for side in ("street", "garden"):
-            for left, sedlo in zip(
-                values[side + "_purlins"],
-                values[side + "_sedla"],
-            ):
+            bounds = []
+            for beam in values[side + "_purlins"]:
                 self.assertEqual(
-                    sedlo.ObjectPlacement.PlacementRelTo,
+                    beam.ObjectPlacement.PlacementRelTo,
                     values["upper"].element.ObjectPlacement,
                 )
-                vertices = self.finished_vertices(exported.by_guid(sedlo.GlobalId))
+                vertices = self.finished_vertices(exported.by_guid(beam.GlobalId))
                 low, high = vertices.min(axis=0), vertices.max(axis=0)
+                bounds.append((low, high))
                 np.testing.assert_allclose(
                     (low + high) / 2,
-                    (-left.end[0], left.end[1], values["PURLIN_BOTTOM_Z"] - sedlo.height / 2),
+                    (-(beam.start[0] + beam.end[0]) / 2, beam.start[1], beam.start[2]),
                     atol=1e-8,
                 )
                 np.testing.assert_allclose(
-                    high - low, (values["SEDLO_LENGTH"], sedlo.width, sedlo.height), atol=1e-8
+                    high - low, (beam.length, beam.width, beam.height), atol=1e-8
                 )
+            for (left_low, _), (_, right_high) in zip(bounds, bounds[1:]):
+                self.assertAlmostEqual(left_low[0], right_high[0])
 
-    def test_inner_walls_have_lower_top_without_sedlo_openings_or_recesses(self):
+    def test_inner_walls_reach_outer_wall_height_without_sedlo_openings_or_recesses(self):
         values = self.values
-        expected = values["PURLIN_WALL_TOP_HEIGHT"] - values["VAZNICE_HEIGHT"]
+        expected = values["PURLIN_WALL_TOP_HEIGHT"]
         for name in ("wall_2", "wall_3"):
             wall = values[name]
             self.assertAlmostEqual(wall.height, expected)
@@ -165,7 +205,7 @@ class CollarRemovalTests(unittest.TestCase):
         self.assertFalse(any("sedlo" in (opening.Name or "").lower() for opening in openings))
         self.assertIn(values["sklad_opening"], openings)
         self.assertEqual(len(values["wall_cuts_2_3"]), 2)
-        # Outer/gable walls and the roof datum are not lowered.
+        # Both inner and outer/gable walls reach the unchanged purlin bottom.
         self.assertAlmostEqual(
             self.finished_vertices(values["wall_4_u"])[:, 2].max(), values["PURLIN_BOTTOM_Z"]
         )
@@ -288,7 +328,7 @@ class CollarRemovalTests(unittest.TestCase):
                 self.assertLess(symbol_thickness, physical_thickness)
                 self.assertAlmostEqual(symbol_thickness / physical_thickness, between_rafter_ratio)
 
-    def test_horizontal_vapour_barrier_is_directly_below_sedla(self):
+    def test_horizontal_vapour_barrier_keeps_its_height_without_sedla(self):
         values = self.values
         plane = values["flat_ceiling_roof"]
         layers = [
@@ -296,15 +336,12 @@ class CollarRemovalTests(unittest.TestCase):
         ]
         self.assertTrue(layers)
         for layer in layers:
-            expected_top = values["SEDLO_BOTTOM_Z"]
+            expected_top = values["PURLIN_BOTTOM_Z"] - values["VAZNICE_HEIGHT"]
+            self.assertAlmostEqual(values["FLAT_VAPOUR_BARRIER_TOP_Z"], expected_top)
             vertices = self.finished_vertices(layer)
             self.assertAlmostEqual(vertices[:, 2].max(), expected_top, places=6)
             self.assertAlmostEqual(
                 vertices[:, 2].min(), expected_top - values["VAPOUR_BARRIER_THICKNESS"], places=6
-            )
-        for sedlo in (*values["street_sedla"], *values["garden_sedla"]):
-            self.assertAlmostEqual(
-                self.finished_vertices(sedlo)[:, 2].min(), values["SEDLO_BOTTOM_Z"]
             )
         # Moving the vapour barrier does not move the plasterboard ceiling.
         self.assertAlmostEqual(
