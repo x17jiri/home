@@ -30,6 +30,8 @@ from rafter_load import (
     calculate_continuous_beam_response,
     calculate_rafter_load,
     calculate_purlin_check,
+    calculate_double_purlin_check,
+    check_double_purlin,
     check_continuous_purlin,
     calculate_roof_check,
     add_rafter_report,
@@ -40,6 +42,116 @@ from rafter_load import (
 
 
 class RafterLoadTests(unittest.TestCase):
+    @unittest.skipUnless(which("pdftotext"), "PDF text extraction needs pdftotext")
+    def test_c20_gl24h_gl28c_work_in_all_checks_and_report(self) -> None:
+        output = StringIO()
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "new-grades.pdf"
+            with redirect_stdout(output), calculation_report(path, include_creep=True):
+                for material in ("c20", "gl24h", "gl28c"):
+                    with self.subTest(material=material):
+                        grade = _resolve_timber_grade(material)
+                        rafter = check_rafter(
+                            title="Krokve " + grade.name, material=material.upper(),
+                            width=0.08, height=0.20, span=3.85, spacing=0.75,
+                            roof_angle=35.83, max_deflection=300, snow_load=1.5,
+                            roof_layers={"Layers": 130}, bearing_length=0.05,
+                        )
+                        arguments = dict(
+                            material=material, width=0.24, rafter_length_above=1.05,
+                            lower_rafter_span=3.85, roof_angle=35.83,
+                            rafter_width=0.08, rafter_height=0.20,
+                            rafter_spacing=0.75, max_deflection=300, snow_load=1.5,
+                            roof_layers={"Layers": 130}, bearing_length=0.12,
+                        )
+                        purlin = check_purlin(
+                            title="Vaznice " + grade.name, span=4.72, height=0.28,
+                            **arguments,
+                        )
+                        continuous = check_continuous_purlin(
+                            title="Souvislá vaznice " + grade.name,
+                            spans=(3.47, 4.72, 2.72), height=0.28, **arguments,
+                        )
+                        double = check_double_purlin(
+                            title="Dvojitá vaznice " + grade.name, span=4.72,
+                            height_top=0.28, height_bottom=0.20, **arguments,
+                        )
+                        multiplier = 0.8 / grade.material_partial_factor
+                        self.assertAlmostEqual(
+                            rafter.bending_resistance_nm,
+                            grade.bending_strength_mpa * 1e6 * multiplier * .08 * .20**2 / 6,
+                        )
+                        for check, height in ((purlin, .28), (continuous, .28),
+                                              (double.top, .28), (double.bottom, .20)):
+                            self.assertAlmostEqual(
+                                check.bending_resistance_nm,
+                                grade.bending_strength_mpa * 1e6 * multiplier * .24 * height**2 / 6,
+                            )
+            text = subprocess.run(["pdftotext", str(path), "-"], check=True,
+                                  capture_output=True, text=True).stdout
+            for name in ("C20", "GL24h", "GL28c"):
+                for title in ("Krokve", "Vaznice", "Souvislá vaznice", "Dvojitá vaznice"):
+                    self.assertIn(title + " " + name, text)
+                    self.assertIn(title + " " + name + ":", output.getvalue())
+
+    def test_c16_material_properties_and_case_insensitive_lookup(self) -> None:
+        grade = _resolve_timber_grade(" c16 ")
+        self.assertEqual(grade, _resolve_timber_grade("C16"))
+        self.assertEqual(grade.name, "C16")
+        self.assertEqual(grade.elastic_modulus_gpa, 8.0)
+        self.assertEqual(grade.bending_strength_mpa, 16.0)
+        self.assertEqual(grade.shear_strength_mpa, 3.2)
+        self.assertEqual(grade.compression_parallel_mpa, 17.0)
+        self.assertEqual(grade.compression_perpendicular_mpa, 2.2)
+        self.assertEqual(grade.material_partial_factor, 1.3)
+
+    @unittest.skipUnless(which("pdftotext"), "PDF text extraction needs pdftotext")
+    def test_c16_works_in_all_checks_and_report(self) -> None:
+        output = StringIO()
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "c16.pdf"
+            with redirect_stdout(output), calculation_report(path, include_creep=True):
+                rafter = check_rafter(
+                    title="Krokve C16", material="C16", width=0.08,
+                    height=0.20, span=3.85, spacing=0.75, roof_angle=35.83,
+                    max_deflection=300, snow_load=1.5,
+                    roof_layers={"Layers": 130}, bearing_length=0.05,
+                )
+                arguments = dict(
+                    material="c16", width=0.24,
+                    rafter_length_above=1.05, lower_rafter_span=3.85,
+                    roof_angle=35.83, rafter_width=0.08, rafter_height=0.20,
+                    rafter_spacing=0.75, max_deflection=300, snow_load=1.5,
+                    roof_layers={"Layers": 130}, bearing_length=0.12,
+                )
+                purlin = check_purlin(title="Vaznice C16", span=4.72, height=0.28, **arguments)
+                continuous = check_continuous_purlin(
+                    title="Souvislá vaznice C16", spans=(3.47, 4.72, 2.72),
+                    height=0.28, **arguments,
+                )
+                double = check_double_purlin(
+                    title="Dvojitá vaznice C16", span=4.72,
+                    height_top=0.28, height_bottom=0.20, **arguments,
+                )
+            text = subprocess.run(["pdftotext", str(path), "-"], check=True,
+                                  capture_output=True, text=True).stdout
+            self.assertIn("C16/C18/C20/C22/C24", text)
+            self.assertIn("8,00 GPa", text)
+            for title in ("Krokve", "Vaznice", "Souvislá vaznice", "Dvojitá vaznice"):
+                self.assertIn(title + " C16", text)
+                self.assertIn(title + " C16:", output.getvalue())
+        multiplier = 0.8 / 1.3
+        self.assertAlmostEqual(rafter.bending_resistance_nm,
+                               16e6 * multiplier * 0.08 * 0.20**2 / 6)
+        for check, height in ((purlin, 0.28), (continuous, 0.28),
+                              (double.top, 0.28), (double.bottom, 0.20)):
+            self.assertAlmostEqual(check.bending_resistance_nm,
+                                   16e6 * multiplier * 0.24 * height**2 / 6)
+            self.assertAlmostEqual(check.shear_resistance_n,
+                                   3.2e6 * multiplier * 0.67 * 0.24 * height / 1.5)
+            self.assertAlmostEqual(check.bearing_resistance_n,
+                                   2.2e6 * multiplier * 0.24 * 0.12)
+
     def test_c18_material_properties_and_case_insensitive_lookup(self) -> None:
         grade = _resolve_timber_grade(" c18 ")
         self.assertEqual(grade, _resolve_timber_grade("C18"))
@@ -51,8 +163,73 @@ class RafterLoadTests(unittest.TestCase):
         self.assertEqual(grade.compression_perpendicular_mpa, 2.2)
         with self.assertRaisesRegex(TypeError, "'c18'"):
             _resolve_timber_grade(None)
-        with self.assertRaisesRegex(ValueError, "c18, c22, c24, gl28h"):
-            _resolve_timber_grade("c16")
+        with self.assertRaisesRegex(ValueError, "c16, c18, c20, c22, c24, gl24c, gl24h, gl28c, gl28h"):
+            _resolve_timber_grade("c14")
+
+    def test_gl24c_material_properties_and_case_insensitive_lookup(self) -> None:
+        grade = _resolve_timber_grade(" gl24c ")
+        self.assertEqual(grade, _resolve_timber_grade("GL24C"))
+        self.assertEqual(grade, _resolve_timber_grade("GL24c"))
+        self.assertEqual(grade.name, "GL24c")
+        self.assertEqual(grade.elastic_modulus_gpa, 11.0)
+        self.assertEqual(grade.bending_strength_mpa, 24.0)
+        self.assertEqual(grade.shear_strength_mpa, 3.5)
+        self.assertEqual(grade.compression_parallel_mpa, 21.5)
+        self.assertEqual(grade.compression_perpendicular_mpa, 2.5)
+        self.assertEqual(grade.material_partial_factor, 1.25)
+        self.assertNotEqual(grade, _resolve_timber_grade("C24"))
+
+    @unittest.skipUnless(which("pdftotext"), "PDF text extraction needs pdftotext")
+    def test_gl24c_works_in_all_checks_and_report(self) -> None:
+        output = StringIO()
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "gl24c.pdf"
+            with redirect_stdout(output), calculation_report(path, include_creep=True):
+                rafter = check_rafter(
+                    title="Krokve GL24c", material="GL24C", width=0.08,
+                    height=0.20, span=3.85, spacing=0.75, roof_angle=35.83,
+                    max_deflection=300, snow_load=1.5,
+                    roof_layers={"Layers": 130}, bearing_length=0.05,
+                )
+                arguments = dict(
+                    material="gl24c", width=0.24,
+                    rafter_length_above=1.05, lower_rafter_span=3.85,
+                    roof_angle=35.83, rafter_width=0.08, rafter_height=0.20,
+                    rafter_spacing=0.75, max_deflection=300, snow_load=1.5,
+                    roof_layers={"Layers": 130}, bearing_length=0.12,
+                )
+                purlin = check_purlin(
+                    title="Vaznice GL24c", span=4.72, height=0.28, **arguments,
+                )
+                continuous = check_continuous_purlin(
+                    title="Souvislá vaznice GL24c", spans=(3.47, 4.72, 2.72),
+                    height=0.28, **arguments,
+                )
+                double = check_double_purlin(
+                    title="Dvojitá vaznice GL24c", span=4.72,
+                    height_top=0.28, height_bottom=0.20, **arguments,
+                )
+            text = subprocess.run(
+                ["pdftotext", str(path), "-"], check=True,
+                capture_output=True, text=True,
+            ).stdout
+            for expected in ("EN 14080", "GL24c", "1,25", "11,00 GPa",
+                             "15,3600 MPa", "2,2400 MPa", "1,6000 MPa"):
+                self.assertIn(expected, text)
+            for title in ("Krokve", "Vaznice", "Souvislá vaznice", "Dvojitá vaznice"):
+                self.assertIn(title + " GL24c", text)
+                self.assertIn(title + " GL24c:", output.getvalue())
+        multiplier = 0.8 / 1.25
+        self.assertAlmostEqual(rafter.bending_resistance_nm,
+                               24e6 * multiplier * 0.08 * 0.20**2 / 6)
+        for check, height in ((purlin, 0.28), (continuous, 0.28),
+                              (double.top, 0.28), (double.bottom, 0.20)):
+            self.assertAlmostEqual(check.bending_resistance_nm,
+                                   24e6 * multiplier * 0.24 * height**2 / 6)
+            self.assertAlmostEqual(check.shear_resistance_n,
+                                   3.5e6 * multiplier * 0.67 * 0.24 * height / 1.5)
+            self.assertAlmostEqual(check.bearing_resistance_n,
+                                   2.5e6 * multiplier * 0.24 * 0.12)
 
     def test_gl28h_material_properties_and_case_insensitive_lookup(self) -> None:
         grade = _resolve_timber_grade(" gl28h ")
@@ -65,12 +242,12 @@ class RafterLoadTests(unittest.TestCase):
         self.assertEqual(grade.compression_parallel_mpa, 28.0)
         self.assertEqual(grade.compression_perpendicular_mpa, 2.5)
         self.assertEqual(grade.material_partial_factor, 1.25)
-        for material in ("c18", "c22", "c24"):
+        for material in ("c16", "c18", "c20", "c22", "c24"):
             self.assertEqual(_resolve_timber_grade(material).material_partial_factor, 1.3)
         with self.assertRaisesRegex(TypeError, "'gl28h'"):
             _resolve_timber_grade(None)
         with self.assertRaisesRegex(ValueError, "gl28h"):
-            _resolve_timber_grade("gl28c")
+            _resolve_timber_grade("gl30c")
 
     @unittest.skipUnless(which("pdftotext"), "PDF text extraction needs pdftotext")
     def test_gl28h_works_in_all_checks_and_report(self) -> None:
@@ -167,7 +344,7 @@ class RafterLoadTests(unittest.TestCase):
                 ["pdftotext", str(path), "-"], check=True, capture_output=True,
                 text=True,
             ).stdout
-            self.assertIn("C18/C22/C24", text)
+            self.assertIn("C18/C20/C22/C24", text)
             for title in ("Krokve C18", "Vaznice C18", "Souvislá vaznice C18"):
                 self.assertIn(title, text)
                 self.assertIn(title + ":", output.getvalue())
@@ -1084,6 +1261,134 @@ class RafterLoadTests(unittest.TestCase):
 
     def test_project_uses_one_snow_load(self) -> None:
         self.assertEqual(SNOW_LOAD_KN_M2, 1.5)
+class DoublePurlinTests(unittest.TestCase):
+    def parameters(self, **overrides):
+        return dict(
+            width_mm=240., height_top_mm=240., height_bottom_mm=240., span_m=4.72,
+            upper_rafter_length_m=1.05, lower_rafter_span_m=3.85,
+            roof_angle_degrees=35.83, rafter_width_mm=80., rafter_height_mm=200.,
+            rafter_spacing_m=.75, deflection_ratio=300., elastic_modulus_gpa=10.,
+            snow_load_kn_m2=1.5, roof_layers_kg_m2={"Layers": 130.},
+        ) | overrides
+
+    def test_equal_beams_have_sum_of_individual_inertias_not_solid_height(self):
+        check = calculate_double_purlin_check(**self.parameters())
+        i = .24 * .24**3 / 12
+        self.assertAlmostEqual(check.effective_second_moment_m4, 2 * i)
+        self.assertAlmostEqual(check.top_load_fraction, .5)
+        self.assertAlmostEqual(check.bottom_load_fraction, .5)
+        q = (check.permanent_line_load_kn_m + check.roof_snow_line_load_kn_m) * 1000
+        expected = 5 * q * 4.72**4 / (384 * 10e9 * 2 * i)
+        for component in (check.top, check.bottom):
+            self.assertAlmostEqual(component.immediate_response.span_max_abs_deflections_m[0], expected)
+        args = self.parameters()
+        args.pop("height_top_mm")
+        args.pop("height_bottom_mm")
+        args["support_spans_m"] = (args.pop("span_m"),)
+        solid = calculate_purlin_check(height_mm=480., **args)
+        self.assertAlmostEqual(expected, 4 * solid.immediate_response.span_max_abs_deflections_m[0])
+        self.assertAlmostEqual(check.top.positive_bending_utilization, 2 * solid.positive_bending_utilization)
+
+    def test_unequal_beams_share_moment_by_stiffness_and_have_equal_deflections(self):
+        check = calculate_double_purlin_check(**self.parameters(height_bottom_mm=120.))
+        self.assertAlmostEqual(check.top_load_fraction, 8 / 9)
+        self.assertAlmostEqual(check.bottom_load_fraction, 1 / 9)
+        for attr in ("immediate_response", "final_response"):
+            self.assertAlmostEqual(getattr(check.top, attr).span_max_abs_deflections_m[0],
+                                   getattr(check.bottom, attr).span_max_abs_deflections_m[0])
+        top_m = check.top.design_response.span_positive_moments_nm[0]
+        bottom_m = check.bottom.design_response.span_positive_moments_nm[0]
+        self.assertAlmostEqual(top_m, 8 * bottom_m)
+        qd = 1.35 * check.permanent_line_load_kn_m + 1.5 * check.roof_snow_line_load_kn_m
+        self.assertAlmostEqual(top_m + bottom_m, qd * 1000 * 4.72**2 / 8)
+        self.assertAlmostEqual(check.top.positive_bending_utilization,
+                               2 * check.bottom.positive_bending_utilization)
+
+    def test_self_weight_counted_once_and_bottom_bearing_takes_total_reaction(self):
+        check = calculate_double_purlin_check(**self.parameters(height_bottom_mm=120.))
+        basis = check.top
+        mass = basis.roof_layer_line_mass_kg_m + basis.rafter_line_mass_kg_m + 450 * .24 * (.24 + .12)
+        self.assertAlmostEqual(check.permanent_line_load_kn_m, mass * GRAVITY_M_S2 / 1000)
+        self.assertAlmostEqual(check.top.permanent_line_load_kn_m + check.bottom.permanent_line_load_kn_m,
+                               check.permanent_line_load_kn_m)
+        self.assertAlmostEqual(check.top.roof_snow_line_load_kn_m + check.bottom.roof_snow_line_load_kn_m,
+                               check.roof_snow_line_load_kn_m)
+        total = check.bottom.bearing_design_reaction_n
+        self.assertAlmostEqual(total, sum(c.design_response.support_reactions_n[0]
+                                          for c in (check.top, check.bottom)))
+        self.assertAlmostEqual(check.bottom.bearing_utilization,
+                               total / check.bottom.bearing_resistance_n)
+        self.assertAlmostEqual(check.bottom.bearing_utilization, 9 *
+                               check.bottom.design_response.support_reactions_n[0] / check.bottom.bearing_resistance_n)
+        self.assertGreaterEqual(check.permanent_contact_load_kn_m, 0.)
+
+    def test_snow_capacity_refers_to_whole_roof_including_at_zero_entered_snow(self):
+        for snow in (0., 1.5):
+            check = calculate_double_purlin_check(**self.parameters(snow_load_kn_m2=snow))
+            i = check.effective_second_moment_m4
+            k = 5 * 1000 * 4.72**4 / (384 * 10e9 * i)
+            limit = 4.72 / 300
+            expected = max(0., limit - k * check.permanent_line_load_kn_m) / (
+                k * check.top.tributary_horizontal_width_m
+            )
+            self.assertAlmostEqual(check.top.maximum_roof_snow_immediate_kn_m2, expected)
+            self.assertAlmostEqual(check.bottom.maximum_roof_snow_immediate_kn_m2, expected)
+
+    def test_invalid_geometry_and_tensile_contact_are_rejected(self):
+        for name in ("width_mm", "height_top_mm", "height_bottom_mm", "span_m"):
+            for value in (0., -1., float('nan'), float('inf')):
+                with self.subTest(name=name, value=value), self.assertRaises(ValueError):
+                    calculate_double_purlin_check(**self.parameters(**{name: value}))
+        with self.assertRaisesRegex(ValueError, "lose vertical contact"):
+            calculate_double_purlin_check(**self.parameters(
+                height_top_mm=300., height_bottom_mm=100., roof_layers_kg_m2={},
+                rafter_width_mm=1., rafter_height_mm=1., snow_load_kn_m2=0.,
+            ))
+
+    @unittest.skipUnless(which("pdftotext"), "PDF text extraction needs pdftotext")
+    def test_public_wrapper_pdf_terminal_summary_and_creep_switch(self):
+        for creep in (False, True):
+            with self.subTest(creep=creep), TemporaryDirectory() as directory:
+                output = StringIO()
+                path = Path(directory) / "double.pdf"
+                with redirect_stdout(output), calculation_report(path, include_creep=creep) as session:
+                    check = check_double_purlin(
+                        title="Dvojitá vaznice C22", material="c22", width=.24,
+                        height_top=.24, height_bottom=.12, span=4.72,
+                        rafter_length_above=1.05, lower_rafter_span=3.85, roof_angle=35.83,
+                        rafter_width=.08, rafter_height=.20, rafter_spacing=.75,
+                        max_deflection=300., snow_load=1.5, roof_layers={"Layers": 130.},
+                        bearing_length=.12,
+                    )
+                    self.assertEqual(len(session.entries), 1)
+                    self.assertEqual(session.entries[0][1], "double_purlin")
+                text = subprocess.run(["pdftotext", str(path), "-"], check=True,
+                                      capture_output=True, text=True).stdout
+                for phrase in ("Dvojitá vaznice C22", "Bez smykového spojení", "Horní nosník",
+                               "Dolní nosník", "Posouzení - namáhání ohybem",
+                               "Celková síla v uložení dolního nosníku"):
+                    self.assertIn(phrase, text)
+                self.assertEqual("Posouzení - konečný průhyb včetně dotvarování" in text, creep)
+                self.assertIn("UNCONNECTED", output.getvalue())
+                self.assertIn("OVERALL RESULT:", output.getvalue())
+                self.assertIn("Dvojitá vaznice C22:", output.getvalue())
+                self.assertGreater(path.stat().st_size, 10000)
+                self.assertAlmostEqual(check.top_load_fraction, 8 / 9)
+
+    def test_summary_failure_and_incomplete_layers_are_not_hidden(self):
+        for mass, expected in ((None, "CHECK INCOMPLETE"), (10000., "FAIL")):
+            with TemporaryDirectory() as directory, redirect_stdout(StringIO()) as output:
+                with calculation_report(Path(directory) / "summary.pdf", include_creep=False):
+                    check_double_purlin(
+                        title="Dvojice", material="c18", width=.24,
+                        height_top=.24, height_bottom=.24, span=4.72,
+                        rafter_length_above=1.05, lower_rafter_span=3.85, roof_angle=35.83,
+                        rafter_width=.08, rafter_height=.20, rafter_spacing=.75,
+                        max_deflection=300., snow_load=0., roof_layers={"Layers": mass},
+                    )
+                self.assertIn("Dvojice: " + expected, output.getvalue())
+
+
 if __name__ == "__main__":
 
 

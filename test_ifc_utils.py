@@ -6794,6 +6794,7 @@ class HouseTests(unittest.TestCase):
                         "pattern": "brick",
                         "color": "orange",
                         "drawing_order": 2,
+                        "material": "c22",
                     },
                 )
             ],
@@ -6823,6 +6824,7 @@ class HouseTests(unittest.TestCase):
                             "pattern": "brick",
                             "color": "#ffa500",
                             "drawing_order": 2,
+                            "material": "c22",
                             "member_guids": [
                                 first.GlobalId,
                                 second.GlobalId,
@@ -6839,6 +6841,24 @@ class HouseTests(unittest.TestCase):
             no_panel.add_timber_schedule(
                 [("Hlavní krokve", (first, second), 0)]
             )
+
+    def test_timber_schedule_accepts_material_without_visual_style(self) -> None:
+        house = House("Material labels")
+        roof = house.storey("Roof", elevation=0)
+        beam = roof.beam("Purlin", start=(0, 0, 0), end=(4, 0, 0), size=(0.2, 0.3))
+        drawing = house.add_drawing("Roof", 2, 1, 2, 4, right_panel_width=110)
+        drawing.add_timber_schedule([
+            ("Vaznice", (beam,), 0, {"material": "gl24c"}),
+            ("Unlabelled", (beam,), 0),
+        ])
+        tables = drawing._right_panel_tables
+        self.assertEqual(tables[0]["items"][0]["material"], "gl24c")
+        self.assertNotIn("color", tables[0]["items"][0])
+        self.assertNotIn("material", tables[0]["items"][1])
+        with self.assertRaisesRegex(TypeError, "material must be a string"):
+            drawing.add_timber_schedule([("Vaznice", (beam,), 0, {"material": 22})])
+        with self.assertRaisesRegex(ValueError, "material must not be empty"):
+            drawing.add_timber_schedule([("Vaznice", (beam,), 0, {"material": " "})])
 
     def test_builds_miako_beam_schedule_from_explicit_and_slab_lengths(
         self,
@@ -8827,6 +8847,7 @@ class HouseTests(unittest.TestCase):
                                 {
                                     "mark": "A",
                                     "name": "Hlavní krokve",
+                                    "material": "c22",
                                     "width": 100,
                                     "height": 180,
                                     "length": 5989,
@@ -8855,6 +8876,7 @@ class HouseTests(unittest.TestCase):
             for heading in (
                 "OZNAČENÍ",
                 "NÁZEV",
+                "Material",
                 "ŠÍŘKA",
                 "VÝŠKA",
                 "DÉLKA",
@@ -8864,6 +8886,7 @@ class HouseTests(unittest.TestCase):
             ):
                 self.assertIn(f">{heading}</text>", svg)
             self.assertIn(">Hlavní krokve</text>", svg)
+            self.assertIn(">c22</text>", svg)
             self.assertIn(">5989</text>", svg)
             self.assertIn(">27</text>", svg)
             self.assertIn(">0,108</text>", svg)

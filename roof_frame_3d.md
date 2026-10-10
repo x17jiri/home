@@ -18,12 +18,10 @@ python3 -m venv .venv-roof3d
 The wall plate/ring beam is one immovable rigid support, not a second elastic
 beam. Horizontal springs act directly at each rafter connection to this
 support **only**, with a separate optional dormer stiffness. Purlin horizontal
-guides are rigid, independently of those stiffnesses. **Gerber purlins** are
-the default: `GERBER_JOINT_1` and `GERBER_JOINT_2` are absolute design X
-coordinates, before mirroring. Hinges may lie in the middle span or one in each
-side span; wall bearings are assigned to the pieces containing the actual wall
-centres. There are no sedla or invented supports under cantilever-tip hinges.
-See the Gerber assumptions below.
+guides are rigid, independently of those stiffnesses. **Independent purlin
+pieces** are the default, with separate end supports at the inner-wall centres.
+Their middle/side dimensions and positions follow the IFC definitions. There
+are no sedla or Gerber hinges in the current configuration.
 Purlin-to-wall bearings are **vertically attached** by default: upward movement
 is prevented, and an upward force delivered to the wall is reported in kN as
 the required hold-down demand. Red circles identify these supports in both PNGs.
@@ -45,10 +43,15 @@ Rafters with only one wall-plate seat retain the existing connected-seat model.
 The old sedlo and independent-piece arrangements remain available as explicit
 comparisons; trial sedlo bolts apply only to the saddle arrangement.
 Timber grades are selected independently by `--rafter-material` and
-`--beam-material`; both accept C18, C22 and C24. The beam grade also applies to
+`--beam-material`; both accept C16, C18, C20, C22, C24, GL24c, GL24h, GL28c and GL28h (case-insensitive).
+The supported names and properties come from `materials.py`, also used by the
+IFC roof schedule and the 2D calculations. The beam grade also applies to
 sedla and purlin spacers. Collar ties use their separate `COLLAR_TIE_MATERIAL`
-setting (also accepting C18). Existing default grades are unchanged.
+setting (accepting the same four grades). Existing default grades are unchanged.
 Actual endpoint pairs are used for all rafters.
+The dormer rafters extend to the upper-face plane of the opposite main rafters
+and have pinned top connections to the matching street-side members. These
+extensions have timber self-weight only, with no roof-layer or snow load.
 Roof-layer mass and snow are configured in `Settings` in this script and
 printed in every run. Paired 50 × 150 mm collar ties above the purlins
 are included by default; use `--no-collar-ties` for comparison.
@@ -81,7 +84,36 @@ python roof_frame_3d.py --rafter-chord-fallback na
 python roof_frame_3d.py --plan-force-combination SLS_symmetric
 ```
 
-### Gerber purlins (default)
+### Independent purlins (default)
+
+The current IFC uses three independent pieces per roof side, split at the
+inner-wall centres. Each adjacent beam end has its own support/node; no moment
+or direct force transfer is imposed between the pieces. `--purlin-system simple`
+is now the default, with no sedla or Gerber hinges.
+
+`RoofLayout.from_house()` reads `PURLIN_X_SEGMENTS` and
+`PURLIN_SECTION_DIMENSIONS` from `house_ifc.py`. Middle sections use
+`VAZNICE_BASE`, `VAZNICE_HEIGHT`, `VAZNICE_DIST`; side sections use their
+`VAZNICE_SIDE_*` equivalents. All tops share `PURLIN_TOP_Z`, while the
+smaller side sections shift by half the width difference to align outer faces
+and preserve both main/dormer roof slopes. `PURLIN_SECTION_BOTTOM_Z` records
+their different underside elevations. The IFC outer gables rise under the
+side pieces; four timber packing blocks bear on the unchanged inner walls.
+These blocks are ideal rigid bearings here; their deformation, bearing capacity
+and fastening are not modelled or assessed.
+Purlin seat locations, section stiffness/self-weight, spacers and automatic
+collar heights follow the local section. Collar boards on opposite sides of a
+height boundary are separate axial links if their configured heights differ;
+the current common-top arrangement groups paired boards at one height.
+Middle deflection checks use the
+4.72 m wall-centre span. The basis JSON records all six section dimensions,
+endpoints and bearing coordinates under `purlin_sections`.
+
+### Gerber purlins (legacy comparison)
+
+`--purlin-system gerber` remains available for compatible house inputs whose
+adjacent piece endpoints coincide. It cannot join the current staggered side
+and middle sections: those are intentionally independent.
 
 `RoofLayout.from_house()` reads the actual `PURLIN_X_SEGMENTS` from the IFC
 script. The four **wall-centre** bearings stay at their real coordinates and
@@ -99,7 +131,7 @@ changes the load path; no additional mode switch is necessary:
 
 Example side-span coordinates are `GERBER_JOINT_1 = 2.84` and
 `GERBER_JOINT_2 = 9.06` (0.75 m outside the inner-wall centres). Set these in
-`house_ifc.py`, then run the simulator normally. Two hinges in one side span
+an older compatible `house_ifc.py`, then run with `--purlin-system gerber`. Two hinges in one side span
 are rejected as unstable. A hinge exactly at an inner-wall centre retains the
 outer-piece wall bearing, without duplicating the ground restraint.
 
@@ -140,10 +172,9 @@ station measured from the left inner wall. Existing `chord_*` columns retain
 the local actual-support-pair result. Both are immediate SLS checks with strict `<`;
 they do not replace strength, creep, stability or connection checks.
 
-`--purlin-system saddles` and `--purlin-system simple` reconstruct the old
-piece boundaries over the wall centres for comparison; they do not mistake the
-new hinge locations for wall supports. `--no-saddles` is retained as an alias
-for the simple independent-piece comparison.
+The legacy `--purlin-system saddles` comparison requires uniform purlin
+dimensions and compatible positions. `--no-saddles` is retained as an alias
+for the default simple independent pieces.
 
 ### Middle-only snow (optional sensitivity case)
 
@@ -171,7 +202,7 @@ Output names receive `_middle_snow` so the usual reports are not overwritten.
 Spacers are included by default at each **main** rafter station, using
 `PURLIN_SPACER_SIZE` from `house_ifc.py` (currently 80 × 200 mm). Offset
 dormer rafters do not add duplicate spacers. Physical length is the clear
-distance between the purlin faces (currently 1.906 m), with tops aligned.
+distance between the local purlin faces, with tops aligned to the local section.
 Their timber grade follows `--beam-material`.
 
 The simple model uses a compression-only axial link, stiffness
@@ -203,6 +234,8 @@ only produced when explicitly requested):
   N is tension-positive/compression-negative (converted from
   PyNite to match the 2D script). `_restrained` is the other support variant.
   Rigid wall-plate outlines are not elastic members and have no member rows.
+- `roof_frame_3d_free_dormer_top_joints.csv`: forces delivered to each dormer top
+  pin, released-end moments, connected main-rafter name and joint coordinates.
 - `roof_frame_3d_free_supports.csv`: signed forces/moments **delivered to** wall
   plate/ring-beam structure and purlins' wall bearings. These are the
   negatives of the solver's support reactions. `outward_kN` is positive toward
@@ -266,7 +299,7 @@ dimensions and placement do **not** depend on IFC collar-tie definitions:
 | `COLLAR_TIE_WIDTH_M` | 0.05 | Width of one board, m |
 | `COLLAR_TIE_HEIGHT_M` | 0.15 | Height of one board, m |
 | `COLLAR_TIE_BOARDS_PER_PAIR` | 2 | One or two boards per main rafter pair |
-| `COLLAR_TIE_MATERIAL` | C22 | C22 or C24 |
+| `COLLAR_TIE_MATERIAL` | C18 | Any grade in `materials.py` |
 | `COLLAR_TIE_TOP_HEIGHT_M` | None | Bottom follows purlin tops; a number overrides the board top above the upper-storey floor, m |
 | `COLLAR_TIE_MIDDLE_LOWERING_M` | 0.0 | Optional lowering in the middle purlin region, m |
 | `COLLAR_TIE_OMIT_TOUCHING_SIDES` | True | Omit boards between touching main rafters |
@@ -284,6 +317,18 @@ purlin support. The rafters are subdivided at these connection nodes. Board
 eccentricity, connection slip, bending, compression buckling and joint capacity
 are **not assessed**. Collar self-weight is added once, half at each connection;
 roof/snow loading is unchanged. Suspended-ceiling loads remain omitted.
+
+Where an adjacent dormer rafter exists, the **garden-side** collar endpoint is
+one shared force joint with the main (usually shortened) rafter and the dormer
+rafter. A massless stiff offset arm bridges their staggered centre lines at the
+same Y station; its dormer end releases all rotations. Both rafters remain
+continuous through the joint, with independent bending rotations. This adds no
+ground/purlin restraint, timber weight or roof/snow load. The street-side collar
+connection is unchanged: the extended dormer top has its separate pin farther
+up the opposite main rafter, not a connection to the street collar endpoint.
+These shared joints are shown as black circles in both PNG views and recorded
+in the basis JSON under `collar_ties.garden_dormer_joints`. Their fastening
+stiffness/capacity is idealised, not a verified bolt design.
 
 The terminal lists each link's governing SLS and ULS axial force, positive for
 tension and negative for compression. This is the **total force for the grouped
@@ -385,12 +430,15 @@ results for every combination. ULS departures are exported but their limit
 statuses are `NOT_CHECKED_ULS`.
 
 Not every rafter reaches both a wall plate and the ridge: in the current inputs,
-8 dormer rafters connect a purlin to the higher dormer wall plate, and 6 shortened
-garden rafters run from the ridge to a purlin, with a short free tail. By default
-(`--rafter-chord-fallback supports`), these 14 use their actual wall-plate–purlin
-or purlin–ridge pair, labelled explicitly in the exports and terminal. No
-missing endpoint is invented. `--rafter-chord-fallback na` can disable these
-alternative references and mark the 14 as `N/A`. Normal wall-plate–ridge
+8 dormer rafters also attach at their extended tops to the opposite main rafters.
+Their chord runs from this actual top pin to the higher dormer wall plate,
+including purlin sag and movement of the supporting main rafter. The reference
+is `main_rafter_to_wall_plate` and remains available with `--rafter-chord-fallback na`.
+The 6 shortened garden rafters run from the ridge to a purlin, with a short free
+tail. By default (`--rafter-chord-fallback supports`), these use their actual
+purlin–ridge pair, labelled explicitly in the exports and terminal. No missing
+endpoint is invented. `--rafter-chord-fallback na` can disable these six
+alternative references and mark them as `N/A`. Normal wall-plate–ridge
 results are unchanged by this option.
 
 These are user-selected **immediate-deflection screening criteria**, not a full
@@ -431,22 +479,35 @@ horizontal force capacity of walls/anchors or timber stability.
 
 - all main rafters (including the shortened street corner and shortened garden
   rafters), `StrongerRafter` widths and the touching offset dormer rafters;
-- the two purlins' three **independent** pieces with a uniform section and
-  common top elevation;
+- the two purlins' three **independent** pieces with middle/side sections,
+  a common top elevation, aligned outer faces and different bottom elevations;
 - the five actual wall-plate pieces: street, cut street, garden left/right and
   dormer. Every matching physical seat is connected, including the cut-street
   plate where it crosses full-length rafters;
 - a hinged, translation-only main ridge, **without** a ridge beam;
-- no kleštiny by default; optional axial links connect the main rafter pairs,
+- paired kleštiny by default; their axial links connect the main rafter pairs,
   not directly the purlins.
 
 Finished member endpoints use centre-line intersections with the IFC cutting
 planes (not the stock/cutting-list extra length). The existing horizontal
-short-rafter cut is controlled by `SHORT_GARDEN_RAFTER_CUT_HEIGHT_M` (3.05 m
-above the upper-storey floor). There is no longer a deeper middle purlin offset.
+short-rafter cut follows the local `PURLIN_SECTION_BOTTOM_Z` from the IFC inputs.
+`SHORT_GARDEN_RAFTER_CUT_HEIGHT_M` is only a fallback for older input files.
 It does not read IFC collar-tie dimensions, and changing the optional trial
 ties does not move this cut. Do not infer that this is a buildable end detail.
-Dormer upper ends follow the current source local Y=-0.5 position.
+Dormer upper ends follow the intersection of their centreline with the opposite
+main rafter's upper-face plane. A massless stiff offset arm connects each end
+to its matching street-side rafter axis, accounting for the staggered X positions
+and section-height eccentricity. All three rotations are released at the dormer
+end; translations are connected, while the main rafter remains continuous.
+The numerical pin's otherwise-unused nodal rotations are fixed only to remove
+zero-stiffness rows, not to clamp either timber. The offset arm can apply an
+eccentric-force moment to the main rafter, but no couple passes across the pin.
+This is an ideal connection assumption, not a fastening-capacity check.
+Rotational releases use [PyNite's end-release interface](https://pynite.readthedocs.io/en/latest/member.html#end-releases).
+`_dormer_top_joints.csv` records forces to the dormer and moments at its pin;
+the basis JSON records the paired members and assumptions. Black circles show
+these joints in the plan PNG and the 3D model image. Roof-layer/snow patches
+remain unchanged; the new top extension has only its own timber self-weight.
 
 An opening between rafters is retained as loaded roof area, conservatively for
 gravity. If an opening intersects a rafter, or `SplitRafter` is used, the reader
@@ -684,12 +745,20 @@ member sizes or approving the anchorage. Strength/stability and the actual
 load path still need separate verification.
 
 The roof is an effective elastic beam frame, not orthotropic timber solids.
-C22 is the default for rafters, purlins and wall plates; C24 remains an explicit
-CLI override. E/G are 10 GPa/0.63 GPa for C22 and 11 GPa/0.69 GPa for C24. Section height is
+The current CLI defaults are C18 rafters and collar ties, and GL24c purlins,
+spacers and wall plates; all remain configurable. `materials.py` supplies the
+E/G/E90 properties and mean densities for C16, C18, C20, C22, C24, GL24c, GL24h, GL28c and GL28h,
+using EN 338 / EN 14080 ([published tables](https://www.swedishwood.com/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol2-2022.pdf#page=10)).
+E90 and mean density are used for optional saddle contact/bolt-slip calculations.
+The separately configured self-weight density remains unchanged. For example, select glulam purlins with
+`--beam-material GL24c`. Section height is
 explicitly oriented toward global Z (normal to each rafter's slope), despite
 PyNite's default global-Y-up convention. Member torsional stiffness is included;
 PyNite's beam formulation omits transverse shear deformation. Timber lateral
 stability and diaphragm/bracing behaviour are not verified by this model.
+
+GL24c properties are from EN 14080:2013, Table 4; an accessible reference is
+[Swedish Wood's glulam strength-class table](https://www.traguiden.se/konstruktion/limtrakonstruktioner/projektering-av-limtrakonstruktioner/limtra-som-konstruktionsmaterial1/tillverkning-av-limtra/hallfasthetsklasser/).
 
 ## Loads and results
 
@@ -733,8 +802,8 @@ a structural engineer must validate them before relying on the forces.
 
 - `HouseInputs`, `RoofLayout.from_house`: safe IFC-input geometry reader.
 - `COLLAR_TIE_*`, `CollarTieParameters`, `add_collar_ties`: independent collar
-  dimensions, placement and board grouping; `SHORT_GARDEN_RAFTER_CUT_HEIGHT_M`
-  controls the existing shortened-rafter cut separately.
+  dimensions, local-section placement and board grouping; `PURLIN_SECTION_BOTTOM_Z`
+  controls the shortened-rafter cut independently.
 - `Timber.properties`, `orient_section`: section stiffness and orientation.
 - `SADDLE_*`, `SaddleParameters`, `add_purlin_saddles`,
   `saddle_contact_stiffness`, `solve_saddle_contact`: saddle geometry and elastic
@@ -745,7 +814,7 @@ a structural engineer must validate them before relying on the forces.
 - `build_roof_model`: connectivity, seat releases, supports, tributary loads
   and load combinations.
 - `RoofLayout.purlin_system`, `RoofLayout.gerber_joints`, `gerber_joint_rows`:
-  Gerber/legacy layout choice, bending-hinge connectivity and hinge exports.
+  independent/Gerber/legacy layout choice, bending-hinge connectivity and hinge exports.
 - `solve_roof_model`, `check_equilibrium`: solver and independent balance check.
 - `rafter_chord`, `purlin_chord`, `maximum_chord_departure`, `chord_result_columns`: physical
   endpoint selection, maximum chord-relative displacement and SLS limit checks.

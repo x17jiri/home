@@ -19,6 +19,7 @@ from pathlib import Path
 
 import numpy as np
 from matplotlib.figure import Figure
+from materials import resolve_timber_grade as _resolve_timber_grade
 
 from rafter_load import (
     CalculationReport,
@@ -28,7 +29,6 @@ from rafter_load import (
     SNOW_LOAD_FACTOR,
     SNOW_LOAD_KN_M2,
     TIMBER_DENSITY_KG_M3,
-    _resolve_timber_grade,
 )
 
 

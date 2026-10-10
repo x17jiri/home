@@ -4,7 +4,8 @@
 Edit the check calls in ``main()`` to describe each structural member.
 Rafters are treated as simply supported beams. Purlins can be checked either
 as individual simply supported pieces or as one uniform continuous member over
-four supports. It is a quick comparison tool, not a structural design.
+four supports. Double purlins use two freely slipping beams in vertical contact,
+without composite action. It is a quick comparison tool, not a structural design.
 """
 
 from __future__ import annotations
@@ -17,6 +18,13 @@ from pathlib import Path
 import re
 from textwrap import wrap
 from typing import TypeAlias
+
+from materials import (
+    TimberGrade,
+    TIMBER_GRADES as _TIMBER_GRADES,
+    TIMBER_MATERIAL_PARTIAL_FACTOR,
+    resolve_timber_grade as _resolve_timber_grade,
+)
 
 from matplotlib import rcParams
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -35,7 +43,7 @@ rcParams["mathtext.fontset"] = "dejavusans"
 # Shared project inputs used by the checks in main().
 ROOF_ANGLE_DEGREES = 35.83
 MAX_DEFLECTION_RATIO = 300.0  # 300 means L/300
-SNOW_LOAD_KN_M2 = 1.5  # vertical load per horizontal roof projection
+SNOW_LOAD_KN_M2 = 1.7  # vertical load per horizontal roof projection
 
 REPORT_SNOW_LOAD_STANDARD = "ČSN EN 1991-1-3:2005/Z1:2006"
 REPORT_SNOW_LOAD_ZONE = 3
@@ -61,7 +69,6 @@ ROOF_LAYERS_KG_M2: dict[str, float | None] = {
 # Shared calculation assumptions. These are model/code properties rather than
 # project geometry, so keeping them together as constants is useful.
 TIMBER_DENSITY_KG_M3 = 450.0
-TIMBER_MATERIAL_PARTIAL_FACTOR = 1.30
 TIMBER_MODIFICATION_FACTOR = 0.80  # solid timber/glulam, service class 2, snow
 TIMBER_CREEP_FACTOR = 0.80  # k_def, solid timber/glulam, service class 2
 SNOW_CREEP_COMBINATION_FACTOR = 0.0  # psi_2; verify for the project/NA
@@ -70,26 +77,6 @@ SNOW_LOAD_FACTOR = 1.50
 BEARING_STRENGTH_FACTOR = 1.0  # conservative k_c,90 pending support detail
 SHEAR_EFFECTIVE_WIDTH_FACTOR = 0.67  # k_cr; verify selected EC5 edition
 GRAVITY_M_S2 = 10.0
-
-
-@dataclass(frozen=True)
-class TimberGrade:
-    name: str
-    elastic_modulus_gpa: float
-    bending_strength_mpa: float
-    shear_strength_mpa: float
-    compression_parallel_mpa: float
-    compression_perpendicular_mpa: float
-    material_partial_factor: float = TIMBER_MATERIAL_PARTIAL_FACTOR
-
-
-_TIMBER_GRADES = {
-    "c18": TimberGrade("C18", 9.0, 18.0, 3.4, 18.0, 2.2),
-    "c22": TimberGrade("C22", 10.0, 22.0, 3.8, 20.0, 2.4),
-    "c24": TimberGrade("C24", 11.0, 24.0, 4.0, 21.0, 2.5),
-    # Homogeneous glulam, EN 14080; EN 1995-1-1 recommended gamma_M.
-    "gl28h": TimberGrade("GL28h", 12.6, 28.0, 3.5, 28.0, 2.5, 1.25),
-}
 
 
 @dataclass(frozen=True)
@@ -196,6 +183,31 @@ class PurlinCheckResult:
     governing_strength_check: str
     governing_strength_utilization: float
     missing_roof_layers: tuple[str, ...]
+    # Normally the member's own reaction. A lower stacked beam also receives
+    # the upper beam's end reaction directly at its support.
+    bearing_design_reaction_n: float | None = None
+
+
+@dataclass(frozen=True)
+class DoublePurlinCheckResult:
+    """Two equal-width, equal-material beams with free longitudinal slip.
+
+    Component actions contain their allocated loads. Tributary roof-mass
+    metadata remains the common, unallocated basis, counted only once per stack.
+    """
+
+    top: PurlinCheckResult
+    bottom: PurlinCheckResult
+    second_moment_top_m4: float
+    second_moment_bottom_m4: float
+    effective_second_moment_m4: float
+    top_load_fraction: float
+    bottom_load_fraction: float
+    permanent_line_load_kn_m: float
+    roof_snow_line_load_kn_m: float
+    self_mass_top_kg_m: float
+    self_mass_bottom_kg_m: float
+    permanent_contact_load_kn_m: float
 
 
 REPORT_RESULT_PASS_TINT = "#d8f0dc"
@@ -234,16 +246,20 @@ _REPORT_VARIABLE_SUFFIXES = {
     "F": ("c,90,Ed,max", "c,90,Ed", "c,β,Ed", "c,Ed"),
     "σ": ("c,90,d", "c,β,d", "c,d", "m,d"),
     "τ": ("d",),
-    "R": ("c,90,d", "c,β,d", "d"),
+    "R": ("c,90,d", "c,β,d", "top,Ed", "bottom,Ed", "total,Ed", "d"),
+    "I": ("top", "bottom", "eff"),
+    "EI": ("eff",),
+    "η": ("top", "bottom"),
     "E": ("0,mean", "d"),
     "G": ("k",),
     "S": ("k",),
-    "g": ("k", "dod"),
-    "s": ("line,k", "k"),
+    "g": ("k,total", "k", "dod"),
+    "s": ("line,k,total", "line,k", "k"),
     "b": ("ef", "t,s", "t,h", "k"),
-    "h": ("k",),
+    "h": ("top", "bottom", "k"),
     "L": ("up", "dol"),
-    "m": ("vrstvy", "krokve", "A", "v"),
+    "m": ("vrstvy", "krokve", "top", "bottom", "A", "v"),
+    "p": ("G",),
 }
 _REPORT_VARIABLE_MATH = {
     base + suffix: rf"${base}_{{\mathrm{{{suffix}}}}}$"
@@ -1370,6 +1386,9 @@ def calculate_purlin_check(
     bearing_length_mm: float = 240.0,
     bearing_strength_factor: float = BEARING_STRENGTH_FACTOR,
     shear_effective_width_factor: float = SHEAR_EFFECTIVE_WIDTH_FACTOR,
+    _line_loads_kn_m: tuple[float, float] | None = None,
+    _bearing_design_reaction_n: float | None = None,
+    _snow_load_fraction: float = 1.0,
 ) -> PurlinCheckResult:
     """Check one simply supported span or one continuous three-span member.
 
@@ -1461,6 +1480,10 @@ def calculate_purlin_check(
     roof_snow_line_load_kn_m = (
         snow_pressure_kn_m2 * tributary_horizontal_width_m
     )
+    if _line_loads_kn_m is not None:
+        permanent_line_load_kn_m, roof_snow_line_load_kn_m = (
+            _non_negative(value, "assigned line load") for value in _line_loads_kn_m
+        )
     second_moment_m4 = purlin_width_m * purlin_height_m**3 / 12
     section_modulus_m3 = purlin_width_m * purlin_height_m**2 / 6
 
@@ -1494,7 +1517,9 @@ def calculate_purlin_check(
     final_response = response(final_line_load_kn_m)
     design_response = response(design_line_load_kn_m)
     permanent_response = response(permanent_line_load_kn_m)
-    unit_snow_response = response(tributary_horizontal_width_m)
+    unit_snow_response = response(
+        tributary_horizontal_width_m * _positive(_snow_load_fraction, "snow load fraction")
+    )
 
     deflection_limits_m = tuple(span / ratio for span in spans)
     immediate_utilizations = tuple(
@@ -1583,6 +1608,10 @@ def calculate_purlin_check(
     maximum_reaction_n = max(
         abs(reaction) for reaction in design_response.support_reactions_n
     )
+    if _bearing_design_reaction_n is not None:
+        maximum_reaction_n = _non_negative(
+            _bearing_design_reaction_n, "bearing_design_reaction_n"
+        )
     positive_bending_utilization = (
         maximum_positive_moment_nm / bending_resistance_nm
     )
@@ -1640,6 +1669,70 @@ def calculate_purlin_check(
             governing_strength_check
         ],
         missing_roof_layers=tuple(missing_roof_layers),
+        bearing_design_reaction_n=_bearing_design_reaction_n,
+    )
+
+
+def calculate_double_purlin_check(
+    *,
+    width_mm: float,
+    height_top_mm: float,
+    height_bottom_mm: float,
+    span_m: float,
+    **purlin_parameters,
+) -> DoublePurlinCheckResult:
+    """Simply supported, frictionless stack with no composite action.
+
+    Both beams cover the same span and use the same material. Roof loads act
+    on the top beam; maintained compressive contact gives equal deflections.
+    Each beam bends about its OWN centroid: EI_eff = E * (I_top + I_bottom).
+    The bottom support receives the full stack reaction. No connection/slip
+    modulus is assumed. The remaining parameters match calculate_purlin_check.
+    Contact opening, unequal spans/materials and connection action are outside
+    this model; reject a permanent-load state requiring tensile contact.
+    """
+    width = _positive(width_mm, "width_mm") / 1000
+    top_height = _positive(height_top_mm, "height_top_mm") / 1000
+    bottom_height = _positive(height_bottom_mm, "height_bottom_mm") / 1000
+    span = _positive(span_m, "span_m")
+    common = dict(width_mm=width_mm, support_spans_m=(span,), **purlin_parameters)
+    # This intermediate call supplies ONLY the common tributary loading and
+    # total timber mass; its solid-section responses are deliberately unused.
+    load_basis = calculate_purlin_check(
+        height_mm=(top_height + bottom_height) * 1000, **common
+    )
+    density = _positive(purlin_parameters.get("timber_density_kg_m3", TIMBER_DENSITY_KG_M3),
+                        "timber_density_kg_m3")
+    top_mass, bottom_mass = (density * width * h for h in (top_height, bottom_height))
+    top_i, bottom_i = (width * h**3 / 12 for h in (top_height, bottom_height))
+    total_i = top_i + bottom_i
+    top_fraction, bottom_fraction = top_i / total_i, bottom_i / total_i
+    g = load_basis.permanent_line_load_kn_m
+    snow = load_basis.roof_snow_line_load_kn_m
+    contact = bottom_fraction * g - bottom_mass * GRAVITY_M_S2 / 1000
+    if contact < -1e-12:
+        raise ValueError(
+            "unconnected beams would lose vertical contact under permanent load; "
+            "this check requires maintained compression contact"
+        )
+    design_g = _positive(purlin_parameters.get("permanent_load_factor", PERMANENT_LOAD_FACTOR),
+                         "permanent_load_factor")
+    design_s = _positive(purlin_parameters.get("snow_load_factor", SNOW_LOAD_FACTOR), "snow_load_factor")
+    full_reaction = (design_g * g + design_s * snow) * 1000 * span / 2
+    top = calculate_purlin_check(
+        height_mm=height_top_mm,
+        _line_loads_kn_m=(top_fraction * g, top_fraction * snow),
+        _snow_load_fraction=top_fraction, **common,
+    )
+    bottom = calculate_purlin_check(
+        height_mm=height_bottom_mm,
+        _line_loads_kn_m=(bottom_fraction * g, bottom_fraction * snow),
+        _bearing_design_reaction_n=full_reaction,
+        _snow_load_fraction=bottom_fraction, **common,
+    )
+    return DoublePurlinCheckResult(
+        top, bottom, top_i, bottom_i, total_i, top_fraction, bottom_fraction,
+        g, snow, top_mass, bottom_mass, max(0.0, contact),
     )
 
 
@@ -2237,6 +2330,9 @@ def add_roof_report_overview(
                     "purlins are modelled either as one simply supported "
                     "piece or as one uniform member continuous over four "
                     "supports.",
+                    "Double purlins use two equal-width, equal-material beams "
+                    "in maintained vertical contact with free longitudinal slip: "
+                    "EI_eff = E × (I_top + I_bottom), no composite action.",
                     "Snow is a vertical action per horizontal roof projection; "
                     "roof-layer masses are per actual sloping surface.",
                 ),
@@ -2249,9 +2345,11 @@ def add_roof_report_overview(
                     f"Timber resistance and deformation model: "
                     f"{REPORT_TIMBER_STANDARD}.",
                     f"Characteristic strengths fm,k, fv,k, fc,0,k and "
-                    f"fc,90,k and mean modulus E0,mean for C18/C22/C24: "
+                    f"fc,90,k and mean modulus E0,mean for C16/C18/C20/C22/C24: "
                     f"{REPORT_TIMBER_GRADES_STANDARD}.",
-                    f"Homogeneous glulam GL28h characteristic strengths "
+                    f"Combined glulam GL24c/GL28c characteristic strengths "
+                    f"and mean modulus: {REPORT_GLULAM_GRADES_STANDARD}.",
+                    f"Homogeneous glulam GL24h/GL28h characteristic strengths "
                     f"and mean modulus: {REPORT_GLULAM_GRADES_STANDARD}.",
                     "The strength class values used by each member are "
                     "printed again in its analysis chapter.",
@@ -2332,19 +2430,6 @@ def add_roof_report_overview(
 
 
 
-def _resolve_timber_grade(material: str | TimberGrade) -> TimberGrade:
-    if isinstance(material, TimberGrade):
-        return material
-    if not isinstance(material, str):
-        choices = ", ".join(repr(name) for name in sorted(_TIMBER_GRADES))
-        raise TypeError(f"material must be {choices}, or a TimberGrade")
-    try:
-        return _TIMBER_GRADES[material.strip().lower()]
-    except KeyError as error:
-        choices = ", ".join(sorted(_TIMBER_GRADES))
-        raise ValueError(f"unknown timber material; choose {choices}") from error
-
-
 class RoofCalculationSession:
     """One terminal run and the PDF assembled from the same results."""
 
@@ -2357,7 +2442,7 @@ class RoofCalculationSession:
         self.report = report
         self.include_creep = include_creep
         self.entries: list[
-            tuple[str, str, RoofCheckResult | PurlinCheckResult]
+            tuple[str, str, RoofCheckResult | PurlinCheckResult | DoublePurlinCheckResult]
         ] = []
         self._snow_load: float | None = None
         self._roof_layers: dict[str, float | None] | None = None
@@ -2393,15 +2478,25 @@ class RoofCalculationSession:
         self,
         title: str,
         kind: str,
-        result: RoofCheckResult | PurlinCheckResult,
+        result: RoofCheckResult | PurlinCheckResult | DoublePurlinCheckResult,
     ) -> None:
         self.entries.append((title, kind, result))
 
     def _entry_status(
         self,
         kind: str,
-        result: RoofCheckResult | PurlinCheckResult,
+        result: RoofCheckResult | PurlinCheckResult | DoublePurlinCheckResult,
     ) -> str:
+        if kind == "double_purlin":
+            assert isinstance(result, DoublePurlinCheckResult)
+            statuses = [
+                _purlin_report_status(check, include_creep=self.include_creep)
+                for check in (result.top, result.bottom)
+            ]
+            failed = any("FAIL" in status for status in statuses)
+            incomplete = any("INCOMPLETE" in status for status in statuses)
+            return ("FAIL; CHECK INCOMPLETE" if failed and incomplete else
+                    "FAIL" if failed else "CHECK INCOMPLETE" if incomplete else "PASS")
         if kind == "rafter":
             assert isinstance(result, RoofCheckResult)
             return _rafter_report_case_status(
@@ -2576,6 +2671,7 @@ def _add_purlin_evaluation(
     timber_density_kg_m3: float,
     include_creep: bool,
     check: PurlinCheckResult,
+    geometry_and_load_lines: Sequence[str] | None = None,
 ) -> None:
     """Append a simple- or continuous-purlin evaluation."""
     is_continuous = len(check.span_lengths_m) == 3
@@ -2638,6 +2734,8 @@ def _add_purlin_evaluation(
     maximum_reaction_n = max(
         abs(value) for value in check.design_response.support_reactions_n
     )
+    if check.bearing_design_reaction_n is not None:
+        maximum_reaction_n = check.bearing_design_reaction_n
     positive_bending_stress_mpa = maximum_positive_moment_nm / section_modulus_m3 / 1e6
     negative_bending_stress_mpa = maximum_negative_moment_nm / section_modulus_m3 / 1e6
     shear_stress_mpa = (
@@ -2794,6 +2892,9 @@ def _add_purlin_evaluation(
             ),
         ),
     ]
+
+    if geometry_and_load_lines is not None:
+        sections[0] = ("Geometrie, materiál a zatížení", tuple(geometry_and_load_lines))
 
     for index, (
         span,
@@ -2983,6 +3084,12 @@ def _add_purlin_evaluation(
                     f"{_cz(bearing_length, 0)} mm = "
                     f"{_cz(bearing_area_mm2, 0)} mm².",
                     (
+                        f"Celková síla v uložení dolního nosníku "
+                        f"Fc,90,Ed = Rtop,Ed + Rbottom,Ed = "
+                        f"{_cz((maximum_reaction_n - max(abs(r) for r in check.design_response.support_reactions_n)) / 1000, 3)} + "
+                        f"{_cz(max(abs(r) for r in check.design_response.support_reactions_n) / 1000, 3)} = "
+                        f"{_cz(maximum_reaction_n / 1000, 3)} kN."
+                        if check.bearing_design_reaction_n is not None else
                         f"Maximální reakce z prutového modelu "
                         f"{beam_model_inputs(design_line_load_kn_m)}: "
                         f"Fc,90,Ed,max = "
@@ -3189,6 +3296,211 @@ def check_purlin(
         elastic_modulus=elastic_modulus,
         timber_density=timber_density,
     )
+
+
+def check_double_purlin(
+    *,
+    title: str,
+    material: str | TimberGrade,
+    width: float,
+    height_top: float,
+    height_bottom: float,
+    span: float,
+    rafter_length_above: float,
+    lower_rafter_span: float,
+    roof_angle: float,
+    rafter_width: float,
+    rafter_height: float,
+    rafter_spacing: float,
+    max_deflection: float,
+    snow_load: float,
+    roof_layers: Mapping[str, float | None] | None = None,
+    additional_load: float = 0,
+    bearing_length: float | None = None,
+    elastic_modulus: float | None = None,
+    timber_density: float = TIMBER_DENSITY_KG_M3,
+) -> DoublePurlinCheckResult:
+    """Report two stacked beams without shear connection/composite action.
+
+    Same API as check_purlin, replacing height with height_top/height_bottom.
+    Geometry uses metres; elastic_modulus uses GPa. Both beams have equal width,
+    material and span, with free longitudinal slip and maintained normal contact.
+    The bottom beam bears on the two walls; the top bears on the bottom at the
+    same ends. bearing_length applies to both end interfaces. Connections,
+    lateral stability and deformation of the contact surfaces are not checked.
+    """
+    session = _active_session()
+    normalized_title = str(title).strip()
+    if not normalized_title:
+        raise ValueError("title must be a non-empty string")
+    grade = _resolve_timber_grade(material)
+    layers = ROOF_LAYERS_KG_M2 if roof_layers is None else roof_layers
+    width_mm = _positive(width, "width") * 1000
+    top_mm = _positive(height_top, "height_top") * 1000
+    bottom_mm = _positive(height_bottom, "height_bottom") * 1000
+    bearing_mm = _positive(width if bearing_length is None else bearing_length,
+                           "bearing_length") * 1000
+    modulus = (grade.elastic_modulus_gpa if elastic_modulus is None
+               else _positive(elastic_modulus, "elastic_modulus"))
+    check = calculate_double_purlin_check(
+        width_mm=width_mm, height_top_mm=top_mm, height_bottom_mm=bottom_mm,
+        span_m=span, upper_rafter_length_m=rafter_length_above,
+        lower_rafter_span_m=lower_rafter_span, roof_angle_degrees=roof_angle,
+        rafter_width_mm=_positive(rafter_width, "rafter_width") * 1000,
+        rafter_height_mm=_positive(rafter_height, "rafter_height") * 1000,
+        rafter_spacing_m=rafter_spacing, deflection_ratio=max_deflection,
+        elastic_modulus_gpa=modulus, snow_load_kn_m2=snow_load,
+        roof_layers_kg_m2=layers, additional_permanent_load_kn_m=additional_load,
+        timber_density_kg_m3=timber_density,
+        bending_strength_mpa=grade.bending_strength_mpa,
+        shear_strength_mpa=grade.shear_strength_mpa,
+        compression_perpendicular_mpa=grade.compression_perpendicular_mpa,
+        material_partial_factor=grade.material_partial_factor,
+        bearing_length_mm=bearing_mm,
+    )
+    session.prepare_inputs(snow_load=snow_load, roof_layers=layers)
+    g, snow = check.permanent_line_load_kn_m, check.roof_snow_line_load_kn_m
+    qd = PERMANENT_LOAD_FACTOR * g + SNOW_LOAD_FACTOR * snow
+    basis = check.top
+    total_reaction = check.bottom.bearing_design_reaction_n
+    model_lines = (
+        "Dva nosníky na sobě, prosté podepření na stejném rozpětí. "
+        "Zatížení střechy působí na horní nosník; dolní nosník leží na stěnách.",
+        "Bez smykového spojení, bez tření; volný podélný prokluz. "
+        "Předpokládá se tuhý svislý tlakový kontakt a společný průhyb, "
+        "nikoliv spolupůsobení jako jednoho vysokého průřezu.",
+        f"Materiál obou nosníků: {grade.name}; E = {_cz(modulus, 2)} GPa. "
+        f"Šířka b = {_cz(width_mm, 0)} mm; htop = {_cz(top_mm, 0)} mm; "
+        f"hbottom = {_cz(bottom_mm, 0)} mm; L = {_cz(span, 3)} m.",
+        f"Itop = b htop³ / 12 = {_cz(width, 3)} × {_cz(height_top, 3)}³ / 12 = "
+        f"{_cz_scientific(check.second_moment_top_m4)} m⁴.",
+        f"Ibottom = b hbottom³ / 12 = {_cz(width, 3)} × {_cz(height_bottom, 3)}³ / 12 = "
+        f"{_cz_scientific(check.second_moment_bottom_m4)} m⁴.",
+        f"Ieff = Itop + Ibottom = {_cz_scientific(check.second_moment_top_m4)} + "
+        f"{_cz_scientific(check.second_moment_bottom_m4)} = "
+        f"{_cz_scientific(check.effective_second_moment_m4)} m⁴.",
+        f"EIeff = E × Ieff = {_cz(modulus, 2)} × 10⁹ × "
+        f"{_cz_scientific(check.effective_second_moment_m4)} = "
+        f"{_cz_scientific(modulus * 1e9 * check.effective_second_moment_m4)} Nm².",
+        "Každý nosník se ohýbá kolem vlastní neutrální osy; "
+        "Steinerovy členy mezi nosníky se nezapočítávají.",
+        f"Podíl horního nosníku ηtop = Itop / Ieff = "
+        f"{_cz_scientific(check.second_moment_top_m4)} / "
+        f"{_cz_scientific(check.effective_second_moment_m4)} = {_cz(check.top_load_fraction, 6)}.",
+        f"Podíl dolního nosníku ηbottom = Ibottom / Ieff = "
+        f"{_cz_scientific(check.second_moment_bottom_m4)} / "
+        f"{_cz_scientific(check.effective_second_moment_m4)} = {_cz(check.bottom_load_fraction, 6)}.",
+        f"Připadající šířka po sklonu bt,s = Lup + Ldol / 2 = "
+        f"{_cz(rafter_length_above, 3)} + {_cz(lower_rafter_span, 3)} / 2 = "
+        f"{_cz(basis.tributary_slope_width_m, 3)} m.",
+        f"Vodorovná šířka bt,h = bt,s × cos α = "
+        f"{_cz(basis.tributary_slope_width_m, 3)} × cos {_cz(roof_angle, 2)}° = "
+        f"{_cz(basis.tributary_horizontal_width_m, 3)} m.",
+        f"Hmotnost vrstev mvrstvy = mA × bt,s = "
+        f"{_cz(basis.roof_layer_line_mass_kg_m / basis.tributary_slope_width_m, 1)} × "
+        f"{_cz(basis.tributary_slope_width_m, 3)} = {_cz(basis.roof_layer_line_mass_kg_m, 1)} kg/m.",
+        f"Hmotnost krokví mkrokve = ρ bk hk bt,s / a = "
+        f"{_cz(timber_density, 1)} × {_cz(rafter_width, 3)} × {_cz(rafter_height, 3)} × "
+        f"{_cz(basis.tributary_slope_width_m, 3)} / {_cz(rafter_spacing, 3)} = "
+        f"{_cz(basis.rafter_line_mass_kg_m, 1)} kg/m.",
+        f"Vlastní hmotnosti mtop = ρ b htop = {_cz(timber_density, 1)} × "
+        f"{_cz(width, 3)} × {_cz(height_top, 3)} = {_cz(check.self_mass_top_kg_m, 1)} kg/m; "
+        f"mbottom = ρ b hbottom = {_cz(timber_density, 1)} × {_cz(width, 3)} × "
+        f"{_cz(height_bottom, 3)} = {_cz(check.self_mass_bottom_kg_m, 1)} kg/m.",
+        f"gk = (mvrstvy + mkrokve + mtop + mbottom) × g / 1000 + gdod = "
+        f"({_cz(basis.roof_layer_line_mass_kg_m, 1)} + {_cz(basis.rafter_line_mass_kg_m, 1)} + "
+        f"{_cz(check.self_mass_top_kg_m, 1)} + {_cz(check.self_mass_bottom_kg_m, 1)}) × "
+        f"{_cz(GRAVITY_M_S2, 2)} / 1000 + {_cz(additional_load, 3)} = {_cz(g, 3)} kN/m.",
+        f"sline,k = sk × bt,h = {_cz(snow_load, 2)} × "
+        f"{_cz(basis.tributary_horizontal_width_m, 3)} = {_cz(snow, 3)} kN/m.",
+        f"Tlakový kontakt od stálého zatížení pG = ηbottom gk - mbottom g / 1000 = "
+        f"{_cz(check.bottom_load_fraction, 6)} × {_cz(g, 3)} - "
+        f"{_cz(check.self_mass_bottom_kg_m, 1)} × {_cz(GRAVITY_M_S2, 2)} / 1000 = "
+        f"{_cz(check.permanent_contact_load_kn_m, 4)} kN/m. "
+        "Kontakt nemusí přenášet tah; kladné přitížení sněhem tlak dále zvyšuje.",
+        f"qd = γG gk + γQ sline,k = {_cz(PERMANENT_LOAD_FACTOR, 2)} × {_cz(g, 3)} + "
+        f"{_cz(SNOW_LOAD_FACTOR, 2)} × {_cz(snow, 3)} = {_cz(qd, 3)} kN/m.",
+        f"Celková reakce v každé podpoře Rtotal,Ed = qd L / 2 = "
+        f"{_cz(qd, 3)} × {_cz(span, 3)} / 2 = {_cz(total_reaction / 1000, 3)} kN.",
+        "Dolní uložení přenáší celou reakci dvojice, nikoliv pouze její podíl v ohybu. "
+        "Stejná délka uložení se předpokládá pro stěnu i koncový kontakt nosníků.",
+        "Neověřuje se lokální stlačení průběžného kontaktu, klopení, boční zajištění "
+        "ani spojovací prostředky. Pružnost smykového spojení se zde nezavádí.",
+        "Výpočet používá nezaokrouhlené hodnoty; zobrazené mezivýsledky jsou zaokrouhlené.",
+    )
+    session.report.add_sections(
+        normalized_title + " – model dvojité vaznice", (("Model a rozdělení zatížení", model_lines),),
+        footer_title="Předběžný statický výpočet střechy", page_label="Strana",
+        continuation_label="pokračování",
+    )
+    print(f"\n{normalized_title}: UNCONNECTED stacked purlin; free longitudinal slip.")
+    print(f"  I_eff = I_top + I_bottom = {check.effective_second_moment_m4:.8g} m^4; "
+          f"load shares top/bottom = {check.top_load_fraction:.3%}/{check.bottom_load_fraction:.3%}")
+    print(f"  Stack permanent/snow load = {g:.3f}/{snow:.3f} kN/m; "
+          f"both beams' self-mass = {check.self_mass_top_kg_m + check.self_mass_bottom_kg_m:.1f} kg/m")
+    print(f"  Compressive contact under permanent load = {check.permanent_contact_load_kn_m:.4f} kN/m; "
+          "no connector stiffness or composite action assumed.")
+    for label, height_mm, fraction, component in (
+        ("Horní nosník", top_mm, check.top_load_fraction, check.top),
+        ("Dolní nosník", bottom_mm, check.bottom_load_fraction, check.bottom),
+    ):
+        h = height_mm / 1000
+        i = width * h**3 / 12
+        w = width * h**2 / 6
+        gi, si = component.permanent_line_load_kn_m, component.roof_snow_line_load_kn_m
+        component_qd = PERMANENT_LOAD_FACTOR * gi + SNOW_LOAD_FACTOR * si
+        geometry = (
+            f"{label}: {grade.name}; b × h = {_cz(width_mm, 0)} × {_cz(height_mm, 0)} mm; "
+            f"L = {_cz(span, 3)} m; E = {_cz(modulus, 2)} GPa.",
+            f"I = b h³ / 12 = {_cz(width, 3)} × {_cz(h, 3)}³ / 12 = {_cz_scientific(i)} m⁴.",
+            f"W = b h² / 6 = {_cz(width, 3)} × {_cz(h, 3)}² / 6 = {_cz_scientific(w)} m³.",
+            f"Podíl zatížení η = {_cz(fraction, 6)} (odvozeno v modelu dvojice).",
+            f"gk = η × gk,total = {_cz(fraction, 6)} × {_cz(g, 3)} = {_cz(gi, 3)} kN/m.",
+            f"sline,k = η × sline,k,total = {_cz(fraction, 6)} × {_cz(snow, 3)} = {_cz(si, 3)} kN/m.",
+            f"qinst = gk + sline,k = {_cz(gi, 3)} + {_cz(si, 3)} = {_cz(gi + si, 3)} kN/m.",
+            f"qd = γG gk + γQ sline,k = {_cz(PERMANENT_LOAD_FACTOR, 2)} × {_cz(gi, 3)} + "
+            f"{_cz(SNOW_LOAD_FACTOR, 2)} × {_cz(si, 3)} = {_cz(component_qd, 3)} kN/m.",
+            *((
+                f"qfin = gk × (1 + kdef) + sline,k × (1 + ψ2 × kdef) = "
+                f"{_cz(gi, 3)} × (1 + {_cz(TIMBER_CREEP_FACTOR, 2)}) + "
+                f"{_cz(si, 3)} × (1 + {_cz(SNOW_CREEP_COMBINATION_FACTOR, 2)} × "
+                f"{_cz(TIMBER_CREEP_FACTOR, 2)}) = "
+                f"{_cz(gi * (1 + TIMBER_CREEP_FACTOR) + si * (1 + SNOW_CREEP_COMBINATION_FACTOR * TIMBER_CREEP_FACTOR), 3)} kN/m.",
+            ) if session.include_creep else ()),
+            "Průhyb obou nosníků je společný; ohybové a smykové napětí se posuzuje v každém zvlášť.",
+            *(('Výpočet je neúplný; chybí hmotnosti vrstev: ' + ', '.join(component.missing_roof_layers),)
+              if component.missing_roof_layers else ()),
+        )
+        _add_purlin_evaluation(
+            session.report, chapter_title=normalized_title + " – " + label,
+            material=grade, width_mm=width_mm, height_mm=height_mm,
+            deflection_ratio=max_deflection, elastic_modulus_gpa=modulus,
+            bearing_length_mm=bearing_mm, roof_angle_degrees=roof_angle,
+            rafter_width_mm=rafter_width * 1000, rafter_height_mm=rafter_height * 1000,
+            rafter_spacing_m=rafter_spacing, snow_load_kn_m2=snow_load,
+            roof_layer_mass_kg_m2=basis.roof_layer_line_mass_kg_m / basis.tributary_slope_width_m,
+            timber_density_kg_m3=timber_density, include_creep=session.include_creep,
+            check=component, geometry_and_load_lines=geometry,
+        )
+        print(f"  {label} {width_mm:g}x{height_mm:g} mm:")
+        print(f"    Deflection L/{max_deflection:g}: immediate "
+              f"{component.immediate_response.span_max_abs_deflections_m[0] * 1000:.2f} mm "
+              f"({_status(component.immediate_deflection_utilizations[0])}); final "
+              f"{component.final_response.span_max_abs_deflections_m[0] * 1000:.2f} mm "
+              f"({_status(component.final_deflection_utilizations[0])})")
+        moment = component.design_response.span_positive_moments_nm[0]
+        shear = component.design_response.span_max_abs_shears_n[0]
+        reaction = (component.bearing_design_reaction_n if component.bearing_design_reaction_n is not None
+                    else max(abs(r) for r in component.design_response.support_reactions_n))
+        print(f"    Bending M={moment / 1000:.3f} kNm, stress={moment / w / 1e6:.3f} MPa "
+              f"({_status(component.positive_bending_utilization)}); "
+              f"shear={shear / 1000:.3f} kN ({_status(component.shear_utilization)})")
+        print(f"    Bearing reaction={reaction / 1000:.3f} kN "
+              f"({_status(component.bearing_utilization)}); "
+              f"governing={component.governing_strength_check} "
+              f"{component.governing_strength_utilization:.1%}")
+    session.add_result(normalized_title, "double_purlin", check)
+    return check
 
 
 def check_continuous_purlin(
@@ -3532,12 +3844,36 @@ def main() -> None:
 #  RAFTER_LENGTH_ABOVE_PURLIN_M = 1.204
 #  PURLIN_SPANS_M = (3.710, 4.720, 2.720)
         check_rafter(
-            title="Hlavní krokve, C22",
-            material="c18",
-            width=0.10,
-            height=0.18,
+            title="Hlavní krokve, C16",
+            material="c16",
+            width=0.08,
+            height=0.20,
             span=3.5,
-            spacing=0.95,
+            spacing=0.80,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.05,
+        )
+        check_rafter(
+            title="Hlavní krokve, C18",
+            material="c18",
+            width=0.08,
+            height=0.20,
+            span=3.5,
+            spacing=0.91,
+            roof_angle=ROOF_ANGLE_DEGREES,
+            max_deflection=MAX_DEFLECTION_RATIO,
+            snow_load=SNOW_LOAD_KN_M2,
+            bearing_length=0.05,
+        )
+        check_rafter(
+            title="Hlavní krokve, C22",
+            material="c22",
+            width=0.08,
+            height=0.20,
+            span=3.5,
+            spacing=1.02	,
             roof_angle=ROOF_ANGLE_DEGREES,
             max_deflection=MAX_DEFLECTION_RATIO,
             snow_load=SNOW_LOAD_KN_M2,
@@ -3548,43 +3884,19 @@ def main() -> None:
             material="c24",
             width=0.08,
             height=0.20,
-            span=3.6,
+            span=3.5,
             spacing=1.0,
             roof_angle=ROOF_ANGLE_DEGREES,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.05,
-        )
-        check_rafter(
-            title="Hlavní krokve, zesílené, C22",
-            material="c24",
-            width=0.10,
-            height=0.20,
-            span=3.85,
-            spacing=1.0,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.05,
-        )
-        check_rafter(
-            title="Krokve vikýře, C22",
-            material="c22",
-            width=0.08,
-            height=0.20,
-            span=3.25,
-            spacing=0.75,
-            roof_angle=17.22,
             max_deflection=MAX_DEFLECTION_RATIO,
             snow_load=SNOW_LOAD_KN_M2,
             bearing_length=0.05,
         )
         check_purlin(
-            title="Vaznice A, c24",
-            material="c24",
+            title="Vaznice Mid, gl24c",
+            material="gl28h",
             width=0.20,
             height=0.32,
-            span=4.5,
+            span=4.75,
             rafter_length_above=1.4,
             lower_rafter_span=3.5,
             roof_angle=ROOF_ANGLE_DEGREES,
@@ -3596,68 +3908,20 @@ def main() -> None:
             bearing_length=0.1,
         )
         check_purlin(
-            title="Vaznice B, C18",
-            material="c18",
-            width=0.24,
+            title="Vaznice AC, c22",
+            material="gl24c",
+            width=0.20,
             height=0.24,
-            span=3.75,
-            rafter_length_above=1.25,
-            lower_rafter_span=3.6,
+            span=3.5,
+            rafter_length_above=1.4,
+            lower_rafter_span=3.5,
             roof_angle=ROOF_ANGLE_DEGREES,
             rafter_width=0.08,
             rafter_height=0.20,
             rafter_spacing=0.75,
             max_deflection=MAX_DEFLECTION_RATIO,
             snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.12,
-        )
-        check_purlin(
-            title="Vaznice B, C22, tenka",
-            material="c22",
-            width=0.24,
-            height=0.28,
-            span=4.80,
-            rafter_length_above=1.05,
-            lower_rafter_span=3.85,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            rafter_width=0.08,
-            rafter_height=0.20,
-            rafter_spacing=0.75,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.12,
-        )
-        check_purlin(
-            title="Vaznice C, C22",
-            material="c22",
-            width=0.24,
-            height=0.24,
-            span=2.75,
-            rafter_length_above=1.05,
-            lower_rafter_span=3.85,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            rafter_width=0.08,
-            rafter_height=0.20,
-            rafter_spacing=0.75,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.12,
-        )
-        check_continuous_purlin(
-            title="Souvislá vaznice, C22",
-            material="c22",
-            width=0.24,
-            height=0.24,
-            spans=(3.74, 4.80, 2.75),
-            rafter_length_above=1.25,
-            lower_rafter_span=3.60,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            rafter_width=0.08,
-            rafter_height=0.20,
-            rafter_spacing=0.75,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.24,
+            bearing_length=0.1,
         )
 
 

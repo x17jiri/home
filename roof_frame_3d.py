@@ -20,11 +20,17 @@ from typing import Literal
 
 import numpy as np
 
+from materials import TIMBER_GRADES, TIMBER_GRADE_NAMES, resolve_timber_grade
+
+# Compatibility/export views derived from the shared registry, not new tables.
+TIMBER_E90_MEAN_PA = {g.name: g.perpendicular_modulus_pa for g in TIMBER_GRADES.values()}
+TIMBER_MEAN_DENSITY_KG_M3 = {g.name: g.mean_density_kg_m3 for g in TIMBER_GRADES.values()}
+
 # Sensitivity parameter, NOT a measured connection stiffness. Applied per X/Y
 # direction ONLY to rafter connections to the rigid wall plate/ring beam.
 # Purlin wall guides are rigid (Y can be explicitly freed for comparison).
-# Gerber wall bearings follow the joint positions; either the middle or the
-# outer pieces can provide the cantilevers supporting adjacent pieces.
+# Independent purlin pieces bear on wall centres by default. The optional
+# Gerber comparison requires compatible coincident section endpoints.
 HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12 * 00.01  ################
 # Dormer seats only: positive kN/mm, None for rigid, or "inherit" to use the
 # general value above. Does not change the house-cut or normal-roof seats.
@@ -35,8 +41,6 @@ DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.01
 SADDLE_LENGTH_M = 1.5  # fallback for synthetic layouts; IFC uses SEDLO_LENGTH
 SADDLE_CONTACT_SPACING_M = 0.10
 SADDLE_CONTACT_STIFFNESS_FACTOR = 1.0
-TIMBER_E90_MEAN_PA = {"C18": 300e6, "C22": 330e6, "C24": 370e6}
-TIMBER_MEAN_DENSITY_KG_M3 = {"C18": 380.0, "C22": 410.0, "C24": 420.0}
 # Trial fastening, NOT a bolt specification/capacity check. Each end has two
 # bolts at 1/3 and 2/3 of its overlap with the saddle (four per saddle).
 SADDLE_BOLT_DIAMETER_MM = 12.0
@@ -57,8 +61,8 @@ COLLAR_TIE_TOP_HEIGHT_M = None  # default bottom on purlin top; optional top abo
 COLLAR_TIE_MIDDLE_LOWERING_M = 0.0
 COLLAR_TIE_OMIT_TOUCHING_SIDES = True
 
-# Existing shortened garden-rafter geometry must also survive removal of the
-# IFC collar constants. This cut is separate from the optional tie height.
+# Legacy fallback only: current shortened rafters end at IFC PURLIN_BOTTOM_Z,
+# independently of the optional collar-tie height.
 SHORT_GARDEN_RAFTER_CUT_HEIGHT_M = 3.05  # above upper-storey floor
 
 
@@ -105,6 +109,9 @@ class HouseInputs:
             return self.get(node.id, visiting)
         if isinstance(node, (ast.Tuple, ast.List)):
             return tuple(self.evaluate(item, visiting) for item in node.elts)
+        if isinstance(node, ast.Dict) and all(key is not None for key in node.keys):
+            return {self.evaluate(key, visiting): self.evaluate(value, visiting)
+                    for key, value in zip(node.keys, node.values)}
         if isinstance(node, ast.Subscript):
             return self.evaluate(node.value, visiting)[self.evaluate(node.slice, visiting)]
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
@@ -163,8 +170,9 @@ class Timber:
     def __post_init__(self):
         positive(self.width, "timber width")
         positive(self.height, "timber height")
-        if self.material not in {"C18", "C22", "C24"}:
-            raise ValueError("material must be C18, C22 or C24")
+        if not isinstance(self.material, str):
+            raise TypeError("material must be a timber grade name")
+        object.__setattr__(self, "material", resolve_timber_grade(self.material).name)
 
     @property
     def properties(self):
@@ -278,6 +286,8 @@ class RoofLayout:
     gerber_joints: tuple[tuple[str, str], ...] = ()
     # Roof strip between inner-wall centres, not between Gerber hinges.
     middle_snow_bounds: tuple[float, float] | None = None
+    # Dormer ridge-side end -> matching opposite (street) main rafter.
+    rafter_top_connections: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self):
         positive(self.saddle_length_m, "IFC saddle length")
@@ -295,6 +305,16 @@ class RoofLayout:
         if self.purlin_system == "gerber" and self.saddle_parameters:
             raise ValueError("Gerber hinges cannot be combined with sedla")
         by_name = {b.name: b for b in self.beams}
+        connected_tops = set()
+        for dormer_name, main_name in self.rafter_top_connections:
+            if dormer_name not in names or main_name not in names:
+                raise ValueError("unknown rafter in dormer top connection")
+            dormer, main = by_name[dormer_name], by_name[main_name]
+            if (dormer.category != "rafter" or main.category != "rafter"
+                    or dormer_name == main_name or dormer_name in connected_tops
+                    or not main.start[1] < dormer.start[1] < main.end[1]):
+                raise ValueError("invalid dormer top connection")
+            connected_tops.add(dormer_name)
         hinged_ends = set()
         for left_name, right_name in self.gerber_joints:
             if left_name not in names or right_name not in names:
@@ -351,7 +371,7 @@ class RoofLayout:
 
     @classmethod
     def from_house(cls, path, *, rafter_material="C18", beam_material="C18", collar_ties=None,
-                   purlin_system="gerber"):
+                   purlin_system="simple"):
         if purlin_system not in {"simple", "saddles", "gerber"}:
             raise ValueError("purlin_system must be simple, saddles or gerber")
         data = HouseInputs(path)
@@ -369,6 +389,10 @@ class RoofLayout:
         wall_centres = (bwt / 2, g("wall2_x") - bwt / 2,
                         g("wall3_x") - bwt / 2, width - bwt / 2)
         segments = g("PURLIN_X_SEGMENTS")
+        sections = (g("PURLIN_SECTION_DIMENSIONS")
+                    if "PURLIN_SECTION_DIMENSIONS" in data.expressions else None)
+        section_bottoms = (g("PURLIN_SECTION_BOTTOM_Z")
+                           if "PURLIN_SECTION_BOTTOM_Z" in data.expressions else None)
         if purlin_system != "gerber":
             # Legacy comparisons retain their original joints over the walls,
             # not wall supports incorrectly moved to the new Gerber hinges.
@@ -394,19 +418,27 @@ class RoofLayout:
                     supports[name].append(x)
             else:
                 supports[name].append(x)
-        for side, y in (
-            ("street", ridge - g("VAZNICE_DIST")),
-            ("garden", ridge + g("VAZNICE_DIST")),
-        ):
+        for side, sign in (("street", -1), ("garden", 1)):
             for segment, lo, hi, height in segments:
-                z = g("PURLIN_TOP_Z") - height / 2
+                if sections is not None:
+                    section_width, section_height, distance = sections[segment]
+                    if abs(section_height - height) > 1e-9:
+                        raise ValueError(f"inconsistent purlin height for {segment}")
+                    bottom = (section_bottoms[segment] if section_bottoms is not None
+                              else g("PURLIN_BOTTOM_Z"))
+                    z = bottom + height / 2
+                else:
+                    # Older house inputs used a common top datum and width.
+                    section_width, distance = g("VAZNICE_BASE"), g("VAZNICE_DIST")
+                    z = g("PURLIN_TOP_Z") - height / 2
+                y = ridge + sign * distance
                 beams.append(
                     BeamSpec(
                         f"{side}_purlin_{segment}",
                         "purlin",
                         (lo, y, z),
                         (hi, y, z),
-                        Timber(g("VAZNICE_BASE"), height, beam_material),
+                        Timber(section_width, height, beam_material),
                         tuple(supports[segment]),
                     )
                 )
@@ -474,6 +506,7 @@ class RoofLayout:
         )
 
         main, full_garden, dormer_names = [], [], []
+        rafter_top_connections = []
         for index, entry in enumerate(g("rafters"), 1):
             pair = None
             if isinstance(entry, tuple):
@@ -506,7 +539,10 @@ class RoofLayout:
             short = pair is not None and not pair.startswith("+")
             high_y = g("GARDEN_ROOF_EAVE_Y")
             if short:
-                cut_z = g("UPPER_FLOOR_START") + SHORT_GARDEN_RAFTER_CUT_HEIGHT_M
+                segment = ("middle" if wall_centres[1] <= entry.x <= wall_centres[2] else "left")
+                cut_z = (section_bottoms[segment] if section_bottoms is not None
+                         else g("PURLIN_BOTTOM_Z") if "PURLIN_BOTTOM_Z" in data.expressions
+                         else g("UPPER_FLOOR_START") + SHORT_GARDEN_RAFTER_CUT_HEIGHT_M)
                 high_y = garden.y_at_z(cut_z, offset)
             beams.append(
                 BeamSpec(
@@ -524,12 +560,14 @@ class RoofLayout:
                 x = entry.x + (
                     -g("RAFTER_THICKNESS") if pair.endswith("before") else g("RAFTER_THICKNESS")
                 )
-                # IFC dormer source starts at local Y=-0.5, not at the ridge.
-                low_y = (
-                    dormer.reference_y
-                    - 0.5 / sqrt(1 + dormer.slope**2)
-                    - offset * dormer.slope / sqrt(1 + dormer.slope**2)
-                )
+                # Finished IFC centreline meets the opposite main rafter's
+                # UPPER face, not its axis or the main roof ridge. Roof patch
+                # limits below keep this extension free of roof/snow loads.
+                opposite_top_offset = g("RAFTER_Z_OFFSET") + g("RAFTER_HEIGHT")
+                slope_delta = dormer.slope - street.slope
+                if abs(slope_delta) <= 1e-9:
+                    raise ValueError("dormer and opposite rafter planes must not be parallel")
+                low_y = (street.z(0, opposite_top_offset) - dormer.z(0, offset)) / slope_delta
                 high_y = g("GARDEN_ROOF_EAVE_Y")
                 name = f"rafter_{index:02d}_dormer"
                 beams.append(
@@ -542,6 +580,7 @@ class RoofLayout:
                     )
                 )
                 dormer_names.append(name)
+                rafter_top_connections.append((name, street_name))
 
         left, right = -g("ROOF_X_OVERHANG"), width + g("ROOF_X_OVERHANG")
         corner_edge = g("CUT_WIDTH") - g("ROOF_X_OVERHANG")
@@ -641,7 +680,8 @@ class RoofLayout:
                         )
         layout = cls(tuple(beams), tuple(patches), Path(path), saddle_length_m=g("SEDLO_LENGTH"),
                      purlin_system=purlin_system, gerber_joints=tuple(gerber_joints),
-                     middle_snow_bounds=wall_centres[1:3])
+                     middle_snow_bounds=wall_centres[1:3],
+                     rafter_top_connections=tuple(rafter_top_connections))
         return (
             layout
             if collar_ties is None
@@ -677,6 +717,12 @@ def add_purlin_spacers(layout):
             ):
                 # Both physical pieces share one numerical hinge node.
                 matches = [max(matches, key=lambda b: len(b.bearings))]
+            elif len(matches) == 2:
+                # The IFC assigns a station exactly on an inner-wall centre
+                # to the middle section; independent beam ends stay separate.
+                middle_matches = [b for b in matches if b.name.endswith("_middle")]
+                if middle_matches:
+                    matches = middle_matches
             if len(matches) != 1:
                 raise ValueError(f"spacer at x={x:g} needs one {side} purlin, got {len(matches)}")
             ends.append(matches[0])
@@ -720,11 +766,11 @@ def add_collar_ties(layout, parameters, *, upper_floor_z):
     )
     by_name = {b.name: b for b in layout.beams}
     middle = next(b for b in layout.beams if b.name == "street_purlin_middle")
-    if parameters.top_height is None:
-        # Follow the actual purlin datum, not the obsolete removed-tie height.
-        tops = [b.start[2] + b.timber.height / 2 for b in layout.beams if b.category == "purlin"]
-        if max(tops) - min(tops) > 1e-9:
-            raise ValueError("automatic collar height requires aligned purlin tops")
+    automatic_height = parameters.top_height is None
+    purlins = [b for b in layout.beams if b.name.startswith("street_purlin_")]
+    tops = [b.start[2] + b.timber.height / 2 for b in purlins]
+    if automatic_height and max(tops) - min(tops) < 1e-9:
+        # Retain the resolved datum for uniform legacy inputs/report consumers.
         parameters = replace(parameters, top_height=tops[0] + parameters.height - upper_floor_z)
     lo, hi = (middle.bearings if len(middle.bearings) == 2
               else (middle.start[0], middle.end[0]))
@@ -744,7 +790,14 @@ def add_collar_ties(layout, parameters, *, upper_floor_z):
         for side in available[: parameters.boards_per_pair]:
             board_x = street.start[0] + side * (street.timber.width + parameters.width) / 2
             lowering = parameters.middle_lowering if lo <= board_x <= hi else 0.0
-            z = upper_floor_z + parameters.top_height - parameters.height / 2 - lowering
+            if automatic_height:
+                matches = [b for b in purlins if b.start[0] <= board_x <= b.end[0]]
+                if not matches:
+                    raise ValueError(f"no purlin at collar board x={board_x:g}")
+                local = next((b for b in matches if b.name.endswith("_middle")), matches[0])
+                z = local.start[2] + local.timber.height / 2 + parameters.height / 2 - lowering
+            else:
+                z = upper_floor_z + parameters.top_height - parameters.height / 2 - lowering
             groups[z] = groups.get(z, 0) + 1
         for group, (z, pieces) in enumerate(sorted(groups.items()), 1):
             ends = []
@@ -912,8 +965,8 @@ def saddle_contact_stiffness(purlin, saddle, area, factor=1.0):
 
 @dataclass(frozen=True)
 class Settings:
-    roof_mass: float = 50.0  # kg/m² actual slope; excludes suspended ceiling
-    snow_load: float = 5.0  # kN/m² horizontal roof projection, NOT ground sk
+    roof_mass: float = 135.0  # kg/m² actual slope; excludes suspended ceiling
+    snow_load: float = 2.0  # kN/m² horizontal roof projection, NOT ground sk
     timber_density: float = 450.0
     gravity: float = 10.0
     purlin_lateral_restraint: bool = True
@@ -980,6 +1033,8 @@ class RoofModel:
     saddle_bolts: list[dict] = field(default_factory=list)
     spacer_links: list[dict] = field(default_factory=list)
     gerber_connections: list[dict] = field(default_factory=list)
+    dormer_top_connections: list[dict] = field(default_factory=list)
+    collar_dormer_connections: list[dict] = field(default_factory=list)
 
     def add_load(self, name, case, q, start=0.0, end=None):
         member = self.model.members[name]
@@ -1026,14 +1081,14 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
     result = RoofModel(model, layout, settings)
     # Effective along-grain beam properties; G is specified separately, NOT
     # inferred from an isotropic Poisson ratio for this orthotropic material.
-    for name, e, g in (
-        ("C18", 9e9, 0.56e9), ("C22", 10e9, 0.63e9), ("C24", 11e9, 0.69e9)
-    ):
-        model.add_material(name, e, g, 0.3, settings.timber_density * settings.gravity)
+    for grade in TIMBER_GRADES.values():
+        model.add_material(grade.name, grade.elastic_modulus_pa, grade.shear_modulus_pa,
+                           0.3, settings.timber_density * settings.gravity)
+    joint_grade = resolve_timber_grade("c22")
     model.add_material(
         "JOINT",
-        10e9 * settings.joint_stiffness_factor,
-        0.63e9 * settings.joint_stiffness_factor,
+        joint_grade.elastic_modulus_pa * settings.joint_stiffness_factor,
+        joint_grade.shear_modulus_pa * settings.joint_stiffness_factor,
         0.3,
         0.0,
     )
@@ -1353,6 +1408,54 @@ def build_roof_model(layout: RoofLayout, settings=Settings()):
         elif beam.name.endswith("_garden"):
             model.def_releases(beam.name, Rxi=True, Ryi=True, Rzi=True)
 
+    for dormer_name, main_name in layout.rafter_top_connections:
+        dormer, main = by_name[dormer_name], by_name[main_name]
+        y = dormer.start[1]
+        lower = node((main.start[0], y, main.z(y)))
+        upper = node(dormer.start)
+        arm = f"dormer_top_joint_{len(result.dormer_top_connections):02d}"
+        # A massless stiff offset arm connects the staggered timber axes.
+        # All rotations at the actual dormer-end pin are free: only forces
+        # pass across it. The main rafter remains continuous through the joint.
+        model.add_member(arm, lower, upper, "JOINT", "JOINT")
+        model.def_releases(arm, Rxj=True, Ryj=True, Rzj=True)
+        model.def_releases(dormer_name, Rxi=True, Ryi=True, Rzi=True)
+        # Both incident ends release these otherwise-unused nodal rotations;
+        # fixing them removes zero rows without restraining either timber.
+        model.def_support(upper, False, False, False, True, True, True)
+        result.dormer_top_connections.append(dict(
+            joint=arm, dormer=dormer_name, main_rafter=main_name,
+            main_node=lower, dormer_node=upper,
+            x_m=dormer.start[0], y_m=y, z_m=dormer.start[2],
+        ))
+
+    # One garden-side force joint: collar endpoint + main (often shortened)
+    # rafter + adjacent dormer rafter. Keep each timber's own continuous beam
+    # axis; a massless stiff arm bridges the small axis offset. Its dormer end
+    # is pinned, so the joint connects translations, not the two rotations.
+    # Do not add any such connection on the street side of the collar.
+    for collar in (b for b in layout.beams if b.category == "collar"):
+        garden_name = collar.attached_rafters[1]
+        dormer_name = garden_name.removesuffix("garden") + "dormer"
+        dormer = by_name.get(dormer_name)
+        if dormer is None:
+            continue
+        y = collar.end[1]
+        if not min(dormer.start[1], dormer.end[1]) < y < max(dormer.start[1], dormer.end[1]):
+            raise ValueError(f"garden collar joint does not intersect {dormer_name}: {collar.name}")
+        main_node = node(collar.end)
+        dormer_node = node((dormer.start[0], y, dormer.z(y)))
+        arm = f"collar_dormer_joint_{len(result.collar_dormer_connections):02d}"
+        model.add_member(arm, main_node, dormer_node, "JOINT", "JOINT")
+        model.def_releases(arm, Rxj=True, Ryj=True, Rzj=True)
+        # Both rafter nodes are interior nodes, with rotations supplied by
+        # their continuous timbers. No ground restraints or timber releases.
+        result.collar_dormer_connections.append(dict(
+            joint=arm, collar=collar.name, main_rafter=garden_name,
+            dormer=dormer_name, main_node=main_node, dormer_node=dormer_node,
+            x_m=collar.end[0], y_m=y, z_m=collar.end[2],
+        ))
+
     by_name = {b.name: b for b in layout.beams}
     all_x = [b.start[0] for b in rafters]
     for patch in layout.patches:
@@ -1632,6 +1735,12 @@ def rafter_chord(roof, beam, *, fallback="supports"):
         ridge = 0.0
     else:
         ridge = None
+    top_joint = next((j for j in getattr(roof, "dormer_top_connections", ())
+                      if j["dormer"] == beam.name), None)
+    if top_joint and plates:
+        plate = max(plates, key=lambda seat: seat[2])
+        return MemberChord(0.0, plate[2], "main_rafter_to_wall_plate",
+                           top_joint["main_rafter"], plate[0])
     if ridge is not None and plates:
         # If a street rafter crosses two plates, use the outer/eave-side one.
         plate = max(plates, key=lambda seat: abs(seat[2] - ridge))
@@ -2234,6 +2343,27 @@ def gerber_joint_rows(roof):
     return rows
 
 
+def dormer_top_joint_rows(roof):
+    """Forces delivered to each dormer-end pin by its massless offset arm."""
+    rows = []
+    for joint in roof.dormer_top_connections:
+        member = roof.model.members[joint["joint"]]
+        submember, _ = member.find_member(member.L())
+        for combo in roof.model.load_combos:
+            force = -submember.F(combo).ravel()[6:12]
+            rows.append(dict(
+                **joint, combination=combo,
+                Fx_to_dormer_kN=force[0] / 1000,
+                Fy_to_dormer_kN=force[1] / 1000,
+                Fz_to_dormer_kN=force[2] / 1000,
+                force_resultant_kN=float(np.linalg.norm(force[:3]) / 1000),
+                Mx_at_pin_kNm=force[3] / 1000,
+                My_at_pin_kNm=force[4] / 1000,
+                Mz_at_pin_kNm=force[5] / 1000,
+            ))
+    return rows
+
+
 def print_summary(roof, members, supports, residuals):
     print(
         f"\n3D roof: direct purlin Y guides {'RESTRAINED' if roof.settings.purlin_lateral_restraint else 'FREE'}"
@@ -2244,6 +2374,16 @@ def print_summary(roof, members, supports, residuals):
         f"{len(roof.wall_plate_connections)} rafter-to-rigid-ring-beam seats; "
         f"{len(roof.model.nodes)} nodes"
     )
+    if roof.dormer_top_connections:
+        print(f"  {len(roof.dormer_top_connections)} pinned dormer tops attached to opposite main rafters.")
+        print("  Top extensions: timber self-weight only; NO snow/roof-layer load. Joint capacity NOT checked.")
+        rows = dormer_top_joint_rows(roof)
+        for joint in roof.dormer_top_connections:
+            worst = max((r for r in rows if r["joint"] == joint["joint"]),
+                        key=lambda r: r["force_resultant_kN"])
+            print(f"    {joint['dormer']} -> {joint['main_rafter']}: "
+                  f"max joint force {worst['force_resultant_kN']:.3f} kN "
+                  f"({worst['combination']})")
     collars = [b for b in roof.layout.beams if b.category == "collar"]
     if roof.spacer_links:
         print(
@@ -2261,16 +2401,21 @@ def print_summary(roof, members, supports, residuals):
             )
     if collars:
         parameters = roof.layout.collar_parameters
+        height_label = (f"{parameters.top_height:g} m above upper floor"
+                        if parameters.top_height is not None else "automatic, above local purlin tops")
         print(
             f"  OPTIONAL kleštiny: {len(collars)} equivalent axial members, "
             f"{sum(b.pieces for b in collars)} boards, "
             f"{parameters.width * 1000:g}×{parameters.height * 1000:g} mm "
-            f"{parameters.material}; top height {parameters.top_height:g} m above upper floor; "
+            f"{parameters.material}; top height {height_label}; "
             f"middle lowering {parameters.middle_lowering:g} m."
         )
         print(
             "  Collar connections ideal pinned axial links to MAIN rafters, not supported by purlins."
         )
+        if roof.collar_dormer_connections:
+            print(f"  {len(roof.collar_dormer_connections)} shared garden-side collar/main/dormer joints "
+                  "(stiff translation links, independent rafter rotations).")
         print("  Collar self-weight included; NO collar bending, buckling or joint-capacity check.")
     else:
         print("  NO kleštiny. Roof layers + timber self-weight + snow only.")
@@ -2807,6 +2952,13 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
         )
         marker.set_gid(bolt["bolt"])
 
+    for joint in (*roof.dormer_top_connections, *roof.collar_dormer_connections):
+        a, b = (roof.model.nodes[joint[key]] for key in ("main_node", "dormer_node"))
+        (marker,) = axes.plot([a.X, b.X], [a.Y, b.Y], color="#202020",
+                             marker="o", markerfacecolor="white", markersize=4,
+                             linewidth=0.8, zorder=15)
+        marker.set_gid(joint["joint"])
+
     for joint in roof.gerber_connections:
         (marker,) = axes.plot(joint["x_m"], joint["y_m"], marker="D", markersize=6,
                              markerfacecolor="white", markeredgecolor="#1565c0",
@@ -2917,6 +3069,10 @@ def plot_plan_report(roof, members, path, *, force_combo="ULS_symmetric"):
         handles.append(Line2D([], [], marker="D", markerfacecolor="white",
                               markeredgecolor="#1565c0", linestyle="none",
                               label="Blue diamonds: Gerber hinges (not wall supports)"))
+    if roof.dormer_top_connections or roof.collar_dormer_connections:
+        handles.append(Line2D([], [], marker="o", markerfacecolor="white",
+                              color="#202020", markersize=4,
+                              label="Black circles: pinned dormer joints (top / garden collar)"))
     if has_spacers:
         handles.append(
             Patch(
@@ -3004,6 +3160,17 @@ def plot_model(roof, path, *, combo="SLS_symmetric", scale=20.0):
         "saddle": "#1678d2",
         "spacer": "#008080",
     }
+    for joints, label in ((roof.dormer_top_connections, "pinned dormer top"),
+                          (roof.collar_dormer_connections, "shared garden collar joint")):
+        for index, joint in enumerate(joints):
+            points = []
+            for key in ("main_node", "dormer_node"):
+                n = roof.model.nodes[joint[key]]
+                points.append(np.array((n.X, n.Y, n.Z)) + scale * np.array(
+                    (n.DX[combo], n.DY[combo], n.DZ[combo])))
+            axes.plot(*np.array(points).T, color="#202020", marker="o", markersize=3,
+                      markerfacecolor="white", lw=0.8,
+                      label=label if index == 0 else None)
     labelled = set()
     for beam in roof.layout.beams:
         if beam.category == "wall_plate":
@@ -3098,7 +3265,7 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, default=Path("roof_frame_3d"))
     parser.add_argument(
         "--purlin-system", choices=("gerber", "saddles", "simple"),
-        help="gerber (default): IFC joint locations, wall bearings follow each piece; saddles/simple: legacy joints over wall centres",
+        help="simple (default): independent IFC sections bearing on wall centres; gerber requires matching piece endpoints; saddles requires uniform sections",
     )
     parser.add_argument(
         "--purlin-lateral",
@@ -3143,8 +3310,10 @@ def main(argv=None):
         default=Settings().roof_mass,
         help="kg/m² actual roof slope, EXCLUDING suspended ceiling; default 135",
     )
-    parser.add_argument("--rafter-material", choices=("C18", "C22", "C24"), default="C18")
-    parser.add_argument("--beam-material", choices=("C18", "C22", "C24"), default="C24")
+    parser.add_argument("--rafter-material", type=lambda value: resolve_timber_grade(value).name,
+                        choices=TIMBER_GRADE_NAMES, default="C18")
+    parser.add_argument("--beam-material", type=lambda value: resolve_timber_grade(value).name,
+                        choices=TIMBER_GRADE_NAMES, default="GL28h")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument(
         "--no-spacers",
@@ -3226,7 +3395,7 @@ def main(argv=None):
     )
     if args.no_saddles and args.purlin_system not in {None, "simple"}:
         parser.error("--no-saddles cannot be combined with Gerber or saddle systems")
-    purlin_system = "simple" if args.no_saddles else (args.purlin_system or "gerber")
+    purlin_system = "simple" if args.no_saddles else (args.purlin_system or "simple")
     #    from rafter_load import SNOW_LOAD_KN_M2
     #
     #    if args.snow is None:
@@ -3294,6 +3463,8 @@ def main(argv=None):
             write_csv(prefix + "_saddle_bolts.csv", saddle_bolt_rows(roof))
         if roof.gerber_connections:
             write_csv(prefix + "_gerber_joints.csv", gerber_joint_rows(roof))
+        if roof.dormer_top_connections:
+            write_csv(prefix + "_dormer_top_joints.csv", dormer_top_joint_rows(roof))
         metadata = dict(
             source=str(layout.source),
             versions={
@@ -3320,9 +3491,20 @@ def main(argv=None):
                 else "first-order elastic"
             )
             + (" with Gerber bending hinges" if roof.gerber_connections else "")
+            + (" with pinned dormer-to-main-rafter tops" if roof.dormer_top_connections else "")
+            + (" with shared garden collar/main/dormer joints" if roof.collar_dormer_connections else "")
             + (" with compression-only purlin spacers" if roof.spacer_links else "")
             + (" with compression-only intermediate wall-plate seats" if roof.wall_plate_bearings else "")
             + (" with compression-only purlin wall bearings" if roof.purlin_wall_bearings else ""),
+            dormer_top_joints=dict(
+                count=len(roof.dormer_top_connections),
+                connections=roof.dormer_top_connections,
+                geometry="dormer centreline trimmed at opposite main-rafter upper-face plane",
+                connection="massless stiff offset arm to main axis; dormer-end translations connected, all rotations released",
+                carrier="opposite main rafter remains continuous; eccentric force application included",
+                extension_load="timber self-weight only; snow/roof-layer patches start at garden roof joint",
+                capacity_checked=False,
+            ),
             purlin_wall_bearings=dict(
                 enabled=bool(roof.purlin_wall_bearings),
                 count=len(roof.purlin_wall_bearings),
@@ -3347,6 +3529,12 @@ def main(argv=None):
                 ],
             ),
             purlin_system=purlin_system,
+            purlin_sections=[
+                dict(name=b.name, width_m=b.timber.width, height_m=b.timber.height,
+                     material=b.timber.material, start=b.start, end=b.end,
+                     bearings_x_m=b.bearings)
+                for b in layout.beams if b.category == "purlin"
+            ],
             gerber=dict(
                 enabled=bool(roof.gerber_connections),
                 count=len(roof.gerber_connections),
@@ -3422,6 +3610,13 @@ def main(argv=None):
                 enabled=args.collar_ties,
                 parameters=asdict(layout.collar_parameters) if layout.collar_parameters else None,
                 model="bilateral axial EA/L spring links on main rafter axes; pinned, no purlin support",
+                garden_dormer_joints=dict(
+                    count=len(roof.collar_dormer_connections),
+                    connections=roof.collar_dormer_connections,
+                    model="garden collar endpoint shared with main rafter; massless stiff offset arm to adjacent dormer axis, pinned at dormer; independent rafter rotations",
+                    street_side="unchanged; no collar-to-dormer connection",
+                    capacity_checked=False,
+                ),
                 self_weight="lumped equally to the two rafter connections; included once",
                 omissions="touching MAIN rafter sides only; main/dormer pairs not suppressed",
                 not_checked=[
@@ -3508,6 +3703,7 @@ def main(argv=None):
                 "purlin bearing X translation rigid; Y rigid in restrained variant, free in free variant; vertical attachment bilateral by default, compression-only with --allow-purlin-lift-off",
                 "purlin wall contact stiffness is a numerical rigid-limit penalty, not calibrated timber compression; opened bearings retain horizontal/roll restraints",
                 "purlin rolling restrained at bearings",
+                "short timber packing blocks under side purlins are ideal rigid vertical bearings; block deformation/strength and fastening are not checked",
                 "seat yaw restrained; roof-plane rafter bending released",
                 "linear effective timber/support stiffness; no creep or nonlinear slip",
                 "roof window area retained conservatively; no timber may bridge opening",
@@ -3528,6 +3724,7 @@ def main(argv=None):
             + (", _saddle_contacts.csv" if roof.saddle_contacts else "")
             + (", _saddle_bolts.csv" if roof.saddle_bolts else "")
             + (", _gerber_joints.csv" if roof.gerber_connections else "")
+            + (", _dormer_top_joints.csv" if roof.dormer_top_connections else "")
             + (", _spacers.csv" if roof.spacer_links else "")
             + (", _model.png, _plan.png" if not args.no_plot else "")
         )

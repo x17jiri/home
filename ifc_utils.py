@@ -3336,7 +3336,7 @@ def _timber_schedule_svg(
         layout_scale = min(layout_scale, float(requested_layout_scale))
 
     normalised_items: list[
-        tuple[str, str, int, int, int, int, str | None, str | None]
+        tuple[str, str, str, int, int, int, int, str | None, str | None]
     ] = []
     for supplied_item in items:
         if not isinstance(supplied_item, dict):
@@ -3352,12 +3352,15 @@ def _timber_schedule_svg(
             continue
         pattern_value = supplied_item.get("pattern")
         color_value = supplied_item.get("color")
+        material_value = supplied_item.get("material", "")
+        material = material_value if isinstance(material_value, str) else ""
         pattern = pattern_value if isinstance(pattern_value, str) else None
         color = color_value if isinstance(color_value, str) else None
         normalised_items.append(
             (
                 mark,
                 name,
+                material,
                 member_width,
                 member_height,
                 length,
@@ -3380,13 +3383,14 @@ def _timber_schedule_svg(
     title_bottom = y + title_height
     heading_bottom = title_bottom + heading_height
     column_rights = (
-        x + width * 0.13,
+        x + width * 0.11,
         x + width * 0.42,
-        x + width * 0.51,
-        x + width * 0.60,
-        x + width * 0.71,
-        x + width * 0.78,
-        x + width * 0.89,
+        x + width * 0.52,
+        x + width * 0.595,
+        x + width * 0.67,
+        x + width * 0.77,
+        x + width * 0.83,
+        x + width * 0.915,
         right,
     )
     column_lefts = (x, *column_rights[:-1])
@@ -3432,6 +3436,7 @@ def _timber_schedule_svg(
         (
             "OZNAČENÍ",
             "NÁZEV",
+            "Material",
             "ŠÍŘKA",
             "VÝŠKA",
             "DÉLKA",
@@ -3459,6 +3464,7 @@ def _timber_schedule_svg(
     for (
         mark,
         name,
+        material,
         member_width,
         member_height,
         length,
@@ -3495,6 +3501,7 @@ def _timber_schedule_svg(
             )
         values = (
             name,
+            material,
             str(member_width),
             str(member_height),
             str(length),
@@ -8644,7 +8651,9 @@ class Drawing:
 
         Each row is ``(name, members, extra_length)`` and may include a fourth
         optional settings such as ``{"color": ..., "pattern": ...,
-        "drawing_order": ...}``; omit ``pattern`` for a solid fill.  Members
+        "drawing_order": ..., "material": "c22"}``; omit ``pattern`` for
+        a solid fill. ``material`` labels the schedule only, without changing
+        the IFC material or calculation inputs; omitted labels stay blank. Members
         with a higher integer ``drawing_order`` are drawn over members with a
         lower one.  The ordering may be supplied without a colour.  ``members``
         must be a non-empty group of equal-section beams with equal finished
@@ -8727,6 +8736,11 @@ class Drawing:
                         f"row {row_index} appearance must be a mapping"
                     )
                 appearance = {}
+                if "material" in supplied_appearance:
+                    appearance["material"] = _name(
+                        supplied_appearance["material"],
+                        f"row {row_index} material",
+                    )
                 if "color" in supplied_appearance:
                     color_channels = _color(
                         supplied_appearance["color"],
@@ -8767,7 +8781,7 @@ class Drawing:
                     appearance["drawing_order"] = drawing_order
                 if not appearance:
                     raise ValueError(
-                        f"row {row_index} appearance must contain color or "
+                        f"row {row_index} appearance must contain material, color or "
                         "drawing_order"
                     )
             if isinstance(supplied_members, (str, bytes)):

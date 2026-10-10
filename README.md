@@ -453,6 +453,29 @@ drawing.add_ridge_tile(
 The curved, terracotta-filled annotation is scoped to that drawing and stays
 attached to the model when its camera or scale changes.
 
+## IFC purlin sections
+
+Each street/garden purlin consists of three independent pieces, split at the
+inner-wall centre lines. Their tops align at `PURLIN_TOP_Z`.
+The middle pieces bear on the unchanged inner-wall level
+`PURLIN_WALL_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE`.
+`VAZNICE_BASE`, `VAZNICE_HEIGHT` and `VAZNICE_DIST` describe the middle piece.
+`VAZNICE_SIDE_BASE` and `VAZNICE_SIDE_HEIGHT` describe both side pieces.
+
+`VAZNICE_SIDE_DIST = VAZNICE_DIST + (VAZNICE_BASE - VAZNICE_SIDE_BASE) / 2`
+aligns the outer faces (DIST measures to the centreline), preserving both the
+main and dormer roof planes. Side pieces sit higher by
+`PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT`.
+The outer gable wall tops rise by that amount. At the two inner walls, four
+short timber blocks support just the side-piece halves: width
+`VAZNICE_SIDE_BASE`, height `PURLIN_SIDE_PACKING_HEIGHT`, length `BWT/2`.
+They appear as “Podložky vaznic” in the roof timber schedule. Spacers,
+collar ties and under-rafter insulation endpoints follow the local section.
+The timber schedule separates the middle/side collar ties and spacers.
+Its `Material` column starts with `gl24c` for purlins and `c22` for other
+members. Override a row using `"material"` in its fourth settings dictionary
+in `house_ifc.py`; these labels do not change IFC materials or simulator inputs.
+
 ## 2D roof-frame model
 
 Run `python3 roof_frame.py` to compare a normal roof section with horizontally
@@ -473,17 +496,19 @@ load conventions and remaining checks.
 ## 3D roof-frame model (PyNite)
 
 `roof_frame_3d.py` models rafters (including the dormer), the six independent
-purlin pieces, **without kleštiny by default**. The five wall-plate outlines represent
+purlin pieces, with paired axial kleštiny by default (`--no-collar-ties` for comparison).
+The six purlin sections follow the current middle/side dimensions, common
+top level and aligned outer faces from `house_ifc.py`.
+Adjacent pieces have separate supported ends, with no Gerber joints or sedla.
+Spacers and automatic collar heights follow their local purlin sections.
+The five wall-plate outlines represent
 one immovable rigid wall plate/ring-beam support, not elastic timber members.
 It safely reads the
 current `house_ifc.py` input geometry without regenerating the IFC. Purlins bend
 between their actual wall bearings, rather than being fixed at each rafter.
-The IFC roof no longer generates collar-tie beams or their timber-schedule rows.
-Shortened dormer-side rafters and sloped under-rafter insulation end at the
-purlin bottoms. The horizontal insulation fits directly below the purlins;
-its vapour barrier is one `THERMAL_INSULATION_UNDER_RAFTERS` thickness below
-their underside. The plasterboard ceiling height is unchanged, and replacement
-ceiling support is not designed by these changes.
+Shortened dormer-side rafters end at the local purlin bottom datum. Packing
+blocks are ideal rigid bearings in the simulator, not separately deformable
+members; their compression/fastening is not checked.
 
 Install the optional dependencies in a separate environment (PyNite uses NumPy
 2), then run:
@@ -492,15 +517,15 @@ Install the optional dependencies in a separate environment (PyNite uses NumPy
 python3 -m venv .venv-roof3d
 .venv-roof3d/bin/python -m pip install -r requirements-roof3d.txt
 .venv-roof3d/bin/python roof_frame_3d.py
-.venv-roof3d/bin/python roof_frame_3d.py --collar-ties
+.venv-roof3d/bin/python roof_frame_3d.py --no-collar-ties
 ```
 
 The optional ties use pinned axial tension/compression links. Edit their
 `COLLAR_TIE_*` dimensions and placement parameters near the top of this script,
 independent of the IFC collar definitions. Ties add their own weight but not
 suspended-ceiling loads; bending, buckling and joint capacity are not checked.
-Reports with ties use `_collars_restrained` (or `_collars_free`) filenames so
-they do not overwrite the baseline. The terminal/CSV include signed axial
+Reports without ties use `_no_collars_restrained` (or `_no_collars_free`) filenames so
+they do not overwrite the default reports. The terminal/CSV include signed axial
 forces, positive for tension and negative for compression.
 
 It uses a shared horizontal spring stiffness **only for the rafter connections to
@@ -540,6 +565,19 @@ to terminal/support CSV values for the same combination. `--no-plot` suppresses
 both images.
 
 ## Rafter load helper
+
+Structural timber properties live in the dependency-free [materials.py](materials.py).
+It defines C16, C18, C20, C22, C24, GL24c, GL24h, GL28c and GL28h once: strengths, E/G/E90,
+mean density for connection slip, and the material partial factor. Use
+`resolve_timber_grade("c16")` to retrieve a frozen grade; names are case-insensitive.
+`rafter_load.py`, `roof_frame.py`, `roof_frame_3d.py` and the IFC roof schedule
+all use this registry. Element selections, drawing colours/hatches, loads and
+the separately configured conservative self-weight density remain local.
+
+The report/check wrappers accept `material="gl24c"` for combined glulam
+(EN 14080), alongside C16, C18, C20, C22, C24, GL24h, GL28c and GL28h. This applies to rafters,
+simple/continuous purlins and stacked double purlins. Material names in this
+script are case-insensitive; existing selections are unchanged.
 
 `rafter_load.py` checks the main and dormer rafters as simply supported
 rectangular members. It checks the street-side purlin as one continuous beam

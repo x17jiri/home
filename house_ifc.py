@@ -80,6 +80,7 @@
 #    https://primavent.cz/primy-zaves-60-125-1-00-mm-akusticky-sylomer-baleni-35ks/
 
 from dataclasses import dataclass
+from materials import resolve_timber_grade
 from math import acos, degrees, isclose
 import sys, math
 from ifc_utils import *
@@ -155,10 +156,14 @@ FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
-VAZNICE_DIST = 1.079 # Vzdalenost vaznice od hrebene
 VAZNICE_HEIGHT = 0.32
 VAZNICE_BASE = 0.20
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
+VAZNICE_DIST = 1.179 - VAZNICE_HALF_BASE
+# Independent side pieces; their tops and outer faces align with the middle.
+VAZNICE_SIDE_HEIGHT = 0.24
+VAZNICE_SIDE_BASE = 0.20
+PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT
 SEDLO_LENGTH = 1.5  # Retained for the force simulator's sedlo variant, not IFC geometry.
 PURLIN_SPACER_SIZE = (0.08, 0.20)
 PURLIN_SPACER_LENGTH = 2 * (VAZNICE_DIST - VAZNICE_HALF_BASE)
@@ -360,30 +365,24 @@ oblouk_at = HOUSE_DEPTH-BWT-1-2.5
 # and "after" shorten the main rafter on the garden side; "+before" and
 # "+after" leave it full-length.
 rafters = [
-	-0.12,
-	(-0.12+1.62)/2,
-	1.62,
-	1.62+0.93,
-	(3.35, "+before"),
-	(4.15, "before"),
-	(4.95, "before"),
-	(5.70, "after"),
-	(6.41, "after"),
-	(7.08, "after"),
-	(7.75, "after"),
-	(8.55, "+after"),
+	-0.10,
+	(-0.10+1.65)/2,
+	1.65,
+	1.65+0.91,
+	(3.37, "+before"),
+	(4.14, "before"),
+	(5.00, "before"),
+	(5.67, "before"),
+	(6.42, "after"),
+	(7.09, "after"),
+	(7.76, "after"),
+	(8.53, "+after"),
 
-	8.55+0.67,
-	8.55+0.67+0.67,
-	8.55+0.67+0.67+0.67,
-	11.27,
+	8.53+0.67,
+	8.53+0.67+0.67,
+	8.53+0.67+0.67+0.67,
+	11.25,
 	]
-
-GERBER_JOINT_1 = (wall2_x + rafters[5][0]) / 2.0
-GERBER_JOINT_2 = (rafters[10][0] + wall3_x - BWT) / 2.0
-
-print("GERBER_JOINT_1 = ", GERBER_JOINT_1)
-print("GERBER_JOINT_2 = ", GERBER_JOINT_2)
 
 # chimney
 CHIMNEY_DIST=0.47
@@ -396,7 +395,7 @@ CHIMNEY_Y_START = GALERY_START - 0.45 # override
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 
-CHIMNEY_X_START = (rafters[5][0] + rafters[6][0])/2 - 0.2
+CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2
 
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
@@ -1165,8 +1164,11 @@ zachod_nahore = upper.floor_layer(
 STREET_ROOF_JOINT_Y = HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE
 GARDEN_ROOF_JOINT_Y = HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE
 PURLIN_WALL_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE
-# Inner walls now reach the same purlin bearing level as the outer gable walls.
+# Inner walls stay at the middle-purlin underside. Side pieces bear higher:
+# raised outer gables and short timber blocks on the outer half of inner walls.
 INNER_SUPPORT_WALL_HEIGHT = PURLIN_WALL_TOP_HEIGHT
+OUTER_SUPPORT_WALL_HEIGHT = PURLIN_WALL_TOP_HEIGHT + PURLIN_SIDE_PACKING_HEIGHT
+PURLIN_SIDE_PACKING_LENGTH = BWT / 2
 ROOF_JOINT_Z = (
 	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
 )
@@ -1180,6 +1182,23 @@ GARDEN_ROOF_PLANE_POINTS = (
 	(10, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
 	(0, HOUSE_DEPTH-0.125+0.08, UPPER_FLOOR_START+NADEZDIVKA+0.12),
 )
+# Keep BOTH main and dormer roof planes unchanged by aligning top/outer edges.
+# DIST measures to the centreline, hence half the difference in FULL widths.
+MAIN_ROOF_SLOPE = (
+	(ROOF_JOINT_Z - STREET_ROOF_PLANE_POINTS[2][2])
+	/ (STREET_ROOF_JOINT_Y - STREET_ROOF_PLANE_POINTS[2][1])
+)
+VAZNICE_SIDE_DIST = (
+	VAZNICE_DIST
+	+ (VAZNICE_BASE - VAZNICE_SIDE_BASE) / 2
+)
+if any(not math.isfinite(value) or value <= 0 for value in (
+	VAZNICE_HEIGHT, VAZNICE_BASE, VAZNICE_DIST,
+	VAZNICE_SIDE_HEIGHT, VAZNICE_SIDE_BASE, VAZNICE_SIDE_DIST,
+)):
+	raise ValueError("purlin dimensions and ridge distances must be positive and finite")
+if PURLIN_SIDE_PACKING_HEIGHT < 0:
+	raise ValueError("side purlins cannot be taller than middle purlins")
 DORMER_WALL_HEIGHT = 2.625
 DORMER_ROOF_PLANE_POINTS = (
 	(0, GARDEN_ROOF_JOINT_Y, ROOF_JOINT_Z),
@@ -1248,9 +1267,9 @@ wall_cuts_1_4 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
-		(0, HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
-		(0, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
-		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+PURLIN_WALL_TOP_HEIGHT),
+		(0, HALF_DEPTH-VAZNICE_DIST-VAZNICE_HALF_BASE, UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT),
+		(0, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT),
+		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT),
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
@@ -1360,23 +1379,30 @@ upper.asset(
 PURLIN_TOP_Z = (
 	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
 )
-if (
-	not math.isfinite(GERBER_JOINT_1)
-	or not math.isfinite(GERBER_JOINT_2)
-	or not MIDDLE_PURLIN_X_MIN <= GERBER_JOINT_1 < GERBER_JOINT_2 <= MIDDLE_PURLIN_X_MAX
-):
-	raise ValueError("GERBER_JOINT_1 and GERBER_JOINT_2 must be ordered between the inner-wall centres")
+# Separate pieces terminate at the inner-wall centre lines. They do not form
+# a suspended Gerber span and need not share a Y/Z axis or cross-section.
 PURLIN_X_SEGMENTS = (
-	("left", -0.2, GERBER_JOINT_1, VAZNICE_HEIGHT),
+	("left", -0.2, MIDDLE_PURLIN_X_MIN, VAZNICE_SIDE_HEIGHT),
 	(
 		"middle",
-		GERBER_JOINT_1,
-		GERBER_JOINT_2,
+		MIDDLE_PURLIN_X_MIN,
+		MIDDLE_PURLIN_X_MAX,
 		VAZNICE_HEIGHT,
 	),
-	("right", GERBER_JOINT_2, HOUSE_WIDTH + 0.2, VAZNICE_HEIGHT),
+	("right", MIDDLE_PURLIN_X_MAX, HOUSE_WIDTH + 0.2, VAZNICE_SIDE_HEIGHT),
 )
+PURLIN_SECTION_DIMENSIONS = {
+	"left": (VAZNICE_SIDE_BASE, VAZNICE_SIDE_HEIGHT, VAZNICE_SIDE_DIST),
+	"middle": (VAZNICE_BASE, VAZNICE_HEIGHT, VAZNICE_DIST),
+	"right": (VAZNICE_SIDE_BASE, VAZNICE_SIDE_HEIGHT, VAZNICE_SIDE_DIST),
+}
+# Bottom of the MIDDLE pieces (and top of the unchanged inner walls).
 PURLIN_BOTTOM_Z = PURLIN_TOP_Z - VAZNICE_HEIGHT
+PURLIN_SECTION_BOTTOM_Z = {
+	"left": PURLIN_TOP_Z - VAZNICE_SIDE_HEIGHT,
+	"middle": PURLIN_BOTTOM_Z,
+	"right": PURLIN_TOP_Z - VAZNICE_SIDE_HEIGHT,
+}
 # Keep the existing suspended-ceiling datum after removing the sedla.
 FLAT_VAPOUR_BARRIER_TOP_Z = PURLIN_BOTTOM_Z - VAZNICE_HEIGHT
 # Paired boards sit directly above the purlins. These dimensions do not move
@@ -1386,20 +1412,41 @@ COLLAR_TIE_TOP_HEIGHT = COLLAR_TIE_BOTTOM_HEIGHT + COLLAR_TIE_SIZE[1]
 
 
 def purlin_bottom_z_at(x):
-	"""Common underside of all three purlin pieces; retain the positional API."""
-	return PURLIN_BOTTOM_Z
+	"""Underside of the purlin piece at logical X (tops share one datum)."""
+	return PURLIN_TOP_Z - purlin_dimensions_at(x)[1]
 
 
-def add_purlin_segments(name, y):
-	"""Add one three-piece purlin with a common top elevation."""
+def purlin_dimensions_at(x):
+	"""Return width, height and ridge distance for the piece at logical X."""
+	segment = "middle" if MIDDLE_PURLIN_X_MIN <= x <= MIDDLE_PURLIN_X_MAX else "left"
+	return PURLIN_SECTION_DIMENSIONS[segment]
+
+
+def purlin_top_z_at(x):
+	return PURLIN_TOP_Z
+
+
+def purlin_outer_face_y_at(x, *, side):
+	width, _, distance = purlin_dimensions_at(x)
+	if side not in {"street", "garden"}:
+		raise ValueError("purlin side must be 'street' or 'garden'")
+	return HALF_DEPTH + (-1 if side == "street" else 1) * (distance + width / 2)
+
+
+def add_purlin_segments(name, *, side):
+	"""Add three independent pieces with aligned tops and outer faces."""
 	segments = []
+	if side not in {"street", "garden"}:
+		raise ValueError("purlin side must be 'street' or 'garden'")
 	for segment_name, x_start, x_end, height in PURLIN_X_SEGMENTS:
-		center_z = PURLIN_TOP_Z - height / 2
+		width, _, distance = PURLIN_SECTION_DIMENSIONS[segment_name]
+		center_z = PURLIN_SECTION_BOTTOM_Z[segment_name] + height / 2
+		y = HALF_DEPTH + (-1 if side == "street" else 1) * distance
 		segments.append(upper.beam(
 			f"{name} purlin {segment_name}",
 			start=(x_start, y, center_z),
 			end=(x_end, y, center_z),
-			size=(VAZNICE_BASE, height),
+			size=(width, height),
 			material="Wood",
 			kind="BEAM",
 		))
@@ -1408,12 +1455,38 @@ def add_purlin_segments(name, y):
 
 street_purlins = add_purlin_segments(
 	"Street",
-	HALF_DEPTH - VAZNICE_DIST,
+	side="street",
 )
 garden_purlins = add_purlin_segments(
 	"Garden",
-	HALF_DEPTH + VAZNICE_DIST,
+	side="garden",
 )
+
+
+def add_purlin_packing_blocks():
+	"""Four short blocks on the SIDE-piece halves of the unchanged inner walls."""
+	blocks = []
+	if PURLIN_SIDE_PACKING_HEIGHT == 0:
+		return tuple(blocks)
+	center_z = PURLIN_BOTTOM_Z + PURLIN_SIDE_PACKING_HEIGHT / 2
+	for side, direction in (("Street", -1), ("Garden", 1)):
+		y = HALF_DEPTH + direction * VAZNICE_SIDE_DIST
+		for label, x_start, x_end in (
+			("left", MIDDLE_PURLIN_X_MIN - PURLIN_SIDE_PACKING_LENGTH, MIDDLE_PURLIN_X_MIN),
+			("right", MIDDLE_PURLIN_X_MAX, MIDDLE_PURLIN_X_MAX + PURLIN_SIDE_PACKING_LENGTH),
+		):
+			blocks.append(upper.beam(
+				f"{side} {label} purlin packing block",
+				start=(x_start, y, center_z),
+				end=(x_end, y, center_z),
+				size=(VAZNICE_SIDE_BASE, PURLIN_SIDE_PACKING_HEIGHT),
+				material="Wood",
+				kind="BEAM",
+			))
+	return tuple(blocks)
+
+
+purlin_packing_blocks = add_purlin_packing_blocks()
 
 
 beam3 = upper.beam(
@@ -1584,6 +1657,17 @@ dormer_roof = roof.plane(
 			(0, GARDEN_ROOF_EAVE_Y, 10),
 		),
 	],
+)
+# Only the structural dormer rafters continue across the ridge-side void.
+# Replace their vertical ridge boundary with the opposite main-rafter upper face;
+# the dormer roof layers and counter-battens retain their original boundaries.
+dormer_rafter_roof = roof.plane(
+	"Dormer rafter slope",
+	points=DORMER_ROOF_PLANE_POINTS,
+	cuts=(
+		offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT),
+		*dormer_roof.cuts[1:],
+	),
 )
 flat_ceiling_roof = roof.plane(
 	"Flat ceiling",
@@ -1863,6 +1947,9 @@ TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
 
 rafter_layout = []
+# The collar board on the dormer side must sit outside the touching pair,
+# rather than in the space occupied by the adjacent dormer rafter.
+paired_rafter_dormer_offsets = {}
 for rafter in rafters:
 	if isinstance(rafter, SplitRafter):
 		if not any(
@@ -1893,6 +1980,8 @@ for rafter in rafters:
 	dormer_offset = (
 		-RAFTER_THICKNESS if dormer_side == "before" else RAFTER_THICKNESS
 	)
+	# Collar clearance is needed for both shortened and full-length (+) pairs.
+	paired_rafter_dormer_offsets[rafter_x] = dormer_offset
 	rafter_layout.extend(
 		(
 			(rafter_x, "main", shorten_garden_side, None, False),
@@ -1927,13 +2016,18 @@ def add_collar_ties():
 		offset_plane(*points, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT)
 		for points in (STREET_ROOF_PLANE_POINTS, GARDEN_ROOF_PLANE_POINTS)
 	)
-	centre_z = PURLIN_TOP_Z + COLLAR_TIE_SIZE[1] / 2
 	ties = []
 	for index, (x, rafter_width) in enumerate(main_rafter_sections, start=1):
 		x_offset = (rafter_width + COLLAR_TIE_THICKNESS) / 2
 		for side, offset in (("left", -x_offset), ("right", x_offset)):
 			if (x, side) in blocked_sides:
 				continue
+			dormer_offset = paired_rafter_dormer_offsets.get(x, 0)
+			if offset * dormer_offset > 0:
+				# Shift this entire board by one rafter width to the outer
+				# face of the dormer rafter; the opposite board stays put.
+				offset += dormer_offset
+			centre_z = purlin_top_z_at(x + offset) + COLLAR_TIE_SIZE[1] / 2
 			tie = upper.beam(
 				f"Collar tie {index} {side}",
 				start=(x + offset, STREET_ROOF_JOINT_Y - COLLAR_TIE_EXTENSION, centre_z),
@@ -1955,12 +2049,12 @@ purlin_spacers = tuple(
 	upper.beam(
 		f"Purlin spacer {index}",
 		start=(
-			x, HALF_DEPTH - PURLIN_SPACER_LENGTH / 2,
-			PURLIN_TOP_Z - PURLIN_SPACER_SIZE[1] / 2,
+			x, HALF_DEPTH - purlin_dimensions_at(x)[2] + purlin_dimensions_at(x)[0] / 2,
+			purlin_top_z_at(x) - PURLIN_SPACER_SIZE[1] / 2,
 		),
 		end=(
-			x, HALF_DEPTH + PURLIN_SPACER_LENGTH / 2,
-			PURLIN_TOP_Z - PURLIN_SPACER_SIZE[1] / 2,
+			x, HALF_DEPTH + purlin_dimensions_at(x)[2] - purlin_dimensions_at(x)[0] / 2,
+			purlin_top_z_at(x) - PURLIN_SPACER_SIZE[1] / 2,
 		),
 		size=PURLIN_SPACER_SIZE,
 		material="Wood",
@@ -2010,6 +2104,30 @@ def add_continuous_roof_layers(
 	outer_x_range=None,
 ):
 	"""Add selected inner and outer parts of the roof build-up."""
+	if include_under_rafter_insulation and under_rafter_end_y is not None:
+		# Follow each piece's outer face, including where a roof layer crosses
+		# the change between the side and middle purlins. Keep outer roof layers
+		# and the suspended-ceiling finishes continuous as before.
+		x_breaks = [x_min, *(
+			x for x in (MIDDLE_PURLIN_X_MIN, MIDDLE_PURLIN_X_MAX)
+			if x_min < x < x_max
+		), x_max]
+		if len(x_breaks) > 2:
+			for part_index, (part_min, part_max) in enumerate(zip(x_breaks, x_breaks[1:])):
+				add_continuous_roof_layers(
+					plane, f"{name} purlin part {part_index}", part_min, part_max, y_min, y_max,
+					inner_cuts=inner_cuts,
+					inner_layout=inner_layout,
+					under_rafter_end_y=under_rafter_end_y,
+					include_inner_finishes=False,
+					include_outer=False,
+				)
+			include_under_rafter_insulation = False
+		else:
+			under_rafter_end_y = purlin_outer_face_y_at(
+				(x_min + x_max) / 2,
+				side="street" if under_rafter_end_y < HALF_DEPTH else "garden",
+			)
 	if outer_x_range is None:
 		outer_x_range = (x_min, x_max)
 	outer_x_min, outer_x_max = outer_x_range
@@ -2196,6 +2314,18 @@ def local_y_at_global_y(plane, global_y, *, local_z=0):
 		- plane.origin[1]
 		- local_z * plane.z_axis[1]
 	) / plane.y_axis[1]
+
+
+def local_y_at_plane_cut(plane, cut, *, local_x, local_z=0):
+	"""Intersect a roof-local Y line with a non-vertical global cutting plane."""
+	residuals = []
+	for local_y in (0, 1):
+		x, y, z = plane.to_world((local_x, local_y, local_z))
+		residuals.append(z - plane_height_at(*cut, x=x, y=y))
+	slope = residuals[1] - residuals[0]
+	if abs(slope) <= 1e-9:
+		raise ValueError("roof-local Y line must not be parallel to the cutting plane")
+	return -residuals[0] / slope
 
 
 def add_tile_battens(plane, name, x_ranges, y_min, y_max):
@@ -2702,9 +2832,20 @@ for i, (
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
 
 	if is_dormer_rafter:
-		rafter = dormer_roof.beam(
+		# Overshoot the cut for BOTH section faces: the sloped cut, not a
+		# square source-beam end, must define the complete finished joint.
+		dormer_rafter_y_min = min(
+			local_y_at_plane_cut(
+				dormer_rafter_roof,
+				dormer_rafter_roof.cuts[0],
+				local_x=rafter_x,
+				local_z=local_z,
+			)
+			for local_z in (RAFTER_Z_OFFSET, RAFTER_Z_OFFSET + rafter_size[1])
+		) - SHORT_RAFTER_CUT_OVERLENGTH
+		rafter = dormer_rafter_roof.beam(
 			"Rafter 1",
-			start=(rafter_x, -0.5),
+			start=(rafter_x, dormer_rafter_y_min),
 			end=(rafter_x, 5),
 			z_offset=RAFTER_Z_OFFSET,
 			size=rafter_size,
@@ -3214,6 +3355,7 @@ if "roof" in sys.argv:
 		wall_zachod_nahore,
 		*street_purlins,
 		*garden_purlins,
+		*purlin_packing_blocks,
 		*purlin_spacers,
 		beam3,
 		beam_cut_street,
@@ -3259,6 +3401,7 @@ if "roof" in sys.argv:
 			(street_purlins[0], garden_purlins[0]),
 			0,
 			{
+				"material": "gl24c",
 				"pattern": PURLIN_DRAWING_PATTERN,
 				"color": PURLIN_LEFT_DRAWING_COLOR,
 				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
@@ -3269,6 +3412,7 @@ if "roof" in sys.argv:
 			(street_purlins[1], garden_purlins[1]),
 			0,
 			{
+				"material": "gl28h",
 				"pattern": PURLIN_DRAWING_PATTERN,
 				"color": PURLIN_MIDDLE_DRAWING_COLOR,
 				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
@@ -3279,6 +3423,7 @@ if "roof" in sys.argv:
 			(street_purlins[2], garden_purlins[2]),
 			0,
 			{
+				"material": "gl24c",
 				"pattern": PURLIN_DRAWING_PATTERN,
 				"color": PURLIN_RIGHT_DRAWING_COLOR,
 				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
@@ -3315,6 +3460,7 @@ if "roof" in sys.argv:
 			corner_short_rafters,
 			RAFTER_EXTRA_LENGTH,
 			{
+				"material": "C16",
 				"pattern": RAFTER_DRAWING_PATTERN,
 				"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
 				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
@@ -3341,6 +3487,7 @@ if "roof" in sys.argv:
 			dormer_short_rafters,
 			RAFTER_EXTRA_LENGTH,
 			{
+				"material": "C16",
 				"pattern": RAFTER_DRAWING_PATTERN,
 				"color": DORMER_SHORT_RAFTER_DRAWING_COLOR,
 				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
@@ -3361,6 +3508,7 @@ if "roof" in sys.argv:
 			(beam3,),
 			0,
 			{
+				"material": "C16",
 				"pattern": WALL_PLATE_DRAWING_PATTERN,
 				"color": STREET_WALL_PLATE_DRAWING_COLOR,
 				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
@@ -3371,6 +3519,7 @@ if "roof" in sys.argv:
 			(beam_cut_street, beam4_a),
 			0,
 			{
+				"material": "C16",
 				"pattern": WALL_PLATE_DRAWING_PATTERN,
 				"color": SHORT_WALL_PLATE_DRAWING_COLOR,
 				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
@@ -3381,6 +3530,7 @@ if "roof" in sys.argv:
 			(beam4_b,),
 			0,
 			{
+				"material": "C16",
 				"pattern": WALL_PLATE_DRAWING_PATTERN,
 				"color": GARDEN_WALL_PLATE_DRAWING_COLOR,
 				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
@@ -3391,19 +3541,23 @@ if "roof" in sys.argv:
 			(beam_dormer,),
 			0,
 			{
+				"material": "C16",
 				"pattern": WALL_PLATE_DRAWING_PATTERN,
 				"color": DORMER_WALL_PLATE_DRAWING_COLOR,
 				"drawing_order": DORMER_WALL_PLATE_DRAWING_ORDER,
 			},
 		),
-		(
-			"Kleštiny",
-			collar_ties,
-			0,
-			{
-				"color": COLLAR_TIE_DRAWING_COLOR,
-				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
-			},
+		*(
+			(
+				f"Kleštiny",
+				collar_ties,
+				0,
+				{
+					"material": "C16",
+					"color": COLLAR_TIE_DRAWING_COLOR,
+					"drawing_order": COLLAR_TIE_DRAWING_ORDER,
+				},
+			),
 		),
 	]
 	if roof_window_trimmers:
@@ -3415,14 +3569,44 @@ if "roof" in sys.argv:
 				{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
 			)
 		)
-	timber_schedule_rows.append(
+	timber_schedule_rows.extend(
 		(
-			"Rozpěry vaznic",
-			purlin_spacers,
+			f"Rozpěry vaznic – {label}",
+			members,
 			0,
-			{"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER},
+			{
+				"material": "C16",
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER
+			},
 		)
+		for label, members in (
+			("střed", tuple(spacer for spacer in purlin_spacers
+				if MIDDLE_PURLIN_X_MIN <= spacer.start[0] <= MIDDLE_PURLIN_X_MAX)),
+			("krajní", tuple(spacer for spacer in purlin_spacers
+				if not MIDDLE_PURLIN_X_MIN <= spacer.start[0] <= MIDDLE_PURLIN_X_MAX)),
+		)
+		if members
 	)
+	if purlin_packing_blocks:
+		timber_schedule_rows.append((
+			"Podložky vaznic",
+			purlin_packing_blocks,
+			0,
+			{
+				"material": "C16",
+				"pattern": PURLIN_DRAWING_PATTERN,
+				"color": PURLIN_LEFT_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER - 1,
+			},
+		))
+	# Any row may override this initial grade in its settings above.
+	timber_schedule_rows = [
+		(name, members, extra_length, {
+			**settings,
+			"material": resolve_timber_grade(settings.get("material", "c22")).name,
+		})
+		for name, members, extra_length, settings in timber_schedule_rows
+	]
 	drawing1.add_timber_schedule(timber_schedule_rows, layout_scale=0.5)
 	drawing1.add_notes(
 		[
@@ -3722,13 +3906,13 @@ if "aa" in sys.argv:
 		under_rafter_street_top = roof_batting_point(
 			street_roof,
 			x=aa_x,
-			y=STREET_ROOF_JOINT_Y,
+			y=purlin_outer_face_y_at(aa_x, side="street"),
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
 		under_rafter_dormer_top = roof_batting_point(
 			dormer_roof,
 			x=aa_x,
-			y=GARDEN_ROOF_JOINT_Y,
+			y=purlin_outer_face_y_at(aa_x, side="garden"),
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
 		under_rafter_street_eave = roof_batting_point(
@@ -3790,13 +3974,14 @@ if "aa" in sys.argv:
 		# The horizontal symbol spans purlin centre to purlin centre above their
 		# tops, retaining the same thickness clearance as the sloped symbols.
 		horizontal_batting_center_z = (
-			PURLIN_TOP_Z + THERMAL_INSULATION_UNDER_RAFTERS / 2
+			purlin_top_z_at(aa_x) + THERMAL_INSULATION_UNDER_RAFTERS / 2
 		)
+		aa_purlin_distance = purlin_dimensions_at(aa_x)[2]
 		horizontal_batting_start = (
-			aa_x, HALF_DEPTH - VAZNICE_DIST, horizontal_batting_center_z,
+			aa_x, HALF_DEPTH - aa_purlin_distance, horizontal_batting_center_z,
 		)
 		horizontal_batting_end = (
-			aa_x, HALF_DEPTH + VAZNICE_DIST, horizontal_batting_center_z,
+			aa_x, HALF_DEPTH + aa_purlin_distance, horizontal_batting_center_z,
 		)
 		drawing1.add_batting(
 			horizontal_batting_start,
