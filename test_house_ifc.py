@@ -7,13 +7,13 @@ from pathlib import Path
 import runpy
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import ifcopenshell.geom
 import ifcopenshell.util.element
 import numpy as np
 
-from ifc_utils import CutDefinition, Drawing, House
+from ifc_utils import CutDefinition, Drawing, House, _remove_3d_only_elements
 from materials import resolve_timber_grade
 
 
@@ -71,6 +71,33 @@ class CutDrawingTests(unittest.TestCase):
         self.assertAlmostEqual(np.dot(aa_cut.view_direction, cut.view_direction), 0)
         self.assertEqual(cut.start[1], self.values["HALF_DEPTH"])
         self.assertEqual(cut.end[1], self.values["HALF_DEPTH"])
+
+    def test_bb_ridge_has_drawing_scoped_between_rafter_batting(self):
+        values = self.values
+        annotations = values["bb_ridge_batting"]
+        self.assertGreater(len(annotations), 10)
+        drawing = next(d for d in values["house"]._drawings if d.name == "bb")
+        aa = next(d for d in values["house"]._drawings if d.name == "aa")
+        for annotation in annotations:
+            self.assertTrue(annotation.Name.startswith("BB ridge insulation batting "))
+            self.assertIn(annotation, drawing.group.IsGroupedBy[0].RelatedObjects)
+            self.assertNotIn(annotation, aa.group.IsGroupedBy[0].RelatedObjects)
+            self.assertIn("rafter-section-batting", ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"))
+            self.assertGreater(ifcopenshell.util.element.get_pset(annotation, "BBIM_Batting", "Thickness"),
+                               values["ROOF_BATTING_THICKNESS"])
+
+    def test_bb_has_no_batting_at_uninsulated_dormer_rafter_extensions(self):
+        drawing = next(d for d in self.values["house"]._drawings if d.name == "bb")
+        section_batting = [
+            a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+            if "rafter-section-batting" in (
+                ifcopenshell.util.element.get_pset(a, "EPset_Annotation", "Classes") or ""
+            ).split()
+        ]
+        self.assertEqual(set(section_batting), set(self.values["bb_ridge_batting"]))
+        self.assertFalse(any((a.Name or "").startswith("BB dormer insulation batting")
+                             for a in self.values["house"].model.by_type("IfcAnnotation")))
 
     def test_bb_outside_wall_insulation_matches_facade_materials(self):
         values = self.values
@@ -134,6 +161,69 @@ class RoofFramingTests(unittest.TestCase):
         ):
             cls.values = runpy.run_path(str(source))
             cls.rendered = [call.args[0] for call in render.call_args_list]
+
+    def test_garage_has_four_corner_posts_and_flat_roof_all_3d_only(self):
+        values = self.values
+        parts = values["garage"]
+        self.assertEqual(len(parts), 5)
+        posts, roof = parts[:4], parts[4]
+        roof_vertices = self.finished_vertices(roof)
+        roof_min, roof_max = roof_vertices.min(axis=0), roof_vertices.max(axis=0)
+        self.assertLess(roof_max[1], 0)  # Initial placement is in front of the house.
+        self.assertAlmostEqual(roof_max[2] - roof_min[2], values["GARAGE_ROOF_THICKNESS"])
+        post_size = values["GARAGE_POST_SIZE"]
+        expected_corners = {
+            (roof_min[0], roof_min[1]),
+            (roof_max[0] - post_size, roof_min[1]),
+            (roof_max[0] - post_size, roof_max[1] - post_size),
+            (roof_min[0], roof_max[1] - post_size),
+        }
+        actual_corners = []
+        for post in posts:
+            vertices = self.finished_vertices(post)
+            lower, upper = vertices.min(axis=0), vertices.max(axis=0)
+            np.testing.assert_allclose(upper[:2] - lower[:2], (post_size, post_size))
+            self.assertAlmostEqual(lower[2], 0)
+            self.assertAlmostEqual(upper[2], roof_min[2])
+            actual_corners.append(tuple(lower[:2]))
+        for corner in expected_corners:
+            self.assertTrue(any(np.allclose(corner, actual) for actual in actual_corners))
+        for part in parts:
+            self.assertEqual(part.ObjectType, "BOX")
+            self.assertIs(ifcopenshell.util.element.get_pset(
+                part, "BBIM_DrawingVisibility", "ShowInDrawings"), False)
+
+    def test_garage_is_mirrored_in_ifc_but_removed_only_from_drawing_copy(self):
+        exported = self.values["house"]._export_model()
+        for part in self.values["garage"]:
+            original = self.finished_vertices(part)
+            mirrored = self.finished_vertices(exported.by_guid(part.GlobalId))
+            np.testing.assert_allclose(mirrored[:, 1:].min(axis=0), original[:, 1:].min(axis=0))
+            np.testing.assert_allclose(mirrored[:, 1:].max(axis=0), original[:, 1:].max(axis=0))
+            self.assertAlmostEqual(mirrored[:, 0].min(), -original[:, 0].max())
+            self.assertAlmostEqual(mirrored[:, 0].max(), -original[:, 0].min())
+        self.assertEqual(_remove_3d_only_elements(exported), 5)
+        remaining = {e.GlobalId for e in exported.by_type("IfcBuildingElementProxy")}
+        self.assertFalse(remaining & {e.GlobalId for e in self.values["garage"]})
+        for part in self.values["garage"]:
+            self.assertTrue(self.values["house"].model.by_guid(part.GlobalId))
+
+    def test_garage_helper_accepts_reversed_corners_and_validates_before_creation(self):
+        values = self.values
+        with patch.object(House, "add_box", return_value=Mock()) as add_box:
+            parts = values["draw_garage"](8, -1, 2, -5, 2.8)
+            self.assertEqual(len(parts), 5)
+            self.assertEqual(add_box.call_count, 5)
+            roof = add_box.call_args_list[-1]
+            self.assertEqual(roof.kwargs["origin"], (2, -5, 2.8))
+            self.assertEqual(roof.kwargs["size"], (6, 4, values["GARAGE_ROOF_THICKNESS"]))
+            self.assertTrue(all(c.kwargs["show_in_drawings"] is False
+                                for c in add_box.call_args_list))
+            add_box.reset_mock()
+            for args in ((0, 0, 0, 4, 3), (0, 0, 4, 4, 0), (0, 0, 4, 4, float("nan"))):
+                with self.assertRaises(ValueError):
+                    values["draw_garage"](*args)
+            add_box.assert_not_called()
 
     def test_roof_uses_native_surfaces_with_member_ids(self):
         drawing = next(d for d in self.values["house"]._drawings if d.name == "Roof plan")
@@ -708,15 +798,16 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertLess(symbol_thickness, physical_thickness)
                 self.assertAlmostEqual(symbol_thickness / physical_thickness, between_rafter_ratio)
 
-    def test_horizontal_vapour_barrier_keeps_its_height_without_sedla(self):
+    def test_horizontal_vapour_barrier_top_matches_inner_wall_top_in_all_sections(self):
         values = self.values
         plane = values["flat_ceiling_roof"]
         layers = [
             e for e in plane.elements if getattr(e, "material_name", None) == "Vapour barrier"
         ]
-        self.assertTrue(layers)
+        self.assertEqual(len(layers), len(values["roof_under_rafter_x_ranges"]))
+        expected_top = values["UPPER_FLOOR_START"] + values["INNER_SUPPORT_WALL_HEIGHT"]
+        self.assertAlmostEqual(expected_top, values["PURLIN_BOTTOM_Z"])
         for layer in layers:
-            expected_top = values["PURLIN_BOTTOM_Z"] - values["VAZNICE_HEIGHT"]
             self.assertAlmostEqual(values["FLAT_VAPOUR_BARRIER_TOP_Z"], expected_top)
             vertices = self.finished_vertices(layer)
             self.assertAlmostEqual(vertices[:, 2].max(), expected_top, places=6)
@@ -728,6 +819,66 @@ class RoofFramingTests(unittest.TestCase):
             values["FLAT_CEILING_LAYER_HEIGHTS"]["Gypsum plasterboard"][0],
             values["UPPER_FLOOR_THICKNESS"] + 2.635,
         )
+
+    def test_all_roof_layers_use_supplied_x_ranges_without_purlin_splits(self):
+        values = self.values
+        inner_materials = {
+            "Thermal insulation", "Vapour barrier", "Gypsum plasterboard",
+        }
+        outer_materials = {"Wood fiberboard", "Roofing underlay", "Roof tiles"}
+        pieces = [
+            (values["cut_street_roof"], "Street segment 0", 0, inner_materials | outer_materials),
+            *[(values["street_roof"], f"Street segment {i}", i, inner_materials | outer_materials)
+              for i in (1, 2, 3)],
+            *[(values["garden_roof"], f"Garden segment {i}", i, inner_materials | outer_materials)
+              for i in (0, 1, 3)],
+            (values["garden_roof"], "Garden segment 2 above dormer", 2, outer_materials),
+            (values["dormer_roof"], "Dormer segment 2", 2, inner_materials | outer_materials),
+            *[(values["flat_ceiling_roof"], f"Flat ceiling segment {i}", i,
+               {"Vapour barrier", "Gypsum plasterboard"}) for i in range(4)],
+        ]
+        for plane, prefix, index, materials in pieces:
+            layers = [e for e in plane.elements
+                      if hasattr(e, "outline") and (e.Name or "").startswith(prefix + " ")]
+            with self.subTest(piece=prefix):
+                self.assertEqual(len(layers), len(materials))
+                self.assertEqual({e.material_name for e in layers}, materials)
+                for layer in layers:
+                    ranges = values["roof_over_rafter_x_ranges"] if layer.material_name in outer_materials \
+                        else values["roof_under_rafter_x_ranges"]
+                    expected_min, expected_max = ranges[index]
+                    xs = [p[0] for p in layer.outline]
+                    self.assertAlmostEqual(min(xs), expected_min)
+                    self.assertAlmostEqual(max(xs), expected_max)
+                    vertices = self.finished_vertices(layer)
+                    self.assertAlmostEqual(vertices[:, 0].min(), expected_min, places=6)
+                    self.assertAlmostEqual(vertices[:, 0].max(), expected_max, places=6)
+
+    def test_roof_layer_helper_does_not_split_at_purlin_joint_even_when_range_crosses_it(self):
+        values = self.values
+        helper = values["add_continuous_roof_layers"]
+        plane = values["street_roof"]
+        x_min = values["MIDDLE_PURLIN_X_MIN"] - 0.4
+        x_max = values["MIDDLE_PURLIN_X_MAX"] + 0.4
+        outer_range = (x_min - 0.2, x_max + 0.2)
+        # Isolate creation so this regression does not mutate the shared model.
+        storeys = {name: Mock() for name in values["roof_layer_storeys"]}
+        with (
+            patch.dict(helper.__globals__, {"roof_layer_storeys": storeys,
+                                           "roof_under_rafter_insulations": {}}),
+            patch.object(type(plane), "layer", return_value=Mock()) as create_layer,
+        ):
+            helper(plane, "X range regression", x_min, x_max,
+                   values["roof_y_min"], values["roof_y_max"],
+                   under_rafter_end_y=values["STREET_ROOF_JOINT_Y"],
+                   outer_x_range=outer_range)
+        self.assertEqual(create_layer.call_count, 6)
+        for call in create_layer.call_args_list:
+            xs = [p[0] for p in call.kwargs["outline"]]
+            expected = outer_range if call.kwargs["material"] in {
+                "Wood fiberboard", "Roofing underlay", "Roof tiles",
+            } else (x_min, x_max)
+            self.assertEqual((min(xs), max(xs)), expected)
 
 
 if __name__ == "__main__":

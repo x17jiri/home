@@ -170,7 +170,10 @@ def generate_plan(args: argparse.Namespace) -> Path:
     tool.Ifc.run(
         "pset.edit_pset",
         pset=drawing_pset,
-        properties={"Stylesheet": str(stylesheet_path)},
+        properties={
+            "Stylesheet": str(stylesheet_path),
+            "Exclude": "IfcElement, BBIM_DrawingVisibility.ShowInDrawings=FALSE",
+        },
     )
 
     require_finished(

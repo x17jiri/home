@@ -101,6 +101,10 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 .material-Woodfiberboard {
+    fill: white !important;
+}
+
+.material-Woodfiberboard.cut {
     fill: #c9b56d !important;
 }
 
@@ -212,8 +216,17 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 .target-view-ELEVATIONVIEW .material-Rooftiles {
+    fill: white !important;
+    stroke: none;
+}
+
+.target-view-ELEVATIONVIEW .material-Rooftiles.cut {
     fill: #a64b35 !important;
-	stroke: none;
+}
+
+.target-view-ELEVATIONVIEW .material-Rooftiles.projection {
+    stroke: black !important;
+    stroke-width: 0.06 !important;
 }
 
 .target-view-ELEVATIONVIEW .material-Chimney.surface {

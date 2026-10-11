@@ -43,6 +43,7 @@ from ifc_utils import (
     Wall,
     _BATTING_MARKER_PATH,
     _close_door_bodies,
+    _remove_3d_only_elements,
     _overhead_mask_global_ids,
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
@@ -72,6 +73,155 @@ from ifc_utils import (
     plane_height_at,
     window_area,
 )
+
+
+class ReferenceBoxTests(unittest.TestCase):
+    @staticmethod
+    def bounds(element):
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        shape = ifcopenshell.geom.create_shape(settings, element)
+        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+        return vertices.min(axis=0), vertices.max(axis=0)
+
+    def test_box_geometry_material_style_and_export_mirroring(self):
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Boxes", mirror_x=mirror, colors={"box": "#80c0ff"})
+                box = house.add_box("Reference", origin=(2, -3, -0.5),
+                                    size=(1, 2, 2.5), material="Wood",
+                                    transparency=0.5, show_in_drawings=False)
+                self.assertEqual(box.ObjectType, "BOX")
+                self.assertTrue(box.is_a("IfcBuildingElementProxy"))
+                self.assertEqual(ifcopenshell.util.element.get_container(box), house.building)
+                self.assertEqual(ifcopenshell.util.element.get_material(box).Name, "Wood")
+                lower, upper = self.bounds(box)
+                np.testing.assert_allclose(lower, (2, -3, -0.5))
+                np.testing.assert_allclose(upper, (3, -1, 2))
+                body = ifcopenshell.util.representation.get_representation(
+                    box, "Model", "Body", "MODEL_VIEW")
+                shading = body.Items[0].StyledByItem[0].Styles[0].Styles[0]
+                rgb = shading.SurfaceColour
+                np.testing.assert_allclose((rgb.Red, rgb.Green, rgb.Blue), (128 / 255, 192 / 255, 1))
+                self.assertEqual(shading.Transparency, 0.5)
+                exported = house._export_model().by_guid(box.GlobalId)
+                lower, upper = self.bounds(exported)
+                np.testing.assert_allclose(lower, (-3 if mirror else 2, -3, -0.5))
+                np.testing.assert_allclose(upper, (-2 if mirror else 3, -1, 2))
+                # Export reflection must not change the live helper coordinates.
+                np.testing.assert_allclose(self.bounds(box)[0], (2, -3, -0.5))
+
+    def test_validates_box_arguments_before_creating_elements(self):
+        house = House("Boxes")
+        defaults = dict(name="Box", origin=(0, 0, 0), size=(1, 2, 3))
+        invalid = [
+            ({"size": (0, 2, 3)}, ValueError),
+            ({"size": (1, -2, 3)}, ValueError),
+            ({"size": (1, 2, float("nan"))}, ValueError),
+            ({"size": (1, 2)}, TypeError),
+            ({"size": "123"}, TypeError),
+            ({"origin": (0, 0)}, TypeError),
+            ({"show_in_drawings": 0}, TypeError),
+            ({"transparency": 1.1}, ValueError),
+            ({"color": "not-a-color"}, ValueError),
+        ]
+        for overrides, error in invalid:
+            with self.subTest(overrides=overrides), self.assertRaises(error):
+                house.add_box(**(defaults | overrides))
+        self.assertFalse(house.model.by_type("IfcBuildingElementProxy"))
+
+    def test_persisted_rule_excludes_only_3d_only_boxes_created_before_or_after_drawings(self):
+        house = House("Boxes")
+        before = house.add_box("Before", origin=(0, 0, 0), size=(1, 1, 1),
+                               show_in_drawings=False)
+        storey = house.storey("Ground", elevation=0)
+        drawings = (
+            house.add_drawing("Plan", 0, 0, 1, 4),
+            house.add_drawing("Section", 0, 0, 1, 4, view="elevation", direction=(1, 0, 0)),
+            house.add_drawing("Filtered", 0, 0, 1, 4, storeys=[storey]),
+        )
+        after = house.add_box("After", origin=(2, 0, 0), size=(1, 1, 1),
+                              show_in_drawings=False)
+        visible = house.add_box("Visible", origin=(4, 0, 0), size=(1, 1, 1))
+        for drawing in drawings:
+            query = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Exclude")
+            self.assertEqual(ifcopenshell.util.selector.filter_elements(house.model, query),
+                             {before, after})
+        model = ifcopenshell.file.from_string(house.model.to_string())
+        self.assertEqual(_remove_3d_only_elements(model), 2)
+        self.assertEqual(_remove_3d_only_elements(model), 0)
+        self.assertEqual(model.by_guid(visible.GlobalId).Name, "Visible")
+        self.assertEqual(len(house.model.by_type("IfcBuildingElementProxy")), 3)
+
+    def test_every_render_entry_point_uses_disposable_model_and_preserves_source(self):
+        house = House("Boxes", mirror_x=True)
+        ground = house.storey("Ground", elevation=0)
+        wall = ground.wall((0, 0), (4, 0), thickness=0.12, height=2.8)
+        hidden = house.add_box("Hidden", origin=(0, -1, 0), size=(5, 5, 3),
+                               show_in_drawings=False)
+        visible = house.add_box("Visible", origin=(4, 4, 0), size=(1, 1, 1))
+        drawings = (
+            house.add_drawing("Plan", 2, 2, 1.6, 5),
+            house.add_drawing("Section", 2, 2, 1.6, 5, view="elevation", direction=(1, 0, 0),
+                              doors_closed=True),
+        )
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            source = directory / "house.ifc"
+            house.write(source)
+            paths = []
+
+            def run(command, *, check):
+                render_path = Path(command[command.index("--ifc") + 1])
+                paths.append(render_path)
+                self.assertNotEqual(render_path, source)
+                rendered = ifcopenshell.open(render_path)
+                self.assertEqual({e.GlobalId for e in rendered.by_type("IfcBuildingElementProxy")},
+                                 {visible.GlobalId})
+                self.assertTrue(rendered.by_guid(wall.GlobalId))
+                self.assertEqual(len(ifcopenshell.open(source).by_type("IfcBuildingElementProxy")), 2)
+                lower, upper = self.bounds(rendered.by_guid(visible.GlobalId))
+                np.testing.assert_allclose(lower, (-5, 4, 0))
+                np.testing.assert_allclose(upper, (-4, 5, 1))
+                Path(command[command.index("--output") + 1]).write_text("<svg/>", encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0)
+
+            with (patch("ifc_utils.shutil.which", return_value="/usr/bin/blender"),
+                  patch("ifc_utils.subprocess.run", side_effect=run)):
+                for drawing in drawings:
+                    drawing.render(directory / f"{drawing.name}.svg")
+                source_before_legacy = source.read_bytes()
+                generate_plan(source, directory / "legacy.svg", x=0, y=0, z=1.6, radius=5)
+                self.assertEqual(source.read_bytes(), source_before_legacy)
+            self.assertEqual(len(paths), 3)
+            self.assertTrue(all(not path.exists() for path in paths))
+            self.assertTrue(ifcopenshell.open(source).by_guid(hidden.GlobalId))
+            self.assertEqual(len(house.model.by_type("IfcBuildingElementProxy")), 2)
+
+    def test_temporary_model_is_cleaned_up_if_renderer_fails(self):
+        house = House("Boxes")
+        hidden = house.add_box("Hidden", origin=(0, 0, 0), size=(1, 1, 1),
+                               show_in_drawings=False)
+        drawing = house.add_drawing("Plan", 0, 0, 1, 4)
+        paths = []
+
+        def fail(command, *, check):
+            paths.append(Path(command[command.index("--ifc") + 1]))
+            raise subprocess.CalledProcessError(1, command)
+
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            house.write(directory / "house.ifc")
+            with (patch("ifc_utils.shutil.which", return_value="/usr/bin/blender"),
+                  patch("ifc_utils.subprocess.run", side_effect=fail)):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    drawing.render(directory / "plan.svg")
+                with self.assertRaises(subprocess.CalledProcessError):
+                    generate_plan(directory / "house.ifc", directory / "legacy.svg",
+                                  x=0, y=0, z=1, radius=4)
+            self.assertTrue(ifcopenshell.open(directory / "house.ifc").by_guid(hidden.GlobalId))
+        self.assertEqual(len(paths), 2)
+        self.assertTrue(all(not path.exists() for path in paths))
 
 
 class HouseTests(unittest.TestCase):
@@ -7285,6 +7435,75 @@ class HouseTests(unittest.TestCase):
                 thickness=0.16,
             )
 
+    def test_adds_batting_between_actual_sloped_rafter_sections(self) -> None:
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Longitudinal insulation", mirror_x=mirror)
+                storey = house.storey("Upper", elevation=0)
+                roof = storey.roof("Roof")
+                plane = roof.plane("Slope", points=((0, 0, 3), (5, 0, 3), (0, 4, 5)))
+                rafters = [plane.beam(f"Rafter {index}", start=(x, -1), end=(x, 5),
+                                      z_offset=0.02, size=(width, 0.2), kind="RAFTER")
+                           for index, (x, width) in enumerate(((0, 0.2), (1, 0.2),
+                                                              (1.2, 0.2), (2, 0.3)))]
+                projected = plane.beam("Projected only", start=(0.5, 2), end=(0.5, 4),
+                                       z_offset=0.02, size=(0.2, 0.2), kind="RAFTER")
+                section = house.add_drawing("Section", x=1, y=0, z=3, radius=4,
+                                            view="elevation", direction=(0, 1, 0))
+                other = house.add_drawing("Other", x=1, y=0, z=3, radius=4,
+                                          view="elevation", direction=(0, 1, 0))
+                before = len(house.model.by_type("IfcBeam"))
+                batting = section.add_rafter_section_batting(rafters + [rafters[0], projected])
+                self.assertEqual(len(batting), 2)
+                self.assertEqual(len(house.model.by_type("IfcBeam")), before)
+                expected_height = 0.2 * (1.25 ** 0.5)
+                for annotation, (left, right) in zip(batting, ((0.13, 0.87), (1.33, 1.82))):
+                    placement = ifcopenshell.util.placement.get_local_placement(annotation.ObjectPlacement)
+                    axis = annotation.Representation.Representations[0].Items[0]
+                    # Axis representations can use a polyline or indexed curve.
+                    if axis.is_a("IfcPolyline"):
+                        length = axis.Points[-1].Coordinates[0]
+                    else:
+                        length = axis.Points.CoordList[-1][0]
+                    end = placement[:3, 3] + placement[:3, 0] * length
+                    np.testing.assert_allclose(placement[:3, 3], (left, 0, 3 + 0.12 * 1.25**0.5), atol=1e-8)
+                    np.testing.assert_allclose(end, (right, 0, placement[2, 3]), atol=1e-8)
+                    self.assertAlmostEqual(ifcopenshell.util.element.get_pset(annotation, "BBIM_Batting", "Thickness"),
+                                           expected_height * 0.7, places=8)
+                    self.assertIn(annotation, section.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertNotIn(annotation, other.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertIn("rafter-section-batting", ifcopenshell.util.element.get_pset(
+                        annotation, "EPset_Annotation", "Classes"))
+                    if mirror:
+                        reflected = house._export_model().by_guid(annotation.GlobalId)
+                        reflected_placement = ifcopenshell.util.placement.get_local_placement(reflected.ObjectPlacement)
+                        self.assertAlmostEqual(reflected_placement[0, 3], -left)
+                self.assertEqual(section.add_rafter_section_batting([projected]), ())
+                self.assertEqual(section.add_rafter_section_batting(rafters, end_inset=5), ())
+
+    def test_validates_rafter_section_batting(self) -> None:
+        house = House("Insulation")
+        storey = house.storey("Upper", elevation=0)
+        beam = storey.beam("Rafter", start=(0, -1, 2), end=(0, 1, 2), size=(0.1, 0.2))
+        section = house.add_drawing("Section", x=0, y=0, z=2, radius=4,
+                                    view="elevation", direction=(0, 1, 0))
+        plan = house.add_drawing("Plan", x=0, y=0, z=2, radius=4)
+        with self.assertRaisesRegex(ValueError, "elevation"):
+            plan.add_rafter_section_batting([beam])
+        for factor in (0, -0.1, 1, 1.1):
+            with self.assertRaisesRegex(ValueError, "size_factor"):
+                section.add_rafter_section_batting([beam], size_factor=factor)
+        with self.assertRaisesRegex(ValueError, "end_inset"):
+            section.add_rafter_section_batting([beam], end_inset=-0.01)
+        with self.assertRaisesRegex(TypeError, "Beam"):
+            section.add_rafter_section_batting([storey.element])
+        with self.assertRaisesRegex(TypeError, "sequence"):
+            section.add_rafter_section_batting("rafters")
+        foreign = House("Other").storey("Upper", elevation=0).beam(
+            "Foreign rafter", start=(0, -1, 2), end=(0, 1, 2), size=(0.1, 0.2))
+        with self.assertRaisesRegex(ValueError, "this house"):
+            section.add_rafter_section_batting([foreign])
+
     def test_adds_rotatable_hexagon_marker_to_elevation(self) -> None:
         house = House("My house")
         house.storey("Ground floor", elevation=0)
@@ -11058,6 +11277,38 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("stroke-dasharray: 0.7 0.8 !important", opening_rule)
         self.assertNotIn("wall-insulation-interface", stylesheet)
+
+    def test_roof_tiles_are_white_in_projection_and_red_in_cut(self) -> None:
+        stylesheet = (Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css").read_text(encoding="utf-8")
+        projection_selector = ".target-view-ELEVATIONVIEW .material-Rooftiles {"
+        cut_selector = ".target-view-ELEVATIONVIEW .material-Rooftiles.cut {"
+        projection_rule = stylesheet.split(projection_selector, maxsplit=1)[1].split("}", maxsplit=1)[0]
+        cut_rule = stylesheet.split(cut_selector, maxsplit=1)[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", projection_rule)
+        self.assertNotIn("#a64b35", projection_rule)
+        self.assertIn("fill: #a64b35 !important", cut_rule)
+        self.assertLess(stylesheet.index(projection_selector), stylesheet.index(cut_selector))
+        outline_rule = stylesheet.split(
+            ".target-view-ELEVATIONVIEW .material-Rooftiles.projection {", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("stroke: black !important", outline_rule)
+        self.assertIn("stroke-width: 0.06 !important", outline_rule)
+        # Outline native projected linework, not every polygonized surface.
+        self.assertIn("stroke: none", projection_rule)
+        self.assertNotIn("stroke:", cut_rule)
+        ridge_tile_rule = stylesheet.split(".PredefinedType-FILLAREA.ridge-tile {", maxsplit=1)[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: #a64b35 !important", ridge_tile_rule)
+
+    def test_wood_fiberboard_is_white_in_projection_and_tinted_in_cut(self) -> None:
+        stylesheet = (Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css").read_text(encoding="utf-8")
+        projection_rule = stylesheet.split(".material-Woodfiberboard {", maxsplit=1)[1].split("}", maxsplit=1)[0]
+        cut_rule = stylesheet.split(".material-Woodfiberboard.cut {", maxsplit=1)[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", projection_rule)
+        self.assertNotIn("#c9b56d", projection_rule)
+        self.assertIn("fill: #c9b56d !important", cut_rule)
+        # Equal importance and greater specificity keep the cut tint.
+        self.assertLess(stylesheet.index(".material-Woodfiberboard {"),
+                        stylesheet.index(".material-Woodfiberboard.cut {"))
 
     def test_facade_eps_pattern_is_transparent_without_changing_floor_or_xps(self) -> None:
         patterns_path = Path(__file__).parent / "drawings" / "assets" / "patterns.svg"

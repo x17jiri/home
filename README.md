@@ -123,7 +123,51 @@ The Python-side coordinates remain unchanged, including values returned by
 walls, stairs, and roof planes. Only written IFC files and rendered drawings
 are mirrored, so existing coordinate calculations need no special handling.
 
+## 3D-only reference boxes
+
+`House.add_box()` creates an axis-aligned box in absolute, unmirrored metre
+coordinates. `origin` is its minimum X/Y/Z corner; `size` is its X/Y/Z extent:
+
+```python
+house.add_box(
+    "Installation space",
+    origin=(2, -3, 0),
+    size=(1, 2, 2.5),
+    color="#80c0ff",
+    transparency=0.5,
+    show_in_drawings=False,
+)
+```
+
+Boxes are eligible for drawing selection by default (normal storey filters
+still apply). With `show_in_drawings=False` they
+remain in the exported IFC, but are removed from disposable drawing models
+before rendering, so they neither appear nor obscure other geometry. This
+applies to plans, sections and the legacy `generate_plan()` entry point. The
+visibility property and an exclusion rule are also persisted for Bonsai.
+
+`house_ifc.py` uses `draw_garage(x1, y1, x2, y2, height)` to add four corner
+posts and one flat roof, all 3D-only. Its call controls the initial footprint
+and clear height; `GARAGE_POST_SIZE` and `GARAGE_ROOF_THICKNESS` control the
+placeholder member dimensions. This is visual reference geometry only.
+
 ## Roof openings
+
+For longitudinal sections through rafters, use drawing-only batting between
+their actual cut sections:
+
+```python
+section.add_rafter_section_batting(
+    rafters,
+    size_factor=0.7,  # Symbol thickness / actual section height.
+    end_inset=0.03,  # Clearance from each rafter face, in metres.
+)
+```
+
+The helper intersects finished beam geometry with the drawing plane, ignores
+projected-only rafters, and merges doubled/overlapping sections before placing
+symbols in the remaining gaps. No insulation solids or convex hull fills are
+added. `bb` uses it for the between-rafter insulation at the ridge.
 
 Use `Roof.add_opening()` to cut a roof-normal opening through every intersecting
 roof slab or beam. The absolute XY rectangle defines the opening at the roof

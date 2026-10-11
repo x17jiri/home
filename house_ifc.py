@@ -1415,8 +1415,8 @@ PURLIN_SECTION_BOTTOM_Z = {
 	"middle": PURLIN_BOTTOM_Z,
 	"right": PURLIN_TOP_Z - VAZNICE_SIDE_HEIGHT,
 }
-# Keep the existing suspended-ceiling datum after removing the sedla.
-FLAT_VAPOUR_BARRIER_TOP_Z = PURLIN_BOTTOM_Z - VAZNICE_HEIGHT
+# One horizontal barrier level throughout, at the top of the inner support walls.
+FLAT_VAPOUR_BARRIER_TOP_Z = UPPER_FLOOR_START + INNER_SUPPORT_WALL_HEIGHT
 # Paired boards sit directly above the purlins. These dimensions do not move
 # the separately defined insulation, vapour barrier or plasterboard ceiling.
 COLLAR_TIE_BOTTOM_HEIGHT = PURLIN_TOP_Z - UPPER_FLOOR_START
@@ -1951,9 +1951,6 @@ FLAT_CEILING_INNER_LAYER_LAYOUT = {
 	)
 	for layer_name, (bottom, top) in FLAT_CEILING_LAYER_HEIGHTS.items()
 }
-MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT = {
-	**FLAT_CEILING_INNER_LAYER_LAYOUT,
-}
 UNDERLAY_BOTTOM = WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
@@ -2083,11 +2080,14 @@ dormer_x_min = min(dormer_rafter_positions)
 dormer_x_max = max(dormer_rafter_positions)
 
 ROOF_X_OVERHANG = 0.25
+# Authoritative layer X extents: inner finishes stop at the room boundaries;
+# outer layers use their separately specified overhangs. Neither is split or
+# extended to match purlin joints.
 roof_under_rafter_x_ranges = (
-	(0, CUT_WIDTH),
+	(BWT, CUT_WIDTH),
 	(CUT_WIDTH, wall2_x-BWT),
-	(wall2_x-BWT, wall3_x),
-	(wall3_x, HOUSE_WIDTH),
+	(wall2_x, wall3_x-BWT),
+	(wall3_x, HOUSE_WIDTH-BWT),
 )
 roof_over_rafter_x_ranges = (
 	(-ROOF_X_OVERHANG, CUT_WIDTH-ROOF_X_OVERHANG),
@@ -2117,30 +2117,6 @@ def add_continuous_roof_layers(
 	outer_x_range=None,
 ):
 	"""Add selected inner and outer parts of the roof build-up."""
-	if include_under_rafter_insulation and under_rafter_end_y is not None:
-		# Follow each piece's outer face, including where a roof layer crosses
-		# the change between the side and middle purlins. Keep outer roof layers
-		# and the suspended-ceiling finishes continuous as before.
-		x_breaks = [x_min, *(
-			x for x in (MIDDLE_PURLIN_X_MIN, MIDDLE_PURLIN_X_MAX)
-			if x_min < x < x_max
-		), x_max]
-		if len(x_breaks) > 2:
-			for part_index, (part_min, part_max) in enumerate(zip(x_breaks, x_breaks[1:])):
-				add_continuous_roof_layers(
-					plane, f"{name} purlin part {part_index}", part_min, part_max, y_min, y_max,
-					inner_cuts=inner_cuts,
-					inner_layout=inner_layout,
-					under_rafter_end_y=under_rafter_end_y,
-					include_inner_finishes=False,
-					include_outer=False,
-				)
-			include_under_rafter_insulation = False
-		else:
-			under_rafter_end_y = purlin_outer_face_y_at(
-				(x_min + x_max) / 2,
-				side="street" if under_rafter_end_y < HALF_DEPTH else "garden",
-			)
 	if outer_x_range is None:
 		outer_x_range = (x_min, x_max)
 	outer_x_min, outer_x_max = outer_x_range
@@ -2364,22 +2340,14 @@ def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 # trim them at the ridge and eaves.  Inner sloped and horizontal layers are
 # separate solids whose outlines end where their bottom faces cross.  This is
 # symmetric and avoids cross-plane Boolean mitres in the IFC model.
-roof_y_min = -1.5
-roof_y_max = 7
+roof_y_min = -3
+roof_y_max = +10
 street_inner_boundaries = independent_inner_layer_boundaries(street_roof)
 cut_street_inner_boundaries = independent_inner_layer_boundaries(
 	cut_street_roof
 )
 garden_inner_boundaries = independent_inner_layer_boundaries(garden_roof)
 dormer_inner_boundaries = independent_inner_layer_boundaries(dormer_roof)
-middle_street_inner_boundaries = independent_inner_layer_boundaries(
-	street_roof,
-	MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT,
-)
-middle_dormer_inner_boundaries = independent_inner_layer_boundaries(
-	dormer_roof,
-	MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT,
-)
 cut_street_outer_y_min, cut_street_outer_y_max = local_y_limits_from_cuts(
 	cut_street_roof,
 	ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS / 2,
@@ -2461,17 +2429,6 @@ def flat_inner_y_limits(left_boundaries, right_boundaries):
 	}
 
 
-# Leave a short source overshoot beyond the dormer wall so its vertical cut
-# defines the exact end.  The previous full-eave overshoot put the source
-# centroid outside that cut, causing the clipping helper to retain the eave
-# side instead of the interior side.
-dormer_under_rafter_y_max = local_y_at_global_y(
-	dormer_roof,
-	7.75,
-	local_z=THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM,
-) + 0.25
-
-
 add_continuous_roof_layers(
 	cut_street_roof,
 	"Street segment 0",
@@ -2503,9 +2460,7 @@ for part_name, (x_min, x_max), outer_x_range in zip(
 		inner_y_limits=sloped_inner_y_limits(
 			street_roof, street_inner_boundaries, 0.25
 		),
-		include_under_rafter_insulation=part_name != "Street segment 2",
 		under_rafter_end_y=STREET_ROOF_JOINT_Y,
-		include_vapour_barrier=part_name != "Street segment 2",
 	)
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 0", *roof_under_rafter_x_ranges[0],
@@ -2537,14 +2492,13 @@ add_continuous_roof_layers(
 )
 add_continuous_roof_layers(
 	dormer_roof, "Dormer segment 2", *roof_under_rafter_x_ranges[2], 0,
-	roof_y_max-1, # overshoot a little less for the dormer so our cuts work properly
+	roof_y_max-3, # overshoot a little less for the dormer so our cuts work properly
 	outer_x_range=roof_over_rafter_x_ranges[2],
 	inner_cuts=roof_inner_cuts,
 	inner_y_limits=sloped_inner_y_limits(
 		dormer_roof, dormer_inner_boundaries, 7.75
 	),
-	include_under_rafter_insulation=False,
-	include_vapour_barrier=False,
+	under_rafter_end_y=GARDEN_ROOF_JOINT_Y,
 )
 add_continuous_roof_layers(
 	garden_roof, "Garden segment 3", *roof_under_rafter_x_ranges[3],
@@ -2596,119 +2550,6 @@ for (
 		),
 		inner_layout=FLAT_CEILING_INNER_LAYER_LAYOUT,
 		include_under_rafter_insulation=False,
-		include_vapour_barrier=part_name != "Flat ceiling segment 2",
-		include_outer=False,
-	)
-
-# Segment 2 crosses the middle purlin. Sloped insulation ends at its outer
-# vertical face; the horizontal vapour barrier follows its underside while the
-# plasterboard remains on one continuous plane below them.
-for (
-	part_name,
-	x_min,
-	x_max,
-	flat_layout,
-	street_side_boundaries,
-	garden_side_boundaries,
-) in (
-	(
-		"left shoulder",
-		roof_under_rafter_x_ranges[2][0],
-		MIDDLE_PURLIN_X_MIN,
-		FLAT_CEILING_INNER_LAYER_LAYOUT,
-		street_inner_boundaries,
-		dormer_inner_boundaries,
-	),
-	(
-		"lower middle",
-		MIDDLE_PURLIN_X_MIN,
-		MIDDLE_PURLIN_X_MAX,
-		MIDDLE_FLAT_CEILING_INNER_LAYER_LAYOUT,
-		middle_street_inner_boundaries,
-		middle_dormer_inner_boundaries,
-	),
-	(
-		"right shoulder",
-		MIDDLE_PURLIN_X_MAX,
-		roof_under_rafter_x_ranges[2][1],
-		FLAT_CEILING_INNER_LAYER_LAYOUT,
-		street_inner_boundaries,
-		dormer_inner_boundaries,
-	),
-):
-	add_continuous_roof_layers(
-		street_roof,
-		f"Street segment 2 under-rafter {part_name}",
-		x_min,
-		x_max,
-		roof_y_min,
-		roof_y_max,
-		inner_cuts=roof_inner_cuts,
-		under_rafter_end_y=STREET_ROOF_JOINT_Y,
-		include_inner_finishes=False,
-		include_outer=False,
-	)
-	add_continuous_roof_layers(
-		dormer_roof,
-		f"Dormer segment 2 under-rafter {part_name}",
-		x_min,
-		x_max,
-		0,
-		dormer_under_rafter_y_max,
-		inner_cuts=roof_inner_cuts,
-		under_rafter_end_y=GARDEN_ROOF_JOINT_Y,
-		include_inner_finishes=False,
-		include_outer=False,
-	)
-	add_continuous_roof_layers(
-		street_roof,
-		f"Street segment 2 vapour barrier {part_name}",
-		x_min,
-		x_max,
-		roof_y_min,
-		roof_y_max,
-		inner_cuts=roof_inner_cuts,
-		inner_y_limits=sloped_inner_y_limits(
-			street_roof,
-			street_side_boundaries,
-			0.25,
-		),
-		include_under_rafter_insulation=False,
-		include_gypsum=False,
-		include_outer=False,
-	)
-	add_continuous_roof_layers(
-		dormer_roof,
-		f"Dormer segment 2 vapour barrier {part_name}",
-		x_min,
-		x_max,
-		0,
-		roof_y_max - 1,
-		inner_cuts=roof_inner_cuts,
-		inner_y_limits=sloped_inner_y_limits(
-			dormer_roof,
-			garden_side_boundaries,
-			7.75,
-		),
-		include_under_rafter_insulation=False,
-		include_gypsum=False,
-		include_outer=False,
-	)
-	add_continuous_roof_layers(
-		flat_ceiling_roof,
-		f"Flat ceiling segment 2 vapour barrier {part_name}",
-		x_min,
-		x_max,
-		BWT - STREET_ROOF_JOINT_Y,
-		HOUSE_DEPTH - BWT - STREET_ROOF_JOINT_Y,
-		inner_cuts=roof_inner_cuts,
-		inner_y_limits=flat_inner_y_limits(
-			street_side_boundaries,
-			garden_side_boundaries,
-		),
-		inner_layout=flat_layout,
-		include_under_rafter_insulation=False,
-		include_gypsum=False,
 		include_outer=False,
 	)
 
@@ -3067,6 +2908,53 @@ add_foundation_insulation(
 	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
 	height=0.8
 )
+
+GARAGE_POST_SIZE = 0.15
+GARAGE_ROOF_THICKNESS = 0.20
+
+
+def draw_garage(x1, y1, x2, y2, height):
+	"""Create a 3D-only garage placeholder, bounded by two opposite XY corners.
+
+	The posts sit inside the footprint, from absolute Z=0 to ``height``;
+	the roof sits on them. This is visual reference geometry, not a design.
+	"""
+	if not all(math.isfinite(value) for value in (x1, y1, x2, y2, height)):
+		raise ValueError("garage coordinates and height must be finite")
+	x_min, x_max = sorted((x1, x2))
+	y_min, y_max = sorted((y1, y2))
+	if x_max - x_min <= 2 * GARAGE_POST_SIZE or y_max - y_min <= 2 * GARAGE_POST_SIZE:
+		raise ValueError("garage footprint must be wider than two posts on each axis")
+	if height <= 0:
+		raise ValueError("garage height must be greater than zero")
+	posts = tuple(
+		house.add_box(
+			f"Garage post {index}",
+			origin=(x, y, 0),
+			size=(GARAGE_POST_SIZE, GARAGE_POST_SIZE, height),
+			material="Wood",
+			color="#8B5A2B",
+			show_in_drawings=False,
+		)
+		for index, (x, y) in enumerate((
+			(x_min+0.3, y_min+0.3),
+			(x_max-0.3 - GARAGE_POST_SIZE, y_min+0.3),
+			(x_max-0.3 - GARAGE_POST_SIZE, y_max-0.3 - GARAGE_POST_SIZE),
+			(x_min+0.3, y_max-0.3 - GARAGE_POST_SIZE),
+		), start=1)
+	)
+	roof = house.add_box(
+		"Garage flat roof",
+		origin=(x_min, y_min, height),
+		size=(x_max - x_min, y_max - y_min, GARAGE_ROOF_THICKNESS),
+		color="#A64B35",
+		show_in_drawings=False,
+	)
+	return (*posts, roof)
+
+
+# Initial 6 x 6 m footprint on the street side (negative Y); tune these here.
+garage = draw_garage(HOUSE_WIDTH-8, -4, HOUSE_WIDTH-2, -1, 3.0)
 
 house.write("house.ifc")
 
@@ -3983,30 +3871,18 @@ if "aa" in sys.argv:
 			y=7.75,
 			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
-		if aa_x < MIDDLE_PURLIN_X_MIN:
-			under_rafter_part_name = "left shoulder"
-		elif aa_x <= MIDDLE_PURLIN_X_MAX:
-			under_rafter_part_name = "lower middle"
-		else:
-			under_rafter_part_name = "right shoulder"
 		under_rafter_batting_segments = (
 			(
 				"AA street under-rafter batting",
 				under_rafter_street_eave,
 				under_rafter_street_top,
-				roof_under_rafter_insulations[
-					f"Street segment 2 under-rafter "
-					f"{under_rafter_part_name}"
-				],
+				roof_under_rafter_insulations["Street segment 2"],
 			),
 			(
 				"AA dormer under-rafter batting",
 				under_rafter_dormer_top,
 				under_rafter_dormer_eave,
-				roof_under_rafter_insulations[
-					f"Dormer segment 2 under-rafter "
-					f"{under_rafter_part_name}"
-				],
+				roof_under_rafter_insulations["Dormer segment 2"],
 			),
 		)
 		for batting_name, batting_start, batting_end, insulation in (
@@ -4082,6 +3958,14 @@ if "bb" in sys.argv:
 		radius=8,
 		storeys=None,
 		doors_closed=True,
+	)
+	# Dormer-rafter extensions cross this plane, but their insulation stops
+	# at the purlin; only the main-roof ridge sections have batting here.
+	bb_ridge_batting = drawing1.add_rafter_section_batting(
+		main_roof_rafters + stronger_main_roof_rafters + dormer_short_rafters,
+		size_factor=ROOF_BATTING_SIZE_FACTOR,
+		end_inset=ROOF_BATTING_END_INSET,
+		name="BB ridge insulation batting",
 	)
 	for wall, thickness, material in (
 		(wall_1a_g, ROCKWOOL_INSULATION_THICKNESS, "rockwool"),

@@ -5002,6 +5002,19 @@ def _close_door_bodies(model: ifcopenshell.file) -> int:
     return closed
 
 
+def _remove_3d_only_elements(model: ifcopenshell.file) -> int:
+    """Remove hidden drawing geometry from a disposable render model only."""
+    hidden = [
+        element for element in model.by_type("IfcElement")
+        if ifcopenshell.util.element.get_pset(
+            element, "BBIM_DrawingVisibility", "ShowInDrawings"
+        ) is False
+    ]
+    for element in hidden:
+        ifcopenshell.api.root.remove_product(model, product=element)
+    return len(hidden)
+
+
 def generate_plan(
     ifc: str | PathLike[str],
     output: str | PathLike[str],
@@ -5066,6 +5079,14 @@ def generate_plan(
             raise IsADirectoryError(f"plan output is not a file: {absolute_output}")
         absolute_output.unlink()
 
+    model = ifcopenshell.open(str(ifc_path))
+    render_ifc = ifc_path
+    temporary_directory: TemporaryDirectory[str] | None = None
+    if _remove_3d_only_elements(model):
+        temporary_directory = TemporaryDirectory(prefix="ifc-drawing-")
+        render_ifc = Path(temporary_directory.name) / ifc_path.name
+        model.write(str(render_ifc))
+
     command = [
         blender_command,
         "--python-exit-code",
@@ -5074,7 +5095,7 @@ def generate_plan(
         str(script_path),
         "--",
         "--ifc",
-        str(ifc_path),
+        str(render_ifc),
         "--output",
         str(absolute_output),
         "--stylesheet",
@@ -5088,11 +5109,14 @@ def generate_plan(
         "--radius",
         str(radius),
     ]
-    subprocess.run(command, check=True)
+    try:
+        subprocess.run(command, check=True)
+    finally:
+        if temporary_directory is not None:
+            temporary_directory.cleanup()
 
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG plan: {absolute_output}")
-    model = ifcopenshell.open(str(ifc_path))
     _postprocess_wall_insulation_batting(absolute_output)
     _postprocess_door_overheads(
         absolute_output,
@@ -5169,16 +5193,25 @@ def _render_existing_drawing(
     target_view = drawing_properties.get("TargetView") if drawing_properties else None
     render_ifc = Path(ifc).resolve()
     temporary_directory: TemporaryDirectory[str] | None = None
-    if target_view == "ELEVATION_VIEW" and bool(
+    hidden_elements = _remove_3d_only_elements(model)
+    close_doors = target_view == "ELEVATION_VIEW" and bool(
         drawing_properties.get("DoorsClosed", False)
-    ):
-        temporary_directory = TemporaryDirectory(prefix="ifc-closed-doors-")
-        render_ifc = Path(temporary_directory.name) / Path(ifc).name
+    )
+    if close_doors:
         closed_doors = _close_door_bodies(model)
-        model.write(str(render_ifc))
         print(
             f"[drawing render] Closed {closed_doors} door bodies in temporary "
             f"elevation model",
+            flush=True,
+        )
+    if hidden_elements or close_doors:
+        temporary_directory = TemporaryDirectory(prefix="ifc-drawing-")
+        render_ifc = Path(temporary_directory.name) / Path(ifc).name
+        model.write(str(render_ifc))
+    if hidden_elements:
+        print(
+            f"[drawing render] Excluded {hidden_elements} 3D-only elements "
+            "from the temporary drawing model",
             flush=True,
         )
 
@@ -5351,6 +5384,7 @@ class House:
     ``#RGB``/``#RRGGBB`` values.  ``asset_library`` may override the
     automatically discovered Bonsai furniture-library IFC path.
     The ``"cylinder"`` color category controls generic cylinders.
+    The ``"box"`` color category controls generic rectangular boxes.
     Set ``mirror_x=True`` to reflect exported IFC geometry and drawings across
     the global ``x=0`` plane.  The live Python objects retain their original
     coordinates, so geometry can continue to refer to values returned by
@@ -5376,6 +5410,7 @@ class House:
         allowed_colors = {
             "beam",
             "block",
+            "box",
             "chimney",
             "cylinder",
             "wall",
@@ -5718,6 +5753,7 @@ class House:
         category: Literal[
             "beam",
             "block",
+            "box",
             "chimney",
             "cylinder",
             "wall",
@@ -7295,6 +7331,88 @@ class House:
             openings=tuple(openings),
         )
 
+    def add_box(
+        self,
+        name: str,
+        *,
+        origin: Point3D,
+        size: Sequence[Number],
+        material: str = "Generic",
+        color: str | None = None,
+        transparency: Number = 0,
+        show_in_drawings: bool = True,
+    ) -> ifcopenshell.entity_instance:
+        """Add an axis-aligned box, using absolute, unmirrored coordinates.
+
+        ``origin`` is the minimum X/Y/Z corner and ``size`` is (X, Y, Z), in
+        metres. With ``show_in_drawings=False`` the box remains in the exported
+        IFC for 3D viewing, but is omitted from plans and sections, including
+        their occlusion calculations. It is a generic, non-structural element
+        contained directly in the building, not a piece of furniture.
+        """
+        box_name = _name(name, "name")
+        x, y, z = _point_3d(origin, "origin")
+        if isinstance(size, (str, bytes)):
+            raise TypeError("size must contain exactly three dimensions")
+        try:
+            width, depth, height = size
+        except (TypeError, ValueError) as error:
+            raise TypeError("size must contain exactly three dimensions") from error
+        dimensions = tuple(_number(value, f"size {axis}") for axis, value in
+                           zip(("width", "depth", "height"), (width, depth, height)))
+        if any(value <= 0 for value in dimensions):
+            raise ValueError("size dimensions must be greater than zero")
+        width, depth, height = dimensions
+        material_name = _name(material, "material")
+        if not isinstance(show_in_drawings, bool):
+            raise TypeError("show_in_drawings must be a boolean")
+        surface_style = self._surface_style("box", color=color, transparency=transparency)
+
+        model = self.model
+        box = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcBuildingElementProxy", name=box_name,
+            predefined_type="USERDEFINED",
+        )
+        box.ObjectType = "BOX"
+        ifcopenshell.api.spatial.assign_container(
+            model, products=[box], relating_structure=self.building,
+        )
+        placement = np.eye(4)
+        placement[:3, 3] = (x + width / 2, y + depth / 2, z)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model, product=box, matrix=placement, is_si=True,
+        )
+        profile = model.createIfcRectangleProfileDef(
+            "AREA", f"{box_name} Profile", None, width, depth,
+        )
+        body = ifcopenshell.api.geometry.add_profile_representation(
+            model, context=self._body_context, profile=profile,
+            depth=height, cardinal_point=None,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model, product=box, representation=body,
+        )
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(
+                model, shape_representation=body, styles=[surface_style],
+            )
+        ifc_material = self._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model, name=material_name, category=material_name.casefold(),
+            )
+            self._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model, products=[box], type="IfcMaterial", material=ifc_material,
+        )
+        visibility = ifcopenshell.api.pset.add_pset(
+            model, product=box, name="BBIM_DrawingVisibility",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=visibility, properties={"ShowInDrawings": show_in_drawings},
+        )
+        return box
+
     def storey(self, name: str, *, elevation: Number) -> Storey:
         """Create and return a building storey at ``elevation`` metres."""
         storey = Storey(self, _name(name, "name"), _number(elevation, "elevation"))
@@ -7716,6 +7834,8 @@ class Drawing:
             "DoorsClosed": self.doors_closed,
             "RightPanelWidth": self.right_panel_width,
             "RightPanelTables": "[]",
+            # Persist the rule for drawings rendered directly in Bonsai, too.
+            "Exclude": "IfcElement, BBIM_DrawingVisibility.ShowInDrawings=FALSE",
         }
         if self.surface_fills:
             drawing_properties["Metadata"] = "GlobalId"
@@ -10341,6 +10461,99 @@ class Drawing:
             products=[annotation],
         )
         return annotation
+
+    def add_rafter_section_batting(
+        self,
+        rafters: Sequence[Beam],
+        *,
+        size_factor: Number = 0.7,
+        end_inset: Number = 0.03,
+        name: str | None = None,
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Add insulation symbols between one row of sectioned rafters.
+
+        Finished IFC geometry is intersected with this elevation's cut plane,
+        so projected-only members are ignored and sloped, cut, stronger and
+        doubled rafters retain their actual section extents. Overlapping or
+        touching sections form one obstacle. Each gap uses the vertical band
+        common to its two neighbouring sections, inset by ``size_factor``
+        (strictly between zero and one) and ``end_inset`` at either end.
+        Only drawing-scoped annotations are added, not insulation solids.
+        """
+        if self.view != "elevation":
+            raise ValueError("rafter section batting requires an elevation drawing")
+        size_factor = _number(size_factor, "size_factor")
+        end_inset = _number(end_inset, "end_inset")
+        if not 0 < size_factor < 1:
+            raise ValueError("size_factor must be strictly between zero and one")
+        if end_inset < 0:
+            raise ValueError("end_inset must not be negative")
+        annotation_name = (
+            _name(name, "name")
+            if name is not None
+            else f"{self.name} Rafter section batting"
+        )
+        if isinstance(rafters, (str, bytes)):
+            raise TypeError("rafters must be a sequence of Beam objects")
+        members = list(rafters)
+        for member in members:
+            if not isinstance(member, Beam):
+                raise TypeError("rafters must contain Beam objects")
+            if member.file is not self.house.model:
+                raise ValueError("rafters must belong to this house")
+
+        camera_to_world = ifcopenshell.util.placement.get_local_placement(
+            self.element.ObjectPlacement
+        )
+        world_to_camera = np.linalg.inv(camera_to_world)
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        sections = []
+        for member in members:
+            shape = ifcopenshell.geom.create_shape(settings, member.element)
+            points = _section_shape_points(
+                shape,
+                plane_origin=camera_to_world[:3, 3],
+                plane_normal=camera_to_world[:3, 2],
+                world_to_camera=world_to_camera,
+            )
+            if len(points) < 3:
+                continue
+            left = min(x for x, _ in points)
+            right = max(x for x, _ in points)
+            bottom = min(z for _, z in points)
+            top = max(z for _, z in points)
+            if right - left > 1e-7 and top - bottom > 1e-7:
+                sections.append((left, right, bottom, top))
+
+        merged: list[list[float]] = []
+        for left, right, bottom, top in sorted(sections):
+            if merged and left <= merged[-1][1] + 1e-7:
+                merged[-1][1] = max(merged[-1][1], right)
+                merged[-1][2] = max(merged[-1][2], bottom)
+                merged[-1][3] = min(merged[-1][3], top)
+            else:
+                merged.append([left, right, bottom, top])
+
+        annotations = []
+        for first, second in zip(merged, merged[1:]):
+            left, right = first[1] + end_inset, second[0] - end_inset
+            bottom, top = max(first[2], second[2]), min(first[3], second[3])
+            if right <= left + 1e-7 or top <= bottom + 1e-7:
+                continue
+            centre = (bottom + top) / 2
+            start = camera_to_world @ np.array((left, centre, 0.0, 1.0))
+            end = camera_to_world @ np.array((right, centre, 0.0, 1.0))
+            annotations.append(
+                self.add_batting(
+                    tuple(start[:3]),
+                    tuple(end[:3]),
+                    thickness=(top - bottom) * size_factor,
+                    name=f"{annotation_name} {len(annotations) + 1}",
+                    classes="roof-batting rafter-section-batting",
+                )
+            )
+        return tuple(annotations)
 
     def add_ridge_tile(
         self,
