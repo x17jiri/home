@@ -214,6 +214,16 @@ unchanged; the resulting IFC material usage has layers along `AXIS3`.
 
 ## Library objects and plan symbols
 
+The roof framing drawing opts in to Bonsai's native visible surface fills with
+`house.add_drawing(..., surface_fills=True)`. This uses `FillMode="SHAPELY"`
+and member-ID metadata; colours and hatches from the timber schedule are
+applied as CSS to those surface paths. No convex hulls, rectangular repairs,
+or category-based ordering are used for this drawing. Visibility and holes
+come from the actual model geometry. Other plan drawings retain their existing
+linework/hull-fill behaviour. Chimney elevations now rely only on Bonsai's
+native surfaces and their white CSS fill; the former hull-fill workaround
+has been removed.
+
 `House.assets` provides a searchable catalog of the plan-ready objects in
 Bonsai's IFC furniture library. You do not need to remember its original type
 names:

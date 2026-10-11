@@ -1512,7 +1512,7 @@ beam3 = upper.beam(
 beam_cut_street = upper.beam(
 	"Cut street wall plate",
 	start=(-0.2, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
-	end=(wall2_x-BWT, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
+	end=(wall2_x, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
 	size=WALL_PLATE_SIZE,
 	material="Wood",
 	kind="BEAM",
@@ -3187,7 +3187,7 @@ if "ground" in sys.argv:
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
 		(
-			"thermal-impact-insulation",
+			"polystyrene-transparent",
 			f"Fasádní izolace - Polystyren "
 			f"{POLYSTYRENE_INSULATION_NOMINAL_THICKNESS * 1000:.0f} mm",
 		),
@@ -3288,7 +3288,7 @@ if "upper" in sys.argv:
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
-			"thermal-impact-insulation",
+			"polystyrene-transparent",
 			f"Fasádní izolace - Polystyren "
 			f"{POLYSTYRENE_INSULATION_NOMINAL_THICKNESS * 1000:.0f} mm",
 		),
@@ -3383,6 +3383,7 @@ if "roof" in sys.argv:
 		],
 		door_annotations=False,
 		projected_wood_color="#f4d35e",
+		surface_fills=True,
 		model_line_width=0.06,
 		right_panel_width=65,
 	)
@@ -3562,8 +3563,19 @@ if "roof" in sys.argv:
 			},
 		),
 		(
-			"Pozednice – krátká",
-			(beam_cut_street, beam4_a),
+			"Pozednice – krátká - zahrada",
+			(beam4_a,),
+			0,
+			{
+				"material": "C16",
+				"pattern": WALL_PLATE_DRAWING_PATTERN,
+				"color": SHORT_WALL_PLATE_DRAWING_COLOR,
+				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+			},
+		),
+		(
+			"Pozednice – krátká - ulice",
+			(beam_cut_street,),
 			0,
 			{
 				"material": "C16",
@@ -3758,7 +3770,7 @@ if "aa" in sys.argv:
 		("wood-solid", "Dřevo"),
 		("drywall-diagonal1", "Sádrokarton"),
 		(
-			"thermal-impact-insulation",
+			"polystyrene-transparent",
 			f"EPS Fasádní izolace, λ ≤ 0.35\n200 mm"
 		),
 		(
@@ -4071,6 +4083,24 @@ if "bb" in sys.argv:
 		storeys=None,
 		doors_closed=True,
 	)
+	for wall, thickness, material in (
+		(wall_1a_g, ROCKWOOL_INSULATION_THICKNESS, "rockwool"),
+		(wall_4_u, POLYSTYRENE_INSULATION_THICKNESS, "polystyrene"),
+	):
+		drawing1.add_wall_insulation(
+			wall,
+			thickness=thickness,
+			material=material,
+			start_z=0.3,
+			end_z=UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT+1.2,
+		)
+		drawing1.add_wall_insulation(
+			wall,
+			thickness=EXTERIOR_XPS_INSULATION_THICKNESS,
+			material="xps",
+			start_z=-1,
+			end_z=0.3,
+		)
 	drawing1.render("bb.svg", png=True, png_dpi=600)
 
 # Drawing - cut3

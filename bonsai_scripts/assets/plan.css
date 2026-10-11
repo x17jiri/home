@@ -56,7 +56,7 @@ a:hover { cursor: pointer; }
     stroke-width: 0.05 !important;
 }
 .PredefinedType-FILLAREA.wall-insulation-polystyrene {
-    fill: url(#thermal-impact-insulation) !important;
+    fill: url(#polystyrene-transparent) !important;
 }
 .PredefinedType-FILLAREA.wall-insulation-xps {
     fill: url(#perimeter-polystyrene) !important;
@@ -227,11 +227,6 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.06 !important;
 }
 
-.target-view-ELEVATIONVIEW .projected-chimney-fill {
-    fill: white !important;
-    stroke: none !important;
-}
-
 /* Lighter section/elevation outlines than Bonsai's drawing defaults. */
 .target-view-ELEVATIONVIEW .cut {
     stroke-width: 0.08;
@@ -306,7 +301,7 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .cut.layer-material-Polystyrene,
 .cut.material-Polystyrene {
-    fill: url(#thermal-impact-insulation) !important;
+    fill: url(#polystyrene-transparent) !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }

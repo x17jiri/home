@@ -72,6 +72,55 @@ class CutDrawingTests(unittest.TestCase):
         self.assertEqual(cut.start[1], self.values["HALF_DEPTH"])
         self.assertEqual(cut.end[1], self.values["HALF_DEPTH"])
 
+    def test_bb_outside_wall_insulation_matches_facade_materials(self):
+        values = self.values
+        drawing = next(d for d in values["house"]._drawings if d.name == "bb")
+        annotations = drawing.group.IsGroupedBy[0].RelatedObjects
+        insulation = [
+            (a, ifcopenshell.util.element.get_pset(a, "BBIM_WallInsulation"))
+            for a in annotations
+            if ifcopenshell.util.element.get_pset(a, "BBIM_WallInsulation")
+        ]
+        self.assertEqual(len(insulation), 4)
+        expected = {
+            (values["wall_1a_g"].GlobalId, "rockwool"): values["ROCKWOOL_INSULATION_THICKNESS"],
+            (values["wall_4_u"].GlobalId, "polystyrene"): values["POLYSTYRENE_INSULATION_THICKNESS"],
+            (values["wall_1a_g"].GlobalId, "xps"): values["EXTERIOR_XPS_INSULATION_THICKNESS"],
+            (values["wall_4_u"].GlobalId, "xps"): values["EXTERIOR_XPS_INSULATION_THICKNESS"],
+        }
+        self.assertEqual({(p["HostWall"], p["Material"]) for _, p in insulation}, set(expected))
+        for annotation, properties in insulation:
+            key = (properties["HostWall"], properties["Material"])
+            self.assertAlmostEqual(properties["Thickness"], expected[key])
+            self.assertEqual(properties["Side"], "right")
+            if properties["Material"] == "xps":
+                self.assertEqual((properties["StartZ"], properties["EndZ"]), (-1, 0.3))
+            else:
+                self.assertEqual(properties["StartZ"], 0.3)
+                self.assertGreater(properties["EndZ"],
+                                   values["UPPER_FLOOR_START"] + values["OUTER_SUPPORT_WALL_HEIGHT"])
+            if properties["Material"] == "rockwool":
+                self.assertEqual(annotation.ObjectType, "BATTING")
+                self.assertLess(properties["BattingThickness"], properties["Thickness"])
+
+    def test_bb_facade_insulation_leaves_upper_window_clear(self):
+        values = self.values
+        drawing = next(d for d in values["house"]._drawings if d.name == "bb")
+        wall = values["wall_4_u"]
+        self.assertEqual(len(wall._openings), 1)
+        _, _, bottom, top = wall._openings[0]
+        bottom += wall.storey.elevation
+        top += wall.storey.elevation
+        annotations = drawing.group.IsGroupedBy[0].RelatedObjects
+        strips = [ifcopenshell.util.element.get_pset(a, "BBIM_WallInsulation") for a in annotations]
+        strips = [p for p in strips if p and p["HostWall"] == wall.GlobalId
+                  and p["Material"] == "polystyrene"]
+        self.assertEqual(len(strips), 1)
+        segments = json.loads(strips[0]["Segments"])
+        self.assertTrue(segments)
+        for start, end in segments:
+            self.assertTrue(end <= bottom or start >= top)
+
 
 class RoofFramingTests(unittest.TestCase):
     @classmethod
@@ -85,6 +134,13 @@ class RoofFramingTests(unittest.TestCase):
         ):
             cls.values = runpy.run_path(str(source))
             cls.rendered = [call.args[0] for call in render.call_args_list]
+
+    def test_roof_uses_native_surfaces_with_member_ids(self):
+        drawing = next(d for d in self.values["house"]._drawings if d.name == "Roof plan")
+        pset = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+        self.assertEqual(pset["FillMode"], "SHAPELY")
+        self.assertEqual(pset["Metadata"], "GlobalId")
+        self.assertTrue(drawing.surface_fills)
 
     def test_bedroom_roof_window_is_flush_with_tiles(self):
         values = self.values

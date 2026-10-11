@@ -1843,6 +1843,47 @@ def _postprocess_projected_wood_fills(
     )
 
 
+def _postprocess_projected_wood_surface_styles(
+    svg_path: Path,
+    *,
+    color: str | None = None,
+    styles: Mapping[str, Mapping[str, object]] | None = None,
+) -> None:
+    """Style Bonsai's visible wood surfaces without constructing any fills.
+
+    GlobalId drawing metadata identifies the member hit by Bonsai's surface
+    raycast. Geometry, holes and occlusion remain entirely Bonsai-generated;
+    drawing_order is deliberately ignored in this mode.
+    """
+    styles = styles or {}
+    _inject_tinted_drawing_patterns(
+        svg_path,
+        {(style["pattern"], style["color"]) for style in styles.values()
+         if isinstance(style.get("pattern"), str) and isinstance(style.get("color"), str)},
+    )
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="projected-wood-surface-styles"' in svg:
+        return
+    rules = []
+    selector = ".target-view-PLANVIEW .IfcBeam.material-Wood.surface"
+    if color is not None:
+        rules.append(f"{selector} {{ fill: {color} !important; }}")
+    for global_id, style in styles.items():
+        member_color = style.get("color")
+        if not isinstance(member_color, str):
+            continue
+        pattern = style.get("pattern")
+        fill = f"url(#{_tinted_pattern_id(pattern, member_color)})" if isinstance(pattern, str) else member_color
+        # Use the same class canonicalisation as Bonsai.get_svg_classes.
+        member_class = "GlobalId-" + re.sub("[^0-9a-zA-Z]+", "", global_id)
+        rules.append(f"{selector}.{member_class} {{ fill: {fill} !important; }}")
+    closing_svg = svg.rfind("</svg>")
+    if closing_svg < 0 or not rules:
+        return
+    css = '<style class="projected-wood-surface-styles" type="text/css">\n' + "\n".join(rules) + "\n</style>\n"
+    svg_path.write_text(svg[:closing_svg] + css + svg[closing_svg:], encoding="utf-8")
+
+
 def _postprocess_roof_opening_masks(svg_path: Path) -> None:
     """Mask projected framing behind dashed rectangular roof openings."""
     svg = svg_path.read_text(encoding="utf-8")
@@ -1970,15 +2011,6 @@ def _postprocess_model_line_width(
     )
     svg = f"{svg[:closing_svg]}{style}{svg[closing_svg:]}"
     svg_path.write_text(svg, encoding="utf-8")
-
-
-def _postprocess_projected_chimney_fills(svg_path: Path) -> None:
-    """Mask merged elevation surfaces behind projected chimney outlines."""
-    _postprocess_projection_hull_fills(
-        svg_path,
-        required_classes={"IfcChimney", "projection"},
-        fill_class="projected-chimney-fill",
-    )
 
 
 def _postprocess_batting_marker_strokes(
@@ -5210,7 +5242,12 @@ def _render_existing_drawing(
             if drawing_properties
             else None
         )
-        _postprocess_projected_wood_fills(
+        wood_styler = (
+            _postprocess_projected_wood_surface_styles
+            if drawing_properties and drawing_properties.get("FillMode") == "SHAPELY"
+            else _postprocess_projected_wood_fills
+        )
+        wood_styler(
             absolute_output,
             color=(
                 str(projected_wood_color)
@@ -5231,7 +5268,6 @@ def _render_existing_drawing(
         )
         _postprocess_wall_insulation_backdrop(absolute_output)
     else:
-        _postprocess_projected_chimney_fills(absolute_output)
         _postprocess_wall_insulation_batting(absolute_output)
         _postprocess_roof_batting(absolute_output)
         _postprocess_elevation_wall_insulation_depth(
@@ -7283,6 +7319,7 @@ class House:
         right_panel_width: Number = 0,
         projected_wood_color: str | None = None,
         model_line_width: Number | None = None,
+        surface_fills: bool = False,
     ) -> Drawing:
         """Add a persisted square plan or elevation drawing to this IFC model.
 
@@ -7323,6 +7360,9 @@ class House:
         ``model_line_width`` optionally sets the printed SVG stroke width for
         model cut and projection geometry in this drawing only.  Annotation
         line conventions remain unchanged.
+        ``surface_fills=True`` enables Bonsai's SHAPELY projected surfaces in
+        plans. Wood colours/hatches style those surfaces without hull fills
+        or drawing_order overrides; visibility follows actual 3D geometry.
         """
         drawing_name = _name(name, "name")
         if any(drawing.name == drawing_name for drawing in self._drawings):
@@ -7344,6 +7384,7 @@ class House:
             right_panel_width=right_panel_width,
             projected_wood_color=projected_wood_color,
             model_line_width=model_line_width,
+            surface_fills=surface_fills,
         )
         self._drawings.append(drawing)
         return drawing
@@ -7413,6 +7454,7 @@ class Drawing:
         right_panel_width: Number,
         projected_wood_color: str | None,
         model_line_width: Number | None,
+        surface_fills: bool = False,
     ) -> None:
         self.house = house
         self.name = name
@@ -7423,6 +7465,9 @@ class Drawing:
         if self.radius <= 0:
             raise ValueError("radius must be greater than zero")
         self.view = _enum(view, "view", {"PLAN", "ELEVATION"}).lower()
+        if not isinstance(surface_fills, bool):
+            raise TypeError("surface_fills must be a boolean")
+        self.surface_fills = surface_fills
         if projected_wood_color is None:
             self.projected_wood_color: str | None = None
         else:
@@ -7649,9 +7694,9 @@ class Drawing:
             "DPI": 96,
             "LineworkMode": "OPENCASCADE",
             # Elevations need closed projected surfaces so material styling
-            # can fill elements which lie behind the section plane.  Plans
-            # retain their existing linework-only projection behaviour.
-            "FillMode": "SHAPELY" if self.view == "elevation" else "NONE",
+            # can fill elements behind the section plane. Plans opt in to
+            # the same geometry-based visible surfaces with surface_fills.
+            "FillMode": "SHAPELY" if self.view == "elevation" or self.surface_fills else "NONE",
             "CutMode": "BISECT",
             "Stylesheet": str(project_dir / "bonsai_scripts" / "assets" / "plan.css"),
             "Markers": str(drawing_assets / "markers.svg"),
@@ -7672,6 +7717,8 @@ class Drawing:
             "RightPanelWidth": self.right_panel_width,
             "RightPanelTables": "[]",
         }
+        if self.surface_fills:
+            drawing_properties["Metadata"] = "GlobalId"
         if self.projected_wood_color is not None:
             drawing_properties["ProjectedWoodColor"] = (
                 self.projected_wood_color
@@ -8852,7 +8899,9 @@ class Drawing:
         a solid fill. ``material`` labels the schedule only, without changing
         the IFC material or calculation inputs; omitted labels stay blank. Members
         with a higher integer ``drawing_order`` are drawn over members with a
-        lower one.  The ordering may be supplied without a colour.  ``members``
+        lower one in linework-only plans. With ``surface_fills=True``, Bonsai
+        determines visibility from the geometry and ignores drawing_order.
+        The ordering may be supplied without a colour.  ``members``
         must be a non-empty group of equal-section beams with equal finished
         lengths;
         clipping planes are included when measuring them.  ``extra_length``
@@ -11495,7 +11544,7 @@ class Drawing:
         lower and upper elevations.  They default to the wall's bottom and
         top, and are also swapped when supplied in the opposite order.
 
-        ``material="polystyrene"`` draws the existing white hexagonal hatch;
+        ``material="polystyrene"`` draws a transparent hexagonal hatch;
         ``material="xps"`` uses the same hatch with the perimeter-insulation
         pink tint; ``material="rockwool"`` draws direction-aware batting.
         All materials leave gaps for doors and windows intersected by this

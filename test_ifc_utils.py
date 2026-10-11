@@ -1,5 +1,6 @@
 import json
 import unittest
+import xml.etree.ElementTree as ET
 from math import hypot
 from pathlib import Path
 import subprocess
@@ -53,8 +54,8 @@ from ifc_utils import (
     _postprocess_cut_symbol_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
-    _postprocess_projected_chimney_fills,
     _postprocess_projected_wood_fills,
+    _postprocess_projected_wood_surface_styles,
     _postprocess_roof_opening_masks,
     _postprocess_pavatex_batting,
     _postprocess_ring_beam_stirrups,
@@ -10419,6 +10420,48 @@ class HouseTests(unittest.TestCase):
             )
             self.assertGreater(svg.index(overlay), svg.index('id="insulation"'))
 
+    def test_plan_surface_fills_are_opt_in_and_preserve_member_metadata(self) -> None:
+        house = House("Surface fills")
+        legacy = house.add_drawing("Legacy", x=0, y=0, z=10, radius=5)
+        roof = house.add_drawing("Roof", x=0, y=0, z=10, radius=5,
+                                 surface_fills=True, projected_wood_color="#f4d35e")
+        legacy_pset = ifcopenshell.util.element.get_pset(legacy.element, "EPset_Drawing")
+        pset = ifcopenshell.util.element.get_pset(roof.element, "EPset_Drawing")
+        self.assertEqual(legacy_pset["FillMode"], "NONE")
+        self.assertNotIn("Metadata", legacy_pset)
+        self.assertEqual(pset["FillMode"], "SHAPELY")
+        self.assertEqual(pset["Metadata"], "GlobalId")
+        self.assertEqual(pset["ProjectedWoodColor"], "#f4d35e")
+        with self.assertRaisesRegex(TypeError, "surface_fills must be a boolean"):
+            house.add_drawing("Invalid", x=0, y=0, z=10, radius=5, surface_fills="yes")
+
+    def test_styles_native_wood_surfaces_without_hulls_or_reordering(self) -> None:
+        svg = '''<svg xmlns="http://www.w3.org/2000/svg"><defs>
+<pattern id="brick" width="10" height="10"><rect fill="#fff"/><path d="M0,0 L10,10"/></pattern>
+</defs><g class="section target-view-PLANVIEW">
+<path class="IfcBeam material-Wood GlobalId-0bguid surface" d="M0,0 L10,0 L10,10 L0,10 Z M2,2 L2,8 L8,8 L8,2 Z"/>
+<path class="IfcBeam material-Wood GlobalId-other surface" d="M11,0 L20,0 L20,10 Z"/>
+<g class="IfcBeam material-Wood projection"><path d="M0,0 L10,0"/></g>
+</g></svg>'''
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "roof.svg"
+            path.write_text(svg)
+            styles = {"0$b_guid": {"color": "#ff8800", "pattern": "brick", "drawing_order": 99},
+                      "other": {"color": "#00ff00", "drawing_order": 0}}
+            _postprocess_projected_wood_surface_styles(path, color="#f4d35e", styles=styles)
+            output = path.read_text()
+            self.assertIn(".surface.GlobalId-0bguid { fill: url(#", output)
+            self.assertIn(".surface.GlobalId-other { fill: #00ff00 !important; }", output)
+            self.assertIn(".surface { fill: #f4d35e !important; }", output)
+            self.assertIn('fill="#ff8800"', output)
+            self.assertIn('d="M0,0 L10,0 L10,10 L0,10 Z M2,2 L2,8 L8,8 L8,2 Z"', output)
+            self.assertLess(output.index("GlobalId-0bguid surface"), output.index("GlobalId-other surface"))
+            self.assertNotIn("<polygon", output)
+            self.assertNotIn("projected-wood-fill", output)
+            self.assertNotIn("projected-wood-order", output)
+            _postprocess_projected_wood_surface_styles(path, color="#f4d35e", styles=styles)
+            self.assertEqual(path.read_text(), output)
+
     def test_fills_open_projected_wood_edges_in_plan(self) -> None:
         with TemporaryDirectory() as directory:
             svg_path = Path(directory) / "plan.svg"
@@ -10965,11 +11008,12 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn(".cut.material-Polystyrene", polystyrene_rule)
         self.assertIn(
-            "fill: url(#thermal-impact-insulation) !important",
+            "fill: url(#polystyrene-transparent) !important",
             polystyrene_rule,
         )
         self.assertIn('<pattern id="perimeter-polystyrene"', patterns)
-        self.assertIn('fill="#f4eeee"', patterns)
+        perimeter_pattern = patterns.split('<pattern id="perimeter-polystyrene"', maxsplit=1)[1].split("</pattern>", maxsplit=1)[0]
+        self.assertIn('fill="#f4dddd"', perimeter_pattern)
         perimeter_rule = stylesheet.split(
             ".cut.layer-material-XPS", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
@@ -10988,7 +11032,7 @@ class HouseTests(unittest.TestCase):
             maxsplit=1,
         )[1].split("}", maxsplit=1)[0]
         self.assertIn(
-            "fill: url(#thermal-impact-insulation) !important",
+            "fill: url(#polystyrene-transparent) !important",
             drawing_rule,
         )
         xps_drawing_rule = stylesheet.split(
@@ -11014,6 +11058,22 @@ class HouseTests(unittest.TestCase):
         )[1].split("}", maxsplit=1)[0]
         self.assertIn("stroke-dasharray: 0.7 0.8 !important", opening_rule)
         self.assertNotIn("wall-insulation-interface", stylesheet)
+
+    def test_facade_eps_pattern_is_transparent_without_changing_floor_or_xps(self) -> None:
+        patterns_path = Path(__file__).parent / "drawings" / "assets" / "patterns.svg"
+        root = ET.parse(patterns_path).getroot()
+        patterns = {element.get("id"): element for element in root.iter()
+                    if element.tag.endswith("}pattern")}
+        eps = patterns["polystyrene-transparent"]
+        self.assertEqual(len(eps), 3)
+        for element in eps:
+            self.assertTrue(element.tag.endswith("}path"))
+            self.assertIn("fill:none", element.get("style", ""))
+            self.assertIn("stroke:black", element.get("style", ""))
+        for pattern_id, background in (("thermal-impact-insulation", "white"),
+                                       ("perimeter-polystyrene", "#f4dddd")):
+            rect = next(element for element in patterns[pattern_id] if element.tag.endswith("}rect"))
+            self.assertEqual(rect.get("fill"), background)
 
     def test_thins_only_wall_insulation_batting_markers(self) -> None:
         with TemporaryDirectory() as directory:
@@ -11377,48 +11437,11 @@ class HouseTests(unittest.TestCase):
             stylesheet,
         )
 
-    def test_fills_projected_chimney_outline_above_elevation_surfaces(
-        self,
-    ) -> None:
-        with TemporaryDirectory() as directory:
-            svg_path = Path(directory) / "elevation.svg"
-            svg_path.write_text(
-                """<svg>
-  <path class="IfcSlab material-Rooftiles surface" d="M0,0 L10,0 L10,10 L0,10"/>
-  <g class="IfcChimney material-Chimney projection">
-    <path d="M3,1 L7,1"/>
-    <path d="M3,1 L3,6"/>
-    <path d="M7,1 L7,6"/>
-  </g>
-</svg>
-""",
-                encoding="utf-8",
-            )
-
-            _postprocess_projected_chimney_fills(svg_path)
-            _postprocess_projected_chimney_fills(svg_path)
-
-            svg = svg_path.read_text(encoding="utf-8")
-            polygon = (
-                '<polygon class="projected-chimney-fill" '
-                'points="3,1 7,1 7,6 3,6"/>'
-            )
-            self.assertEqual(svg.count(polygon), 1)
-            self.assertGreater(
-                svg.index(polygon),
-                svg.index('class="IfcSlab material-Rooftiles surface"'),
-            )
-            self.assertLess(svg.index(polygon), svg.index('<path d="M3,1 L7,1"'))
-
+    def test_styles_native_chimney_surfaces_and_outlines(self) -> None:
         stylesheet = (
             Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
         ).read_text(encoding="utf-8")
-        chimney_rule = stylesheet.split(
-            ".target-view-ELEVATIONVIEW .projected-chimney-fill",
-            maxsplit=1,
-        )[1].split("}", maxsplit=1)[0]
-        self.assertIn("fill: white !important", chimney_rule)
-        self.assertIn("stroke: none !important", chimney_rule)
+        self.assertNotIn("projected-chimney-fill", stylesheet)
 
         chimney_surface_rule = stylesheet.split(
             ".target-view-ELEVATIONVIEW .material-Chimney.surface",
