@@ -57,6 +57,7 @@ __all__ = [
     "Beam",
     "CeilingLayer",
     "Chimney",
+    "CutDefinition",
     "Drawing",
     "FacadeLayer",
     "FloorLayer",
@@ -131,6 +132,68 @@ _LINTEL_TAG_ALONG_OFFSET = 0.45
 _LINTEL_TAG_NORMAL_OFFSET = 0.65
 _HEXAGON_MARKER_LEADER_START = 0.1732
 HEXAGON_MARKER_LEADER_REACH = 0.6165
+
+
+@dataclass(frozen=True)
+class CutDefinition:
+    """One vertical section shared by plan markers and its elevation camera.
+
+    ``start``/``end`` are world XY coordinates in metres. Looking from start
+    to end, direction=1 looks left and -1 looks right. The midpoint locates
+    the section camera; its vertical centre and sheet size remain drawing
+    options. X mirroring is applied normally by House at export time.
+    """
+
+    start: Point
+    end: Point
+    identifier: str
+    direction: Number = -1
+
+    def __post_init__(self) -> None:
+        start = _point(self.start, "start")
+        end = _point(self.end, "end")
+        identifier = _name(self.identifier, "identifier")
+        if isinstance(self.direction, bool):
+            raise TypeError("direction must be -1 or 1")
+        direction = _number(self.direction, "direction")
+        if direction not in (-1, 1):
+            raise ValueError("direction must be -1 or 1")
+        if hypot(end[0] - start[0], end[1] - start[1]) <= 1e-9:
+            raise ValueError("start and end must be different points")
+        object.__setattr__(self, "start", start)
+        object.__setattr__(self, "end", end)
+        object.__setattr__(self, "identifier", identifier)
+        object.__setattr__(self, "direction", int(direction))
+
+    @property
+    def center(self) -> tuple[float, float]:
+        return ((self.start[0] + self.end[0]) / 2,
+                (self.start[1] + self.end[1]) / 2)
+
+    @property
+    def view_direction(self) -> tuple[float, float, float]:
+        """Unit vector pointing from the camera into the section."""
+        dx, dy = self.end[0] - self.start[0], self.end[1] - self.start[1]
+        length = hypot(dx, dy)
+        return (-self.direction * dy / length, self.direction * dx / length, 0.0)
+
+    def add_symbol(self, drawing: Drawing) -> ifcopenshell.entity_instance:
+        """Add this cut's line, arrows and endpoint labels to a plan."""
+        return drawing.add_cut_symbol(self.start, self.end, self.identifier,
+                                      direction=self.direction)
+
+    def add_drawing(self, house: House, name: str, *, z: Number,
+                    radius: Number, **options: object) -> Drawing:
+        """Create the section view; other options are those of add_drawing.
+
+        Name, vertical centre, radius, storeys, legends and door display can
+        differ from the plan drawings. XY position/view direction cannot:
+        both are derived from this cut, keeping its markers and camera aligned.
+        """
+        x, y = self.center
+        return house.add_drawing(name, x=x, y=y, z=z, radius=radius,
+                                 view="elevation", direction=self.view_direction,
+                                 **options)
 
 
 @dataclass(frozen=True)
@@ -3945,6 +4008,37 @@ def _postprocess_note_overlays(svg_path: Path) -> None:
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_cut_symbol_overlays(svg_path: Path) -> None:
+    """Keep section lines, endpoint arrows and letters above plan geometry."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="cut-symbol-overlays"' in svg:
+        return
+    elements: list[str] = []
+
+    def collect(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = {
+            word
+            for value in re.findall(r'\bclass="([^"]*)"', element)
+            for word in value.split()
+        }
+        if not classes.intersection({"cut-symbol-line", "cut-symbol-arrow", "cut-symbol-text"}):
+            return element
+        elements.append(element.strip())
+        return ""
+
+    updated = re.sub(
+        r"<(?:line|polyline|path)\b[^>]*(?:/>|>\s*</(?:line|polyline|path)>)"
+        r"|<text\b[^>]*?(?<!/)>.*?</text>",
+        collect, svg, flags=re.DOTALL,
+    )
+    closing = updated.rfind("</svg>")
+    if not elements or closing < 0:
+        return
+    overlay = '  <g class="cut-symbol-overlays">\n' + "\n".join(elements) + "\n  </g>\n"
+    svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -5162,6 +5256,7 @@ def _render_existing_drawing(
         _postprocess_elevation_furniture_labels(absolute_output)
         _postprocess_hexagon_marker_overlays(absolute_output)
     _postprocess_note_overlays(absolute_output)
+    _postprocess_cut_symbol_overlays(absolute_output)
     _postprocess_right_panel(
         absolute_output,
         drawing_properties or {},
@@ -7378,6 +7473,7 @@ class Drawing:
         self._entrance_arrow_count = 0
         self._hexagon_marker_count = 0
         self._note_count = 0
+        self._cut_symbol_count = 0
         self._annotated_stairs: set[int] = set()
         self._annotated_stair_landings: set[int] = set()
         self._annotated_chimneys: set[int] = set()
@@ -8020,6 +8116,107 @@ class Drawing:
             properties={"HasAnnotation": True},
         )
         return annotation
+
+    def add_cut_symbol(
+        self,
+        start: Point,
+        end: Point,
+        identifier: str,
+        *,
+        direction: Number = -1,
+    ) -> ifcopenshell.entity_instance:
+        """Add a plan cut line with an arrow and upright letter at both ends.
+
+        Coordinates and symbol sizes are in model metres. Looking from
+        ``start`` towards ``end``, ``direction=1`` points to the left of the
+        line and ``-1`` to the right. Arrows point towards the cut line from
+        the viewing side; they indicate the direction of the section view.
+        The returned annotation is the dash-dot line; all five annotations
+        belong only to this drawing. This does not create a section camera.
+        """
+        self._require_plan_view("add_cut_symbol")
+        cut = CutDefinition(start, end, identifier, direction)
+        start_xy = np.array(cut.start, dtype=float)
+        end_xy = np.array(cut.end, dtype=float)
+        identifier = cut.identifier
+        direction = cut.direction
+        delta = end_xy - start_xy
+        length = float(np.linalg.norm(delta))
+        tangent = delta / length
+        normal = np.array(cut.view_direction[:2])
+        selected = [storey for storey in self.storeys if storey.elevation <= self.z]
+        annotation_z = max((storey.elevation for storey in selected), default=0.0)
+        self._cut_symbol_count += 1
+        name = f"{self.name} Cut {identifier} {self._cut_symbol_count}"
+        model = self.house.model
+        annotations: list[ifcopenshell.entity_instance] = []
+
+        def create_annotation(suffix: str, predefined_type: str, classes: str,
+                              items: list[ifcopenshell.entity_instance],
+                              origin: np.ndarray) -> ifcopenshell.entity_instance:
+            annotation = ifcopenshell.api.root.create_entity(
+                model, ifc_class="IfcAnnotation", name=f"{name} {suffix}",
+                predefined_type=predefined_type,
+            )
+            placement = np.eye(4)
+            placement[:2, 3] = origin
+            placement[2, 3] = annotation_z
+            ifcopenshell.api.geometry.edit_object_placement(
+                model, product=annotation, matrix=placement, is_si=True,
+            )
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context, "Annotation", "Annotation2D"
+                if predefined_type == "TEXT" else "GeometricCurveSet", items,
+            )
+            ifcopenshell.api.geometry.assign_representation(
+                model, product=annotation, representation=representation,
+            )
+            pset = ifcopenshell.api.pset.add_pset(model, product=annotation, name="EPset_Annotation")
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={"Classes": classes})
+            annotations.append(annotation)
+            return annotation
+
+        def curve(points: Sequence[np.ndarray]) -> ifcopenshell.entity_instance:
+            return model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D([tuple(float(v) for v in p) for p in points]),
+                None, False,
+            )
+
+        cut_line = create_annotation(
+            "Line", "LINEWORK", "cut-symbol-line",
+            [model.createIfcGeometricCurveSet([curve([start_xy, end_xy])])], np.zeros(2),
+        )
+        for label, point in (("Start", start_xy), ("End", end_xy)):
+            tail = -normal * 0.55
+            wing = -normal * 0.15
+            create_annotation(
+                label + " Arrow", "LINEWORK", "cut-symbol-arrow",
+                [model.createIfcGeometricCurveSet([
+                    curve([tail, np.zeros(2)]),
+                    curve([wing - tangent * 0.08, np.zeros(2), wing + tangent * 0.08]),
+                ])], point,
+            )
+            literal = model.createIfcTextLiteralWithExtent(
+                identifier,
+                model.createIfcAxis2Placement3D(
+                    model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+                    model.createIfcDirection((0.0, 0.0, 1.0)),
+                    model.createIfcDirection((1.0, 0.0, 0.0)),
+                ),
+                "RIGHT", model.createIfcPlanarExtent(0.5, 0.5), "center",
+            )
+            create_annotation(label + " Letter", "TEXT", "cut-symbol-text", [literal],
+                              point - normal * 0.35 + tangent * 0.20)
+        pset = ifcopenshell.api.pset.add_pset(model, product=cut_line, name="BBIM_CutSymbol")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+            "Start": json.dumps(start_xy.tolist()), "End": json.dumps(end_xy.tolist()),
+            "Identifier": identifier, "Direction": int(direction),
+        })
+        ifcopenshell.api.group.assign_group(model, group=self.group, products=annotations)
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=self._drawing_pset, properties={"HasAnnotation": True},
+        )
+        return cut_line
 
     def add_note(
         self,
@@ -12365,6 +12562,8 @@ class Roof(ifcopenshell.entity_instance):
         plane: RoofPlane,
     ) -> None:
         """Create one host-specific opening normal to its roof plane."""
+        if element in roof_opening.lining:
+            return
         if any(
             void.RelatedOpeningElement in roof_opening.elements
             for void in (element.HasOpenings or ())
@@ -12735,6 +12934,257 @@ class RoofPlane(ifcopenshell.entity_instance):
                 self.roof._apply_openings(element, plane=self)
         return relationship
 
+    def add_window(
+        self,
+        opening: RoofOpening,
+        *,
+        top_layer: RoofLayer,
+        frame_depth: Number = 0.10,
+        frame_thickness: Number = 0.04,
+        color: str = "#E8E5DE",
+        glass_color: str = "#B7D9E8",
+        glass_transparency: Number = 0.6,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Fill a roof opening with a single-panel, slope-aligned IFC window.
+
+        The outside frame face is flush with ``top_layer``'s upper surface;
+        ``frame_depth`` extends inward, normal to the roof. Frame width/height
+        are derived from the existing roof-normal opening, in surface metres
+        (not horizontal plan metres). ``frame_thickness`` is the total border
+        width around the 10 mm glazing. The opening must align with the roof
+        plane's axes and be contained by this layer. No plan representation is
+        added: plans project the tilted 3D body instead of a vertical symbol.
+        """
+        if not isinstance(opening, RoofOpening):
+            raise TypeError("opening must be a RoofOpening")
+        if opening.roof is not self.roof or opening not in self.roof.openings:
+            raise ValueError("opening must belong to this roof")
+        if opening.window is not None:
+            raise ValueError("roof opening already has a window")
+        if not isinstance(top_layer, RoofLayer):
+            raise TypeError("top_layer must be a RoofLayer")
+        if top_layer.plane is not self:
+            raise ValueError("top_layer must belong to this roof plane")
+        host_openings = [void for void in opening.elements
+                         if any(rel.RelatingBuildingElement == top_layer
+                                for rel in (void.VoidsElements or ()))]
+        if len(host_openings) != 1:
+            raise ValueError("opening must cut the supplied top_layer")
+        if host_openings[0].HasFillings:
+            raise ValueError("top_layer opening already has a filling")
+        (x_min, y_min), (x_max, y_max) = opening.rectangle
+        local = np.array([self.to_local_xy(p) for p in
+                          ((x_min, y_min), (x_max, y_min),
+                           (x_max, y_max), (x_min, y_max))])
+        if not Polygon(top_layer.outline).buffer(1e-9).covers(Polygon(local)):
+            raise ValueError("opening must be contained by top_layer")
+        geometry_local = local * (1.0, self.geometry_y_sign)
+        minimum, maximum = geometry_local.min(axis=0), geometry_local.max(axis=0)
+        if not all(all(isclose(v, lo, abs_tol=1e-9) or isclose(v, hi, abs_tol=1e-9)
+                       for v, lo, hi in zip(p, minimum, maximum)) for p in geometry_local):
+            raise ValueError("opening rectangle must align with the roof-plane axes")
+        width, height = (float(v) for v in maximum - minimum)
+        frame_depth = _number(frame_depth, "frame_depth")
+        frame_thickness = _number(frame_thickness, "frame_thickness")
+        if frame_depth < 0.01:
+            raise ValueError("frame_depth must be at least 0.01 m to contain the glazing")
+        if frame_thickness <= 0 or 2 * frame_thickness >= min(width, height):
+            raise ValueError("frame_thickness must be positive and leave space for glazing")
+        _color(color, "color")
+        _color(glass_color, "glass_color")
+        glass_transparency = _number(glass_transparency, "glass_transparency")
+        if not 0 <= glass_transparency <= 1:
+            raise ValueError("glass_transparency must be between zero and one")
+        window_name = _name(name, "name") if name is not None else opening.name
+        top_offset = top_layer.z_offset + top_layer.thickness
+        # IfcWindow geometry is in its X/Z plane, with depth along +Y.
+        # Map +Y inward (-roof normal) and +Z along the right-handed slope Y.
+        placement = np.eye(4)
+        placement[:3, 0] = self.placement[:3, 0]
+        placement[:3, 1] = -self.placement[:3, 2]
+        placement[:3, 2] = self.placement[:3, 1]
+        placement[:3, 3] = self.to_world(
+            (float(minimum[0]), self.geometry_y_sign * float(minimum[1]), top_offset)
+        )
+        model = self.file
+        window = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcWindow", name=window_name, predefined_type="SKYLIGHT",
+        )
+        window.OverallWidth = width
+        window.OverallHeight = height
+        window.PartitioningType = "SINGLE_PANEL"
+        window.Representation = model.createIfcProductDefinitionShape()
+        body = ifcopenshell.api.geometry.add_window_representation(
+            model, context=self.storey.house._body_context,
+            overall_width=width, overall_height=height, partition_type="SINGLE_PANEL",
+            lining_properties={
+                "LiningDepth": frame_depth, "LiningThickness": frame_thickness / 2,
+                "LiningOffset": 0.0, "LiningToPanelOffsetX": frame_thickness / 2,
+                "LiningToPanelOffsetY": 0.0,
+            },
+            panel_properties=[{"FrameDepth": frame_depth, "FrameThickness": frame_thickness / 2}],
+            part_of_product=window.Representation,
+        )
+        ifcopenshell.api.geometry.assign_representation(model, product=window, representation=body)
+        frame_style = self.storey.house._surface_style("window", color=color, transparency=0)
+        glass_style = self.storey.house._surface_style(
+            "window", color=glass_color, transparency=glass_transparency,
+        )
+        for aspect in window.Representation.HasShapeAspects:
+            style = glass_style if aspect.Name == "Glazing" else frame_style
+            for representation in aspect.ShapeRepresentations:
+                for item in representation.Items:
+                    ifcopenshell.api.style.assign_item_style(model, item=item, style=style)
+        self.add(window, trim_openings=False)
+        ifcopenshell.api.feature.add_filling(model, opening=host_openings[0], element=window)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=window, matrix=placement, is_si=True)
+        pset = ifcopenshell.api.pset.add_pset(model, product=window, name="BBIM_RoofWindow")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+            "RoofPlane": self.GlobalId, "TopLayer": top_layer.GlobalId,
+            "TopOffset": top_offset, "FrameDepth": frame_depth,
+            "FrameThickness": frame_thickness, "Rectangle": json.dumps(opening.rectangle),
+        })
+        opening._window = window
+        return window
+
+    def add_opening_lining(
+        self,
+        opening: RoofOpening,
+        *,
+        bottom_layer: RoofLayer,
+        thickness: Number = 0.0125,
+        bottom_overlap: Number = 0.001,
+        material: str = "Gypsum plasterboard",
+        color: str = "#E8E5DE",
+    ) -> tuple[ifcopenshell.entity_instance, ...]:
+        """Line the four reveals of a window opening, normal to the roof.
+
+        Panels sit just inside the void, reducing its clear width and height
+        by twice ``thickness``. They run from the back of ``bottom_layer``
+        to the underside of the window frame, with ``bottom_overlap`` embedded
+        in that bottom layer. Its opening is reduced by the lining thickness
+        on every side, covering the panel ends from the room side. Corners
+        are butt-jointed without overlapping solids. The window must already
+        have been created with ``add_window`` on this plane. Panels are real
+        IFC coverings, exempt from this opening's subtraction, and may be
+        reassigned to a visibility storey like other roof elements.
+        Adjacent matching bottom-layer pieces may jointly surround the hole.
+        """
+        if not isinstance(opening, RoofOpening):
+            raise TypeError("opening must be a RoofOpening")
+        if opening.roof is not self.roof or opening not in self.roof.openings:
+            raise ValueError("opening must belong to this roof")
+        if opening.lining:
+            raise ValueError("roof opening already has a lining")
+        if not isinstance(bottom_layer, RoofLayer):
+            raise TypeError("bottom_layer must be a RoofLayer")
+        if bottom_layer.plane is not self:
+            raise ValueError("bottom_layer must belong to this roof plane")
+        if not any(void.VoidsElements[0].RelatingBuildingElement == bottom_layer
+                   for void in opening.elements):
+            raise ValueError("opening must cut the supplied bottom_layer")
+        if opening.window is None:
+            raise ValueError("create the roof window before its opening lining")
+        window_properties = ifcopenshell.util.element.get_pset(opening.window, "BBIM_RoofWindow")
+        if not window_properties or window_properties.get("RoofPlane") != self.GlobalId:
+            raise ValueError("window must belong to this roof plane")
+        (x_min, y_min), (x_max, y_max) = opening.rectangle
+        local = np.array([self.to_local_xy(p) for p in
+                          ((x_min, y_min), (x_max, y_min),
+                           (x_max, y_max), (x_min, y_max))])
+        matching_layers = [layer for layer in self.elements
+                           if isinstance(layer, RoofLayer)
+                           and layer.material_name == bottom_layer.material_name
+                           and isclose(layer.z_offset, bottom_layer.z_offset, abs_tol=1e-9)
+                           and isclose(layer.thickness, bottom_layer.thickness, abs_tol=1e-9)]
+        matching_outlines = [Polygon(layer.outline) for layer in matching_layers]
+        if not unary_union(matching_outlines).buffer(1e-9).covers(Polygon(local)):
+            raise ValueError("opening must be contained by the matching bottom-layer pieces")
+        (left, low), (right, high) = local.min(axis=0), local.max(axis=0)
+        thickness = _number(thickness, "thickness")
+        if thickness <= 0 or 2 * thickness >= min(right - left, high - low):
+            raise ValueError("thickness must be positive and leave a clear opening")
+        bottom_overlap = _number(bottom_overlap, "bottom_overlap")
+        if not 0 <= bottom_overlap < bottom_layer.thickness:
+            raise ValueError("bottom_overlap must be nonnegative and less than bottom_layer thickness")
+        material_name = _name(material, "material")
+        _color(color, "color")
+        bottom = bottom_layer.z_offset + bottom_layer.thickness - bottom_overlap
+        top = window_properties["TopOffset"] - window_properties["FrameDepth"]
+        if top <= bottom_layer.z_offset + bottom_layer.thickness:
+            raise ValueError("window frame must be above bottom_layer")
+        rectangles = (
+            ("left", left, low, left + thickness, high),
+            ("right", right - thickness, low, right, high),
+            ("lower", left + thickness, low, right - thickness, low + thickness),
+            ("upper", left + thickness, high - thickness, right - thickness, high),
+        )
+        placement = self.placement.copy()
+        placement[:3, 3] = self.to_world((0, 0, bottom))
+        model = self.file
+        house = self.storey.house
+        # Only change host-specific voids in the matching interior finish.
+        # Keep the registered rectangle and all structural/outer-layer cuts.
+        inner_outline = ((left + thickness, low + thickness),
+                         (right - thickness, low + thickness),
+                         (right - thickness, high - thickness),
+                         (left + thickness, high - thickness))
+        for void in opening.elements:
+            if void.VoidsElements[0].RelatingBuildingElement not in matching_layers:
+                continue
+            body = ifcopenshell.util.representation.get_representation(
+                void, "Model", "Body", "MODEL_VIEW",
+            )
+            # These voids were created by Roof._apply_opening as slab prisms;
+            # changing the profile preserves their depth, placement and links.
+            body.Items[0].SweptArea.OuterCurve.Points.CoordList = tuple(
+                (float(x), float(self.geometry_y_sign * y)) for x, y in inner_outline
+            )
+            pset = ifcopenshell.api.pset.add_pset(model, product=void, name="BBIM_RoofOpening")
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+                "LiningInset": thickness, "LocalOutline": json.dumps(inner_outline),
+            })
+        style = house._surface_style("slab", color=color, transparency=0)
+        ifc_material = house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(
+                model, name=material_name, category=material_name.casefold(),
+            )
+            house._materials[material_name] = ifc_material
+        panels = []
+        for side, x1, y1, x2, y2 in rectangles:
+            panel = ifcopenshell.api.root.create_entity(
+                model, ifc_class="IfcCovering", predefined_type="CLADDING",
+                name=f"{opening.name} - {side} reveal",
+            )
+            panel.ObjectType = "ROOF_OPENING_LINING"
+            outline = ((x1, y1), (x2, y1), (x2, y2), (x1, y2))
+            body = ifcopenshell.api.geometry.add_slab_representation(
+                model, context=house._body_context, depth=top - bottom,
+                polyline=tuple((float(x), float(self.geometry_y_sign * y)) for x, y in outline),
+            )
+            ifcopenshell.api.geometry.assign_representation(model, product=panel, representation=body)
+            ifcopenshell.api.style.assign_representation_styles(
+                model, shape_representation=body, styles=[style],
+            )
+            ifcopenshell.api.material.assign_material(
+                model, products=[panel], type="IfcMaterial", material=ifc_material,
+            )
+            self.add(panel, trim_openings=False)
+            ifcopenshell.api.geometry.edit_object_placement(model, product=panel, matrix=placement, is_si=True)
+            pset = ifcopenshell.api.pset.add_pset(model, product=panel, name="BBIM_RoofOpeningLining")
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+                "RoofPlane": self.GlobalId, "Window": opening.window.GlobalId,
+                "BottomLayer": bottom_layer.GlobalId, "Side": side,
+                "Thickness": thickness, "BottomOffset": bottom, "TopOffset": top,
+                "BottomOverlap": bottom_overlap,
+                "Rectangle": json.dumps(opening.rectangle),
+            })
+            panels.append(panel)
+        opening._lining = tuple(panels)
+        return opening.lining
+
     def beam(
         self,
         name: str,
@@ -12973,6 +13423,18 @@ class RoofOpening:
         self.roof = roof
         self.trimmers = trimmers
         self._elements: list[ifcopenshell.entity_instance] = []
+        self._window: ifcopenshell.entity_instance | None = None
+        self._lining: tuple[ifcopenshell.entity_instance, ...] = ()
+
+    @property
+    def lining(self) -> tuple[ifcopenshell.entity_instance, ...]:
+        """The four optional covering panels around the window opening."""
+        return self._lining
+
+    @property
+    def window(self) -> ifcopenshell.entity_instance | None:
+        """The optional sloped window filling this opening."""
+        return self._window
 
     @property
     def elements(self) -> tuple[ifcopenshell.entity_instance, ...]:

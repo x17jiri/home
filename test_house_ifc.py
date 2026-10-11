@@ -13,8 +13,64 @@ import ifcopenshell.geom
 import ifcopenshell.util.element
 import numpy as np
 
-from ifc_utils import Drawing, House
+from ifc_utils import CutDefinition, Drawing, House
 from materials import resolve_timber_grade
+
+
+class CutDrawingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source), "ground", "upper", "roof", "aa", "bb"]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("drawing.svg")) as render,
+            redirect_stdout(StringIO()),
+        ):
+            cls.values = runpy.run_path(str(source))
+            cls.rendered = [call.args[0] for call in render.call_args_list]
+
+    def test_all_plan_symbols_use_shared_cut_definitions(self):
+        cuts = (self.values["aa_cut"], self.values["bb_cut"])
+        self.assertTrue(all(isinstance(cut, CutDefinition) for cut in cuts))
+        self.assertEqual(self.rendered, ["ground.svg", "upper.svg", "roof.svg", "aa.svg", "bb.svg"])
+        drawings = self.values["house"]._drawings
+        self.assertEqual(len(drawings), 5)
+        for drawing in drawings[:3]:
+            annotations = drawing.group.IsGroupedBy[0].RelatedObjects
+            markers = [a for a in annotations if ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol")]
+            self.assertEqual(len(markers), 2)
+            definitions = {ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol", "Identifier"):
+                           ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol") for a in markers}
+            for cut in cuts:
+                properties = definitions[cut.identifier]
+                self.assertEqual(json.loads(properties["Start"]), list(cut.start))
+                self.assertEqual(json.loads(properties["End"]), list(cut.end))
+                self.assertEqual(properties["Direction"], cut.direction)
+
+    def test_aa_camera_is_derived_from_cut(self):
+        cut = self.values["aa_cut"]
+        drawing = next(d for d in self.values["house"]._drawings if d.name == "aa")
+        self.assertEqual(drawing.name, "aa")
+        self.assertEqual((drawing.x, drawing.y), cut.center)
+        self.assertEqual(drawing.direction, cut.view_direction)
+        self.assertEqual((drawing.y, drawing.z, drawing.radius), (4, 3.5, 8))
+        self.assertEqual(drawing.direction, (1, 0, 0))
+
+    def test_bb_camera_runs_through_ridge_perpendicular_to_aa(self):
+        cut = self.values["bb_cut"]
+        aa_cut = self.values["aa_cut"]
+        drawing = next(d for d in self.values["house"]._drawings if d.name == "bb")
+        self.assertEqual((drawing.x, drawing.y), cut.center)
+        self.assertEqual(drawing.direction, cut.view_direction)
+        self.assertAlmostEqual(drawing.x, self.values["HOUSE_WIDTH"] / 2)
+        self.assertEqual(drawing.y, self.values["HALF_DEPTH"])
+        self.assertEqual(drawing.direction, (0, 1, 0))
+        self.assertEqual((drawing.z, drawing.radius, drawing.view), (3.5, 8, "elevation"))
+        self.assertTrue(drawing.doors_closed)
+        self.assertAlmostEqual(np.dot(aa_cut.view_direction, cut.view_direction), 0)
+        self.assertEqual(cut.start[1], self.values["HALF_DEPTH"])
+        self.assertEqual(cut.end[1], self.values["HALF_DEPTH"])
 
 
 class RoofFramingTests(unittest.TestCase):
@@ -29,6 +85,59 @@ class RoofFramingTests(unittest.TestCase):
         ):
             cls.values = runpy.run_path(str(source))
             cls.rendered = [call.args[0] for call in render.call_args_list]
+
+    def test_bedroom_roof_window_is_flush_with_tiles(self):
+        values = self.values
+        window = values["roof_window"]
+        tiles = values["roof_window_tiles"]
+        plane = values["garden_roof"]
+        local = np.array([plane.to_local(tuple(v)) for v in self.finished_vertices(window)])
+        self.assertAlmostEqual(local[:, 2].max(), tiles.z_offset + tiles.thickness)
+        self.assertAlmostEqual(local[:, 2].min(), tiles.z_offset + tiles.thickness - 0.10)
+        self.assertIs(values["roof_window_opening"].window, window)
+        self.assertEqual(window.FillsVoids[0].RelatingOpeningElement.VoidsElements[0].RelatingBuildingElement, tiles)
+        windows_storey = values["roof_layer_storeys"]["Roof windows"]
+        self.assertEqual(ifcopenshell.util.element.get_container(window), windows_storey.element)
+        roof_drawing = next(d for d in values["house"]._drawings if d.name == "Roof plan")
+        self.assertNotIn(windows_storey, roof_drawing.storeys)
+
+    def test_all_window_frames_and_glazing_are_white_in_3d(self):
+        for window in self.values["house"].model.by_type("IfcWindow"):
+            with self.subTest(window=window.Name):
+                aspects = {aspect.Name: aspect for aspect in window.Representation.HasShapeAspects}
+                self.assertEqual(set(aspects), {"Lining", "Framing", "Glazing"})
+                for name, aspect in aspects.items():
+                    for representation in aspect.ShapeRepresentations:
+                        for item in representation.Items:
+                            shading = item.StyledByItem[0].Styles[0].Styles[0]
+                            rgb = shading.SurfaceColour
+                            self.assertEqual((rgb.Red, rgb.Green, rgb.Blue), (1, 1, 1))
+                            if name == "Glazing":
+                                self.assertGreater(shading.Transparency, 0)
+                            else:
+                                self.assertEqual(shading.Transparency, 0)
+
+    def test_bedroom_window_reveals_join_plasterboard_to_frame(self):
+        values = self.values
+        panels = values["roof_window_lining"]
+        self.assertEqual(len(panels), 4)
+        self.assertEqual(panels, values["roof_window_opening"].lining)
+        plane = values["garden_roof"]
+        frame = ifcopenshell.util.element.get_pset(values["roof_window"], "BBIM_RoofWindow")
+        storey = values["roof_layer_storeys"]["Gypsum plasterboard"]
+        for panel in panels:
+            local = np.array([plane.to_local(tuple(v)) for v in self.finished_vertices(panel)])
+            plasterboard = values["roof_window_plasterboard"]
+            self.assertAlmostEqual(local[:, 2].min(), plasterboard.z_offset + plasterboard.thickness - 0.001)
+            self.assertAlmostEqual(local[:, 2].max(), frame["TopOffset"] - frame["FrameDepth"])
+            self.assertEqual(ifcopenshell.util.element.get_container(panel), storey.element)
+            self.assertFalse(panel.HasOpenings)
+        modified_voids = [void for void in values["roof_window_opening"].elements
+                          if ifcopenshell.util.element.get_pset(void, "BBIM_RoofOpening", "LiningInset")]
+        self.assertEqual(len(modified_voids), 2)
+        for void in modified_voids:
+            host = void.VoidsElements[0].RelatingBuildingElement
+            self.assertEqual(ifcopenshell.util.element.get_material(host).Name, "Gypsum plasterboard")
 
     def test_paired_collar_ties_above_purlins_and_visibility_storey(self):
         model = self.values["house"].model
@@ -124,6 +233,18 @@ class RoofFramingTests(unittest.TestCase):
                 row[3]["drawing_order"], self.values["PURLIN_AND_WALL_PLATE_DRAWING_ORDER"]
             )
             self.assertLess(row[3]["drawing_order"], self.values["MAIN_RAFTER_DRAWING_ORDER"])
+
+    def test_roof_cut_symbol_uses_shared_aa_definition(self):
+        cut = self.values["aa_cut"]
+        drawing = next(d for d in self.values["house"]._drawings if d.name == "Roof plan")
+        markers = [a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                   if ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol", "Identifier") == cut.identifier]
+        self.assertEqual(len(markers), 1)
+        properties = ifcopenshell.util.element.get_pset(markers[0], "BBIM_CutSymbol")
+        self.assertEqual(json.loads(properties["Start"]), list(cut.start))
+        self.assertEqual(json.loads(properties["End"]), list(cut.end))
+        self.assertEqual(properties["Identifier"], cut.identifier)
+        self.assertEqual(properties["Direction"], cut.direction)
 
     def test_roof_schedule_resolves_shared_materials_and_preserves_row_selections(self):
         values = self.values

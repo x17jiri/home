@@ -199,6 +199,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.08;
 }
 
+/* Thin reveal panels need lighter outlines than the main plasterboard slabs. */
+.target-view-ELEVATIONVIEW .IfcCovering.material-Gypsumplasterboard.cut,
+.target-view-ELEVATIONVIEW .IfcCovering.material-Gypsumplasterboard.projection {
+    stroke-width: 0.05;
+}
+
 .target-view-ELEVATIONVIEW .material-Vapourbarrier {
     fill: none !important;
     stroke: #4a90e2 !important;
@@ -432,6 +438,25 @@ tspan.room-area {
     fill: none !important;
     stroke: black !important;
     stroke-width: 0.06 !important;
+}
+
+/* Section reference: dash-dot axis, open arrows and upright endpoint IDs. */
+.PredefinedType-LINEWORK.cut-symbol-line {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.13 !important;
+    stroke-dasharray: 8, 2, 0.3, 2;
+}
+.PredefinedType-LINEWORK.cut-symbol-arrow {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.13 !important;
+}
+text.cut-symbol-text,
+tspan.cut-symbol-text {
+    fill: black !important;
+    stroke: none !important;
+    font-size: 3.5px !important;
 }
 
 text.lintel-symbol,

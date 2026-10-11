@@ -31,7 +31,7 @@ TIMBER_MEAN_DENSITY_KG_M3 = {g.name: g.mean_density_kg_m3 for g in TIMBER_GRADES
 # Purlin wall guides are rigid (Y can be explicitly freed for comparison).
 # Independent purlin pieces bear on wall centres by default. The optional
 # Gerber comparison requires compatible coincident section endpoints.
-HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12 * 00.01  ################
+HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.12 * 00000.01  ################
 # Dormer seats only: positive kN/mm, None for rigid, or "inherit" to use the
 # general value above. Does not change the house-cut or normal-roof seats.
 DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM = 0.01
@@ -3311,9 +3311,9 @@ def main(argv=None):
         help="kg/m² actual roof slope, EXCLUDING suspended ceiling; default 135",
     )
     parser.add_argument("--rafter-material", type=lambda value: resolve_timber_grade(value).name,
-                        choices=TIMBER_GRADE_NAMES, default="C18")
+                        choices=TIMBER_GRADE_NAMES, default="C16")
     parser.add_argument("--beam-material", type=lambda value: resolve_timber_grade(value).name,
-                        choices=TIMBER_GRADE_NAMES, default="GL28h")
+                        choices=TIMBER_GRADE_NAMES, default="gl28h")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument(
         "--no-spacers",

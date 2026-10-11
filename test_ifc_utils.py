@@ -25,6 +25,7 @@ from ifc_utils import (
     Beam,
     CeilingLayer,
     Chimney,
+    CutDefinition,
     CustomStair,
     FacadeLayer,
     FloorLayer,
@@ -49,6 +50,7 @@ from ifc_utils import (
     _postprocess_miako_slab_end_faces,
     _postprocess_model_line_width,
     _postprocess_note_overlays,
+    _postprocess_cut_symbol_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_chimney_fills,
@@ -843,6 +845,216 @@ class HouseTests(unittest.TestCase):
             house.write(output)
             reopened = ifcopenshell.open(output)
             self.assertEqual(len(reopened.by_type("IfcOpeningElement")), 3)
+
+    def test_roof_window_aligns_with_tiles_on_both_slopes_and_mirrors(self) -> None:
+        for dz in (2, -2):
+            with self.subTest(dz=dz):
+                house = House("Roof window", mirror_x=True)
+                roof = house.storey("Upper floor", elevation=3).roof("Roof")
+                slope = roof.plane("Slope", points=((0, 0, 4), (6, 0, 4), (0, 4, 4 + dz)))
+                opening = roof.add_opening("Bedroom", rectangle=((2, 1), (3, 2)))
+                outline = ((0, 0), (6, 0), (6, 6), (0, 6))
+                lower = slope.layer("Insulation", outline=outline, thickness=0.2, material="Wool")
+                tiles = slope.layer("Tiles", outline=outline, z_offset=0.5,
+                                    thickness=0.03, material="Roof tiles")
+                window = slope.add_window(opening, top_layer=tiles)
+                self.assertIs(opening.window, window)
+                self.assertEqual(window.PredefinedType, "SKYLIGHT")
+                self.assertAlmostEqual(window.OverallWidth, 1)
+                self.assertAlmostEqual(window.OverallHeight, np.sqrt(5) / 2)
+                self.assertEqual(len(window.FillsVoids), 1)
+                self.assertEqual(window.FillsVoids[0].RelatingOpeningElement.VoidsElements[0].RelatingBuildingElement, tiles)
+                self.assertFalse(lower.HasOpenings[0].RelatedOpeningElement.HasFillings)
+                self.assertFalse(window.HasOpenings)
+                self.assertEqual([r.RepresentationIdentifier for r in window.Representation.Representations], ["Body"])
+                matrix = ifcopenshell.util.placement.get_local_placement(window.ObjectPlacement)
+                np.testing.assert_allclose(matrix[:3, 1], -np.array(slope.z_axis), atol=1e-9)
+                self.assertAlmostEqual(np.linalg.det(matrix[:3, :3]), 1)
+                settings = ifcopenshell.geom.settings()
+                settings.set(settings.USE_WORLD_COORDS, True)
+                shape = ifcopenshell.geom.create_shape(settings, window)
+                vertices = np.array(shape.geometry.verts).reshape(-1, 3)
+                local = np.array([slope.to_local(tuple(v)) for v in vertices])
+                self.assertAlmostEqual(local[:, 2].max(), 0.53)
+                self.assertAlmostEqual(local[:, 2].min(), 0.43)
+                np.testing.assert_allclose(local[:, :2].min(axis=0), (2, np.sqrt(5) / 2))
+                np.testing.assert_allclose(local[:, :2].max(axis=0), (3, np.sqrt(5)))
+                aspects = {a.Name: a for a in window.Representation.HasShapeAspects}
+                self.assertEqual(set(aspects), {"Lining", "Framing", "Glazing"})
+                glass = aspects["Glazing"].ShapeRepresentations[0].Items[0]
+                self.assertAlmostEqual(glass.StyledByItem[0].Styles[0].Styles[0].Transparency, 0.6)
+                with TemporaryDirectory() as directory:
+                    path = Path(directory) / "window.ifc"
+                    house.write(path)
+                    exported = ifcopenshell.open(path).by_guid(window.GlobalId)
+                    self.assertEqual(exported.OverallHeight, window.OverallHeight)
+                    self.assertEqual(len(exported.FillsVoids), 1)
+                    mirrored_shape = ifcopenshell.geom.create_shape(settings, exported)
+                    mirrored = np.array(mirrored_shape.geometry.verts).reshape(-1, 3)
+                    vertices[:, 0] *= -1
+                    np.testing.assert_allclose(mirrored.min(axis=0), vertices.min(axis=0), atol=1e-8)
+                    np.testing.assert_allclose(mirrored.max(axis=0), vertices.max(axis=0), atol=1e-8)
+
+    def test_roof_opening_lining_has_four_solid_reveals_on_both_slopes(self) -> None:
+        for dz in (2, -2):
+            with self.subTest(dz=dz):
+                house = House("Roof reveals", mirror_x=True)
+                roof = house.storey("Upper floor", elevation=3).roof("Roof")
+                slope = roof.plane("Slope", points=((0, 0, 4), (6, 0, 4), (0, 4, 4 + dz)))
+                opening = roof.add_opening("Bedroom", rectangle=((2, 1), (3, 2)))
+                outline = ((0, 0), (6, 0), (6, 6), (0, 6))
+                bottom = slope.layer("Plasterboard", outline=outline, z_offset=-0.2,
+                                     thickness=0.025, material="Gypsum plasterboard")
+                tiles = slope.layer("Tiles", outline=outline, z_offset=0.5,
+                                    thickness=0.03, material="Roof tiles")
+                slope.add_window(opening, top_layer=tiles)
+                panels = slope.add_opening_lining(opening, bottom_layer=bottom)
+                self.assertEqual(panels, opening.lining)
+                self.assertEqual(len(panels), 4)
+                visibility = house.storey("Roof - plasterboard", elevation=3)
+                visibility.add(*panels)
+                settings = ifcopenshell.geom.settings()
+                settings.set(settings.USE_WORLD_COORDS, True)
+                volume = 0
+                bounds = []
+                vertices_by_id = {}
+                for panel in panels:
+                    self.assertEqual(panel.is_a(), "IfcCovering")
+                    self.assertEqual(panel.PredefinedType, "CLADDING")
+                    self.assertEqual(ifcopenshell.util.element.get_material(panel).Name, "Gypsum plasterboard")
+                    self.assertEqual(ifcopenshell.util.element.get_container(panel), visibility.element)
+                    # Re-applying registered openings must not eat their own reveals.
+                    roof._apply_openings(panel, plane=slope)
+                    self.assertFalse(panel.HasOpenings)
+                    shape = ifcopenshell.geom.create_shape(settings, panel)
+                    volume += ifcopenshell.util.shape.get_volume(shape.geometry)
+                    vertices = np.array(shape.geometry.verts).reshape(-1, 3)
+                    vertices_by_id[panel.GlobalId] = vertices
+                    local = np.array([slope.to_local(tuple(v)) for v in vertices])
+                    low, high = local.min(axis=0), local.max(axis=0)
+                    self.assertAlmostEqual(low[2], bottom.z_offset + bottom.thickness - 0.001)
+                    self.assertAlmostEqual(high[2], 0.43)
+                    bounds.append((low, high))
+                # Exactly a rectangular ring: no corner overlaps or missing panels.
+                w, h, t = 1, np.sqrt(5) / 2, 0.0125
+                expected_area = w * h - (w - 2 * t) * (h - 2 * t)
+                self.assertAlmostEqual(volume, expected_area * (0.63 - 0.025 + 0.001))
+                # Interior plasterboard now extends underneath the reveal ends.
+                shape = ifcopenshell.geom.create_shape(settings, bottom)
+                self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry),
+                                       (36 - (w - 2 * t) * (h - 2 * t)) * 0.025)
+                interior_void = bottom.HasOpenings[0].RelatedOpeningElement
+                self.assertAlmostEqual(ifcopenshell.util.element.get_pset(interior_void, "BBIM_RoofOpening", "LiningInset"), t)
+                # Tiles keep their original larger hole and window filling.
+                shape = ifcopenshell.geom.create_shape(settings, tiles)
+                self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), (36 - w * h) * 0.03)
+                self.assertEqual(len(tiles.HasOpenings[0].RelatedOpeningElement.HasFillings), 1)
+                for index, (low, high) in enumerate(bounds):
+                    for other_low, other_high in bounds[index + 1:]:
+                        overlap = np.maximum(0, np.minimum(high, other_high) - np.maximum(low, other_low))
+                        self.assertAlmostEqual(float(np.prod(overlap)), 0)
+                with TemporaryDirectory() as directory:
+                    path = Path(directory) / "reveals.ifc"
+                    house.write(path)
+                    exported = ifcopenshell.open(path)
+                    for panel in panels:
+                        mirror_panel = exported.by_guid(panel.GlobalId)
+                        self.assertFalse(mirror_panel.HasOpenings)
+                        mirror_shape = ifcopenshell.geom.create_shape(settings, mirror_panel)
+                        mirrored = np.array(mirror_shape.geometry.verts).reshape(-1, 3)
+                        expected = vertices_by_id[panel.GlobalId].copy()
+                        expected[:, 0] *= -1
+                        np.testing.assert_allclose(mirrored.min(axis=0), expected.min(axis=0), atol=1e-8)
+                        np.testing.assert_allclose(mirrored.max(axis=0), expected.max(axis=0), atol=1e-8)
+
+    def test_plasterboard_reveals_use_light_elevation_outlines(self) -> None:
+        stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text()
+        rule = stylesheet.split(
+            ".target-view-ELEVATIONVIEW .IfcCovering.material-Gypsumplasterboard.cut,", 1
+        )[1].split("}", 1)[0]
+        self.assertIn(".IfcCovering.material-Gypsumplasterboard.projection", rule)
+        self.assertIn("stroke-width: 0.05;", rule)
+
+    def test_roof_opening_lining_validates_before_creating_panels(self) -> None:
+        house = House("Roof reveals")
+        roof = house.storey("Upper floor", elevation=3).roof("Roof")
+        slope = roof.plane("Slope", points=((0, 0, 4), (6, 0, 4), (0, 4, 6)))
+        other = roof.plane("Other", points=((0, 0, 4), (6, 0, 4), (0, 4, 2)))
+        opening = roof.add_opening("Bedroom", rectangle=((2, 1), (3, 2)))
+        foreign = house.storey("Other storey", elevation=0).roof("Other roof").add_opening(rectangle=((2, 1), (3, 2)))
+        outline = ((0, 0), (6, 0), (6, 6), (0, 6))
+        bottom = slope.layer("Plasterboard", outline=outline, thickness=0.025, material="Gypsum plasterboard")
+        tiles = slope.layer("Tiles", outline=outline, z_offset=0.5, thickness=0.03, material="Roof tiles")
+        other_bottom = other.layer("Other bottom", outline=outline, thickness=0.025, material="Gypsum plasterboard")
+        distant = slope.layer("Distant", outline=((7, 0), (8, 0), (8, 1), (7, 1)), thickness=0.025, material="Gypsum plasterboard")
+        with self.assertRaisesRegex(ValueError, "create the roof window"):
+            slope.add_opening_lining(opening, bottom_layer=bottom)
+        slope.add_window(opening, top_layer=tiles)
+        for subject, options in ((foreign, {}), (opening, {"thickness": 0}),
+                                 (opening, {"thickness": 0.5}), (opening, {"color": "invalid"}),
+                                 (opening, {"bottom_overlap": -0.001}),
+                                 (opening, {"bottom_overlap": 0.025}),
+                                 (opening, {"bottom_layer": other_bottom}),
+                                 (opening, {"bottom_layer": tiles}),
+                                 (opening, {"bottom_layer": distant})):
+            with self.subTest(options=options):
+                count = len(list(house.model))
+                with self.assertRaises(ValueError):
+                    slope.add_opening_lining(subject, **({"bottom_layer": bottom} | options))
+                self.assertEqual(len(list(house.model)), count)
+                self.assertFalse(opening.lining)
+        slope.add_opening_lining(opening, bottom_layer=bottom)
+        with self.assertRaisesRegex(ValueError, "already has a lining"):
+            slope.add_opening_lining(opening, bottom_layer=bottom)
+
+    def test_roof_opening_lining_spans_adjacent_plasterboard_pieces(self) -> None:
+        roof = House("Split finishes").storey("Upper floor", elevation=3).roof("Roof")
+        slope = roof.plane("Slope", points=((0, 0, 4), (6, 0, 4), (0, 4, 6)))
+        opening = roof.add_opening("Bedroom", rectangle=((2, 1), (3, 2)))
+        left = slope.layer("Left", outline=((0, 0), (2.5, 0), (2.5, 6), (0, 6)),
+                           thickness=0.025, material="Gypsum plasterboard")
+        tiles = slope.layer("Tiles", outline=((0, 0), (6, 0), (6, 6), (0, 6)),
+                            z_offset=0.5, thickness=0.03, material="Roof tiles")
+        slope.add_window(opening, top_layer=tiles)
+        with self.assertRaisesRegex(ValueError, "matching bottom-layer pieces"):
+            slope.add_opening_lining(opening, bottom_layer=left)
+        right = slope.layer("Right", outline=((2.5, 0), (6, 0), (6, 6), (2.5, 6)),
+                            thickness=0.025, material="Gypsum plasterboard")
+        self.assertEqual(len(slope.add_opening_lining(opening, bottom_layer=left)), 4)
+        for layer in (left, right):
+            void = layer.HasOpenings[0].RelatedOpeningElement
+            self.assertEqual(ifcopenshell.util.element.get_pset(void, "BBIM_RoofOpening", "LiningInset"), 0.0125)
+
+    def test_roof_window_rejects_invalid_parameters_without_mutation(self) -> None:
+        house = House("Roof window")
+        roof = house.storey("Upper floor", elevation=3).roof("Roof")
+        slope = roof.plane("Slope", points=((0, 0, 4), (6, 0, 4), (0, 4, 6)))
+        other = roof.plane("Other", points=((0, 0, 4), (6, 0, 4), (0, 4, 2)))
+        opening = roof.add_opening("Bedroom", rectangle=((2, 1), (3, 2)))
+        outline = ((0, 0), (6, 0), (6, 6), (0, 6))
+        tiles = slope.layer("Tiles", outline=outline, z_offset=0.5, thickness=0.03, material="Roof tiles")
+        other_tiles = other.layer("Other tiles", outline=outline, thickness=0.03, material="Roof tiles")
+        distant = slope.layer("Distant", outline=((7, 0), (8, 0), (8, 1), (7, 1)), thickness=0.03, material="Roof tiles")
+        for options in ({"frame_depth": 0}, {"frame_thickness": 0.6},
+                        {"glass_transparency": 2}, {"color": "invalid"},
+                        {"top_layer": other_tiles}, {"top_layer": distant}):
+            with self.subTest(options=options):
+                count = len(list(house.model))
+                with self.assertRaises(ValueError):
+                    slope.add_window(opening, **({"top_layer": tiles} | options))
+                self.assertEqual(len(list(house.model)), count)
+                self.assertIsNone(opening.window)
+        slope.add_window(opening, top_layer=tiles)
+        with self.assertRaisesRegex(ValueError, "already has a window"):
+            slope.add_window(opening, top_layer=tiles)
+
+    def test_roof_window_rejects_skewed_rectangle(self) -> None:
+        roof = House("Roof window").storey("Upper floor", elevation=3).roof("Roof")
+        slope = roof.plane("Oblique", points=((0, 0, 4), (6, 6, 4), (-4, 4, 6)))
+        opening = roof.add_opening("Bedroom", rectangle=((0, 2), (1, 3)))
+        tiles = slope.layer("Tiles", outline=((-5, -5), (10, -5), (10, 10), (-5, 10)), thickness=0.03, material="Roof tiles")
+        with self.assertRaisesRegex(ValueError, "align with the roof-plane axes"):
+            slope.add_window(opening, top_layer=tiles)
 
     def test_validates_absolute_xy_roof_openings(self) -> None:
         roof = House("My house").storey("Upper floor", elevation=3).roof(
@@ -7226,6 +7438,151 @@ class HouseTests(unittest.TestCase):
                 "SK2",
                 line_length=0.1,
             )
+
+    def test_cut_definition_shares_geometry_between_symbols_and_camera(self) -> None:
+        for start, end, direction in (((2, -1), (2, 9), -1),
+                                      ((-1, 2), (9, 2), 1),
+                                      ((1, 1), (4, 5), -1)):
+            with self.subTest(start=start, end=end, direction=direction):
+                cut = CutDefinition(start, end, " A ", direction)
+                house = House("Cut definition", mirror_x=True)
+                plan = house.add_drawing("Plan", 2, 2, 1, 5)
+                line = cut.add_symbol(plan)
+                section = cut.add_drawing(house, "AA", z=3.5, radius=8,
+                                          doors_closed=True, right_panel_width=60)
+                expected_center = (np.array(start) + np.array(end)) / 2
+                np.testing.assert_allclose(cut.center, expected_center)
+                np.testing.assert_allclose((section.x, section.y), expected_center)
+                np.testing.assert_allclose(section.direction, cut.view_direction)
+                self.assertEqual((section.z, section.radius, section.view), (3.5, 8, "elevation"))
+                self.assertEqual(section.right_panel_width, 60)
+                self.assertTrue(section.doors_closed)
+                self.assertAlmostEqual(np.linalg.norm(cut.view_direction), 1)
+                self.assertAlmostEqual(np.dot(cut.view_direction[:2], np.array(end) - start), 0)
+                self.assertEqual(ifcopenshell.util.element.get_pset(line, "BBIM_CutSymbol", "Identifier"), "A")
+                exported = house._export_model()
+                arrow = next(a for a in exported.by_type("IfcAnnotation")
+                             if ifcopenshell.util.element.get_pset(a, "EPset_Annotation", "Classes") == "cut-symbol-arrow")
+                matrix = ifcopenshell.util.placement.get_local_placement(arrow.ObjectPlacement)
+                item = arrow.Representation.Representations[0].Items[0]
+                if item.is_a("IfcMappedItem"):
+                    matrix = matrix @ ifcopenshell.util.placement.get_mappeditem_transformation(item)
+                    item = item.MappingSource.MappedRepresentation.Items[0]
+                shaft = item.Elements[0].Points.CoordList
+                world_shaft = [matrix @ np.array((*point, 0, 1)) for point in shaft]
+                arrow_direction = (world_shaft[1] - world_shaft[0])[:3] / .55
+                exported_section = exported.by_guid(section.element.GlobalId)
+                camera_matrix = ifcopenshell.util.placement.get_local_placement(exported_section.ObjectPlacement)
+                np.testing.assert_allclose(arrow_direction, -camera_matrix[:3, 2], atol=1e-9)
+
+    def test_cut_definition_validates_and_normalizes_inputs(self) -> None:
+        cut = CutDefinition([1, 2], [1, 4], " A ")
+        self.assertEqual((cut.start, cut.end, cut.identifier, cut.direction),
+                         ((1., 2.), (1., 4.), "A", -1))
+        with self.assertRaises(AttributeError):
+            cut.direction = 1
+        for direction in (0, 2, float("nan")):
+            with self.assertRaises(ValueError):
+                CutDefinition((0, 0), (1, 0), "A", direction)
+        with self.assertRaises(TypeError):
+            CutDefinition((0, 0), (1, 0), "A", True)
+        with self.assertRaisesRegex(ValueError, "different points"):
+            CutDefinition((0, 0), (0, 0), "A")
+        with self.assertRaisesRegex(ValueError, "identifier"):
+            CutDefinition((0, 0), (1, 0), " ")
+
+    def test_adds_cut_symbols_with_two_perpendicular_arrows_and_letters(self) -> None:
+        house = House("Cuts")
+        ground = house.storey("Ground", elevation=0.4)
+        drawing = house.add_drawing("Ground", 2, 2, 1.4, 5, storeys=[ground])
+        other = house.add_drawing("Other", 2, 2, 1.4, 5)
+        for start, end in (((1, 2), (4, 2)), ((2, 1), (2, 4)), ((1, 1), (4, 5))):
+            for direction in (-1, 1):
+                with self.subTest(start=start, end=end, direction=direction):
+                    before = {a.id() for a in house.model.by_type("IfcAnnotation")}
+                    line = drawing.add_cut_symbol(start, end, "A", direction=direction)
+                    added = [a for a in house.model.by_type("IfcAnnotation") if a.id() not in before]
+                    self.assertEqual(len(added), 5)
+                    classes = lambda a: ifcopenshell.util.element.get_pset(a, "EPset_Annotation", "Classes")
+                    self.assertEqual(classes(line), "cut-symbol-line")
+                    props = ifcopenshell.util.element.get_pset(line, "BBIM_CutSymbol")
+                    self.assertEqual(json.loads(props["Start"]), list(start))
+                    self.assertEqual(json.loads(props["End"]), list(end))
+                    self.assertEqual((props["Identifier"], props["Direction"]), ("A", direction))
+                    tangent = np.array(end, dtype=float) - np.array(start)
+                    tangent /= np.linalg.norm(tangent)
+                    normal = direction * np.array((-tangent[1], tangent[0]))
+                    arrows = [a for a in added if classes(a) == "cut-symbol-arrow"]
+                    self.assertEqual(len(arrows), 2)
+                    for arrow, endpoint in zip(arrows, (start, end)):
+                        matrix = ifcopenshell.util.placement.get_local_placement(arrow.ObjectPlacement)
+                        np.testing.assert_allclose(matrix[:3, 3], (*endpoint, .4))
+                        curves = arrow.Representation.Representations[0].Items[0].Elements
+                        shaft = np.array(curves[0].Points.CoordList)
+                        np.testing.assert_allclose(shaft[0], -normal * .55)
+                        np.testing.assert_allclose(shaft[1], (0, 0))
+                        self.assertAlmostEqual(float(np.dot(shaft[1] - shaft[0], tangent)), 0)
+                        self.assertGreater(float(np.dot(shaft[1] - shaft[0], normal)), 0)
+                        wings = np.array(curves[1].Points.CoordList)
+                        np.testing.assert_allclose(wings[1], (0, 0))
+                    texts = [a for a in added if classes(a) == "cut-symbol-text"]
+                    self.assertEqual(len(texts), 2)
+                    for text in texts:
+                        self.assertEqual(text.Representation.Representations[0].Items[0].Literal, "A")
+                        np.testing.assert_allclose(
+                            ifcopenshell.util.placement.get_local_placement(text.ObjectPlacement)[:3, :3],
+                            np.eye(3),
+                        )
+                    self.assertTrue(set(added) <= set(drawing.group.IsGroupedBy[0].RelatedObjects))
+                    self.assertTrue(set(added).isdisjoint(other.group.IsGroupedBy[0].RelatedObjects))
+        self.assertTrue(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "HasAnnotation"))
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "cuts.ifc"
+            house.write(path)
+            reloaded = ifcopenshell.open(str(path)).by_guid(line.GlobalId)
+            self.assertEqual(ifcopenshell.util.element.get_pset(reloaded, "BBIM_CutSymbol", "Identifier"), "A")
+
+    def test_cut_symbols_validate_inputs_without_creating_annotations(self) -> None:
+        house = House("Cuts")
+        plan = house.add_drawing("Plan", 2, 2, 1, 5)
+        elevation = house.add_drawing("AA", 2, 0, 2, 5, view="elevation", direction=(1, 0, 0))
+        count = len(house.model.by_type("IfcAnnotation"))
+        for direction in (0, 2, -2, float("nan")):
+            with self.assertRaises(ValueError):
+                plan.add_cut_symbol((0, 0), (1, 0), "A", direction=direction)
+        with self.assertRaises(TypeError):
+            plan.add_cut_symbol((0, 0), (1, 0), "A", direction=True)
+        with self.assertRaisesRegex(ValueError, "different points"):
+            plan.add_cut_symbol((1, 1), (1, 1), "A")
+        with self.assertRaisesRegex(ValueError, "identifier"):
+            plan.add_cut_symbol((0, 0), (1, 0), " ")
+        with self.assertRaisesRegex(ValueError, "plan drawings"):
+            elevation.add_cut_symbol((0, 0), (1, 0), "A")
+        self.assertEqual(len(house.model.by_type("IfcAnnotation")), count)
+        line = plan.add_cut_symbol((0, 0), (1, 0), "AA")
+        self.assertEqual(ifcopenshell.util.element.get_pset(line, "BBIM_CutSymbol", "Direction"), -1)
+
+    def test_cut_symbol_overlays_are_complete_and_idempotent(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "cut.svg"
+            path.write_text('''<svg>
+<defs><path id="keep-definition" d="M0 0L1 1"/></defs>
+<line class="cut-symbol-line" x1="0" y1="0" x2="5" y2="0"/>
+<path class="cut-symbol-arrow" d="M0 0L0 5"/>
+<polyline class="cut-symbol-arrow" points="0,0 1,1 2,0"/>
+<text><tspan class="cut-symbol-text">A</tspan></text>
+<g id="wall"><path d="M0 0L5 0"/></g>
+<text class="unrelated">Keep me</text>
+</svg>''', encoding="utf-8")
+            _postprocess_cut_symbol_overlays(path)
+            once = path.read_text()
+            _postprocess_cut_symbol_overlays(path)
+            self.assertEqual(path.read_text(), once)
+            self.assertEqual(once.count('class="cut-symbol-overlays"'), 1)
+            self.assertEqual(once.count('class="cut-symbol-arrow"'), 2)
+            self.assertGreater(once.index('class="cut-symbol-overlays"'), once.index('id="wall"'))
+            self.assertIn('id="keep-definition"', once)
+            self.assertIn("Keep me", once)
 
     def test_adds_arrow_notes_to_plans_and_elevations(self) -> None:
         house = House("My house")

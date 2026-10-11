@@ -157,12 +157,12 @@ RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 VAZNICE_HEIGHT = 0.32
-VAZNICE_BASE = 0.20
+VAZNICE_BASE = 0.22
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
 VAZNICE_DIST = 1.179 - VAZNICE_HALF_BASE
 # Independent side pieces; their tops and outer faces align with the middle.
-VAZNICE_SIDE_HEIGHT = 0.24
-VAZNICE_SIDE_BASE = 0.20
+VAZNICE_SIDE_HEIGHT = 0.28
+VAZNICE_SIDE_BASE = 0.16
 PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT
 SEDLO_LENGTH = 1.5  # Retained for the force simulator's sedlo variant, not IFC geometry.
 PURLIN_SPACER_SIZE = (0.08, 0.20)
@@ -276,7 +276,7 @@ house = House(
     colors={
         "wall": "#ffffff",
         "door": "#8B5A2B",
-        "window": "#4A90E2",
+        "window": "#ffffff",
     },
 )
 
@@ -326,6 +326,18 @@ KK_WIDTH = 2.50 - 0.02
 wall2_x = BWT + 3.25 - 0.02 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
+aa_cut = CutDefinition(
+	start=(wall2_x + 0.56, -2.5),
+	end=(wall2_x + 0.56, HOUSE_DEPTH + 2.5),
+	identifier="A",
+	direction=-1,
+)
+bb_cut = CutDefinition(
+	start=(-2.5, HALF_DEPTH+0.01),
+	end=(HOUSE_WIDTH + 2.5, HALF_DEPTH),
+	identifier="B",
+	direction=1,  # Look towards the garden (+Y).
+)
 MIDDLE_PURLIN_X_MIN = wall2_x - BWT / 2
 MIDDLE_PURLIN_X_MAX = wall3_x - BWT / 2
 stair_height = (
@@ -1897,6 +1909,7 @@ roof_layer_storeys.update({
 	"Counter-battens": house.storey("Roof - +3: Counter-battens", elevation=upper.elevation),
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
+	"Roof windows": house.storey("Roof - +6: Windows", elevation=upper.elevation),
 })
 roof_under_rafter_insulations = {}
 for layer_name, layer_storey in roof_layer_storeys.items():
@@ -2994,6 +3007,34 @@ if roof_window_opening.trimmers:
 		roof_layer_storeys["Rafters"].add(trimmer)
 		roof_window_trimmers.append(trimmer)
 
+# Use the tiles actually cut by this opening, not a guessed vertical height.
+roof_window_tiles = next(
+	layer for layer in garden_roof.elements
+	if isinstance(layer, RoofLayer)
+	and layer.material_name == "Roof tiles"
+	and any(void.RelatedOpeningElement in roof_window_opening.elements
+			for void in (layer.HasOpenings or ()))
+)
+roof_window = garden_roof.add_window(
+	roof_window_opening,
+	top_layer=roof_window_tiles,
+	color="#ffffff",
+	glass_color="#ffffff",
+)
+roof_layer_storeys["Roof windows"].add(roof_window)
+roof_window_plasterboard = next(
+	layer for layer in garden_roof.elements
+	if isinstance(layer, RoofLayer)
+	and layer.material_name == "Gypsum plasterboard"
+	and any(void.RelatedOpeningElement in roof_window_opening.elements
+			for void in (layer.HasOpenings or ()))
+)
+roof_window_lining = garden_roof.add_opening_lining(
+	roof_window_opening,
+	bottom_layer=roof_window_plasterboard,
+)
+roof_layer_storeys["Gypsum plasterboard"].add(*roof_window_lining)
+
 add_foundation_insulation(
 	(
 		(CUT_WIDTH+BWT, BWT),
@@ -3127,6 +3168,8 @@ if "ground" in sys.argv:
 		storeys=[ground],
 		right_panel_width=40,
 	)
+	aa_cut.add_symbol(drawing1)
+	bb_cut.add_symbol(drawing1)
 	drawing1.add_note(
 		point=(
 			wall_1a_g.start[0]+BWT,
@@ -3238,6 +3281,8 @@ if "upper" in sys.argv:
 		storeys=[upper],
 		right_panel_width=40,
 	)
+	aa_cut.add_symbol(drawing1)
+	bb_cut.add_symbol(drawing1)
 	drawing1.include_element(heat_pump)
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
@@ -3341,6 +3386,8 @@ if "roof" in sys.argv:
 		model_line_width=0.06,
 		right_panel_width=65,
 	)
+	aa_cut.add_symbol(drawing1)
+	bb_cut.add_symbol(drawing1)
 	for element in (
 		wall_dormer,
 		wall_front_u,
@@ -3676,14 +3723,11 @@ if "cut1" in sys.argv:
 
 # Drawing - cut AA
 if "aa" in sys.argv:
-	drawing1 = house.add_drawing(
+	drawing1 = aa_cut.add_drawing(
+		house,
 		"aa",
-		x=wall2_x+0.6,
-		y=4,
 		z=3.5,
 		radius=8,
-		view="elevation",
-		direction=(1, 0, 0),
 		storeys=None,
 		doors_closed=True,
 		right_panel_width=60,
@@ -4016,6 +4060,18 @@ if "aa" in sys.argv:
 		offset=0)
 
 	drawing1.render("aa.svg", png=True, png_dpi=600)
+
+# Longitudinal section through the ridge, perpendicular to AA.
+if "bb" in sys.argv:
+	drawing1 = bb_cut.add_drawing(
+		house,
+		"bb",
+		z=3.5,
+		radius=8,
+		storeys=None,
+		doors_closed=True,
+	)
+	drawing1.render("bb.svg", png=True, png_dpi=600)
 
 # Drawing - cut3
 if "cut3" in sys.argv:

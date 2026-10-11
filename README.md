@@ -125,15 +125,16 @@ are mirrored, so existing coordinate calculations need no special handling.
 
 ## Roof openings
 
-Use `Roof.add_opening()` to cut a vertical opening through every roof slab or
-beam above an absolute XY rectangle. The two supplied points are opposite
+Use `Roof.add_opening()` to cut a roof-normal opening through every intersecting
+roof slab or beam. The absolute XY rectangle defines the opening at the roof
+plane's zero-offset surface. The two supplied points are opposite
 corners and may be given in either order:
 
 ```python
 upper = house.storey("Upper floor", elevation=3)
 roof = upper.roof("Main roof")
 
-roof.add_opening(
+opening = roof.add_opening(
     rectangle=((2.4, 1.8), (3.2, 3.0)),
     name="Bedroom roof window",  # Optional; defaults to "Roof Opening 1".
 )
@@ -142,8 +143,48 @@ roof.add_opening(
 The opening may be registered before or after the roof planes, layers, and
 beams are created. IFC permits one opening to void only one host, so the
 returned `RoofOpening.elements` contains one aligned `IfcOpeningElement` for
-each intersecting roof part. This creates the construction hole; the window
-frame and glazing can be added separately.
+each intersecting roof part. To fill it with a sloped window, use the roof
+plane containing the opening and its roof-tile layer:
+
+```python
+window = garden_roof.add_window(
+    opening,
+    top_layer=roof_tiles,  # RoofLayer returned by garden_roof.layer(...).
+    frame_depth=0.10,
+    frame_thickness=0.04,
+)
+```
+
+The outer frame face is flush with the tile layer's top surface. Frame depth
+extends inward, perpendicular to the roof; the frame's width and height are
+derived from the opening along the slope. This creates an `IfcWindow/SKYLIGHT`
+with frame and glazing and fills the tile-layer void without cutting the
+window itself. The rectangular opening must align with the roof-plane axes
+and fit entirely within that layer. `opening.window` returns the created window.
+
+To conceal the cut edges of the roof layers, add plasterboard reveals after
+creating the window:
+
+```python
+reveals = garden_roof.add_opening_lining(
+    opening,
+    bottom_layer=roof_plasterboard,
+    thickness=0.0125,
+    material="Gypsum plasterboard",
+)
+```
+
+The four IFC coverings lie just inside the opening and run perpendicular to
+the roof, from the back of the interior plasterboard to the underside of the
+window frame. A configurable `bottom_overlap=0.001` embeds their ends 1 mm into
+the plasterboard. The helper reduces only the plasterboard's opening by the
+lining thickness on each side, so it covers the panel ends from below; other
+roof layers retain the full opening. The reveals have
+nonoverlapping butt-jointed corners, and are not cut away by their own
+opening. `opening.lining` returns the panels; they can be assigned to the
+plasterboard visibility storey with `storey.add(*reveals)`.
+An opening may span multiple adjacent plasterboard pieces at the same offset
+and thickness; in that case, supply any intersecting piece as `bottom_layer`.
 
 The optional `"axis"` marker places the reference line at a boundary between
 layers. In this example, brick extends 120 mm to the left of the axis and rock
@@ -310,6 +351,39 @@ drawing = house.add_drawing(
     door_annotation_offset=0.05,
 )
 ```
+
+Add a section reference to a plan (coordinates are in model metres):
+
+```python
+drawing.add_cut_symbol(
+    start=(1, 2), end=(8, 2), identifier="A", direction=-1,
+)
+# Equivalent positional ID:
+# drawing.add_cut_symbol((1, 2), (8, 2), "A", direction=-1)
+```
+
+This draws a dash-dot line with a perpendicular open arrow and the same letter
+at each endpoint, above the plan geometry. Looking from `start` towards `end`,
+`direction=1` looks to the left and `direction=-1` (the default) to the right.
+The letters stay upright. It labels an existing cut; it does not create a new
+section drawing/camera automatically.
+
+For one shared definition of the plan markers and the actual section view:
+
+```python
+aa_cut = CutDefinition(start=(4.31, -1), end=(4.31, 9), identifier="A", direction=-1)
+aa_cut.add_symbol(ground_drawing)
+aa_cut.add_symbol(upper_drawing)
+aa_drawing = aa_cut.add_drawing(house, "aa", z=3.5, radius=8, doors_closed=True)
+```
+
+The section camera uses the cut midpoint and the same viewing direction as
+the arrows. In `house_ifc.py`, `aa_cut` is defined alongside the house geometry
+constants; editing it updates both plans and the AA view.
+`bb_cut` defines a longitudinal section through the ridge at `HOUSE_DEPTH / 2`,
+perpendicular to AA and looking towards the garden (+Y). Both cuts are marked
+on the ground, upper and roof plans. Generate the section with
+`python3 house_ifc.py bb` (outputs `bb.svg` and `bb.png`).
 
 For manual control, disable the automatic labels and add selected doors with
 individual offsets:
