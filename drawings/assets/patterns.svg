@@ -181,6 +181,12 @@
     <path d="M 1.25,2.165 L 2.5,4.33 L 5,4.33 L 6.25,2.165 L 5,0 L 2.5,0 L 1.25,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round;fill:none" />
     <path d="M 6.25,2.165 L 7.5,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round" />
 </pattern>
+<!-- Facade EPS keeps the hexagon lines without an opaque background. -->
+<pattern id="polystyrene-transparent" width="7.5" height="4.33" patternUnits="userSpaceOnUse" patternTransform="scale(0.15)">
+    <path d="M 0,2.165 L 1.25,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round;fill:none" />
+    <path d="M 1.25,2.165 L 2.5,4.33 L 5,4.33 L 6.25,2.165 L 5,0 L 2.5,0 L 1.25,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round;fill:none" />
+    <path d="M 6.25,2.165 L 7.5,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round;fill:none" />
+</pattern>
 <!-- XPS uses the same hatch over its light-pink model tint. -->
 <pattern id="perimeter-polystyrene" width="7.5" height="4.33" patternUnits="userSpaceOnUse" patternTransform="scale(0.15)">
     <rect width="7.5" height="4.33" fill="#f4dddd" />
