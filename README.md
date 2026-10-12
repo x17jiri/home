@@ -343,6 +343,64 @@ house = House("My house", asset_library="path/to/IFC4 Furniture Library.ifc")
 
 ## Automated Bonsai plans
 
+`Drawing.add_angle(vertex, start, end, radius=0.65)` adds a native angular
+dimension between two rays, with an arc, arrowheads, degree label and reference
+lines. Coordinates are `(x, y)` in plans, `(y, z)` in sections looking along X,
+or `(x, z)` when looking along Y, matching `add_dimension()`. Ray lengths are
+ignored; `radius` controls the arc size in metres. Collinear rays are rejected.
+The helper defaults the drawing's `AngleDecimalPlaces` to 2 if unset and
+preserves an existing setting. AA uses it for the main and dormer roof pitches,
+derived from their model planes.
+
+```python
+drawing.add_angle(
+    vertex=(2.5, 5.0),
+    start=(1.5, 5.0),
+    end=(1.5, 4.3),
+    radius=0.65,
+)
+```
+
+Run `python3 house_ifc.py roof_xx` for a transverse roof-framing section looking
+along +X (parallel to AA). Its `add_roof_elevation()` call selects index 1 in
+`rafters` and puts the camera 0.15 m before it. It uses the roof plan's
+structural timber selection and upper-floor walls, without roof build-up layers,
+furniture or dimensions. The complete timber schedule comes from the same
+`timber_schedule_rows` definition as the roof plan. Only the selected rafter
+assembly (both roof sides, paired dormer members, collar ties and spacer) and
+the purlins cut by the camera, all wall plates and purlin packing blocks receive
+its colours/hatches (including projected plates/blocks); other timber stays
+white with outlines, and Bonsai still determines visibility. Outputs are
+`roof_xx.svg` and `roof_xx.png`; the camera is mirrored with the IFC as usual.
+
+Reuse the same helper in `house_ifc.py` for additional framing sections:
+
+```python
+section = add_roof_elevation("roof_yy", rafter_index=5, offset=0.15)
+# Add dimensions or notes here, if needed.
+section.render("roof_yy.svg", png=True, png_dpi=600)
+```
+
+The index is zero-based and accepts any existing `rafters` entry, including
+paired dormer, stronger and split rafters. Positive offsets move the camera
+before the assembly, zero cuts through it, and negative offsets move it past
+the assembly. `radius=6` controls the view size. The helper returns a `Drawing`
+without rendering; each drawing keeps independent styles and uses the same
+full schedule definition.
+
+`roof_elevation_definitions` holds the rafter indices, offsets and marker
+letters for `roof_xx`, `roof_yy` and `roof_zz`. The roof plan displays their
+X–X, Y–Y and Z–Z cut lines, derived by `roof_elevation_cut()` from those same
+settings, even when only the plan is being generated. Section cameras use
+that cut-definition helper too, keeping locations and viewing arrows aligned
+through export mirroring. Tune the settings in that shared dictionary.
+
+`drawing.add_timber_schedule(rows, styled_members=members)` limits diagram
+styles without filtering the schedule's counts, lengths, volumes or pattern
+examples. Omit `styled_members` to style all scheduled members, or pass an
+empty list for white timber throughout. Styling native elevation cuts and
+surfaces does not construct hulls or reorder elements.
+
 After writing the IFC model, `House.generate_plan()` can launch Blender and
 Bonsai, create a downward-looking orthographic camera, and save a styled SVG:
 

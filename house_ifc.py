@@ -101,6 +101,13 @@ class StrongerRafter:
 
 	x: float
 
+
+def rafter_x_position(rafter):
+	"""Return the main X coordinate of one entry in the rafters array."""
+	if isinstance(rafter, (SplitRafter, StrongerRafter)):
+		return rafter.x
+	return rafter[0] if isinstance(rafter, tuple) else rafter
+
 RAFTER_Z_OFFSET = -0.05
 RAFTER_THICKNESS = 0.08
 STRONGER_RAFTER_THICKNESS = 0.10
@@ -169,6 +176,7 @@ PURLIN_SPACER_SIZE = (0.08, 0.20)
 PURLIN_SPACER_LENGTH = 2 * (VAZNICE_DIST - VAZNICE_HALF_BASE)
 PURLIN_DRAWING_PATTERN = "brick"
 PURLIN_LEFT_DRAWING_COLOR = "#f4a261"
+PODLOZKY_VAZNIC_COLOR = "#f4a2f4"
 PURLIN_MIDDLE_DRAWING_COLOR = "#e76f51"
 PURLIN_RIGHT_DRAWING_COLOR = "#f4d35e"
 WALL_PLATE_DRAWING_PATTERN = "brick-opposite"
@@ -2009,6 +2017,9 @@ main_rafter_sections = [
 	if kind == "main"
 ]
 main_rafter_positions = [x for x, _ in main_rafter_sections]
+# Associate offset ties and paired dormer members with their MAIN rafter line,
+# rather than guessing ownership from proximity to the section camera.
+rafter_assemblies = {x: [] for x in main_rafter_positions}
 
 
 def add_collar_ties():
@@ -2048,6 +2059,7 @@ def add_collar_ties():
 				cuts=cuts,
 			)
 			roof_layer_storeys["Collar ties"].add(tie)
+			rafter_assemblies[x].append(tie)
 			ties.append(tie)
 	return tuple(ties)
 
@@ -2072,6 +2084,8 @@ purlin_spacers = tuple(
 	)
 	for index, x in enumerate(main_rafter_positions, start=1)
 )
+for x, spacer in zip(main_rafter_positions, purlin_spacers):
+	rafter_assemblies[x].append(spacer)
 dormer_rafter_positions = [
 	x for x, kind, _, _, _ in rafter_layout if kind == "dormer"
 ]
@@ -2792,6 +2806,17 @@ for i, (
 		)
 		roof_layer_storeys["Counter-battens"].add(counter_batten)
 
+for rafter in (
+	*main_roof_rafters, *stronger_main_roof_rafters,
+	*corner_short_rafters, *stronger_corner_short_rafters, *dormer_short_rafters,
+):
+	rafter_assemblies[rafter.local_start[0]].append(rafter)
+dormer_rafter_owners = {
+	x + offset: x for x, offset in paired_rafter_dormer_offsets.items()
+}
+for rafter in dormer_roof_rafters:
+	rafter_assemblies[dormer_rafter_owners[rafter.local_start[0]]].append(rafter)
+
 roof_window_trimmers = []
 if roof_window_opening.trimmers:
 	# Trimmers span between the inner faces of the two uninterrupted main
@@ -2948,6 +2973,13 @@ def draw_garage(x1, y1, x2, y2, height):
 		origin=(x_min, y_min, height),
 		size=(x_max - x_min, y_max - y_min, GARAGE_ROOF_THICKNESS),
 		color="#A64B35",
+		show_in_drawings=False,
+	)
+	roof = house.add_box(
+		"Garage floor",
+		origin=(x_min, y_min, 0.0),
+		size=(x_max - x_min, y_max - y_min, 0.1),
+		color="#151515",
 		show_in_drawings=False,
 	)
 	return (*posts, roof)
@@ -3258,6 +3290,340 @@ if "upper" in sys.argv:
 
 # Roof framing plan. Its camera is above the complete roof build-up, so all
 # selected model elements are projections rather than section cuts.
+roof_outline_walls = (
+	wall_dormer,
+	wall_front_u,
+	wall_back_u,
+	wall_1a_u,
+	wall_1b_u,
+	wall_gym_u,
+	wall_2,
+	wall_3,
+	wall_4_u,
+	wall_pokoj2,
+	wall_zachod_nahore,
+)
+roof_wall_plates = (beam3, beam_cut_street, beam4_a, beam4_b, beam_dormer)
+roof_structural_beams = (
+	*street_purlins,
+	*garden_purlins,
+	*purlin_packing_blocks,
+	*purlin_spacers,
+	*roof_wall_plates,
+)
+
+# One schedule definition for every roof drawing; no diagram-specific copies.
+timber_schedule_rows = [
+	(
+		"Vaznice – pravý díl",
+		(street_purlins[0], garden_purlins[0]),
+		0,
+		{
+			"material": "gl24c",
+			"pattern": PURLIN_DRAWING_PATTERN,
+			"color": PURLIN_LEFT_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Vaznice – střední díl",
+		(street_purlins[1], garden_purlins[1]),
+		0,
+		{
+			"material": "gl28h",
+			"pattern": PURLIN_DRAWING_PATTERN,
+			"color": PURLIN_MIDDLE_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Vaznice – levý díl",
+		(street_purlins[2], garden_purlins[2]),
+		0,
+		{
+			"material": "gl24c",
+			"pattern": PURLIN_DRAWING_PATTERN,
+			"color": PURLIN_RIGHT_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Krokve – hlavní",
+		main_roof_rafters,
+		RAFTER_EXTRA_LENGTH,
+		{
+			"pattern": RAFTER_DRAWING_PATTERN,
+			"color": MAIN_RAFTER_DRAWING_COLOR,
+			"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+		},
+	),
+	*(
+		(
+			(
+				"Krokve – zesílené",
+				stronger_main_roof_rafters,
+				RAFTER_EXTRA_LENGTH,
+				{
+					"pattern": STRONGER_RAFTER_DRAWING_PATTERN,
+					"color": MAIN_RAFTER_DRAWING_COLOR,
+					"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+				},
+			),
+		)
+		if stronger_main_roof_rafters
+		else ()
+	),
+	(
+		"Krokve – roh",
+		corner_short_rafters,
+		RAFTER_EXTRA_LENGTH,
+		{
+			"material": "C16",
+			"pattern": RAFTER_DRAWING_PATTERN,
+			"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
+			"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+		},
+	),
+	*(
+		(
+			(
+				"Krokve – roh, zesílené",
+				stronger_corner_short_rafters,
+				RAFTER_EXTRA_LENGTH,
+				{
+					"pattern": STRONGER_RAFTER_DRAWING_PATTERN,
+					"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
+					"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+				},
+			),
+		)
+		if stronger_corner_short_rafters
+		else ()
+	),
+	(
+		"Krokve – zkrácené, vikýř",
+		dormer_short_rafters,
+		RAFTER_EXTRA_LENGTH,
+		{
+			"material": "C16",
+			"pattern": RAFTER_DRAWING_PATTERN,
+			"color": DORMER_SHORT_RAFTER_DRAWING_COLOR,
+			"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
+		},
+	),
+	(
+		"Krokve – vikýř",
+		dormer_roof_rafters,
+		RAFTER_EXTRA_LENGTH,
+		{
+			"pattern": RAFTER_DRAWING_PATTERN,
+			"color": DORMER_RAFTER_DRAWING_COLOR,
+			"drawing_order": DORMER_RAFTER_DRAWING_ORDER,
+		},
+	),
+	(
+		"Pozednice – ulice",
+		(beam3,),
+		0,
+		{
+			"material": "C16",
+			"pattern": WALL_PLATE_DRAWING_PATTERN,
+			"color": STREET_WALL_PLATE_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Pozednice – krátká - zahrada",
+		(beam4_a,),
+		0,
+		{
+			"material": "C16",
+			"pattern": WALL_PLATE_DRAWING_PATTERN,
+			"color": SHORT_WALL_PLATE_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Pozednice – krátká - ulice",
+		(beam_cut_street,),
+		0,
+		{
+			"material": "C16",
+			"pattern": WALL_PLATE_DRAWING_PATTERN,
+			"color": SHORT_WALL_PLATE_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Pozednice – zahrada",
+		(beam4_b,),
+		0,
+		{
+			"material": "C16",
+			"pattern": WALL_PLATE_DRAWING_PATTERN,
+			"color": GARDEN_WALL_PLATE_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Pozednice – vikýř",
+		(beam_dormer,),
+		0,
+		{
+			"material": "C16",
+			"pattern": WALL_PLATE_DRAWING_PATTERN,
+			"color": DORMER_WALL_PLATE_DRAWING_COLOR,
+			"drawing_order": DORMER_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	*(
+		(
+			f"Kleštiny",
+			collar_ties,
+			0,
+			{
+				"material": "C16",
+				"color": COLLAR_TIE_DRAWING_COLOR,
+				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
+			},
+		),
+	),
+]
+if roof_window_trimmers:
+	timber_schedule_rows.append(
+		(
+			"Tesařská výměna",
+			roof_window_trimmers,
+			0,
+			{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
+		)
+	)
+timber_schedule_rows.extend(
+	(
+		f"Rozpěry vaznic – {label}",
+		members,
+		0,
+		{
+			"material": "C16",
+			"color": MAIN_RAFTER_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER
+		},
+	)
+	for label, members in (
+		("střed", tuple(spacer for spacer in purlin_spacers
+			if MIDDLE_PURLIN_X_MIN <= spacer.start[0] <= MIDDLE_PURLIN_X_MAX)),
+		("krajní", tuple(spacer for spacer in purlin_spacers
+			if not MIDDLE_PURLIN_X_MIN <= spacer.start[0] <= MIDDLE_PURLIN_X_MAX)),
+	)
+	if members
+)
+if purlin_packing_blocks:
+	timber_schedule_rows.append((
+		"Podložky vaznic",
+		purlin_packing_blocks,
+		0,
+		{
+			"material": "C16",
+			"pattern": PURLIN_DRAWING_PATTERN,
+			"color": PODLOZKY_VAZNIC_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER - 1,
+		},
+	))
+# Any row may override this initial grade in its settings above.
+timber_schedule_rows = [
+	(name, members, extra_length, {
+		**settings,
+		"material": resolve_timber_grade(settings.get("material", "c22")).name,
+	})
+	for name, members, extra_length, settings in timber_schedule_rows
+]
+
+def roof_elevation_cut(*, rafter_index, offset=0.15, identifier="X"):
+	"""Define the framing cut from the same rafter/offset used by its camera."""
+	if isinstance(rafter_index, bool) or not isinstance(rafter_index, int):
+		raise TypeError("rafter_index must be an integer")
+	if not 0 <= rafter_index < len(rafters):
+		raise ValueError("rafter_index must be within the rafters array")
+	if isinstance(offset, bool) or not isinstance(offset, (int, float)):
+		raise TypeError("offset must be a number in metres")
+	if not math.isfinite(offset):
+		raise ValueError("offset must be finite")
+	rafter_x = rafter_x_position(rafters[rafter_index])
+	camera_x = rafter_x - offset
+	return CutDefinition(
+		start=(camera_x, -2.0),
+		end=(camera_x, HOUSE_DEPTH + 2.0),
+		identifier=identifier,
+		direction=-1,
+	)
+
+
+def add_roof_elevation(name, *, rafter_index, offset=0.15, radius=6, identifier="X"):
+	"""Return a roof-framing section with the shared schedule and timber styles.
+
+	``rafter_index`` is a zero-based index into ``rafters``. Positive ``offset``
+	places the +X-looking camera before that assembly (towards lower X); zero
+	cuts through it, and negative values move the camera past it. Coordinates
+	remain unmirrored here, as for all other drawing helpers. Rendering is left
+	to the caller so dimensions and notes can be added first.
+	"""
+	cut = roof_elevation_cut(rafter_index=rafter_index, offset=offset, identifier=identifier)
+	rafter_x = rafter_x_position(rafters[rafter_index])
+	camera_x = cut.center[0]
+	drawing = cut.add_drawing(
+		house, name,
+		z=(UPPER_FLOOR_START + ground_floor_top + total_house_height) / 2,
+		radius=radius,
+		storeys=[roof_layer_storeys["Rafters"], roof_layer_storeys["Collar ties"]],
+		door_annotations=False,
+		automatic_plan_annotations=False,
+		doors_closed=True,
+		model_line_width=0.06,
+		right_panel_width=65,
+	)
+	for element in (*roof_outline_walls, *roof_structural_beams):
+		drawing.include_element(element)
+	styled_members = (
+		*rafter_assemblies[rafter_x],
+		# Highlight plates at the selected assembly, not plates seen farther
+		# along the house. Keep those distant plates as white projections.
+		*(beam for beam in roof_wall_plates
+			if min(beam.start[0], beam.end[0]) <= rafter_x <= max(beam.start[0], beam.end[0])),
+		*purlin_packing_blocks,
+		*(beam for beam in (*street_purlins, *garden_purlins)
+			if min(beam.start[0], beam.end[0]) <= camera_x <= max(beam.start[0], beam.end[0])),
+	)
+	drawing.add_timber_schedule(
+		timber_schedule_rows, layout_scale=0.5,
+		styled_members=styled_members,
+	)
+	return drawing
+
+
+# Shared camera/plan-marker inputs; changing a rafter or offset moves both.
+roof_elevation_definitions = {
+	"roof_xx": {"rafter_index": 1, "offset": 0.15, "identifier": "X"},
+	"roof_yy": {"rafter_index": 5, "offset": 0.25, "identifier": "Y"},
+	"roof_zz": {"rafter_index": 14, "offset": 0.15, "identifier": "Z"},
+}
+roof_elevation_cuts = {
+	name: roof_elevation_cut(**definition)
+	for name, definition in roof_elevation_definitions.items()
+}
+
+
+if "roof_xx" in sys.argv:
+	roof_xx = add_roof_elevation("roof_xx", **roof_elevation_definitions["roof_xx"])
+	roof_xx.render("roof_xx.svg", png=True, png_dpi=600)
+
+if "roof_yy" in sys.argv:
+	roof_yy = add_roof_elevation("roof_yy", **roof_elevation_definitions["roof_yy"])
+	roof_yy.render("roof_yy.svg", png=True, png_dpi=600)
+
+if "roof_zz" in sys.argv:
+	roof_zz = add_roof_elevation("roof_zz", **roof_elevation_definitions["roof_zz"])
+	roof_zz.render("roof_zz.svg", png=True, png_dpi=600)
+
 if "roof" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Roof plan",
@@ -3277,28 +3643,9 @@ if "roof" in sys.argv:
 	)
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
-	for element in (
-		wall_dormer,
-		wall_front_u,
-		wall_back_u,
-		wall_1a_u,
-		wall_1b_u,
-		wall_gym_u,
-		wall_2,
-		wall_3,
-		wall_4_u,
-		wall_pokoj2,
-		wall_zachod_nahore,
-		*street_purlins,
-		*garden_purlins,
-		*purlin_packing_blocks,
-		*purlin_spacers,
-		beam3,
-		beam_cut_street,
-		beam4_a,
-		beam4_b,
-		beam_dormer,
-	):
+	for cut in roof_elevation_cuts.values():
+		cut.add_symbol(drawing1)
+	for element in (*roof_outline_walls, *roof_structural_beams):
 		drawing1.include_element(element)
 	drawing1.add_chimney_annotation(chimney)
 	drawing1.add_roof_opening_outline(
@@ -3331,229 +3678,6 @@ if "roof" in sys.argv:
 			name=f"Dormer rafter spacing {index}",
 		)
 
-	timber_schedule_rows = [
-		(
-			"Vaznice – pravý díl",
-			(street_purlins[0], garden_purlins[0]),
-			0,
-			{
-				"material": "gl24c",
-				"pattern": PURLIN_DRAWING_PATTERN,
-				"color": PURLIN_LEFT_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Vaznice – střední díl",
-			(street_purlins[1], garden_purlins[1]),
-			0,
-			{
-				"material": "gl28h",
-				"pattern": PURLIN_DRAWING_PATTERN,
-				"color": PURLIN_MIDDLE_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Vaznice – levý díl",
-			(street_purlins[2], garden_purlins[2]),
-			0,
-			{
-				"material": "gl24c",
-				"pattern": PURLIN_DRAWING_PATTERN,
-				"color": PURLIN_RIGHT_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Krokve – hlavní",
-			main_roof_rafters,
-			RAFTER_EXTRA_LENGTH,
-			{
-				"pattern": RAFTER_DRAWING_PATTERN,
-				"color": MAIN_RAFTER_DRAWING_COLOR,
-				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
-			},
-		),
-		*(
-			(
-				(
-					"Krokve – zesílené",
-					stronger_main_roof_rafters,
-					RAFTER_EXTRA_LENGTH,
-					{
-						"pattern": STRONGER_RAFTER_DRAWING_PATTERN,
-						"color": MAIN_RAFTER_DRAWING_COLOR,
-						"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
-					},
-				),
-			)
-			if stronger_main_roof_rafters
-			else ()
-		),
-		(
-			"Krokve – roh",
-			corner_short_rafters,
-			RAFTER_EXTRA_LENGTH,
-			{
-				"material": "C16",
-				"pattern": RAFTER_DRAWING_PATTERN,
-				"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
-				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
-			},
-		),
-		*(
-			(
-				(
-					"Krokve – roh, zesílené",
-					stronger_corner_short_rafters,
-					RAFTER_EXTRA_LENGTH,
-					{
-						"pattern": STRONGER_RAFTER_DRAWING_PATTERN,
-						"color": CORNER_SHORT_RAFTER_DRAWING_COLOR,
-						"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
-					},
-				),
-			)
-			if stronger_corner_short_rafters
-			else ()
-		),
-		(
-			"Krokve – zkrácené, vikýř",
-			dormer_short_rafters,
-			RAFTER_EXTRA_LENGTH,
-			{
-				"material": "C16",
-				"pattern": RAFTER_DRAWING_PATTERN,
-				"color": DORMER_SHORT_RAFTER_DRAWING_COLOR,
-				"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
-			},
-		),
-		(
-			"Krokve – vikýř",
-			dormer_roof_rafters,
-			RAFTER_EXTRA_LENGTH,
-			{
-				"pattern": RAFTER_DRAWING_PATTERN,
-				"color": DORMER_RAFTER_DRAWING_COLOR,
-				"drawing_order": DORMER_RAFTER_DRAWING_ORDER,
-			},
-		),
-		(
-			"Pozednice – ulice",
-			(beam3,),
-			0,
-			{
-				"material": "C16",
-				"pattern": WALL_PLATE_DRAWING_PATTERN,
-				"color": STREET_WALL_PLATE_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Pozednice – krátká - zahrada",
-			(beam4_a,),
-			0,
-			{
-				"material": "C16",
-				"pattern": WALL_PLATE_DRAWING_PATTERN,
-				"color": SHORT_WALL_PLATE_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Pozednice – krátká - ulice",
-			(beam_cut_street,),
-			0,
-			{
-				"material": "C16",
-				"pattern": WALL_PLATE_DRAWING_PATTERN,
-				"color": SHORT_WALL_PLATE_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Pozednice – zahrada",
-			(beam4_b,),
-			0,
-			{
-				"material": "C16",
-				"pattern": WALL_PLATE_DRAWING_PATTERN,
-				"color": GARDEN_WALL_PLATE_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		(
-			"Pozednice – vikýř",
-			(beam_dormer,),
-			0,
-			{
-				"material": "C16",
-				"pattern": WALL_PLATE_DRAWING_PATTERN,
-				"color": DORMER_WALL_PLATE_DRAWING_COLOR,
-				"drawing_order": DORMER_WALL_PLATE_DRAWING_ORDER,
-			},
-		),
-		*(
-			(
-				f"Kleštiny",
-				collar_ties,
-				0,
-				{
-					"material": "C16",
-					"color": COLLAR_TIE_DRAWING_COLOR,
-					"drawing_order": COLLAR_TIE_DRAWING_ORDER,
-				},
-			),
-		),
-	]
-	if roof_window_trimmers:
-		timber_schedule_rows.append(
-			(
-				"Tesařská výměna",
-				roof_window_trimmers,
-				0,
-				{"drawing_order": MAIN_RAFTER_DRAWING_ORDER},
-			)
-		)
-	timber_schedule_rows.extend(
-		(
-			f"Rozpěry vaznic – {label}",
-			members,
-			0,
-			{
-				"material": "C16",
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER
-			},
-		)
-		for label, members in (
-			("střed", tuple(spacer for spacer in purlin_spacers
-				if MIDDLE_PURLIN_X_MIN <= spacer.start[0] <= MIDDLE_PURLIN_X_MAX)),
-			("krajní", tuple(spacer for spacer in purlin_spacers
-				if not MIDDLE_PURLIN_X_MIN <= spacer.start[0] <= MIDDLE_PURLIN_X_MAX)),
-		)
-		if members
-	)
-	if purlin_packing_blocks:
-		timber_schedule_rows.append((
-			"Podložky vaznic",
-			purlin_packing_blocks,
-			0,
-			{
-				"material": "C16",
-				"pattern": PURLIN_DRAWING_PATTERN,
-				"color": PURLIN_LEFT_DRAWING_COLOR,
-				"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER - 1,
-			},
-		))
-	# Any row may override this initial grade in its settings above.
-	timber_schedule_rows = [
-		(name, members, extra_length, {
-			**settings,
-			"material": resolve_timber_grade(settings.get("material", "c22")).name,
-		})
-		for name, members, extra_length, settings in timber_schedule_rows
-	]
 	drawing1.add_timber_schedule(timber_schedule_rows, layout_scale=0.5)
 	drawing1.add_notes(
 		[
@@ -3704,6 +3828,20 @@ if "aa" in sys.argv:
 		end_z=0.3,
 	)
 	aa_x = drawing1.x
+	# Roof pitches measured against horizontal, with the same slopes as the
+	# IFC roof planes. Keep the angular dimensions in clear space below them.
+	for angle_name, plane, y, angle, slope_sign, clearance, radius in (
+		("AA main roof angle", street_roof, 2.2, street_roof_angle, -1, -0.2, 1.0),
+		("AA dormer roof angle", dormer_roof, 6.5, dormer_roof_angle, 1, -0.2, 1.0),
+	):
+		z = roof_layer_height_at_y(plane, ROOF_TILE_BOTTOM, y, 0) - clearance
+		drawing1.add_angle(
+			vertex=(y, z),
+			start=(y + slope_sign, z),
+			end=(y + slope_sign, z - math.tan(math.radians(angle))),
+			radius=radius,
+			name=angle_name,
+		)
 	# Move each leader endpoint 100 mm into its referenced build-up so the
 	# pointer visibly crosses the outer boundary instead of merely touching it.
 	AA_COMPOSITION_MARKER_PENETRATION = 0.10
@@ -3711,7 +3849,7 @@ if "aa" in sys.argv:
 		HEXAGON_MARKER_LEADER_REACH
 		- AA_COMPOSITION_MARKER_PENETRATION
 	)
-	roof_composition_y = 1.25
+	roof_composition_y = 0.5
 	roof_composition_target = roof_batting_point(
 		street_roof,
 		x=aa_x,

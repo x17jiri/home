@@ -41,6 +41,18 @@ a:hover { cursor: pointer; }
 .PredefinedType-PLANLEVEL { marker-end: url(#plan-level-marker); }
 .PredefinedType-DIMENSION { marker-start: url(#dimension-marker-start); marker-end: url(#dimension-marker-end); }
 .PredefinedType-ANGLE { marker-start: url(#dimension-marker-start); marker-end: url(#dimension-marker-end); }
+.PredefinedType-ANGLE.angle-dimension {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.08;
+    marker-start: url(#angle-marker-start);
+    marker-end: url(#angle-marker-end);
+}
+.PredefinedType-LINEWORK.angle-reference {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.06;
+}
 .PredefinedType-RADIUS { marker-end: url(#fall-marker-end); }
 .PredefinedType-FALL { marker-end: url(#radius-marker-end); }
 .PredefinedType-SLOPEANGLE { marker-end: url(#radius-marker-end); }
@@ -406,6 +418,10 @@ tspan.furniture-label {
 
 text.DIMENSION,
 tspan.DIMENSION {
+    font-size: 2px !important;
+}
+text.ANGLE,
+tspan.ANGLE {
     font-size: 2px !important;
 }
 

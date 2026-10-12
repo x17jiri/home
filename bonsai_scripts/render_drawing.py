@@ -136,6 +136,11 @@ def render_drawing(args: argparse.Namespace) -> Path:
         "activating the drawing",
     )
     report_stage("Drawing camera activated")
+    # Native angle labels read this UI cache directly. In unattended exports
+    # no Properties panel has loaded it after activating the drawing.
+    from bonsai.bim.module.drawing.data import DrawingsData
+
+    DrawingsData.load()
     report_stage(f"Creating SVG at {output_path}")
     require_finished(
         bpy.ops.bim.create_drawing(

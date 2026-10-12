@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from difflib import get_close_matches
 from html import escape
 import json
-from math import atan2, ceil, cos, hypot, isclose, isfinite, pi, radians, sin
+from math import atan2, ceil, cos, degrees, hypot, isclose, isfinite, pi, radians, sin
 from os import PathLike, environ
 from pathlib import Path
 import re
@@ -1848,6 +1848,8 @@ def _postprocess_projected_wood_surface_styles(
     *,
     color: str | None = None,
     styles: Mapping[str, Mapping[str, object]] | None = None,
+    view: DrawingView = "plan",
+    include_cuts: bool = False,
 ) -> None:
     """Style Bonsai's visible wood surfaces without constructing any fills.
 
@@ -1865,9 +1867,12 @@ def _postprocess_projected_wood_surface_styles(
     if 'class="projected-wood-surface-styles"' in svg:
         return
     rules = []
-    selector = ".target-view-PLANVIEW .IfcBeam.material-Wood.surface"
+    view_class = "PLANVIEW" if view == "plan" else "ELEVATIONVIEW"
+    selectors = [f".target-view-{view_class} .IfcBeam.material-Wood.surface"]
+    if include_cuts:
+        selectors.append(f".target-view-{view_class} .IfcBeam.material-Wood.cut")
     if color is not None:
-        rules.append(f"{selector} {{ fill: {color} !important; }}")
+        rules.extend(f"{selector} {{ fill: {color} !important; }}" for selector in selectors)
     for global_id, style in styles.items():
         member_color = style.get("color")
         if not isinstance(member_color, str):
@@ -1876,7 +1881,8 @@ def _postprocess_projected_wood_surface_styles(
         fill = f"url(#{_tinted_pattern_id(pattern, member_color)})" if isinstance(pattern, str) else member_color
         # Use the same class canonicalisation as Bonsai.get_svg_classes.
         member_class = "GlobalId-" + re.sub("[^0-9a-zA-Z]+", "", global_id)
-        rules.append(f"{selector}.{member_class} {{ fill: {fill} !important; }}")
+        rules.extend(f"{selector}.{member_class} {{ fill: {fill} !important; }}"
+                     for selector in selectors)
     closing_svg = svg.rfind("</svg>")
     if closing_svg < 0 or not rules:
         return
@@ -1989,6 +1995,30 @@ def _postprocess_roof_opening_masks(svg_path: Path) -> None:
         f"{svg[insertion_offset:]}"
     )
     svg_path.write_text(svg, encoding="utf-8")
+
+
+def _postprocess_angle_labels(svg_path: Path, drawing_properties: Mapping) -> None:
+    """Remove Bonsai's float suffix from angles rounded to whole degrees."""
+    if drawing_properties.get("AngleDecimalPlaces") != 0:
+        return
+    svg = svg_path.read_text(encoding="utf-8")
+    label_pattern = re.compile(
+        r'<(?P<tag>text|tspan)\b(?P<attrs>[^>]*)>'
+        r'(?P<value>\s*\d+)\.0+(?P<suffix>°\s*)</(?P=tag)>'
+    )
+
+    def format_label(match: re.Match[str]) -> str:
+        class_attribute = re.search(r'\bclass=([\"\'])(.*?)\1', match["attrs"])
+        if class_attribute is None or "ANGLE" not in class_attribute[2].split():
+            return match[0]
+        return (
+            f'<{match["tag"]}{match["attrs"]}>'
+            f'{match["value"]}{match["suffix"]}</{match["tag"]}>'
+        )
+
+    updated = label_pattern.sub(format_label, svg)
+    if updated != svg:
+        svg_path.write_text(updated, encoding="utf-8")
 
 
 def _postprocess_model_line_width(
@@ -3668,6 +3698,11 @@ def _timber_schedule_member_styles(
         items = table.get("items", [])
         if not isinstance(items, list):
             continue
+        selected = table.get("styled_member_guids")
+        if selected is not None:
+            if not isinstance(selected, list):
+                continue
+            selected = {global_id for global_id in selected if isinstance(global_id, str)}
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -3679,6 +3714,8 @@ def _timber_schedule_member_styles(
                 continue
             for global_id in member_guids:
                 if isinstance(global_id, str):
+                    if selected is not None and global_id not in selected:
+                        continue
                     style: dict[str, object] = {}
                     if isinstance(color, str):
                         style["color"] = color
@@ -3704,6 +3741,27 @@ def _postprocess_right_panel(
         return
     if panel_width_mm <= 0:
         return
+
+    try:
+        tables = json.loads(str(drawing_properties.get("RightPanelTables", "[]")))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        tables = []
+    if not isinstance(tables, list):
+        tables = []
+    # Legend samples always use ALL row appearances, even when the diagram
+    # styles only a selected subset of those members.
+    table_patterns = set()
+    for table in tables:
+        if not isinstance(table, dict) or table.get("kind") != "timber_schedule":
+            continue
+        items = table.get("items", [])
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if (isinstance(item, dict) and isinstance(item.get("pattern"), str)
+                    and isinstance(item.get("color"), str)):
+                table_patterns.add((item["pattern"], item["color"]))
+    _inject_tinted_drawing_patterns(svg_path, table_patterns)
 
     svg = svg_path.read_text(encoding="utf-8")
     if 'class="right-side-panel"' in svg:
@@ -3743,14 +3801,6 @@ def _postprocess_right_panel(
         max(0.0, (panel_width_mm - 10.0) / 90.0),
     )
 
-    try:
-        tables = json.loads(
-            str(drawing_properties.get("RightPanelTables", "[]"))
-        )
-    except (TypeError, ValueError, json.JSONDecodeError):
-        tables = []
-    if not isinstance(tables, list):
-        tables = []
     table_y = view_y + vertical_margin
     table_parts = []
     for table in tables:
@@ -5271,7 +5321,8 @@ def _render_existing_drawing(
             )[2, 3]
         )
         projected_wood_color = (
-            drawing_properties.get("ProjectedWoodColor")
+            drawing_properties.get("UnstyledTimberColor",
+                                   drawing_properties.get("ProjectedWoodColor"))
             if drawing_properties
             else None
         )
@@ -5301,6 +5352,16 @@ def _render_existing_drawing(
         )
         _postprocess_wall_insulation_backdrop(absolute_output)
     else:
+        timber_styles = _timber_schedule_member_styles(drawing_properties or {})
+        unstyled_color = (drawing_properties or {}).get("UnstyledTimberColor")
+        if timber_styles or unstyled_color:
+            _postprocess_projected_wood_surface_styles(
+                absolute_output,
+                view="elevation",
+                include_cuts=True,
+                color=str(unstyled_color) if unstyled_color else None,
+                styles=timber_styles,
+            )
         _postprocess_wall_insulation_batting(absolute_output)
         _postprocess_roof_batting(absolute_output)
         _postprocess_elevation_wall_insulation_depth(
@@ -5324,6 +5385,7 @@ def _render_existing_drawing(
         )
         _postprocess_elevation_furniture_labels(absolute_output)
         _postprocess_hexagon_marker_overlays(absolute_output)
+    _postprocess_angle_labels(absolute_output, drawing_properties or {})
     _postprocess_note_overlays(absolute_output)
     _postprocess_cut_symbol_overlays(absolute_output)
     _postprocess_right_panel(
@@ -7633,6 +7695,7 @@ class Drawing:
         self._ridge_tile_count = 0
         self._wall_insulation_count = 0
         self._dimension_count = 0
+        self._angle_count = 0
         self._entrance_arrow_count = 0
         self._hexagon_marker_count = 0
         self._note_count = 0
@@ -9010,6 +9073,7 @@ class Drawing:
         *,
         title: str = "SPECIFIKACE PRVKŮ KROVU",
         layout_scale: Number | None = None,
+        styled_members: Sequence[Beam] | None = None,
     ) -> Drawing:
         """Add an automatically measured structural-timber schedule.
 
@@ -9028,7 +9092,11 @@ class Drawing:
         is added only to the displayed procurement length, which is useful for
         a rafter end-cut allowance.  Marks are assigned as A, B, C, ...; rows
         with an appearance show its hatch instead and apply it to those
-        projected members in this plan.  All dimensions are rounded to
+        projected members in this drawing (also cut members in elevations).
+        ``styled_members`` optionally limits the diagram appearances to those
+        beams; other wood remains white with outlines. It does not filter the
+        schedule rows, procurement quantities or table pattern examples.
+        Omit it to style all scheduled members. All dimensions are rounded to
         millimetres.  ``layout_scale`` may be used to cap the table's text and
         row scale independently of the right-panel width.
         """
@@ -9055,6 +9123,22 @@ class Drawing:
             ) from error
         if not supplied_rows:
             raise ValueError("rows must contain at least one timber group")
+        styled_guids = None
+        if styled_members is not None:
+            if isinstance(styled_members, (str, bytes)):
+                raise TypeError("styled_members must be a sequence of Beam objects")
+            try:
+                supplied_styles = list(styled_members)
+            except TypeError as error:
+                raise TypeError("styled_members must be a sequence of Beam objects") from error
+            styled_guids = []
+            for member in supplied_styles:
+                if not isinstance(member, Beam):
+                    raise TypeError("styled_members must contain only Beam objects")
+                if member.file is not self.house.model:
+                    raise ValueError("styled_members must belong to this house")
+                if member.GlobalId not in styled_guids:
+                    styled_guids.append(member.GlobalId)
 
         def alphabetical_mark(index: int) -> str:
             mark = ""
@@ -9214,18 +9298,128 @@ class Drawing:
         }
         if layout_scale is not None:
             table["layout_scale"] = layout_scale
+        if styled_guids is not None:
+            table["styled_member_guids"] = styled_guids
         self._right_panel_tables.append(table)
+        properties = {
+            "RightPanelTables": json.dumps(self._right_panel_tables, ensure_ascii=False),
+        }
+        if self.view == "elevation":
+            properties["Metadata"] = "GlobalId"
+        if styled_guids is not None:
+            properties["UnstyledTimberColor"] = "#ffffff"
         ifcopenshell.api.pset.edit_pset(
             self.house.model,
             pset=self._drawing_pset,
-            properties={
-                "RightPanelTables": json.dumps(
-                    self._right_panel_tables,
-                    ensure_ascii=False,
-                )
-            },
+            properties=properties,
         )
         return self
+
+    def add_angle(
+        self,
+        vertex: Point,
+        start: Point,
+        end: Point,
+        *,
+        radius: Number = 0.65,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Dimension the smaller angle between two rays from ``vertex``.
+
+        Points use world (x, y) in plans, (y, z) in elevations looking along
+        X, or (x, z) when looking along Y, like add_dimension(). The supplied
+        start/end distances only define ray directions; ``radius`` controls
+        the arc size in metres. Bonsai measures and labels the native ANGLE
+        annotation in degrees. Thin reference lines extend 100 mm beyond the
+        arc. Collinear rays are rejected. All annotations belong only to this
+        drawing, and export mirroring preserves their measured angle.
+        """
+        vertex = _point(vertex, "vertex")
+        start = _point(start, "start")
+        end = _point(end, "end")
+        radius = _number(radius, "radius")
+        if radius <= 0:
+            raise ValueError("radius must be greater than zero")
+        start_delta = np.array(start) - vertex
+        end_delta = np.array(end) - vertex
+        start_length = hypot(*start_delta)
+        end_length = hypot(*end_delta)
+        if start_length == 0 or end_length == 0:
+            raise ValueError("angle ray endpoints must differ from the vertex")
+        start_direction = start_delta / start_length
+        end_direction = end_delta / end_length
+        cross = start_direction[0] * end_direction[1] - start_direction[1] * end_direction[0]
+        if abs(cross) < 1e-9:
+            raise ValueError("angle must be strictly between 0 and 180 degrees")
+        angle_degrees = degrees(atan2(abs(cross), float(np.dot(start_direction, end_direction))))
+        angle_name = _name(name, "name") if name is not None else None
+        if self.view == "plan":
+            annotation_z = max((s.elevation for s in self.storeys if s.elevation <= self.z), default=0.0)
+
+            def to_world(point):
+                return np.array((*point, annotation_z), dtype=float)
+        elif isclose(abs(self.direction[0]), 1.0, abs_tol=1e-9):
+            def to_world(point):
+                return np.array((self.x, *point), dtype=float)
+        elif isclose(abs(self.direction[1]), 1.0, abs_tol=1e-9):
+            def to_world(point):
+                return np.array((point[0], self.y, point[1]), dtype=float)
+        else:
+            raise ValueError("add_angle requires an axis-aligned elevation direction")
+
+        placement = ifcopenshell.util.placement.get_local_placement(self.element.ObjectPlacement).copy()
+        centre = to_world(vertex)
+        placement[:3, 3] = centre
+
+        def ray_local(direction, length):
+            delta = to_world(np.array(vertex) + direction * length) - centre
+            return (float(np.dot(delta, placement[:3, 0])),
+                    float(np.dot(delta, placement[:3, 1])))
+
+        self._angle_count += 1
+        angle_name = angle_name or f"{self.name} Angle {self._angle_count}"
+        model = self.house.model
+        angle = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcAnnotation", name=angle_name, predefined_type="ANGLE",
+        )
+        representation = ifcopenshell.api.geometry.add_axis_representation(
+            model, context=self.house._annotation_context,
+            axis=[ray_local(start_direction, radius), (0.0, 0.0), ray_local(end_direction, radius)],
+        )
+        ifcopenshell.api.geometry.assign_representation(model, product=angle, representation=representation)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=angle, matrix=placement, is_si=True)
+        classes = ifcopenshell.api.pset.add_pset(model, product=angle, name="EPset_Annotation")
+        ifcopenshell.api.pset.edit_pset(model, pset=classes, properties={"Classes": "angle-dimension"})
+        properties = ifcopenshell.api.pset.add_pset(model, product=angle, name="BBIM_AngleDimension")
+        ifcopenshell.api.pset.edit_pset(model, pset=properties, properties={
+            "Vertex": json.dumps(vertex), "Start": json.dumps(start), "End": json.dumps(end),
+            "Radius": radius, "AngleDegrees": angle_degrees,
+        })
+
+        references = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcAnnotation", name=f"{angle_name} Reference Lines", predefined_type="LINEWORK",
+        )
+        curves = [model.createIfcIndexedPolyCurve(
+            model.createIfcCartesianPointList2D([(0.0, 0.0), ray_local(direction, radius + 0.1)]),
+            None, False,
+        ) for direction in (start_direction, end_direction)]
+        reference_representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context, "Annotation", "GeometricCurveSet",
+            [model.createIfcGeometricCurveSet(curves)],
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            model, product=references, representation=reference_representation)
+        ifcopenshell.api.geometry.edit_object_placement(
+            model, product=references, matrix=placement.copy(), is_si=True)
+        reference_pset = ifcopenshell.api.pset.add_pset(model, product=references, name="EPset_Annotation")
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=reference_pset, properties={"Classes": "angle-reference fine"})
+        ifcopenshell.api.group.assign_group(model, group=self.group, products=[angle, references])
+        drawing_properties = {"HasAnnotation": True}
+        if ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "AngleDecimalPlaces") is None:
+            drawing_properties["AngleDecimalPlaces"] = 0
+        ifcopenshell.api.pset.edit_pset(model, pset=self._drawing_pset, properties=drawing_properties)
+        return angle
 
     def add_dimension(
         self,

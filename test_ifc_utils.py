@@ -44,7 +44,9 @@ from ifc_utils import (
     _BATTING_MARKER_PATH,
     _close_door_bodies,
     _remove_3d_only_elements,
+    _timber_schedule_member_styles,
     _overhead_mask_global_ids,
+    _postprocess_angle_labels,
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
     _postprocess_hexagon_marker_overlays,
@@ -222,6 +224,140 @@ class ReferenceBoxTests(unittest.TestCase):
             self.assertTrue(ifcopenshell.open(directory / "house.ifc").by_guid(hidden.GlobalId))
         self.assertEqual(len(paths), 2)
         self.assertTrue(all(not path.exists() for path in paths))
+
+
+class AngleDimensionTests(unittest.TestCase):
+    @staticmethod
+    def world_curves(annotation):
+        placement = ifcopenshell.util.placement.get_local_placement(annotation.ObjectPlacement)
+        result = []
+        for representation in annotation.Representation.Representations:
+            for resolved in ifcopenshell.util.representation.resolve_items(representation):
+                item = resolved["item"]
+                curves = item.Elements if item.is_a("IfcGeometricCurveSet") else (item,)
+                for curve in curves:
+                    if curve.is_a("IfcIndexedPolyCurve"):
+                        coordinates = curve.Points.CoordList
+                    else:
+                        coordinates = [p.Coordinates for p in curve.Points]
+                    result.append(np.asarray([
+                        (placement @ resolved["matrix"] @ np.array((*p[:2], 0, 1)))[:3]
+                        for p in coordinates
+                    ]))
+        return result
+
+    def test_native_angle_and_reference_geometry_in_plans_and_all_axis_aligned_elevations(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Angles", mirror_x=mirror)
+                    house.storey("Floor", elevation=0.25)
+                    drawing = house.add_drawing("View", x=1, y=1.5, z=4, radius=5,
+                                                view=view, direction=direction)
+                    angle = drawing.add_angle(vertex=(2, 3), start=(4, 3), end=(3, 4), radius=0.65)
+                    self.assertEqual(angle.ObjectType, "ANGLE")
+                    properties = ifcopenshell.util.element.get_pset(angle, "BBIM_AngleDimension")
+                    self.assertAlmostEqual(properties["AngleDegrees"], 45)
+                    self.assertEqual(json.loads(properties["Vertex"]), [2, 3])
+                    self.assertEqual(properties["Radius"], 0.65)
+                    points = self.world_curves(angle)[0]
+                    if view == "plan":
+                        centre = (2, 3, 0.25)
+                        first = (2.65, 3, 0.25)
+                    elif direction[0]:
+                        centre = (1, 2, 3)
+                        first = (1, 2.65, 3)
+                    else:
+                        centre = (2, 1.5, 3)
+                        first = (2.65, 1.5, 3)
+                    np.testing.assert_allclose(points[1], centre)
+                    np.testing.assert_allclose(points[0], first)
+                    for point in (points[0], points[2]):
+                        self.assertAlmostEqual(np.linalg.norm(point - points[1]), 0.65)
+                    annotations = drawing.group.IsGroupedBy[0].RelatedObjects
+                    references = next(a for a in annotations if (a.Name or "").endswith("Reference Lines"))
+                    for line in self.world_curves(references):
+                        np.testing.assert_allclose(line[0], centre)
+                        self.assertAlmostEqual(np.linalg.norm(line[1] - line[0]), 0.75)
+                    exported = house._export_model()
+                    mirrored_points = self.world_curves(exported.by_guid(angle.GlobalId))[0]
+                    expected = points * np.array((-1 if mirror else 1, 1, 1))
+                    np.testing.assert_allclose(mirrored_points, expected)
+                    a, b = mirrored_points[0] - mirrored_points[1], mirrored_points[2] - mirrored_points[1]
+                    measured = np.degrees(np.arccos(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))))
+                    self.assertAlmostEqual(measured, 45)
+
+    def test_angles_are_drawing_scoped_and_preserve_explicit_decimal_setting(self):
+        house = House("Angles")
+        first = house.add_drawing("First", 0, 0, 2, 4)
+        other = house.add_drawing("Other", 0, 0, 2, 4)
+        angle = first.add_angle((0, 0), (1, 0), (1, -1), name="Roof pitch")
+        self.assertEqual(angle.Name, "Roof pitch")
+        self.assertEqual(len([a for a in first.group.IsGroupedBy[0].RelatedObjects
+                              if a.ObjectType != "DRAWING"]), 2)
+        self.assertNotIn(angle, other.group.IsGroupedBy[0].RelatedObjects)
+        self.assertEqual(ifcopenshell.util.element.get_pset(first.element, "EPset_Drawing", "AngleDecimalPlaces"), 0)
+        pset = ifcopenshell.util.element.get_pset(first.element, "EPset_Drawing")
+        ifcopenshell.api.pset.edit_pset(house.model, pset=house.model.by_id(pset["id"]),
+                                       properties={"AngleDecimalPlaces": 1})
+        first.add_angle((0, 0), (1, 0), (1, 1))
+        self.assertEqual(ifcopenshell.util.element.get_pset(first.element, "EPset_Drawing", "AngleDecimalPlaces"), 1)
+        self.assertTrue(ifcopenshell.util.element.get_pset(first.element, "EPset_Drawing", "HasAnnotation"))
+
+    def test_whole_degree_labels_drop_float_suffix_only_for_angles(self):
+        svg = '''<svg xmlns="http://www.w3.org/2000/svg">
+<text class="ANGLE" x="1" y="2">36.0°</text>
+<text class="fine ANGLE">15.0°</text>
+<text><tspan class='ANGLE'>90.0°</tspan></text>
+<text class="DIMENSION">36.0</text>
+<text class="NOTE">36.0°</text>
+<text class="NOT-ANGLE">15.0°</text>
+<text class="ANGLE">15.5°</text>
+</svg>'''
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "angles.svg"
+            path.write_text(svg, encoding="utf-8")
+            _postprocess_angle_labels(path, {"AngleDecimalPlaces": 0})
+            expected = svg.replace('>36.0°</text>', '>36°</text>', 1)
+            expected = expected.replace('>15.0°</text>', '>15°</text>', 1)
+            expected = expected.replace('>90.0°</tspan>', '>90°</tspan>')
+            self.assertEqual(path.read_text(encoding="utf-8"), expected)
+            _postprocess_angle_labels(path, {"AngleDecimalPlaces": 0})
+            self.assertEqual(path.read_text(encoding="utf-8"), expected)
+            ET.fromstring(expected)
+
+    def test_angle_labels_preserve_explicit_decimal_precision_and_unspecified_settings(self):
+        svg = '<svg><text class="ANGLE">36.0°</text></svg>'
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "angles.svg"
+            path.write_text(svg, encoding="utf-8")
+            for properties in ({}, {"AngleDecimalPlaces": 1}, {"AngleDecimalPlaces": 2}):
+                with self.subTest(properties=properties):
+                    _postprocess_angle_labels(path, properties)
+                    self.assertEqual(path.read_text(encoding="utf-8"), svg)
+
+    def test_invalid_angles_leave_no_partial_annotations(self):
+        house = House("Angles")
+        drawing = house.add_drawing("View", 0, 0, 2, 4)
+        arguments = dict(vertex=(0, 0), start=(1, 0), end=(1, 1))
+        before = len(house.model.by_type("IfcAnnotation"))
+        invalid = (
+            ({"start": (0, 0)}, ValueError), ({"end": (0, 0)}, ValueError),
+            ({"end": (2, 0)}, ValueError), ({"end": (-1, 0)}, ValueError),
+            ({"vertex": (0, 0, 0)}, TypeError), ({"start": (float("nan"), 0)}, ValueError),
+            ({"radius": 0}, ValueError), ({"radius": -1}, ValueError),
+            ({"radius": True}, TypeError), ({"radius": "not-a-number"}, TypeError),
+            ({"name": ""}, ValueError),
+        )
+        for overrides, error in invalid:
+            with self.subTest(overrides=overrides), self.assertRaises(error):
+                drawing.add_angle(**(arguments | overrides))
+        self.assertEqual(len(house.model.by_type("IfcAnnotation")), before)
+        diagonal = house.add_drawing("Diagonal", 0, 0, 2, 4, view="elevation", direction=(1, 1, 0))
+        with self.assertRaisesRegex(ValueError, "axis-aligned"):
+            diagonal.add_angle(**arguments)
 
 
 class HouseTests(unittest.TestCase):
@@ -7205,6 +7341,52 @@ class HouseTests(unittest.TestCase):
                 [("Hlavní krokve", (first, second), 0)]
             )
 
+    def test_timber_schedule_limits_elevation_styles_without_filtering_table_counts(self):
+        house = House("Timber styles")
+        ground = house.storey("Ground", elevation=0)
+        members = [ground.beam(f"Rafter {x}", start=(x, 0, 2), end=(x, 3, 2),
+                               size=(0.08, 0.2)) for x in (0, 1, 2)]
+        rows = [("Krokve", members, 0.1,
+                 {"color": "#ffaa00", "pattern": "diagonal1", "material": "C22"})]
+        section = house.add_drawing("Section", 0, 0, 2, 5, view="elevation",
+                                    direction=(1, 0, 0), right_panel_width=65)
+        section.add_timber_schedule(rows, styled_members=[members[1], members[1]], layout_scale=0.5)
+        properties = ifcopenshell.util.element.get_pset(section.element, "EPset_Drawing")
+        table = json.loads(properties["RightPanelTables"])[0]
+        self.assertEqual(table["styled_member_guids"], [members[1].GlobalId])
+        self.assertEqual(table["items"][0]["count"], 3)
+        self.assertEqual(table["items"][0]["length"], 3100)
+        self.assertEqual(table["items"][0]["pattern"], "diagonal1")
+        self.assertEqual(properties["Metadata"], "GlobalId")
+        self.assertEqual(properties["UnstyledTimberColor"], "#ffffff")
+        self.assertEqual(_timber_schedule_member_styles(properties),
+                         {members[1].GlobalId: {"color": "#ffaa00", "pattern": "diagonal1"}})
+        no_fills = house.add_drawing("No fills", 0, 0, 2, 5, view="elevation",
+                                     direction=(1, 0, 0), right_panel_width=65)
+        no_fills.add_timber_schedule(rows, styled_members=[])
+        self.assertEqual(_timber_schedule_member_styles(
+            ifcopenshell.util.element.get_pset(no_fills.element, "EPset_Drawing")), {})
+        plan = house.add_drawing("Plan", 0, 0, 10, 5, right_panel_width=65)
+        plan.add_timber_schedule(rows)
+        self.assertEqual(set(_timber_schedule_member_styles(
+            ifcopenshell.util.element.get_pset(plan.element, "EPset_Drawing"))),
+            {b.GlobalId for b in members})
+
+    def test_timber_schedule_validates_styled_members_before_adding_table(self):
+        house = House("Timber styles")
+        beam = house.storey("Ground", elevation=0).beam(
+            "Beam", start=(0, 0, 1), end=(0, 3, 1), size=(0.08, 0.2))
+        foreign = House("Foreign").storey("Ground", elevation=0).beam(
+            "Foreign", start=(0, 0, 1), end=(0, 3, 1), size=(0.08, 0.2))
+        drawing = house.add_drawing("Section", 0, 0, 2, 5, view="elevation",
+                                   direction=(1, 0, 0), right_panel_width=65)
+        for selection, error in (("guid", TypeError), (True, TypeError),
+                                 ([object()], TypeError), ([foreign], ValueError)):
+            with self.subTest(selection=selection), self.assertRaises(error):
+                drawing.add_timber_schedule([("Beams", [beam], 0)], styled_members=selection)
+        self.assertEqual(json.loads(ifcopenshell.util.element.get_pset(
+            drawing.element, "EPset_Drawing", "RightPanelTables")), [])
+
     def test_timber_schedule_accepts_material_without_visual_style(self) -> None:
         house = House("Material labels")
         roof = house.storey("Roof", elevation=0)
@@ -9402,6 +9584,44 @@ class HouseTests(unittest.TestCase):
                 'style="font-size:1.6px">Hlavní', svg
             )
 
+    def test_timber_legend_keeps_all_hatches_when_diagram_styles_are_filtered(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "section.svg"
+            path.write_text('''<svg width="120mm" height="120mm" viewBox="0 0 120 120"><defs>
+<pattern id="brick" width="10" height="10"><rect fill="#fff"/><path d="M0,0 L10,10"/></pattern>
+</defs><g class="section target-view-ELEVATIONVIEW"/></svg>''')
+            table = {
+                "kind": "timber_schedule", "title": "SPECIFIKACE PRVKŮ KROVU",
+                "styled_member_guids": ["selected"],
+                "items": [
+                    {"mark": "A", "name": "Selected", "width": 80, "height": 200,
+                     "length": 4000, "count": 2, "pattern": "brick", "color": "#ff8800",
+                     "member_guids": ["selected"]},
+                    {"mark": "B", "name": "Unselected", "width": 80, "height": 200,
+                     "length": 4000, "count": 10, "pattern": "brick", "color": "#ff0000",
+                     "member_guids": ["other"]},
+                ],
+            }
+            props = {"RightPanelWidth": 65, "RightPanelTables": json.dumps([table])}
+            styles = _timber_schedule_member_styles(props)
+            self.assertEqual(set(styles), {"selected"})
+            _postprocess_projected_wood_surface_styles(
+                path, color="#ffffff", styles=styles, view="elevation", include_cuts=True)
+            _postprocess_right_panel(path, props)
+            svg = path.read_text()
+            self.assertIn('fill="#ff8800"', svg)
+            self.assertIn('fill="#ff0000"', svg)
+            self.assertNotIn(".GlobalId-other {", svg)
+            tree = ET.fromstring(svg)
+            ids = {e.attrib.get("id") for e in tree.iter()}
+            for element in tree.iter():
+                style = element.attrib.get("style", "")
+                if "fill:url(#" in style:
+                    pattern = style.split("fill:url(#", 1)[1].split(")", 1)[0]
+                    self.assertIn(pattern, ids)
+            _postprocess_right_panel(path, props)
+            self.assertEqual(path.read_text(), svg)
+
     def test_appends_timber_schedule_to_right_panel(self) -> None:
         with TemporaryDirectory() as directory:
             svg_path = Path(directory) / "drawing.svg"
@@ -10042,6 +10262,7 @@ class HouseTests(unittest.TestCase):
     def test_renders_a_persisted_drawing_by_global_id(self) -> None:
         house = House("My house")
         drawing = house.add_drawing("Ground plan", 2, 3, 1.6, 5)
+        drawing.add_angle((0, 0), (1, 0), (1, 1))
 
         with self.assertRaisesRegex(RuntimeError, "write the house"):
             drawing.render("ground-plan.svg")
@@ -10057,8 +10278,11 @@ class HouseTests(unittest.TestCase):
                 commands.append(command)
                 if "--output" in command:
                     output_index = command.index("--output") + 1
-                    Path(command[output_index]).write_text("<svg/>", encoding="utf-8")
+                    Path(command[output_index]).write_text(
+                        '<svg><text class="ANGLE">45.0°</text></svg>', encoding="utf-8"
+                    )
                 else:
+                    self.assertIn('>45°</text>', output.read_text(encoding="utf-8"))
                     png_argument = next(
                         argument
                         for argument in command
@@ -10074,6 +10298,7 @@ class HouseTests(unittest.TestCase):
                 result = drawing.render(output, png=True, png_dpi=600)
 
             self.assertEqual(result, output)
+            self.assertIn('>45°</text>', output.read_text(encoding="utf-8"))
             self.assertEqual(len(commands), 2)
             blender_command = commands[0]
             self.assertTrue(
@@ -10679,6 +10904,35 @@ class HouseTests(unittest.TestCase):
             self.assertNotIn("projected-wood-fill", output)
             self.assertNotIn("projected-wood-order", output)
             _postprocess_projected_wood_surface_styles(path, color="#f4d35e", styles=styles)
+            self.assertEqual(path.read_text(), output)
+
+    def test_styles_selected_native_elevation_surfaces_and_cuts_without_new_geometry(self):
+        svg = '''<svg xmlns="http://www.w3.org/2000/svg"><defs>
+<pattern id="brick" width="10" height="10"><rect fill="#fff"/><path d="M0,0 L10,10"/></pattern>
+</defs><g class="section target-view-ELEVATIONVIEW">
+<path class="IfcBeam material-Wood GlobalId-selected surface" d="M0,0 L10,0 L10,10 L0,10 Z"/>
+<g class="IfcBeam material-Wood GlobalId-cutguid cut"><path d="M0,12 L2,12 L2,14 L0,14 Z"/></g>
+<path class="IfcBeam material-Wood GlobalId-other surface" d="M20,0 L25,0 L25,5 Z"/>
+</g></svg>'''
+        styles = {"selected": {"color": "#ffee00", "pattern": "brick"},
+                  "cut_guid": {"color": "#ff8800", "pattern": "brick"}}
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "section.svg"
+            path.write_text(svg)
+            _postprocess_projected_wood_surface_styles(
+                path, color="#ffffff", styles=styles, view="elevation", include_cuts=True)
+            output = path.read_text()
+            self.assertIn(".target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface { fill: #ffffff", output)
+            self.assertIn(".target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut { fill: #ffffff", output)
+            self.assertIn(".surface.GlobalId-selected { fill: url(#", output)
+            self.assertIn(".cut.GlobalId-cutguid { fill: url(#", output)
+            self.assertNotIn(".GlobalId-other {", output)
+            self.assertNotIn("PLANVIEW", output)
+            self.assertNotIn("<polygon", output)
+            for data in ("M0,0 L10,0 L10,10 L0,10 Z", "M0,12 L2,12 L2,14 L0,14 Z", "M20,0 L25,0 L25,5 Z"):
+                self.assertIn(f'd="{data}"', output)
+            _postprocess_projected_wood_surface_styles(
+                path, color="#ffffff", styles=styles, view="elevation", include_cuts=True)
             self.assertEqual(path.read_text(), output)
 
     def test_fills_open_projected_wood_edges_in_plan(self) -> None:

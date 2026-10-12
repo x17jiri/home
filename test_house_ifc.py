@@ -11,9 +11,12 @@ from unittest.mock import Mock, patch
 
 import ifcopenshell.geom
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
+import ifcopenshell.util.representation
+import ifcopenshell.util.selector
 import numpy as np
 
-from ifc_utils import CutDefinition, Drawing, House, _remove_3d_only_elements
+from ifc_utils import CutDefinition, Drawing, House, _remove_3d_only_elements, _timber_schedule_member_styles
 from materials import resolve_timber_grade
 
 
@@ -39,10 +42,12 @@ class CutDrawingTests(unittest.TestCase):
         for drawing in drawings[:3]:
             annotations = drawing.group.IsGroupedBy[0].RelatedObjects
             markers = [a for a in annotations if ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol")]
-            self.assertEqual(len(markers), 2)
+            expected_cuts = (*cuts, *self.values["roof_elevation_cuts"].values()) \
+                if drawing.name == "Roof plan" else cuts
+            self.assertEqual(len(markers), len(expected_cuts))
             definitions = {ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol", "Identifier"):
                            ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol") for a in markers}
-            for cut in cuts:
+            for cut in expected_cuts:
                 properties = definitions[cut.identifier]
                 self.assertEqual(json.loads(properties["Start"]), list(cut.start))
                 self.assertEqual(json.loads(properties["End"]), list(cut.end))
@@ -56,6 +61,25 @@ class CutDrawingTests(unittest.TestCase):
         self.assertEqual(drawing.direction, cut.view_direction)
         self.assertEqual((drawing.y, drawing.z, drawing.radius), (4, 3.5, 8))
         self.assertEqual(drawing.direction, (1, 0, 0))
+
+    def test_aa_roof_angle_dimensions_measure_model_pitches_and_are_drawing_scoped(self):
+        values = self.values
+        drawing = next(d for d in values["house"]._drawings if d.name == "aa")
+        other = next(d for d in values["house"]._drawings if d.name == "bb")
+        annotations = drawing.group.IsGroupedBy[0].RelatedObjects
+        angles = {a.Name: a for a in annotations
+                  if ifcopenshell.util.element.get_pset(a, "BBIM_AngleDimension")}
+        expected = {"AA main roof angle": values["street_roof_angle"],
+                    "AA dormer roof angle": values["dormer_roof_angle"]}
+        self.assertEqual(set(angles), set(expected))
+        self.assertEqual(ifcopenshell.util.element.get_pset(
+            drawing.element, "EPset_Drawing", "AngleDecimalPlaces"), 0)
+        for name, pitch in expected.items():
+            angle = angles[name]
+            self.assertEqual(angle.ObjectType, "ANGLE")
+            properties = ifcopenshell.util.element.get_pset(angle, "BBIM_AngleDimension")
+            self.assertAlmostEqual(properties["AngleDegrees"], pitch)
+            self.assertNotIn(angle, other.group.IsGroupedBy[0].RelatedObjects)
 
     def test_bb_camera_runs_through_ridge_perpendicular_to_aa(self):
         cut = self.values["bb_cut"]
@@ -149,6 +173,264 @@ class CutDrawingTests(unittest.TestCase):
             self.assertTrue(end <= bottom or start >= top)
 
 
+class RoofElevationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source), "roof", "roof_xx", "roof_yy", "roof_zz"]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("drawing.svg")) as render,
+            redirect_stdout(StringIO()),
+        ):
+            cls.values = runpy.run_path(str(source))
+            cls.rendered = [call.args[0] for call in render.call_args_list]
+
+    def test_camera_is_before_selected_rafter_parallel_to_aa_and_mirrors_once(self):
+        values = self.values
+        drawing = values["roof_xx"]
+        self.assertEqual(self.rendered, ["roof_xx.svg", "roof_yy.svg", "roof_zz.svg", "roof.svg"])
+        self.assertEqual(len(values["house"]._drawings), 4)
+        self.assertEqual(drawing.view, "elevation")
+        selected_x = values["rafter_x_position"](values["rafters"][1])
+        self.assertAlmostEqual(drawing.x, selected_x - 0.15)
+        self.assertEqual(drawing.y, values["HALF_DEPTH"])
+        self.assertEqual(drawing.direction, values["aa_cut"].view_direction)
+        exported = values["house"]._export_model()
+        placement = ifcopenshell.util.placement.get_local_placement(
+            exported.by_guid(drawing.element.GlobalId).ObjectPlacement)
+        np.testing.assert_allclose(placement[:3, 3], (-drawing.x, drawing.y, drawing.z))
+        np.testing.assert_allclose(-placement[:3, 2], (-1, 0, 0))
+        first_members = [b for b in values["roof_layer_storeys"]["Rafters"].element
+                         .ContainsElements[0].RelatedElements
+                         if abs(ifcopenshell.util.placement.get_local_placement(
+                             b.ObjectPlacement)[0, 3] - selected_x) < 1e-7]
+        self.assertTrue(first_members)
+
+    def test_includes_only_upper_walls_and_structural_roof_members(self):
+        values = self.values
+        drawing = values["roof_xx"]
+        pset = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+        self.assertEqual(pset["FillMode"], "SHAPELY")
+        selected = ifcopenshell.util.selector.filter_elements(values["house"].model, pset["Include"])
+        expected = set((*values["roof_outline_walls"], *values["roof_structural_beams"]))
+        for name in ("Rafters", "Collar ties"):
+            for relation in values["roof_layer_storeys"][name].element.ContainsElements:
+                expected.update(relation.RelatedElements)
+        self.assertEqual(selected, expected)
+        self.assertNotIn(values["roof_window"], selected)
+        self.assertFalse(set(values["garage"]) & selected)
+        for name in ("Wood fiberboard", "Roofing underlay", "Roof tiles",
+                     "Gypsum plasterboard", "Vapour barrier", "Tile battens", "Counter-battens"):
+            for relation in values["roof_layer_storeys"][name].element.ContainsElements:
+                self.assertFalse(set(relation.RelatedElements) & selected)
+
+    def test_shares_complete_schedule_with_roof_plan_without_automatic_plan_annotations(self):
+        values = self.values
+        drawing = values["roof_xx"]
+        pset = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+        tables = json.loads(pset["RightPanelTables"])
+        self.assertEqual(len(tables), 1)
+        self.assertEqual(tables[0]["kind"], "timber_schedule")
+        plan = next(d for d in values["house"]._drawings if d.name == "Roof plan")
+        plan_pset = ifcopenshell.util.element.get_pset(plan.element, "EPset_Drawing")
+        plan_table = next(t for t in json.loads(plan_pset["RightPanelTables"])
+                          if t["kind"] == "timber_schedule")
+        self.assertEqual(tables[0]["items"], plan_table["items"])
+        self.assertEqual(tables[0]["layout_scale"], plan_table["layout_scale"])
+        self.assertEqual(drawing.right_panel_width, plan.right_panel_width)
+        self.assertEqual(pset["Metadata"], "GlobalId")
+        self.assertFalse(drawing._automatic_door_annotations)
+        self.assertFalse(drawing._automatic_plan_annotations)
+
+    def test_styles_cut_purlins_selected_rafter_wall_plates_and_packing_blocks(self):
+        values = self.values
+        pset = ifcopenshell.util.element.get_pset(values["roof_xx"].element, "EPset_Drawing")
+        styles = _timber_schedule_member_styles(pset)
+        selected_x = values["rafter_x_position"](values["rafters"][1])
+        expected_members = set(values["rafter_assemblies"][selected_x])
+        cuts = [b for b in (*values["street_purlins"], *values["garden_purlins"])
+                if min(b.start[0], b.end[0]) <= values["roof_xx"].x <= max(b.start[0], b.end[0])]
+        self.assertEqual(len(cuts), 2)
+        expected_members.update(cuts)
+        plates = [b for b in values["roof_wall_plates"]
+                  if min(b.start[0], b.end[0]) <= selected_x <= max(b.start[0], b.end[0])]
+        expected_members.update(plates)
+        expected_members.update(values["purlin_packing_blocks"])
+        self.assertEqual(set(styles), {b.GlobalId for b in expected_members})
+        self.assertEqual(pset["UnstyledTimberColor"], "#ffffff")
+        self.assertEqual(sum((b.Name or "").startswith("Collar tie ") for b in expected_members), 2)
+        self.assertEqual(sum((b.Name or "").startswith("Purlin spacer ") for b in expected_members), 1)
+        for b in expected_members:
+            self.assertIn("color", styles[b.GlobalId])
+        for b in (*plates, *values["purlin_packing_blocks"]):
+            self.assertIn("pattern", styles[b.GlobalId])
+
+    def test_distant_wall_plates_stay_visible_but_are_not_highlighted(self):
+        values = self.values
+        for name, definition in values["roof_elevation_definitions"].items():
+            with self.subTest(drawing=name):
+                drawing = values[name]
+                pset = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+                styles = _timber_schedule_member_styles(pset)
+                included = ifcopenshell.util.selector.filter_elements(values["house"].model, pset["Include"])
+                rafter_x = values["rafter_x_position"](values["rafters"][definition["rafter_index"]])
+                for plate in values["roof_wall_plates"]:
+                    self.assertIn(plate, included)
+                    at_rafter = min(plate.start[0], plate.end[0]) <= rafter_x <= max(plate.start[0], plate.end[0])
+                    self.assertEqual(plate.GlobalId in styles, at_rafter)
+        xx_styles = _timber_schedule_member_styles(ifcopenshell.util.element.get_pset(
+            values["roof_xx"].element, "EPset_Drawing"))
+        self.assertNotIn(values["beam3"].GlobalId, xx_styles)
+        self.assertIn(values["beam_cut_street"].GlobalId, xx_styles)
+
+    def test_wall_plate_and_packing_styles_are_shared_with_plan_even_when_not_cut(self):
+        values = self.values
+        section = values["roof_xx"]
+        plan = next(d for d in values["house"]._drawings if d.name == "Roof plan")
+        section_styles = _timber_schedule_member_styles(
+            ifcopenshell.util.element.get_pset(section.element, "EPset_Drawing"))
+        plan_styles = _timber_schedule_member_styles(
+            ifcopenshell.util.element.get_pset(plan.element, "EPset_Drawing"))
+        projected_only = []
+        for b in (*values["roof_wall_plates"], *values["purlin_packing_blocks"]):
+            if b.GlobalId not in section_styles:
+                continue
+            self.assertEqual(section_styles[b.GlobalId], plan_styles[b.GlobalId])
+            if not min(b.start[0], b.end[0]) <= section.x <= max(b.start[0], b.end[0]):
+                projected_only.append(b)
+        self.assertTrue(projected_only)
+
+    def test_rafter_assemblies_include_offset_ties_and_paired_dormer_members(self):
+        values = self.values
+        assemblies = values["rafter_assemblies"]
+        self.assertEqual(set(assemblies), set(values["main_rafter_positions"]))
+        owner_ids = [b.GlobalId for members in assemblies.values() for b in members]
+        self.assertEqual(len(owner_ids), len(set(owner_ids)))
+        for x, offset in values["paired_rafter_dormer_offsets"].items():
+            members = assemblies[x]
+            dormer = [b for b in values["dormer_roof_rafters"] if b.local_start[0] == x + offset]
+            self.assertTrue(dormer)
+            self.assertTrue(set(dormer) <= set(members))
+            self.assertTrue(any((b.Name or "").startswith("Collar tie ") for b in members))
+            self.assertTrue(any((b.Name or "").startswith("Purlin spacer ") for b in members))
+
+    def test_rafter_x_lookup_accepts_every_layout_entry_type(self):
+        values = self.values
+        get_x = values["rafter_x_position"]
+        for entry in (1.2, (1.2, "before"), values["SplitRafter"](1.2, 7),
+                      values["StrongerRafter"](1.2)):
+            self.assertEqual(get_x(entry), 1.2)
+
+    def test_roof_plan_cut_symbols_match_xx_yy_zz_cameras_and_mirroring(self):
+        values = self.values
+        plan = next(d for d in values["house"]._drawings if d.name == "Roof plan")
+        markers = {
+            ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol", "Identifier"): a
+            for a in plan.group.IsGroupedBy[0].RelatedObjects
+            if ifcopenshell.util.element.get_pset(a, "BBIM_CutSymbol")
+        }
+        self.assertEqual(set(markers), {"A", "B", "X", "Y", "Z"})
+        exported = values["house"]._export_model()
+        for name, cut in values["roof_elevation_cuts"].items():
+            drawing = values[name]
+            properties = ifcopenshell.util.element.get_pset(markers[cut.identifier], "BBIM_CutSymbol")
+            self.assertEqual(json.loads(properties["Start"]), list(cut.start))
+            self.assertEqual(json.loads(properties["End"]), list(cut.end))
+            self.assertEqual(properties["Direction"], cut.direction)
+            self.assertEqual((drawing.x, drawing.y), cut.center)
+            self.assertEqual(drawing.direction, cut.view_direction)
+            self.assertEqual(drawing.direction, (1, 0, 0))
+            curve = markers[cut.identifier].Representation.Representations[0].Items[0].Elements[0]
+            mirrored_marker = exported.by_guid(markers[cut.identifier].GlobalId)
+            mirrored_placement = ifcopenshell.util.placement.get_local_placement(mirrored_marker.ObjectPlacement)
+            camera = ifcopenshell.util.placement.get_local_placement(
+                exported.by_guid(drawing.element.GlobalId).ObjectPlacement)
+            resolved = ifcopenshell.util.representation.resolve_items(
+                mirrored_marker.Representation.Representations[0])
+            world_points = [mirrored_placement @ item["matrix"] @ np.array((*p, 0, 1))
+                            for item in resolved for line in item["item"].Elements
+                            for p in line.Points.CoordList]
+            for point in world_points:
+                self.assertAlmostEqual(point[0], camera[0, 3])
+            self.assertEqual(len(curve.Points.CoordList), 2)
+
+
+class RoofElevationHelperTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source)]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            redirect_stdout(StringIO()),
+        ):
+            cls.values = runpy.run_path(str(source))
+
+    def test_creates_independent_sections_for_main_and_dormer_assemblies(self):
+        values = self.values
+        helper = values["add_roof_elevation"]
+        with patch.object(Drawing, "render") as render:
+            first = helper("Helper main", rafter_index=1, offset=0.15)
+            first_pset = ifcopenshell.util.element.get_pset(first.element, "EPset_Drawing")
+            first_table = json.loads(first_pset["RightPanelTables"])[0]
+            first_styles = _timber_schedule_member_styles(first_pset)
+            other = helper("Helper dormer", rafter_index=5, offset=0.2, radius=5)
+            other_pset = ifcopenshell.util.element.get_pset(other.element, "EPset_Drawing")
+            other_table = json.loads(other_pset["RightPanelTables"])[0]
+            other_styles = _timber_schedule_member_styles(other_pset)
+            render.assert_not_called()
+        self.assertIsInstance(first, Drawing)
+        self.assertIsInstance(other, Drawing)
+        self.assertAlmostEqual(first.x, values["rafter_x_position"](values["rafters"][1]) - 0.15)
+        other_x = values["rafter_x_position"](values["rafters"][5])
+        self.assertAlmostEqual(other.x, other_x - 0.2)
+        self.assertEqual(other.radius, 5)
+        self.assertNotEqual(first.element.GlobalId, other.element.GlobalId)
+        self.assertEqual(first_table["items"], other_table["items"])
+        self.assertNotEqual(first_table["styled_member_guids"], other_table["styled_member_guids"])
+        self.assertTrue({b.GlobalId for b in values["rafter_assemblies"][other_x]}
+                        <= set(other_styles))
+        self.assertNotEqual(set(first_styles), set(other_styles))
+        self.assertEqual(ifcopenshell.util.element.get_pset(first.element, "EPset_Drawing"), first_pset)
+
+    def test_zero_and_negative_offsets_and_wrapped_rafter_entries(self):
+        values = self.values
+        helper = values["add_roof_elevation"]
+        x = values["rafter_x_position"](values["rafters"][1])
+        for index, (entry, offset) in enumerate((
+            (values["StrongerRafter"](x), 0),
+            (values["SplitRafter"](x, 7), -0.05),
+            ((x, "before"), 0.25),
+        )):
+            with patch.dict(helper.__globals__, {"rafters": [entry]}):
+                drawing = helper(f"Helper wrapped {index}", rafter_index=0, offset=offset)
+            self.assertAlmostEqual(drawing.x, x - offset)
+
+    def test_invalid_arguments_create_no_partial_drawing(self):
+        values = self.values
+        helper = values["add_roof_elevation"]
+        house = values["house"]
+        before = len(house._drawings)
+        annotation_count = len(house.model.by_type("IfcAnnotation"))
+        invalid = (
+            ({"rafter_index": True}, TypeError),
+            ({"rafter_index": 1.0}, TypeError),
+            ({"rafter_index": -1}, ValueError),
+            ({"rafter_index": len(values["rafters"])}, ValueError),
+            ({"offset": "0.15"}, TypeError),
+            ({"offset": True}, TypeError),
+            ({"offset": float("nan")}, ValueError),
+            ({"offset": float("inf")}, ValueError),
+            ({"radius": 0}, ValueError),
+        )
+        for options, error in invalid:
+            with self.subTest(options=options), self.assertRaises(error):
+                helper("Invalid section", **({"rafter_index": 1} | options))
+        self.assertEqual(len(house._drawings), before)
+        self.assertEqual(len(house.model.by_type("IfcAnnotation")), annotation_count)
+
+
 class RoofFramingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -172,12 +454,6 @@ class RoofFramingTests(unittest.TestCase):
         self.assertLess(roof_max[1], 0)  # Initial placement is in front of the house.
         self.assertAlmostEqual(roof_max[2] - roof_min[2], values["GARAGE_ROOF_THICKNESS"])
         post_size = values["GARAGE_POST_SIZE"]
-        expected_corners = {
-            (roof_min[0], roof_min[1]),
-            (roof_max[0] - post_size, roof_min[1]),
-            (roof_max[0] - post_size, roof_max[1] - post_size),
-            (roof_min[0], roof_max[1] - post_size),
-        }
         actual_corners = []
         for post in posts:
             vertices = self.finished_vertices(post)
@@ -185,7 +461,17 @@ class RoofFramingTests(unittest.TestCase):
             np.testing.assert_allclose(upper[:2] - lower[:2], (post_size, post_size))
             self.assertAlmostEqual(lower[2], 0)
             self.assertAlmostEqual(upper[2], roof_min[2])
+            self.assertTrue(np.all(lower[:2] >= roof_min[:2] - 1e-8))
+            self.assertTrue(np.all(upper[:2] <= roof_max[:2] + 1e-8))
             actual_corners.append(tuple(lower[:2]))
+        # Posts may be inset below a roof overhang; check their own rectangle.
+        corner_min = np.min(actual_corners, axis=0)
+        corner_max = np.max(actual_corners, axis=0)
+        expected_corners = {
+            (corner_min[0], corner_min[1]), (corner_max[0], corner_min[1]),
+            (corner_max[0], corner_max[1]), (corner_min[0], corner_max[1]),
+        }
+        self.assertEqual(len(expected_corners), 4)
         for corner in expected_corners:
             self.assertTrue(any(np.allclose(corner, actual) for actual in actual_corners))
         for part in parts:
@@ -400,7 +686,8 @@ class RoofFramingTests(unittest.TestCase):
             grade = resolve_timber_grade(settings["material"])
             self.assertEqual(settings["material"], grade.name)
             if is_purlin:
-                self.assertEqual(grade.name, "GL24c", name)
+                expected_grade = "GL28h" if "střední" in name else "GL24c"
+                self.assertEqual(grade.name, expected_grade, name)
         # drawing1 is replaced by the subsequent AA drawing; inspect persisted
         # plan tables directly on the model's roof drawing instead.
         tables = []
@@ -411,7 +698,8 @@ class RoofFramingTests(unittest.TestCase):
         items = [item for table in tables if table["kind"] == "timber_schedule"
                  for item in table["items"]]
         self.assertEqual(len(items), len(values["timber_schedule_rows"]))
-        self.assertEqual(sum(item["material"] == "GL24c" for item in items), 3)
+        self.assertEqual(sum(item["material"] == "GL24c" for item in items), 2)
+        self.assertEqual(sum(item["material"] == "GL28h" for item in items), 1)
         expected = {name: settings["material"] for name, _, _, settings in values["timber_schedule_rows"]}
         self.assertEqual({item["name"]: item["material"] for item in items}, expected)
 

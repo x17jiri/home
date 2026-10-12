@@ -195,6 +195,12 @@ def generate_plan(args: argparse.Namespace) -> Path:
     camera.data.clip_start = 0.002
     camera.data.clip_end = max(10.0, abs(args.z) + 10.0)
 
+    # Angle annotations require the active drawing metadata even when no UI
+    # panel has populated Bonsai's drawing cache during this automated run.
+    from bonsai.bim.module.drawing.data import DrawingsData
+
+    DrawingsData.load()
+
     # Bonsai treats these properties as authoritative and synchronises the
     # native Blender ortho_scale and raster dimensions from them.
     camera_props = tool.Drawing.get_camera_props(camera.data)
