@@ -2740,8 +2740,9 @@ def _material_legend_svg(
     units_per_mm: float,
     layout_scale: float | None = None,
 ) -> tuple[str, float]:
-    """Return one material-legend SVG table and its height in SVG units."""
-    title = str(table.get("title", "MATERIAL LEGEND"))
+    """Return an appearance legend (material fills or line styles) and height."""
+    is_line_legend = table.get("kind") == "line_legend"
+    title = str(table.get("title", "LINE LEGEND" if is_line_legend else "MATERIAL LEGEND"))
     supplied_items = table.get("items", [])
     items = supplied_items if isinstance(supplied_items, list) else []
     width_mm = width / units_per_mm
@@ -2759,7 +2760,7 @@ def _material_legend_svg(
     for supplied_item in items:
         if not isinstance(supplied_item, dict):
             continue
-        pattern = str(supplied_item.get("pattern", ""))
+        pattern = str(supplied_item.get("classes" if is_line_legend else "pattern", ""))
         description = str(supplied_item.get("description", ""))
         lines = description.splitlines() or [""]
         row_height_mm = max(
@@ -2778,7 +2779,7 @@ def _material_legend_svg(
     right = x + width
     header_bottom = y + header_height
     parts = [
-        '<g class="right-panel-table material-legend">',
+        f'<g class="right-panel-table {"line-legend" if is_line_legend else "material-legend"}">',
         (
             f'<rect class="right-panel-table-outline" x="{x:.6g}" '
             f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
@@ -2807,18 +2808,27 @@ def _material_legend_svg(
     row_y = header_bottom
     available_patterns = _drawing_pattern_ids()
     for (pattern, lines, _), row_height in zip(normalised_items, row_heights):
-        is_batting = pattern in {"rockwool-wave", "pavatex-wave"}
+        is_batting = not is_line_legend and pattern in {"rockwool-wave", "pavatex-wave"}
         is_pavatex = pattern == "pavatex-wave"
         fill = (
             f"url(#{pattern})"
             if pattern in available_patterns and not is_batting
             else "#c9b56d" if is_pavatex else "white"
         )
-        parts.append(
-            f'<rect class="material-legend-swatch" x="{x:.6g}" '
-            f'y="{row_y:.6g}" width="{swatch_width:.6g}" '
-            f'height="{row_height:.6g}" fill="{fill}"/>'
-        )
+        if is_line_legend:
+            # Reuse the source annotation's exact CSS classes, so sample
+            # thickness/dashes follow the drawing stylesheet automatically.
+            parts.append(
+                f'<line class="line-legend-sample {escape(pattern, quote=True)}" '
+                f'x1="{x + padding:.6g}" x2="{x + swatch_width - padding:.6g}" '
+                f'y1="{row_y + row_height / 2:.6g}" y2="{row_y + row_height / 2:.6g}"/>'
+            )
+        else:
+            parts.append(
+                f'<rect class="material-legend-swatch" x="{x:.6g}" '
+                f'y="{row_y:.6g}" width="{swatch_width:.6g}" '
+                f'height="{row_height:.6g}" fill="{fill}"/>'
+            )
         if is_batting:
             batting_height = row_height * (0.70 if is_pavatex else 0.82)
             batting_scale = batting_height / 1.825
@@ -3808,6 +3818,7 @@ def _postprocess_right_panel(
             continue
         table_renderer = {
             "material_legend": _material_legend_svg,
+            "line_legend": _material_legend_svg,
             "room_legend": _room_legend_svg,
             "lintel_legend": _lintel_legend_svg,
             "notes": _notes_svg,
@@ -8914,6 +8925,58 @@ class Drawing:
                     ensure_ascii=False,
                 )
             },
+        )
+        return self
+
+    def add_line_legend(
+        self,
+        items: Sequence[tuple[ifcopenshell.entity_instance, str]],
+        *,
+        title: str = "LEGENDA ČAR",
+    ) -> Drawing:
+        """Add line samples and descriptions to the right-side panel.
+
+        Each item is (linework_annotation, description), e.g. the annotation
+        returned by add_wall_outlines(). Samples reuse the annotation's CSS
+        classes, including its dash style and thickness. All annotations must
+        belong to this drawing. Tables stack in call order and persist in IFC.
+        """
+        if self.right_panel_width < 40:
+            raise ValueError("add_line_legend requires right_panel_width of at least 40 mm")
+        title = _name(title, "title")
+        if isinstance(items, (str, bytes)):
+            raise TypeError("items must be a sequence of annotation-description pairs")
+        try:
+            supplied_items = list(items)
+        except TypeError as error:
+            raise TypeError("items must be a sequence of annotation-description pairs") from error
+        if not supplied_items:
+            raise ValueError("items must contain at least one line")
+        drawing_members = set(self.group.IsGroupedBy[0].RelatedObjects)
+        normalised_items = []
+        for index, item in enumerate(supplied_items, start=1):
+            if isinstance(item, (str, bytes)):
+                raise TypeError(f"item {index} must contain an annotation and description")
+            try:
+                annotation, description = item
+            except (TypeError, ValueError) as error:
+                raise TypeError(f"item {index} must contain an annotation and description") from error
+            if not isinstance(annotation, ifcopenshell.entity_instance) or not annotation.is_a("IfcAnnotation"):
+                raise TypeError(f"item {index} annotation must be an IfcAnnotation")
+            if annotation.file is not self.house.model or annotation not in drawing_members:
+                raise ValueError(f"item {index} annotation must belong to this drawing")
+            if annotation.ObjectType != "LINEWORK":
+                raise ValueError(f"item {index} annotation must be LINEWORK")
+            description = _name(description, f"item {index} description")
+            classes = ifcopenshell.util.element.get_pset(annotation, "EPset_Annotation", "Classes") or ""
+            normalised_items.append({
+                "classes": f"IfcAnnotation PredefinedType-LINEWORK {classes}".strip(),
+                "description": description,
+            })
+        self._right_panel_tables.append({"kind": "line_legend", "title": title, "items": normalised_items})
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model, pset=self._drawing_pset,
+            properties={"RightPanelTables": json.dumps(self._right_panel_tables, ensure_ascii=False)},
         )
         return self
 

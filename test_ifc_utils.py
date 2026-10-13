@@ -584,6 +584,71 @@ class DrawingTitleTests(unittest.TestCase):
                 _drawing_pdf_sheet(path.read_text(encoding="utf-8"), width=297, height=210, margin=10)
 
 
+class LineLegendTests(unittest.TestCase):
+    def setUp(self):
+        self.house = House("Lines")
+        floor = self.house.storey("Floor", elevation=0)
+        wall = floor.wall((0, 0), (4, 0), thickness=0.24, height=2.8)
+        self.wall = wall
+        self.drawing = self.house.add_drawing("Foundation", 2, 0, -1, 4, right_panel_width=40)
+        self.outline = self.drawing.add_wall_outlines([wall], style="dashed")
+
+    def test_line_legend_persists_source_styles_without_adding_geometry(self):
+        count = len(self.house.model.by_type("IfcAnnotation"))
+        result = self.drawing.add_line_legend([(self.outline, "Obrys nosných stěn")])
+        self.assertIs(result, self.drawing)
+        self.assertEqual(len(self.house.model.by_type("IfcAnnotation")), count)
+        exported = self.house._export_model()
+        pset = ifcopenshell.util.element.get_pset(exported.by_guid(self.drawing.element.GlobalId), "EPset_Drawing")
+        table = json.loads(pset["RightPanelTables"])[0]
+        self.assertEqual(table["kind"], "line_legend")
+        self.assertEqual(table["title"], "LEGENDA ČAR")
+        self.assertEqual(table["items"], [{
+            "classes": "IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed",
+            "description": "Obrys nosných stěn",
+        }])
+
+    def test_line_samples_share_outline_css_and_stack_with_existing_tables(self):
+        self.drawing.add_material_legend([("brick", "Zdivo")])
+        self.drawing.add_line_legend([(self.outline, "Obrys <nosných> & stěn")], title="LEGENDA ČAR")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "found.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" height="160mm" '
+                            'viewBox="0 0 160 160"><g id="geometry"/></svg>', encoding="utf-8")
+            pset = ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing")
+            _postprocess_right_panel(path, pset)
+            svg = path.read_text(encoding="utf-8")
+            _postprocess_right_panel(path, pset)
+            self.assertEqual(path.read_text(encoding="utf-8"), svg)
+            root = ET.fromstring(svg)
+            samples = [e for e in root.iter() if "line-legend-sample" in e.get("class", "").split()]
+            self.assertEqual(len(samples), 1)
+            sample = samples[0]
+            source_classes = ifcopenshell.util.element.get_pset(self.outline, "EPset_Annotation", "Classes")
+            self.assertTrue(set(source_classes.split()) <= set(sample.get("class").split()))
+            self.assertIn("PredefinedType-LINEWORK", sample.get("class").split())
+            self.assertEqual(sample.get("y1"), sample.get("y2"))
+            self.assertGreater(float(sample.get("x2")) - float(sample.get("x1")), 3)
+            self.assertLess(svg.index("material-legend"), svg.index("line-legend"))
+            self.assertIn("Obrys &lt;nosných&gt; &amp; stěn", svg)
+            self.assertEqual(root.get("width"), "200mm")
+
+    def test_invalid_line_legends_do_not_change_existing_tables(self):
+        other = self.house.add_drawing("Other", 2, 0, -1, 4, right_panel_width=40)
+        angle = self.drawing.add_angle((0, 0), (1, 0), (1, 1))
+        other_line = other.add_wall_outlines([self.wall])
+        invalid = (([], ValueError), ("dashed", TypeError), (None, TypeError),
+                   (["dashed"], TypeError), ([(self.outline,)], TypeError),
+                   ([("dashed", "Wall")], TypeError), ([(other_line, "Wall")], ValueError),
+                   ([(angle, "Angle")], ValueError), ([(self.outline, "")], ValueError))
+        for items, error in invalid:
+            with self.subTest(items=items), self.assertRaises(error):
+                self.drawing.add_line_legend(items)
+            self.assertEqual(self.drawing._right_panel_tables, [])
+        narrow = self.house.add_drawing("Narrow", 2, 0, -1, 4, right_panel_width=30)
+        with self.assertRaisesRegex(ValueError, "40 mm"):
+            narrow.add_line_legend([(self.outline, "Wall")])
+
 class HouseTests(unittest.TestCase):
     def test_calculates_roof_u_value_with_parallel_rafter_path(self) -> None:
         result = calculate_roof_u_value(

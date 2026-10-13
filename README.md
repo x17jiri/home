@@ -883,6 +883,17 @@ drawing.add_material_legend(
 )
 ```
 
+Line legends use the actual linework annotation's style, so dash spacing and
+thickness stay consistent with the drawing:
+
+```python
+outline = drawing.add_wall_outlines(walls, style="dashed")
+drawing.add_line_legend([(outline, "Obrys nosných stěn")])
+```
+
+Like material legends, `add_line_legend()` requires a right panel at least
+40 mm wide and stacks with other tables. Its default title is `LEGENDA ČAR`.
+
 Descriptions wrap automatically and may also contain explicit newlines.
 Available pattern names are defined in `drawings/assets/patterns.svg`, including
 `diagonal1`, `diagonal2`, `crosshatch1`, `brick`, `concrete`, `sand`, and

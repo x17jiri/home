@@ -347,13 +347,14 @@ dry_wall = house.wall_type(
 	color="#dfefcf"
 )
 
+ROOM_SUBTRACT = 0.02
 HOUSE_DEPTH = 8.00
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.50 - 0.02
+KITCHEN_WIDTH = 4.50 - ROOM_SUBTRACT
 CUT_WIDTH = 1.75
-KK_WIDTH = 2.50 - 0.02
+KK_WIDTH = 2.50 - ROOM_SUBTRACT
 
-wall2_x = BWT + 3.25 - 0.02 + BWT;
+wall2_x = BWT + 3.25 - ROOM_SUBTRACT + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
 aa_cut = CutDefinition(
@@ -397,7 +398,8 @@ CHODBA_DEPTH = 2.5
 GALERY_START = BWT+2.5
 
 wall_zachod_nahore_y = BWT+1.2+1+0.1
-oblouk_at = HOUSE_DEPTH-BWT-1-2.5
+oblouk1_at = HOUSE_DEPTH-BWT-0.5-1.5
+oblouk2_at = HOUSE_DEPTH-BWT-0.5-1.5-0.625-1.5
 
 # Each number is the absolute X coordinate of a main rafter centre.
 # SplitRafter divides its garden-side rafter at an absolute Y coordinate inside
@@ -452,14 +454,14 @@ kuchyn = ground.floor_layer(
 	outline=(
 		(wall2_x, BWT+CHODBA_DEPTH+0.115),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.115),
-		(wall3_x-BWT, oblouk_at),
-		(wall3_x, oblouk_at),
+		(wall3_x-BWT, oblouk2_at),
+		(wall3_x, oblouk2_at),
 		(wall3_x, BWT+BATHROOM_DEPTH+0.115),
 		(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.115),
 		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
 		(wall3_x, HOUSE_DEPTH-BWT),
-		(wall3_x, oblouk_at+2.5),
-		(wall3_x-BWT, oblouk_at+2.5),
+		(wall3_x, oblouk1_at+1.5),
+		(wall3_x-BWT, oblouk1_at+1.5),
 		(wall3_x-BWT, HOUSE_DEPTH-BWT),
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
@@ -798,14 +800,6 @@ ground.furniture(
     color="#ffffff",
     center=(HOUSE_WIDTH-(BWT+0.4), BWT+0.4),
 )
-ground.furniture(
-    "Pračka",
-    kind="USERDEFINED",
-	start_height=GROUND_FLOOR_THICKNESS,
-    size=(0.7, 0.7, 2.0),
-    color="#ffffff",
-    center=(HOUSE_WIDTH-(BWT+0.8)-0.4, BWT+0.4),
-)
 if "aa" not in sys.argv:
 	gauc = ground.asset(
 		"Gauc", asset="3_seater_sofa",
@@ -878,12 +872,19 @@ pokoj0_door = wall_gym_g.add_door(
 )
 
 # Oblouk
-oblouk = wall_3.add_opening(
-	at=oblouk_at,
-	width=2.5,
+oblouk1 = wall_3.add_opening(
+	at=oblouk1_at,
+	width=1.5,
     height=ground_floor_height-0.5,
     sill_height=GROUND_FLOOR_THICKNESS,
-	name="Oblouk"
+	name="Oblouk1"
+)
+oblouk2 = wall_3.add_opening(
+	at=oblouk2_at,
+	width=1.5,
+    height=ground_floor_height-0.5,
+    sill_height=GROUND_FLOOR_THICKNESS,
+	name="Oblouk2"
 )
 
 # Bathroom
@@ -1588,7 +1589,15 @@ upper.furniture(
     size=(0.8, 0.4, 0.9),
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
-    center=(HOUSE_WIDTH-BWT-0.5, BWT+0.25),
+    center=(wall3_x+0.5, BWT+0.25),
+)
+upper.furniture(
+    "Pračka",
+    kind="USERDEFINED",
+	start_height=GROUND_FLOOR_THICKNESS,
+    size=(0.7, 0.7, 2.0),
+    color="#ffffff",
+    center=(HOUSE_WIDTH-(BWT+0.5)-0.4, BWT+0.4),
 )
 
 # Okna obyvak
@@ -3095,7 +3104,8 @@ if "found" in sys.argv:
 		storeys=[foundation],
 		right_panel_width=40,
 	)
-	drawing1.add_wall_outlines(foundation_walls, style="dashed")
+	wall_outline = drawing1.add_wall_outlines(foundation_walls, style="dashed")
+	drawing1.add_line_legend([(wall_outline, "Obrys nosných stěn")])
 
 	drawing1.render("found.svg", pdf=PDF_FOUND)
 
@@ -3206,7 +3216,8 @@ if "ground" in sys.argv:
 	drawing1.add_lintel(window_pokoj_dole, 5, direction="in")
 	drawing1.add_lintel(window_pokoj_dole_2, 6, direction="in")
 	drawing1.add_lintel(window_obyvak, 7, position="after", direction="in")
-	drawing1.add_lintel(oblouk, 8)
+	drawing1.add_lintel(oblouk1, 5)
+	drawing1.add_lintel(oblouk2, 5)
 	drawing1.add_lintel_legend()
 
 	drawing1.render("ground.svg", pdf=PDF_GROUND)

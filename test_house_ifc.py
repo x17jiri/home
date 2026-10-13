@@ -20,6 +20,35 @@ from ifc_utils import CutDefinition, Drawing, House, _remove_3d_only_elements, _
 from materials import resolve_timber_grade
 
 
+class FoundationDrawingTests(unittest.TestCase):
+    def test_foundation_line_legend_matches_wall_outline_and_is_drawing_scoped(self):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source), "found", "ground"]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("drawing.svg")),
+            redirect_stdout(StringIO()),
+        ):
+            values = runpy.run_path(str(source))
+        foundation, ground = values["house"]._drawings
+        tables = json.loads(ifcopenshell.util.element.get_pset(foundation.element, "EPset_Drawing", "RightPanelTables"))
+        self.assertEqual(len(tables), 1)
+        table = tables[0]
+        self.assertEqual(table["kind"], "line_legend")
+        self.assertEqual(table["title"], "LEGENDA ČAR")
+        self.assertEqual(len(table["items"]), 1)
+        item = table["items"][0]
+        self.assertEqual(item["description"], "Obrys nosných stěn")
+        outlines = [a for a in foundation.group.IsGroupedBy[0].RelatedObjects
+                    if "load-bearing-wall-outline" in (ifcopenshell.util.element.get_pset(
+                        a, "EPset_Annotation", "Classes") or "").split()]
+        self.assertEqual(len(outlines), 1)
+        classes = ifcopenshell.util.element.get_pset(outlines[0], "EPset_Annotation", "Classes")
+        self.assertEqual(item["classes"], f"IfcAnnotation PredefinedType-LINEWORK {classes}")
+        ground_tables = json.loads(ifcopenshell.util.element.get_pset(ground.element, "EPset_Drawing", "RightPanelTables"))
+        self.assertNotIn("line_legend", [t["kind"] for t in ground_tables])
+
+
 class CutDrawingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
