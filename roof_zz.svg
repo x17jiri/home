@@ -41,6 +41,18 @@ a:hover { cursor: pointer; }
 .PredefinedType-PLANLEVEL { marker-end: url(#plan-level-marker); }
 .PredefinedType-DIMENSION { marker-start: url(#dimension-marker-start); marker-end: url(#dimension-marker-end); }
 .PredefinedType-ANGLE { marker-start: url(#dimension-marker-start); marker-end: url(#dimension-marker-end); }
+.PredefinedType-ANGLE.angle-dimension {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.08;
+    marker-start: url(#angle-marker-start);
+    marker-end: url(#angle-marker-end);
+}
+.PredefinedType-LINEWORK.angle-reference {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.06;
+}
 .PredefinedType-RADIUS { marker-end: url(#fall-marker-end); }
 .PredefinedType-FALL { marker-end: url(#radius-marker-end); }
 .PredefinedType-SLOPEANGLE { marker-end: url(#radius-marker-end); }
@@ -406,6 +418,10 @@ tspan.furniture-label {
 
 text.DIMENSION,
 tspan.DIMENSION {
+    font-size: 2px !important;
+}
+text.ANGLE,
+tspan.ANGLE {
     font-size: 2px !important;
 }
 
@@ -1023,16 +1039,6 @@ tspan.door-dimension {
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
-<pattern id="brick-opposite-tint-f4a261" width="3" height="3" patternTransform="rotate(-45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
-    <rect width="3" height="3" fill="#f4a261" />
-    <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
-    <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
-</pattern>
-<pattern id="brick-opposite-tint-f4b6c2" width="3" height="3" patternTransform="rotate(-45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
-    <rect width="3" height="3" fill="#f4b6c2" />
-    <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
-    <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
-</pattern>
 <pattern id="brick-opposite-tint-f4d35e" width="3" height="3" patternTransform="rotate(-45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
     <rect width="3" height="3" fill="#f4d35e" />
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
@@ -1053,6 +1059,16 @@ tspan.door-dimension {
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
+<pattern id="brick-opposite-tint-f4a261" width="3" height="3" patternTransform="rotate(-45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
+    <rect width="3" height="3" fill="#f4a261" />
+    <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
+    <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
+</pattern>
+<pattern id="brick-opposite-tint-f4b6c2" width="3" height="3" patternTransform="rotate(-45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
+    <rect width="3" height="3" fill="#f4b6c2" />
+    <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
+    <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
+</pattern>
 <pattern id="diagonal1-tint-5ed3f4" width="1" height="1" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
     <rect width="1" height="1" fill="#5ed3f4" />
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.25" />
@@ -1066,52 +1082,52 @@ tspan.door-dimension {
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.25" />
 </pattern>
 </defs>    <g ifc:name="Elevation roof_zz" class="section target-view-ELEVATIONVIEW scale-100" ifc:plane="[[0.000000,0.000000,1.000000,-10.390000],[1.000000,0.000000,0.000000,0.000000],[0.000000,1.000000,0.000000,0.000000],[0.000000,0.000000,0.000000,1.000000]]" ifc:matrix3="[[10.000000,0.000000,20.000001],[0.000000,10.000000,113.208070],[0.000000,0.000000,1.000000]]">
-        <path d="M22.400000499320964,70.35807081806087 L22.400000499320964,83.60807051072442 L22.900000499320964,83.60807051072442 L43.90000000758265,83.60807051072442 L44.40000000758265,83.60807051072442 L44.40000000758265,55.10807114774905 L45.399999985230906,55.10807114774905 L45.399999985230906,83.60807051072442 L45.899999985230906,83.60807051072442 L97.09999881846998,83.60807051072442 L97.59999881846998,83.60807051072442 L97.59999881846998,70.35807081806087 L97.59999881846998,69.85807081806087 L97.59999881846998,69.35807081806087 L97.59999881846998,68.65807084488296 L97.59999881846998,67.86643795545928 L74.81275391641294,51.4080712304505 L71.78999939536844,51.4080712304505 L70.18999943113123,51.4080712304505 L49.809999886659725,51.4080712304505 L48.209999922422504,51.4080712304505 L45.18724540137801,51.4080712304505 L22.400000499320964,67.86643795545928 L22.400000499320964,68.65807084488296 L22.400000499320964,69.35807081806087 L22.400000499320964,69.85807081806087 Z M54.999999770654185,59.858071041578285 L64.99999954713677,59.858071041578285 L64.99999954713677,69.85807081806087 L54.999999770654185,69.85807081806087 Z" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-0sHTDf1XC0wBpswEzbcC surface"/><path d="M68.85923784000808,47.10807132656298 L72.27505232693116,47.10807132656298 L72.27505232693117,47.10807132656298 L59.99999965889549,38.24226419421011 L59.99999965889549,40.70937804373489 L59.99999965889549,40.7093780437349 Z" class="IfcBeam material-Wood GlobalId-0jtwqnqf8dgRCvTyMFBns surface"/><path d="M51.140761477782874,47.10807132656298 L47.724946990859785,47.10807132656298 L45.648139057230196,48.608071293035366 L48.209999922422504,48.608071293035366 L49.809999886659725,48.608071293035366 L70.18999943113123,48.608071293035366 L71.78999939536844,48.608071293035366 L74.35186026056076,48.608071293035366 L72.27505232693116,47.10807132656298 L68.85923784000808,47.10807132656298 Z" class="IfcBeam material-Wood GlobalId-0f7yKXAYn1KhRSKryDSnCg surface"/><path d="M47.72494699085977,47.10807132656298 L47.724946990859785,47.10807132656298 L51.140761477782874,47.10807132656298 L59.99999965889548,40.709378043734894 L59.99999965889549,40.70937804373489 L59.99999965889549,38.24226419421011 L59.99999965889548,38.2422641942101 Z" class="IfcBeam material-Wood GlobalId-0iEqVCslPDFvcUZNNoZRNk surface"/><path d="M99.54999877488409,68.65807084488296 L99.54999877488409,69.27484930726413 L99.9999987648258,69.5998673115268 L100.35749150005702,69.85807081806087 L107.49999859718774,75.01683404923777 L107.49999859718774,72.549720199713 L74.35186026056078,48.608071293035366 L74.35186026056076,48.608071293035366 L71.78999939536844,48.608071293035366 L71.78999939536844,48.60807129303538 L71.78999939536844,49.224849755416564 L74.81275391641294,51.4080712304505 L97.59999881846998,67.86643795545928 L98.69604515315334,68.65807084488296 Z" class="IfcBeam material-Wood GlobalId-0jtwqnqf8dgRCvTyMFBns surface"/><path d="M48.209999922422504,49.224849755416564 L48.209999922422504,48.60807129303538 L48.209999922422504,48.608071293035366 L45.648139057230196,48.608071293035366 L45.648139057230175,48.608071293035366 L12.500000720603234,72.54972019971297 L12.500000720603243,75.01683404923776 L19.64250781773393,69.85807081806087 L20.000000552965144,69.5998673115268 L20.45000054290686,69.27484930726413 L20.45000054290686,68.65807084488296 L21.30395416463761,68.65807084488296 L22.400000499320964,67.86643795545928 L45.18724540137801,51.4080712304505 Z" class="IfcBeam material-Wood GlobalId-0iEqVCslPDFvcUZNNoZRNk surface"/><path d="M49.809999886659725,48.608071293035366 L49.809999886659725,48.60807129303538 L49.809999886659725,50.60807124833188 L70.18999943113123,50.60807124833188 L70.18999943113123,48.60807129303538 L70.18999943113123,48.608071293035366 Z" class="IfcBeam material-Wood GlobalId-2dOrU0JX5CxXpaiiiJnpD surface"/><g id="product-1a387854-e239-41a9-84d5-e0f2dffa9abf" class="IfcBeam material-Wood GlobalId-0QE7XKuZb1gOJLuFBVfg projection" ifc:name="Street purlin right" ifc:guid="0QE7XKuZb1gOJLuFBV_fg$">
+        <path d="M22.400000499320964,70.35807081806087 L22.400000499320964,83.60807051072442 L22.900000499320964,83.60807051072442 L43.90000000758265,83.60807051072442 L44.40000000758265,83.60807051072442 L44.40000000758265,55.10807114774905 L45.399999985230906,55.10807114774905 L45.399999985230906,83.60807051072442 L45.899999985230906,83.60807051072442 L97.09999881846998,83.60807051072442 L97.59999881846998,83.60807051072442 L97.59999881846998,70.35807081806087 L97.59999881846998,69.85807081806087 L97.59999881846998,69.35807081806087 L97.59999881846998,68.65807084488296 L97.59999881846998,67.86643795545928 L74.81275391641294,51.4080712304505 L71.78999939536844,51.4080712304505 L70.18999943113123,51.4080712304505 L49.809999886659725,51.4080712304505 L48.209999922422504,51.4080712304505 L45.18724540137801,51.4080712304505 L22.400000499320964,67.86643795545928 L22.400000499320964,68.65807084488296 L22.400000499320964,69.35807081806087 L22.400000499320964,69.85807081806087 Z M54.999999770654185,59.858071041578285 L64.99999954713677,59.858071041578285 L64.99999954713677,69.85807081806087 L54.999999770654185,69.85807081806087 Z" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-33EfgHfn21fDjb9N8vMzK surface"/><path d="M68.85923784000808,47.10807132656298 L72.27505232693116,47.10807132656298 L72.27505232693117,47.10807132656298 L59.99999965889549,38.24226419421011 L59.99999965889549,40.70937804373489 L59.99999965889549,40.7093780437349 Z" class="IfcBeam material-Wood GlobalId-0rwiPeDoLFDAAbuNIqoDCM surface"/><path d="M51.140761477782874,47.10807132656298 L47.724946990859785,47.10807132656298 L45.648139057230196,48.608071293035366 L48.209999922422504,48.608071293035366 L49.809999886659725,48.608071293035366 L70.18999943113123,48.608071293035366 L71.78999939536844,48.608071293035366 L74.35186026056076,48.608071293035366 L72.27505232693116,47.10807132656298 L68.85923784000808,47.10807132656298 Z" class="IfcBeam material-Wood GlobalId-0VHBQh6DDEO9m165xBO6 surface"/><path d="M47.72494699085977,47.10807132656298 L47.724946990859785,47.10807132656298 L51.140761477782874,47.10807132656298 L59.99999965889548,40.709378043734894 L59.99999965889549,40.70937804373489 L59.99999965889549,38.24226419421011 L59.99999965889548,38.2422641942101 Z" class="IfcBeam material-Wood GlobalId-00AIi4G451Be69iqtjUSyZ surface"/><path d="M71.78999939536844,48.608071293035366 L71.78999939536844,48.60807129303538 L71.78999939536844,49.224849755416564 L74.81275391641294,51.4080712304505 L97.59999881846998,67.86643795545928 L98.69604515315334,68.65807084488296 L99.54999877488409,68.65807084488296 L99.54999877488409,69.27484930726413 L99.9999987648258,69.5998673115268 L100.35749150005702,69.85807081806087 L107.49999859718774,75.01683404923777 L107.49999859718774,72.549720199713 L74.35186026056078,48.608071293035366 L74.35186026056076,48.608071293035366 Z" class="IfcBeam material-Wood GlobalId-0rwiPeDoLFDAAbuNIqoDCM surface"/><path d="M48.209999922422504,49.224849755416564 L48.209999922422504,48.60807129303538 L48.209999922422504,48.608071293035366 L45.648139057230196,48.608071293035366 L45.648139057230175,48.608071293035366 L12.500000720603234,72.54972019971297 L12.500000720603243,75.01683404923776 L19.64250781773393,69.85807081806087 L20.000000552965144,69.5998673115268 L20.45000054290686,69.27484930726413 L20.45000054290686,68.65807084488296 L21.30395416463761,68.65807084488296 L22.400000499320964,67.86643795545928 L45.18724540137801,51.4080712304505 Z" class="IfcBeam material-Wood GlobalId-00AIi4G451Be69iqtjUSyZ surface"/><path d="M49.809999886659725,48.608071293035366 L49.809999886659725,48.60807129303538 L49.809999886659725,50.60807124833188 L70.18999943113123,50.60807124833188 L70.18999943113123,48.60807129303538 L70.18999943113123,48.608071293035366 Z" class="IfcBeam material-Wood GlobalId-0ug23d9Dv0DwkDPdgJkTf surface"/><g id="product-d0eed00e-c888-4988-bdee-98a7293e14bb" class="IfcBeam material-Wood GlobalId-3Gxj0Eo8X9YBtkcASfFXIx projection" ifc:name="Street purlin right" ifc:guid="3Gxj0Eo8X9YBtkcASfFXIx">
             <path d="M49.809999886659725,48.60807129303538 L49.809999886659725,51.408071230450496"/>
             <path d="M48.209999922422504,48.60807129303538 L49.809999886659725,48.60807129303538"/>
             <path d="M48.209999922422504,51.408071230450496 L48.209999922422504,48.60807129303538"/>
             <path d="M49.809999886659725,51.408071230450496 L48.209999922422504,51.408071230450496"/>
         </g>
-        <g id="product-dbc6e7b8-d566-496d-938c-90dbf8fb026f" class="IfcBeam material-Wood GlobalId-3RnkUurMP9RPECaDlum9l projection" ifc:name="Beam" ifc:guid="3RnkUurMP9RPECaDlu_m9l">
-            <path d="M99.549998774884088,68.658070844882957 L99.549998774884088,69.858070818060867"/>
-            <path d="M97.949998810646875,68.658070844882957 L99.549998774884088,68.658070844882957"/>
-            <path d="M97.949998810646875,69.858070818060867 L97.949998810646875,68.658070844882957"/>
-            <path d="M99.549998774884088,69.858070818060867 L97.949998810646875,69.858070818060867"/>
-        </g>
-        <g id="product-7e710e16-4041-46d5-b0e9-b39f9fab8eb0" class="IfcBeam material-Wood GlobalId-1SGuMG456rR3fivVguwm projection" ifc:name="Garden purlin right" ifc:guid="1_SGuMG456rR3fiv_Vguwm">
+        <g id="product-35414659-42e7-4056-9976-b42e0ca16b12" class="IfcBeam material-Wood GlobalId-0rGKPPGkT0Lfbsj2uCeMiI projection" ifc:name="Garden purlin right" ifc:guid="0rGKPPGkT0Lfbsj2uCeMiI">
             <path d="M71.78999939536844,48.60807129303538 L71.78999939536844,51.408071230450496"/>
             <path d="M70.189999431131227,48.60807129303538 L71.78999939536844,48.60807129303538"/>
             <path d="M70.189999431131227,51.408071230450496 L70.189999431131227,48.60807129303538"/>
             <path d="M71.78999939536844,51.408071230450496 L70.189999431131227,51.408071230450496"/>
         </g>
-        <g id="product-0738b93a-b8b8-427a-bcfc-2c731a1d8e8f" class="IfcBeam material-Wood GlobalId-07EBawkBX2UhpyB7CQ7OwF projection" ifc:name="Beam" ifc:guid="07EBawkBX2UhpyB7CQ7OwF">
+        <g id="product-16d86d54-fe27-4d1d-8048-89b8b4d4b9cc" class="IfcBeam material-Wood GlobalId-0Ms6rKYTD7O18YRYqrBdC projection" ifc:name="Beam" ifc:guid="0Ms6rK$YTD7O18YRYqrBdC">
+            <path d="M99.549998774884088,68.658070844882957 L99.549998774884088,69.858070818060867"/>
+            <path d="M97.949998810646875,68.658070844882957 L99.549998774884088,68.658070844882957"/>
+            <path d="M97.949998810646875,69.858070818060867 L97.949998810646875,68.658070844882957"/>
+            <path d="M99.549998774884088,69.858070818060867 L97.949998810646875,69.858070818060867"/>
+        </g>
+        <g id="product-d058dbf9-fa01-4fdd-81c2-7b86c3d9a9d4" class="IfcBeam material-Wood GlobalId-3GMDlvW5FtO72UuR3sQdK projection" ifc:name="Beam" ifc:guid="3GMDlv_W5FtO72UuR3sQdK">
             <path d="M22.050000507144073,68.658070844882957 L22.050000507144073,69.858070818060867"/>
             <path d="M20.45000054290686,68.658070844882957 L22.050000507144073,68.658070844882957"/>
             <path d="M20.45000054290686,69.858070818060867 L20.45000054290686,68.658070844882957"/>
             <path d="M22.050000507144073,69.858070818060867 L20.45000054290686,69.858070818060867"/>
         </g>
-        <g id="product-291fc521-2a2c-4152-b6dc-535f0d73132a" class="IfcBeam material-Wood GlobalId-0f7yKXAYn1KhRSKryDSnCg projection" ifc:name="Collar tie 15 left" ifc:guid="0f7yKXAYn1KhRSKryDSnCg">
+        <g id="product-1f44b6ab-1be3-4d39-8270-04617b2d8f86" class="IfcBeam material-Wood GlobalId-0VHBQh6DDEO9m165xBO6 projection" ifc:name="Collar tie 15 left" ifc:guid="0VHBQh6_DDEO9m165xBO_6">
             <path d="M47.724946990859785,47.108071326562978 L72.27505232693116,47.108071326562978"/>
             <path d="M72.27505232693116,47.108071326562978 L74.351860260560755,48.608071293035366"/>
             <path d="M45.648139057230196,48.608071293035366 L74.351860260560755,48.608071293035366"/>
             <path d="M45.648139057230196,48.608071293035366 L47.724946990859785,47.108071326562978"/>
         </g>
-        <g id="product-a763fd5e-0138-4533-b873-92cb2c4f1ccd" class="IfcBeam material-Wood GlobalId-2dOrU0JX5CxXpaiiiJnpD projection" ifc:name="Purlin spacer 15" ifc:guid="2dO$rU0JX5CxXpaiiiJnpD">
+        <g id="product-38a820e7-24de-4037-ab8d-667a93b9da7e" class="IfcBeam material-Wood GlobalId-0ug23d9Dv0DwkDPdgJkTf projection" ifc:name="Purlin spacer 15" ifc:guid="0ug23d9Dv0DwkDPdgJkTf_">
             <path d="M49.809999886659725,50.608071248331882 L70.189999431131227,50.608071248331882"/>
         </g>
-        <g id="product-7e250fbe-76fe-4571-812d-a8b174dc33e2" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-19GTlv5SO4jgB5qt3FY projection" ifc:name="Wall 2" ifc:guid="1_9G__Tlv5SO4jgB5qt3FY">
+        <g id="product-ff7bc6f5-a558-4236-9eed-0aaca96d132d" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-3UyRrfLX2Dfxj2gofRHCj projection" ifc:name="Wall 2" ifc:guid="3$UyRrfLX2Dfxj2gofRHCj">
             <path d="M22.400000499320964,83.608070510724417 L22.400000499320964,69.858070818060867"/>
             <path d="M20.000000552965144,69.858070818060867 L22.400000499320964,69.858070818060867"/>
             <path d="M20.000000552965144,69.858070818060867 L20.000000552965144,83.608070510724417"/>
             <path d="M20.000000552965144,83.608070510724417 L22.400000499320964,83.608070510724417"/>
         </g>
-        <g id="product-c051aff9-42a6-43bf-b20c-d0b062d29e48" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-30KQvGgP3lx8CqB1Yqfv8 projection" ifc:name="Wall 3" ifc:guid="30KQ$vGgP3lx8CqB1Yqfv8">
+        <g id="product-8d55ca63-e924-4ccd-b69c-becf5f69f6f6" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-2DLSfZwIHCpRQSlizVQVRs projection" ifc:name="Wall 3" ifc:guid="2DLSfZwIHCpRQSlizVQVRs">
             <path d="M97.599998818469984,69.858070818060867 L97.599998818469984,83.608070510724417"/>
             <path d="M97.599998818469984,83.608070510724417 L99.999998764825804,83.608070510724417"/>
             <path d="M99.999998764825804,83.608070510724417 L99.999998764825804,69.858070818060867"/>
             <path d="M97.599998818469984,69.858070818060867 L99.999998764825804,69.858070818060867"/>
         </g>
-        <g id="product-2c3b47cc-daf6-4d3f-999e-8d75f28db5ee" class="IfcBeam material-Wood GlobalId-0iEqVCslPDFvcUZNNoZRNk projection" ifc:name="Rafter 1" ifc:guid="0iEqVCslPDFvcUZNNoZRNk">
+        <g id="product-00292b04-4041-412e-8189-b34ded79cf23" class="IfcBeam material-Wood GlobalId-00AIi4G451Be69iqtjUSyZ projection" ifc:name="Rafter 1" ifc:guid="00AIi4G451Be69iqtjUSyZ">
             <path d="M59.99999965889549,38.242264194210094 L12.500000720603225,72.549720199712965"/>
             <path d="M12.500000720603234,72.549720199712965 L12.500000720603243,75.016834049237758"/>
             <path d="M59.99999965889549,40.709378043734887 L51.140761477782874,47.108071326562978"/>
@@ -1119,7 +1135,7 @@ tspan.door-dimension {
             <path d="M20.45000054290686,69.274849307264134 L12.500000720603243,75.016834049237758"/>
             <path d="M59.99999965889549,40.709378043734887 L59.99999965889549,38.242264194210094"/>
         </g>
-        <g id="product-2ddfeeb4-c74a-489e-a6cc-e5df163cbc76" class="IfcBeam material-Wood GlobalId-0jtwqnqf8dgRCvTyMFBns projection" ifc:name="Rafter 1" ifc:guid="0jt_wqnqf8dgRCvTyMFBns">
+        <g id="product-35eac668-3725-4f34-a2a5-e174b4c8d316" class="IfcBeam material-Wood GlobalId-0rwiPeDoLFDAAbuNIqoDCM projection" ifc:name="Rafter 1" ifc:guid="0rwiPeDoLFDAAbuNIqoDCM">
             <path d="M59.99999965889549,38.242264194210108 L107.49999859718774,72.549720199712993"/>
             <path d="M107.49999859718774,72.549720199712993 L107.49999859718774,75.016834049237772"/>
             <path d="M59.99999965889549,40.709378043734901 L68.859237840008078,47.108071326562978"/>
@@ -1127,7 +1143,7 @@ tspan.door-dimension {
             <path d="M99.549998774884088,69.274849307264134 L107.49999859718774,75.016834049237772"/>
             <path d="M59.99999965889549,40.709378043734901 L59.99999965889549,38.242264194210108"/>
         </g>
-        <g id="product-3fd9174d-a418-4c03-a2f3-dbfe8ef6598c" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-0sHTDf1XC0wBpswEzbcC projection" ifc:name="Wall 9" ifc:guid="0$sHTDf1XC0wBps$wEzbcC">
+        <g id="product-c33a9fea-469c-4206-936d-9495c8e56f54" class="IfcWall material-LoadbearingwallVPC240mm GlobalId-33EfgHfn21fDjb9N8vMzK projection" ifc:name="Wall 9" ifc:guid="33Ef$gHfn21fDjb9N8vMzK">
             <path d="M64.999999547136767,59.858071041578285 L54.999999770654185,59.858071041578285"/>
             <path d="M64.999999547136767,69.858070818060867 L54.999999770654185,69.858070818060867"/>
             <path d="M54.999999770654185,69.858070818060867 L54.999999770654185,59.858071041578285"/>
@@ -1137,49 +1153,43 @@ tspan.door-dimension {
             <path d="M22.400000499320964,69.858070818060867 L22.400000499320964,67.866437955459304"/>
             <path d="M97.599998818469984,83.608070510724417 L22.400000499320967,83.608070510724417"/>
         </g>
-        <g id="product-5c5f089d-5f75-444c-9073-6bd5d403558c" class="IfcWall material-drywall100mm GlobalId-1SNmYTNtL4J91pQzNK0rMC projection" ifc:name="Wall 11" ifc:guid="1SNmYTNtL4J91pQzNK0rMC">
+        <g id="product-41637e56-d588-4005-9b52-dff864d4b34e" class="IfcWall material-drywall100mm GlobalId-11OtvMrOX01PjItXarBDE projection" ifc:name="Wall 11" ifc:guid="11OtvMrOX01PjIt$XarBDE">
             <path d="M45.399999985230906,55.108071147749051 L45.399999985230906,83.608070510724417"/>
             <path d="M45.399999985230906,55.108071147749051 L44.400000007582648,55.108071147749051"/>
             <path d="M44.400000007582648,55.108071147749051 L44.400000007582648,83.608070510724417"/>
             <path d="M45.399999985230906,83.608070510724417 L44.400000007582648,83.608070510724417"/>
         </g>
-    <g ifc:guid="1_SGuMG456rR3fiv_Vguwm" ifc:name="Garden purlin right" class="IfcBeam material-Wood GlobalId-1SGuMG456rR3fivVguwm cut"><path d="M70.18999934196472,48.608070611953735 L70.18999934196472,49.492279291152954 L70.18999934196472,51.4080685377121 L70.69526076316833,51.4080685377121 L71.78999781608582,51.4080685377121 L71.78999781608582,50.52385985851288 L71.78999781608582,48.608070611953735 L71.2847363948822,48.608070611953735 Z"/></g><g ifc:guid="0QE7XKuZb1gOJLuFBV_fg$" ifc:name="Street purlin right" class="IfcBeam material-Wood GlobalId-0QE7XKuZb1gOJLuFBVfg cut"><path d="M48.209999799728394,48.608070611953735 L48.209999799728394,49.492279291152954 L48.209999799728394,51.4080685377121 L48.71526122093201,51.4080685377121 L49.80999827384949,51.4080685377121 L49.80999827384949,50.52385985851288 L49.80999827384949,48.608070611953735 L49.304736852645874,48.608070611953735 Z"/></g><g ifc:guid="07EBawkBX2UhpyB7CQ7OwF" ifc:name="Beam" class="IfcBeam material-Wood GlobalId-07EBawkBX2UhpyB7CQ7OwF cut"><path d="M20.449998378753662,68.65807235240936 L20.449998378753662,68.7756222486496 L20.449998378753662,69.85807120800018 L20.60673475265503,69.85807120800018 L22.049999237060547,69.85807120800018 L22.049999237060547,69.74052131175995 L22.049999237060547,68.65807235240936 L21.89326524734497,68.65807235240936 Z"/></g><g ifc:guid="3RnkUurMP9RPECaDlu_m9l" ifc:name="Beam" class="IfcBeam material-Wood GlobalId-3RnkUurMP9RPECaDlum9l cut"><path d="M97.95000076293945,68.65807235240936 L97.95000076293945,69.05259311199188 L97.95000076293945,69.85807120800018 L98.47602844238281,69.85807120800018 L99.54999923706055,69.85807120800018 L99.54999923706055,69.46355044841766 L99.54999923706055,68.65807235240936 L99.02397155761719,68.65807235240936 Z"/></g><g class="IfcWall GlobalId-30KQvGgP3lx8CqB1Yqfv8 material-LoadbearingwallVPC240mm 30KQ$vGgP3lx8CqB1Yqfv8 cut"><path d="M100.0,69.858 L99.836,69.858 L97.6,69.858 L97.6,82.671 L97.6,83.608 L97.764,83.608 L100.0,83.608 L100.0,70.795 Z"/></g><g class="IfcWall GlobalId-19GTlv5SO4jgB5qt3FY material-LoadbearingwallVPC240mm 1_9G__Tlv5SO4jgB5qt3FY cut"><path d="M22.206,69.858 L20.0,69.858 L20.0,82.496 L20.0,83.608 L20.194,83.608 L22.4,83.608 L22.4,70.97 L22.4,69.858 Z"/></g><g class="GlobalId-1SNmYTNtL4J91pQzNK0rMC 1SNmYTNtL4J91pQzNK0rMC IfcWall material-drywall100mm cut"><path d="M44.4,68.983 L44.4,82.958 L44.4,83.608 L45.19,83.608 L45.4,83.608 L45.4,82.958 L45.4,68.983 L45.4,59.008 L45.4,57.058 L45.4,55.108 L45.19,55.108 L44.4,55.108 L44.4,57.058 L44.4,59.008 Z"/></g><g class="IfcMaterialLayer IfcWall GlobalId-30KQvGgP3lx8CqB1Yqfv8 layer-material-Brick material-LoadbearingwallVPC240mm 30KQ$vGgP3lx8CqB1Yqfv8 cut"><path d="M100.0,69.858 L99.836,69.858 L97.6,69.858 L97.6,82.671 L97.6,83.608 L97.764,83.608 L100.0,83.608 L100.0,70.795 Z"/></g><g class="IfcMaterialLayer IfcWall layer-material-Brick GlobalId-19GTlv5SO4jgB5qt3FY material-LoadbearingwallVPC240mm 1_9G__Tlv5SO4jgB5qt3FY cut"><path d="M22.206,69.858 L20.0,69.858 L20.0,82.496 L20.0,83.608 L20.194,83.608 L22.4,83.608 L22.4,70.97 L22.4,69.858 Z"/></g><g class="GlobalId-1SNmYTNtL4J91pQzNK0rMC 1SNmYTNtL4J91pQzNK0rMC IfcMaterialLayer layer-material-SDK IfcWall material-drywall100mm cut"><path d="M44.4,68.983 L44.4,82.958 L44.4,83.608 L45.19,83.608 L45.4,83.608 L45.4,82.958 L45.4,68.983 L45.4,59.008 L45.4,57.058 L45.4,55.108 L45.19,55.108 L44.4,55.108 L44.4,57.058 L44.4,59.008 Z"/></g></g>
+    <g ifc:guid="3Gxj0Eo8X9YBtkcASfFXIx" ifc:name="Street purlin right" class="IfcBeam material-Wood GlobalId-3Gxj0Eo8X9YBtkcASfFXIx cut"><path d="M48.209999799728394,48.608070611953735 L48.209999799728394,49.492279291152954 L48.209999799728394,51.4080685377121 L48.71526122093201,51.4080685377121 L49.80999827384949,51.4080685377121 L49.80999827384949,50.52385985851288 L49.80999827384949,48.608070611953735 L49.304736852645874,48.608070611953735 Z"/></g><g ifc:guid="0rGKPPGkT0Lfbsj2uCeMiI" ifc:name="Garden purlin right" class="IfcBeam material-Wood GlobalId-0rGKPPGkT0Lfbsj2uCeMiI cut"><path d="M70.18999934196472,48.608070611953735 L70.18999934196472,49.492279291152954 L70.18999934196472,51.4080685377121 L70.69526076316833,51.4080685377121 L71.78999781608582,51.4080685377121 L71.78999781608582,50.52385985851288 L71.78999781608582,48.608070611953735 L71.2847363948822,48.608070611953735 Z"/></g><g ifc:guid="3GMDlv_W5FtO72UuR3sQdK" ifc:name="Beam" class="IfcBeam material-Wood GlobalId-3GMDlvW5FtO72UuR3sQdK cut"><path d="M20.449998378753662,68.65807235240936 L20.449998378753662,68.7756222486496 L20.449998378753662,69.85807120800018 L20.60673475265503,69.85807120800018 L22.049999237060547,69.85807120800018 L22.049999237060547,69.74052131175995 L22.049999237060547,68.65807235240936 L21.89326524734497,68.65807235240936 Z"/></g><g ifc:guid="0Ms6rK$YTD7O18YRYqrBdC" ifc:name="Beam" class="IfcBeam material-Wood GlobalId-0Ms6rKYTD7O18YRYqrBdC cut"><path d="M97.95000076293945,68.65807235240936 L97.95000076293945,69.05259311199188 L97.95000076293945,69.85807120800018 L98.47602844238281,69.85807120800018 L99.54999923706055,69.85807120800018 L99.54999923706055,69.46355044841766 L99.54999923706055,68.65807235240936 L99.02397155761719,68.65807235240936 Z"/></g><g class="2DLSfZwIHCpRQSlizVQVRs material-LoadbearingwallVPC240mm GlobalId-2DLSfZwIHCpRQSlizVQVRs cut IfcWall"><path d="M100.0,69.858 L99.836,69.858 L97.6,69.858 L97.6,82.671 L97.6,83.608 L97.764,83.608 L100.0,83.608 L100.0,70.795 Z"/></g><g class="material-LoadbearingwallVPC240mm 3$UyRrfLX2Dfxj2gofRHCj cut GlobalId-3UyRrfLX2Dfxj2gofRHCj IfcWall"><path d="M22.206,69.858 L20.0,69.858 L20.0,82.496 L20.0,83.608 L20.194,83.608 L22.4,83.608 L22.4,70.97 L22.4,69.858 Z"/></g><g class="GlobalId-11OtvMrOX01PjItXarBDE material-drywall100mm cut 11OtvMrOX01PjIt$XarBDE IfcWall"><path d="M44.4,68.983 L44.4,82.958 L44.4,83.608 L45.19,83.608 L45.4,83.608 L45.4,82.958 L45.4,68.983 L45.4,59.008 L45.4,57.058 L45.4,55.108 L45.19,55.108 L44.4,55.108 L44.4,57.058 L44.4,59.008 Z"/></g><g class="2DLSfZwIHCpRQSlizVQVRs material-LoadbearingwallVPC240mm IfcMaterialLayer GlobalId-2DLSfZwIHCpRQSlizVQVRs cut layer-material-Brick IfcWall"><path d="M100.0,69.858 L99.836,69.858 L97.6,69.858 L97.6,82.671 L97.6,83.608 L97.764,83.608 L100.0,83.608 L100.0,70.795 Z"/></g><g class="material-LoadbearingwallVPC240mm IfcMaterialLayer cut 3$UyRrfLX2Dfxj2gofRHCj GlobalId-3UyRrfLX2Dfxj2gofRHCj layer-material-Brick IfcWall"><path d="M22.206,69.858 L20.0,69.858 L20.0,82.496 L20.0,83.608 L20.194,83.608 L22.4,83.608 L22.4,70.97 L22.4,69.858 Z"/></g><g class="GlobalId-11OtvMrOX01PjItXarBDE layer-material-SDK IfcMaterialLayer material-drywall100mm cut 11OtvMrOX01PjIt$XarBDE IfcWall"><path d="M44.4,68.983 L44.4,82.958 L44.4,83.608 L45.19,83.608 L45.4,83.608 L45.4,82.958 L45.4,68.983 L45.4,59.008 L45.4,57.058 L45.4,55.108 L45.19,55.108 L44.4,55.108 L44.4,57.058 L44.4,59.008 Z"/></g></g>
   <style class="model-line-width-override" type="text/css">.section g.cut, .section g.projection { stroke-width: 0.06 !important; }</style>
 <style class="projected-wood-surface-styles" type="text/css">
 .target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface { fill: #ffffff !important; }
 .target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut { fill: #ffffff !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0QE7XKuZb1gOJLuFBVfg { fill: url(#brick-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0QE7XKuZb1gOJLuFBVfg { fill: url(#brick-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-1SGuMG456rR3fivVguwm { fill: url(#brick-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-1SGuMG456rR3fivVguwm { fill: url(#brick-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0iEqVCslPDFvcUZNNoZRNk { fill: url(#diagonal1-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0iEqVCslPDFvcUZNNoZRNk { fill: url(#diagonal1-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0jtwqnqf8dgRCvTyMFBns { fill: url(#diagonal1-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0jtwqnqf8dgRCvTyMFBns { fill: url(#diagonal1-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-07EBawkBX2UhpyB7CQ7OwF { fill: url(#brick-opposite-tint-e76f51) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-07EBawkBX2UhpyB7CQ7OwF { fill: url(#brick-opposite-tint-e76f51) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-2KagbS5Cf2ygYTzCmXpC { fill: url(#brick-opposite-tint-f4a261) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-2KagbS5Cf2ygYTzCmXpC { fill: url(#brick-opposite-tint-f4a261) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-3rcPtpf27PzNPL1m7Chj { fill: url(#brick-opposite-tint-f4a261) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-3rcPtpf27PzNPL1m7Chj { fill: url(#brick-opposite-tint-f4a261) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-3RnkUurMP9RPECaDlum9l { fill: url(#brick-opposite-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-3RnkUurMP9RPECaDlum9l { fill: url(#brick-opposite-tint-f4d35e) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-13OAVUib9SBNc1uWEkKV8 { fill: url(#brick-opposite-tint-f4b6c2) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-13OAVUib9SBNc1uWEkKV8 { fill: url(#brick-opposite-tint-f4b6c2) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0f7yKXAYn1KhRSKryDSnCg { fill: #516fe7 !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0f7yKXAYn1KhRSKryDSnCg { fill: #516fe7 !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-1N7uAQ9oX5YB18MnTSnpkQ { fill: #516fe7 !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-1N7uAQ9oX5YB18MnTSnpkQ { fill: #516fe7 !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-2dOrU0JX5CxXpaiiiJnpD { fill: #f4d35e !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-2dOrU0JX5CxXpaiiiJnpD { fill: #f4d35e !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-2O0XSzTc579uHFMPsL1xQJ { fill: url(#brick-tint-f4a2f4) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-2O0XSzTc579uHFMPsL1xQJ { fill: url(#brick-tint-f4a2f4) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-36bdixc5z1BAPtjAMV00PY { fill: url(#brick-tint-f4a2f4) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-36bdixc5z1BAPtjAMV00PY { fill: url(#brick-tint-f4a2f4) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-3ujFizV3H6gRtcIgLqkjc9 { fill: url(#brick-tint-f4a2f4) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-3ujFizV3H6gRtcIgLqkjc9 { fill: url(#brick-tint-f4a2f4) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0CxUP1AFTEb9ItWrnziz { fill: url(#brick-tint-f4a2f4) !important; }
-.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0CxUP1AFTEb9ItWrnziz { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-3Gxj0Eo8X9YBtkcASfFXIx { fill: url(#brick-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-3Gxj0Eo8X9YBtkcASfFXIx { fill: url(#brick-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0rGKPPGkT0Lfbsj2uCeMiI { fill: url(#brick-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0rGKPPGkT0Lfbsj2uCeMiI { fill: url(#brick-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-00AIi4G451Be69iqtjUSyZ { fill: url(#diagonal1-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-00AIi4G451Be69iqtjUSyZ { fill: url(#diagonal1-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0rwiPeDoLFDAAbuNIqoDCM { fill: url(#diagonal1-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0rwiPeDoLFDAAbuNIqoDCM { fill: url(#diagonal1-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-3GMDlvW5FtO72UuR3sQdK { fill: url(#brick-opposite-tint-e76f51) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-3GMDlvW5FtO72UuR3sQdK { fill: url(#brick-opposite-tint-e76f51) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0Ms6rKYTD7O18YRYqrBdC { fill: url(#brick-opposite-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0Ms6rKYTD7O18YRYqrBdC { fill: url(#brick-opposite-tint-f4d35e) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0VHBQh6DDEO9m165xBO6 { fill: #516fe7 !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0VHBQh6DDEO9m165xBO6 { fill: #516fe7 !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-3ytI2DHv30uhtfCFbduf3 { fill: #516fe7 !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-3ytI2DHv30uhtfCFbduf3 { fill: #516fe7 !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0ug23d9Dv0DwkDPdgJkTf { fill: #f4d35e !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0ug23d9Dv0DwkDPdgJkTf { fill: #f4d35e !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0igywBLzA982HBXknx1S { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0igywBLzA982HBXknx1S { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-0eEgSqYzEsREu0sp7bi7X { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-0eEgSqYzEsREu0sp7bi7X { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-1FSODn1mT5SxKzZVdPrPQn { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-1FSODn1mT5SxKzZVdPrPQn { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.surface.GlobalId-2WLHGVM9CjPTzooFArGJ { fill: url(#brick-tint-f4a2f4) !important; }
+.target-view-ELEVATIONVIEW .IfcBeam.material-Wood.cut.GlobalId-2WLHGVM9CjPTzooFArGJ { fill: url(#brick-tint-f4a2f4) !important; }
 </style>
 <g class="ring-beam-stirrups target-view-ELEVATIONVIEW">
     <polygon class="ring-beam-stirrup" ifc:name="Ring beam 1" points="20.65,85.0581 21.75,85.0581 21.75,84.2581 20.65,84.2581" style="fill:none !important;stroke:#333 !important;stroke-width:0.08 !important;stroke-linejoin:miter"/>

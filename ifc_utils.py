@@ -19,7 +19,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from textwrap import wrap
 from time import monotonic
 from typing import Literal, Sequence, TypeAlias
@@ -5200,6 +5200,159 @@ def generate_plan(
     return output_path
 
 
+def _drawing_pdf_options(
+    pdf: str | PathLike[str] | None,
+    paper: str,
+    orientation: str,
+    margin: Number,
+) -> tuple[Path | None, float, float, float]:
+    """Validate optional PDF output and return its sheet dimensions in mm."""
+    if pdf is not None and not isinstance(pdf, (str, PathLike)):
+        raise TypeError("pdf must be an output path or None, not a boolean")
+    pdf_path = Path(pdf).resolve() if pdf is not None else None
+    if pdf_path is not None:
+        if pdf_path.suffix.lower() != ".pdf":
+            raise ValueError("pdf output must use the .pdf extension")
+        if pdf_path.exists() and not pdf_path.is_file():
+            raise IsADirectoryError(f"PDF output is not a file: {pdf_path}")
+    sizes = {"A4": (210, 297), "A3": (297, 420), "A2": (420, 594),
+             "A1": (594, 841), "A0": (841, 1189)}
+    if not isinstance(paper, str) or paper not in sizes:
+        raise ValueError("paper must be A4, A3, A2, A1, or A0")
+    if orientation not in ("landscape", "portrait"):
+        raise ValueError("orientation must be landscape or portrait")
+    width, height = sizes[paper]
+    if orientation == "landscape":
+        width, height = height, width
+    margin = _number(margin, "margin")
+    if margin < 0 or 2 * margin >= min(width, height):
+        raise ValueError("margin must be non-negative and leave usable paper area")
+    return pdf_path, float(width), float(height), margin
+
+
+def _drawing_svg_frame(svg: str) -> tuple[re.Match[str], float, float, tuple[float, ...]]:
+    """Read the physical SVG frame used for titles and scale-preserving PDFs."""
+    root = re.search(r"<svg\b(?P<attrs>[^>]*)>", svg)
+    if root is None:
+        raise ValueError("Drawing layout requires an SVG root")
+    attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', root["attrs"]))
+    dimensions = []
+    for name in ("width", "height"):
+        match = re.fullmatch(rf"\s*({_SVG_NUMBER})mm\s*", attributes.get(name, ""))
+        if match is None:
+            raise ValueError("Drawing layout requires SVG width and height in millimetres")
+        value = float(match[1])
+        if not isfinite(value) or value <= 0:
+            raise ValueError("Drawing layout requires positive finite SVG dimensions")
+        dimensions.append(value)
+    try:
+        view_box = tuple(float(v) for v in re.split(r"[,\s]+", attributes["viewBox"].strip()))
+    except (KeyError, ValueError):
+        raise ValueError("Drawing layout requires a valid SVG viewBox") from None
+    if len(view_box) != 4 or not all(isfinite(v) for v in view_box) or min(view_box[2:]) <= 0:
+        raise ValueError("Drawing layout requires a valid SVG viewBox")
+    return root, *dimensions, view_box
+
+
+def _postprocess_drawing_title(svg_path: Path, title: str) -> None:
+    """Add a compact 10 mm header without rescaling any drawing geometry."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="drawing-title"' in svg:
+        return
+    root, width, height, (view_x, view_y, view_width, view_height) = _drawing_svg_frame(svg)
+    closing = svg.rfind("</svg>")
+    if closing < root.end():
+        raise ValueError("Drawing title requires a closing SVG tag")
+    units_per_mm = view_height / height
+    header = 10 * units_per_mm
+    updated_root = re.sub(r'\bheight="[^"]*"', f'height="{height + 10:g}mm"', root[0], count=1)
+    updated_root = re.sub(
+        r'\bviewBox="[^"]*"',
+        f'viewBox="{view_x:g} {view_y:g} {view_width:g} {view_height + header:g}"',
+        updated_root, count=1,
+    )
+    title_svg = (
+        f'<text class="drawing-title" x="{view_x + view_width / 2:g}" '
+        f'y="{view_y + 6.5 * units_per_mm:g}" text-anchor="middle" '
+        f'style="font-family: DejaVu Sans, sans-serif; font-size: {4 * units_per_mm:g}px; '
+        f'font-weight: bold; fill: black; stroke: none;">{escape(title)}</text>'
+    )
+    content = svg[root.end():closing]
+    svg_path.write_text(
+        f'{svg[:root.start()]}{updated_root}{title_svg}'
+        f'<g class="drawing-title-content" transform="translate(0, {header:g})">'
+        f'{content}</g>{svg[closing:]}', encoding="utf-8",
+    )
+
+
+def _drawing_pdf_sheet(svg: str, *, width: float, height: float, margin: float) -> str:
+    """Centre a finished SVG on a physical sheet, preserving its drawing scale."""
+    root, drawing_width, drawing_height, _ = _drawing_svg_frame(svg)
+    available_width, available_height = width - 2 * margin, height - 2 * margin
+    if drawing_width > available_width + 1e-6 or drawing_height > available_height + 1e-6:
+        raise ValueError(
+            f"Drawing ({drawing_width:g} × {drawing_height:g} mm) does not fit "
+            f"the paper's usable area ({available_width:g} × {available_height:g} mm). "
+            "Choose larger paper or smaller margins; the drawing will not be scaled."
+        )
+    # The outer viewBox uses one unit per mm. Give the nested SVG numeric
+    # viewport dimensions (not mm lengths), retaining its original viewBox.
+    replacements = {"width": drawing_width, "height": drawing_height,
+                    "x": (width - drawing_width) / 2, "y": (height - drawing_height) / 2}
+    inner_root = root[0]
+    for name, value in replacements.items():
+        pattern = rf'\b{name}="[^"]*"'
+        attribute = f'{name}="{value:g}"'
+        if re.search(pattern, inner_root):
+            inner_root = re.sub(pattern, attribute, inner_root, count=1)
+        else:
+            inner_root = inner_root[:-1] + f" {attribute}>"
+    inner_svg = inner_root + svg[root.end():]
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:g}mm" '
+        f'height="{height:g}mm" viewBox="0 0 {width:g} {height:g}">'
+        f'<rect width="{width:g}" height="{height:g}" fill="white"/>'
+        f'{inner_svg}</svg>'
+    )
+
+
+def _export_drawing_pdf(
+    svg_path: Path,
+    pdf: str | PathLike[str],
+    *,
+    paper: str = "A4",
+    orientation: str = "landscape",
+    margin: Number = 10,
+    inkscape: str | PathLike[str] = "inkscape",
+) -> None:
+    pdf_path, width, height, margin = _drawing_pdf_options(pdf, paper, orientation, margin)
+    assert pdf_path is not None
+    sheet = _drawing_pdf_sheet(svg_path.read_text(encoding="utf-8"),
+                               width=width, height=height, margin=margin)
+    inkscape_command = shutil.which(str(inkscape))
+    if inkscape_command is None:
+        raise FileNotFoundError(f"Inkscape executable not found: {inkscape}")
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    # Keep the sheet beside the source so relative SVG asset links still work.
+    # Replace an existing PDF only after a successful, nonempty export.
+    with NamedTemporaryFile(mode="w", suffix=".svg", prefix=".pdf-sheet-",
+                            dir=svg_path.parent, encoding="utf-8") as temporary_svg:
+        temporary_svg.write(sheet)
+        temporary_svg.flush()
+        with TemporaryDirectory(prefix=f".{pdf_path.stem}-pdf-", dir=pdf_path.parent) as directory:
+            temporary_pdf = Path(directory) / pdf_path.name
+            subprocess.run([
+                inkscape_command, temporary_svg.name,
+                f"--export-filename={temporary_pdf}", "--export-type=pdf",
+                "--export-area-page", "--batch-process",
+            ], check=True)
+            if not temporary_pdf.is_file() or temporary_pdf.stat().st_size == 0:
+                raise RuntimeError(f"Inkscape did not create the PDF drawing: {pdf_path}")
+            temporary_pdf.replace(pdf_path)
+    print(f"[drawing render] Inkscape PDF created: {pdf_path} "
+          f"({paper} {orientation}, scale preserved)", flush=True)
+
+
 def _render_existing_drawing(
     ifc: Path,
     drawing_guid: str,
@@ -5209,6 +5362,11 @@ def _render_existing_drawing(
     png_dpi: Number,
     blender: str | PathLike[str],
     inkscape: str | PathLike[str],
+    pdf: str | PathLike[str] | None = None,
+    paper: str = "A4",
+    orientation: str = "landscape",
+    margin: Number = 10,
+    title: str | None = None,
 ) -> Path:
     """Render a persisted Bonsai drawing from an IFC file."""
     output_path = Path(output)
@@ -5392,6 +5550,8 @@ def _render_existing_drawing(
         absolute_output,
         drawing_properties or {},
     )
+    resolved_title = title if title is not None else Path(pdf if pdf is not None else output_path).stem
+    _postprocess_drawing_title(absolute_output, resolved_title)
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -5430,6 +5590,10 @@ def _render_existing_drawing(
             f"({png_size} bytes)",
             flush=True,
         )
+
+    if pdf is not None:
+        _export_drawing_pdf(absolute_output, pdf, paper=paper, orientation=orientation,
+                            margin=margin, inkscape=inkscape)
 
     return output_path
 
@@ -12635,13 +12799,29 @@ class Drawing:
         *,
         png: bool = False,
         png_dpi: Number = 200,
+        pdf: str | PathLike[str] | None = None,
+        paper: str = "A4",
+        orientation: str = "landscape",
+        margin: Number = 10,
+        title: str | None = None,
         blender: str | PathLike[str] = "blender",
         inkscape: str | PathLike[str] = "inkscape",
         stylesheet: str | PathLike[str] | None = None,
     ) -> Path:
-        """Render through Blender/Bonsai; ``png_dpi`` controls optional PNG resolution."""
+        """Render SVG and optionally PNG/PDF through Blender/Bonsai and Inkscape.
+
+        ``pdf`` is an output path or None. PDFs default to A4 landscape with
+        10 mm margins, centring the completed drawing without changing its
+        scale. Oversized drawings raise ValueError rather than being shrunk.
+        A compact title is added to SVG, PNG and PDF. If omitted, use the PDF
+        filename stem (or SVG filename stem when pdf=None). The title adds a
+        10 mm header without rescaling geometry; png_dpi affects only PNG.
+        """
         if self.house._ifc_path is None:
             raise RuntimeError("write the house before rendering a drawing")
+        _drawing_pdf_options(pdf, paper, orientation, margin)
+        if title is not None:
+            title = _name(title, "title")
 
         output_path = Path(output)
         absolute_output = output_path.resolve()
@@ -12672,6 +12852,11 @@ class Drawing:
             png_dpi=png_dpi,
             blender=blender,
             inkscape=inkscape,
+            pdf=pdf,
+            paper=paper,
+            orientation=orientation,
+            margin=margin,
+            title=title,
         )
 
 

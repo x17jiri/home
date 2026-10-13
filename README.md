@@ -592,6 +592,29 @@ metres in both X and Y, so the example cuts the model at 1.6 m and covers a
 10 m by 10 m area. `png=True` additionally creates `house.png` through
 Inkscape.
 
+Pass a PDF output path (or `None` to skip PDF export) to render a vector PDF
+of the finished drawing, including all legends, notes and post-processing:
+
+```python
+from pathlib import Path
+
+drawing.render("house.svg", png=True, pdf=Path("house.pdf"))
+drawing.render("house.svg", pdf=Path("house-a3.pdf"), paper="A3")
+drawing.render("house.svg", pdf=Path("house.pdf"), title="Půdorys přízemí")
+```
+
+PDFs default to **A4 landscape** with **10 mm margins**. `paper` supports
+`"A4"`, `"A3"`, `"A2"`, `"A1"` and `"A0"`; `orientation` is `"landscape"`
+or `"portrait"`, and `margin` is in millimetres. The complete SVG is centred
+on the sheet without resizing it, preserving its drawing scale and vector
+linework. Oversized drawings raise an error rather than silently shrinking.
+Existing PDFs are replaced only after a successful export. `title` adds a
+centred, bold 4 mm heading to SVG, PNG and PDF in a compact 10 mm header. If
+omitted, it uses the PDF filename without its directory or extension (or the
+SVG filename when no PDF is requested). The drawing is moved down, not scaled;
+the header is included in the paper-fit check. Print the PDF at actual size /
+100%, not "fit to page".
+
 A basic side elevation uses the same persisted drawing interface.  Place the
 camera outside the building and point ``direction`` toward it:
 

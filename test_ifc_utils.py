@@ -43,10 +43,14 @@ from ifc_utils import (
     Wall,
     _BATTING_MARKER_PATH,
     _close_door_bodies,
+    _drawing_pdf_options,
+    _drawing_pdf_sheet,
+    _export_drawing_pdf,
     _remove_3d_only_elements,
     _timber_schedule_member_styles,
     _overhead_mask_global_ids,
     _postprocess_angle_labels,
+    _postprocess_drawing_title,
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
     _postprocess_hexagon_marker_overlays,
@@ -185,7 +189,10 @@ class ReferenceBoxTests(unittest.TestCase):
                 lower, upper = self.bounds(rendered.by_guid(visible.GlobalId))
                 np.testing.assert_allclose(lower, (-5, 4, 0))
                 np.testing.assert_allclose(upper, (-4, 5, 1))
-                Path(command[command.index("--output") + 1]).write_text("<svg/>", encoding="utf-8")
+                Path(command[command.index("--output") + 1]).write_text(
+                    '<svg width="100mm" height="100mm" viewBox="0 0 100 100"></svg>',
+                    encoding="utf-8",
+                )
                 return subprocess.CompletedProcess(command, 0)
 
             with (patch("ifc_utils.shutil.which", return_value="/usr/bin/blender"),
@@ -358,6 +365,223 @@ class AngleDimensionTests(unittest.TestCase):
         diagonal = house.add_drawing("Diagonal", 0, 0, 2, 4, view="elevation", direction=(1, 1, 0))
         with self.assertRaisesRegex(ValueError, "axis-aligned"):
             diagonal.add_angle(**arguments)
+
+
+class DrawingPdfTests(unittest.TestCase):
+    SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="235mm" height="170mm" '
+           'viewBox="0 0 235 170" data-scale="1:100">'
+           '<defs><pattern id="hatch" width="2" height="2" patternUnits="userSpaceOnUse">'
+           '<path d="M0 0 L2 2"/></pattern></defs>'
+           '<rect x="10" y="20" width="100" height="50" fill="url(#hatch)"/>'
+           '<text class="ANGLE">36.0°</text></svg>')
+
+    def test_defaults_and_alternative_papers(self):
+        path, width, height, margin = _drawing_pdf_options(Path("roof.pdf"), "A4", "landscape", 10)
+        self.assertEqual(path, Path("roof.pdf").resolve())
+        self.assertEqual((width, height, margin), (297, 210, 10))
+        for paper, size in (("A4", (210, 297)), ("A3", (297, 420)),
+                            ("A2", (420, 594)), ("A1", (594, 841)), ("A0", (841, 1189))):
+            self.assertEqual(_drawing_pdf_options(None, paper, "portrait", 0), (None, *size, 0))
+
+    def test_sheet_centres_drawing_without_scaling_or_changing_geometry(self):
+        sheet = _drawing_pdf_sheet(self.SVG, width=297, height=210, margin=10)
+        root = ET.fromstring(sheet)
+        self.assertEqual((root.get("width"), root.get("height")), ("297mm", "210mm"))
+        self.assertEqual(root.get("viewBox"), "0 0 297 210")
+        inner = root.find("{http://www.w3.org/2000/svg}svg")
+        self.assertEqual((inner.get("width"), inner.get("height")), ("235", "170"))
+        self.assertEqual((inner.get("x"), inner.get("y")), ("31", "20"))
+        self.assertEqual(inner.get("viewBox"), "0 0 235 170")
+        self.assertEqual(inner.get("data-scale"), "1:100")
+        self.assertIn(self.SVG.split(">", 1)[1], sheet)
+        with self.assertRaisesRegex(ValueError, "does not fit"):
+            _drawing_pdf_sheet(self.SVG, width=210, height=297, margin=10)
+
+    def test_invalid_options_are_rejected_before_persisting_or_launching_renderer(self):
+        house = House("PDF options")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4)
+        with TemporaryDirectory() as directory:
+            house.write(Path(directory) / "house.ifc")
+            invalid = (({"pdf": True}, TypeError), ({"pdf": False}, TypeError),
+                       ({"pdf": "roof.png"}, ValueError), ({"paper": "A5"}, ValueError),
+                       ({"orientation": "diagonal"}, ValueError), ({"margin": -1}, ValueError),
+                       ({"margin": 105}, ValueError), ({"margin": float("nan")}, ValueError),
+                       ({"margin": True}, TypeError), ({"title": True}, TypeError),
+                       ({"title": "   "}, ValueError))
+            with patch.object(house, "_write_model") as write, patch("ifc_utils.subprocess.run") as run:
+                for options, error in invalid:
+                    with self.subTest(options=options), self.assertRaises(error):
+                        drawing.render(Path(directory) / "plan.svg", **options)
+                write.assert_not_called()
+                run.assert_not_called()
+
+    def test_sheet_preserves_non_mm_viewbox_units_and_handles_xml_declaration(self):
+        svg = '<?xml version="1.0"?>' + self.SVG.replace('viewBox="0 0 235 170"',
+                                                                     'viewBox="10 20 470 340"')
+        root = ET.fromstring(_drawing_pdf_sheet(svg, width=297, height=420, margin=20))
+        inner = root.find("{http://www.w3.org/2000/svg}svg")
+        self.assertEqual(inner.get("viewBox"), "10 20 470 340")
+        self.assertEqual((inner.get("width"), inner.get("height")), ("235", "170"))
+        self.assertEqual((inner.get("x"), inner.get("y")), ("31", "125"))
+
+    def test_svg_physical_dimensions_are_required_for_scale_preserving_export(self):
+        for svg in ("<html/>", self.SVG.replace('width="235mm"', 'width="235px"'),
+                    self.SVG.replace('height="170mm"', 'height="0mm"'),
+                    self.SVG.replace('viewBox="0 0 235 170"', '')):
+            with self.subTest(svg=svg), self.assertRaises(ValueError):
+                _drawing_pdf_sheet(svg, width=297, height=210, margin=10)
+
+    def test_pdf_is_exported_after_postprocessing_and_before_returning(self):
+        house = House("PDF render")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4)
+        drawing.add_angle((0, 0), (1, 0), (1, 1))
+        commands, temporary_paths = [], []
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            house.write(directory / "house.ifc")
+            svg_path, pdf_path = directory / "roof.svg", directory / "reports" / "D1.1.5. Krov.pdf"
+
+            def run(command, *, check):
+                self.assertTrue(check)
+                commands.append(command)
+                if "--output" in command:
+                    Path(command[command.index("--output") + 1]).write_text(self.SVG, encoding="utf-8")
+                elif "--export-type=pdf" in command:
+                    temporary_svg = Path(command[1])
+                    temporary_pdf = Path(next(a.split("=", 1)[1] for a in command
+                                              if a.startswith("--export-filename=")))
+                    temporary_paths.extend((temporary_svg, temporary_pdf))
+                    root = ET.parse(temporary_svg).getroot()
+                    self.assertEqual(root.get("width"), "297mm")
+                    self.assertEqual(root.get("height"), "210mm")
+                    self.assertIn(">36°</text>", temporary_svg.read_text(encoding="utf-8"))
+                    self.assertIn(">D1.1.5. Krov</text>", temporary_svg.read_text(encoding="utf-8"))
+                    self.assertEqual(temporary_svg.parent, svg_path.parent)
+                    self.assertIn("--export-type=pdf", command)
+                    self.assertNotIn("--export-text-to-path", command)
+                    temporary_pdf.write_bytes(b"%PDF-test")
+                else:
+                    root = ET.parse(command[1]).getroot()
+                    self.assertEqual(root.get("width"), "235mm")
+                    temporary_png = Path(next(a.split("=", 1)[1] for a in command
+                                              if a.startswith("--export-filename=")))
+                    temporary_paths.append(temporary_png)
+                    temporary_png.write_bytes(b"PNG-test")
+                return subprocess.CompletedProcess(command, 0)
+
+            with patch("ifc_utils.shutil.which", return_value="/usr/bin/tool"), \
+                    patch("ifc_utils.subprocess.run", side_effect=run):
+                self.assertEqual(drawing.render(svg_path, png=True, pdf=pdf_path), svg_path)
+            self.assertEqual(len(commands), 3)
+            self.assertEqual(pdf_path.read_bytes(), b"%PDF-test")
+            self.assertEqual(svg_path.with_suffix(".png").read_bytes(), b"PNG-test")
+            svg = ET.parse(svg_path).getroot()
+            self.assertEqual((svg.get("width"), svg.get("height")), ("235mm", "180mm"))
+            self.assertTrue(all(not path.exists() for path in temporary_paths))
+
+    def test_oversized_drawing_preserves_previous_pdf_without_launching_exporter(self):
+        with TemporaryDirectory() as directory:
+            svg, pdf = Path(directory) / "roof.svg", Path(directory) / "roof.pdf"
+            svg.write_text(self.SVG, encoding="utf-8")
+            pdf.write_bytes(b"previous PDF")
+            with patch("ifc_utils.subprocess.run") as run:
+                with self.assertRaisesRegex(ValueError, "does not fit"):
+                    _export_drawing_pdf(svg, pdf, orientation="portrait")
+                run.assert_not_called()
+            self.assertEqual(pdf.read_bytes(), b"previous PDF")
+
+    def test_failed_or_empty_exports_preserve_previous_pdf_and_clean_temporary_files(self):
+        with TemporaryDirectory() as directory:
+            svg, pdf = Path(directory) / "roof.svg", Path(directory) / "roof.pdf"
+            svg.write_text(self.SVG, encoding="utf-8")
+            pdf.write_bytes(b"previous PDF")
+            for failure in (subprocess.CalledProcessError(1, "inkscape"), None):
+                with self.subTest(failure=failure), \
+                        patch("ifc_utils.shutil.which", return_value="/usr/bin/inkscape"), \
+                        patch("ifc_utils.subprocess.run", side_effect=failure):
+                    error = subprocess.CalledProcessError if failure else RuntimeError
+                    with self.assertRaises(error):
+                        _export_drawing_pdf(svg, pdf)
+                self.assertEqual(pdf.read_bytes(), b"previous PDF")
+                self.assertEqual(set(Path(directory).iterdir()), {svg, pdf})
+
+
+class DrawingTitleTests(unittest.TestCase):
+    def test_title_has_compact_header_and_escapes_text_without_resizing_geometry(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "roof.svg"
+            path.write_text(DrawingPdfTests.SVG, encoding="utf-8")
+            _postprocess_drawing_title(path, "Krov – řez <AA> & BB")
+            svg = path.read_text(encoding="utf-8")
+            root = ET.fromstring(svg)
+            self.assertEqual((root.get("width"), root.get("height")), ("235mm", "180mm"))
+            self.assertEqual(root.get("viewBox"), "0 0 235 180")
+            title = root.find("{http://www.w3.org/2000/svg}text")
+            self.assertEqual(title.text, "Krov – řez <AA> & BB")
+            self.assertEqual((title.get("x"), title.get("y")), ("117.5", "6.5"))
+            self.assertIn("font-size: 4px", title.get("style"))
+            content = root.find("{http://www.w3.org/2000/svg}g")
+            self.assertEqual(content.get("transform"), "translate(0, 10)")
+            self.assertNotIn("scale", content.get("transform"))
+            source = ET.fromstring(DrawingPdfTests.SVG)
+            self.assertEqual([ET.tostring(c) for c in content], [ET.tostring(c) for c in source])
+            _postprocess_drawing_title(path, "Krov – řez <AA> & BB")
+            self.assertEqual(path.read_text(encoding="utf-8"), svg)
+
+    def test_title_handles_nonzero_viewbox_and_different_units_per_mm(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "roof.svg"
+            path.write_text(DrawingPdfTests.SVG.replace('viewBox="0 0 235 170"',
+                                                        'viewBox="10 20 470 340"'), encoding="utf-8")
+            _postprocess_drawing_title(path, "Roof")
+            root = ET.parse(path).getroot()
+            self.assertEqual(root.get("viewBox"), "10 20 470 360")
+            title = root.find("{http://www.w3.org/2000/svg}text")
+            self.assertEqual((title.get("x"), title.get("y")), ("245", "33"))
+            self.assertIn("font-size: 8px", title.get("style"))
+            self.assertEqual(root.find("{http://www.w3.org/2000/svg}g").get("transform"),
+                             "translate(0, 20)")
+
+    def test_render_uses_pdf_stem_svg_stem_or_explicit_title_in_all_outputs(self):
+        house = House("Titles")
+        drawing = house.add_drawing("Different IFC name", 0, 0, 2, 4)
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            house.write(directory / "house.ifc")
+            svg = directory / "source.svg"
+            pdf = directory / "reports" / "D1.1.6. Krov – řez XX.pdf"
+
+            def render(command, *, check):
+                Path(command[command.index("--output") + 1]).write_text(DrawingPdfTests.SVG, encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0)
+
+            with patch("ifc_utils.shutil.which", return_value="/usr/bin/blender"), \
+                    patch("ifc_utils.subprocess.run", side_effect=render), \
+                    patch("ifc_utils._export_drawing_pdf") as export:
+                for options, expected in (({}, "source"), ({"pdf": pdf}, pdf.stem),
+                                          ({"pdf": pdf, "title": "Příčný řez"}, "Příčný řez"),
+                                          ({"title": "Custom SVG title"}, "Custom SVG title")):
+                    with self.subTest(options=options):
+                        export.reset_mock()
+                        drawing.render(svg, **options)
+                        root = ET.parse(svg).getroot()
+                        self.assertEqual(root.find("{http://www.w3.org/2000/svg}text").text, expected)
+                        self.assertEqual(root.get("height"), "180mm")
+                        if "pdf" in options:
+                            export.assert_called_once()
+                        else:
+                            export.assert_not_called()
+
+    def test_title_height_is_included_in_pdf_fit_check(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "roof.svg"
+            svg = DrawingPdfTests.SVG.replace('height="170mm"', 'height="185mm"').replace(
+                'viewBox="0 0 235 170"', 'viewBox="0 0 235 185"')
+            path.write_text(svg, encoding="utf-8")
+            _drawing_pdf_sheet(svg, width=297, height=210, margin=10)
+            _postprocess_drawing_title(path, "Roof")
+            with self.assertRaisesRegex(ValueError, "does not fit"):
+                _drawing_pdf_sheet(path.read_text(encoding="utf-8"), width=297, height=210, margin=10)
 
 
 class HouseTests(unittest.TestCase):
@@ -10279,7 +10503,8 @@ class HouseTests(unittest.TestCase):
                 if "--output" in command:
                     output_index = command.index("--output") + 1
                     Path(command[output_index]).write_text(
-                        '<svg><text class="ANGLE">45.0°</text></svg>', encoding="utf-8"
+                        '<svg width="100mm" height="100mm" viewBox="0 0 100 100">'
+                        '<text class="ANGLE">45.0°</text></svg>', encoding="utf-8"
                     )
                 else:
                     self.assertIn('>45°</text>', output.read_text(encoding="utf-8"))

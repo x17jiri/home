@@ -86,6 +86,28 @@ import sys, math
 from ifc_utils import *
 from shapely.geometry import Polygon
 
+class PDFFolder:
+	def __init__(self, section, dir):
+		self.section = section
+		self.dir = dir
+		self.counter = 0
+
+	def add_pdf(self, name):
+		self.counter += 1
+		return self.dir + self.section + str(self.counter) + ". " + name + ".pdf"
+
+DIR = PDFFolder("D1.1.", "projekt/D1.1. ARCHITEKTONICKO STAVEBNÍ ŘEŠENÍ/")
+DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = DIR
+PDF_FOUND = DIR.add_pdf("Základy")
+PDF_GROUND = DIR.add_pdf("Půdorys 1.NP")
+PDF_CEILING = DIR.add_pdf("Strop nad 1.NP")
+PDF_UPPER = DIR.add_pdf("Půdorys podkroví")
+PDF_KROV = DIR.add_pdf("Krov")
+PDF_KROV_XX = DIR.add_pdf("Krov - řez XX")
+PDF_KROV_YY = DIR.add_pdf("Krov - řez YY")
+PDF_KROV_ZZ = DIR.add_pdf("Krov - řez ZZ")
+PDF_AA = DIR.add_pdf("Řez AA")
+PDF_BB = DIR.add_pdf("Podélný řez BB")
 
 @dataclass(frozen=True)
 class SplitRafter:
@@ -3075,7 +3097,7 @@ if "found" in sys.argv:
 	)
 	drawing1.add_wall_outlines(foundation_walls, style="dashed")
 
-	drawing1.render("found.svg", png=True, png_dpi=600)
+	drawing1.render("found.svg", pdf=PDF_FOUND)
 
 # Drawing 1 - ground floor
 if "ground" in sys.argv:
@@ -3108,12 +3130,11 @@ if "ground" in sys.argv:
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
 		(
 			"polystyrene-transparent",
-			f"Fasádní izolace - Polystyren "
-			f"{POLYSTYRENE_INSULATION_NOMINAL_THICKNESS * 1000:.0f} mm",
+			f"Fasádní izolace - Polystyren",
 		),
 		(
 			"rockwool-wave",
-			f"Fasádní izolace - Minerální vata 200 mm",
+			f"Fasádní izolace - Minerální vata",
 		),
 	])
 
@@ -3188,7 +3209,7 @@ if "ground" in sys.argv:
 	drawing1.add_lintel(oblouk, 8)
 	drawing1.add_lintel_legend()
 
-	drawing1.render("ground.svg", png=True, png_dpi=600)
+	drawing1.render("ground.svg", pdf=PDF_GROUND)
 
 # Drawing 2 - upper floor
 if "upper" in sys.argv:
@@ -3209,12 +3230,11 @@ if "upper" in sys.argv:
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"polystyrene-transparent",
-			f"Fasádní izolace - Polystyren "
-			f"{POLYSTYRENE_INSULATION_NOMINAL_THICKNESS * 1000:.0f} mm",
+			f"Fasádní izolace - Polystyren",
 		),
 		(
 			"rockwool-wave",
-			f"Fasádní izolace - Minerální vata 200 mm",
+			f"Fasádní izolace - Minerální vata",
 		),
 	])
 
@@ -3286,7 +3306,7 @@ if "upper" in sys.argv:
 	drawing1.add_lintel(sklad_opening, 1, position="after")
 	drawing1.add_lintel_legend()
 
-	drawing1.render("upper.svg", png=True, png_dpi=600)
+	drawing1.render("upper.svg", pdf=PDF_UPPER)
 
 # Roof framing plan. Its camera is above the complete roof build-up, so all
 # selected model elements are projections rather than section cuts.
@@ -3614,15 +3634,15 @@ roof_elevation_cuts = {
 
 if "roof_xx" in sys.argv:
 	roof_xx = add_roof_elevation("roof_xx", **roof_elevation_definitions["roof_xx"])
-	roof_xx.render("roof_xx.svg", png=True, png_dpi=600)
+	roof_xx.render("roof_xx.svg", pdf=PDF_KROV_XX)
 
 if "roof_yy" in sys.argv:
 	roof_yy = add_roof_elevation("roof_yy", **roof_elevation_definitions["roof_yy"])
-	roof_yy.render("roof_yy.svg", png=True, png_dpi=600)
+	roof_yy.render("roof_yy.svg", pdf=PDF_KROV_YY)
 
 if "roof_zz" in sys.argv:
 	roof_zz = add_roof_elevation("roof_zz", **roof_elevation_definitions["roof_zz"])
-	roof_zz.render("roof_zz.svg", png=True, png_dpi=600)
+	roof_zz.render("roof_zz.svg", pdf=PDF_KROV_ZZ)
 
 if "roof" in sys.argv:
 	drawing1 = house.add_drawing(
@@ -3688,7 +3708,7 @@ if "roof" in sys.argv:
 		],
 		layout_scale=0.5,
 	)
-	drawing1.render("roof.svg", png=True, png_dpi=600)
+	drawing1.render("roof.svg", pdf=PDF_KROV)
 
 if "ceiling" in sys.argv:
 	drawing1 = house.add_drawing(
@@ -3728,7 +3748,7 @@ if "ceiling" in sys.argv:
 		wall_front_u, wall_1a_u, wall_1b_u, wall_gym_u, wall_dormer, wall_4_u
 	)
 
-	drawing1.render("ceiling.svg", png=True, png_dpi=600)
+	drawing1.render("ceiling.svg", pdf=PDF_CEILING)
 
 # Drawing - cut1
 if "cut1" in sys.argv:
@@ -4085,7 +4105,7 @@ if "aa" in sys.argv:
 		end=(5.3, GROUND_FLOOR_THICKNESS+2.635),
 		offset=0)
 
-	drawing1.render("aa.svg", png=True, png_dpi=600)
+	drawing1.render("aa.svg", pdf=PDF_AA)
 
 # Longitudinal section through the ridge, perpendicular to AA.
 if "bb" in sys.argv:
@@ -4123,7 +4143,7 @@ if "bb" in sys.argv:
 			start_z=-1,
 			end_z=0.3,
 		)
-	drawing1.render("bb.svg", png=True, png_dpi=600)
+	drawing1.render("bb.svg", pdf=PDF_BB)
 
 # Drawing - cut3
 if "cut3" in sys.argv:
