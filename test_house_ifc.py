@@ -36,15 +36,22 @@ class FoundationDrawingTests(unittest.TestCase):
         table = tables[0]
         self.assertEqual(table["kind"], "line_legend")
         self.assertEqual(table["title"], "LEGENDA ČAR")
-        self.assertEqual(len(table["items"]), 1)
-        item = table["items"][0]
-        self.assertEqual(item["description"], "Obrys nosných stěn")
+        self.assertEqual(len(table["items"]), 6)
+        items = {item["description"]: item for item in table["items"]}
+        item = items["Obrys nosných stěn"]
         outlines = [a for a in foundation.group.IsGroupedBy[0].RelatedObjects
                     if "load-bearing-wall-outline" in (ifcopenshell.util.element.get_pset(
                         a, "EPset_Annotation", "Classes") or "").split()]
         self.assertEqual(len(outlines), 1)
         classes = ifcopenshell.util.element.get_pset(outlines[0], "EPset_Annotation", "Classes")
         self.assertEqual(item["classes"], f"IfcAnnotation PredefinedType-LINEWORK {classes}")
+        self.assertIn("drawing-line solid drawing-line-color-000000", items["Spodní úroveň základových pasů"]["classes"])
+        self.assertIn("drawing-line dashed drawing-line-color-ff0000", items["Zemnící pásovina FeZn 30/35"]["classes"])
+        for description, color in zip(("splašková kanalizace", "dešťová kanalizace", "vodovod"),
+                                       ("ffa500", "008000", "0000ff")):
+            item = items[description]
+            self.assertIn("dashed-arrows", item["classes"].split())
+            self.assertIn(f"drawing-line-color-{color}", item["classes"].split())
         ground_tables = json.loads(ifcopenshell.util.element.get_pset(ground.element, "EPset_Drawing", "RightPanelTables"))
         self.assertNotIn("line_legend", [t["kind"] for t in ground_tables])
 

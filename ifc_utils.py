@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
+from fractions import Fraction
 from html import escape
 import json
 from math import atan2, ceil, cos, degrees, hypot, isclose, isfinite, pi, radians, sin
@@ -2043,6 +2044,32 @@ def _postprocess_model_line_width(
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_drawing_line_colors(svg_path: Path) -> None:
+    """Style native lines and legend samples using their persisted color classes."""
+    original = svg_path.read_text(encoding="utf-8")
+    svg = re.sub(r'<style\b[^>]*class="drawing-line-colors"[^>]*>.*?</style>',
+                 "", original, flags=re.DOTALL)
+    colors = sorted(set(re.findall(r"\bdrawing-line-color-([0-9a-f]{6})\b", svg)))
+    if not colors:
+        return
+    rules = "\n".join(f".drawing-line-color-{color} {{ stroke: #{color} !important; }}"
+                      for color in colors)
+    style = '<style class="drawing-line-colors" type="text/css">' + rules + '</style>'
+    # Inkscape needs these rules before the styled objects when importing SVG.
+    # Appending a stylesheet after the linework can leave it black in the PDF.
+    defs = re.search(r"<defs\b[^>]*>", svg)
+    if defs is not None:
+        offset, insertion = defs.end(), style
+    else:
+        root = re.search(r"<svg\b[^>]*>", svg)
+        if root is None:
+            return
+        offset, insertion = root.end(), f"<defs>{style}</defs>"
+    updated = svg[:offset] + insertion + svg[offset:]
+    if updated != original:
+        svg_path.write_text(updated, encoding="utf-8")
+
+
 def _postprocess_batting_marker_strokes(
     svg_path: Path,
     *,
@@ -2731,6 +2758,42 @@ def _drawing_pattern_ids() -> frozenset[str]:
     return _DRAWING_PATTERN_IDS
 
 
+def _dashed_arrow_segments(
+    start: Point,
+    end: Point,
+    *,
+    units_per_mm: float,
+) -> list[list[tuple[float, float]]]:
+    """Shared vector pattern: 1.26 mm dashes / 1.44 mm gaps, every second dash an arrow.
+
+    units_per_mm converts paper dimensions to SVG units or model metres. The
+    pattern is directional from start to end, including a clipped last dash.
+    """
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = hypot(dx, dy)
+    if length == 0:
+        return []
+    tangent_x, tangent_y = dx / length, dy / length
+    normal_x, normal_y = -tangent_y, tangent_x
+    pattern_unit = 1.8 * units_per_mm
+    dash, pitch = 0.7 * pattern_unit, 1.5 * pattern_unit
+
+    def point(along, across=0):
+        return (start[0] + tangent_x * along + normal_x * across,
+                start[1] + tangent_y * along + normal_y * across)
+
+    segments = []
+    for index in range(ceil(length / pitch)):
+        a, b = index * pitch, min(index * pitch + dash, length)
+        segments.append([point(a), point(b)])
+        if index % 2:
+            head_length = min(0.3 * pattern_unit, (b - a) * 0.6)
+            half_width = head_length * 2 / 3
+            segments.append([point(b - head_length, half_width), point(b),
+                             point(b - head_length, -half_width)])
+    return segments
+
+
 def _material_legend_svg(
     table: Mapping[str, object],
     *,
@@ -2818,11 +2881,21 @@ def _material_legend_svg(
         if is_line_legend:
             # Reuse the source annotation's exact CSS classes, so sample
             # thickness/dashes follow the drawing stylesheet automatically.
-            parts.append(
-                f'<line class="line-legend-sample {escape(pattern, quote=True)}" '
-                f'x1="{x + padding:.6g}" x2="{x + swatch_width - padding:.6g}" '
-                f'y1="{row_y + row_height / 2:.6g}" y2="{row_y + row_height / 2:.6g}"/>'
-            )
+            sample_classes = f"line-legend-sample {escape(pattern, quote=True)}"
+            start = (x + padding, row_y + row_height / 2)
+            end = (x + swatch_width - padding, row_y + row_height / 2)
+            if "dashed-arrows" in pattern.split():
+                paths = []
+                for points in _dashed_arrow_segments(start, end, units_per_mm=u):
+                    d = "M" + " L".join(f"{px:.6g},{py:.6g}" for px, py in points)
+                    paths.append(f'<path d="{d}"/>')
+                parts.append(f'<g class="{sample_classes}">{"".join(paths)}</g>')
+            else:
+                parts.append(
+                    f'<line class="{sample_classes}" '
+                    f'x1="{start[0]:.6g}" x2="{end[0]:.6g}" '
+                    f'y1="{start[1]:.6g}" y2="{end[1]:.6g}"/>'
+                )
         else:
             parts.append(
                 f'<rect class="material-legend-swatch" x="{x:.6g}" '
@@ -4928,6 +5001,15 @@ def _color(value: str, argument: str) -> tuple[float, float, float]:
     return channels
 
 
+def _drawing_line_appearance(style: str, color: str) -> tuple[str, str, str]:
+    """Return validated style, normalized color and shared native/legend CSS classes."""
+    style = _enum(style, "style", {"SOLID", "DASHED", "DASHED-ARROWS"}).lower()
+    rgb = _color(color, "color")
+    color = "#" + "".join(f"{round(channel * 255):02x}" for channel in rgb)
+    classes = f"drawing-line {style} drawing-line-color-{color[1:]}"
+    return style, color, classes
+
+
 def _rotate_items_about_z(
     model: ifcopenshell.file,
     items: Sequence[ifcopenshell.entity_instance],
@@ -5561,6 +5643,7 @@ def _render_existing_drawing(
         absolute_output,
         drawing_properties or {},
     )
+    _postprocess_drawing_line_colors(absolute_output)
     resolved_title = title if title is not None else Path(pdf if pdf is not None else output_path).stem
     _postprocess_drawing_title(absolute_output, resolved_title)
 
@@ -7871,6 +7954,7 @@ class Drawing:
         self._wall_insulation_count = 0
         self._dimension_count = 0
         self._angle_count = 0
+        self._line_count = 0
         self._entrance_arrow_count = 0
         self._hexagon_marker_count = 0
         self._note_count = 0
@@ -8930,7 +9014,7 @@ class Drawing:
 
     def add_line_legend(
         self,
-        items: Sequence[tuple[ifcopenshell.entity_instance, str]],
+        items: Sequence[tuple[ifcopenshell.entity_instance, str] | Mapping[str, object]],
         *,
         title: str = "LEGENDA ČAR",
     ) -> Drawing:
@@ -8939,7 +9023,9 @@ class Drawing:
         Each item is (linework_annotation, description), e.g. the annotation
         returned by add_wall_outlines(). Samples reuse the annotation's CSS
         classes, including its dash style and thickness. All annotations must
-        belong to this drawing. Tables stack in call order and persist in IFC.
+        belong to this drawing. For legend-only samples, supply a dict with
+        description, style (solid/dashed/dashed-arrows) and color (default black), instead
+        of an annotation pair. Tables stack in call order and persist in IFC.
         """
         if self.right_panel_width < 40:
             raise ValueError("add_line_legend requires right_panel_width of at least 40 mm")
@@ -8955,6 +9041,14 @@ class Drawing:
         drawing_members = set(self.group.IsGroupedBy[0].RelatedObjects)
         normalised_items = []
         for index, item in enumerate(supplied_items, start=1):
+            if isinstance(item, Mapping):
+                description = _name(item.get("description"), f"item {index} description")
+                _, _, classes = _drawing_line_appearance(item.get("style", "solid"), item.get("color", "black"))
+                normalised_items.append({
+                    "classes": f"IfcAnnotation PredefinedType-LINEWORK {classes}",
+                    "description": description,
+                })
+                continue
             if isinstance(item, (str, bytes)):
                 raise TypeError(f"item {index} must contain an annotation and description")
             try:
@@ -9541,6 +9635,85 @@ class Drawing:
             properties=properties,
         )
         return self
+
+    def add_line(
+        self,
+        start: Point,
+        end: Point,
+        *,
+        style: Literal["solid", "dashed", "dashed-arrows"] = "solid",
+        color: str = "black",
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add drawing-only native linework between two 2D model coordinates.
+
+        Coordinates are metres: (x,y) in plans, (y,z) when looking along X,
+        and (x,z) when looking along Y. Colors accept names or #RGB/#RRGGBB.
+        Lines use a thin 0.1 mm stroke and share their styles with line legends.
+        dashed-arrows alternates plain dashes and open arrows towards end,
+        using the same paper-sized vector pattern as the legend samples.
+        """
+        start, end = _point(start, "start"), _point(end, "end")
+        if hypot(end[0] - start[0], end[1] - start[1]) < 1e-9:
+            raise ValueError("line start and end must be different")
+        style, color, classes = _drawing_line_appearance(style, color)
+        line_name = _name(name, "name") if name is not None else None
+        if self.view == "plan":
+            annotation_z = max((s.elevation for s in self.storeys if s.elevation <= self.z), default=0.0)
+
+            def to_world(point):
+                return np.array((*point, annotation_z), dtype=float)
+        elif isclose(abs(self.direction[0]), 1.0, abs_tol=1e-9):
+            def to_world(point):
+                return np.array((self.x, *point), dtype=float)
+        elif isclose(abs(self.direction[1]), 1.0, abs_tol=1e-9):
+            def to_world(point):
+                return np.array((point[0], self.y, point[1]), dtype=float)
+        else:
+            raise ValueError("add_line requires an axis-aligned elevation direction")
+        placement = ifcopenshell.util.placement.get_local_placement(self.element.ObjectPlacement).copy()
+        origin = to_world(start)
+        placement[:3, 3] = origin
+        delta = to_world(end) - origin
+        local_end = (float(np.dot(delta, placement[:3, 0])), float(np.dot(delta, placement[:3, 1])))
+        segments = None
+        if style == "dashed-arrows":
+            scale_value = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Scale")
+            try:
+                scale = float(Fraction(str(scale_value)))
+                if not isfinite(scale) or scale <= 0:
+                    raise ValueError
+            except (ValueError, ZeroDivisionError):
+                raise ValueError("dashed-arrows requires a positive drawing scale") from None
+            segments = _dashed_arrow_segments((0, 0), local_end, units_per_mm=0.001 / scale)
+        self._line_count += 1
+        model = self.house.model
+        line = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcAnnotation", name=line_name or f"{self.name} Line {self._line_count}",
+            predefined_type="LINEWORK",
+        )
+        if segments is None:
+            representation = ifcopenshell.api.geometry.add_axis_representation(
+                model, context=self.house._annotation_context, axis=[(0.0, 0.0), local_end],
+            )
+        else:
+            curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(points), None, False)
+                      for points in segments]
+            representation = model.createIfcShapeRepresentation(
+                self.house._annotation_context, "Annotation", "GeometricCurveSet",
+                [model.createIfcGeometricCurveSet(curves)],
+            )
+        ifcopenshell.api.geometry.assign_representation(model, product=line, representation=representation)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=line, matrix=placement, is_si=True)
+        for pset_name, properties in (
+            ("EPset_Annotation", {"Classes": classes}),
+            ("BBIM_DrawingLine", {"Start": json.dumps(start), "End": json.dumps(end), "Style": style, "Color": color}),
+        ):
+            pset = ifcopenshell.api.pset.add_pset(model, product=line, name=pset_name)
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties=properties)
+        ifcopenshell.api.group.assign_group(model, group=self.group, products=[line])
+        ifcopenshell.api.pset.edit_pset(model, pset=self._drawing_pset, properties={"HasAnnotation": True})
+        return line
 
     def add_angle(
         self,

@@ -537,6 +537,18 @@ tspan.note-text {
     stroke-dasharray: 0.7 0.8 !important;
 }
 
+/* Generic drawing-only lines; export injects their per-color CSS rules. */
+.PredefinedType-LINEWORK.drawing-line {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: none !important;
+}
+
+.PredefinedType-LINEWORK.drawing-line.dashed {
+    stroke-dasharray: 0.7 0.8 !important;
+}
+
 /* Inserted immediately behind the four roof-window outline lines. */
 .roof-opening-mask {
     fill: white !important;

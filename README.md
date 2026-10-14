@@ -891,6 +891,30 @@ outline = drawing.add_wall_outlines(walls, style="dashed")
 drawing.add_line_legend([(outline, "Obrys nosných stěn")])
 ```
 
+Draw individual lines using model-space 2D coordinates (metres):
+
+```python
+line = drawing.add_line(start=(1, 2), end=(3, 2), style="dashed", color="red")
+```
+
+`style` defaults to `"solid"`; `color` defaults to `"black"` and accepts
+named colors or `#RGB`/`#RRGGBB`. Plans use `(x, y)`, elevations looking along
+X use `(y, z)`, and elevations looking along Y use `(x, z)`, just like notes
+and dimensions. Lines are drawing-only annotations, not physical model parts.
+`style="dashed-arrows"` alternates a plain dash with an arrow pointing toward
+`end`; reversing the endpoints reverses the arrows. The pattern uses actual
+vector segments (including the arrowheads), at a constant paper size for the
+drawing scale, and the same geometry is used in legend samples.
+Pass `(line, description)` to `add_line_legend()` to reuse its appearance, or
+use a style-only dictionary when the line has not yet been placed:
+
+```python
+drawing.add_line_legend([
+    {"style": "solid", "color": "black", "description": "Spodní úroveň základových pasů"},
+    {"style": "dashed", "color": "red", "description": "Zemnící pásovina FeZn 30/35"},
+])
+```
+
 Like material legends, `add_line_legend()` requires a right panel at least
 40 mm wide and stacks with other tables. Its default title is `LEGENDA ČAR`.
 

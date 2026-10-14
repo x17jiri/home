@@ -51,6 +51,8 @@ from ifc_utils import (
     _overhead_mask_global_ids,
     _postprocess_angle_labels,
     _postprocess_drawing_title,
+    _postprocess_drawing_line_colors,
+    _dashed_arrow_segments,
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
     _postprocess_hexagon_marker_overlays,
@@ -584,7 +586,164 @@ class DrawingTitleTests(unittest.TestCase):
                 _drawing_pdf_sheet(path.read_text(encoding="utf-8"), width=297, height=210, margin=10)
 
 
+class DrawingLineTests(unittest.TestCase):
+    def test_arrow_dashes_alternate_and_point_toward_end_in_either_direction(self):
+        segments = _dashed_arrow_segments((0, 0), (10.8, 0), units_per_mm=1)
+        self.assertEqual(len(segments), 6)
+        np.testing.assert_allclose(segments[0], [(0, 0), (1.26, 0)])
+        np.testing.assert_allclose(segments[1], [(2.7, 0), (3.96, 0)])
+        np.testing.assert_allclose(segments[2], [(3.42, 0.36), (3.96, 0), (3.42, -0.36)])
+        np.testing.assert_allclose(segments[3], [(5.4, 0), (6.66, 0)])
+        for start, end in (((6, 0), (0, 0)), ((0, 0), (0, 6)), ((0, 0), (3.6, 4.8))):
+            direction = (np.array(end) - start) / 6
+            for segment in _dashed_arrow_segments(start, end, units_per_mm=1):
+                if len(segment) == 3:
+                    self.assertGreater(np.dot(np.array(segment[1]) - segment[0], direction), 0)
+                    self.assertGreater(np.dot(np.array(segment[1]) - segment[2], direction), 0)
+        for length in (0.1, 1.6, 1.9, 4.6):
+            for segment in _dashed_arrow_segments((0, 0), (length, 0), units_per_mm=1):
+                for x, y in segment:
+                    self.assertGreaterEqual(x, -1e-9)
+                    self.assertLessEqual(x, length + 1e-9)
+
+    def test_arrow_line_native_geometry_and_legend_use_the_same_paper_sized_pattern(self):
+        for mirror in (False, True):
+            for scale, metres_per_mm in (("1/100", 0.1), ("1/50", 0.05)):
+                for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                        ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                        ("elevation", (0, -1, 0))):
+                    with self.subTest(mirror=mirror, scale=scale, direction=direction):
+                        house = House("Arrow lines", mirror_x=mirror)
+                        drawing = house.add_drawing("View", 1, 1.5, 4, 5, view=view, direction=direction,
+                                                    right_panel_width=40)
+                        ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset, properties={"Scale": scale})
+                        line = drawing.add_line((2, 3), (3, 3), style="dashed-arrows", color="orange")
+                        drawing.add_line_legend([(line, "Utility")])
+                        curves = AngleDimensionTests.world_curves(line)
+                        source_pattern = _dashed_arrow_segments((2, 3), (3, 3), units_per_mm=metres_per_mm)
+                        self.assertEqual(len(curves), len(source_pattern))
+                        for curve, points in zip(curves, source_pattern):
+                            if view == "plan":
+                                expected = np.array([(*p, 0) for p in points])
+                            elif direction[0]:
+                                expected = np.array([(1, *p) for p in points])
+                            else:
+                                expected = np.array([(p[0], 1.5, p[1]) for p in points])
+                            # A mirrored viewing basis reverses the V's wing
+                            # order, but not its geometry or arrow direction.
+                            if len(points) == 3 and np.allclose(curve, expected[::-1]):
+                                expected = expected[::-1]
+                            np.testing.assert_allclose(curve, expected)
+                        exported = house._export_model()
+                        mirrored_curves = AngleDimensionTests.world_curves(exported.by_guid(line.GlobalId))
+                        for curve, mirrored_curve in zip(curves, mirrored_curves):
+                            np.testing.assert_allclose(mirrored_curve, curve * np.array((-1 if mirror else 1, 1, 1)))
+                        classes = ifcopenshell.util.element.get_pset(line, "EPset_Annotation", "Classes")
+                        self.assertIn("dashed-arrows", classes.split())
+                        self.assertNotIn("dashed", classes.split())
+
+    def test_lines_use_model_coordinates_in_plans_and_all_elevations_and_mirror_once(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Lines", mirror_x=mirror)
+                    house.storey("Floor", elevation=0.25)
+                    drawing = house.add_drawing("View", 1, 1.5, 4, 5, view=view, direction=direction)
+                    line = drawing.add_line((2, 3), (4, 5), style="dashed", color="red", name="Earth strip")
+                    self.assertEqual(line.ObjectType, "LINEWORK")
+                    properties = ifcopenshell.util.element.get_pset(line, "BBIM_DrawingLine")
+                    self.assertEqual((properties["Style"], properties["Color"]), ("dashed", "#ff0000"))
+                    self.assertEqual(json.loads(properties["Start"]), [2, 3])
+                    if view == "plan":
+                        expected = np.array([(2, 3, 0.25), (4, 5, 0.25)])
+                    elif direction[0]:
+                        expected = np.array([(1, 2, 3), (1, 4, 5)])
+                    else:
+                        expected = np.array([(2, 1.5, 3), (4, 1.5, 5)])
+                    np.testing.assert_allclose(AngleDimensionTests.world_curves(line)[0], expected)
+                    exported = house._export_model()
+                    expected *= np.array((-1 if mirror else 1, 1, 1))
+                    np.testing.assert_allclose(AngleDimensionTests.world_curves(exported.by_guid(line.GlobalId))[0], expected)
+                    self.assertIn(line, drawing.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertTrue(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "HasAnnotation"))
+                    other = house.add_drawing("Other", 1, 1.5, 4, 5)
+                    self.assertNotIn(line, other.group.IsGroupedBy[0].RelatedObjects)
+
+    def test_defaults_hex_colors_and_line_legend_share_appearance(self):
+        house = House("Lines")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4, right_panel_width=40)
+        black = drawing.add_line((0, 0), (1, 1))
+        colored = drawing.add_line((0, 1), (1, 2), color="#aBc")
+        self.assertEqual(black.Name, "Plan Line 1")
+        black_style = ifcopenshell.util.element.get_pset(black, "BBIM_DrawingLine")
+        self.assertEqual((black_style["Style"], black_style["Color"]), ("solid", "#000000"))
+        self.assertEqual(ifcopenshell.util.element.get_pset(colored, "BBIM_DrawingLine", "Color"), "#aabbcc")
+        drawing.add_line_legend([(colored, "Colored line")])
+        table = json.loads(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "RightPanelTables"))[0]
+        classes = ifcopenshell.util.element.get_pset(colored, "EPset_Annotation", "Classes")
+        self.assertEqual(table["items"][0]["classes"], f"IfcAnnotation PredefinedType-LINEWORK {classes}")
+
+    def test_invalid_lines_leave_no_partial_annotations(self):
+        house = House("Lines")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4)
+        invalid = (({"end": (0, 0)}, ValueError), ({"start": (0, 0, 0)}, TypeError),
+                   ({"end": (float("nan"), 0)}, ValueError), ({"style": "wavy"}, ValueError),
+                   ({"color": "not a color"}, ValueError), ({"color": True}, TypeError),
+                   ({"name": ""}, ValueError))
+        before = len(house.model.by_type("IfcAnnotation"))
+        for kwargs, error in invalid:
+            with self.subTest(kwargs=kwargs), self.assertRaises(error):
+                drawing.add_line(**(dict(start=(0, 0), end=(1, 1)) | kwargs))
+        self.assertEqual(len(house.model.by_type("IfcAnnotation")), before)
+        self.assertEqual(drawing._line_count, 0)
+        diagonal = house.add_drawing("Diagonal", 0, 0, 2, 4, view="elevation", direction=(1, 1, 0))
+        before = len(house.model.by_type("IfcAnnotation"))
+        with self.assertRaisesRegex(ValueError, "axis-aligned"):
+            diagonal.add_line((0, 0), (1, 1))
+        self.assertEqual(len(house.model.by_type("IfcAnnotation")), before)
+
+    def test_native_line_and_legend_colors_are_injected_in_svg_without_geometry_changes(self):
+        svg = ('<svg><path class="PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000" '
+               'd="M0 0 L10 10"/><line class="line-legend-sample drawing-line-color-000000" '
+               'x1="1" y1="2" x2="3" y2="2"/></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "lines.svg"
+            path.write_text(svg, encoding="utf-8")
+            _postprocess_drawing_line_colors(path)
+            result = path.read_text(encoding="utf-8")
+            self.assertIn(".drawing-line-color-ff0000 { stroke: #ff0000 !important; }", result)
+            self.assertIn(".drawing-line-color-000000 { stroke: #000000 !important; }", result)
+            self.assertIn('d="M0 0 L10 10"', result)
+            self.assertLess(result.index('class="drawing-line-colors"'), result.index('<path'))
+            _postprocess_drawing_line_colors(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), result)
+            ET.fromstring(result)
+
+
 class LineLegendTests(unittest.TestCase):
+    def test_arrow_samples_are_real_vectors_and_keep_color_classes(self):
+        self.drawing.add_line_legend([
+            {"description": "splašková kanalizace", "style": "dashed-arrows", "color": "orange"},
+            {"description": "dešťová kanalizace", "style": "dashed-arrows", "color": "green"},
+            {"description": "vodovod", "style": "dashed-arrows", "color": "blue"},
+        ])
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "found.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" height="160mm" '
+                            'viewBox="0 0 160 160"><g id="geometry"/></svg>', encoding="utf-8")
+            _postprocess_right_panel(path, ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing"))
+            _postprocess_drawing_line_colors(path)
+            root = ET.parse(path).getroot()
+            samples = [e for e in root.iter() if "line-legend-sample" in e.get("class", "").split()]
+            self.assertEqual(len(samples), 3)
+            for sample, color in zip(samples, ("ffa500", "008000", "0000ff")):
+                self.assertTrue(sample.tag.endswith("}g"))
+                self.assertIn(f"drawing-line-color-{color}", sample.get("class").split())
+                self.assertEqual(len(sample), 3)
+                self.assertEqual(sum(path.get("d").count(" L") == 2 for path in sample), 1)
+
     def setUp(self):
         self.house = House("Lines")
         floor = self.house.storey("Floor", elevation=0)
@@ -640,7 +799,10 @@ class LineLegendTests(unittest.TestCase):
         invalid = (([], ValueError), ("dashed", TypeError), (None, TypeError),
                    (["dashed"], TypeError), ([(self.outline,)], TypeError),
                    ([("dashed", "Wall")], TypeError), ([(other_line, "Wall")], ValueError),
-                   ([(angle, "Angle")], ValueError), ([(self.outline, "")], ValueError))
+                   ([(angle, "Angle")], ValueError), ([(self.outline, "")], ValueError),
+                   ([{"description": "Line", "style": "wavy"}], ValueError),
+                   ([{"description": "Line", "color": "bad-color"}], ValueError),
+                   ([{"style": "solid"}], TypeError))
         for items, error in invalid:
             with self.subTest(items=items), self.assertRaises(error):
                 self.drawing.add_line_legend(items)
@@ -648,6 +810,17 @@ class LineLegendTests(unittest.TestCase):
         narrow = self.house.add_drawing("Narrow", 2, 0, -1, 4, right_panel_width=30)
         with self.assertRaisesRegex(ValueError, "40 mm"):
             narrow.add_line_legend([(self.outline, "Wall")])
+
+    def test_style_only_samples_do_not_add_lines_to_the_plan(self):
+        before = len(self.house.model.by_type("IfcAnnotation"))
+        self.drawing.add_line_legend([
+            {"description": "Bottom", "style": "solid", "color": "black"},
+            {"description": "Earth strip", "style": "dashed", "color": "red"},
+        ])
+        self.assertEqual(len(self.house.model.by_type("IfcAnnotation")), before)
+        table = json.loads(ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing", "RightPanelTables"))[0]
+        self.assertIn("drawing-line solid drawing-line-color-000000", table["items"][0]["classes"])
+        self.assertIn("drawing-line dashed drawing-line-color-ff0000", table["items"][1]["classes"])
 
 class HouseTests(unittest.TestCase):
     def test_calculates_roof_u_value_with_parallel_rafter_path(self) -> None:

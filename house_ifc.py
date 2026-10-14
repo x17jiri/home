@@ -829,11 +829,13 @@ ground.asset(
     center=(HOUSE_WIDTH-(BWT+0.5), BWT+BATHROOM_DEPTH-0.5),
 	rotation=0,
 )
+toilet_x = HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4
+toilet_y = BWT+0.5
 ground.asset(
     "WC",
     asset="toilet_without_cistern",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, BWT+0.5),
+    center=(toilet_x, toilet_y),
     rotation=180,
 )
 
@@ -3105,7 +3107,37 @@ if "found" in sys.argv:
 		right_panel_width=40,
 	)
 	wall_outline = drawing1.add_wall_outlines(foundation_walls, style="dashed")
-	drawing1.add_line_legend([(wall_outline, "Obrys nosných stěn")])
+	drawing1.add_line_legend([
+		{"style": "solid", "color": "black", "description": "Spodní úroveň základových pasů"},
+		(wall_outline, "Obrys nosných stěn"),
+		{"style": "dashed", "color": "red", "description": "Zemnící pásovina FeZn 30/35"},
+		{"style": "dashed-arrows", "color": "orange", "description": "splašková kanalizace"},
+		{"style": "dashed-arrows", "color": "green", "description": "dešťová kanalizace"},
+		{"style": "dashed-arrows", "color": "blue", "description": "vodovod"},
+		{"style": "solid", "color": "blue", "description": "chránička"},
+	])
+
+	# FeZn
+	drawing1.add_line((BWT/2, GYM_DEPTH-1), (BWT/2, HOUSE_DEPTH+1), style="dashed", color="red")
+	drawing1.add_line((BWT/2, HOUSE_DEPTH-BWT/2), (HOUSE_WIDTH-BWT/2, HOUSE_DEPTH-BWT/2), style="dashed", color="red")
+	drawing1.add_line((HOUSE_WIDTH-BWT/2, -1), (HOUSE_WIDTH-BWT/2, HOUSE_DEPTH+1), style="dashed", color="red")
+	drawing1.add_line((CUT_WIDTH+BWT/2, BWT/2), (HOUSE_WIDTH-BWT/2, BWT/2), style="dashed", color="red")
+	drawing1.add_line((CUT_WIDTH+BWT/2, BWT/2), (CUT_WIDTH+BWT/2, BWT+GYM_DEPTH+BWT/2), style="dashed", color="red")
+	drawing1.add_line((CUT_WIDTH+BWT/2, BWT+GYM_DEPTH+BWT/2), (BWT/2, BWT+GYM_DEPTH+BWT/2), style="dashed", color="red")
+
+	# Kanalizace
+	cisticka_x = 2
+	cisticka_y = -2
+	drawing1.add_line((toilet_x+0.2, 1.0), (toilet_x+0.2, -1), style="dashed-arrows", color="orange")
+	drawing1.add_line((toilet_x+0.2, -1), (cisticka_x, cisticka_y), style="dashed-arrows", color="orange")
+
+	# Vodovod
+	drawing1.add_line((HOUSE_WIDTH-1.3, -1.0), (HOUSE_WIDTH-1.3, 1.0), style="dashed-arrows", color="blue")
+	# Chranicka
+	drawing1.add_line((HOUSE_WIDTH-1.25, -0.5), (HOUSE_WIDTH-1.25, 0.7), style="solid", color="blue")
+	drawing1.add_line((HOUSE_WIDTH-1.35, -0.5), (HOUSE_WIDTH-1.35, 0.7), style="solid", color="blue")
+	drawing1.add_line((HOUSE_WIDTH-1.25, -0.5), (HOUSE_WIDTH-1.35, -0.5), style="solid", color="blue")
+	drawing1.add_line((HOUSE_WIDTH-1.25, 0.7), (HOUSE_WIDTH-1.35, 0.7), style="solid", color="blue")
 
 	drawing1.render("found.svg", pdf=PDF_FOUND)
 
