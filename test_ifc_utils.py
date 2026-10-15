@@ -52,6 +52,7 @@ from ifc_utils import (
     _postprocess_angle_labels,
     _postprocess_drawing_title,
     _postprocess_drawing_line_colors,
+    _postprocess_drawing_circles,
     _dashed_arrow_segments,
     _postprocess_door_overheads,
     _postprocess_elevation_furniture_labels,
@@ -586,7 +587,423 @@ class DrawingTitleTests(unittest.TestCase):
                 _drawing_pdf_sheet(path.read_text(encoding="utf-8"), width=297, height=210, margin=10)
 
 
+class DrawingPrimitiveTests(unittest.TestCase):
+    def test_circle_export_uses_exact_parameters_and_only_current_drawing(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1,0,0)),
+                                    ("elevation", (-1,0,0)), ("elevation", (0,1,0)),
+                                    ("elevation", (0,-1,0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Exact circles", mirror_x=mirror)
+                    drawing = house.add_drawing("View", 1, 1.5, 4, 5, view=view, direction=direction)
+                    circle = drawing.add_circle((2,3), 0.5)
+                    other = house.add_drawing("Other", 1, 1.5, 4, 5, view=view, direction=direction)
+                    other.add_circle((20,30), 5)
+                    model = house._export_model()
+                    svg = ('<svg width="100mm" height="100mm" viewBox="0 0 100 100">'
+                           '<line class="drawing-line drawing-circle-1" x1="1" y1="2" x2="2" y2="3"/>'
+                           '<line class="drawing-line drawing-circle-1" x1="2" y1="3" x2="3" y2="4"/>'
+                           '<line class="unrelated" x1="5" y1="6" x2="7" y2="8"/></svg>')
+                    with TemporaryDirectory() as directory:
+                        path = Path(directory) / "circles.svg"
+                        path.write_text(svg, encoding="utf-8")
+                        _postprocess_drawing_circles(path, model, model.by_guid(drawing.element.GlobalId))
+                        result = path.read_text(encoding="utf-8")
+                        root = ET.fromstring(result)
+                        circles = list(root.iter("circle"))
+                        self.assertEqual(len(circles), 1)
+                        self.assertEqual(float(circles[0].get("r")), 5)
+                        camera = ifcopenshell.util.placement.get_local_placement(model.by_guid(drawing.element.GlobalId).ObjectPlacement)
+                        position = ifcopenshell.util.placement.get_local_placement(model.by_guid(circle.GlobalId).ObjectPlacement)
+                        local = np.linalg.inv(camera) @ position[:,3]
+                        self.assertAlmostEqual(float(circles[0].get("cx")), 50 + local[0]*10)
+                        self.assertAlmostEqual(float(circles[0].get("cy")), 50 - local[1]*10)
+                        self.assertIn('class="unrelated"', result)
+                        _postprocess_drawing_circles(path, model, model.by_guid(drawing.element.GlobalId))
+                        self.assertEqual(path.read_text(encoding="utf-8"), result)
+
+    def test_circle_rectangle_and_text_positions_in_all_views_and_export_mirroring(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Primitives", mirror_x=mirror)
+                    house.storey("Floor", elevation=0.25)
+                    drawing = house.add_drawing("View", 1, 1.5, 4, 5, view=view, direction=direction)
+                    other = house.add_drawing("Other", 1, 1.5, 4, 5)
+                    circle = drawing.add_circle((2, 3), 0.5, color="blue")
+                    rectangle = drawing.add_rectangle((4, 5), (2, 3), style="dashed")
+                    text = drawing.add_text((2, 3), "ČOV", font_size=3.25, color="red")
+                    for item in (circle, rectangle, text):
+                        self.assertIn(item, drawing.group.IsGroupedBy[0].RelatedObjects)
+                        self.assertNotIn(item, other.group.IsGroupedBy[0].RelatedObjects)
+                    literal = text.Representation.Representations[0].Items[0]
+                    self.assertEqual((literal.Literal, literal.BoxAlignment), ("ČOV", "center"))
+                    self.assertEqual(circle.Representation.Representations[0].Items[0].Elements[0].Radius, 0.5)
+                    if view == "plan":
+                        centre = np.array((2, 3, 0.25))
+                        corners = np.array([(2,3,.25), (4,3,.25), (4,5,.25), (2,5,.25), (2,3,.25)])
+                    elif direction[0]:
+                        centre = np.array((1, 2, 3))
+                        corners = np.array([(1,2,3), (1,4,3), (1,4,5), (1,2,5), (1,2,3)])
+                    else:
+                        centre = np.array((2, 1.5, 3))
+                        corners = np.array([(2,1.5,3), (4,1.5,3), (4,1.5,5), (2,1.5,5), (2,1.5,3)])
+                    np.testing.assert_allclose(AngleDimensionTests.world_curves(rectangle)[0], corners)
+                    for item in (circle, text):
+                        placement = ifcopenshell.util.placement.get_local_placement(item.ObjectPlacement)
+                        np.testing.assert_allclose(placement[:3, 3], centre)
+                    exported = house._export_model()
+                    reflection = np.array((-1 if mirror else 1, 1, 1))
+                    np.testing.assert_allclose(AngleDimensionTests.world_curves(exported.by_guid(rectangle.GlobalId))[0], corners * reflection)
+                    for item in (circle, text):
+                        placement = ifcopenshell.util.placement.get_local_placement(exported.by_guid(item.GlobalId).ObjectPlacement)
+                        np.testing.assert_allclose(placement[:3, 3], centre * reflection)
+                    props = ifcopenshell.util.element.get_pset(exported.by_guid(text.GlobalId), "BBIM_DrawingText")
+                    self.assertEqual((props["Text"], props["FontSize"], props["Color"]), ("ČOV", 3.25, "#ff0000"))
+
+    def test_text_alignment_and_styles_are_configurable(self):
+        house = House("Primitives")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4)
+        for alignment, box in (("center", "center"), ("left", "middle-left"), ("right", "middle-right")):
+            text = drawing.add_text((1, 2), "Žluťoučký text", alignment=alignment)
+            self.assertEqual(text.Representation.Representations[0].Items[0].BoxAlignment, box)
+            props = ifcopenshell.util.element.get_pset(text, "BBIM_DrawingText")
+            self.assertEqual((props["FontSize"], props["Color"]), (3, "#000000"))
+        circle = drawing.add_circle((1, 2), 0.5, style="dashed", color="#aBc", name="Tank")
+        self.assertEqual(circle.Name, "Tank")
+        props = ifcopenshell.util.element.get_pset(circle, "BBIM_DrawingCircle")
+        self.assertEqual((props["Style"], props["Color"]), ("dashed", "#aabbcc"))
+
+    def test_invalid_primitives_leave_no_partial_annotations(self):
+        house = House("Primitives")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4)
+        invalid = (
+            (lambda: drawing.add_circle((0,0), 0), ValueError),
+            (lambda: drawing.add_circle((0,0), -1), ValueError),
+            (lambda: drawing.add_circle((0,0), True), TypeError),
+            (lambda: drawing.add_circle((0,0), float("inf")), ValueError),
+            (lambda: drawing.add_circle((0,0), 1, style="dashed-arrows"), ValueError),
+            (lambda: drawing.add_rectangle((0,0), (0,1)), ValueError),
+            (lambda: drawing.add_rectangle((0,0), (1,0)), ValueError),
+            (lambda: drawing.add_rectangle((0,0,0), (1,1)), TypeError),
+            (lambda: drawing.add_text((0,0), " "), ValueError),
+            (lambda: drawing.add_text((0,0), "Text", font_size=0), ValueError),
+            (lambda: drawing.add_text((0,0), "Text", font_size=True), TypeError),
+            (lambda: drawing.add_text((0,0), "Text", alignment="unknown"), ValueError),
+            (lambda: drawing.add_text((0,0), "Text", color="bad-color"), ValueError),
+        )
+        before = len(house.model.by_type("IfcAnnotation"))
+        for call, error in invalid:
+            with self.assertRaises(error):
+                call()
+            self.assertEqual(len(house.model.by_type("IfcAnnotation")), before)
+        diagonal = house.add_drawing("Diagonal", 0, 0, 2, 4, view="elevation", direction=(1,1,0))
+        before = len(house.model.by_type("IfcAnnotation"))
+        for call in (lambda: diagonal.add_circle((0,0), 1),
+                     lambda: diagonal.add_rectangle((0,0), (1,1)), lambda: diagonal.add_text((0,0), "Text")):
+            with self.assertRaisesRegex(ValueError, "axis-aligned"):
+                call()
+            self.assertEqual(len(house.model.by_type("IfcAnnotation")), before)
+
+    def test_text_color_and_paper_font_size_css_are_defined_before_geometry(self):
+        svg = ('<svg width="100mm" height="100mm" viewBox="0 0 200 200">'
+               '<text class="drawing-text drawing-text-size-3p25 drawing-text-color-ff0000">'
+               '<tspan>ČOV</tspan></text></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "text.svg"
+            path.write_text(svg, encoding="utf-8")
+            _postprocess_drawing_line_colors(path)
+            result = path.read_text(encoding="utf-8")
+            self.assertIn(".drawing-text-color-ff0000 tspan", result)
+            self.assertIn("fill: #ff0000 !important", result)
+            self.assertIn(".drawing-text-size-3p25 tspan", result)
+            self.assertIn("font-size: 6.5px !important", result)
+            self.assertLess(result.index('<style'), result.index('<text'))
+            _postprocess_drawing_line_colors(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), result)
+
+
+class SanitarySymbolTests(unittest.TestCase):
+    def test_basin_and_sink_geometry_share_rim_and_outlet_and_bottom_datum(self):
+        house = House("Sanitary icons")
+        drawing = house.add_drawing("kanal", 2, 2, 1, 5, storeys=[])
+        other = house.add_drawing("Other", 2, 2, 1, 5, storeys=[])
+        for method, kind in ((drawing.add_basin, "basin"), (drawing.add_sink, "sink")):
+            with self.subTest(kind=kind):
+                before = set(house.model.by_type("IfcAnnotation"))
+                symbol = method(x=2, z=0.65, name=f"Symbol {kind}")
+                self.assertEqual(set(house.model.by_type("IfcAnnotation")) - before, {symbol})
+                self.assertEqual(symbol.ObjectType, "LINEWORK")
+                self.assertEqual(symbol.Name, f"Symbol {kind}")
+                self.assertIn(symbol, drawing.group.IsGroupedBy[0].RelatedObjects)
+                self.assertNotIn(symbol, other.group.IsGroupedBy[0].RelatedObjects)
+                curves = AngleDimensionTests.world_curves(symbol)
+                self.assertEqual(len(curves), 3)
+                bowl, rim, outlet = curves
+                np.testing.assert_allclose(np.min(bowl[:, :2], axis=0), (1.7, .65))
+                np.testing.assert_allclose(np.max(bowl[:, :2], axis=0), (2.3, .85))
+                np.testing.assert_allclose(rim, ((1.65, .85, 0), (2.35, .85, 0)))
+                np.testing.assert_allclose(outlet, ((2, .65, 0), (2, .55, 0)))
+                if kind == "basin":
+                    self.assertEqual(len(bowl), 33)
+                    np.testing.assert_allclose(((bowl[:, 0] - 2) / .3)**2 + ((bowl[:, 1] - .85) / .2)**2, 1)
+                else:
+                    np.testing.assert_allclose(bowl, ((1.7, .85, 0), (1.7, .65, 0),
+                                                      (2.3, .65, 0), (2.3, .85, 0)))
+                props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+                self.assertEqual(props["Kind"], kind)
+                self.assertEqual((props["X"], props["BottomZ"], props["Width"], props["Height"],
+                                  props["OutletLength"], props["Color"]), (2, .65, .6, .2, .1, "#000000"))
+        self.assertFalse(house.model.by_type("IfcSanitaryTerminal"))
+
+    def test_positions_in_all_views_and_export_mirroring(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Icons", mirror_x=mirror)
+                    drawing = house.add_drawing("View", 1, 2, 3, 5, view=view, direction=direction, storeys=[])
+                    for method in (drawing.add_basin, drawing.add_sink):
+                        symbol = method(2, 4, width=.8, height=.3, outlet_length=.15, color="orange")
+                        curves = AngleDimensionTests.world_curves(symbol)
+                        if view == "plan":
+                            expected = ((2, 4, 0), (2, 3.85, 0))
+                        elif direction[0]:
+                            expected = ((1, 2, 4), (1, 2, 3.85))
+                        else:
+                            expected = ((2, 2, 4), (2, 2, 3.85))
+                        np.testing.assert_allclose(curves[-1], expected)
+                        exported = house._export_model().by_guid(symbol.GlobalId)
+                        for original, mirrored in zip(curves, AngleDimensionTests.world_curves(exported)):
+                            np.testing.assert_allclose(mirrored, original * (-1 if mirror else 1, 1, 1))
+                        self.assertEqual(ifcopenshell.util.element.get_pset(exported, "BBIM_SanitarySymbol", "Color"), "#ffa500")
+
+    def test_optional_outlet_semicircle_and_invalid_arguments(self):
+        house = House("Icons")
+        drawing = house.add_drawing("kanal", 0, 0, 1, 5, storeys=[])
+        symbol = drawing.add_basin(0, 0, width=.6, height=.3, outlet_length=0, color="#123456")
+        curves = AngleDimensionTests.world_curves(symbol)
+        self.assertEqual(len(curves), 2)
+        np.testing.assert_allclose(np.linalg.norm(curves[0][:, :2] - (0, .3), axis=1), .3)
+        for method in (drawing.add_basin, drawing.add_sink):
+            for kwargs in ({"width": 0}, {"height": -1}, {"outlet_length": -.1}, {"color": "bad-color"},
+                           {"width": float("inf")}, {"height": True}, {"name": " "}):
+                before = set(house.model.by_type("IfcAnnotation"))
+                with self.assertRaises((ValueError, TypeError)):
+                    method(2, 3, **kwargs)
+                self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+            for x, z in ((True, 0), (0, float("nan"))):
+                with self.assertRaises((ValueError, TypeError)):
+                    method(x, z)
+        diagonal = house.add_drawing("Oblique", 0, 0, 1, 5, view="elevation", direction=(1, 1, 0))
+        before = set(house.model.by_type("IfcAnnotation"))
+        for method in (diagonal.add_basin, diagonal.add_sink):
+            with self.assertRaisesRegex(ValueError, "axis-aligned"):
+                method(2, 3)
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
+
+class RoofLayerLevelTests(unittest.TestCase):
+    def test_queries_sloping_faces_at_xy_with_normal_thickness(self):
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Levels", mirror_x=mirror)
+                roof = house.storey("Upper", elevation=3).roof("Roof")
+                plane = roof.plane("Slope", points=((0, 0, 3), (4, 0, 3), (0, 4, 6)))
+                plane.layer("Tiles", outline=((0, 0), (4, 0), (4, 5), (0, 5)),
+                            z_offset=0.2, thickness=0.1, material="Roof tiles")
+                bottom, top = roof.layer_vertical_extent("Roof tiles", x=2, y=2)
+                # Base slope is z=3+0.75y, normal.z=0.8. At fixed XY,
+                # perpendicular layer offsets become vertical offset / 0.8.
+                self.assertAlmostEqual(bottom, 4.5 + 0.2 / 0.8)
+                self.assertAlmostEqual(top, 4.5 + 0.3 / 0.8)
+                with self.assertRaisesRegex(ValueError, "no .*roof layer at"):
+                    roof.layer_vertical_extent("Roof tiles", x=20, y=2)
+
+    def test_uses_horizontal_ceiling_and_respects_roof_openings(self):
+        house = House("Levels")
+        roof = house.storey("Floor", elevation=0).roof("Roof")
+        plane = roof.plane("Flat", points=((0, 0, -3), (4, 0, -3), (0, 4, -3)))
+        plane.layer("Ceiling", outline=((0, 0), (4, 0), (4, 4), (0, 4)),
+                    z_offset=0.2, thickness=0.025, material="Gypsum plasterboard")
+        np.testing.assert_allclose(
+            roof.layer_vertical_extent("Gypsum plasterboard", x=1, y=1), (-2.8, -2.775),
+        )
+        roof.add_opening(rectangle=((0.5, 0.5), (1.5, 1.5)), trimmers=False)
+        with self.assertRaisesRegex(ValueError, "no .*roof layer at"):
+            roof.layer_vertical_extent("Gypsum plasterboard", x=1, y=1)
+        np.testing.assert_allclose(
+            roof.layer_vertical_extent("Gypsum plasterboard", x=3, y=3), (-2.8, -2.775),
+        )
+
+    def test_respects_actual_clipping_planes_and_material_filter(self):
+        house = House("Levels")
+        roof = house.storey("Floor", elevation=0).roof("Roof")
+        plane = roof.plane("Flat", points=((0, 0, 3), (4, 0, 3), (0, 4, 3)))
+        plane.layer("Clipped tiles", outline=((0, 0), (4, 0), (4, 4), (0, 4)),
+                    z_offset=0, thickness=0.1, material="Roof tiles",
+                    extra_cuts=[((3, 0, 0), (3, 1, 0), (3, 0, 1))])
+        np.testing.assert_allclose(roof.layer_vertical_extent("Roof tiles", x=1, y=2), (3, 3.1))
+        with self.assertRaisesRegex(ValueError, "no .*roof layer at"):
+            roof.layer_vertical_extent("Roof tiles", x=3.5, y=2)
+        with self.assertRaisesRegex(ValueError, "no layers of material"):
+            roof.layer_vertical_extent("Missing", x=1, y=1)
+        with self.assertRaises(ValueError):
+            roof.layer_vertical_extent("Roof tiles", x=float("nan"), y=1)
+
+
+class DrainageStackTests(unittest.TestCase):
+    def test_symbol_has_two_filled_halves_circle_and_diagonal_only(self):
+        house = House("Drainage")
+        floor = house.storey("Ground", elevation=0.25)
+        drawing = house.add_drawing("Ground", 2, 3, 1.6, 4, storeys=[floor])
+        other = house.add_drawing("Other", 2, 3, 1.6, 4)
+        before = set(house.model.by_type("IfcAnnotation"))
+        outline = drawing.add_drainage_stack((2, 3), name="Stoupačka kanalizace")
+        created = set(house.model.by_type("IfcAnnotation")) - before
+        self.assertEqual(len(created), 4)
+        self.assertEqual(outline.Name, "Stoupačka kanalizace")
+        self.assertEqual(outline.ObjectType, "LINEWORK")
+        self.assertTrue(created <= set(drawing.group.IsGroupedBy[0].RelatedObjects))
+        self.assertTrue(created.isdisjoint(other.group.IsGroupedBy[0].RelatedObjects))
+        self.assertFalse(house.model.by_type("IfcPipeSegment"))
+        self.assertFalse(house.model.by_type("IfcOpeningElement"))
+        props = ifcopenshell.util.element.get_pset(outline, "BBIM_DrainageStack")
+        self.assertEqual(json.loads(props["Center"]), [2, 3])
+        self.assertEqual(props["Diameter"], 0.11)
+        circle = outline.Representation.Representations[0].Items[0].Elements[0]
+        self.assertTrue(circle.is_a("IfcCircle"))
+        self.assertAlmostEqual(circle.Radius, 0.055)
+        parts = {}
+        for item in created:
+            placement = ifcopenshell.util.placement.get_local_placement(item.ObjectPlacement)
+            np.testing.assert_allclose(placement[:3, 3], (2, 3, 0.25))
+            part = ifcopenshell.util.element.get_pset(item, "BBIM_DrainageStackPart", "Part")
+            if part:
+                parts[part] = item
+        self.assertEqual(set(parts), {"white", "orange", "divider"})
+        halves = []
+        for color in ("white", "orange"):
+            item = parts[color]
+            representation = item.Representation.Representations[0]
+            self.assertEqual((item.ObjectType, representation.RepresentationType), ("FILLAREA", "Annotation2D"))
+            fill = representation.Items[0]
+            self.assertTrue(fill.is_a("IfcAnnotationFillArea"))
+            points = np.array(fill.OuterBoundary.Points.CoordList)
+            np.testing.assert_allclose(np.linalg.norm(points, axis=1), circle.Radius)
+            np.testing.assert_allclose(points[0], points[-1])
+            np.testing.assert_allclose(points[0], -points[-2], atol=1e-12)
+            classes = ifcopenshell.util.element.get_pset(item, "EPset_Annotation", "Classes")
+            self.assertIn(f"drainage-stack-{color}", classes.split())
+            halves.append(points)
+        np.testing.assert_allclose(halves[0], -halves[1], atol=1e-12)
+        divider = parts["divider"].Representation.Representations[0].Items[0].Elements[0]
+        self.assertEqual(len(divider.Points.CoordList), 2)
+        np.testing.assert_allclose(divider.Points.CoordList, [halves[1][-2], halves[1][0]])
+        self.assertTrue(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "HasAnnotation"))
+
+    def test_floor_plans_share_position_and_mirror_once_and_persist(self):
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Drainage", mirror_x=mirror)
+                ground = house.storey("Ground", elevation=0)
+                upper = house.storey("Upper", elevation=3)
+                drawings = [house.add_drawing(name, 2, 3, z, 4, storeys=[storey])
+                            for name, z, storey in (("Ground", 1.5, ground), ("Upper", 4.5, upper))]
+                outlines = [drawing.add_drainage_stack((2, 3), diameter=0.16) for drawing in drawings]
+                model = house._export_model()
+                with TemporaryDirectory() as directory:
+                    path = Path(directory) / "drainage.ifc"
+                    model.write(str(path))
+                    reopened = ifcopenshell.open(path)
+                    for outline, z in zip(outlines, (0, 3)):
+                        item = reopened.by_guid(outline.GlobalId)
+                        placement = ifcopenshell.util.placement.get_local_placement(item.ObjectPlacement)
+                        np.testing.assert_allclose(placement[:3, 3], (-2 if mirror else 2, 3, z))
+                        props = ifcopenshell.util.element.get_pset(item, "BBIM_DrainageStack")
+                        self.assertEqual(props["Diameter"], 0.16)
+                        self.assertEqual(json.loads(props["Center"]), [2, 3])
+
+    def test_invalid_symbols_do_not_create_partial_annotations(self):
+        house = House("Drainage")
+        drawing = house.add_drawing("Ground", 0, 0, 1.5, 4)
+        before = set(house.model.by_type("IfcAnnotation"))
+        for diameter, error in ((0, ValueError), (-1, ValueError), (float("inf"), ValueError), (True, TypeError)):
+            with self.assertRaises(error):
+                drawing.add_drainage_stack((2, 3), diameter=diameter)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        with self.assertRaises(ValueError):
+            drawing.add_drainage_stack((2, 3), name=" ")
+        with self.assertRaises(TypeError):
+            drawing.add_drainage_stack((2, 3, 4))
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        elevation = house.add_drawing("Section", 0, 0, 1.5, 4, view="elevation", direction=(1, 0, 0))
+        before = set(house.model.by_type("IfcAnnotation"))
+        with self.assertRaisesRegex(ValueError, "plan"):
+            elevation.add_drainage_stack((2, 3))
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
+    def test_fill_styles_are_opaque_and_have_no_box_outline(self):
+        stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
+        for selector, rule in (("drainage-stack-fill", "stroke: none !important"),
+                               ("drainage-stack-white", "fill: white !important"),
+                               ("drainage-stack-orange", "fill: #ffa500 !important")):
+            body = stylesheet.split(f".PredefinedType-FILLAREA.{selector} {{", 1)[1].split("}", 1)[0]
+            self.assertIn(rule, body)
+
+
 class DrawingLineTests(unittest.TestCase):
+    def test_line_width_defaults_and_custom_values_persist_and_reach_legends(self):
+        house = House("Line widths")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4, right_panel_width=40)
+        for style in ("solid", "dashed", "dashed-arrows"):
+            for width in (.1, .3, .725, .000001):
+                with self.subTest(style=style, width=width):
+                    line = drawing.add_line((0, 0), (1, 1), style=style, line_width=width)
+                    exported = house._export_model().by_guid(line.GlobalId)
+                    self.assertEqual(ifcopenshell.util.element.get_pset(exported, "BBIM_DrawingLine", "LineWidth"), width)
+                    classes = ifcopenshell.util.element.get_pset(line, "EPset_Annotation", "Classes")
+                    self.assertIn("drawing-line-width-", classes)
+                    drawing.add_line_legend([(line, "Sample")])
+                    self.assertIn(classes, drawing._right_panel_tables[-1]["items"][0]["classes"])
+        default = drawing.add_line((0, 0), (1, 1))
+        self.assertEqual(ifcopenshell.util.element.get_pset(default, "BBIM_DrawingLine", "LineWidth"), .1)
+
+    def test_invalid_widths_do_not_create_partial_lines(self):
+        house = House("Line widths")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 4)
+        before = set(house.model.by_type("IfcAnnotation"))
+        for width in (0, -1, float("inf"), float("nan"), True, None, "bad-width"):
+            with self.subTest(width=width), self.assertRaises((ValueError, TypeError)):
+                drawing.add_line((0, 0), (1, 1), line_width=width)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        self.assertEqual(drawing._line_count, 0)
+
+    def test_width_css_is_paper_sized_specific_and_idempotent(self):
+        for units_per_mm in (1, 2):
+            with self.subTest(units_per_mm=units_per_mm), TemporaryDirectory() as directory:
+                path = Path(directory) / "widths.svg"
+                path.write_text(
+                    f'<svg width="100mm" height="100mm" viewBox="0 0 {100*units_per_mm} {100*units_per_mm}">'
+                    '<path class="PredefinedType-LINEWORK drawing-line drawing-line-width-0p3" d="M0 0 L10 10"/>'
+                    '<line class="PredefinedType-LINEWORK drawing-line line-legend-sample drawing-line-width-1e-06" '
+                    'x1="0" y1="1" x2="10" y2="1"/></svg>', encoding="utf-8",
+                )
+                _postprocess_drawing_line_colors(path)
+                result = path.read_text(encoding="utf-8")
+                self.assertIn(
+                    f'.PredefinedType-LINEWORK.drawing-line.drawing-line-width-0p3 {{ stroke-width: {.3*units_per_mm:g}px !important; }}', result,
+                )
+                self.assertIn(f'stroke-width: {1e-6*units_per_mm:g}px !important;', result)
+                self.assertLess(result.index('class="drawing-line-colors"'), result.index('<path'))
+                self.assertIn('d="M0 0 L10 10"', result)
+                _postprocess_drawing_line_colors(path)
+                self.assertEqual(path.read_text(encoding="utf-8"), result)
+                ET.fromstring(result)
+
     def test_arrow_dashes_alternate_and_point_toward_end_in_either_direction(self):
         segments = _dashed_arrow_segments((0, 0), (10.8, 0), units_per_mm=1)
         self.assertEqual(len(segments), 6)
@@ -723,6 +1140,19 @@ class DrawingLineTests(unittest.TestCase):
 
 
 class LineLegendTests(unittest.TestCase):
+    def test_style_only_samples_accept_width_and_reject_invalid_widths(self):
+        before = len(self.house.model.by_type("IfcAnnotation"))
+        self.drawing.add_line_legend([
+            {"description": "Thick", "color": "orange", "line_width": .3},
+        ])
+        self.assertIn("drawing-line-width-0p3", self.drawing._right_panel_tables[-1]["items"][0]["classes"])
+        self.assertEqual(len(self.house.model.by_type("IfcAnnotation")), before)
+        tables = list(self.drawing._right_panel_tables)
+        for width in (0, -1, float("inf"), True, None):
+            with self.subTest(width=width), self.assertRaises((ValueError, TypeError)):
+                self.drawing.add_line_legend([{"description": "Bad", "line_width": width}])
+            self.assertEqual(self.drawing._right_panel_tables, tables)
+
     def test_arrow_samples_are_real_vectors_and_keep_color_classes(self):
         self.drawing.add_line_legend([
             {"description": "splašková kanalizace", "style": "dashed-arrows", "color": "orange"},

@@ -615,6 +615,73 @@ SVG filename when no PDF is requested). The drawing is moved down, not scaled;
 the header is included in the paper-fit check. Print the PDF at actual size /
 100%, not "fit to page".
 
+### Drainage schematic
+
+Run `python3 house_ifc.py kanal` to create the annotation-only drawing
+`kanal.svg` and `projekt/D1.5. Zdravotechnické instalace/D1.5.1. Kanalizace.pdf`.
+It uses `storeys=[]`, so no house plans or other model geometry are shown.
+Its seven horizontal reference lines use the finished ground-floor surface
+as height zero: ground-floor surface and foundation slab top; MIAKO bottom,
+MIAKO top and upper-floor surface; plasterboard bottom and roof-tile top.
+The last two are measured at `DRAINAGE_STACK_X, DRAINAGE_STACK_Y` using
+`roof.layer_vertical_extent(material, x=..., y=...)`, which intersects the
+actual clipped roof/ceiling solids, including any openings. Horizontal
+positions are schematic; vertical coordinates retain the model's heights.
+
+Draw simple washbasin (`umyvadlo`) and kitchen sink (`dřez`) symbols with:
+
+```python
+drawing.add_basin(x=2, z=0.65)
+drawing.add_sink(x=4, z=0.65, width=0.8, height=0.25)
+```
+
+`x` is the bowl's horizontal centre, and `z` its bottom. The washbasin has a
+rounded bowl; the sink is rectangular. Both have a horizontal rim and a
+short central outlet below the bowl. Dimensions use metres: default width
+0.60, bowl height 0.20 and `outlet_length=0.10` (set to 0 to omit the outlet).
+The rounded bowl is a half-ellipse; `height=width/2` makes it a semicircle.
+These are unfilled, thin black native linework icons, scoped to the drawing,
+not physical IFC fixtures. Both accept `color` and `name`. Labels and actual
+drainage pipes can be added separately with `add_text()` and `add_line()`.
+In the plan-based `kanal` schematic, `z` maps to the vertical page coordinate
+(model Y); the helpers also support axis-aligned elevations.
+
+### PDFs from Markdown
+
+Use the independent Markdown helper, also re-exported by `ifc_utils`:
+
+```python
+from pathlib import Path
+from pdf_utils import markdown_to_pdf
+
+markdown_to_pdf(source=Path("skladby.md"), output=Path("skladby.pdf"))
+markdown_to_pdf("checklist.md", "checklist.pdf", paper="A3", orientation="landscape")
+```
+
+The default is **A4 portrait**, with **20 mm margins**, page numbers, readable
+DejaVu fonts and selectable Czech text. Headings, lists, tables (with repeated
+headers), fenced code and local images are supported. Image paths resolve
+relative to the Markdown file. Raw HTML is escaped and remote resources are
+not downloaded. Existing PDFs are replaced only after a successful export.
+`margin` is configurable in millimetres; paper sizes A4 through A0 are available.
+
+The helper uses `markdown-it-py` and WeasyPrint, listed in `requirements.txt`.
+WeasyPrint also needs system Pango libraries; see its
+[installation instructions](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html).
+These system libraries are already available on this machine. Dependencies
+for this helper have been installed in the isolated `.venv-pdf` environment:
+
+```bash
+.venv-pdf/bin/python pdf_utils.py skladby.md skladby.pdf
+```
+
+For a fresh environment:
+
+```bash
+python3 -m venv --system-site-packages .venv-pdf
+.venv-pdf/bin/python -m pip install -r requirements.txt
+```
+
 A basic side elevation uses the same persisted drawing interface.  Place the
 camera outside the building and point ``direction`` toward it:
 
@@ -895,12 +962,16 @@ Draw individual lines using model-space 2D coordinates (metres):
 
 ```python
 line = drawing.add_line(start=(1, 2), end=(3, 2), style="dashed", color="red")
+drawing.add_line((2, 0.65), (2, 0.1), color="orange", line_width=0.3)
 ```
 
 `style` defaults to `"solid"`; `color` defaults to `"black"` and accepts
 named colors or `#RGB`/`#RRGGBB`. Plans use `(x, y)`, elevations looking along
 X use `(y, z)`, and elevations looking along Y use `(x, z)`, just like notes
 and dimensions. Lines are drawing-only annotations, not physical model parts.
+`line_width` sets stroke thickness in printed millimetres (default 0.1),
+independently of drawing scale. It must be positive. Legend samples inherit
+the line's thickness; style-only legend dictionaries also accept `line_width`.
 `style="dashed-arrows"` alternates a plain dash with an arrow pointing toward
 `end`; reversing the endpoints reverses the arrows. The pattern uses actual
 vector segments (including the arrowheads), at a constant paper size for the
@@ -914,6 +985,37 @@ drawing.add_line_legend([
     {"style": "dashed", "color": "red", "description": "Zemnící pásovina FeZn 30/35"},
 ])
 ```
+
+Circles, rectangles and text use the same model coordinates as `add_line()`:
+
+```python
+drawing.add_circle(center=(2, 3), radius=0.5, color="blue")
+drawing.add_text(point=(2, 3), text="ČOV", font_size=3)
+drawing.add_rectangle(start=(4, 2), end=(6, 4), style="dashed")
+drawing.add_text(point=(5, 3), text="Nádrž", color="green")
+```
+
+Circle radii and rectangle corners are in metres. Both shapes are unfilled
+and support `style="solid"` (default) or `"dashed"`. Text uses printed
+millimetres for `font_size` (default 3 mm), so its size does not depend on the
+drawing scale. It is centred horizontally and vertically by default;
+`alignment="left"`/`"right"` changes horizontal alignment. All three helpers
+accept named or hex colors (default black), return drawing-scoped native IFC
+annotations and work in plans or axis-aligned elevations. Czech text remains
+selectable in PDF exports. None of these helpers adds physical 3D geometry.
+
+For a drainage stack (stoupačka kanalizace), use a diagonal half-white,
+half-orange circle without a surrounding box:
+
+```python
+stack_position = (2, 3)  # model coordinates, shared by all floor plans
+ground_drawing.add_drainage_stack(center=stack_position)
+upper_drawing.add_drainage_stack(center=stack_position, diameter=0.11)
+```
+
+`add_drainage_stack()` is plan-only; its diameter is in metres (default
+0.11 m). It returns the circular outline and creates drawing-scoped native
+IFC annotations, without adding a physical pipe or cutting any openings.
 
 Like material legends, `add_line_legend()` requires a right panel at least
 40 mm wide and stacks with other tables. Its default title is `LEGENDA ČAR`.

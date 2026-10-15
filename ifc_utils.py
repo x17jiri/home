@@ -50,6 +50,7 @@ from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
+from pdf_utils import markdown_to_pdf
 
 
 __all__ = [
@@ -64,6 +65,7 @@ __all__ = [
     "FloorLayer",
     "HorizontalFrame",
     "House",
+    "markdown_to_pdf",
     "HEXAGON_MARKER_LEADER_REACH",
     "MiakoSlab",
     "Roof",
@@ -2044,16 +2046,82 @@ def _postprocess_model_line_width(
     svg_path.write_text(svg, encoding="utf-8")
 
 
+def _postprocess_drawing_circles(svg_path: Path, model: ifcopenshell.file, drawing: ifcopenshell.entity_instance) -> None:
+    """Replace coarse native circle tessellation with exact SVG circles from IFC parameters."""
+    members = []
+    for relation in drawing.HasAssignments or ():
+        if relation.is_a("IfcRelAssignsToGroup") and relation.RelatingGroup.ObjectType == "DRAWING":
+            for group_relation in relation.RelatingGroup.IsGroupedBy or ():
+                members.extend(group_relation.RelatedObjects)
+    circles = [item for item in members if ifcopenshell.util.element.get_pset(item, "BBIM_DrawingCircle")]
+    if not circles:
+        return
+    svg = svg_path.read_text(encoding="utf-8")
+    _, width, _, (view_x, view_y, view_width, view_height) = _drawing_svg_frame(svg)
+    scale = float(Fraction(str(ifcopenshell.util.element.get_pset(drawing, "EPset_Drawing", "Scale"))))
+    units_per_metre = 1000 * scale * view_width / width
+    world_to_camera = np.linalg.inv(ifcopenshell.util.placement.get_local_placement(drawing.ObjectPlacement))
+    replacements = {}
+    for item in circles:
+        properties = ifcopenshell.util.element.get_pset(item, "BBIM_DrawingCircle")
+        classes = ifcopenshell.util.element.get_pset(item, "EPset_Annotation", "Classes").split()
+        key = next(token for token in classes if re.fullmatch(r"drawing-circle-\d+", token))
+        placement = ifcopenshell.util.placement.get_local_placement(item.ObjectPlacement)
+        center = world_to_camera @ placement[:, 3]
+        replacements[key] = (view_x + view_width / 2 + center[0] * units_per_metre,
+                             view_y + view_height / 2 - center[1] * units_per_metre,
+                             float(properties["Radius"]) * units_per_metre)
+    emitted = set()
+
+    def replace_edge(match):
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match[0]))
+        key = next((token for token in attributes.get("class", "").split() if token in replacements), None)
+        if key is None:
+            return match[0]
+        if key in emitted:
+            return ""
+        emitted.add(key)
+        x, y, radius = replacements[key]
+        return (f'<circle class="{escape(attributes["class"], quote=True)} drawing-circle-exact" '
+                f'cx="{x:g}" cy="{y:g}" r="{radius:g}"/>')
+
+    updated = re.sub(r'<(?:line|polyline|path)\b[^>]*(?:/>|>\s*</(?:line|polyline|path)>)', replace_edge, svg)
+    if updated != svg:
+        svg_path.write_text(updated, encoding="utf-8")
+
+
 def _postprocess_drawing_line_colors(svg_path: Path) -> None:
-    """Style native lines and legend samples using their persisted color classes."""
+    """Style native lines, text and legend samples using persisted appearance classes."""
     original = svg_path.read_text(encoding="utf-8")
     svg = re.sub(r'<style\b[^>]*class="drawing-line-colors"[^>]*>.*?</style>',
                  "", original, flags=re.DOTALL)
     colors = sorted(set(re.findall(r"\bdrawing-line-color-([0-9a-f]{6})\b", svg)))
-    if not colors:
+    text_colors = sorted(set(re.findall(r"\bdrawing-text-color-([0-9a-f]{6})\b", svg)))
+    sizes = sorted(set(re.findall(r"\bdrawing-text-size-(\d+(?:p\d+)?(?:e-?\d+)?)\b", svg)))
+    widths = sorted(set(re.findall(r"\bdrawing-line-width-(\d+(?:p\d+)?(?:e-?\d+)?)\b", svg)))
+    if not colors and not text_colors and not sizes and not widths:
         return
     rules = "\n".join(f".drawing-line-color-{color} {{ stroke: #{color} !important; }}"
                       for color in colors)
+    rules += "\n" + "\n".join(
+        f".drawing-text-color-{color}, .drawing-text-color-{color} tspan "
+        f"{{ fill: #{color} !important; stroke: none !important; }}" for color in text_colors
+    )
+    if sizes or widths:
+        _, width, _, (_, _, view_width, _) = _drawing_svg_frame(svg)
+        units_per_mm = view_width / width
+        rules += "\n" + "\n".join(
+            f".drawing-text-size-{size}, .drawing-text-size-{size} tspan "
+            f"{{ font-size: {float(size.replace('p', '.')) * units_per_mm:g}px !important; }}"
+            for size in sizes
+        )
+        # Be more specific than the stylesheet's fixed 0.1 mm line rule;
+        # preserve physical paper thickness even in a non-mm SVG viewBox.
+        rules += "\n" + "\n".join(
+            f".PredefinedType-LINEWORK.drawing-line.drawing-line-width-{width} "
+            f"{{ stroke-width: {float(width.replace('p', '.')) * units_per_mm:g}px !important; }}"
+            for width in widths
+        )
     style = '<style class="drawing-line-colors" type="text/css">' + rules + '</style>'
     # Inkscape needs these rules before the styled objects when importing SVG.
     # Appending a stylesheet after the linework can leave it black in the PDF.
@@ -5010,6 +5078,15 @@ def _drawing_line_appearance(style: str, color: str) -> tuple[str, str, str]:
     return style, color, classes
 
 
+def _drawing_line_width(line_width: Number) -> tuple[float, str]:
+    """Validate a printed-mm stroke width and encode it in a shared CSS class."""
+    line_width = _number(line_width, "line_width")
+    if line_width <= 0:
+        raise ValueError("line_width must be greater than zero")
+    token = f"{line_width:.12g}".replace(".", "p").replace("+", "")
+    return line_width, f"drawing-line-width-{token}"
+
+
 def _rotate_items_about_z(
     model: ifcopenshell.file,
     items: Sequence[ifcopenshell.entity_instance],
@@ -5555,6 +5632,7 @@ def _render_existing_drawing(
     )
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
+    _postprocess_drawing_circles(absolute_output, model, drawing)
     model_line_width = (
         drawing_properties.get("ModelLineWidth")
         if drawing_properties
@@ -7955,6 +8033,11 @@ class Drawing:
         self._dimension_count = 0
         self._angle_count = 0
         self._line_count = 0
+        self._circle_count = 0
+        self._drainage_stack_count = 0
+        self._sanitary_symbol_count = 0
+        self._rectangle_count = 0
+        self._text_count = 0
         self._entrance_arrow_count = 0
         self._hexagon_marker_count = 0
         self._note_count = 0
@@ -9024,8 +9107,9 @@ class Drawing:
         returned by add_wall_outlines(). Samples reuse the annotation's CSS
         classes, including its dash style and thickness. All annotations must
         belong to this drawing. For legend-only samples, supply a dict with
-        description, style (solid/dashed/dashed-arrows) and color (default black), instead
-        of an annotation pair. Tables stack in call order and persist in IFC.
+        description, style (solid/dashed/dashed-arrows), color (default black)
+        and optional line_width in printed millimetres, instead of an
+        annotation pair. Tables stack in call order and persist in IFC.
         """
         if self.right_panel_width < 40:
             raise ValueError("add_line_legend requires right_panel_width of at least 40 mm")
@@ -9044,6 +9128,9 @@ class Drawing:
             if isinstance(item, Mapping):
                 description = _name(item.get("description"), f"item {index} description")
                 _, _, classes = _drawing_line_appearance(item.get("style", "solid"), item.get("color", "black"))
+                if "line_width" in item:
+                    _, width_class = _drawing_line_width(item["line_width"])
+                    classes += f" {width_class}"
                 normalised_items.append({
                     "classes": f"IfcAnnotation PredefinedType-LINEWORK {classes}",
                     "description": description,
@@ -9636,6 +9723,293 @@ class Drawing:
         )
         return self
 
+    def _annotation_frame(self, point: Point, method: str) -> np.ndarray:
+        """Camera-oriented frame at a point given in the drawing's model coordinates."""
+        if self.view == "plan":
+            z = max((s.elevation for s in self.storeys if s.elevation <= self.z), default=0.0)
+            origin = (*point, z)
+        elif isclose(abs(self.direction[0]), 1.0, abs_tol=1e-9):
+            origin = (self.x, *point)
+        elif isclose(abs(self.direction[1]), 1.0, abs_tol=1e-9):
+            origin = (point[0], self.y, point[1])
+        else:
+            raise ValueError(f"{method} requires an axis-aligned elevation direction")
+        placement = ifcopenshell.util.placement.get_local_placement(self.element.ObjectPlacement).copy()
+        placement[:3, 3] = origin
+        return placement
+
+    def _add_primitive_annotation(self, name, kind, placement, items, classes, pset_name, properties):
+        """Persist a drawing-scoped native primitive and its editable source parameters."""
+        model = self.house.model
+        annotation = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcAnnotation", name=name, predefined_type=kind,
+        )
+        representation = model.createIfcShapeRepresentation(
+            self.house._annotation_context, "Annotation",
+            "Annotation2D" if kind in {"TEXT", "FILLAREA"} else "GeometricCurveSet", items,
+        )
+        ifcopenshell.api.geometry.assign_representation(model, product=annotation, representation=representation)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=annotation, matrix=placement, is_si=True)
+        for property_name, values in (("EPset_Annotation", {"Classes": classes}), (pset_name, properties)):
+            pset = ifcopenshell.api.pset.add_pset(model, product=annotation, name=property_name)
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties=values)
+        ifcopenshell.api.group.assign_group(model, group=self.group, products=[annotation])
+        ifcopenshell.api.pset.edit_pset(model, pset=self._drawing_pset, properties={"HasAnnotation": True})
+        return annotation
+
+    def add_circle(
+        self, center: Point, radius: Number, *,
+        style: Literal["solid", "dashed"] = "solid", color: str = "black", name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw an unfilled native circle, using model metres and add_line() coordinates."""
+        center = _point(center, "center")
+        radius = _number(radius, "radius")
+        if radius <= 0:
+            raise ValueError("radius must be greater than zero")
+        style = _enum(style, "style", {"SOLID", "DASHED"}).lower()
+        style, color, classes = _drawing_line_appearance(style, color)
+        circle_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(center, "add_circle")
+        model = self.house.model
+        circle = ShapeBuilder(model).circle(radius=radius)
+        self._circle_count += 1
+        classes += f" drawing-circle-{self._circle_count}"
+        return self._add_primitive_annotation(
+            circle_name or f"{self.name} Circle {self._circle_count}", "LINEWORK", placement,
+            [model.createIfcGeometricCurveSet([circle])], classes, "BBIM_DrawingCircle",
+            {"Center": json.dumps(center), "Radius": radius, "Style": style, "Color": color},
+        )
+
+    def add_drainage_stack(
+        self,
+        center: Point,
+        *,
+        diameter: Number = 0.11,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Mark a drainage stack in this plan with a half-white/orange circle.
+
+        Centre coordinates and diameter are in model metres. The diagonal
+        split matches the chimney flue symbol, but there is no surrounding
+        box. This is a drawing-only annotation, not a physical pipe or hole;
+        call it in each desired floor plan with the same centre coordinates.
+        Returns the circular outline, with BBIM_DrainageStack source data.
+        """
+        self._require_plan_view("add_drainage_stack")
+        center = _point(center, "center")
+        diameter = _number(diameter, "diameter")
+        if diameter <= 0:
+            raise ValueError("diameter must be greater than zero")
+        symbol_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(center, "add_drainage_stack")
+        self._drainage_stack_count += 1
+        symbol_name = symbol_name or f"{self.name} Drainage Stack {self._drainage_stack_count}"
+        model = self.house.model
+        radius = diameter / 2
+
+        # Both halves have an explicit fill: the white half must also hide
+        # any wall hatch or other model linework underneath the symbol.
+        for start_angle, part in ((45, "orange"), (225, "white")):
+            points = [
+                (
+                    radius * cos(radians(start_angle + index * 180 / 32)),
+                    radius * sin(radians(start_angle + index * 180 / 32)),
+                )
+                for index in range(33)
+            ]
+            points.append(points[0])
+            curve = model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(points), None, False,
+            )
+            self._add_primitive_annotation(
+                f"{symbol_name} {part.title()} Fill", "FILLAREA", placement,
+                [model.createIfcAnnotationFillArea(curve, None)],
+                f"drainage-stack-fill drainage-stack-{part}", "BBIM_DrainageStackPart",
+                {"Center": json.dumps(center), "Diameter": diameter, "Part": part},
+            )
+
+        outline = self.add_circle(center, radius, color="orange", name=symbol_name)
+        pset = ifcopenshell.api.pset.add_pset(
+            model, product=outline, name="BBIM_DrainageStack",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=pset,
+            properties={"Center": json.dumps(center), "Diameter": diameter},
+        )
+        diagonal = radius / 2**0.5
+        divider = model.createIfcIndexedPolyCurve(
+            model.createIfcCartesianPointList2D([
+                (-diagonal, -diagonal), (diagonal, diagonal),
+            ]), None, False,
+        )
+        _, _, classes = _drawing_line_appearance("solid", "orange")
+        self._add_primitive_annotation(
+            f"{symbol_name} Divider", "LINEWORK", placement,
+            [model.createIfcGeometricCurveSet([divider])], classes,
+            "BBIM_DrainageStackPart",
+            {"Center": json.dumps(center), "Diameter": diameter, "Part": "divider"},
+        )
+        return outline
+
+    def add_basin(
+        self,
+        x: Number,
+        z: Number,
+        *,
+        width: Number = 0.60,
+        height: Number = 0.20,
+        outlet_length: Number = 0.10,
+        color: str = "black",
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a schematic washbasin: rounded bowl, rim and drain stub.
+
+        X is the horizontal centre and Z the bowl bottom, not the end of
+        the drain stub. All dimensions are model metres. In a plan-based
+        schematic such as kanal, Z is the diagram's vertical (Y) coordinate;
+        axis-aligned elevations use their usual horizontal/height coordinates.
+        The bowl is a lower half-ellipse (a semicircle if height=width/2).
+        This drawing-only icon adds no physical sanitary fixture or label.
+        """
+        return self._add_sanitary_symbol(
+            "basin", x, z, width=width, height=height,
+            outlet_length=outlet_length, color=color, name=name,
+        )
+
+    def add_sink(
+        self,
+        x: Number,
+        z: Number,
+        *,
+        width: Number = 0.60,
+        height: Number = 0.20,
+        outlet_length: Number = 0.10,
+        color: str = "black",
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a rectangular schematic kitchen sink, using add_basin() coordinates.
+
+        X is the bowl centre, Z its bottom; the outlet extends below Z.
+        Width, bowl height and outlet length are in model metres. Set
+        outlet_length=0 to omit the stub. No 3D fixture or label is added.
+        """
+        return self._add_sanitary_symbol(
+            "sink", x, z, width=width, height=height,
+            outlet_length=outlet_length, color=color, name=name,
+        )
+
+    def _add_sanitary_symbol(
+        self, kind, x, z, *, width, height, outlet_length, color, name,
+    ) -> ifcopenshell.entity_instance:
+        """Persist the common rim/bowl/outlet geometry as one native annotation."""
+        x, z = _number(x, "x"), _number(z, "z")
+        width, height = _number(width, "width"), _number(height, "height")
+        outlet_length = _number(outlet_length, "outlet_length")
+        if width <= 0 or height <= 0:
+            raise ValueError("width and height must be greater than zero")
+        if outlet_length < 0:
+            raise ValueError("outlet_length must not be negative")
+        _, color, classes = _drawing_line_appearance("solid", color)
+        symbol_name = _name(name, "name") if name is not None else None
+        method = f"add_{kind}"
+        placement = self._annotation_frame((x, z), method)
+        half_width, rim_overhang = width / 2, width / 12
+        if kind == "basin":
+            bowl = [
+                (-half_width * cos(index * pi / 32),
+                 height * (1 - sin(index * pi / 32)))
+                for index in range(33)
+            ]
+        else:
+            bowl = [(-half_width, height), (-half_width, 0),
+                    (half_width, 0), (half_width, height)]
+        paths = [bowl, [(-half_width - rim_overhang, height),
+                        (half_width + rim_overhang, height)]]
+        if outlet_length:
+            paths.append([(0, 0), (0, -outlet_length)])
+        model = self.house.model
+        curves = []
+        for path in paths:
+            local_points = []
+            for dx, dz in path:
+                delta = self._annotation_frame((x + dx, z + dz), method)[:3, 3] - placement[:3, 3]
+                local_points.append((float(np.dot(delta, placement[:3, 0])),
+                                     float(np.dot(delta, placement[:3, 1]))))
+            curves.append(model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(local_points), None, False,
+            ))
+        self._sanitary_symbol_count += 1
+        return self._add_primitive_annotation(
+            symbol_name or f"{self.name} {kind.title()} Symbol {self._sanitary_symbol_count}",
+            "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)],
+            f"{classes} sanitary-symbol sanitary-{kind}", "BBIM_SanitarySymbol",
+            {"Kind": kind, "X": x, "BottomZ": z, "Width": width, "Height": height,
+             "OutletLength": outlet_length, "Color": color},
+        )
+
+    def add_rectangle(
+        self, start: Point, end: Point, *,
+        style: Literal["solid", "dashed"] = "solid", color: str = "black", name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw an unfilled rectangle from opposite corners in add_line() coordinates."""
+        start, end = _point(start, "start"), _point(end, "end")
+        if abs(end[0] - start[0]) < 1e-9 or abs(end[1] - start[1]) < 1e-9:
+            raise ValueError("rectangle width and height must be greater than zero")
+        style = _enum(style, "style", {"SOLID", "DASHED"}).lower()
+        style, color, classes = _drawing_line_appearance(style, color)
+        rectangle_name = _name(name, "name") if name is not None else None
+        x1, x2 = sorted((start[0], end[0]))
+        y1, y2 = sorted((start[1], end[1]))
+        placement = self._annotation_frame((x1, y1), "add_rectangle")
+        corners = ((x1, y1), (x2, y1), (x2, y2), (x1, y2), (x1, y1))
+        points = []
+        for corner in corners:
+            delta = self._annotation_frame(corner, "add_rectangle")[:3, 3] - placement[:3, 3]
+            points.append((float(np.dot(delta, placement[:3, 0])), float(np.dot(delta, placement[:3, 1]))))
+        model = self.house.model
+        curve = model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(points), None, False)
+        self._rectangle_count += 1
+        return self._add_primitive_annotation(
+            rectangle_name or f"{self.name} Rectangle {self._rectangle_count}", "LINEWORK", placement,
+            [model.createIfcGeometricCurveSet([curve])], classes, "BBIM_DrawingRectangle",
+            {"Start": json.dumps(start), "End": json.dumps(end), "Style": style, "Color": color},
+        )
+
+    def add_text(
+        self, point: Point, text: str, *, font_size: Number = 3, color: str = "black",
+        alignment: Literal["center", "left", "right"] = "center", name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Add native text at model coordinates, with font_size in printed millimetres.
+
+        Text is centred vertically; alignment controls horizontal alignment.
+        The default center alignment places a label inside a circle/rectangle
+        when given its centre. Native export keeps Czech text selectable.
+        """
+        point = _point(point, "point")
+        text = _name(text, "text")
+        font_size = _number(font_size, "font_size")
+        if font_size <= 0:
+            raise ValueError("font_size must be greater than zero")
+        _, color, _ = _drawing_line_appearance("solid", color)
+        alignment = _enum(alignment, "alignment", {"CENTER", "LEFT", "RIGHT"}).lower()
+        text_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(point, "add_text")
+        model = self.house.model
+        literal = model.createIfcTextLiteralWithExtent(
+            text, model.createIfcAxis2Placement3D(model.createIfcCartesianPoint((0.0, 0.0, 0.0)),
+            model.createIfcDirection((0.0, 0.0, 1.0)), model.createIfcDirection((1.0, 0.0, 0.0))),
+            "RIGHT", model.createIfcPlanarExtent(1.0, 1.0),
+            "center" if alignment == "center" else f"middle-{alignment}",
+        )
+        size_token = f"{font_size:.12g}".replace(".", "p").replace("+", "")
+        classes = f"drawing-text drawing-text-size-{size_token} drawing-text-color-{color[1:]}"
+        self._text_count += 1
+        return self._add_primitive_annotation(
+            text_name or f"{self.name} Text {self._text_count}", "TEXT", placement, [literal], classes,
+            "BBIM_DrawingText", {"Point": json.dumps(point), "Text": text, "FontSize": font_size,
+                                 "Color": color, "Alignment": alignment},
+        )
+
     def add_line(
         self,
         start: Point,
@@ -9643,13 +10017,15 @@ class Drawing:
         *,
         style: Literal["solid", "dashed", "dashed-arrows"] = "solid",
         color: str = "black",
+        line_width: Number = 0.1,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add drawing-only native linework between two 2D model coordinates.
 
         Coordinates are metres: (x,y) in plans, (y,z) when looking along X,
         and (x,z) when looking along Y. Colors accept names or #RGB/#RRGGBB.
-        Lines use a thin 0.1 mm stroke and share their styles with line legends.
+        line_width is the printed stroke width in millimetres (default 0.1),
+        independent of drawing scale. Line legends reuse the same thickness.
         dashed-arrows alternates plain dashes and open arrows towards end,
         using the same paper-sized vector pattern as the legend samples.
         """
@@ -9657,24 +10033,11 @@ class Drawing:
         if hypot(end[0] - start[0], end[1] - start[1]) < 1e-9:
             raise ValueError("line start and end must be different")
         style, color, classes = _drawing_line_appearance(style, color)
+        line_width, width_class = _drawing_line_width(line_width)
+        classes += f" {width_class}"
         line_name = _name(name, "name") if name is not None else None
-        if self.view == "plan":
-            annotation_z = max((s.elevation for s in self.storeys if s.elevation <= self.z), default=0.0)
-
-            def to_world(point):
-                return np.array((*point, annotation_z), dtype=float)
-        elif isclose(abs(self.direction[0]), 1.0, abs_tol=1e-9):
-            def to_world(point):
-                return np.array((self.x, *point), dtype=float)
-        elif isclose(abs(self.direction[1]), 1.0, abs_tol=1e-9):
-            def to_world(point):
-                return np.array((point[0], self.y, point[1]), dtype=float)
-        else:
-            raise ValueError("add_line requires an axis-aligned elevation direction")
-        placement = ifcopenshell.util.placement.get_local_placement(self.element.ObjectPlacement).copy()
-        origin = to_world(start)
-        placement[:3, 3] = origin
-        delta = to_world(end) - origin
+        placement = self._annotation_frame(start, "add_line")
+        delta = self._annotation_frame(end, "add_line")[:3, 3] - placement[:3, 3]
         local_end = (float(np.dot(delta, placement[:3, 0])), float(np.dot(delta, placement[:3, 1])))
         segments = None
         if style == "dashed-arrows":
@@ -9707,7 +10070,8 @@ class Drawing:
         ifcopenshell.api.geometry.edit_object_placement(model, product=line, matrix=placement, is_si=True)
         for pset_name, properties in (
             ("EPset_Annotation", {"Classes": classes}),
-            ("BBIM_DrawingLine", {"Start": json.dumps(start), "End": json.dumps(end), "Style": style, "Color": color}),
+            ("BBIM_DrawingLine", {"Start": json.dumps(start), "End": json.dumps(end), "Style": style,
+                                  "Color": color, "LineWidth": line_width}),
         ):
             pset = ifcopenshell.api.pset.add_pset(model, product=line, name=pset_name)
             ifcopenshell.api.pset.edit_pset(model, pset=pset, properties=properties)
@@ -13345,6 +13709,45 @@ class Roof(ifcopenshell.entity_instance):
     def openings(self) -> tuple[RoofOpening, ...]:
         """Return the absolute-XY openings registered on this roof."""
         return tuple(self._openings)
+
+    def layer_vertical_extent(
+        self, material: str, *, x: Number, y: Number,
+    ) -> tuple[float, float]:
+        """Return the lowest/highest layer faces at model XY, in absolute Z.
+
+        Intersects the actual IFC solids, including horizontal ceiling parts,
+        clipping planes and openings. Coordinates use the source model's
+        unmirrored convention, like the other modelling helpers. Raises if
+        no layer of the requested material exists at that point.
+        """
+        material = _name(material, "material")
+        x, y = _number(x, "x"), _number(y, "y")
+        layers = [
+            element for plane in self.planes for element in plane.elements
+            if isinstance(element, RoofLayer) and element.material_name == material
+        ]
+        if not layers:
+            raise ValueError(f"roof has no layers of material {material!r}")
+        # Uncut source bounds safely enclose the finished geometry, even for
+        # roofs below Z=0. Offsets/thickness are measured normal to each plane.
+        heights = [
+            layer.plane.to_world((local_x, local_y, local_z))[2]
+            for layer in layers for local_x, local_y in layer.outline
+            for local_z in (layer.z_offset, layer.z_offset + layer.thickness)
+        ]
+        ray_bottom, ray_top = min(heights) - 1, max(heights) + 1
+        settings = ifcopenshell.geom.settings()
+        settings.set("iterator-output", ifcopenshell.ifcopenshell_wrapper.NATIVE)
+        tree = ifcopenshell.geom.tree()
+        for layer in layers:
+            tree.add_element(ifcopenshell.geom.create_shape(settings, layer))
+        hits = tree.select_ray(
+            (x, y, ray_bottom), (0.0, 0.0, 1.0), ray_top - ray_bottom,
+        )
+        if not hits:
+            raise ValueError(f"no {material!r} roof layer at ({x:g}, {y:g})")
+        levels = [ray_bottom + hit.distance for hit in hits]
+        return min(levels), max(levels)
 
     def add_opening(
         self,

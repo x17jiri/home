@@ -7,8 +7,7 @@ Cementový potěr | 60 mm
 Kročejová izolace | 30 mm
 Základová deska | 150 mm
 Izolace pod deskou | 100 mm
----|---
-Celkem | 350 mm
+**Celkem** | 350 mm
 
 ### Upřesnění parametrů
 
@@ -34,8 +33,7 @@ Cementový potěr | 60 mm
 Kročejová izolace | 30 mm
 MIAKO strop | 210 mm
 Štuk | 15 mm
----|---
-Celkem | 325 mm
+**Celkem** | 325 mm
 
 ### Upřesnění parametrů
 
@@ -63,8 +61,7 @@ OSB Záklop | 15 mm
 Pojistná parobrzda | 1 mm
 Laťový rošt 40x60 | 40 mm
 2xSDK podhled | 25 mm
----|---
-Celkem | 557 mm
+**Celkem** | 557 mm
 
 ### Upřesnění parametrů
 
@@ -115,8 +112,7 @@ Finální venkovní vrstva | 5 mm
 Tepelná izolace | 200 mm
 VPC cihla | 240 mm
 Štuk | 10 mm
----|---
-Celkem | 455 mm
+**Celkem** | 455 mm
 
 ### Upřesnění parametrů
 

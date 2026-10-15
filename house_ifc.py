@@ -7,6 +7,9 @@
 # https://www.dek.cz/produkty/detail/4400914454-porfix-aku-248-pdk-tvarnice-p20-1800-248x249x248
 # ma 56 dB, jine jen 53
 
+# Sprcha:
+# https://www.ravak.cz/p.sprchova-vanicka-sabina/A217001020
+
 # Strecha:
 #    - based on this:
 #        - https://www.dataholz.eu/download/en/sdrhzi09b-4.pdf
@@ -108,6 +111,12 @@ PDF_KROV_YY = DIR.add_pdf("Krov - řez YY")
 PDF_KROV_ZZ = DIR.add_pdf("Krov - řez ZZ")
 PDF_AA = DIR.add_pdf("Řez AA")
 PDF_BB = DIR.add_pdf("Podélný řez BB")
+PDF_LAYERS = DIR.add_pdf("Skladby")
+
+DIR_ZDRAVOTECHNICKE_INSTALACE = PDFFolder(
+	"D1.5.", "projekt/D1.5. Zdravotechnické instalace/",
+)
+PDF_KANAL = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Kanalizace")
 
 @dataclass(frozen=True)
 class SplitRafter:
@@ -449,6 +458,8 @@ print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
 BATHROOM_DEPTH = 2.615
+DRAINAGE_STACK_X = wall3_x + 0.1 + 0.12
+DRAINAGE_STACK_Y = wall_zachod_nahore_y - 0.1 - 0.1
 kuchyn = ground.floor_layer(
 	"Kuchyn",
 	outline=(
@@ -3096,11 +3107,89 @@ def common_wall_insulation(
 		end_y=HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS,
 	)
 
+if "kanal" in sys.argv:
+	# Schematic coordinates: horizontal distance is diagram layout, vertical
+	# distance is the actual height above the finished ground-floor surface.
+	datum = ground_floor_top
+	miako_bottom = ceiling3.storey.elevation + ceiling3.bottom - datum
+	miako_top = ceiling3.storey.elevation + ceiling3.top - datum
+	upper_floor_top = upper.elevation + upper_pokoj_1.start_height + upper_pokoj_1.thickness - datum
+	plasterboard_bottom, _ = roof.layer_vertical_extent(
+		"Gypsum plasterboard", x=DRAINAGE_STACK_X, y=DRAINAGE_STACK_Y,
+	)
+	_, tiles_top = roof.layer_vertical_extent(
+		"Roof tiles", x=DRAINAGE_STACK_X, y=DRAINAGE_STACK_Y,
+	)
+	levels = (
+		("Přízemí - hotová podlaha", 0.0),
+		("Přízemí - horní líc základové desky",
+		 foundation.elevation + foundation_base_plate.start_height + foundation_base_plate.thickness - datum),
+		("Podkroví - spodní líc stropu MIAKO", miako_bottom),
+		("Podkroví - horní líc stropu MIAKO", miako_top),
+		("Podkroví - hotová podlaha", upper_floor_top),
+		("Střecha - spodní líc sádrokartonu", plasterboard_bottom - datum),
+		("Střecha - horní líc krytiny", tiles_top - datum),
+	)
+	line_start, line_end = 0.0, 10.0
+	bottom, top = min(height for _, height in levels), max(height for _, height in levels)
+	drawing1 = house.add_drawing(
+		"kanal",
+		x=(line_start + line_end) / 2,
+		y=(bottom + top) / 2,
+		z=1,
+		radius=max((line_end - line_start) / 2 + 0.5, (top - bottom) / 2 + 0.7),
+		storeys=[],
+		door_annotations=False,
+		automatic_plan_annotations=False,
+	)
+	for label, height in levels:
+		drawing1.add_line((line_start, height), (line_end, height), name=label)
+		print(f"kanal: {label}: {height:+.3f} m")
+	for label, height in (
+		("Přízemí ±0,000", 0.0),
+		(f"Podkroví +{upper_floor_top:.3f}".replace(".", ","), upper_floor_top),
+		(f"Střecha +{tiles_top:.3f}", tiles_top - datum),
+	):
+		# The house mirrors model X on export; anchor labels at the screen-left
+		# endpoint so they extend into the drawing rather than off the page.
+		label_x = line_end if house.mirror_x else line_start
+		drawing1.add_text((label_x, height + 0.2), label, alignment="left", font_size=2.5)
+
+	drawing1.add_basin(x=2, z=0.65)  # umyvadlo
+	drawing1.add_sink(x=4, z=0.65)   # dřez
+
+	drawing1.add_line(
+		(0, tiles_top+0.2),
+		(0, plasterboard_bottom-0.2),
+		color="orange", line_width=0.3)
+	drawing1.add_line(
+		(0, plasterboard_bottom-0.2),
+		(0.5, plasterboard_bottom-0.2-0.5),
+		color="orange", line_width=0.3)
+	drawing1.add_line(
+		(0.5, plasterboard_bottom-0.2-0.5),
+		(0.5, upper_floor_top+0.2),
+		color="orange", line_width=0.3)
+	drawing1.add_line(
+		(0.5, upper_floor_top+0.2),
+		(0.5, miako_bottom-0.2),
+		color="orange", line_width=0.3)
+	drawing1.add_line(
+		(0.5, miako_bottom-0.2),
+		(2.5, 0.2),
+		color="orange", line_width=0.3)
+	drawing1.add_line(
+		(2.5, 0.2),
+		(2.5, -0.2),
+		color="orange", line_width=0.3)
+
+	drawing1.render("kanal.svg", pdf=PDF_KANAL)
+
 if "found" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Foundation",
 		x=5,
-		y=4,
+		y=3,
 		z=-1.3,
 		radius=8,
 		storeys=[foundation],
@@ -3126,10 +3215,9 @@ if "found" in sys.argv:
 	drawing1.add_line((CUT_WIDTH+BWT/2, BWT+GYM_DEPTH+BWT/2), (BWT/2, BWT+GYM_DEPTH+BWT/2), style="dashed", color="red")
 
 	# Kanalizace
-	cisticka_x = 2
-	cisticka_y = -2
 	drawing1.add_line((toilet_x+0.2, 1.0), (toilet_x+0.2, -1), style="dashed-arrows", color="orange")
-	drawing1.add_line((toilet_x+0.2, -1), (cisticka_x, cisticka_y), style="dashed-arrows", color="orange")
+	drawing1.add_line((toilet_x+0.2, -1), (3+1.1, -3), style="dashed-arrows", color="orange")
+	drawing1.add_line((3-1.1, -3), (0, -3), style="dashed-arrows", color="orange")
 
 	# Vodovod
 	drawing1.add_line((HOUSE_WIDTH-1.3, -1.0), (HOUSE_WIDTH-1.3, 1.0), style="dashed-arrows", color="blue")
@@ -3138,6 +3226,9 @@ if "found" in sys.argv:
 	drawing1.add_line((HOUSE_WIDTH-1.35, -0.5), (HOUSE_WIDTH-1.35, 0.7), style="solid", color="blue")
 	drawing1.add_line((HOUSE_WIDTH-1.25, -0.5), (HOUSE_WIDTH-1.35, -0.5), style="solid", color="blue")
 	drawing1.add_line((HOUSE_WIDTH-1.25, 0.7), (HOUSE_WIDTH-1.35, 0.7), style="solid", color="blue")
+
+	drawing1.add_circle(center=(3, -3), radius=1.1, color="orange")
+	drawing1.add_text(point=(3, -3), text="DČOV", font_size=3, color="orange")
 
 	drawing1.render("found.svg", pdf=PDF_FOUND)
 
@@ -3348,6 +3439,12 @@ if "upper" in sys.argv:
 	drawing1.add_lintel(window_sklad, 1, position="after", direction="in")
 	drawing1.add_lintel(sklad_opening, 1, position="after")
 	drawing1.add_lintel_legend()
+
+	# stoupacka kanalizace
+	#drawing1.add_drainage_stack(
+	#    center=(DRAINAGE_STACK_X, DRAINAGE_STACK_Y),
+    #	diameter=0.11,
+	#)
 
 	drawing1.render("upper.svg", pdf=PDF_UPPER)
 
@@ -3751,6 +3848,13 @@ if "roof" in sys.argv:
 		],
 		layout_scale=0.5,
 	)
+
+	# stoupacka kanalizace
+	drawing1.add_drainage_stack(
+	    center=(DRAINAGE_STACK_X, DRAINAGE_STACK_Y),
+    	diameter=0.11,
+	)
+
 	drawing1.render("roof.svg", pdf=PDF_KROV)
 
 if "ceiling" in sys.argv:
@@ -4247,3 +4351,9 @@ if "wall_back" in sys.argv:
 		doors_closed=True,
 	)
 	drawing1.render("wall_back.svg", png=True, png_dpi=600)
+
+if "layers" in sys.argv:
+	markdown_to_pdf(
+		source="skladby.md",
+		output=PDF_LAYERS,
+	)

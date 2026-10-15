@@ -389,6 +389,18 @@ marker[id^="batting-"] path {
     stroke-width: 0.25 !important;
 }
 
+.PredefinedType-FILLAREA.drainage-stack-fill {
+    stroke: none !important;
+}
+
+.PredefinedType-FILLAREA.drainage-stack-orange {
+    fill: #ffa500 !important;
+}
+
+.PredefinedType-FILLAREA.drainage-stack-white {
+    fill: white !important;
+}
+
 .IfcFurniture.projection,
 .IfcFurniture.cut,
 .IfcSanitaryTerminal.projection,
