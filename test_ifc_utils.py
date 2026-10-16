@@ -63,6 +63,7 @@ from ifc_utils import (
     _postprocess_note_overlays,
     _postprocess_cut_symbol_overlays,
     _postprocess_change_floor_symbol_overlays,
+    _postprocess_dimension_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_wood_fills,
@@ -1205,6 +1206,57 @@ class DrainageStackTests(unittest.TestCase):
                                ("drainage-stack-orange", "fill: #ffa500 !important")):
             body = stylesheet.split(f".PredefinedType-FILLAREA.{selector} {{", 1)[1].split("}", 1)[0]
             self.assertIn(rule, body)
+
+
+class DimensionOverlayTests(unittest.TestCase):
+    def test_moves_complete_dimensions_after_fills_without_duplicates(self):
+        source = ('<svg xmlns="http://www.w3.org/2000/svg">'
+                  '<defs><g id="template"><text data-type="text-template"/></g>'
+                  '<marker id="dimension-marker-start"><path d="M0 0L1 1"/></marker></defs>'
+                  '<line id="dimension" class="IfcAnnotation PredefinedType-DIMENSION" '
+                  'x1="0" y1="0" x2="0" y2="2" marker-start="url(#dimension-marker-start)"/>'
+                  '<text id="label" transform="translate(1,2) rotate(-90)">'
+                  '<tspan class="DIMENSION" x="0" y="0">100</tspan></text>'
+                  '<line id="extension" class="PredefinedType-LINEWORK dimension-extension fine" '
+                  'x1="0" y1="0" x2="1" y2="0"/>'
+                  '<path id="arc" class="PredefinedType-ANGLE angle-dimension" d="M0 0L1 1"/>'
+                  '<text id="angle-label"><tspan class="ANGLE">36°</tspan></text>'
+                  '<polyline id="reference" class="PredefinedType-LINEWORK angle-reference fine" '
+                  'points="0,0 1,0 1,1"/>'
+                  '<g id="floor" class="IfcSlab cut"><path fill="white" d="M0 0L3 0L3 3Z"/></g>'
+                  '<g class="right-side-panel"><text id="legend">Legend</text></g>'
+                  '<g class="change-floor-symbol-overlays"><path id="arrow" d="M0 0L1 1"/></g>'
+                  '</svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "section.svg"
+            path.write_text(source, encoding="utf-8")
+            _postprocess_dimension_overlays(path)
+            result = path.read_text(encoding="utf-8")
+            root = ET.fromstring(result)
+            ns = {"s": "http://www.w3.org/2000/svg"}
+            overlay = root.find("s:g[@class='dimension-overlays']", ns)
+            self.assertIsNotNone(overlay)
+            self.assertEqual(list(root)[-1], overlay)
+            identifiers = ["dimension", "label", "extension", "arc", "angle-label", "reference"]
+            self.assertEqual([element.get("id") for element in overlay], identifiers)
+            self.assertEqual(overlay[1].get("transform"), "translate(1,2) rotate(-90)")
+            self.assertEqual(overlay[0].get("marker-start"), "url(#dimension-marker-start)")
+            for identifier in identifiers + ["floor", "legend", "arrow", "template", "dimension-marker-start"]:
+                self.assertEqual(result.count(f'id="{identifier}"'), 1)
+            self.assertLess(result.index('id="floor"'), result.index('id="dimension"'))
+            self.assertLess(result.index('id="arrow"'), result.index('id="dimension"'))
+            _postprocess_dimension_overlays(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), result)
+
+    def test_leaves_svg_without_dimensions_unchanged(self):
+        source = ('<svg><defs><text data-type="text-template"/></defs>'
+                  '<text><tspan class="TEXT">100</tspan></text>'
+                  '<line class="drawing-line" x1="0" y1="0" x2="1" y2="1"/></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "section.svg"
+            path.write_text(source, encoding="utf-8")
+            _postprocess_dimension_overlays(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), source)
 
 
 class ChangeFloorSymbolTests(unittest.TestCase):
@@ -10692,6 +10744,26 @@ class HouseTests(unittest.TestCase):
                 right_panel_width=-1,
             )
 
+    def test_mdf_legend_swatch_is_solid_without_batting(self) -> None:
+        house = House("MDF legend")
+        drawing = house.add_drawing("AA", 0, 0, 2, 4, storeys=[], right_panel_width=60)
+        drawing.add_material_legend([("mdf-solid", "MDF deska")])
+        properties = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+        patterns = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg")
+        pattern = next(p for p in patterns.getroot().iter() if p.get("id") == "mdf-solid")
+        self.assertEqual(len(pattern), 1)
+        self.assertTrue(pattern[0].tag.endswith("}rect"))
+        self.assertEqual(pattern[0].get("fill"), "#c9b56d")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "drawing.svg"
+            path.write_text('<svg width="160mm" height="160mm" viewBox="0 0 160 160">'
+                            '<defs></defs><g id="model-view"/></svg>', encoding="utf-8")
+            _postprocess_right_panel(path, properties)
+            svg = path.read_text(encoding="utf-8")
+        self.assertIn("MDF deska", svg)
+        self.assertIn('fill="url(#mdf-solid)"', svg)
+        self.assertNotIn('class="material-legend-batting', svg)
+
     def test_appends_material_legend_and_expands_svg_sheet(self) -> None:
         with TemporaryDirectory() as directory:
             svg_path = Path(directory) / "drawing.svg"
@@ -12211,6 +12283,28 @@ class HouseTests(unittest.TestCase):
 
             svg = svg_path.read_text(encoding="utf-8")
             self.assertNotIn("section-opening-overlays", svg)
+
+    def test_vapour_barrier_is_blue_only_in_cut_and_matches_legend(self) -> None:
+        stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
+        rule = stylesheet.split(
+            ".target-view-ELEVATIONVIEW .material-Vapourbarrier {", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: white !important", rule)
+        self.assertIn("stroke: black !important", rule)
+        self.assertNotIn("#4a90e2", rule)
+        self.assertIn("stroke-width: 0.08 !important", rule)
+        cut_rule = stylesheet.split(
+            ".target-view-ELEVATIONVIEW .material-Vapourbarrier.cut {", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("fill: #4a90e2 !important", cut_rule)
+        self.assertIn("stroke: #4a90e2 !important", cut_rule)
+        self.assertLess(stylesheet.index(".target-view-ELEVATIONVIEW .material-Vapourbarrier {"),
+                        stylesheet.index(".target-view-ELEVATIONVIEW .material-Vapourbarrier.cut {"))
+        patterns = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg")
+        pattern = next(p for p in patterns.getroot().iter() if p.get("id") == "vapour-barrier-solid")
+        self.assertEqual(len(pattern), 1)
+        self.assertTrue(pattern[0].tag.endswith("}rect"))
+        self.assertEqual(pattern[0].get("fill"), "#4a90e2")
 
     def test_layers_cut_vapour_barriers_above_insulation_edges(self) -> None:
         with TemporaryDirectory() as directory:
@@ -13816,6 +13910,105 @@ class HouseTests(unittest.TestCase):
                 1,
             )
         self.assertNotIn('href="#projected"', svg)
+
+    def test_ring_beam_band_replaces_masonry_and_splits_at_openings(self) -> None:
+        house = House("Ring beam band")
+        source = house.storey("Source", elevation=2)
+        destination = house.storey("Destination", elevation=3)
+        wall_type = house.wall_type("Load bearing", layers=[("Brick", 0.24), "axis"])
+        wall = source.wall(
+            (0, 0), (3, 4), wall_type=wall_type, start_height=0.2, height=3,
+            cuts=[((0, 0, 4.8), (10, 0, 4.8), (0, 10, 4.8))],
+        )
+        wall.add_opening(at=1, width=1, sill_height=0.2, height=2.25)
+        # A window starting exactly at the band's top must not split it.
+        wall.add_window(at=3, width=1, sill_height=1.375, height=2.375)
+        source.wall((0, 6), (3, 6), wall_type=wall_type, height=1.125)
+        source.wall((0, 7), (3, 7), wall_type=wall_type, start_height=1.375, height=1)
+        source.wall((0, 8), (3, 8), thickness=0.12, height=3)
+        openings = tuple(wall._openings)
+        voids = tuple(wall.HasOpenings)
+        settings = ifcopenshell.geom.settings()
+        before = ifcopenshell.geom.create_shape(settings, wall)
+        before_volume = ifcopenshell.util.shape.get_volume(before.geometry)
+        original_clips = json.loads(ifcopenshell.util.element.get_pset(wall, "BBIM_Boolean", "Data"))
+
+        beams = destination.add_ring_beams_from(
+            source, source_wall_type=wall_type, height=0.25, start_height=0.125,
+            replace_wall_band=True,
+        )
+
+        self.assertEqual(len(beams), 2)
+        self.assertEqual(tuple(wall._openings), openings)
+        self.assertEqual(tuple(wall.HasOpenings), voids)
+        self.assertEqual((wall.start_height, wall.height), (0.2, 3))
+        self.assertEqual(len(wall.cuts), 1)
+        self.assertEqual([beam.length for beam in beams], [1, 3])
+        self.assertEqual([beam.source_wall for beam in beams], [wall, wall])
+        for beam, along_start in zip(beams, (0, 2)):
+            self.assertAlmostEqual(beam.start[2], 3.25)
+            self.assertAlmostEqual(beam.end[2], 3.25)
+            properties = ifcopenshell.util.element.get_pset(beam, "BBIM_RingBeam")
+            self.assertEqual(properties["StartAlongWall"], along_start)
+            self.assertEqual(properties["Length"], beam.length)
+            for bar in beam.reinforcement:
+                self.assertEqual(bar.BarLength, beam.length)
+                shape = ifcopenshell.geom.create_shape(settings, bar)
+                self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), beam.length)
+        after = ifcopenshell.geom.create_shape(settings, wall)
+        self.assertAlmostEqual(
+            before_volume - ifcopenshell.util.shape.get_volume(after.geometry),
+            4 * 0.24 * 0.25,
+        )
+        boolean_ids = json.loads(ifcopenshell.util.element.get_pset(wall, "BBIM_Boolean", "Data"))
+        self.assertEqual(boolean_ids[:-2], original_clips)
+        self.assertEqual(house.model.by_id(boolean_ids[-1]).Operator, "DIFFERENCE")
+        # The material change is retained in persisted IFC, not only wrappers.
+        reloaded = ifcopenshell.file.from_string(house.model.to_string())
+        saved_shape = ifcopenshell.geom.create_shape(settings, reloaded.by_guid(wall.GlobalId))
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(saved_shape.geometry),
+            ifcopenshell.util.shape.get_volume(after.geometry),
+        )
+
+    def test_ring_beam_band_preserves_insulation_and_masonry_below_partial_openings(self) -> None:
+        house = House("Composite ring beam wall")
+        storey = house.storey("Upper", elevation=3)
+        wall_type = house.wall_type(
+            "Composite wall", layers=[("Brick", 0.24), "axis", ("Rockwool", 0.2)]
+        )
+        wall = storey.wall((0, 0), (5, 0), wall_type=wall_type, height=3)
+        wall.add_window(at=2, width=1, sill_height=1.2, height=2.2)
+        settings = ifcopenshell.geom.settings()
+        before = ifcopenshell.geom.create_shape(settings, wall)
+        beams = storey.add_ring_beams_from(
+            storey, source_wall_type=wall_type, height=0.25, start_height=1.125,
+            structural_width=0.24, structural_center_offset=0.12,
+            replace_wall_band=True,
+        )
+        self.assertEqual(len(beams), 2)
+        for beam in beams:
+            self.assertAlmostEqual(beam.width, 0.24)
+        after = ifcopenshell.geom.create_shape(settings, wall)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(before.geometry)
+            - ifcopenshell.util.shape.get_volume(after.geometry),
+            4 * 0.24 * 0.25,
+        )
+
+    def test_ring_beam_band_validates_height_and_option_before_mutation(self) -> None:
+        house = House("Ring beam validation")
+        storey = house.storey("Upper", elevation=3)
+        storey.wall((0, 0), (4, 0), thickness=0.24, height=1.25)
+        for kwargs, error, message in (
+            ({"replace_wall_band": "yes"}, TypeError, "must be a boolean"),
+            ({"replace_wall_band": True}, ValueError, "must fit within source wall"),
+        ):
+            with self.subTest(kwargs=kwargs):
+                entity_count = len(list(house.model))
+                with self.assertRaisesRegex(error, message):
+                    storey.add_ring_beams_from(storey, height=0.25, start_height=1.125, **kwargs)
+                self.assertEqual(len(list(house.model)), entity_count)
 
     def test_rejects_invalid_wall_layers_and_type_usage(self) -> None:
         house = House("My house")

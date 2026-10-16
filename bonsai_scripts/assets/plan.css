@@ -222,9 +222,14 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 .target-view-ELEVATIONVIEW .material-Vapourbarrier {
-    fill: none !important;
-    stroke: #4a90e2 !important;
+    fill: white !important;
+    stroke: black !important;
     stroke-width: 0.08 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Vapourbarrier.cut {
+    fill: #4a90e2 !important;
+    stroke: #4a90e2 !important;
 }
 
 .target-view-ELEVATIONVIEW .material-Rooftiles {

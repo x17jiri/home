@@ -1,6 +1,5 @@
 
 # TODO:
-# - venec pod pozednici
 # - roof angles
 
 # Cihla:
@@ -198,6 +197,7 @@ FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
+UPPER_RING_BEAM_HEIGHT = 0.25
 VAZNICE_HEIGHT = 0.32
 VAZNICE_BASE = 0.22
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
@@ -378,7 +378,7 @@ aa_cut = CutDefinition(
 )
 bb_cut = CutDefinition(
 	start=(-2.5, HALF_DEPTH+0.01),
-	end=(HOUSE_WIDTH + 2.5, HALF_DEPTH),
+	end=(HOUSE_WIDTH + 2.5, HALF_DEPTH+0.01),
 	identifier="B",
 	direction=1,  # Look towards the garden (+Y).
 )
@@ -1655,6 +1655,22 @@ window_sklad = wall_4_u.add_window(
 	width=1,
 	height=2.375,
 	sill_height=NADEZDIVKA, partition="SINGLE_PANEL",)
+
+# A level concrete band through all upper load-bearing walls, below the
+# normal wall plates and dormer windows. Openings interrupt concrete and bars;
+# the taller walls and all roof support levels remain unchanged.
+upper_ring_beams = upper.add_ring_beams_from(
+	upper,
+	source_wall_type=load_bearing_wall,
+	height=UPPER_RING_BEAM_HEIGHT,
+	start_height=NADEZDIVKA-UPPER_RING_BEAM_HEIGHT,
+	replace_wall_band=True,
+	concrete_material="Concrete topping",
+	reinforcement_material="Ring beam reinforcement",
+	bar_diameter=RING_BEAM_BAR_DIAMETER,
+	stirrup_diameter=RING_BEAM_STIRRUP_DIAMETER,
+	concrete_cover=RING_BEAM_CONCRETE_COVER,
+)
 
 # Roof
 
@@ -3311,6 +3327,12 @@ if "found" in sys.argv:
 	drawing1.add_circle(center=(3, -3), radius=1.1, color="orange")
 	drawing1.add_text(point=(3, -3), text="DČOV", font_size=3, color="orange")
 
+	drawing1.add_dimension(
+		(HOUSE_WIDTH-BWT/2.0-FOUNDATION_FOOTER_WIDTH/2.0, HOUSE_DEPTH-2),
+		(HOUSE_WIDTH-BWT/2.0+FOUNDATION_FOOTER_WIDTH/2.0, HOUSE_DEPTH-2),
+		offset=3
+	)
+
 	drawing1.render("found.svg", pdf=PDF_FOUND)
 
 if "voda_ground" in sys.argv:
@@ -3946,6 +3968,90 @@ def roof_elevation_cut(*, rafter_index, offset=0.15, identifier="X"):
 	)
 
 
+def add_roof_angles(drawing1):
+	for angle_name, plane, y, angle, slope_sign, clearance, radius in (
+		("AA main roof angle", street_roof, 2.2, street_roof_angle, -1, -0.2, 1.0),
+		("AA dormer roof angle", dormer_roof, 6.5, dormer_roof_angle, 1, -0.2, 1.0),
+	):
+		z = roof_layer_height_at_y(plane, ROOF_TILE_BOTTOM, y, 0) - clearance
+		drawing1.add_angle(
+			vertex=(y, z),
+			start=(y + slope_sign, z),
+			end=(y + slope_sign, z - math.tan(math.radians(angle))),
+			radius=radius,
+			name=angle_name,
+		)
+
+def add_roof_rafter_dimensions(drawing, *, rafter_x, offset=0.45):
+	"""Dimension rafter spans between the supports' outer top corners.
+
+	Use the selected assembly's actual rafter axes and purlin piece. The
+	street wall plate may be the raised house-cut plate; on the garden side,
+	use the dormer rafter/plate when present. Symmetric lower spans need only
+	one dimension. Keep the existing rafter-axis point at the ridge. These
+	are support spans, not timber cutting lengths.
+	"""
+	members = [beam for beam in rafter_assemblies[rafter_x] if beam.kind == "RAFTER"]
+	street = next(beam for beam in members if beam.roof_plane in (street_roof, cut_street_roof))
+	garden = next((beam for beam in members if beam.roof_plane is dormer_rafter_roof), None)
+	if garden is None:
+		garden = next(beam for beam in members if beam.roof_plane is garden_roof)
+	street_plate = beam_cut_street if street.roof_plane is cut_street_roof else beam3
+	garden_plates = (beam_dormer,) if garden.roof_plane is dormer_rafter_roof else (beam4_a, beam4_b)
+	garden_plate = next(plate for plate in garden_plates
+		if min(plate.start[0], plate.end[0]) <= garden.start[0] <= max(plate.start[0], plate.end[0]))
+	street_purlin = next(beam for beam in street_purlins
+		if min(beam.start[0], beam.end[0]) <= street.start[0] <= max(beam.start[0], beam.end[0]))
+	garden_purlin = next(beam for beam in garden_purlins
+		if min(beam.start[0], beam.end[0]) <= garden.start[0] <= max(beam.start[0], beam.end[0]))
+
+	def outer_top_corner(beam, outside_direction):
+		return (beam.start[1] + outside_direction * beam.width / 2,
+		        beam.start[2] + beam.height / 2)
+
+	def point_on_rafter(beam, y):
+		fraction = (y - beam.start[1]) / (beam.end[1] - beam.start[1])
+		return (y, beam.start[2] + fraction * (beam.end[2] - beam.start[2]))
+
+	street_seat = outer_top_corner(street_plate, -1)
+	street_support = outer_top_corner(street_purlin, -1)
+	ridge = point_on_rafter(street, HALF_DEPTH+0.06)
+	garden_seat = outer_top_corner(garden_plate, 1)
+	garden_support = outer_top_corner(garden_purlin, 1)
+	dimensions = [
+		drawing.add_dimension(
+			start=street_support, end=ridge, offset=offset,
+			name=f"{drawing.name} street rafter purlin to ridge",
+		),
+		drawing.add_dimension(
+			start=street_seat, end=street_support, offset=offset,
+			name=f"{drawing.name} street rafter wall plate to purlin",
+		),
+	]
+	if not isclose(math.dist(street_seat, street_support),
+	               math.dist(garden_seat, garden_support), rel_tol=1e-9, abs_tol=1e-9):
+		dimensions.append(drawing.add_dimension(
+			start=garden_seat, end=garden_support, offset=-offset,
+			name=f"{drawing.name} garden rafter wall plate to purlin",
+		))
+	return tuple(dimensions)
+
+
+def add_roof_purlin_dimension(drawing, *, rafter_x, offset=-0.5):
+	"""Dimension purlin centre spacing below the framing, using local pieces."""
+	street, garden = (
+		next(beam for beam in pieces
+			if min(beam.start[0], beam.end[0]) <= rafter_x <= max(beam.start[0], beam.end[0]))
+		for pieces in (street_purlins, garden_purlins)
+	)
+	return drawing.add_dimension(
+		start=(street.start[1], street.start[2]),
+		end=(garden.start[1], garden.start[2]),
+		offset=offset,
+		name=f"{drawing.name} purlin centre spacing",
+	)
+
+
 def add_roof_elevation(name, *, rafter_index, offset=0.15, radius=6, identifier="X"):
 	"""Return a roof-framing section with the shared schedule and timber styles.
 
@@ -3969,7 +4075,7 @@ def add_roof_elevation(name, *, rafter_index, offset=0.15, radius=6, identifier=
 		model_line_width=0.06,
 		right_panel_width=65,
 	)
-	for element in (*roof_outline_walls, *roof_structural_beams):
+	for element in (*roof_outline_walls, *upper_ring_beams, *roof_structural_beams):
 		drawing.include_element(element)
 	styled_members = (
 		*rafter_assemblies[rafter_x],
@@ -3985,6 +4091,8 @@ def add_roof_elevation(name, *, rafter_index, offset=0.15, radius=6, identifier=
 		timber_schedule_rows, layout_scale=0.5,
 		styled_members=styled_members,
 	)
+	add_roof_rafter_dimensions(drawing, rafter_x=rafter_x)
+	add_roof_purlin_dimension(drawing, rafter_x=rafter_x)
 	return drawing
 
 
@@ -4033,7 +4141,7 @@ if "roof" in sys.argv:
 	bb_cut.add_symbol(drawing1)
 	for cut in roof_elevation_cuts.values():
 		cut.add_symbol(drawing1)
-	for element in (*roof_outline_walls, *roof_structural_beams):
+	for element in (*roof_outline_walls, *upper_ring_beams, *roof_structural_beams):
 		drawing1.include_element(element)
 	drawing1.add_chimney_annotation(chimney)
 	drawing1.add_roof_opening_outline(
@@ -4140,24 +4248,13 @@ if "cut1" in sys.argv:
 	)
 	drawing1.render("cut1.svg", png=True, png_dpi=600)
 
-# Drawing - cut AA
-if "aa" in sys.argv:
-	drawing1 = aa_cut.add_drawing(
-		house,
-		"aa",
-		z=3.5,
-		radius=8,
-		storeys=None,
-		doors_closed=True,
-		right_panel_width=60,
-	)
-	drawing1.add_furniture_label(kamna)
-	#drawing1.add_furniture_label(gauc)
-	drawing1.add_material_legend([
-		("brick", "Nosná zeď\nVPC Cihla 240 mm, λ = 0.75"),
+def add_section_material_legend(drawing):
+	"""Add the shared material legend used by the house sections."""
+	return drawing.add_material_legend([
+		("brick", "Nosná zeď\nVPC Cihla 240 mm"),
 		(
 			"liapor-brick",
-			f"První řada cihel nosných stěn, λ = 0.333\nLiapor M AKU, 12 MPa",
+			f"První řada cihel nosných stěn\nLiapor M AKU, 12 MPa",
 		),
 		(
 			"ztracene-bedneni",
@@ -4178,22 +4275,41 @@ if "aa" in sys.argv:
 		("drywall-diagonal1", "Sádrokarton"),
 		(
 			"polystyrene-transparent",
-			f"EPS Fasádní izolace, λ ≤ 0.35\n200 mm"
+			f"EPS Fasádní izolace"
 		),
 		(
 			"perimeter-polystyrene",
-			f"XPS Perimetrická izolace, λ ≤ 0.35\n100 mm nebo 200 mm"
+			f"XPS Perimetrická izolace"
 		),
 		(
 			"rockwool-wave",
-			"Minerální vata, λ ≤ 0.039\n"
-			"tloušťka podle skladby konstrukce",
+			"Minerální vata",
 		),
 		(
-			"pavatex-wave",
-			f"Dřevovláknitá deska, λ ≤ 0.43\n100 mm",
+			"mdf-solid",
+			"MDF záklop",
+		),
+		(
+			"vapour-barrier-solid",
+			"OSB záklop + parobrzda",
 		),
 	])
+
+# Drawing - cut AA
+if "aa" in sys.argv:
+	drawing1 = aa_cut.add_drawing(
+		house,
+		"aa",
+		z=3.5,
+		radius=8,
+		storeys=None,
+		doors_closed=True,
+		right_panel_width=60,
+	)
+	drawing1.add_furniture_label(kamna)
+	#drawing1.add_furniture_label(gauc)
+	add_section_material_legend(drawing1)
+
 	drawing1.add_wall_insulation(
 		wall_front_g,
 		thickness=POLYSTYRENE_INSULATION_THICKNESS,
@@ -4225,18 +4341,7 @@ if "aa" in sys.argv:
 	aa_x = drawing1.x
 	# Roof pitches measured against horizontal, with the same slopes as the
 	# IFC roof planes. Keep the angular dimensions in clear space below them.
-	for angle_name, plane, y, angle, slope_sign, clearance, radius in (
-		("AA main roof angle", street_roof, 2.2, street_roof_angle, -1, -0.2, 1.0),
-		("AA dormer roof angle", dormer_roof, 6.5, dormer_roof_angle, 1, -0.2, 1.0),
-	):
-		z = roof_layer_height_at_y(plane, ROOF_TILE_BOTTOM, y, 0) - clearance
-		drawing1.add_angle(
-			vertex=(y, z),
-			start=(y + slope_sign, z),
-			end=(y + slope_sign, z - math.tan(math.radians(angle))),
-			radius=radius,
-			name=angle_name,
-		)
+	add_roof_angles()
 	# Move each leader endpoint 100 mm into its referenced build-up so the
 	# pointer visibly crosses the outer boundary instead of merely touching it.
 	AA_COMPOSITION_MARKER_PENETRATION = 0.10
@@ -4491,7 +4596,9 @@ if "bb" in sys.argv:
 		radius=8,
 		storeys=None,
 		doors_closed=True,
+		right_panel_width=60,
 	)
+	add_section_material_legend(drawing1)
 	# Dormer-rafter extensions cross this plane, but their insulation stops
 	# at the purlin; only the main-roof ridge sections have batting here.
 	bb_ridge_batting = drawing1.add_rafter_section_batting(
@@ -4518,6 +4625,58 @@ if "bb" in sys.argv:
 			start_z=-1,
 			end_z=0.3,
 		)
+
+	# vyska nadezdivky
+	drawing1.add_dimension(
+		start=(HOUSE_WIDTH-1, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		end=(HOUSE_WIDTH-1, UPPER_FLOOR_START+normal_plasterboard_wall_height))
+
+	# vyska stropu nahore
+	drawing1.add_dimension(
+		start=(HOUSE_WIDTH-2, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		end=(HOUSE_WIDTH-2, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.635))
+	# vyska stropu dole
+	drawing1.add_dimension(
+		start=(HOUSE_WIDTH-1.2, 0+GROUND_FLOOR_THICKNESS),
+		end=(HOUSE_WIDTH-1.2, 0+GROUND_FLOOR_THICKNESS+2.635))
+
+	# vyska oken na vikyri
+	drawing1.add_dimension(
+		start=(wall3_x-2, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		end=(wall3_x-2, UPPER_FLOOR_START+NADEZDIVKA))
+
+	# tloustka podlaha dole
+	drawing1.add_dimension(
+		start=(0, 0),
+		end=(0, 0+GROUND_FLOOR_THICKNESS),
+		offset=-0.5)
+
+	# tloustka podlaha nahore
+	drawing1.add_dimension(
+		start=(0, UPPER_FLOOR_START),
+		end=(0, UPPER_FLOOR_START+GROUND_FLOOR_THICKNESS),
+		offset=-0.5)
+	# tloustka strop
+	drawing1.add_dimension(
+		start=(0, UPPER_FLOOR_START-0.210),
+		end=(0, UPPER_FLOOR_START),
+		offset=0.5)
+
+	# rozdil podlazi
+	drawing1.add_dimension(
+		start=(0, GROUND_FLOOR_THICKNESS),
+		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		offset=1)
+	drawing1.add_dimension(
+		start=(0, GROUND_FLOOR_THICKNESS),
+		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.635),
+		offset=1.5)
+	# house height
+	drawing1.add_dimension(
+		start=(0, GROUND_FLOOR_THICKNESS),
+		end=(0, GROUND_FLOOR_THICKNESS+total_house_height),
+		offset=2.0)
+
 	drawing1.render("bb.svg", pdf=PDF_BB)
 
 # Drawing - cut3

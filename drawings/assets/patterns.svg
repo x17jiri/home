@@ -199,6 +199,13 @@
     <rect width="0.73" height="4" fill="white" />
     <path transform="translate(0 1.0875)" d="M 0 0.365 A 0.365 0.365 0 0 1 0.73 0.365 L 0.365 1.46 M 0 0.365 L 0.365 1.46 A 0.365 0.365 0 0 0 0.73 1.825 M 0.365 1.46 A 0.365 0.365 0 0 1 0 1.825" style="fill:none;stroke:black;stroke-width:0.10" vector-effect="non-scaling-stroke" />
 </pattern>
+<!-- MDF board keeps the model's cut tint, without insulation batting. -->
+<pattern id="mdf-solid" width="1" height="1" patternUnits="userSpaceOnUse">
+    <rect width="1" height="1" fill="#c9b56d" />
+</pattern>
+<pattern id="vapour-barrier-solid" width="1" height="1" patternUnits="userSpaceOnUse">
+    <rect width="1" height="1" fill="#4a90e2" />
+</pattern>
 <!-- Wood-fibre board uses the insulation loop over its model tint. -->
 <pattern id="pavatex-wave" width="0.73" height="4" patternUnits="userSpaceOnUse">
     <rect width="0.73" height="4" fill="#c9b56d" />

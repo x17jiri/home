@@ -256,6 +256,19 @@ wall.set_vertical_material_layers(
 The original wall, its body, and its hosted door and window openings remain
 unchanged; the resulting IFC material usage has layers along `AXIS3`.
 
+To insert a reinforced-concrete band into existing walls, use
+`storey.add_ring_beams_from(source_storey, height=0.25, start_height=1.125,
+replace_wall_band=True, source_wall_type=load_bearing_wall)`. The height offset
+is relative to the destination storey. This removes the structural band from
+the masonry without introducing new hosted openings and splits both concrete
+and longitudinal bars at existing openings intersecting that level. Walls
+wholly above or below the band are skipped. Call after wall joins and openings;
+the original wall heights and roof clipping planes are preserved. Without
+`replace_wall_band`, the helper retains its existing wall-capping behaviour.
+In `house_ifc.py`, `UPPER_RING_BEAM_HEIGHT` controls the additional 250 mm band,
+whose top is at `UPPER_FLOOR_START + NADEZDIVKA` around the perimeter and along
+the internal load-bearing walls, interrupted at the bedroom and storage openings.
+
 ## Library objects and plan symbols
 
 The roof framing drawing opts in to Bonsai's native visible surface fills with
@@ -343,6 +356,9 @@ house = House("My house", asset_library="path/to/IFC4 Furniture Library.ifc")
 
 ## Automated Bonsai plans
 
+Linear and angular dimensions, including labels and extension/reference lines,
+are placed above model fills and masks in the final SVG, PNG and PDF output.
+
 `Drawing.add_angle(vertex, start, end, radius=0.65)` adds a native angular
 dimension between two rays, with an arc, arrowheads, degree label and reference
 lines. Coordinates are `(x, y)` in plans, `(y, z)` in sections looking along X,
@@ -387,6 +403,19 @@ before the assembly, zero cuts through it, and negative offsets move it past
 the assembly. `radius=6` controls the view size. The helper returns a `Drawing`
 without rendering; each drawing keeps independent styles and uses the same
 full schedule definition.
+
+These framing sections also dimension the sloping rafter spans between the
+outer top corners of the wall plates and purlins, and from the street purlin's
+outer top corner to the ridge. The ridge endpoint remains on the rafter axis.
+`add_roof_rafter_dimensions()` uses the selected assembly's actual beams,
+including raised house-cut/dormer wall plates and local purlin sections.
+Unequal lower spans are shown on both sides (XX/YY); symmetric ones are shown
+once (ZZ). Dimension lines are offset 0.45 m outward and exclude eave
+overhangs and fabrication allowances.
+Each framing section also calls `add_roof_purlin_dimension()` to show horizontal
+purlin centre-to-centre spacing below the beams. It uses the local purlin pieces
+(side pieces in XX/ZZ, middle pieces in YY), with a default offset of -0.5 m
+from their centreline level. Existing rafter dimensions are unchanged.
 
 `roof_elevation_definitions` holds the rafter indices, offsets and marker
 letters for `roof_xx`, `roof_yy` and `roof_zz`. The roof plan displays their

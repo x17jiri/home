@@ -4301,6 +4301,47 @@ def _postprocess_change_floor_symbol_overlays(svg_path: Path) -> None:
     svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
 
 
+def _postprocess_dimension_overlays(svg_path: Path) -> None:
+    """Move native dimension lines, labels and extensions above model fills."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="dimension-overlays"' in svg:
+        return
+    elements: list[str] = []
+    dimension_classes = {
+        "PredefinedType-DIMENSION", "DIMENSION", "dimension-extension",
+        "PredefinedType-ANGLE", "ANGLE", "angle-reference",
+    }
+
+    def collect(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = {
+            token
+            for value in re.findall(r'\bclass="([^"]*)"', element)
+            for token in value.split()
+        }
+        if not classes.intersection(dimension_classes):
+            return element
+        elements.append(element.strip())
+        return ""
+
+    # Bonsai emits these annotations as flat SVG primitives. Keep complete
+    # text elements (including tspans/transforms), not just their label spans.
+    # Skip self-closing text templates in defs rather than consuming the SVG
+    # up to the next actual text element.
+    updated = re.sub(
+        r"<(?:line|polyline|path|circle|ellipse|polygon)\b[^>]*"
+        r"(?:/>|>\s*</(?:line|polyline|path|circle|ellipse|polygon)>)"
+        r"|<text\b[^>]*?(?<!/)>.*?</text>",
+        collect, svg, flags=re.DOTALL,
+    )
+    closing = updated.rfind("</svg>")
+    if not elements or closing < 0:
+        return
+    overlay = ('  <g class="dimension-overlays">\n'
+               + "\n".join(elements) + "\n  </g>\n")
+    svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -5750,6 +5791,7 @@ def _render_existing_drawing(
         drawing_properties or {},
     )
     _postprocess_change_floor_symbol_overlays(absolute_output)
+    _postprocess_dimension_overlays(absolute_output)
     _postprocess_drawing_line_colors(absolute_output)
     resolved_title = title if title is not None else Path(pdf if pdf is not None else output_path).stem
     _postprocess_drawing_title(absolute_output, resolved_title)
@@ -15598,6 +15640,46 @@ class Wall(ifcopenshell.entity_instance):
         )
         return vertical_type
 
+    def _subtract_material_band(
+        self,
+        *,
+        start_height: float,
+        height: float,
+        width: float,
+        center_offset: float,
+        runs: Sequence[tuple[float, float]],
+    ) -> None:
+        """Remove a structural band without introducing a hosted opening."""
+        model = self.storey.house.model
+        body = ifcopenshell.util.representation.get_representation(
+            self, "Model", "Body", "MODEL_VIEW"
+        )
+        builder = ShapeBuilder(model)
+        overlap = 0.01
+        boolean_ids = json.loads(
+            ifcopenshell.util.element.get_pset(self, "BBIM_Boolean", "Data") or "[]"
+        )
+        for start, end in runs:
+            # Overrun only the outer wall ends, never the concrete/opening
+            # boundaries: a partial-height opening may retain masonry there.
+            start = start - overlap if isclose(start, 0.0, abs_tol=1e-9) else start
+            end = end + overlap if isclose(end, self.length, abs_tol=1e-9) else end
+            cutter = builder.extrude(
+                builder.rectangle(size=(end - start, width)),
+                magnitude=height,
+                position=(start, center_offset - width / 2,
+                          start_height - self.start_height),
+            )
+            for item in tuple(body.Items):
+                boolean_ids.extend(boolean.id() for boolean in ifcopenshell.api.geometry.add_boolean(
+                    model, first_item=item, second_items=[cutter], operator="DIFFERENCE"
+                ))
+        body.RepresentationType = "CSG"
+        pset = ifcopenshell.api.pset.add_pset(model, product=self, name="BBIM_Boolean")
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=pset, properties={"Data": json.dumps(boolean_ids)}
+        )
+
     def _validate_opening(
         self,
         *,
@@ -16925,6 +17007,7 @@ class Storey:
         structural_center_offset: Number | None = None,
         height: Number,
         start_height: Number,
+        replace_wall_band: bool = False,
         concrete_material: str = "Concrete topping",
         reinforcement_material: str = "Ring beam reinforcement",
         bar_diameter: Number = 0.016,
@@ -16947,6 +17030,15 @@ class Storey:
         ``stirrup_diameter``.  The returned beams expose their source wall as
         ``source_wall`` and their four :class:`IfcReinforcingBar` occurrences
         as ``reinforcement``.
+
+        With ``replace_wall_band=True``, insert the beams into the selected
+        walls rather than above them. Walls wholly outside the band's height
+        are skipped; intersecting walls must contain its full height. Split
+        beams and reinforcement at every hosted opening intersecting the
+        band. Subtract only the concrete's structural band from the masonry,
+        preserving wall heights, roof clips, and existing openings. This is
+        a body Boolean, not a new window/opening, so facade and plan opening
+        annotations are unaffected. Call after wall joins and openings.
         """
         if not isinstance(source_storey, Storey):
             raise TypeError("source_storey must be a Storey")
@@ -16963,6 +17055,8 @@ class Storey:
 
         height = _number(height, "height")
         start_height = _number(start_height, "start_height")
+        if not isinstance(replace_wall_band, bool):
+            raise TypeError("replace_wall_band must be a boolean")
         if structural_width is not None:
             structural_width = _number(
                 structural_width, "structural_width"
@@ -16996,6 +17090,45 @@ class Storey:
         if not 0 <= transparency <= 1:
             raise ValueError("transparency must be between zero and one")
 
+        source_bottom = self.elevation + start_height - source_storey.elevation
+        source_top = source_bottom + height
+        beam_runs = []
+        band_walls = []
+        tolerance = 1e-9
+        for source_wall in source_storey.walls:
+            if (
+                source_wall_type is not None
+                and ifcopenshell.util.element.get_type(source_wall)
+                != source_wall_type
+            ):
+                continue
+            runs = [(0.0, source_wall.length)]
+            if replace_wall_band:
+                if (source_top <= source_wall.start_height + tolerance
+                        or source_bottom >= source_wall.end_height - tolerance):
+                    continue
+                if (source_bottom < source_wall.start_height - tolerance
+                        or source_top > source_wall.end_height + tolerance):
+                    raise ValueError(
+                        f"ring beam band must fit within source wall {source_wall.Name!r}"
+                    )
+                for opening_start, opening_end, bottom, top in source_wall._openings:
+                    if bottom >= source_top - tolerance or top <= source_bottom + tolerance:
+                        continue
+                    remaining = []
+                    for run_start, run_end in runs:
+                        if opening_start >= run_end - tolerance or opening_end <= run_start + tolerance:
+                            remaining.append((run_start, run_end))
+                            continue
+                        if opening_start > run_start + tolerance:
+                            remaining.append((run_start, opening_start))
+                        if opening_end < run_end - tolerance:
+                            remaining.append((opening_end, run_end))
+                    runs = remaining
+                if runs:
+                    band_walls.append((source_wall, runs))
+            beam_runs.extend((source_wall, start, end) for start, end in runs)
+
         model = self.house.model
         reinforcement_style = self.house._surface_style(
             "beam",
@@ -17017,13 +17150,8 @@ class Storey:
 
         ring_beams = []
         radius = bar_diameter / 2
-        for source_wall in source_storey.walls:
-            if (
-                source_wall_type is not None
-                and ifcopenshell.util.element.get_type(source_wall)
-                != source_wall_type
-            ):
-                continue
+        for source_wall, along_start, along_end in beam_runs:
+            run_length = along_end - along_start
             resolved_structural_width = (
                 source_wall.thickness
                 if structural_width is None
@@ -17048,18 +17176,22 @@ class Storey:
             normal_y = delta_x / source_wall.length
             start_x = (
                 source_wall.start[0]
+                + delta_x * along_start / source_wall.length
                 + normal_x * resolved_structural_center_offset
             )
             start_y = (
                 source_wall.start[1]
+                + delta_y * along_start / source_wall.length
                 + normal_y * resolved_structural_center_offset
             )
             end_x = (
-                source_wall.end[0]
+                source_wall.start[0]
+                + delta_x * along_end / source_wall.length
                 + normal_x * resolved_structural_center_offset
             )
             end_y = (
-                source_wall.end[1]
+                source_wall.start[1]
+                + delta_y * along_end / source_wall.length
                 + normal_y * resolved_structural_center_offset
             )
             center_z = self.elevation + start_height + height / 2
@@ -17088,7 +17220,9 @@ class Storey:
                     "SourceWall": source_wall.GlobalId,
                     "Width": resolved_structural_width,
                     "Height": height,
-                    "Length": source_wall.length,
+                    "Length": run_length,
+                    "StartAlongWall": along_start,
+                    "EndAlongWall": along_end,
                     "StartHeight": start_height,
                     "StructuralCenterOffset": (
                         resolved_structural_center_offset
@@ -17123,7 +17257,7 @@ class Storey:
                 )
                 bar.NominalDiameter = bar_diameter
                 bar.CrossSectionArea = pi * radius**2
-                bar.BarLength = source_wall.length
+                bar.BarLength = run_length
                 bar.BarSurface = "PLAIN"
 
                 bar_placement = ring_beam.placement.copy()
@@ -17141,7 +17275,7 @@ class Storey:
                 builder = ShapeBuilder(model)
                 bar_solid = builder.extrude(
                     builder.circle(center=(0.0, 0.0), radius=radius),
-                    magnitude=source_wall.length,
+                    magnitude=run_length,
                     position_z_axis=(1.0, 0.0, 0.0),
                     position_x_axis=(0.0, 1.0, 0.0),
                 )
@@ -17179,6 +17313,16 @@ class Storey:
             )
             object.__setattr__(ring_beam, "start_height", start_height)
             ring_beams.append(ring_beam)
+
+        for wall, runs in band_walls:
+            wall._subtract_material_band(
+                start_height=source_bottom,
+                height=height,
+                width=wall.thickness if structural_width is None else structural_width,
+                center_offset=(wall.body_offset + wall.thickness / 2
+                               if structural_center_offset is None else structural_center_offset),
+                runs=runs,
+            )
 
         return tuple(ring_beams)
 

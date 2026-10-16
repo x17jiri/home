@@ -20,6 +20,56 @@ from ifc_utils import CutDefinition, Drawing, House, _remove_3d_only_elements, _
 from materials import resolve_timber_grade
 
 
+class UpperRingBeamTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source)]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            redirect_stdout(StringIO()),
+        ):
+            cls.values = runpy.run_path(str(source))
+
+    def test_level_band_follows_all_load_bearing_walls_except_higher_dormer(self):
+        v = self.values
+        beams = v["upper_ring_beams"]
+        expected_walls = [v[name] for name in (
+            "wall_front_u", "wall_back_u", "wall_1a_u", "wall_1b_u",
+            "wall_gym_u", "wall_2", "wall_3", "wall_4_u",
+        )]
+        self.assertEqual({beam.source_wall for beam in beams}, set(expected_walls))
+        self.assertEqual(len(beams), 10)
+        self.assertAlmostEqual(v["UPPER_RING_BEAM_HEIGHT"], 0.25)
+        for beam in beams:
+            with self.subTest(beam=beam.Name):
+                self.assertAlmostEqual(beam.height, 0.25)
+                self.assertAlmostEqual(beam.start[2] + beam.height / 2,
+                                       v["UPPER_FLOOR_START"] + v["NADEZDIVKA"])
+                self.assertAlmostEqual(beam.width, v["BWT"])
+                self.assertEqual(beam.ContainedInStructure[0].RelatingStructure, v["upper"].element)
+                for bar in beam.reinforcement:
+                    self.assertAlmostEqual(bar.BarLength, beam.length)
+        self.assertEqual(len(v["ring_beams"]), 8)  # Existing ceiling-level ring stays.
+
+    def test_internal_openings_interrupt_beams_without_new_hosted_openings(self):
+        v = self.values
+        for name in ("wall_2", "wall_3"):
+            wall = v[name]
+            beams = [b for b in v["upper_ring_beams"] if b.source_wall == wall]
+            self.assertEqual(len(beams), 2)
+            self.assertEqual(len(wall._openings), 1)
+            self.assertEqual(len(wall.HasOpenings), 1)
+            opening_start, opening_end, _, _ = wall._openings[0]
+            self.assertAlmostEqual(beams[0].length, opening_start)
+            self.assertAlmostEqual(beams[1].length, wall.length - opening_end)
+            properties = ifcopenshell.util.element.get_pset(beams[1], "BBIM_RingBeam")
+            self.assertAlmostEqual(properties["StartAlongWall"], opening_end)
+            self.assertTrue(ifcopenshell.util.element.get_pset(wall, "BBIM_Boolean", "Data"))
+        self.assertAlmostEqual(v["wall_front_u"].height, v["NADEZDIVKA"])
+        self.assertAlmostEqual(v["wall_dormer"].start_height, v["NADEZDIVKA"])
+
+
 class FoundationDrawingTests(unittest.TestCase):
     def test_foundation_line_legend_matches_wall_outline_and_is_drawing_scoped(self):
         source = Path(__file__).with_name("house_ifc.py")
@@ -99,6 +149,36 @@ class CutDrawingTests(unittest.TestCase):
         ):
             cls.values = runpy.run_path(str(source))
             cls.rendered = [call.args[0] for call in render.call_args_list]
+
+    def test_aa_legend_uses_plain_mdf_instead_of_wood_fibre_batting(self):
+        drawing = next(d for d in self.values["house"]._drawings if d.name == "aa")
+        tables = json.loads(ifcopenshell.util.element.get_pset(
+            drawing.element, "EPset_Drawing", "RightPanelTables"))
+        items = next(table["items"] for table in tables if table["kind"] == "material_legend")
+        self.assertIn({"pattern": "mdf-solid", "description": "MDF záklop"}, items)
+        self.assertFalse(any(item["pattern"] == "pavatex-wave" for item in items))
+        self.assertFalse(any("Dřevovláknitá deska" in item["description"] for item in items))
+        self.assertTrue(any(item["pattern"] == "rockwool-wave" for item in items))
+
+    def test_aa_legend_includes_blue_osb_and_vapour_control_layer(self):
+        drawing = next(d for d in self.values["house"]._drawings if d.name == "aa")
+        tables = json.loads(ifcopenshell.util.element.get_pset(
+            drawing.element, "EPset_Drawing", "RightPanelTables"))
+        items = next(table["items"] for table in tables if table["kind"] == "material_legend")
+        self.assertIn({"pattern": "vapour-barrier-solid",
+                       "description": "OSB záklop + parobrzda"}, items)
+
+    def test_aa_and_bb_share_the_same_material_legend(self):
+        legends = []
+        for name in ("aa", "bb"):
+            drawing = next(d for d in self.values["house"]._drawings if d.name == name)
+            self.assertEqual(drawing.right_panel_width, 60)
+            tables = json.loads(ifcopenshell.util.element.get_pset(
+                drawing.element, "EPset_Drawing", "RightPanelTables"))
+            legends.append([table for table in tables if table["kind"] == "material_legend"])
+        self.assertEqual(len(legends[0]), 1)
+        self.assertEqual(len(legends[0][0]["items"]), 12)
+        self.assertEqual(legends[0], legends[1])
 
     def test_all_plan_symbols_use_shared_cut_definitions(self):
         cuts = (self.values["aa_cut"], self.values["bb_cut"])
@@ -253,6 +333,105 @@ class RoofElevationTests(unittest.TestCase):
             cls.values = runpy.run_path(str(source))
             cls.rendered = [call.args[0] for call in render.call_args_list]
 
+    def test_rafter_span_dimensions_are_scoped_and_suppress_symmetric_duplicate(self):
+        for name, count in (("roof_xx", 3), ("roof_yy", 3), ("roof_zz", 2)):
+            with self.subTest(drawing=name):
+                drawing = self.values[name]
+                dimensions = [a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                              if a.ObjectType == "DIMENSION" and " rafter " in a.Name]
+                self.assertEqual(len(dimensions), count)
+                self.assertTrue(all(a.Name.startswith(name + " ") for a in dimensions))
+                self.assertTrue(any(a.Name.endswith("purlin to ridge") for a in dimensions))
+                self.assertEqual(sum(a.Name.endswith("wall plate to purlin") for a in dimensions), count - 1)
+                self.assertTrue(all(ifcopenshell.util.element.get_pset(
+                    a, "BBIM_Dimension", "CustomUnit") == ["Millimeters"] for a in dimensions))
+
+    def test_rafter_span_dimensions_use_outer_top_support_corners_and_keep_ridge(self):
+        v = self.values
+        for name, street_plate, garden_plate, distance, width in (
+            ("roof_xx", v["beam_cut_street"], v["beam4_a"], v["VAZNICE_SIDE_DIST"], v["VAZNICE_SIDE_BASE"]),
+            ("roof_yy", v["beam3"], v["beam_dormer"], v["VAZNICE_DIST"], v["VAZNICE_BASE"]),
+            ("roof_zz", v["beam3"], v["beam4_b"], v["VAZNICE_SIDE_DIST"], v["VAZNICE_SIDE_BASE"]),
+        ):
+            drawing = v[name]
+            products = drawing.group.IsGroupedBy[0].RelatedObjects
+            street_seat = (street_plate.start[1] - street_plate.width / 2,
+                           street_plate.start[2] + street_plate.height / 2)
+            garden_seat = (garden_plate.start[1] + garden_plate.width / 2,
+                           garden_plate.start[2] + garden_plate.height / 2)
+            street_support = (v["HALF_DEPTH"] - distance - width / 2, v["PURLIN_TOP_Z"])
+            garden_support = (v["HALF_DEPTH"] + distance + width / 2, v["PURLIN_TOP_Z"])
+            # Preserve the user's existing 60 mm ridge-point adjustment.
+            axis_plane = v["offset_plane"](*v["street_roof"].points,
+                                           offset=v["ROOF_BATTING_CENTER_OFFSET"])
+            ridge_y = v["HALF_DEPTH"] + 0.06
+            ridge = (ridge_y, v["plane_height_at"](*axis_plane, x=0, y=ridge_y))
+            expected = {
+                "street rafter purlin to ridge": (street_support, ridge),
+                "street rafter wall plate to purlin": (street_seat, street_support),
+            }
+            if name != "roof_zz":
+                expected["garden rafter wall plate to purlin"] = (garden_seat, garden_support)
+            for suffix, (first_point, second_point) in expected.items():
+                with self.subTest(drawing=name, span=suffix):
+                    dimension = next(a for a in products if a.Name == f"{name} {suffix}")
+                    curve = dimension.Representation.Representations[0].Items[0]
+                    first, second = np.asarray(curve.Points.CoordList)
+                    length = np.linalg.norm(second - first)
+                    expected_length = np.linalg.norm(np.subtract(second_point, first_point))
+                    self.assertAlmostEqual(length, expected_length)
+                    self.assertGreater(length, abs(second_point[0] - first_point[0]))
+                    extension = next(a for a in products if a.Name == dimension.Name + " Extension Lines")
+                    placement = ifcopenshell.util.placement.get_local_placement(extension.ObjectPlacement)
+                    segments = extension.Representation.Representations[0].Items[0].Elements
+                    for segment, expected_point in zip(segments, (first_point, second_point)):
+                        local = segment.Points.CoordList[0]
+                        point = placement @ np.array((*local, 0, 1))
+                        np.testing.assert_allclose(point[:3], (drawing.x, *expected_point), atol=1e-9)
+
+    def test_purlin_centre_spacing_dimensions_use_local_sections_and_sit_below_beams(self):
+        v = self.values
+        for name, distance, height in (
+            ("roof_xx", v["VAZNICE_SIDE_DIST"], v["VAZNICE_SIDE_HEIGHT"]),
+            ("roof_yy", v["VAZNICE_DIST"], v["VAZNICE_HEIGHT"]),
+            ("roof_zz", v["VAZNICE_SIDE_DIST"], v["VAZNICE_SIDE_HEIGHT"]),
+        ):
+            with self.subTest(drawing=name):
+                drawing = v[name]
+                products = drawing.group.IsGroupedBy[0].RelatedObjects
+                dimensions = [a for a in products if a.Name == f"{name} purlin centre spacing"]
+                self.assertEqual(len(dimensions), 1)
+                dimension = dimensions[0]
+                self.assertEqual(dimension.ObjectType, "DIMENSION")
+                curve = dimension.Representation.Representations[0].Items[0]
+                points = np.asarray(curve.Points.CoordList)
+                self.assertAlmostEqual(np.linalg.norm(points[1] - points[0]), 2 * distance)
+                placement = ifcopenshell.util.placement.get_local_placement(dimension.ObjectPlacement)
+                centre_z = v["PURLIN_TOP_Z"] - height / 2
+                for point, y in zip(points, (v["HALF_DEPTH"] - distance, v["HALF_DEPTH"] + distance)):
+                    world = placement @ np.array((*point, 0, 1))
+                    np.testing.assert_allclose(world[:3], (drawing.x, y, centre_z - 0.5), atol=1e-9)
+                extension = next(a for a in products if a.Name == dimension.Name + " Extension Lines")
+                placement = ifcopenshell.util.placement.get_local_placement(extension.ObjectPlacement)
+                curves = extension.Representation.Representations[0].Items[0].Elements
+                for curve, y in zip(curves, (v["HALF_DEPTH"] - distance, v["HALF_DEPTH"] + distance)):
+                    start = curve.Points.CoordList[0]
+                    world = placement @ np.array((*start, 0, 1))
+                    np.testing.assert_allclose(world[:3], (drawing.x, y, centre_z), atol=1e-9)
+
+    def test_rafter_dimensions_mirror_with_the_section_camera(self):
+        v = self.values
+        exported = v["house"]._export_model()
+        for name in ("roof_xx", "roof_yy", "roof_zz"):
+            for dimension in v[name].group.IsGroupedBy[0].RelatedObjects:
+                if dimension.ObjectType != "DIMENSION":
+                    continue
+                original = ifcopenshell.util.placement.get_local_placement(dimension.ObjectPlacement)
+                mirrored = ifcopenshell.util.placement.get_local_placement(
+                    exported.by_guid(dimension.GlobalId).ObjectPlacement)
+                np.testing.assert_allclose(mirrored[:3, 3], original[:3, 3] * (-1, 1, 1), atol=1e-9)
+                self.assertAlmostEqual(mirrored[0, 3], -v[name].x)
+
     def test_camera_is_before_selected_rafter_parallel_to_aa_and_mirrors_once(self):
         values = self.values
         drawing = values["roof_xx"]
@@ -274,13 +453,14 @@ class RoofElevationTests(unittest.TestCase):
                              b.ObjectPlacement)[0, 3] - selected_x) < 1e-7]
         self.assertTrue(first_members)
 
-    def test_includes_only_upper_walls_and_structural_roof_members(self):
+    def test_includes_only_upper_walls_ring_beams_and_structural_roof_members(self):
         values = self.values
         drawing = values["roof_xx"]
         pset = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
         self.assertEqual(pset["FillMode"], "SHAPELY")
         selected = ifcopenshell.util.selector.filter_elements(values["house"].model, pset["Include"])
-        expected = set((*values["roof_outline_walls"], *values["roof_structural_beams"]))
+        expected = set((*values["roof_outline_walls"], *values["upper_ring_beams"],
+                        *values["roof_structural_beams"]))
         for name in ("Rafters", "Collar ties"):
             for relation in values["roof_layer_storeys"][name].element.ContainsElements:
                 expected.update(relation.RelatedElements)
