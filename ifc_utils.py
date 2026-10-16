@@ -4273,6 +4273,34 @@ def _postprocess_cut_symbol_overlays(svg_path: Path) -> None:
     svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
 
 
+def _postprocess_change_floor_symbol_overlays(svg_path: Path) -> None:
+    """Move complete floor-change symbols above model geometry and masks."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="change-floor-symbol-overlays"' in svg:
+        return
+    elements: list[str] = []
+
+    def collect(match: re.Match[str]) -> str:
+        element = match.group(0)
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', element))
+        if "change-floor-symbol" not in attributes.get("class", "").split():
+            return element
+        elements.append(element.strip())
+        return ""
+
+    updated = re.sub(
+        r"<(?:line|polyline|path|circle|ellipse|polygon)\b[^>]*"
+        r"(?:/>|>\s*</(?:line|polyline|path|circle|ellipse|polygon)>)",
+        collect, svg, flags=re.DOTALL,
+    )
+    closing = updated.rfind("</svg>")
+    if not elements or closing < 0:
+        return
+    overlay = ('  <g class="change-floor-symbol-overlays">\n'
+               + "\n".join(elements) + "\n  </g>\n")
+    svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
+
+
 def _postprocess_door_overheads(
     svg_path: Path,
     *,
@@ -4445,7 +4473,7 @@ def _postprocess_door_overheads(
     if '<g class="furniture-label-overlays">' not in svg:
         furniture_labels = [
             match.group(0).strip()
-            for match in re.finditer(r"<text\b[^>]*>.*?</text>", svg, re.DOTALL)
+            for match in re.finditer(r"<text\b[^>]*(?<!/)>.*?</text>", svg, re.DOTALL)
             if "furniture-label" in match.group(0)
         ]
         closing_svg = svg.rfind("</svg>")
@@ -5721,6 +5749,7 @@ def _render_existing_drawing(
         absolute_output,
         drawing_properties or {},
     )
+    _postprocess_change_floor_symbol_overlays(absolute_output)
     _postprocess_drawing_line_colors(absolute_output)
     resolved_title = title if title is not None else Path(pdf if pdf is not None else output_path).stem
     _postprocess_drawing_title(absolute_output, resolved_title)
@@ -8033,12 +8062,14 @@ class Drawing:
         self._dimension_count = 0
         self._angle_count = 0
         self._line_count = 0
+        self._poly_line_count = 0
         self._circle_count = 0
         self._drainage_stack_count = 0
         self._sanitary_symbol_count = 0
         self._rectangle_count = 0
         self._text_count = 0
         self._entrance_arrow_count = 0
+        self._change_floor_symbol_count = 0
         self._hexagon_marker_count = 0
         self._note_count = 0
         self._cut_symbol_count = 0
@@ -9860,6 +9891,7 @@ class Drawing:
         height: Number = 0.20,
         outlet_length: Number = 0.10,
         color: str = "black",
+        identifier: str | None = None,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Draw a schematic washbasin: rounded bowl, rim and drain stub.
@@ -9869,11 +9901,12 @@ class Drawing:
         schematic such as kanal, Z is the diagram's vertical (Y) coordinate;
         axis-aligned elevations use their usual horizontal/height coordinates.
         The bowl is a lower half-ellipse (a semicircle if height=width/2).
-        This drawing-only icon adds no physical sanitary fixture or label.
+        A centred identifier (default "Umyvadlo") is drawn above the rim.
+        This drawing-only icon adds no physical sanitary fixture.
         """
         return self._add_sanitary_symbol(
             "basin", x, z, width=width, height=height,
-            outlet_length=outlet_length, color=color, name=name,
+            outlet_length=outlet_length, color=color, identifier=identifier, name=name,
         )
 
     def add_sink(
@@ -9885,21 +9918,179 @@ class Drawing:
         height: Number = 0.20,
         outlet_length: Number = 0.10,
         color: str = "black",
+        identifier: str | None = None,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Draw a rectangular schematic kitchen sink, using add_basin() coordinates.
 
         X is the bowl centre, Z its bottom; the outlet extends below Z.
         Width, bowl height and outlet length are in model metres. Set
-        outlet_length=0 to omit the stub. No 3D fixture or label is added.
+        outlet_length=0 to omit the stub. The identifier defaults to "Dřez".
+        No physical 3D fixture is added.
         """
         return self._add_sanitary_symbol(
             "sink", x, z, width=width, height=height,
-            outlet_length=outlet_length, color=color, name=name,
+            outlet_length=outlet_length, color=color, identifier=identifier, name=name,
+        )
+
+    def add_toilet(
+        self,
+        x: Number,
+        z: Number,
+        *,
+        width: Number = 0.40,
+        height: Number = 0.20,
+        rim_thickness: Number = 0.025,
+        outlet_length: Number = 0,
+        color: str = "black",
+        identifier: str | None = None,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a schematic WC bowl with two horizontal lines at the top.
+
+        Coordinates match add_basin(): X is the horizontal centre and Z the
+        bowl bottom, in metres. The rounded bowl is a semicircle with the
+        default dimensions; the narrow closed rim extends rim_thickness above
+        the bowl's height. No drain stub is drawn unless outlet_length>0.
+        A centred identifier (default "WC") is drawn above the rim. Drainage
+        pipes remain separate annotations. This does not add a 3D toilet.
+        """
+        return self._add_sanitary_symbol(
+            "toilet", x, z, width=width, height=height,
+            rim_thickness=rim_thickness, outlet_length=outlet_length,
+            color=color, identifier=identifier, name=name,
+        )
+
+    def add_washing_machine_connection(
+        self,
+        x: Number,
+        z: Number,
+        *,
+        width: Number = 0.16,
+        height: Number = 0.24,
+        color: str = "black",
+        identifier: str | None = None,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a washing-machine wall waste connector, not the appliance.
+
+        X is the horizontal centre and Z the connector box's bottom, in
+        metres, using the same diagram coordinates as add_basin(). The symbol
+        is a small upright rectangle with an inset circular socket, centred
+        at Z + 2*height/3. Its identifier defaults to "Pračka". Pipes are drawn
+        separately; no outlet stub or physical 3D plumbing is added.
+        """
+        return self._add_sanitary_symbol(
+            "washing_machine_connection", x, z, width=width, height=height,
+            outlet_length=0, color=color, identifier=identifier, name=name,
+        )
+
+    def add_roof_vent(
+        self,
+        x: Number,
+        z: Number,
+        *,
+        width: Number = 0.40,
+        height: Number = 0.20,
+        color: str = "black",
+        identifier: str | None = None,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw an upward-pointing roof-vent triangle labelled "Odvětrání".
+
+        X is the horizontal centre and Z the triangle's bottom edge, in
+        metres, using the same diagram coordinates as add_basin(). Connect
+        the vent pipe separately at (x, z). This is an unfilled drawing-only
+        symbol, not physical roof-vent geometry.
+        """
+        return self._add_sanitary_symbol(
+            "roof_vent", x, z, width=width, height=height,
+            outlet_length=0, color=color, identifier=identifier, name=name,
+        )
+
+    def add_shower(
+        self,
+        x: Number,
+        z: Number,
+        *,
+        width: Number = 0.90,
+        height: Number = 0.30,
+        color: str = "black",
+        identifier: str | None = None,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a rectangular shower-tray symbol anchored at its bottom left.
+
+        Unlike the other sanitary icons, X is the left edge, not the centre.
+        Z is the bottom edge; all dimensions are metres. Coordinate mapping
+        is the same as add_basin(), including plan-based drainage schematics
+        and axis-aligned elevations. This is unfilled drawing-only linework,
+        with no extra rim, outlet or physical 3D fixture. The identifier
+        defaults to "Sprcha" and is centred above the rectangle.
+        """
+        x, z = _number(x, "x"), _number(z, "z")
+        width, height = _number(width, "width"), _number(height, "height")
+        if width <= 0 or height <= 0:
+            raise ValueError("width and height must be greater than zero")
+        identifier, label_offset = self._sanitary_identifier_layout("shower", identifier)
+        symbol = self.add_rectangle(
+            (x, z), (x - width, z + height), color=color,
+            name=name if name is not None else f"{self.name} Shower Symbol {self._sanitary_symbol_count + 1}",
+        )
+        self._sanitary_symbol_count += 1
+        model = self.house.model
+        pset = ifcopenshell.api.pset.add_pset(model, product=symbol, name="BBIM_SanitarySymbol")
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=pset,
+            properties={"Kind": "shower", "X": x, "BottomZ": z, "Width": width,
+                        "Height": height, "PositionReference": "bottom-left", "OutletLength": 0,
+                        "Identifier": identifier,
+                        "Color": ifcopenshell.util.element.get_pset(symbol, "BBIM_DrawingRectangle", "Color")},
+        )
+        appearance = ifcopenshell.util.element.get_pset(symbol, "EPset_Annotation")
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=model.by_id(appearance["id"]),
+            properties={"Classes": f"{appearance['Classes']} sanitary-symbol sanitary-shower"},
+        )
+        self._add_sanitary_identifier(symbol, (x - width / 2, z + height + label_offset), identifier)
+        return symbol
+
+    def _sanitary_identifier_layout(self, kind, identifier) -> tuple[str, float]:
+        """Resolve a type label and its fixed printed distance above the icon."""
+        defaults = {"basin": "Umyvadlo", "sink": "Dřez", "toilet": "WC", "shower": "Sprcha",
+                    "washing_machine_connection": "Pračka", "roof_vent": "Odvětrání"}
+        identifier = defaults[kind] if identifier is None else _name(identifier, "identifier")
+        scale_value = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Scale")
+        try:
+            scale = float(Fraction(str(scale_value)))
+            if not isfinite(scale) or scale <= 0:
+                raise ValueError
+        except (ValueError, ZeroDivisionError):
+            raise ValueError("sanitary identifiers require a positive drawing scale") from None
+        # The text centre is 3 printed mm above the actual top edge, leaving
+        # clearance for the 2.5 mm lettering at any drawing scale.
+        return identifier, 0.003 / scale
+
+    def _add_sanitary_identifier(self, symbol, point, identifier) -> None:
+        """Link a native, drawing-scoped text annotation to its sanitary icon."""
+        properties = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+        label = self.add_text(
+            point, identifier, font_size=2.5, color=properties["Color"],
+            name=f"{symbol.Name} Identifier",
+        )
+        model = self.house.model
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=model.by_id(properties["id"]),
+            properties={"IdentifierAnnotation": label.GlobalId},
+        )
+        pset = ifcopenshell.api.pset.add_pset(model, product=label, name="BBIM_SanitaryIdentifier")
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=pset, properties={"Symbol": symbol.GlobalId, "Identifier": identifier},
         )
 
     def _add_sanitary_symbol(
         self, kind, x, z, *, width, height, outlet_length, color, name,
+        rim_thickness=0, identifier=None,
     ) -> ifcopenshell.entity_instance:
         """Persist the common rim/bowl/outlet geometry as one native annotation."""
         x, z = _number(x, "x"), _number(z, "z")
@@ -9909,12 +10100,17 @@ class Drawing:
             raise ValueError("width and height must be greater than zero")
         if outlet_length < 0:
             raise ValueError("outlet_length must not be negative")
+        if kind == "toilet":
+            rim_thickness = _number(rim_thickness, "rim_thickness")
+            if rim_thickness <= 0:
+                raise ValueError("rim_thickness must be greater than zero")
         _, color, classes = _drawing_line_appearance("solid", color)
         symbol_name = _name(name, "name") if name is not None else None
+        identifier, label_offset = self._sanitary_identifier_layout(kind, identifier)
         method = f"add_{kind}"
         placement = self._annotation_frame((x, z), method)
         half_width, rim_overhang = width / 2, width / 12
-        if kind == "basin":
+        if kind in {"basin", "toilet"}:
             bowl = [
                 (-half_width * cos(index * pi / 32),
                  height * (1 - sin(index * pi / 32)))
@@ -9923,8 +10119,25 @@ class Drawing:
         else:
             bowl = [(-half_width, height), (-half_width, 0),
                     (half_width, 0), (half_width, height)]
-        paths = [bowl, [(-half_width - rim_overhang, height),
-                        (half_width + rim_overhang, height)]]
+        if kind == "roof_vent":
+            paths = [[(-half_width, 0), (half_width, 0), (0, height), (-half_width, 0)]]
+        elif kind == "washing_machine_connection":
+            radius = min(width, height) / 6
+            paths = [
+                [(-half_width, 0), (half_width, 0), (half_width, height),
+                 (-half_width, height), (-half_width, 0)],
+                [(radius * cos(index * 2 * pi / 32),
+                  2 * height / 3 + radius * sin(index * 2 * pi / 32))
+                 for index in range(33)],
+            ]
+        elif kind == "toilet":
+            paths = [bowl, [(-half_width, height),
+                            (-half_width, height + rim_thickness),
+                            (half_width, height + rim_thickness),
+                            (half_width, height), (-half_width, height)]]
+        else:
+            paths = [bowl, [(-half_width - rim_overhang, height),
+                            (half_width + rim_overhang, height)]]
         if outlet_length:
             paths.append([(0, 0), (0, -outlet_length)])
         model = self.house.model
@@ -9939,13 +10152,20 @@ class Drawing:
                 model.createIfcCartesianPointList2D(local_points), None, False,
             ))
         self._sanitary_symbol_count += 1
-        return self._add_primitive_annotation(
+        properties = {
+            "Kind": kind, "X": x, "BottomZ": z, "Width": width, "Height": height,
+            "OutletLength": outlet_length, "Color": color, "Identifier": identifier,
+        }
+        if kind == "toilet":
+            properties["RimThickness"] = rim_thickness
+        symbol = self._add_primitive_annotation(
             symbol_name or f"{self.name} {kind.title()} Symbol {self._sanitary_symbol_count}",
             "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)],
             f"{classes} sanitary-symbol sanitary-{kind}", "BBIM_SanitarySymbol",
-            {"Kind": kind, "X": x, "BottomZ": z, "Width": width, "Height": height,
-             "OutletLength": outlet_length, "Color": color},
+            properties,
         )
+        self._add_sanitary_identifier(symbol, (x, z + height + rim_thickness + label_offset), identifier)
+        return symbol
 
     def add_rectangle(
         self, start: Point, end: Point, *,
@@ -10078,6 +10298,67 @@ class Drawing:
         ifcopenshell.api.group.assign_group(model, group=self.group, products=[line])
         ifcopenshell.api.pset.edit_pset(model, pset=self._drawing_pset, properties={"HasAnnotation": True})
         return line
+
+    def add_poly_line(
+        self,
+        points: Sequence[Point],
+        *,
+        style: Literal["solid", "dashed", "dashed-arrows"] = "solid",
+        color: str = "black",
+        line_width: Number = 0.1,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a connected path through two or more 2D model points.
+
+        Coordinates, styles and printed-mm line_width match add_line(). In
+        kanal, points are (x,z). The path is unfilled; repeat the first point
+        at the end to close it. Consecutive duplicate points are rejected.
+        dashed-arrows follows the supplied point order and restarts its
+        pattern at each corner. Returns one drawing-scoped LINEWORK annotation
+        suitable for add_line_legend(), without physical 3D geometry.
+        """
+        if isinstance(points, (str, bytes)):
+            raise TypeError("points must be a sequence of 2D points")
+        try:
+            supplied = list(points)
+        except TypeError as error:
+            raise TypeError("points must be a sequence of 2D points") from error
+        if len(supplied) < 2:
+            raise ValueError("points must contain at least two points")
+        points = tuple(_point(point, f"point {index}") for index, point in enumerate(supplied, start=1))
+        if any(hypot(b[0] - a[0], b[1] - a[1]) < 1e-9 for a, b in zip(points, points[1:])):
+            raise ValueError("consecutive points must be different")
+        style, color, classes = _drawing_line_appearance(style, color)
+        line_width, width_class = _drawing_line_width(line_width)
+        classes += f" {width_class}"
+        line_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(points[0], "add_poly_line")
+        local_points = []
+        for point in points:
+            delta = self._annotation_frame(point, "add_poly_line")[:3, 3] - placement[:3, 3]
+            local_points.append((float(np.dot(delta, placement[:3, 0])),
+                                 float(np.dot(delta, placement[:3, 1]))))
+        paths = [local_points]
+        if style == "dashed-arrows":
+            scale_value = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Scale")
+            try:
+                scale = float(Fraction(str(scale_value)))
+                if not isfinite(scale) or scale <= 0:
+                    raise ValueError
+            except (ValueError, ZeroDivisionError):
+                raise ValueError("dashed-arrows requires a positive drawing scale") from None
+            paths = [path for start, end in zip(local_points, local_points[1:])
+                     for path in _dashed_arrow_segments(start, end, units_per_mm=0.001 / scale)]
+        model = self.house.model
+        curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(path), None, False)
+                  for path in paths]
+        self._poly_line_count += 1
+        return self._add_primitive_annotation(
+            line_name or f"{self.name} Poly Line {self._poly_line_count}",
+            "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)], classes,
+            "BBIM_DrawingPolyLine", {"Points": json.dumps(points), "Style": style,
+                                     "Color": color, "LineWidth": line_width},
+        )
 
     def add_angle(
         self,
@@ -10681,6 +10962,72 @@ class Drawing:
             room_data["window_area"] = window_area
         self._room_annotations.append(room_data)
         return identifier_annotation
+
+    def add_change_floor_symbol(
+        self,
+        x: Number,
+        y: Number,
+        type: Literal["to up", "to down", "from up", "from down"],
+        *,
+        size: Number = 0.6,
+        color: str = "black",
+        line_width: Number = 0.1,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw one 45-degree floor-change arrow anchored at model point (x,y).
+
+        Directions refer to the rendered page, including mirrored X exports:
+        'to up' starts at the point and points right/up; 'to down' starts there
+        and points left/down; 'from up' comes from right/up to the point;
+        'from down' comes from left/down to the point. Coordinates follow
+        add_line() (in kanal, y represents the schematic height Z).
+        size is the diagonal shaft length in model metres; line_width is in
+        printed millimetres. A small outlined circle marks the anchor point;
+        its radius is size/12. The arrow has one open head, with no 3D geometry.
+        """
+        point = _point((x, y), "point")
+        type = _enum(type, "type", {"TO UP", "TO DOWN", "FROM UP", "FROM DOWN"}).lower()
+        size = _number(size, "size")
+        if size <= 0:
+            raise ValueError("size must be greater than zero")
+        _, color, classes = _drawing_line_appearance("solid", color)
+        line_width, width_class = _drawing_line_width(line_width)
+        classes += f" {width_class} change-floor-symbol"
+        symbol_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(point, "add_change_floor_symbol")
+        offset = size / 2**0.5
+        sign = 1 if type.endswith("up") else -1
+        remote = np.array((sign * offset, sign * offset))
+        anchor = np.zeros(2)
+        start, end = (anchor, remote) if type.startswith("to ") else (remote, anchor)
+        tangent = (end - start) / size
+        normal = np.array((-tangent[1], tangent[0]))
+        head_base = end - tangent * (0.25 * size)
+        paths = ([start, end], [head_base + normal * (0.10 * size), end,
+                                head_base - normal * (0.10 * size)])
+        anchor_radius = size / 12
+        circle = [(anchor_radius * cos(index * 2 * pi / 32),
+                   anchor_radius * sin(index * 2 * pi / 32)) for index in range(32)]
+        circle.append(circle[0])
+        paths = (*paths, circle)
+        # Export mirrors both model and camera with a compensating local-X
+        # reflection. Pre-reflect the annotation's camera-local X so visual
+        # right/up and left/down stay unchanged in every supported view.
+        screen_x_sign = -1 if self.house.mirror_x else 1
+        model = self.house.model
+        curves = [model.createIfcIndexedPolyCurve(
+            model.createIfcCartesianPointList2D([
+                (float(px * screen_x_sign), float(py)) for px, py in path
+            ]), None, False,
+        ) for path in paths]
+        self._change_floor_symbol_count += 1
+        return self._add_primitive_annotation(
+            symbol_name or f"{self.name} Change Floor Symbol {self._change_floor_symbol_count}",
+            "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)], classes,
+            "BBIM_ChangeFloorSymbol", {"Point": json.dumps(point), "Type": type,
+                                       "Size": size, "Color": color, "LineWidth": line_width,
+                                       "AnchorRadius": anchor_radius},
+        )
 
     def add_entrance_arrow(
         self,

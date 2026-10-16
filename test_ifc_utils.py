@@ -62,6 +62,7 @@ from ifc_utils import (
     _postprocess_model_line_width,
     _postprocess_note_overlays,
     _postprocess_cut_symbol_overlays,
+    _postprocess_change_floor_symbol_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_wood_fills,
@@ -726,6 +727,257 @@ class DrawingPrimitiveTests(unittest.TestCase):
 
 
 class SanitarySymbolTests(unittest.TestCase):
+    def test_roof_vent_is_upward_triangle_with_identifier_in_all_views(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Roof vent", mirror_x=mirror)
+                    drawing = house.add_drawing("View", 1, 2, 3, 5, view=view, direction=direction, storeys=[])
+                    other = house.add_drawing("Other", 1, 2, 3, 5, storeys=[])
+                    before = set(house.model.by_type("IfcAnnotation"))
+                    symbol = drawing.add_roof_vent(x=2, z=6)
+                    label = self.assert_symbol_annotations(house, before, symbol)
+                    self.assertIn(label, drawing.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertNotIn(symbol, other.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertNotIn(label, other.group.IsGroupedBy[0].RelatedObjects)
+                    corners = ((1.8, 6), (2.2, 6), (2, 6.2), (1.8, 6))
+                    if view == "plan":
+                        expected = np.array([(x, z, 0) for x, z in corners])
+                    elif direction[0]:
+                        expected = np.array([(1, x, z) for x, z in corners])
+                    else:
+                        expected = np.array([(x, 2, z) for x, z in corners])
+                    curves = AngleDimensionTests.world_curves(symbol)
+                    self.assertEqual(len(curves), 1)
+                    np.testing.assert_allclose(curves[0], expected)
+                    props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+                    self.assertEqual((props["Kind"], props["Identifier"], props["OutletLength"]), ("roof_vent", "Odvětrání", 0))
+                    exported = house._export_model()
+                    np.testing.assert_allclose(AngleDimensionTests.world_curves(exported.by_guid(symbol.GlobalId))[0],
+                                               expected * (-1 if mirror else 1, 1, 1))
+                    self.assertFalse(house.model.by_type("IfcPipeSegment"))
+                    before = set(house.model.by_type("IfcAnnotation"))
+                    for kwargs in ({"width": 0}, {"height": -1}, {"height": float("inf")},
+                                   {"width": True}, {"color": "bad-color"}):
+                        with self.assertRaises((ValueError, TypeError)):
+                            drawing.add_roof_vent(2, 6, **kwargs)
+                        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
+    def test_washing_machine_connector_has_box_and_socket_not_an_appliance(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Connector", mirror_x=mirror)
+                    drawing = house.add_drawing("View", 1, 2, 3, 5, view=view, direction=direction, storeys=[])
+                    other = house.add_drawing("Other", 1, 2, 3, 5, storeys=[])
+                    before = set(house.model.by_type("IfcAnnotation"))
+                    symbol = drawing.add_washing_machine_connection(x=2, z=.6)
+                    label = self.assert_symbol_annotations(house, before, symbol)
+                    self.assertIn(symbol, drawing.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertIn(label, drawing.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertNotIn(symbol, other.group.IsGroupedBy[0].RelatedObjects)
+                    curves = AngleDimensionTests.world_curves(symbol)
+                    self.assertEqual([len(c) for c in curves], [5, 33])
+                    # Compare in diagram coordinates, independently of the view's
+                    # horizontal axis direction. Both paths must be closed.
+                    def diagram(curve):
+                        if view == "plan":
+                            return curve[:, :2]
+                        if direction[0]:
+                            return curve[:, 1:]
+                        return curve[:, (0, 2)]
+                    box, circle = map(diagram, curves)
+                    np.testing.assert_allclose(np.min(box, axis=0), (1.92, .6))
+                    np.testing.assert_allclose(np.max(box, axis=0), (2.08, .84))
+                    np.testing.assert_allclose(box[0], box[-1])
+                    np.testing.assert_allclose(circle[0], circle[-1])
+                    np.testing.assert_allclose(np.linalg.norm(circle - (2, .76), axis=1), .16 / 6)
+                    props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+                    self.assertEqual((props["Kind"], props["Identifier"], props["OutletLength"]),
+                                     ("washing_machine_connection", "Pračka", 0))
+                    exported = house._export_model()
+                    for curve, reflected in zip(curves, AngleDimensionTests.world_curves(exported.by_guid(symbol.GlobalId))):
+                        np.testing.assert_allclose(reflected, curve * (-1 if mirror else 1, 1, 1))
+                    self.assertFalse(house.model.by_type("IfcSanitaryTerminal"))
+                    self.assertFalse(house.model.by_type("IfcPipeSegment"))
+
+    def test_washing_machine_connector_custom_size_color_and_invalid_inputs(self):
+        house = House("Connector")
+        drawing = house.add_drawing("kanal", 0, 0, 1, 5, storeys=[])
+        symbol = drawing.add_washing_machine_connection(1, .5, width=.2, height=.3,
+                                                       identifier="P1", color="orange", name="Waste outlet")
+        self.assertEqual(symbol.Name, "Waste outlet")
+        props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+        self.assertEqual((props["Identifier"], props["Color"], props["Width"], props["Height"]),
+                         ("P1", "#ffa500", .2, .3))
+        label = house.model.by_guid(props["IdentifierAnnotation"])
+        np.testing.assert_allclose(json.loads(ifcopenshell.util.element.get_pset(label, "BBIM_DrawingText", "Point")), (1, 1.1))
+        before = set(house.model.by_type("IfcAnnotation"))
+        for kwargs in ({"width": 0}, {"height": -1}, {"width": float("inf")}, {"height": True},
+                       {"x": float("nan")}, {"z": None}, {"identifier": " "},
+                       {"color": "bad-color"}, {"name": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((ValueError, TypeError)):
+                drawing.add_washing_machine_connection(**({"x": 1, "z": .5} | kwargs))
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        oblique = house.add_drawing("Oblique", 0, 0, 1, 5, view="elevation", direction=(1, 1, 0))
+        before = set(house.model.by_type("IfcAnnotation"))
+        with self.assertRaisesRegex(ValueError, "axis-aligned"):
+            oblique.add_washing_machine_connection(1, .5)
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
+    def assert_symbol_annotations(self, house, before, symbol):
+        props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+        label = house.model.by_guid(props["IdentifierAnnotation"])
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")) - before, {symbol, label})
+        self.assertEqual(label.ObjectType, "TEXT")
+        self.assertEqual(label.Representation.Representations[0].Items[0].Literal, props["Identifier"])
+        return label
+
+    def test_identifiers_default_by_type_are_centred_above_actual_top_at_any_scale(self):
+        for mirror in (False, True):
+            for scale, factor in (("1/100", .01), ("1/50", .02)):
+                for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                        ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                        ("elevation", (0, -1, 0))):
+                    with self.subTest(mirror=mirror, scale=scale, direction=direction):
+                        house = House("Identifiers", mirror_x=mirror)
+                        drawing = house.add_drawing("View", 1, 2, 3, 5, view=view, direction=direction, storeys=[])
+                        other = house.add_drawing("Other", 1, 2, 3, 5, storeys=[])
+                        ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset, properties={"Scale": scale})
+                        for method, default in ((drawing.add_basin, "Umyvadlo"), (drawing.add_sink, "Dřez"),
+                                                (drawing.add_toilet, "WC"), (drawing.add_shower, "Sprcha"),
+                                                (drawing.add_washing_machine_connection, "Pračka"),
+                                                (drawing.add_roof_vent, "Odvětrání")):
+                            before = set(house.model.by_type("IfcAnnotation"))
+                            symbol = method(2, 4, width=.8, height=.3, color="orange", name="Internal name")
+                            label = self.assert_symbol_annotations(house, before, symbol)
+                            props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+                            self.assertEqual(props["Identifier"], default)
+                            self.assertEqual(symbol.Name, "Internal name")
+                            self.assertIn(label, drawing.group.IsGroupedBy[0].RelatedObjects)
+                            self.assertNotIn(label, other.group.IsGroupedBy[0].RelatedObjects)
+                            text = ifcopenshell.util.element.get_pset(label, "BBIM_DrawingText")
+                            expected_x = 1.6 if method == drawing.add_shower else 2
+                            expected_z = 4.3 + props.get("RimThickness", 0) + .003 / factor
+                            np.testing.assert_allclose(json.loads(text["Point"]), (expected_x, expected_z))
+                            self.assertEqual((text["Color"], text["FontSize"], text["Alignment"]), ("#ffa500", 2.5, "center"))
+                            self.assertEqual(ifcopenshell.util.element.get_pset(label, "BBIM_SanitaryIdentifier", "Symbol"), symbol.GlobalId)
+                            exported = house._export_model()
+                            original = ifcopenshell.util.placement.get_local_placement(label.ObjectPlacement)[:3, 3]
+                            position = ifcopenshell.util.placement.get_local_placement(exported.by_guid(label.GlobalId).ObjectPlacement)[:3, 3]
+                            np.testing.assert_allclose(position, original * (-1 if mirror else 1, 1, 1))
+                            self.assertEqual(ifcopenshell.util.element.get_pset(exported.by_guid(symbol.GlobalId), "BBIM_SanitarySymbol", "Identifier"), default)
+
+    def test_custom_identifiers_and_invalid_identifiers_are_validated_before_geometry(self):
+        house = House("Identifiers")
+        drawing = house.add_drawing("kanal", 0, 0, 1, 5, storeys=[])
+        for method in (drawing.add_basin, drawing.add_sink, drawing.add_toilet, drawing.add_shower,
+                       drawing.add_washing_machine_connection, drawing.add_roof_vent):
+            symbol = method(2, 3, identifier="  U1 – přízemí  ")
+            props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SanitarySymbol")
+            self.assertEqual(props["Identifier"], "U1 – přízemí")
+            for identifier in ("", "  ", True, 123):
+                before = set(house.model.by_type("IfcAnnotation"))
+                with self.subTest(method=method.__name__, identifier=identifier), self.assertRaises((ValueError, TypeError)):
+                    method(2, 3, identifier=identifier)
+                self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+            for scale in ("0", "1/0", "invalid"):
+                ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset, properties={"Scale": scale})
+                before = set(house.model.by_type("IfcAnnotation"))
+                with self.assertRaisesRegex(ValueError, "positive drawing scale"):
+                    method(2, 3)
+                self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+            ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset, properties={"Scale": "1/100"})
+
+    def test_shower_is_one_rectangle_anchored_at_bottom_left_in_all_views(self):
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Shower", mirror_x=mirror)
+                    drawing = house.add_drawing("View", 1, 2, 3, 5, view=view, direction=direction, storeys=[])
+                    other = house.add_drawing("Other", 1, 2, 3, 5, storeys=[])
+                    before = set(house.model.by_type("IfcAnnotation"))
+                    shower = drawing.add_shower(x=2, z=4)
+                    self.assert_symbol_annotations(house, before, shower)
+                    self.assertIn(shower, drawing.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertNotIn(shower, other.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertEqual(shower.ObjectType, "LINEWORK")
+                    corners = ((1.1, 4), (2, 4), (2, 4.3), (1.1, 4.3), (1.1, 4))
+                    if view == "plan":
+                        expected = np.array([(x, z, 0) for x, z in corners])
+                    elif direction[0]:
+                        expected = np.array([(1, x, z) for x, z in corners])
+                    else:
+                        expected = np.array([(x, 2, z) for x, z in corners])
+                    curves = AngleDimensionTests.world_curves(shower)
+                    self.assertEqual(len(curves), 1)
+                    np.testing.assert_allclose(curves[0], expected)
+                    props = ifcopenshell.util.element.get_pset(shower, "BBIM_SanitarySymbol")
+                    self.assertEqual((props["Kind"], props["X"], props["BottomZ"], props["Width"], props["Height"],
+                                      props["PositionReference"], props["OutletLength"], props["Color"]),
+                                     ("shower", 2, 4, .9, .3, "bottom-left", 0, "#000000"))
+                    exported = house._export_model().by_guid(shower.GlobalId)
+                    np.testing.assert_allclose(AngleDimensionTests.world_curves(exported)[0], expected * (-1 if mirror else 1, 1, 1))
+                    self.assertIn("sanitary-shower", ifcopenshell.util.element.get_pset(exported, "EPset_Annotation", "Classes"))
+                    self.assertFalse(house.model.by_type("IfcSanitaryTerminal"))
+
+    def test_shower_custom_size_and_invalid_inputs_leave_no_partial_geometry(self):
+        house = House("Shower")
+        drawing = house.add_drawing("kanal", 0, 0, 1, 5, storeys=[])
+        shower = drawing.add_shower(1, .2, width=1.2, height=.4, color="orange", name="Sprcha")
+        self.assertEqual(shower.Name, "Sprcha")
+        points = AngleDimensionTests.world_curves(shower)[0]
+        np.testing.assert_allclose(np.min(points[:, :2], axis=0), (-.2, .2))
+        np.testing.assert_allclose(np.max(points[:, :2], axis=0), (1, .6))
+        self.assertEqual(ifcopenshell.util.element.get_pset(shower, "BBIM_SanitarySymbol", "Color"), "#ffa500")
+        before = set(house.model.by_type("IfcAnnotation"))
+        for kwargs in ({"width": 0}, {"width": -1}, {"height": 0}, {"height": -1},
+                       {"width": float("inf")}, {"height": True}, {"x": float("nan")},
+                       {"z": None}, {"color": "bad-color"}, {"name": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((ValueError, TypeError)):
+                drawing.add_shower(**({"x": 1, "z": .2} | kwargs))
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        self.assertEqual((drawing._sanitary_symbol_count, drawing._rectangle_count), (1, 1))
+        oblique = house.add_drawing("Oblique", 0, 0, 1, 5, view="elevation", direction=(1, 1, 0))
+        before = set(house.model.by_type("IfcAnnotation"))
+        with self.assertRaisesRegex(ValueError, "axis-aligned"):
+            oblique.add_shower(1, .2)
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
+    def test_toilet_is_semicircle_with_closed_double_rim_and_no_default_outlet(self):
+        house = House("Toilet icon")
+        drawing = house.add_drawing("kanal", 2, 2, 1, 5, storeys=[])
+        other = house.add_drawing("Other", 2, 2, 1, 5, storeys=[])
+        before = set(house.model.by_type("IfcAnnotation"))
+        toilet = drawing.add_toilet(x=2, z=.2, name="WC")
+        self.assert_symbol_annotations(house, before, toilet)
+        self.assertIn(toilet, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(toilet, other.group.IsGroupedBy[0].RelatedObjects)
+        self.assertEqual((toilet.Name, toilet.ObjectType), ("WC", "LINEWORK"))
+        curves = AngleDimensionTests.world_curves(toilet)
+        self.assertEqual(len(curves), 2)
+        bowl, rim = curves
+        self.assertEqual(len(bowl), 33)
+        np.testing.assert_allclose(np.linalg.norm(bowl[:, :2] - (2, .4), axis=1), .2)
+        np.testing.assert_allclose(bowl[16], (2, .2, 0))
+        np.testing.assert_allclose(rim, ((1.8, .4, 0), (1.8, .425, 0),
+                                       (2.2, .425, 0), (2.2, .4, 0), (1.8, .4, 0)))
+        props = ifcopenshell.util.element.get_pset(toilet, "BBIM_SanitarySymbol")
+        self.assertEqual((props["Kind"], props["RimThickness"], props["OutletLength"]), ("toilet", .025, 0))
+        self.assertIn("sanitary-toilet", ifcopenshell.util.element.get_pset(toilet, "EPset_Annotation", "Classes"))
+        self.assertFalse(house.model.by_type("IfcSanitaryTerminal"))
+        for thickness in (0, -.1, float("inf"), float("nan"), True, None):
+            before = set(house.model.by_type("IfcAnnotation"))
+            with self.subTest(thickness=thickness), self.assertRaises((TypeError, ValueError)):
+                drawing.add_toilet(2, .2, rim_thickness=thickness)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
     def test_basin_and_sink_geometry_share_rim_and_outlet_and_bottom_datum(self):
         house = House("Sanitary icons")
         drawing = house.add_drawing("kanal", 2, 2, 1, 5, storeys=[])
@@ -734,7 +986,7 @@ class SanitarySymbolTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 before = set(house.model.by_type("IfcAnnotation"))
                 symbol = method(x=2, z=0.65, name=f"Symbol {kind}")
-                self.assertEqual(set(house.model.by_type("IfcAnnotation")) - before, {symbol})
+                self.assert_symbol_annotations(house, before, symbol)
                 self.assertEqual(symbol.ObjectType, "LINEWORK")
                 self.assertEqual(symbol.Name, f"Symbol {kind}")
                 self.assertIn(symbol, drawing.group.IsGroupedBy[0].RelatedObjects)
@@ -766,7 +1018,7 @@ class SanitarySymbolTests(unittest.TestCase):
                 with self.subTest(mirror=mirror, direction=direction):
                     house = House("Icons", mirror_x=mirror)
                     drawing = house.add_drawing("View", 1, 2, 3, 5, view=view, direction=direction, storeys=[])
-                    for method in (drawing.add_basin, drawing.add_sink):
+                    for method in (drawing.add_basin, drawing.add_sink, drawing.add_toilet):
                         symbol = method(2, 4, width=.8, height=.3, outlet_length=.15, color="orange")
                         curves = AngleDimensionTests.world_curves(symbol)
                         if view == "plan":
@@ -788,7 +1040,7 @@ class SanitarySymbolTests(unittest.TestCase):
         curves = AngleDimensionTests.world_curves(symbol)
         self.assertEqual(len(curves), 2)
         np.testing.assert_allclose(np.linalg.norm(curves[0][:, :2] - (0, .3), axis=1), .3)
-        for method in (drawing.add_basin, drawing.add_sink):
+        for method in (drawing.add_basin, drawing.add_sink, drawing.add_toilet):
             for kwargs in ({"width": 0}, {"height": -1}, {"outlet_length": -.1}, {"color": "bad-color"},
                            {"width": float("inf")}, {"height": True}, {"name": " "}):
                 before = set(house.model.by_type("IfcAnnotation"))
@@ -800,7 +1052,7 @@ class SanitarySymbolTests(unittest.TestCase):
                     method(x, z)
         diagonal = house.add_drawing("Oblique", 0, 0, 1, 5, view="elevation", direction=(1, 1, 0))
         before = set(house.model.by_type("IfcAnnotation"))
-        for method in (diagonal.add_basin, diagonal.add_sink):
+        for method in (diagonal.add_basin, diagonal.add_sink, diagonal.add_toilet):
             with self.assertRaisesRegex(ValueError, "axis-aligned"):
                 method(2, 3)
         self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
@@ -953,6 +1205,226 @@ class DrainageStackTests(unittest.TestCase):
                                ("drainage-stack-orange", "fill: #ffa500 !important")):
             body = stylesheet.split(f".PredefinedType-FILLAREA.{selector} {{", 1)[1].split("}", 1)[0]
             self.assertIn(rule, body)
+
+
+class ChangeFloorSymbolTests(unittest.TestCase):
+    def test_moves_whole_arrow_and_anchor_circle_above_masks_without_duplication(self):
+        source = ('<svg xmlns="http://www.w3.org/2000/svg">'
+                  '<defs><g id="template"><text data-type="text-template"/></g></defs>'
+                  '<g class="section"><line class="change-floor-symbol drawing-line drawing-line-width-0p1" '
+                  'id="shaft" x1="0" y1="0" x2="1" y2="1"/>'
+                  '<polyline class="change-floor-symbol" id="head" points="0,1 1,1 1,0"/>'
+                  '<path class="change-floor-symbol" id="sampled-circle" d="M0 0L1 1"/>'
+                  '<circle class="change-floor-symbol" id="circle" cx="0" cy="0" r=".05"/>'
+                  '<polygon class="door-overhead-mask" id="mask" points="0,0 2,0 2,2"/>'
+                  '<path id="wall" d="M0 0L2 0"/></g>'
+                  '<g class="door-symbol-overlays"><path id="door" d="M0 0L2 2"/></g></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.svg"
+            path.write_text(source, encoding="utf-8")
+            _postprocess_change_floor_symbol_overlays(path)
+            result = path.read_text(encoding="utf-8")
+            root = ET.fromstring(result)
+            ns = {"s": "http://www.w3.org/2000/svg"}
+            overlay = root.find("s:g[@class='change-floor-symbol-overlays']", ns)
+            self.assertIsNotNone(overlay)
+            self.assertEqual(list(root)[-1], overlay)
+            self.assertEqual([e.get("id") for e in overlay], ["shaft", "head", "sampled-circle", "circle"])
+            self.assertLess(result.index('id="mask"'), result.index('id="shaft"'))
+            self.assertLess(result.index('id="door"'), result.index('id="shaft"'))
+            self.assertIn('drawing-line-width-0p1', overlay[0].get("class"))
+            for identifier in ("shaft", "head", "sampled-circle", "circle", "mask", "wall", "door", "template"):
+                self.assertEqual(result.count(f'id="{identifier}"'), 1)
+            _postprocess_change_floor_symbol_overlays(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), result)
+
+    def test_overlay_leaves_drawings_without_floor_change_symbols_unchanged(self):
+        source = '<svg><defs/><path class="drawing-line" d="M0 0L1 1"/></svg>'
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.svg"
+            path.write_text(source, encoding="utf-8")
+            _postprocess_change_floor_symbol_overlays(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), source)
+
+    def test_all_four_arrows_keep_screen_directions_in_every_view_and_mirrored_export(self):
+        offset = .6 / 2**.5
+        expected = {
+            "to up": ((0, 0), (offset, offset)),
+            "to down": ((0, 0), (-offset, -offset)),
+            "from up": ((offset, offset), (0, 0)),
+            "from down": ((-offset, -offset), (0, 0)),
+        }
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Floor changes", mirror_x=mirror)
+                    drawing = house.add_drawing("View", 1, 1.5, 4, 5, view=view, direction=direction, storeys=[])
+                    other = house.add_drawing("Other", 1, 1.5, 4, 5, storeys=[])
+                    for kind, shaft in expected.items():
+                        before = set(house.model.by_type("IfcAnnotation"))
+                        arrow = drawing.add_change_floor_symbol(2, 3, kind)
+                        self.assertEqual(set(house.model.by_type("IfcAnnotation")) - before, {arrow})
+                        self.assertIn(arrow, drawing.group.IsGroupedBy[0].RelatedObjects)
+                        self.assertNotIn(arrow, other.group.IsGroupedBy[0].RelatedObjects)
+                        self.assertEqual(arrow.ObjectType, "LINEWORK")
+                        exported = house._export_model()
+                        camera = ifcopenshell.util.placement.get_local_placement(exported.by_guid(drawing.element.GlobalId).ObjectPlacement)
+                        world_to_camera = np.linalg.inv(camera)
+                        if view == "plan":
+                            anchor = np.array((2, 3, 0))
+                        elif direction[0]:
+                            anchor = np.array((1, 2, 3))
+                        else:
+                            anchor = np.array((2, 1.5, 3))
+                        anchor *= (-1 if mirror else 1, 1, 1)
+                        anchor_camera = world_to_camera @ np.append(anchor, 1)
+                        curves = AngleDimensionTests.world_curves(exported.by_guid(arrow.GlobalId))
+                        self.assertEqual([len(c) for c in curves], [2, 3, 33])
+                        screen = [(world_to_camera @ np.column_stack((c, np.ones(len(c)))).T).T[:, :2]
+                                  - anchor_camera[:2] for c in curves]
+                        np.testing.assert_allclose(screen[0], shaft, atol=1e-12)
+                        np.testing.assert_allclose(screen[1][1], shaft[1], atol=1e-12)
+                        np.testing.assert_allclose(np.linalg.norm(screen[2], axis=1), .6 / 12, atol=1e-12)
+                        np.testing.assert_allclose(screen[2][0], screen[2][-1], atol=1e-12)
+                        np.testing.assert_allclose(np.mean(screen[2][:-1], axis=0), (0, 0), atol=1e-12)
+                        tangent = (np.array(shaft[1]) - shaft[0]) / .6
+                        for wing in (screen[1][0], screen[1][2]):
+                            self.assertAlmostEqual(float(np.dot(wing - shaft[1], tangent)), -.15)
+                        props = ifcopenshell.util.element.get_pset(exported.by_guid(arrow.GlobalId), "BBIM_ChangeFloorSymbol")
+                        self.assertAlmostEqual(props["AnchorRadius"], .6 / 12)
+                        self.assertEqual((json.loads(props["Point"]), props["Type"], props["Size"], props["LineWidth"]),
+                                         ([2, 3], kind, .6, .1))
+
+    def test_custom_appearance_persistence_and_invalid_arguments(self):
+        house = House("Floor changes", mirror_x=True)
+        drawing = house.add_drawing("View", 0, 0, 2, 5, storeys=[])
+        arrow = drawing.add_change_floor_symbol(2, 3, type=" FROM UP ", size=.8, color="orange", line_width=.3, name="Riser")
+        self.assertEqual(arrow.Name, "Riser")
+        self.assertAlmostEqual(np.linalg.norm(np.diff(AngleDimensionTests.world_curves(arrow)[0], axis=0)), .8)
+        classes = ifcopenshell.util.element.get_pset(arrow, "EPset_Annotation", "Classes").split()
+        self.assertIn("drawing-line-color-ffa500", classes)
+        self.assertIn("drawing-line-width-0p3", classes)
+        self.assertIn("change-floor-symbol", classes)
+        with TemporaryDirectory() as directory:
+            path = house.write(Path(directory) / "arrows.ifc")
+            reopened = ifcopenshell.open(str(path))
+            props = ifcopenshell.util.element.get_pset(reopened.by_guid(arrow.GlobalId), "BBIM_ChangeFloorSymbol")
+            self.assertEqual((props["Type"], props["Color"], props["LineWidth"]), ("from up", "#ffa500", .3))
+            self.assertAlmostEqual(props["AnchorRadius"], .8 / 12)
+        before = set(house.model.by_type("IfcAnnotation"))
+        for kwargs in ({"type": "up"}, {"type": True}, {"type": None}, {"size": 0}, {"size": -1},
+                       {"size": float("inf")}, {"line_width": 0}, {"color": "bad-color"},
+                       {"x": float("nan")}, {"y": True}, {"name": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                drawing.add_change_floor_symbol(**({"x": 2, "y": 3, "type": "to up"} | kwargs))
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        self.assertEqual(drawing._change_floor_symbol_count, 1)
+        oblique = house.add_drawing("Oblique", 0, 0, 2, 5, view="elevation", direction=(1, 1, 0))
+        before = set(house.model.by_type("IfcAnnotation"))
+        with self.assertRaisesRegex(ValueError, "axis-aligned"):
+            oblique.add_change_floor_symbol(2, 3, "to up")
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
+
+class DrawingPolyLineTests(unittest.TestCase):
+    def test_poly_line_coordinates_in_plans_elevations_and_mirrored_exports(self):
+        points = ((2, 3), (4, 3), (4, 5), (2, 3))
+        for mirror in (False, True):
+            for view, direction in (("plan", None), ("elevation", (1, 0, 0)),
+                                    ("elevation", (-1, 0, 0)), ("elevation", (0, 1, 0)),
+                                    ("elevation", (0, -1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Paths", mirror_x=mirror)
+                    house.storey("Floor", elevation=.25)
+                    drawing = house.add_drawing("View", 1, 1.5, 4, 5, view=view, direction=direction)
+                    other = house.add_drawing("Other", 1, 1.5, 4, 5)
+                    before = set(house.model.by_type("IfcAnnotation"))
+                    path = drawing.add_poly_line(points, style="dashed", color="orange", line_width=.3)
+                    self.assertEqual(set(house.model.by_type("IfcAnnotation")) - before, {path})
+                    self.assertEqual((path.Name, path.ObjectType), ("View Poly Line 1", "LINEWORK"))
+                    self.assertIn(path, drawing.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertNotIn(path, other.group.IsGroupedBy[0].RelatedObjects)
+                    if view == "plan":
+                        expected = np.array([(*p, .25) for p in points])
+                    elif direction[0]:
+                        expected = np.array([(1, *p) for p in points])
+                    else:
+                        expected = np.array([(p[0], 1.5, p[1]) for p in points])
+                    curves = AngleDimensionTests.world_curves(path)
+                    self.assertEqual(len(curves), 1)
+                    np.testing.assert_allclose(curves[0], expected)
+                    exported = house._export_model().by_guid(path.GlobalId)
+                    np.testing.assert_allclose(AngleDimensionTests.world_curves(exported)[0],
+                                               expected * (-1 if mirror else 1, 1, 1))
+                    props = ifcopenshell.util.element.get_pset(exported, "BBIM_DrawingPolyLine")
+                    self.assertEqual(json.loads(props["Points"]), [list(p) for p in points])
+                    self.assertEqual((props["Style"], props["Color"], props["LineWidth"]), ("dashed", "#ffa500", .3))
+
+    def test_arrow_poly_line_matches_individual_arrow_segments_at_each_scale(self):
+        points = ((0, 0), (2, 0), (2, 2), (1, 3))
+        for scale in ("1/100", "1/50"):
+            for direction in (None, (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)):
+                with self.subTest(scale=scale, direction=direction):
+                    house = House("Arrow paths", mirror_x=True)
+                    drawing = house.add_drawing("View", 1, 1.5, 4, 5,
+                                                view="plan" if direction is None else "elevation", direction=direction)
+                    ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset, properties={"Scale": scale})
+                    path = drawing.add_poly_line(points, style="dashed-arrows", color="blue", line_width=.4)
+                    expected = []
+                    for start, end in zip(points, points[1:]):
+                        expected.extend(AngleDimensionTests.world_curves(drawing.add_line(start, end, style="dashed-arrows")))
+                    actual = AngleDimensionTests.world_curves(path)
+                    self.assertEqual(len(actual), len(expected))
+                    for first, second in zip(actual, expected):
+                        np.testing.assert_allclose(first, second, atol=1e-12)
+                    classes = ifcopenshell.util.element.get_pset(path, "EPset_Annotation", "Classes").split()
+                    self.assertIn("dashed-arrows", classes)
+                    self.assertNotIn("dashed", classes)
+                    self.assertIn("drawing-line-width-0p4", classes)
+
+    def test_two_point_defaults_persistence_and_legend_appearance(self):
+        house = House("Paths")
+        drawing = house.add_drawing("View", 0, 0, 2, 5, right_panel_width=40, storeys=[])
+        path = drawing.add_poly_line([(1, 2), (3, 4)], name="Waste route")
+        line = drawing.add_line((1, 2), (3, 4))
+        np.testing.assert_allclose(AngleDimensionTests.world_curves(path)[0], AngleDimensionTests.world_curves(line)[0])
+        self.assertEqual(path.Name, "Waste route")
+        props = ifcopenshell.util.element.get_pset(path, "BBIM_DrawingPolyLine")
+        self.assertEqual((props["Style"], props["Color"], props["LineWidth"]), ("solid", "#000000", .1))
+        drawing.add_line_legend([(path, "Waste route")])
+        classes = ifcopenshell.util.element.get_pset(path, "EPset_Annotation", "Classes")
+        self.assertIn(classes, drawing._right_panel_tables[-1]["items"][0]["classes"])
+        with TemporaryDirectory() as directory:
+            output = house.write(Path(directory) / "paths.ifc")
+            reopened = ifcopenshell.open(str(output))
+            self.assertEqual(ifcopenshell.util.element.get_pset(reopened.by_guid(path.GlobalId), "BBIM_DrawingPolyLine", "Points"), props["Points"])
+
+    def test_invalid_paths_do_not_create_partial_annotations(self):
+        house = House("Paths")
+        drawing = house.add_drawing("View", 0, 0, 2, 5)
+        before = set(house.model.by_type("IfcAnnotation"))
+        for points in (None, 123, "bad", [], [(0, 0)], [(0, 0), (0, 0)],
+                       [(0, 0), (1, 1), (1, 1)], [(0, 0), (1, 2, 3)], [(0, 0), (1, float("nan"))]):
+            with self.subTest(points=points), self.assertRaises((TypeError, ValueError)):
+                drawing.add_poly_line(points)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        for kwargs in ({"style": "bad"}, {"color": "bad-color"}, {"line_width": 0},
+                       {"line_width": True}, {"line_width": float("inf")}, {"name": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                drawing.add_poly_line([(0, 0), (1, 1)], **kwargs)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        self.assertEqual(drawing._poly_line_count, 0)
+        ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset, properties={"Scale": "0"})
+        with self.assertRaisesRegex(ValueError, "positive drawing scale"):
+            drawing.add_poly_line([(0, 0), (1, 1)], style="dashed-arrows")
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        oblique = house.add_drawing("Oblique", 0, 0, 2, 5, view="elevation", direction=(1, 1, 0))
+        before = set(house.model.by_type("IfcAnnotation"))
+        with self.assertRaisesRegex(ValueError, "axis-aligned"):
+            oblique.add_poly_line([(0, 0), (1, 1)])
+        self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
 
 
 class DrawingLineTests(unittest.TestCase):
@@ -11359,6 +11831,27 @@ class HouseTests(unittest.TestCase):
                 'ifc:name="Other slab block">',
                 svg,
             )
+
+    def test_furniture_label_overlays_skip_self_closing_text_templates(self):
+        source = ('<svg xmlns="http://www.w3.org/2000/svg">'
+                  '<defs><g id="template"><text class="regular" /></g></defs>'
+                  '<g id="model"><path d="M0 0L1 1"/></g>'
+                  '<text><tspan class="furniture-label">Kamna</tspan></text></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.svg"
+            path.write_text(source, encoding="utf-8")
+            _postprocess_door_overheads(path)
+            result = path.read_text(encoding="utf-8")
+            root = ET.fromstring(result)
+            ns = {"s": "http://www.w3.org/2000/svg"}
+            overlay = root.find("s:g[@class='furniture-label-overlays']", ns)
+            self.assertIsNotNone(overlay)
+            self.assertEqual(len(overlay), 1)
+            self.assertEqual("".join(overlay.itertext()).strip(), "Kamna")
+            self.assertEqual(result.count('id="template"'), 1)
+            self.assertEqual(result.count('id="model"'), 1)
+            _postprocess_door_overheads(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), result)
 
     def test_keeps_only_visible_furniture_labels_above_elevation_linework(
         self,

@@ -617,6 +617,12 @@ the header is included in the paper-fit check. Print the PDF at actual size /
 
 ### Drainage schematic
 
+Run `python3 house_ifc.py kanal_ground` for the ground-floor drainage plan.
+It initially includes only the ground-floor model, without the architectural
+plan's manually added dimensions, legends or notes. The outputs are
+`kanal_ground.svg` and the path specified by `PDF_KANAL_GROUND`, currently
+`projekt/D1.5. Zdravotechnické instalace/D1.5.2. Kanalizace - Půdorys 1.NP.pdf`.
+
 Run `python3 house_ifc.py kanal` to create the annotation-only drawing
 `kanal.svg` and `projekt/D1.5. Zdravotechnické instalace/D1.5.1. Kanalizace.pdf`.
 It uses `storeys=[]`, so no house plans or other model geometry are shown.
@@ -633,6 +639,7 @@ Draw simple washbasin (`umyvadlo`) and kitchen sink (`dřez`) symbols with:
 ```python
 drawing.add_basin(x=2, z=0.65)
 drawing.add_sink(x=4, z=0.65, width=0.8, height=0.25)
+drawing.add_toilet(x=6, z=0.2)
 ```
 
 `x` is the bowl's horizontal centre, and `z` its bottom. The washbasin has a
@@ -641,10 +648,46 @@ short central outlet below the bowl. Dimensions use metres: default width
 0.60, bowl height 0.20 and `outlet_length=0.10` (set to 0 to omit the outlet).
 The rounded bowl is a half-ellipse; `height=width/2` makes it a semicircle.
 These are unfilled, thin black native linework icons, scoped to the drawing,
-not physical IFC fixtures. Both accept `color` and `name`. Labels and actual
-drainage pipes can be added separately with `add_text()` and `add_line()`.
+not physical IFC fixtures. All sanitary helpers add a centred identifier
+above the symbol: `Umyvadlo`, `Dřez`, `WC`, `Sprcha`, `Pračka` or `Odvětrání`,
+according to type.
+Override it with `identifier="U1"`, for example:
+
+```python
+drawing.add_basin(x=2, z=0.65, identifier="U1")
+```
+
+Identifiers use the symbol color, selectable 2.5 mm text and a text centre
+3 printed mm above the icon's top (including the toilet rim), independent
+of drawing scale. `name` remains the internal IFC annotation name, not the
+visible identifier. Actual drainage pipes are added with `add_line()`.
 In the plan-based `kanal` schematic, `z` maps to the vertical page coordinate
 (model Y); the helpers also support axis-aligned elevations.
+
+`add_toilet()` uses the same coordinates and a rounded bowl with a thin,
+closed rim (two horizontal lines). Default bowl dimensions are 0.40 m wide
+and 0.20 m high, with `rim_thickness=0.025` above the bowl. There is no outlet
+stub by default (`outlet_length=0`); draw the waste pipe separately. Width,
+height, rim thickness, outlet length, color and name are configurable.
+
+For a shower tray, use `drawing.add_shower(x=7, z=0.2)`. It draws only a
+0.90 m wide, 0.30 m high rectangle. **Its coordinates specify the bottom-left
+corner, not the centre.** Optional `width`, `height`, `color` and `name`
+parameters work as for the other icons. There is no rim or outlet stub.
+
+Use `drawing.add_washing_machine_connection(x=4, z=0.6)` for a washing-machine
+wall waste connector, **not the machine itself**. It is a 0.16 m wide,
+0.24 m high upright rectangle with a small circular socket inside. X is the
+horizontal centre and Z the bottom; the socket centre is at
+`(x, z + 2*height/3)`. `width`, `height`, `color`, `identifier` (default
+`"Pračka"`) and `name` are configurable. Connect pipes separately with
+`add_line()`; the helper creates no physical plumbing.
+
+`drawing.add_roof_vent(x=0, z=6.5)` draws an upward-pointing outlined triangle
+labelled `"Odvětrání"`. X is its horizontal centre and Z its bottom edge,
+where the separately drawn vent pipe connects. Default width is 0.40 m and
+height 0.20 m; `width`, `height`, `color`, `identifier` and `name` can be
+overridden. It adds no physical roof-vent geometry.
 
 ### PDFs from Markdown
 
@@ -972,6 +1015,42 @@ and dimensions. Lines are drawing-only annotations, not physical model parts.
 `line_width` sets stroke thickness in printed millimetres (default 0.1),
 independently of drawing scale. It must be positive. Legend samples inherit
 the line's thickness; style-only legend dictionaries also accept `line_width`.
+
+Use `add_poly_line()` to draw a connected route through more than two points:
+
+```python
+pipe = drawing.add_poly_line(
+    [(2, 0.65), (2, 0.2), (4, 0.25), (4, 1)],
+    color="orange", line_width=0.3,
+)
+```
+
+Coordinates and options match `add_line()` (in `kanal`, points are `(x, z)`).
+It returns a single native annotation, usable in `add_line_legend()`.
+At least two points are required, with no consecutive duplicates. Repeat the
+first point at the end to close an unfilled outline. For `dashed-arrows`,
+arrows follow point order and the pattern restarts at each corner.
+
+For one diagonal floor-change arrow, use:
+
+```python
+drawing.add_change_floor_symbol(x=2, y=1, type="to up")
+```
+
+Left/right always mean the rendered page, even when the house's X axis is
+mirrored. `"to up"` starts at the point and points right/up; `"to down"`
+starts there and points left/down; `"from up"` comes from right/up and ends
+at the point; `"from down"` comes from left/down and ends there. Coordinates
+match `add_line()` (in `kanal`, `y` is the diagram's height Z). Optional
+`size` sets the diagonal shaft length in metres (default 0.6); `color`,
+`line_width` (printed mm, default 0.1) and `name` are also supported. Each
+call adds one drawing-only arrow with a single open head and a small
+outlined circle at the supplied anchor point. The circle radius is `size/12`
+and uses the arrow's color and line width.
+The complete symbol is moved to a final SVG overlay layer, so wall-opening
+masks, walls, doors and other drawing geometry cannot cover it. This applies
+to SVG, PNG and PDF exports and does not alter the IFC model geometry.
+
 `style="dashed-arrows"` alternates a plain dash with an arrow pointing toward
 `end`; reversing the endpoints reverses the arrows. The pattern uses actual
 vector segments (including the arrowheads), at a constant paper size for the

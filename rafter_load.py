@@ -2533,7 +2533,7 @@ _ACTIVE_SESSION: RoofCalculationSession | None = None
 
 @contextmanager
 def calculation_report(
-    path: str | Path = "rafter_load_report.pdf",
+    path: str | Path,
     *,
     include_creep: bool = True,
 ):
@@ -3834,7 +3834,7 @@ def _purlin_report_status(
 
 def main() -> None:
     with calculation_report(
-        "rafter_load_report.pdf",
+        "projekt/D1.2. Stavebně Konstrukční Řešení/D1.2. Statika.pdf",
         include_creep=True,
     ):
 #  SUPPORT_SPAN_M = 3.576

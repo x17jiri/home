@@ -99,7 +99,7 @@ class PDFFolder:
 		self.counter += 1
 		return self.dir + self.section + str(self.counter) + ". " + name + ".pdf"
 
-DIR = PDFFolder("D1.1.", "projekt/D1.1. ARCHITEKTONICKO STAVEBNÍ ŘEŠENÍ/")
+DIR = PDFFolder("D1.1.", "projekt/D1.1. Architektonicko Stavební Řešení/")
 DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = DIR
 PDF_FOUND = DIR.add_pdf("Základy")
 PDF_GROUND = DIR.add_pdf("Půdorys 1.NP")
@@ -114,9 +114,13 @@ PDF_BB = DIR.add_pdf("Podélný řez BB")
 PDF_LAYERS = DIR.add_pdf("Skladby")
 
 DIR_ZDRAVOTECHNICKE_INSTALACE = PDFFolder(
-	"D1.5.", "projekt/D1.5. Zdravotechnické instalace/",
+	"D1.5.", "projekt/D1.5. Zdravotechnické Instalace/",
 )
 PDF_KANAL = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Kanalizace")
+PDF_KANAL_GROUND = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Kanalizace - Půdorys 1.NP")
+PDF_KANAL_UPPER = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Kanalizace - Půdorys podkroví")
+PDF_VODA_GROUND = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Vodovod - Půdorys 1.NP")
+PDF_VODA_UPPER = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Vodovod - Půdorys podkroví")
 
 @dataclass(frozen=True)
 class SplitRafter:
@@ -810,6 +814,22 @@ ground.furniture(
 	start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
     center=(HOUSE_WIDTH-(BWT+0.4), BWT+0.4),
+)
+ground.furniture(
+    "Hydro-\nbox",
+    kind="USERDEFINED",
+    size=(0.8, 0.5, 0.9),
+	start_height=GROUND_FLOOR_THICKNESS,
+    color="#ffffff",
+    center=(wall3_x+KK_WIDTH/2.0, BWT+0.3),
+)
+ground.furniture(
+    "Vodo-\nměr",
+    kind="USERDEFINED",
+    size=(0.6, 0.55, 0.9),
+	start_height=GROUND_FLOOR_THICKNESS,
+    color="#ffffff",
+    center=(wall3_x+KK_WIDTH/2.0, BWT+0.7),
 )
 if "aa" not in sys.argv:
 	gauc = ground.asset(
@@ -1595,14 +1615,6 @@ upper.furniture(
     center=(HOUSE_WIDTH-BWT-0.3, wall_zachod_nahore_y-0.7),
 	rotation=90,
 	start_height=UPPER_FLOOR_THICKNESS,
-)
-upper.furniture(
-    "Hydrobox",
-    kind="USERDEFINED",
-    size=(0.8, 0.4, 0.9),
-	start_height=GROUND_FLOOR_THICKNESS,
-    color="#ffffff",
-    center=(wall3_x+0.5, BWT+0.25),
 )
 upper.furniture(
     "Pračka",
@@ -3130,7 +3142,7 @@ if "kanal" in sys.argv:
 		("Střecha - spodní líc sádrokartonu", plasterboard_bottom - datum),
 		("Střecha - horní líc krytiny", tiles_top - datum),
 	)
-	line_start, line_end = 0.0, 10.0
+	line_start, line_end = -1.0, 12.0
 	bottom, top = min(height for _, height in levels), max(height for _, height in levels)
 	drawing1 = house.add_drawing(
 		"kanal",
@@ -3146,42 +3158,111 @@ if "kanal" in sys.argv:
 		drawing1.add_line((line_start, height), (line_end, height), name=label)
 		print(f"kanal: {label}: {height:+.3f} m")
 	for label, height in (
-		("Přízemí ±0,000", 0.0),
-		(f"Podkroví +{upper_floor_top:.3f}".replace(".", ","), upper_floor_top),
-		(f"Střecha +{tiles_top:.3f}", tiles_top - datum),
+		("Přízemí 0 mm", 0.0),
+		(f"Podkroví {upper_floor_top:.3f} mm".replace(".", ""), upper_floor_top),
+		(f"Střecha {tiles_top:.3f} mm".replace(".", ""), tiles_top - datum),
 	):
 		# The house mirrors model X on export; anchor labels at the screen-left
 		# endpoint so they extend into the drawing rather than off the page.
 		label_x = line_end if house.mirror_x else line_start
 		drawing1.add_text((label_x, height + 0.2), label, alignment="left", font_size=2.5)
 
-	drawing1.add_basin(x=2, z=0.65)  # umyvadlo
-	drawing1.add_sink(x=4, z=0.65)   # dřez
+	drawing1.add_poly_line(
+		[
+			(0.5, tiles_top+0.2),
+			(0.5, miako_bottom-0.2),
+			(2.5, 0.0),
+			(2.5, -0.2),
+		],
+		color="orange", line_width=0.3)
 
+	# slope
 	drawing1.add_line(
-		(0, tiles_top+0.2),
-		(0, plasterboard_bottom-0.2),
+		(2.5+5.5+1, 5.5*0.03),
+		(2.5, -0.0),
 		color="orange", line_width=0.3)
+
+	drawing1.add_washing_machine_connection(x=2.5+2.5+3+1, z=0.65, identifier="Myčka")
 	drawing1.add_line(
-		(0, plasterboard_bottom-0.2),
-		(0.5, plasterboard_bottom-0.2-0.5),
+		(2.5+2.5+3+1, 0.65),
+		(2.5+2.5+3+1, (2.5+3+1)*0.03),
 		color="orange", line_width=0.3)
+
+	drawing1.add_sink(x=2.5+2.5+3, z=0.65)
 	drawing1.add_line(
-		(0.5, plasterboard_bottom-0.2-0.5),
-		(0.5, upper_floor_top+0.2),
+		(2.5+2.5+3, 0.65),
+		(2.5+2.5+3, (2.5+3)*0.03),
 		color="orange", line_width=0.3)
+
+	drawing1.add_shower(x=2.5+2.5+2.4, z=(2.5+2.4)*0.03+0.08)
 	drawing1.add_line(
-		(0.5, upper_floor_top+0.2),
-		(0.5, miako_bottom-0.2),
+		(2.5+2.5+2.4, (2.5+2.4)*0.03+0.08),
+		(2.5+2.5+2.4, (2.5+2.4)*0.03),
 		color="orange", line_width=0.3)
+
+	drawing1.add_basin(x=2.5+2.5+1, z=0.65)
 	drawing1.add_line(
-		(0.5, miako_bottom-0.2),
-		(2.5, 0.2),
+		(2.5+2.5+1, 0.65),
+		(2.5+2.5+1, (2.5+1)*0.03),
 		color="orange", line_width=0.3)
+
+	drawing1.add_toilet(x=2.5+0, z=0.2)
 	drawing1.add_line(
-		(2.5, 0.2),
-		(2.5, -0.2),
+		(2.5+0, 0.2),
+		(2.5+0, 0),
+		color="orange", line_width=0.2)
+
+	# slope
+	drawing1.add_line(
+		(8, upper_floor_top+7.5*0.03),
+		(0.5, upper_floor_top),
 		color="orange", line_width=0.3)
+
+	drawing1.add_basin(x=8, z=upper_floor_top+0.65)
+	drawing1.add_line(
+		(8, upper_floor_top+0.65),
+		(8, upper_floor_top+(8-0.5)*0.03),
+		color="orange", line_width=0.3)
+
+	drawing1.add_toilet(x=0.5+0, z=upper_floor_top+0.2)
+
+	drawing1.add_washing_machine_connection(x=2.5+1.5, z=upper_floor_top+0.65)
+	drawing1.add_line(
+		(2.5+1.5, upper_floor_top+0.65),
+		(2.5+1.5, upper_floor_top+(8-0.5-2.5-1.5)*0.03),
+		color="orange", line_width=0.3)
+
+	drawing1.add_roof_vent(x=0.5, z=tiles_top+0.2)
+
+	drawing1.add_text(
+		point=(0.0, plasterboard_bottom+0.2),
+		text="DN 100",
+		font_size=2.5
+	)
+
+	drawing1.add_text(
+		point=(0.5, 1.5),
+		text="DN 100",
+		font_size=2.5
+	)
+
+	drawing1.add_text(
+		point=(2.5, -0.5),
+		text="DN 100",
+		font_size=2.5
+	)
+
+	drawing1.add_text(
+		point=(4, 0.35),
+		text="DN 50",
+		font_size=2.5
+	)
+
+	drawing1.add_text(
+		point=(2, upper_floor_top+0.3),
+		text="DN 50",
+		font_size=2.5
+	)
 
 	drawing1.render("kanal.svg", pdf=PDF_KANAL)
 
@@ -3231,6 +3312,153 @@ if "found" in sys.argv:
 	drawing1.add_text(point=(3, -3), text="DČOV", font_size=3, color="orange")
 
 	drawing1.render("found.svg", pdf=PDF_FOUND)
+
+if "voda_ground" in sys.argv:
+	drawing1 = house.add_drawing(
+		"voda_ground",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=GROUND_FLOOR_THICKNESS+2.05,
+		radius=8.5,
+		storeys=[ground],
+		right_panel_width=40,
+	)
+	drawing1.add_line_legend([
+		{"style": "solid", "color": "red", "line_width": 0.3, "description": "teplá"},
+		{"style": "solid", "color": "blue", "line_width": 0.3, "description": "studená"},
+	])
+
+	drawing1.add_stair_annotation(main_stairs)
+	drawing1.add_stair_landing_annotation(middle_stair_landing)
+	drawing1.add_stair_annotation(gallery_stairs)
+	drawing1.add_chimney_annotation(chimney)
+
+	drawing1.add_poly_line(
+		[
+			(wall3_x+0.4, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, BWT+3),
+			(HOUSE_WIDTH-BWT-1, BWT+3),
+		],style="solid", color="blue", line_width=0.3)
+	drawing1.add_poly_line(
+		[
+			(wall3_x+1.5, BWT+0.2),
+			(HOUSE_WIDTH-BWT-0.2, BWT+0.2),
+			(HOUSE_WIDTH-BWT-0.2, BWT+2.9),
+		],style="solid", color="red", line_width=0.3)
+
+	drawing1.add_change_floor_symbol(wall3_x+1.25, BWT+0.1, "from down", color="black", line_width=0.3)
+	drawing1.add_change_floor_symbol(wall3_x+1.25, BWT+0.1, "to up", color="black", line_width=0.3)
+	drawing1.add_change_floor_symbol(wall3_x+1.5, BWT+0.2, "to up", color="black", line_width=0.3)
+
+	drawing1.render("voda_ground.svg", pdf=PDF_VODA_GROUND)
+
+if "voda_upper" in sys.argv:
+	drawing1 = house.add_drawing(
+		"voda_upper",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=BWT+2.75+2,
+		radius=8.5,
+		storeys=[upper],
+		right_panel_width=40,
+	)
+	drawing1.add_line_legend([
+		{"style": "solid", "color": "red", "line_width": 0.3, "description": "teplá"},
+		{"style": "solid", "color": "blue", "line_width": 0.3, "description": "studená"},
+	])
+
+	drawing1.add_stair_annotation(main_stairs)
+	drawing1.add_stair_landing_annotation(middle_stair_landing)
+	drawing1.add_stair_annotation(gallery_stairs)
+	drawing1.add_chimney_annotation(chimney)
+
+	drawing1.add_poly_line(
+		[
+			(wall3_x+0.1, wall_zachod_nahore_y-0.6),
+			(wall3_x+0.1, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, wall_zachod_nahore_y+0.2),
+		],style="solid", color="blue", line_width=0.3)
+	drawing1.add_poly_line(
+		[
+			(wall3_x+1.5, BWT+0.2),
+			(HOUSE_WIDTH-BWT-0.2, BWT+0.2),
+			(HOUSE_WIDTH-BWT-0.2, wall_zachod_nahore_y+0.2),
+		],style="solid", color="red", line_width=0.3)
+
+	drawing1.add_change_floor_symbol(wall3_x+1.25, BWT+0.1, "from down", color="black", line_width=0.3)
+	drawing1.add_change_floor_symbol(wall3_x+1.5, BWT+0.2, "from down", color="black", line_width=0.3)
+
+	drawing1.render("voda_upper.svg", pdf=PDF_VODA_UPPER)
+
+if "kanal_ground" in sys.argv:
+	drawing1 = house.add_drawing(
+		"kanal_ground",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=GROUND_FLOOR_THICKNESS+2.05,
+		radius=8.5,
+		storeys=[ground],
+	)
+
+	drawing1.add_stair_annotation(main_stairs)
+	drawing1.add_stair_landing_annotation(middle_stair_landing)
+	drawing1.add_stair_annotation(gallery_stairs)
+	drawing1.add_chimney_annotation(chimney)
+
+	drawing1.add_poly_line(
+		[
+			(wall3_x+0.1, wall_zachod_nahore_y-0.6),
+			(wall3_x+0.1, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, BWT+3),
+			(HOUSE_WIDTH-BWT-1, BWT+3),
+		],style="solid", color="orange", line_width=0.3)
+
+	drawing1.add_change_floor_symbol(wall3_x+0.1, wall_zachod_nahore_y-0.6, "from up", color="black", line_width=0.3)
+	drawing1.add_change_floor_symbol(toilet_x, BWT+0.1, "to down", color="black", line_width=0.3)
+
+	# DCOV
+	drawing1.add_poly_line(
+		[
+			(toilet_x, BWT+0.1),
+			(toilet_x, -1),
+			(3+1.1, -3),
+		], color="orange", style="dashed")
+
+	drawing1.add_circle(center=(3, -3), radius=1.1, color="orange", style="dashed")
+	drawing1.add_text(point=(3, -3), text="DČOV", font_size=3, color="orange")
+
+	drawing1.render("kanal_ground.svg", pdf=PDF_KANAL_GROUND)
+
+if "kanal_upper" in sys.argv:
+	drawing1 = house.add_drawing(
+		"kanal_upper",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=BWT+2.75+2,
+		radius=8.5,
+		storeys=[upper],
+	)
+
+	drawing1.add_stair_annotation(main_stairs)
+	drawing1.add_stair_landing_annotation(middle_stair_landing)
+	drawing1.add_stair_annotation(gallery_stairs)
+	drawing1.add_chimney_annotation(chimney)
+
+	drawing1.add_poly_line(
+		[
+			(wall3_x+0.1, wall_zachod_nahore_y-0.6),
+			(wall3_x+0.1, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, BWT+0.1),
+			(HOUSE_WIDTH-BWT-0.1, wall_zachod_nahore_y+0.2),
+		],style="solid", color="orange", line_width=0.3)
+
+	drawing1.add_change_floor_symbol(wall3_x+0.1, wall_zachod_nahore_y-0.6, "to down", color="black", line_width=0.3)
+	drawing1.add_change_floor_symbol(wall3_x+0.1, wall_zachod_nahore_y-0.6, "to up", color="black", line_width=0.3)
+
+	drawing1.render("kanal_upper.svg", pdf=PDF_KANAL_UPPER)
 
 # Drawing 1 - ground floor
 if "ground" in sys.argv:

@@ -56,6 +56,37 @@ class FoundationDrawingTests(unittest.TestCase):
         self.assertNotIn("line_legend", [t["kind"] for t in ground_tables])
 
 
+class WaterDrawingTests(unittest.TestCase):
+    def test_both_water_plans_have_hot_and_cold_line_legends(self):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source), "voda_ground", "voda_upper"]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("drawing.svg")) as render,
+            redirect_stdout(StringIO()),
+        ):
+            values = runpy.run_path(str(source))
+        self.assertEqual([call.args[0] for call in render.call_args_list],
+                         ["voda_ground.svg", "voda_upper.svg"])
+        self.assertEqual(len(values["house"]._drawings), 2)
+        for drawing in values["house"]._drawings:
+            with self.subTest(drawing=drawing.element.Name):
+                self.assertEqual(drawing.right_panel_width, 40)
+                tables = json.loads(ifcopenshell.util.element.get_pset(
+                    drawing.element, "EPset_Drawing", "RightPanelTables"))
+                self.assertEqual(len(tables), 1)
+                self.assertEqual(tables[0]["kind"], "line_legend")
+                self.assertEqual(tables[0]["title"], "LEGENDA ČAR")
+                self.assertEqual(tables[0]["items"], [
+                    {"classes": "IfcAnnotation PredefinedType-LINEWORK drawing-line solid "
+                                "drawing-line-color-ff0000 drawing-line-width-0p3",
+                     "description": "teplá"},
+                    {"classes": "IfcAnnotation PredefinedType-LINEWORK drawing-line solid "
+                                "drawing-line-color-0000ff drawing-line-width-0p3",
+                     "description": "studená"},
+                ])
+
+
 class CutDrawingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
