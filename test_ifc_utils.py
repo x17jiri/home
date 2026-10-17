@@ -28,6 +28,7 @@ from ifc_utils import (
     Chimney,
     CutDefinition,
     CustomStair,
+    ElektroLineDrawer,
     FacadeLayer,
     FloorLayer,
     House,
@@ -64,6 +65,7 @@ from ifc_utils import (
     _postprocess_cut_symbol_overlays,
     _postprocess_change_floor_symbol_overlays,
     _postprocess_dimension_overlays,
+    _postprocess_floor_corner_overlays,
     _postprocess_elevation_wall_insulation_depth,
     _postprocess_elevation_opening_overlays,
     _postprocess_projected_wood_fills,
@@ -1208,6 +1210,103 @@ class DrainageStackTests(unittest.TestCase):
             self.assertIn(rule, body)
 
 
+class FloorCornerTests(unittest.TestCase):
+    def test_floor_collection_ids_scope_and_hidden_coordinate_map(self):
+        house = House("Corner references")
+        ground = house.storey("Ground", elevation=0.2)
+        upper = house.storey("Upper", elevation=3)
+        floor = ground.floor_layer("Kitchen", room_id="0.01", outline=[(1, 1), (5, 1), (5, 4), (1, 4)], thickness=.1)
+        upper.floor_layer("Upper room", room_id="1.01", outline=floor.outline, thickness=.1)
+        ground.floor_layer("Structural slab", outline=floor.outline, thickness=.2, kind="BASESLAB")
+        drawing = house.add_drawing("Elektro", 3, 2.5, 2, 5, storeys=[ground])
+        # Discover floors added after the drawing too; room names are a fallback ID.
+        other = ground.floor_layer("Other", outline=[(6, 1), (9, 1), (9, 4), (6, 4)], thickness=.1)
+        self.assertEqual(ground.floor_layers, (floor, ground.floor_layers[1], other))
+        expected = {f"0.01.{i}": p for i, p in enumerate(floor.outline, 1)}
+        expected.update({f"Other.{i}": p for i, p in enumerate(other.outline, 1)})
+        before = len(list(house.model))
+        self.assertEqual(drawing.add_floor_corner_labels(ground, show=False), expected)
+        self.assertEqual(len(list(house.model)), before)
+        self.assertEqual(drawing.add_floor_corner_labels(ground), expected)
+        annotations = drawing.group.IsGroupedBy[0].RelatedObjects
+        labels = [ifcopenshell.util.element.get_pset(a, "BBIM_FloorCorner") for a in annotations]
+        labels = [p for p in labels if p]
+        self.assertEqual({p["Identifier"] for p in labels}, set(expected))
+        for p in labels:
+            self.assertEqual(tuple(json.loads(p["Point"])), expected[p["Identifier"]])
+        self.assertEqual(ifcopenshell.util.element.get_pset(floor, "BBIM_FloorLayer", "RoomIdentifier"), "0.01")
+        reopened = ifcopenshell.file.from_string(house.model.to_string())
+        self.assertEqual(ifcopenshell.util.element.get_pset(
+            reopened.by_guid(floor.GlobalId), "BBIM_FloorLayer", "RoomIdentifier"), "0.01")
+
+    def test_corner_circles_follow_mirrored_model_without_changing_source_points(self):
+        for mirror in (False, True):
+            house = House("Corners", mirror_x=mirror)
+            storey = house.storey("Ground", elevation=0.2)
+            floor = storey.floor_layer("Room", room_id="0.01", outline=[(1, 1), (5, 1), (5, 4), (1, 4)], thickness=.1)
+            drawing = house.add_drawing("Elektro", 3, 2.5, 2, 5, storeys=[storey])
+            points = drawing.add_floor_corner_labels(storey)
+            exported = house._export_model()
+            markers = [a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                       if ifcopenshell.util.element.get_pset(a, "BBIM_DrawingCircle")]
+            self.assertEqual(len(markers), 4)
+            centres = set()
+            for marker in markers:
+                point = tuple(json.loads(ifcopenshell.util.element.get_pset(marker, "BBIM_DrawingCircle", "Center")))
+                centres.add(point)
+                placement = ifcopenshell.util.placement.get_local_placement(
+                    exported.by_guid(marker.GlobalId).ObjectPlacement)
+                np.testing.assert_allclose(placement[:3, 3], (point[0] * (-1 if mirror else 1), point[1], 0.2))
+            self.assertEqual(centres, set(floor.outline))
+            self.assertEqual(points["0.01.1"], (1, 1))
+
+    def test_rejects_invalid_options_and_duplicate_ids_before_adding_guides(self):
+        house = House("Corners")
+        storey = house.storey("Ground", elevation=0)
+        drawing = house.add_drawing("Elektro", 0, 0, 2, 5, storeys=[storey])
+        for kwargs, error in (({"show": 1}, TypeError), ({"font_size": 0}, ValueError),
+                              ({"color": "invalid"}, ValueError)):
+            before = len(list(house.model))
+            with self.assertRaises(error):
+                drawing.add_floor_corner_labels(storey, **kwargs)
+            self.assertEqual(len(list(house.model)), before)
+        outline = [(0, 0), (3, 0), (3, 3), (0, 3)]
+        before = len(list(house.model))
+        with self.assertRaises(ValueError):
+            storey.floor_layer("Invalid", room_id=" ", outline=outline, thickness=.1)
+        self.assertEqual(len(list(house.model)), before)
+        for name in ("First", "Second"):
+            storey.floor_layer(name, room_id="0.01", outline=outline, thickness=.1)
+        before = len(list(house.model))
+        with self.assertRaisesRegex(ValueError, "IDs must be unique"):
+            drawing.add_floor_corner_labels(storey)
+        self.assertEqual(len(list(house.model)), before)
+
+    def test_corner_guides_move_above_fills_without_duplication_or_template_damage(self):
+        source = ('<svg><defs><text data-type="text-template"/></defs>'
+                  '<line id="leader" class="drawing-line floor-corner-guide" x1="0" y1="0" x2="1" y2="1"/>'
+                  '<circle id="point" class="floor-corner-guide" cx="0" cy="0" r=".03"/>'
+                  '<text id="label"><tspan class="floor-corner-guide">0.01.1</tspan></text>'
+                  '<path id="floor" fill="white" d="M0 0L2 0L2 2Z"/></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "drawing.svg"
+            path.write_text(source, encoding="utf-8")
+            _postprocess_floor_corner_overlays(path)
+            result = path.read_text(encoding="utf-8")
+            root = ET.fromstring(result)
+            self.assertEqual(root[-1].get("class"), "floor-corner-overlays")
+            self.assertEqual([n.get("id") for n in root[-1]], ["leader", "point", "label"])
+            self.assertIsNotNone(root.find("defs/text"))
+            for identifier in ("leader", "point", "label", "floor"):
+                self.assertEqual(result.count(f'id="{identifier}"'), 1)
+            _postprocess_floor_corner_overlays(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), result)
+            source = '<svg><text><tspan>Unrelated</tspan></text></svg>'
+            path.write_text(source, encoding="utf-8")
+            _postprocess_floor_corner_overlays(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), source)
+
+
 class DimensionOverlayTests(unittest.TestCase):
     def test_moves_complete_dimensions_after_fills_without_duplicates(self):
         source = ('<svg xmlns="http://www.w3.org/2000/svg">'
@@ -1378,6 +1477,411 @@ class ChangeFloorSymbolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "axis-aligned"):
             oblique.add_change_floor_symbol(2, 3, "to up")
         self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+
+
+class ElektroLineDrawerTests(unittest.TestCase):
+    def setUp(self):
+        self.house = House("Electrical routes", mirror_x=True)
+        self.drawing = self.house.add_drawing("Electrical", 0, 0, 2, 5, storeys=[])
+        self.corners = {"0.03.2": (2, 3), "0.01.7": (4, 5)}
+        self.draw = ElektroLineDrawer(self.drawing, self.corners)
+
+    def points(self, annotation):
+        return json.loads(ifcopenshell.util.element.get_pset(annotation, "BBIM_DrawingPolyLine", "Points"))
+
+    def test_requested_api_accumulates_and_forwards_appearance(self):
+        references = ["-+0.03.2", "--0.01.7"]
+        for n in (1, 2):
+            path = self.draw(references, style="dashed", color="red", line_width=.3, name="Wire")
+            expected = [(2 - n * .1, 3 + n * .1), (4 - n * .1, 5 - n * .1)]
+            np.testing.assert_allclose(self.points(path), expected)
+            props = ifcopenshell.util.element.get_pset(path, "BBIM_DrawingPolyLine")
+            self.assertEqual((props["Style"], props["Color"], props["LineWidth"]), ("dashed", "#ff0000", .3))
+            self.assertEqual(path.Name, "Wire")
+            self.assertIn(path, self.drawing.group.IsGroupedBy[0].RelatedObjects)
+            exported = self.house._export_model().by_guid(path.GlobalId)
+            np.testing.assert_allclose(AngleDimensionTests.world_curves(exported)[0],
+                                       [(-x, y, 0) for x, y in expected])
+        self.assertEqual(self.corners, {"0.03.2": (2, 3), "0.01.7": (4, 5)})
+
+    def test_repeated_corner_and_mixed_signs_share_state(self):
+        first = self.draw(["++0.03.2", "++0.03.2", "--0.03.2", "+-0.01.7"])
+        np.testing.assert_allclose(self.points(first), [(2.1, 3.1), (2.2, 3.2), (2.1, 3.1), (4.1, 4.9)])
+        second = self.draw(["--0.03.2", "-+0.01.7"])
+        np.testing.assert_allclose(self.points(second), [(2, 3), (4, 5)])
+
+    def test_helpers_are_isolated_and_copy_the_source_map(self):
+        other_drawing = self.house.add_drawing("Other", 0, 0, 2, 5, storeys=[])
+        other = ElektroLineDrawer(other_drawing, self.corners, step=.2)
+        self.corners["0.03.2"] = (100, 100)
+        np.testing.assert_allclose(self.points(self.draw(["++0.03.2", "++0.01.7"])), [(2.1, 3.1), (4.1, 5.1)])
+        path = other(["++0.03.2", "++0.01.7"])
+        np.testing.assert_allclose(self.points(path), [(2.2, 3.2), (4.2, 5.2)])
+        self.assertNotIn(path, self.drawing.group.IsGroupedBy[0].RelatedObjects)
+
+    def test_spaces_preserve_each_axis_accumulated_value(self):
+        changes = {"+": .1, "-": -.1, " ": 0}
+        for x_sign, x_change in changes.items():
+            for y_sign, y_change in changes.items():
+                with self.subTest(x_sign=x_sign, y_sign=y_sign):
+                    draw = ElektroLineDrawer(self.drawing, self.corners)
+                    initial = draw(["  0.03.2", "  0.01.7"])
+                    np.testing.assert_allclose(self.points(initial), [(2, 3), (4, 5)])
+                    draw(["++0.03.2", "--0.01.7"])
+                    path = draw([f"{x_sign}{y_sign}0.03.2", "  0.01.7"])
+                    expected = [(2.1 + x_change, 3.1 + y_change), (3.9, 4.9)]
+                    np.testing.assert_allclose(self.points(path), expected)
+                    repeated = draw(["  0.03.2", "  0.01.7"])
+                    np.testing.assert_allclose(self.points(repeated), expected)
+
+    def test_spaces_work_with_one_time_shifts_and_sockets(self):
+        self.draw(["++0.03.2", "--0.01.7"])
+        path = self.draw(["  0.03.2;1,-1", "socket,0.4,up", "  0.01.7;-1,1"])
+        np.testing.assert_allclose(self.points(path), [(3.1, 2.1), (2.9, 5.9)])
+        symbol = next(a for a in self.house.model.by_type("IfcAnnotation")
+                      if ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol"))
+        props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SocketSymbol")
+        np.testing.assert_allclose(json.loads(props["Point"]), (3.02, 3.62))
+        next_path = self.draw(["  0.03.2", "  0.01.7"])
+        np.testing.assert_allclose(self.points(next_path), [(2.1, 3.1), (3.9, 4.9)])
+
+    def test_one_time_corner_shifts_do_not_accumulate(self):
+        path = self.draw(["++0.03.2;0.25,-0.05", "++0.03.2", "--0.01.7; -0.3, +0.4"])
+        expected = [(2.35, 3.05), (2.2, 3.2), (3.6, 5.3)]
+        np.testing.assert_allclose(self.points(path), expected)
+        exported = self.house._export_model().by_guid(path.GlobalId)
+        np.testing.assert_allclose(AngleDimensionTests.world_curves(exported)[0],
+                                   [(-x, y, 0) for x, y in expected])
+        next_path = self.draw(["++0.03.2;0.25,-0.05", "--0.01.7"])
+        np.testing.assert_allclose(self.points(next_path), [(2.55, 3.25), (3.8, 4.8)])
+        last_path = self.draw(["--0.03.2;0,0", "++0.01.7"])
+        np.testing.assert_allclose(self.points(last_path), [(2.2, 3.2), (3.9, 4.9)])
+        self.assertEqual(self.corners, {"0.03.2": (2, 3), "0.01.7": (4, 5)})
+
+    def test_socket_interpolation_includes_one_time_corner_shifts(self):
+        path = self.draw(["++0.03.2;1,-1", "socket,0.4,up", "--0.01.7;-1,1"])
+        np.testing.assert_allclose(self.points(path), [(3.1, 2.1), (2.9, 5.9)])
+        symbol = next(a for a in self.house.model.by_type("IfcAnnotation")
+                      if ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol"))
+        props = ifcopenshell.util.element.get_pset(symbol, "BBIM_SocketSymbol")
+        np.testing.assert_allclose(json.loads(props["Point"]), (3.02, 3.62))
+
+    def test_invalid_shifts_do_not_create_annotations_or_consume_offsets(self):
+        before = set(self.house.model.by_type("IfcAnnotation"))
+        for suffix in ("", "1", "1,2,3", "1,", ",2", "a,2", "1;2,3", "1,2;3,4",
+                       "nan,0", "0,inf", "-inf,0"):
+            with self.subTest(suffix=suffix), self.assertRaises((TypeError, ValueError)):
+                self.draw(["++0.03.2;1,2", f"--0.01.7;{suffix}"])
+            self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        with self.assertRaises(ValueError):
+            self.draw(["++0.03.2", "socket,0.4,up;1,2", "--0.01.7"])
+        self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        # These shifted endpoints coincide, so the polyline must reject them.
+        with self.assertRaisesRegex(ValueError, "consecutive points"):
+            self.draw(["++0.03.2;2,2", "++0.01.7"])
+        self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        path = self.draw(["++0.03.2", "--0.01.7"])
+        np.testing.assert_allclose(self.points(path), [(2.1, 3.1), (3.9, 4.9)])
+
+    def test_bad_references_or_styles_do_not_consume_offsets_or_create_annotations(self):
+        before = set(self.house.model.by_type("IfcAnnotation"))
+        for references in (None, 123, "++0.03.2", [], ["++0.03.2"],
+                           ["++0.03.2", "--missing"], ["++0.03.2", "0.01.7"],
+                           ["++0.03.2", "++"], ["++0.03.2", "x+0.01.7"], ["++0.03.2", 42]):
+            with self.subTest(references=references), self.assertRaises((TypeError, ValueError)):
+                self.draw(references)
+            self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        for kwargs in ({"style": "bad"}, {"color": "bad-color"}, {"line_width": 0}, {"name": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                self.draw(["++0.03.2", "--0.01.7"], **kwargs)
+            self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        np.testing.assert_allclose(self.points(self.draw(["++0.03.2", "--0.01.7"])), [(2.1, 3.1), (3.9, 4.9)])
+
+    def test_degenerate_route_does_not_consume_offsets(self):
+        draw = ElektroLineDrawer(self.drawing, {"a": (0, 0), "b": (.2, .2)})
+        before = set(self.house.model.by_type("IfcAnnotation"))
+        with self.assertRaisesRegex(ValueError, "consecutive points"):
+            draw(["++a", "--b"])
+        self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        np.testing.assert_allclose(self.points(draw(["++a", "++b"])), [(.1, .1), (.3, .3)])
+
+    def test_constructor_validation(self):
+        for step in (0, -.1, True, float("nan"), float("inf")):
+            with self.subTest(step=step), self.assertRaises((TypeError, ValueError)):
+                ElektroLineDrawer(self.drawing, self.corners, step=step)
+        for corners in (None, [], {"": (0, 0)}, {1: (0, 0)}, {"a": (1, 2, 3)}, {"a": (float("nan"), 0)}):
+            with self.subTest(corners=corners), self.assertRaises((TypeError, ValueError)):
+                ElektroLineDrawer(self.drawing, corners)
+        with self.assertRaisesRegex(TypeError, "Drawing"):
+            ElektroLineDrawer(None, self.corners)
+        elevation = self.house.add_drawing("Section", 0, 0, 2, 5, view="elevation", direction=(1, 0, 0))
+        with self.assertRaisesRegex(ValueError, "plan drawing"):
+            ElektroLineDrawer(elevation, self.corners)
+
+    def test_sockets_interpolate_each_segment_without_changing_route_or_offsets(self):
+        path = self.draw(["++0.03.2", "socket,0.4,up", "socket,0.8,left", "--0.01.7",
+                          "socket,0,down", "socket,1,right", "+-0.03.2"],
+                         style="dashed", color="blue", line_width=.3)
+        points = [(2.1, 3.1), (3.9, 4.9), (2.2, 3)]
+        np.testing.assert_allclose(self.points(path), points)
+        symbols = {ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol", "Direction"): a
+                   for a in self.house.model.by_type("IfcAnnotation")
+                   if ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol")}
+        self.assertEqual(set(symbols), {"up", "down", "left", "right"})
+        for direction, point in (("up", (2.82, 3.82)), ("left", (3.54, 4.54)),
+                                 ("down", points[1]), ("right", points[2])):
+            props = ifcopenshell.util.element.get_pset(symbols[direction], "BBIM_SocketSymbol")
+            np.testing.assert_allclose(json.loads(props["Point"]), point)
+            self.assertEqual((props["Color"], props["LineWidth"]), ("#008000", .3))
+        np.testing.assert_allclose(self.points(self.draw(["--0.03.2", "++0.01.7"])), [(2.1, 2.9), (4, 5)])
+
+    def test_double_sockets_mix_with_single_sockets_and_shifted_corners(self):
+        path = self.draw(["  0.03.2;1,-1", "socket,0.2,up", "d_socket,0.4,right",
+                          "d_socket,0.8,left", "  0.01.7"])
+        np.testing.assert_allclose(self.points(path), [(3, 2), (4, 5)])
+        symbols = [ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol")
+                   for a in self.house.model.by_type("IfcAnnotation")
+                   if ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol")]
+        self.assertEqual(len(symbols), 3)
+        for props in symbols:
+            fraction = {"up": .2, "right": .4, "left": .8}[props["Direction"]]
+            np.testing.assert_allclose(json.loads(props["Point"]), (3 + fraction, 2 + 3 * fraction))
+            self.assertEqual(props["Double"], props["Direction"] != "up")
+            self.assertEqual((props["BranchLength"], props["Radius"], props["Color"]),
+                             (.225, .1125, "#008000"))
+        np.testing.assert_allclose(self.points(self.draw(["  0.03.2", "  0.01.7"])), [(2, 3), (4, 5)])
+
+    def test_invalid_socket_entries_leave_route_and_offsets_unchanged(self):
+        before = set(self.house.model.by_type("IfcAnnotation"))
+        invalid = ["socket", "socket,0.4", "socket,0.4,up,extra", "socket,no,up",
+                   "socket,nan,up", "socket,inf,up", "socket,-0.1,up", "socket,1.1,up",
+                   "socket,0.4,diagonal", "unknown,0.4,up", "d_socket", "d_socket,0.4",
+                   "d_socket,0.4,diagonal", "d_socket,nan,up", "d_socket,1.1,up"]
+        routes = [["++0.03.2", entry, "--0.01.7"] for entry in invalid]
+        routes += [["socket,0.4,up", "++0.03.2", "--0.01.7"],
+                   ["++0.03.2", "--0.01.7", "socket,0.4,up"],
+                   ["++0.03.2", "socket,0.4,up"],
+                   ["d_socket,0.4,up", "++0.03.2", "--0.01.7"],
+                   ["++0.03.2", "--0.01.7", "d_socket,0.4,up"],
+                   ["++0.03.2", "socket,0.4,up", "--missing"]]
+        for route in routes:
+            with self.subTest(route=route), self.assertRaises((TypeError, ValueError)):
+                self.draw(route)
+            self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        with self.assertRaises(ValueError):
+            self.draw(["++0.03.2", "socket,0.4,up", "--0.01.7"], color="bad-color")
+        self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        path = self.draw(["++0.03.2", "socket,0.4,up", "--0.01.7"])
+        np.testing.assert_allclose(self.points(path), [(2.1, 3.1), (3.9, 4.9)])
+
+
+class SwitchSymbolTests(unittest.TestCase):
+    def test_green_switch_geometry_and_page_directions_survive_mirroring(self):
+        for mirror in (False, True):
+            house = House("Switches", mirror_x=mirror)
+            drawing = house.add_drawing("Plan", 0, 0, 2, 5, storeys=[])
+            other = house.add_drawing("Other", 0, 0, 2, 5, storeys=[])
+            for direction, vector in (("up", (0, 1)), ("down", (0, -1)),
+                                      ("left", (-1, 0)), ("right", (1, 0))):
+                with self.subTest(mirror=mirror, direction=direction):
+                    switch = drawing.add_switch_symbol((2, 3), direction, line_width=.3)
+                    self.assertIn(switch, drawing.group.IsGroupedBy[0].RelatedObjects)
+                    self.assertNotIn(switch, other.group.IsGroupedBy[0].RelatedObjects)
+                    exported = house._export_model()
+                    paths = AngleDimensionTests.world_curves(exported.by_guid(switch.GlobalId))
+                    camera = ifcopenshell.util.placement.get_local_placement(
+                        exported.by_guid(drawing.element.GlobalId).ObjectPlacement)
+                    screen = [(path - paths[0][0]) @ camera[:3, :3] for path in paths]
+                    along = np.array((*vector, 0))
+                    across = np.array((along[1], -along[0], 0))
+                    self.assertEqual([len(path) for path in screen], [2, 65, 3])
+                    np.testing.assert_allclose(screen[0], [np.zeros(3), along * .225], atol=1e-12)
+                    center = along * .3
+                    np.testing.assert_allclose(np.linalg.norm(screen[1] - center, axis=1), .075, atol=1e-12)
+                    np.testing.assert_allclose(screen[1][0], screen[1][-1])
+                    self.assertAlmostEqual(float(np.linalg.norm(screen[2][0] - center)), .075)
+                    self.assertAlmostEqual(float(np.linalg.norm(screen[2][1] - screen[2][0])), .15)
+                    self.assertAlmostEqual(float(np.linalg.norm(screen[2][2] - screen[2][1])), .075 * .75)
+                    np.testing.assert_allclose(screen[2][0], center + across * .0375 + along * (.075 * 3**.5 / 2), atol=1e-12)
+                    props = ifcopenshell.util.element.get_pset(exported.by_guid(switch.GlobalId), "BBIM_SwitchSymbol")
+                    self.assertEqual((props["Direction"], props["Color"], props["LineWidth"]), (direction, "#008000", .3))
+
+    def test_route_switches_share_socket_placement_rules_without_advancing_state(self):
+        house = House("Switches")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+        draw = ElektroLineDrawer(drawing, {"a": (0, 0), "b": (4, 2)})
+        route = draw(["  a;1,0", "switch,0,up", "switch,0.4,left", "switch,1,down",
+                      "socket,0.8,right", "light,0.6", "  b"], color="#f080f0", line_width=.3)
+        self.assertEqual(json.loads(ifcopenshell.util.element.get_pset(route, "BBIM_DrawingPolyLine", "Points")),
+                         [[1, 0], [4, 2]])
+        symbols = {p["Direction"]: p for a in house.model.by_type("IfcAnnotation")
+                   if (p := ifcopenshell.util.element.get_pset(a, "BBIM_SwitchSymbol"))}
+        self.assertEqual(set(symbols), {"up", "left", "down"})
+        for direction, point in (("up", (1, 0)), ("left", (2.2, .8)), ("down", (4, 2))):
+            np.testing.assert_allclose(json.loads(symbols[direction]["Point"]), point)
+            self.assertEqual((symbols[direction]["Color"], symbols[direction]["LineWidth"]), ("#008000", .3))
+        unchanged = draw(["  a", "  b"])
+        self.assertEqual(json.loads(ifcopenshell.util.element.get_pset(unchanged, "BBIM_DrawingPolyLine", "Points")),
+                         [[0, 0], [4, 2]])
+
+    def test_invalid_switches_do_not_create_geometry_or_consume_corner_offsets(self):
+        house = House("Switches")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+        draw = ElektroLineDrawer(drawing, {"a": (0, 0), "b": (4, 2)})
+        before = set(house.model.by_type("IfcAnnotation"))
+        for entry in ("switch", "switch,0.4", "switch,nan,up", "switch,0.4,diagonal", "switch,1.1,up",
+                      "switch,-.1,up", "switch,0.4,up;1,2"):
+            with self.subTest(entry=entry), self.assertRaises((TypeError, ValueError)):
+                draw(["++a", entry, "++b"])
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        for refs in (["switch,0.4,up", "++a", "++b"], ["++a", "++b", "switch,0.4,up"]):
+            with self.assertRaises(ValueError):
+                draw(refs)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        for kwargs in ({"radius": 0}, {"branch_length": -1}, {"radius": float("nan")},
+                       {"direction": "diagonal"}, {"color": "bad-color"}, {"line_width": 0}, {"name": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                drawing.add_switch_symbol((0, 0), **kwargs)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        route = draw(["++a", "switch,0.4,up", "++b"])
+        np.testing.assert_allclose(json.loads(ifcopenshell.util.element.get_pset(route, "BBIM_DrawingPolyLine", "Points")),
+                                   [(.1, .1), (4.1, 2.1)])
+        elevation = house.add_drawing("Section", 0, 0, 2, 5, view="elevation", direction=(1, 0, 0))
+        with self.assertRaisesRegex(ValueError, "plan"):
+            elevation.add_switch_symbol((1, 2))
+
+
+class LightSymbolTests(unittest.TestCase):
+    def test_blue_crossed_circle_geometry_scope_and_mirroring(self):
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Lights", mirror_x=mirror)
+                house.storey("Floor", elevation=.4)
+                drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+                other = house.add_drawing("Other", 0, 0, 2, 5)
+                symbol = drawing.add_light_symbol((2, 3), line_width=.3, name="Ceiling light")
+                self.assertEqual(symbol.Name, "Ceiling light")
+                self.assertIn(symbol, drawing.group.IsGroupedBy[0].RelatedObjects)
+                self.assertNotIn(symbol, other.group.IsGroupedBy[0].RelatedObjects)
+                exported = house._export_model()
+                paths = AngleDimensionTests.world_curves(exported.by_guid(symbol.GlobalId))
+                self.assertEqual([len(p) for p in paths], [65, 2, 2])
+                center = np.array((-2 if mirror else 2, 3, .4))
+                for path in paths:
+                    np.testing.assert_allclose(np.linalg.norm(path - center, axis=1), .15, atol=1e-12)
+                np.testing.assert_allclose(paths[0][0], paths[0][-1])
+                for diagonal in paths[1:]:
+                    np.testing.assert_allclose(np.mean(diagonal, axis=0), center)
+                first, second = paths[1][1] - paths[1][0], paths[2][1] - paths[2][0]
+                self.assertAlmostEqual(float(np.dot(first, second)), 0)
+                props = ifcopenshell.util.element.get_pset(exported.by_guid(symbol.GlobalId), "BBIM_LightSymbol")
+                self.assertEqual(json.loads(props["Center"]), [2, 3])
+                self.assertEqual((props["Color"], props["LineWidth"], props["Radius"]), ("#0000ff", .3, .15))
+
+    def test_route_lights_use_shifted_endpoints_without_advancing_corners(self):
+        house = House("Lights")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+        draw = ElektroLineDrawer(drawing, {"a": (0, 0), "b": (4, 2)})
+        route = draw(["  a;1,0", "light,0.4", "d_socket,0.8,up", "  b"], color="#f080f0", line_width=.3)
+        self.assertEqual(json.loads(ifcopenshell.util.element.get_pset(route, "BBIM_DrawingPolyLine", "Points")),
+                         [[1, 0], [4, 2]])
+        light = next(a for a in house.model.by_type("IfcAnnotation")
+                     if ifcopenshell.util.element.get_pset(a, "BBIM_LightSymbol"))
+        props = ifcopenshell.util.element.get_pset(light, "BBIM_LightSymbol")
+        np.testing.assert_allclose(json.loads(props["Center"]), (2.2, .8))
+        self.assertEqual((props["Color"], props["LineWidth"]), ("#0000ff", .3))
+        self.assertEqual(len([a for a in house.model.by_type("IfcAnnotation")
+                             if ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol")]), 1)
+        route = draw(["  a", "  b"])
+        self.assertEqual(json.loads(ifcopenshell.util.element.get_pset(route, "BBIM_DrawingPolyLine", "Points")),
+                         [[0, 0], [4, 2]])
+
+    def test_invalid_lights_leave_geometry_and_corner_offsets_unchanged(self):
+        house = House("Lights")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+        draw = ElektroLineDrawer(drawing, {"a": (0, 0), "b": (4, 2)})
+        before = set(house.model.by_type("IfcAnnotation"))
+        for entry in ("light", "light,up", "light,nan", "light,-1", "light,1.1", "light,0.4,up", "light,0.4;1,2"):
+            with self.subTest(entry=entry), self.assertRaises((TypeError, ValueError)):
+                draw(["++a", entry, "++b"])
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        for route in (["light,0.4", "++a", "++b"], ["++a", "++b", "light,0.4"]):
+            with self.assertRaises(ValueError):
+                draw(route)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        for kwargs in ({"radius": 0}, {"radius": float("inf")}, {"color": "bad-color"},
+                       {"line_width": 0}, {"name": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                drawing.add_light_symbol((0, 0), **kwargs)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        route = draw(["++a", "light,0", "light,1", "++b"])
+        np.testing.assert_allclose(json.loads(ifcopenshell.util.element.get_pset(route, "BBIM_DrawingPolyLine", "Points")),
+                                   [(.1, .1), (4.1, 2.1)])
+        elevation = house.add_drawing("Section", 0, 0, 2, 5, view="elevation", direction=(1, 0, 0))
+        with self.assertRaisesRegex(ValueError, "plan"):
+            elevation.add_light_symbol((1, 2))
+
+
+class SocketSymbolTests(unittest.TestCase):
+    def test_semicircle_stem_orientation_mirroring_and_drawing_scope(self):
+        branch_length, radius = .225, .1125
+        for mirror in (False, True):
+            house = House("Sockets", mirror_x=mirror)
+            drawing = house.add_drawing("Plan", 0, 0, 2, 5, storeys=[])
+            other = house.add_drawing("Other", 0, 0, 2, 5, storeys=[])
+            for direction, along in (("up", (0, 1)), ("down", (0, -1)),
+                                     ("left", (-1, 0)), ("right", (1, 0))):
+                for double in (False, True):
+                    with self.subTest(mirror=mirror, direction=direction, double=double):
+                        symbol = drawing.add_socket_symbol((2, 3), direction, double=double, line_width=.3)
+                        self.assertIn(symbol, drawing.group.IsGroupedBy[0].RelatedObjects)
+                        self.assertNotIn(symbol, other.group.IsGroupedBy[0].RelatedObjects)
+                        exported = house._export_model()
+                        paths = AngleDimensionTests.world_curves(exported.by_guid(symbol.GlobalId))
+                        camera = ifcopenshell.util.placement.get_local_placement(
+                            exported.by_guid(drawing.element.GlobalId).ObjectPlacement)
+                        screen = [(p - paths[0][0]) @ camera[:3, :3] for p in paths]
+                        along_vector = np.array((*along, 0))
+                        across = np.array((along_vector[1], -along_vector[0], 0))
+                        np.testing.assert_allclose(screen[0], [np.zeros(3), along_vector * branch_length], atol=1e-12)
+                        self.assertEqual(len(screen), 3 if double else 2)
+                        for arc_index, arc in enumerate(screen[1:]):
+                            self.assertEqual(len(arc), 33)
+                            arc_radius = radius if arc_index == 0 else radius * 2 / 3
+                            center = along_vector * (branch_length + radius)
+                            np.testing.assert_allclose(arc[0], center + across * arc_radius, atol=1e-12)
+                            np.testing.assert_allclose(arc[16], center - along_vector * arc_radius, atol=1e-12)
+                            np.testing.assert_allclose(arc[-1], center - across * arc_radius, atol=1e-12)
+                        props = ifcopenshell.util.element.get_pset(exported.by_guid(symbol.GlobalId), "BBIM_SocketSymbol")
+                        self.assertEqual((props["Direction"], props["Color"], props["LineWidth"], props["Double"]),
+                                         (direction, "#008000", .3, double))
+                        self.assertEqual((props["BranchLength"], props["Radius"]), (branch_length, radius))
+                        classes = ifcopenshell.util.element.get_pset(symbol, "EPset_Annotation", "Classes")
+                        self.assertIn("drawing-line-color-008000", classes)
+                        self.assertIn("drawing-line-width-0p3", classes)
+
+    def test_explicit_socket_dimensions_are_not_scaled_again(self):
+        house = House("Sockets")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+        symbol = drawing.add_socket_symbol((0, 0), double=True, branch_length=.6, radius=.3)
+        paths = AngleDimensionTests.world_curves(symbol)
+        np.testing.assert_allclose(paths[0], [(0, 0, 0), (0, .6, 0)])
+        np.testing.assert_allclose(paths[1][0], (.3, .9, 0))
+        np.testing.assert_allclose(paths[2][0], (.2, .9, 0))
+
+    def test_invalid_socket_parameters_do_not_create_partial_annotations(self):
+        house = House("Sockets")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+        before = set(house.model.by_type("IfcAnnotation"))
+        for kwargs in ({"direction": "diagonal"}, {"branch_length": 0}, {"radius": -.1},
+                       {"radius": float("nan")}, {"branch_length": True}, {"color": "bad-color"},
+                       {"line_width": 0}, {"name": " "}, {"double": "yes"}, {"double": 1}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                drawing.add_socket_symbol((1, 2), **kwargs)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        elevation = house.add_drawing("Section", 0, 0, 2, 5, view="elevation", direction=(1, 0, 0))
+        with self.assertRaisesRegex(ValueError, "plan"):
+            elevation.add_socket_symbol((1, 2))
 
 
 class DrawingPolyLineTests(unittest.TestCase):
@@ -1661,6 +2165,109 @@ class DrawingLineTests(unittest.TestCase):
             _postprocess_drawing_line_colors(path)
             self.assertEqual(path.read_text(encoding="utf-8"), result)
             ET.fromstring(result)
+
+
+class SymbolLegendTests(unittest.TestCase):
+    def setUp(self):
+        self.house = House("Symbols")
+        self.drawing = self.house.add_drawing("Electrical", 0, 0, 2, 5, storeys=[], right_panel_width=60)
+
+    def test_symbol_legend_persists_without_adding_plan_geometry(self):
+        before = set(self.house.model.by_type("IfcAnnotation"))
+        result = self.drawing.add_symbol_legend([("socket", "Zásuvka"), ("d_socket", "Dvojitá zásuvka")])
+        self.assertIs(result, self.drawing)
+        self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        exported = self.house._export_model()
+        tables = json.loads(ifcopenshell.util.element.get_pset(
+            exported.by_guid(self.drawing.element.GlobalId), "EPset_Drawing", "RightPanelTables"))
+        self.assertEqual(tables[0]["kind"], "symbol_legend")
+        self.assertEqual(tables[0]["title"], "LEGENDA SYMBOLŮ")
+        self.assertEqual(tables[0]["items"], [{"symbol": "socket", "description": "Zásuvka"},
+                                            {"symbol": "d_socket", "description": "Dvojitá zásuvka"}])
+        self.assertIn("drawing-line-color-008000", tables[0]["classes"])
+        self.assertIn("drawing-line-width-0p3", tables[0]["classes"])
+
+    def test_symbols_render_as_green_vectors_and_stack_after_line_legend(self):
+        self.drawing.add_line_legend([{"color": "blue", "description": "Zásuvkový okruh"}])
+        self.drawing.add_symbol_legend([("socket", "Zásuvka <A> & B"), ("d_socket", "Dvojitá zásuvka")])
+        props = ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing")
+        for physical_width in (160, 80):
+            with self.subTest(physical_width=physical_width), TemporaryDirectory() as directory:
+                path = Path(directory) / "symbols.svg"
+                path.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{physical_width}mm" '
+                                'height="160mm" viewBox="0 0 160 160"><g id="geometry"/></svg>', encoding="utf-8")
+                _postprocess_right_panel(path, props)
+                panel_svg = path.read_text(encoding="utf-8")
+                _postprocess_right_panel(path, props)
+                self.assertEqual(path.read_text(encoding="utf-8"), panel_svg)
+                _postprocess_drawing_line_colors(path)
+                root = ET.parse(path).getroot()
+                samples = [e for e in root.iter() if "symbol-legend-sample" in e.get("class", "").split()]
+                self.assertEqual([sample.get("data-symbol") for sample in samples], ["socket", "d_socket"])
+                for sample, curve_count in zip(samples, (2, 3)):
+                    self.assertEqual(len(sample), curve_count)
+                    self.assertTrue(all(e.tag.endswith("}path") for e in sample))
+                    self.assertIn("drawing-line-color-008000", sample.get("class").split())
+                    for curve in sample:
+                        self.assertTrue(curve.get("d").startswith("M"))
+                        self.assertNotIn("Z", curve.get("d"))
+                svg = path.read_text(encoding="utf-8")
+                self.assertLess(svg.index('class="right-panel-table line-legend"'),
+                                svg.index('class="right-panel-table symbol-legend"'))
+                self.assertIn("Zásuvka &lt;A&gt; &amp; B", svg)
+                self.assertIn("stroke: #008000 !important", svg)
+                expected_width = .3 * 160 / physical_width
+                self.assertIn(f"stroke-width: {expected_width:g}px !important", svg)
+
+    def test_mixed_legend_renders_blue_light_and_green_sockets(self):
+        self.drawing.add_symbol_legend([("socket", "Zásuvka"), ("light", "Světlo")])
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "symbols.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" height="160mm" '
+                            'viewBox="0 0 160 160"></svg>', encoding="utf-8")
+            _postprocess_right_panel(path, ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing"))
+            _postprocess_drawing_line_colors(path)
+            root = ET.parse(path).getroot()
+            samples = [e for e in root.iter() if "symbol-legend-sample" in e.get("class", "").split()]
+            self.assertEqual([e.get("data-symbol") for e in samples], ["socket", "light"])
+            self.assertIn("drawing-line-color-008000", samples[0].get("class"))
+            self.assertIn("drawing-line-color-0000ff", samples[1].get("class"))
+            self.assertEqual(len(samples[1]), 3)
+            self.assertEqual(samples[1][0].get("d").count(" L"), 64)
+            for diagonal in list(samples[1])[1:]:
+                self.assertEqual(diagonal.get("d").count(" L"), 1)
+        overridden = self.house.add_drawing("Custom", 0, 0, 2, 5, right_panel_width=60)
+        overridden.add_symbol_legend([("light", "Light")], color="red")
+        self.assertIn("drawing-line-color-ff0000", overridden._right_panel_tables[0]["classes"])
+
+    def test_switch_legend_has_branch_circle_and_lever(self):
+        self.drawing.add_symbol_legend([("switch", "Vypínač")])
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "switch.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" height="160mm" '
+                            'viewBox="0 0 160 160"></svg>', encoding="utf-8")
+            _postprocess_right_panel(path, ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing"))
+            _postprocess_drawing_line_colors(path)
+            root = ET.parse(path).getroot()
+            sample = next(e for e in root.iter() if "symbol-legend-sample" in e.get("class", "").split())
+            self.assertEqual(sample.get("data-symbol"), "switch")
+            self.assertIn("drawing-line-color-008000", sample.get("class"))
+            self.assertEqual([e.get("d").count(" L") for e in sample], [1, 64, 2])
+            self.assertIn("Vypínač", path.read_text(encoding="utf-8"))
+
+    def test_invalid_symbol_legends_leave_tables_unchanged(self):
+        for items in ([], None, "socket", ["socket"], [("socket",)], [("unknown", "Bad")],
+                      [("socket", "")], [("socket", "Valid"), ("unknown", "Bad")]):
+            with self.subTest(items=items), self.assertRaises((TypeError, ValueError)):
+                self.drawing.add_symbol_legend(items)
+            self.assertEqual(self.drawing._right_panel_tables, [])
+        for kwargs in ({"line_width": 0}, {"color": "bad-color"}, {"title": " "}):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                self.drawing.add_symbol_legend([("socket", "Socket")], **kwargs)
+            self.assertEqual(self.drawing._right_panel_tables, [])
+        narrow = self.house.add_drawing("Narrow", 0, 0, 2, 5, right_panel_width=30)
+        with self.assertRaisesRegex(ValueError, "40 mm"):
+            narrow.add_symbol_legend([("socket", "Socket")])
 
 
 class LineLegendTests(unittest.TestCase):

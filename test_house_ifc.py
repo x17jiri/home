@@ -106,6 +106,85 @@ class FoundationDrawingTests(unittest.TestCase):
         self.assertNotIn("line_legend", [t["kind"] for t in ground_tables])
 
 
+class ElectricalDrawingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.runs = []
+        source = Path(__file__).with_name("house_ifc.py")
+        for args in (["elektro_ground"], ["elektro_ground", "--no-room-corners"]):
+            with (
+                patch.object(sys, "argv", [str(source), *args]),
+                patch.object(House, "write", return_value=Path("house.ifc")),
+                patch.object(Drawing, "render", return_value=Path("drawing.svg")) as render,
+                redirect_stdout(StringIO()),
+            ):
+                values = runpy.run_path(str(source))
+            cls.runs.append((values, render.call_args_list))
+
+    def test_ground_plan_has_all_room_corners_and_uses_electrical_pdf_path(self):
+        v, rendered = self.runs[0]
+        drawing = v["elektro_ground"]
+        self.assertEqual([call.args[0] for call in rendered], ["elektro_ground.svg"])
+        self.assertEqual(rendered[0].kwargs["pdf"], v["PDF_ELEKTRO_GROUND"])
+        self.assertEqual(list(drawing.storeys), [v["ground"]])
+        floors = v["ground"].floor_layers
+        self.assertEqual({floor.room_id for floor in floors}, {"0.01", "0.02", "0.03", "0.04"})
+        points = {f"{floor.room_id}.{i}": p for floor in floors for i, p in enumerate(floor.outline, 1)}
+        self.assertEqual(len(points), sum(len(floor.outline) for floor in floors))
+        self.assertEqual(v["elektro_ground_corners"], points)
+        labels = [ifcopenshell.util.element.get_pset(a, "BBIM_FloorCorner")
+                  for a in drawing.group.IsGroupedBy[0].RelatedObjects]
+        self.assertEqual({p["Identifier"] for p in labels if p}, set(points))
+        for p in filter(None, labels):
+            self.assertEqual(tuple(json.loads(p["Point"])), points[p["Identifier"]])
+
+    def test_disable_flag_removes_guides_but_preserves_wire_reference_coordinates(self):
+        visible, _ = self.runs[0]
+        hidden, _ = self.runs[1]
+        self.assertEqual(visible["elektro_ground_corners"], hidden["elektro_ground_corners"])
+        drawing = hidden["elektro_ground"]
+        self.assertFalse(any(ifcopenshell.util.element.get_pset(a, "BBIM_FloorCorner")
+                             for a in drawing.group.IsGroupedBy[0].RelatedObjects))
+        self.assertFalse(any("floor-corner-guide" in (ifcopenshell.util.element.get_pset(
+            a, "EPset_Annotation", "Classes") or "").split()
+            for a in drawing.group.IsGroupedBy[0].RelatedObjects))
+
+    def test_circuit_and_socket_legends(self):
+        for values, _ in self.runs:
+            drawing = values["elektro_ground"]
+            self.assertEqual(drawing.right_panel_width, 60)
+            tables = json.loads(ifcopenshell.util.element.get_pset(
+                drawing.element, "EPset_Drawing", "RightPanelTables"))
+            self.assertEqual([table["kind"] for table in tables], ["line_legend", "symbol_legend"])
+            lines, symbols = tables
+            self.assertEqual([item["description"] for item in lines["items"]],
+                             ["Zásuvkový okruh", "3-fázový okruh", "Světelný okruh"])
+            for item, color in zip(lines["items"], ("0000ff", "ff0000", "f080f0")):
+                self.assertIn(f"drawing-line-color-{color}", item["classes"])
+                self.assertIn("drawing-line-width-0p3", item["classes"])
+            self.assertEqual(symbols["items"][:2], [{"symbol": "socket", "description": "Zásuvka"},
+                                                   {"symbol": "d_socket", "description": "Dvojitá zásuvka"}])
+            self.assertEqual(len(symbols["items"]), 4)
+            self.assertEqual(symbols["items"][2]["symbol"], "light")
+            self.assertEqual(symbols["items"][2]["description"], "Světlo")
+            self.assertIn("drawing-line-color-0000ff", symbols["items"][2]["classes"])
+            self.assertEqual(symbols["items"][3], {"symbol": "switch", "description": "Vypínač"})
+
+    def test_stateful_wire_helper_is_available_with_guides_on_or_off(self):
+        for values, _ in self.runs:
+            with self.subTest(guides=values["elektro_ground_corners"]):
+                path = values["draw_elektro_line"](["-+0.03.2", "--0.01.7"], color="red")
+                actual = json.loads(ifcopenshell.util.element.get_pset(path, "BBIM_DrawingPolyLine", "Points"))
+                # User-authored routes may already have advanced these corners.
+                next_path = values["draw_elektro_line"]([
+                    "-+0.03.2", "socket,0.4,up", "--0.01.7"], color="red")
+                next_points = json.loads(ifcopenshell.util.element.get_pset(next_path, "BBIM_DrawingPolyLine", "Points"))
+                for point, following, change in zip(actual, next_points, ((-.1, .1), (-.1, -.1))):
+                    for axis in (0, 1):
+                        self.assertAlmostEqual(following[axis] - point[axis], change[axis])
+                self.assertIn(path, values["elektro_ground"].group.IsGroupedBy[0].RelatedObjects)
+
+
 class WaterDrawingTests(unittest.TestCase):
     def test_both_water_plans_have_hot_and_cold_line_legends(self):
         source = Path(__file__).with_name("house_ifc.py")

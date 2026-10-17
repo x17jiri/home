@@ -356,6 +356,101 @@ house = House("My house", asset_library="path/to/IFC4 Furniture Library.ifc")
 
 ## Automated Bonsai plans
 
+Generate the ground-floor electrical wiring draft with
+`python3 house_ifc.py elektro_ground`. It saves `elektro_ground.svg` and the PDF
+at `PDF_ELEKTRO_GROUND` under `projekt/D1.4. Zařízení Silnoproudé Elektrotechniky/`.
+The right panel includes circuit line colors (blue: zásuvkový okruh, red:
+3-fázový okruh, pink `#f080f0`: světelný okruh), single/double socket symbols,
+and symbols for a blue crossed-circle light (Světlo) and a green switch (Vypínač).
+Temporary magenta corner guides use the existing room IDs and one-based floor
+outline order, e.g. `0.01.1`. Every room floor in `ground.floor_layers` is
+included automatically; `floor_layer(room_id="0.01", ...)` sets the ID, with
+the floor name used as a fallback. No physical 3D guide geometry is added.
+
+Set `ELEKTRO_SHOW_ROOM_CORNERS = False` or run
+`python3 house_ifc.py elektro_ground --no-room-corners` to hide the guides.
+The returned `elektro_ground_corners` dictionary always remains available, so
+wire routes can reference `elektro_ground_corners["0.01.1"]` even in the final
+drawing. `drawing.add_floor_corner_labels(storey, show=True)` is reusable for
+other floor-plan drawings.
+
+Use the stateful `draw_elektro_line` helper before `elektro_ground.render(...)`:
+
+```python
+draw_elektro_line(["-+0.03.2", "--0.01.7"], style="solid", color="red", line_width=0.3)
+draw_elektro_line(["-+0.03.2", "--0.01.7"], style="dashed", color="blue", line_width=0.3)
+```
+
+The first two signs change model X and Y by 0.1 m **before** placing each point.
+For example, `-+0.03.2` first uses corner `0.03.2` minus 0.1 m in X and plus
+0.1 m in Y; the second call uses minus/plus 0.2 m. Each corner has independent
+state, shared across all sign combinations and repeated references within a
+route. Signs follow model coordinates, even when the drawing mirrors X.
+Use a literal space in either of the first two positions to keep that axis's
+current accumulated value: `" +0.04.1"` changes only Y, `"- 0.04.1"` changes
+only X, and `"  0.04.1"` changes neither. Keep both prefix positions, including
+leading spaces, inside the string.
+Failed calls leave offsets unchanged; the original corner dictionary is never
+modified. The helper works even with corner guides hidden.
+
+Append `;x,y` to a corner reference for an additional one-time shift in metres,
+e.g. `"++0.04.1;0.25,-0.05"`. The normal `++` offset still accumulates, but the
+extra `(0.25, -0.05)` applies only to this occurrence. It uses model X/Y axes,
+not page directions. Socket positions interpolate between the final, shifted
+segment endpoints.
+
+For another plan, create its own callable with
+`draw_elektro_line = ElektroLineDrawer(drawing, corners, step=0.1)`.
+Creating a new instance resets offsets. Styles, colors, printed-mm `line_width`
+and optional `name` work exactly as in `drawing.add_poly_line()`; it returns
+the resulting drawing annotation.
+
+Insert socket entries between the two corner IDs defining a segment:
+
+```python
+draw_elektro_line([
+    "-+0.03.2",
+    "socket,0.4,up",
+    "d_socket,0.8,left",
+    "--0.01.7",
+], color="blue", line_width=0.3)
+```
+
+The fraction (0–1) measures from the preceding corner to the following corner,
+after their cumulative offsets. Multiple sockets may share a segment; they do
+not bend the route or advance corner offsets. Each draws a solid dark-green
+(`#008000`) branch ending in an open semicircle. `up`, `down`, `left`, `right`
+refer to the **page**, including mirrored exports. The wire keeps its own
+style/color; sockets use its line width. The default branch is 0.225 m long and
+the semicircle radius is 0.1125 m (75% of the original size). `d_socket` adds
+a second, nested semicircle with 2/3 of the outer radius; both rims align and
+it supports the same fractions and directions as `socket`.
+Standalone/custom-sized sockets can use
+`drawing.add_socket_symbol(point, "up", branch_length=0.225, radius=0.1125)`;
+add `double=True` for a double socket. Explicit dimensions and line widths
+are used as supplied, without additional scaling.
+
+Lights use a blue circle with a diagonal X, placed directly on the route with
+`"light,0.4"` (40% between the neighboring corner points, without a branch).
+Standalone placement uses `drawing.add_light_symbol((x, y))`; its default
+radius is 0.15 m. Optional `radius`, `color`, `line_width` and `name` are supported.
+The light stays blue even when the circuit line uses another color.
+
+Switches use `"switch,0.4,up"`, just like sockets: a green branch extends from
+the point 40% along the segment to a small circle with a tilted lever and a
+short tip. Directions (`up`, `down`, `left`, `right`) refer to the page, even
+with X mirroring, and rotate the whole symbol. Standalone placement uses
+`drawing.add_switch_symbol((x, y), "up")`; optional `branch_length` (default
+0.225 m), `radius` (default 0.075 m), `color`, `line_width` and `name` are supported.
+Switch entries do not advance corner offsets and use the route's line width.
+
+For other drawings with a right panel of at least 40 mm, symbol legends can use
+`drawing.add_symbol_legend([("socket", "Zásuvka"), ("d_socket", "Dvojitá zásuvka"), ("light", "Světlo"), ("switch", "Vypínač")])`.
+They reuse symbol geometry, add no objects to the plan, and stack with other
+legends. Optional `title`, `color` and `line_width` control their appearance;
+omitting `color` uses green sockets/switches and blue lights, while an explicit color
+overrides all samples.
+
 Linear and angular dimensions, including labels and extension/reference lines,
 are placed above model fills and masks in the final SVG, PNG and PDF output.
 

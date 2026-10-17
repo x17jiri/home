@@ -61,6 +61,7 @@ __all__ = [
     "Chimney",
     "CutDefinition",
     "Drawing",
+    "ElektroLineDrawer",
     "FacadeLayer",
     "FloorLayer",
     "HorizontalFrame",
@@ -2862,6 +2863,42 @@ def _dashed_arrow_segments(
     return segments
 
 
+def _socket_symbol_paths(branch_length: float, radius: float, double: bool) -> list[list[Point]]:
+    """Shared upward socket geometry for native annotations and legend samples."""
+    paths = [[(0, 0), (0, branch_length)],
+             [(radius * cos(index * pi / 32),
+               branch_length + radius * (1 - sin(index * pi / 32)))
+              for index in range(33)]]
+    if double:
+        inner_radius = radius * 2 / 3
+        paths.append([(inner_radius * cos(index * pi / 32),
+                       branch_length + radius - inner_radius * sin(index * pi / 32))
+                      for index in range(33)])
+    return paths
+
+
+def _light_symbol_paths(radius: float) -> list[list[Point]]:
+    """Shared crossed-circle geometry, with an X inscribed in the circle."""
+    circle = [(radius * cos(index * 2 * pi / 64), radius * sin(index * 2 * pi / 64))
+              for index in range(64)]
+    circle.append(circle[0])
+    diagonal = radius / 2**0.5
+    return [circle, [(-diagonal, -diagonal), (diagonal, diagonal)],
+            [(-diagonal, diagonal), (diagonal, -diagonal)]]
+
+
+def _switch_symbol_paths(branch_length: float, radius: float) -> list[list[Point]]:
+    """Upward switch: branch, small circle and a tilted lever with a short tip."""
+    center_y = branch_length + radius
+    circle = [(radius * cos(index * 2 * pi / 64), center_y + radius * sin(index * 2 * pi / 64))
+              for index in range(64)]
+    circle.append(circle[0])
+    lever_start = (radius * .5, center_y + radius * 3**0.5 / 2)
+    lever_end = (radius * 1.5, center_y + radius * 3 * 3**0.5 / 2)
+    tip = (lever_end[0] + radius * .75 * 3**0.5 / 2, lever_end[1] - radius * .75 / 2)
+    return [[(0, 0), (0, branch_length)], circle, [lever_start, lever_end, tip]]
+
+
 def _material_legend_svg(
     table: Mapping[str, object],
     *,
@@ -2871,9 +2908,11 @@ def _material_legend_svg(
     units_per_mm: float,
     layout_scale: float | None = None,
 ) -> tuple[str, float]:
-    """Return an appearance legend (material fills or line styles) and height."""
+    """Return an appearance legend (materials, lines or symbols) and height."""
     is_line_legend = table.get("kind") == "line_legend"
-    title = str(table.get("title", "LINE LEGEND" if is_line_legend else "MATERIAL LEGEND"))
+    is_symbol_legend = table.get("kind") == "symbol_legend"
+    legend_class = "symbol-legend" if is_symbol_legend else "line-legend" if is_line_legend else "material-legend"
+    title = str(table.get("title", legend_class.replace("-", " ").upper()))
     supplied_items = table.get("items", [])
     items = supplied_items if isinstance(supplied_items, list) else []
     width_mm = width / units_per_mm
@@ -2887,30 +2926,31 @@ def _material_legend_svg(
     header_height_mm = 12.0 * layout_scale
     line_height_mm = 5.4 * layout_scale
     minimum_row_height_mm = 12.0 * layout_scale
-    normalised_items: list[tuple[str, list[str], float]] = []
+    normalised_items: list[tuple[str, list[str], float, str]] = []
     for supplied_item in items:
         if not isinstance(supplied_item, dict):
             continue
-        pattern = str(supplied_item.get("classes" if is_line_legend else "pattern", ""))
+        pattern = str(supplied_item.get("symbol" if is_symbol_legend else "classes" if is_line_legend else "pattern", ""))
         description = str(supplied_item.get("description", ""))
         lines = description.splitlines() or [""]
         row_height_mm = max(
             minimum_row_height_mm,
             2 * padding_mm + len(lines) * line_height_mm,
         )
-        normalised_items.append((pattern, lines, row_height_mm))
+        classes = str(supplied_item.get("classes", table.get("classes", "")))
+        normalised_items.append((pattern, lines, row_height_mm, classes))
 
     u = units_per_mm
     header_height = header_height_mm * u
     swatch_width = swatch_width_mm * u
     padding = padding_mm * u
     line_height = line_height_mm * u
-    row_heights = [row_height_mm * u for _, _, row_height_mm in normalised_items]
+    row_heights = [row_height_mm * u for _, _, row_height_mm, _ in normalised_items]
     height = header_height + sum(row_heights)
     right = x + width
     header_bottom = y + header_height
     parts = [
-        f'<g class="right-panel-table {"line-legend" if is_line_legend else "material-legend"}">',
+        f'<g class="right-panel-table {legend_class}">',
         (
             f'<rect class="right-panel-table-outline" x="{x:.6g}" '
             f'y="{y:.6g}" width="{width:.6g}" height="{height:.6g}"/>'
@@ -2938,15 +2978,39 @@ def _material_legend_svg(
 
     row_y = header_bottom
     available_patterns = _drawing_pattern_ids()
-    for (pattern, lines, _), row_height in zip(normalised_items, row_heights):
-        is_batting = not is_line_legend and pattern in {"rockwool-wave", "pavatex-wave"}
+    for (pattern, lines, _, classes), row_height in zip(normalised_items, row_heights):
+        is_batting = not is_line_legend and not is_symbol_legend and pattern in {"rockwool-wave", "pavatex-wave"}
         is_pavatex = pattern == "pavatex-wave"
         fill = (
             f"url(#{pattern})"
             if pattern in available_patterns and not is_batting
             else "#c9b56d" if is_pavatex else "white"
         )
-        if is_line_legend:
+        if is_symbol_legend:
+            # Fit the shared symbol shape to the sample cell; explicit SVG
+            # coordinates keep the printed stroke width independent of scale.
+            if pattern == "light":
+                paths = _light_symbol_paths(.15)
+            elif pattern == "switch":
+                paths = _switch_symbol_paths(.225, .075)
+            else:
+                paths = _socket_symbol_paths(.225, .1125, pattern == "d_socket")
+            sample_points = [point for path in paths for point in path]
+            min_x, min_y = np.min(sample_points, axis=0)
+            max_x, max_y = np.max(sample_points, axis=0)
+            symbol_width, symbol_height = max_x - min_x, max_y - min_y
+            sample_scale = min((swatch_width - 2 * padding) / symbol_width,
+                               (row_height - 2 * padding) / symbol_height)
+            origin_x = x + swatch_width / 2 - (min_x + max_x) * sample_scale / 2
+            origin_y = row_y + row_height / 2 + (min_y + max_y) * sample_scale / 2
+            sample_classes = escape(classes, quote=True)
+            parts.append(f'<g class="symbol-legend-sample {sample_classes}" data-symbol="{escape(pattern, quote=True)}">')
+            for path in paths:
+                d = "M" + " L".join(f"{origin_x + px * sample_scale:.6g},{origin_y - py * sample_scale:.6g}"
+                                     for px, py in path)
+                parts.append(f'<path d="{d}"/>')
+            parts.append('</g>')
+        elif is_line_legend:
             # Reuse the source annotation's exact CSS classes, so sample
             # thickness/dashes follow the drawing stylesheet automatically.
             sample_classes = f"line-legend-sample {escape(pattern, quote=True)}"
@@ -3960,6 +4024,7 @@ def _postprocess_right_panel(
         table_renderer = {
             "material_legend": _material_legend_svg,
             "line_legend": _material_legend_svg,
+            "symbol_legend": _material_legend_svg,
             "room_legend": _room_legend_svg,
             "lintel_legend": _lintel_legend_svg,
             "notes": _notes_svg,
@@ -4339,6 +4404,35 @@ def _postprocess_dimension_overlays(svg_path: Path) -> None:
         return
     overlay = ('  <g class="dimension-overlays">\n'
                + "\n".join(elements) + "\n  </g>\n")
+    svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
+
+
+def _postprocess_floor_corner_overlays(svg_path: Path) -> None:
+    """Keep temporary floor-corner guides above furniture, fills and masks."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="floor-corner-overlays"' in svg:
+        return
+    elements = []
+
+    def collect(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = {token for value in re.findall(r'\bclass="([^"]*)"', element)
+                   for token in value.split()}
+        if "floor-corner-guide" not in classes:
+            return element
+        elements.append(element.strip())
+        return ""
+
+    updated = re.sub(
+        r"<(?:line|polyline|path|circle|ellipse|polygon)\b[^>]*"
+        r"(?:/>|>\s*</(?:line|polyline|path|circle|ellipse|polygon)>)"
+        r"|<text\b[^>]*?(?<!/)>.*?</text>",
+        collect, svg, flags=re.DOTALL,
+    )
+    closing = updated.rfind("</svg>")
+    if not elements or closing < 0:
+        return
+    overlay = '  <g class="floor-corner-overlays">\n' + "\n".join(elements) + "\n  </g>\n"
     svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
 
 
@@ -5792,6 +5886,7 @@ def _render_existing_drawing(
     )
     _postprocess_change_floor_symbol_overlays(absolute_output)
     _postprocess_dimension_overlays(absolute_output)
+    _postprocess_floor_corner_overlays(absolute_output)
     _postprocess_drawing_line_colors(absolute_output)
     resolved_title = title if title is not None else Path(pdf if pdf is not None else output_path).stem
     _postprocess_drawing_title(absolute_output, resolved_title)
@@ -8019,6 +8114,116 @@ class House:
         )
 
 
+class ElektroLineDrawer:
+    """Callable polyline helper with cumulative offsets for floor-corner IDs.
+
+    Each reference starts with two signs, for model X and Y respectively:
+    ``-+0.03.2`` moves corner ``0.03.2`` by (-step, +step) before using it.
+    A space in either sign position keeps that axis's accumulated value.
+    Offsets accumulate independently per corner, including repeated references
+    within one route. Export mirroring is handled by Drawing, not by the signs.
+    An optional ``;x,y`` suffix adds a one-time model-coordinate shift in metres
+    to that point only; it never changes the accumulated corner offsets.
+    Between corner references, ``socket,0.4,up`` branches a socket 40% along
+    that segment; ``d_socket`` adds a double socket. Socket directions refer
+    to the page, not model axes.
+    ``light,0.4`` places a crossed-circle light directly on the segment.
+    ``switch,0.4,up`` branches a circle-and-lever switch like a socket.
+    Failed calls do not advance offsets. Create a new helper to start over.
+    """
+
+    def __init__(
+        self, drawing: Drawing, corners: Mapping[str, Point], *, step: Number = 0.1,
+    ) -> None:
+        if not isinstance(drawing, Drawing):
+            raise TypeError("drawing must be a Drawing")
+        if drawing.view != "plan":
+            raise ValueError("ElektroLineDrawer requires a plan drawing")
+        if not isinstance(corners, Mapping):
+            raise TypeError("corners must map corner IDs to 2D points")
+        step = _number(step, "step")
+        if step <= 0:
+            raise ValueError("step must be greater than zero")
+        self._drawing = drawing
+        self._step = step
+        self._corners = {_name(key, "corner ID"): _point(point, f"corner {key}")
+                         for key, point in corners.items()}
+        self._offsets: dict[str, tuple[int, int]] = {}
+
+    def __call__(
+        self,
+        corners: Sequence[str],
+        *,
+        style: Literal["solid", "dashed", "dashed-arrows"] = "solid",
+        color: str = "black",
+        line_width: Number = 0.1,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a route with socket/d_socket/switch,fraction,direction or light,fraction."""
+        if isinstance(corners, (str, bytes)):
+            raise TypeError("corners must be a sequence of signed corner IDs")
+        try:
+            references = list(corners)
+        except TypeError as error:
+            raise TypeError("corners must be a sequence of signed corner IDs") from error
+        if len(references) < 2:
+            raise ValueError("corners must contain at least two references")
+        offsets = self._offsets.copy()
+        points = []
+        symbols = []
+        increments = {"+": 1, "-": -1, " ": 0}
+        for reference in references:
+            if not isinstance(reference, str):
+                raise TypeError("each corner reference must be a string")
+            reference, separator, shift_text = reference.partition(";")
+            if "," in reference or reference in {"socket", "d_socket", "light", "switch"}:
+                parts = [part.strip() for part in reference.split(",")]
+                if (separator or parts[0] not in {"socket", "d_socket", "light", "switch"}
+                        or len(parts) != (2 if parts[0] == "light" else 3)):
+                    raise ValueError("symbol entry must be 'socket/d_socket/switch,fraction,direction' or 'light,fraction'")
+                fraction = _number(parts[1], "symbol fraction")
+                if not 0 <= fraction <= 1:
+                    raise ValueError("symbol fraction must be between 0 and 1")
+                direction = None if parts[0] == "light" else _enum(parts[2], "symbol direction", {"UP", "DOWN", "LEFT", "RIGHT"}).lower()
+                if not points:
+                    raise ValueError("symbol entries must be between two corner references")
+                symbols.append((len(points) - 1, fraction, direction, parts[0]))
+                continue
+            if len(reference) < 3 or reference[0] not in increments or reference[1] not in increments:
+                raise ValueError(f"corner reference {reference!r} must start with two '+', '-' or space characters and a corner ID")
+            key = reference[2:]
+            if key not in self._corners:
+                raise ValueError(f"unknown corner ID {key!r}")
+            shift_x, shift_y = 0.0, 0.0
+            if separator:
+                shift_parts = shift_text.split(",")
+                if ";" in shift_text or len(shift_parts) != 2:
+                    raise ValueError("corner shift must use ';x,y'")
+                shift_x, shift_y = _point(shift_parts, "corner shift")
+            dx, dy = offsets.get(key, (0, 0))
+            dx += increments[reference[0]]
+            dy += increments[reference[1]]
+            offsets[key] = (dx, dy)
+            x, y = self._corners[key]
+            points.append((x + dx * self._step + shift_x, y + dy * self._step + shift_y))
+        if any(index >= len(points) - 1 for index, _, _, _ in symbols):
+            raise ValueError("symbol entries must be between two corner references")
+        annotation = self._drawing.add_poly_line(
+            points, style=style, color=color, line_width=line_width, name=name,
+        )
+        for index, fraction, direction, kind in symbols:
+            a, b = points[index], points[index + 1]
+            point = tuple(a[axis] + fraction * (b[axis] - a[axis]) for axis in (0, 1))
+            if kind == "light":
+                self._drawing.add_light_symbol(point, line_width=line_width)
+            elif kind == "switch":
+                self._drawing.add_switch_symbol(point, direction, line_width=line_width)
+            else:
+                self._drawing.add_socket_symbol(point, direction, double=kind == "d_socket", line_width=line_width)
+        self._offsets = offsets
+        return annotation
+
+
 class Drawing:
     """A persisted Bonsai plan or elevation drawing belonging to a House."""
 
@@ -8112,6 +8317,9 @@ class Drawing:
         self._text_count = 0
         self._entrance_arrow_count = 0
         self._change_floor_symbol_count = 0
+        self._socket_symbol_count = 0
+        self._light_symbol_count = 0
+        self._switch_symbol_count = 0
         self._hexagon_marker_count = 0
         self._note_count = 0
         self._cut_symbol_count = 0
@@ -9234,6 +9442,62 @@ class Drawing:
         )
         return self
 
+    def add_symbol_legend(
+        self,
+        items: Sequence[tuple[Literal["socket", "d_socket", "light", "switch"], str]],
+        *,
+        title: str = "LEGENDA SYMBOLŮ",
+        color: str | None = None,
+        line_width: Number = 0.3,
+    ) -> Drawing:
+        """Add electrical symbol samples to the panel, without plan geometry.
+
+        Items are (symbol, description) pairs; supported symbols are socket
+        and d_socket (green), switch (green), or light (blue). Samples share the native symbol
+        geometry; color overrides all default colors when supplied. The line
+        width is in printed millimetres. Tables persist in IFC and
+        stack in call order with line and material legends.
+        """
+        if self.right_panel_width < 40:
+            raise ValueError("add_symbol_legend requires right_panel_width of at least 40 mm")
+        title = _name(title, "title")
+        _, _, classes = _drawing_line_appearance("solid", "#008000" if color is None else color)
+        _, width_class = _drawing_line_width(line_width)
+        if isinstance(items, (str, bytes)):
+            raise TypeError("items must be a sequence of symbol-description pairs")
+        try:
+            supplied_items = list(items)
+        except TypeError as error:
+            raise TypeError("items must be a sequence of symbol-description pairs") from error
+        if not supplied_items:
+            raise ValueError("items must contain at least one symbol")
+        normalised_items = []
+        for index, item in enumerate(supplied_items, start=1):
+            if isinstance(item, (str, bytes)):
+                raise TypeError(f"item {index} must contain a symbol and description")
+            try:
+                symbol, description = item
+            except (TypeError, ValueError) as error:
+                raise TypeError(f"item {index} must contain a symbol and description") from error
+            symbol = _name(symbol, f"item {index} symbol")
+            if symbol not in {"socket", "d_socket", "light", "switch"}:
+                raise ValueError(f"item {index} symbol must be socket, d_socket, light or switch")
+            description = _name(description, f"item {index} description")
+            item = {"symbol": symbol, "description": description}
+            if symbol == "light" and color is None:
+                _, _, light_classes = _drawing_line_appearance("solid", "blue")
+                item["classes"] = f"IfcAnnotation PredefinedType-LINEWORK {light_classes} {width_class}"
+            normalised_items.append(item)
+        self._right_panel_tables.append({
+            "kind": "symbol_legend", "title": title, "items": normalised_items,
+            "classes": f"IfcAnnotation PredefinedType-LINEWORK {classes} {width_class}",
+        })
+        ifcopenshell.api.pset.edit_pset(
+            self.house.model, pset=self._drawing_pset,
+            properties={"RightPanelTables": json.dumps(self._right_panel_tables, ensure_ascii=False)},
+        )
+        return self
+
     def add_room_legend(
         self,
         *,
@@ -9853,6 +10117,150 @@ class Drawing:
             {"Center": json.dumps(center), "Radius": radius, "Style": style, "Color": color},
         )
 
+    def add_socket_symbol(
+        self,
+        point: Point,
+        direction: Literal["up", "down", "left", "right"] = "up",
+        *,
+        branch_length: Number = 0.225,
+        radius: Number = 0.1125,
+        double: bool = False,
+        color: str = "#008000",
+        line_width: Number = 0.1,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Branch from a plan point to an open semicircular socket symbol.
+
+        Directions refer to the rendered page, including mirrored exports.
+        The semicircle opens in the branch direction, matching an upward U
+        with a stem below it. Branch length and radius use model metres;
+        line_width uses printed millimetres. With double=True a second,
+        concentric semicircle (2/3 radius) marks a double socket. The symbol
+        is drawing-only.
+        """
+        self._require_plan_view("add_socket_symbol")
+        point = _point(point, "point")
+        direction = _enum(direction, "direction", {"UP", "DOWN", "LEFT", "RIGHT"}).lower()
+        branch_length = _number(branch_length, "branch_length")
+        radius = _number(radius, "radius")
+        if branch_length <= 0 or radius <= 0:
+            raise ValueError("branch_length and radius must be greater than zero")
+        if not isinstance(double, bool):
+            raise TypeError("double must be a boolean")
+        _, color, classes = _drawing_line_appearance("solid", color)
+        line_width, width_class = _drawing_line_width(line_width)
+        symbol_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(point, "add_socket_symbol")
+        along = np.array({"up": (0, 1), "down": (0, -1),
+                          "left": (-1, 0), "right": (1, 0)}[direction])
+        across = np.array((along[1], -along[0]))
+        # As with floor-change arrows, compensate local X for export mirroring.
+        screen_x_sign = -1 if self.house.mirror_x else 1
+        paths = _socket_symbol_paths(branch_length, radius, double)
+        model = self.house.model
+        curves = []
+        for path in paths:
+            local_points = []
+            for x, y in path:
+                local = across * x + along * y
+                local_points.append((float(local[0] * screen_x_sign), float(local[1])))
+            curves.append(model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(local_points), None, False,
+            ))
+        self._socket_symbol_count += 1
+        return self._add_primitive_annotation(
+            symbol_name or f"{self.name} {'Double Socket' if double else 'Socket'} Symbol {self._socket_symbol_count}",
+            "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)],
+            f"{classes} {width_class} socket-symbol", "BBIM_SocketSymbol",
+            {"Point": json.dumps(point), "Direction": direction, "BranchLength": branch_length,
+             "Radius": radius, "Double": double, "Color": color, "LineWidth": line_width},
+        )
+
+    def add_switch_symbol(
+        self,
+        point: Point,
+        direction: Literal["up", "down", "left", "right"] = "up",
+        *,
+        branch_length: Number = 0.225,
+        radius: Number = 0.075,
+        color: str = "#008000",
+        line_width: Number = 0.1,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Branch from a plan point to a small circle with a tilted switch lever.
+
+        Directions refer to the page even when model X is mirrored, like
+        add_socket_symbol(). The entire symbol rotates with the branch.
+        Lengths use model metres and line_width uses printed millimetres.
+        """
+        self._require_plan_view("add_switch_symbol")
+        point = _point(point, "point")
+        direction = _enum(direction, "direction", {"UP", "DOWN", "LEFT", "RIGHT"}).lower()
+        branch_length = _number(branch_length, "branch_length")
+        radius = _number(radius, "radius")
+        if branch_length <= 0 or radius <= 0:
+            raise ValueError("branch_length and radius must be greater than zero")
+        _, color, classes = _drawing_line_appearance("solid", color)
+        line_width, width_class = _drawing_line_width(line_width)
+        symbol_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(point, "add_switch_symbol")
+        along = np.array({"up": (0, 1), "down": (0, -1),
+                          "left": (-1, 0), "right": (1, 0)}[direction])
+        across = np.array((along[1], -along[0]))
+        screen_x_sign = -1 if self.house.mirror_x else 1
+        model = self.house.model
+        curves = []
+        for path in _switch_symbol_paths(branch_length, radius):
+            local_points = []
+            for x, y in path:
+                local = across * x + along * y
+                local_points.append((float(local[0] * screen_x_sign), float(local[1])))
+            curves.append(model.createIfcIndexedPolyCurve(
+                model.createIfcCartesianPointList2D(local_points), None, False,
+            ))
+        self._switch_symbol_count += 1
+        return self._add_primitive_annotation(
+            symbol_name or f"{self.name} Switch Symbol {self._switch_symbol_count}",
+            "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)],
+            f"{classes} {width_class} switch-symbol", "BBIM_SwitchSymbol",
+            {"Point": json.dumps(point), "Direction": direction, "BranchLength": branch_length,
+             "Radius": radius, "Color": color, "LineWidth": line_width},
+        )
+
+    def add_light_symbol(
+        self,
+        center: Point,
+        *,
+        radius: Number = 0.15,
+        color: str = "blue",
+        line_width: Number = 0.1,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a blue circle with an inscribed diagonal X (světlo) in a plan.
+
+        The center and radius use model metres; line_width uses printed mm.
+        This drawing-only symbol has no physical 3D geometry or branch stem.
+        """
+        self._require_plan_view("add_light_symbol")
+        center = _point(center, "center")
+        radius = _number(radius, "radius")
+        if radius <= 0:
+            raise ValueError("radius must be greater than zero")
+        _, color, classes = _drawing_line_appearance("solid", color)
+        line_width, width_class = _drawing_line_width(line_width)
+        symbol_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(center, "add_light_symbol")
+        model = self.house.model
+        curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(path), None, False)
+                  for path in _light_symbol_paths(radius)]
+        self._light_symbol_count += 1
+        return self._add_primitive_annotation(
+            symbol_name or f"{self.name} Light Symbol {self._light_symbol_count}",
+            "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)],
+            f"{classes} {width_class} light-symbol", "BBIM_LightSymbol",
+            {"Center": json.dumps(center), "Radius": radius, "Color": color, "LineWidth": line_width},
+        )
+
     def add_drainage_stack(
         self,
         center: Point,
@@ -10271,6 +10679,79 @@ class Drawing:
             "BBIM_DrawingText", {"Point": json.dumps(point), "Text": text, "FontSize": font_size,
                                  "Color": color, "Alignment": alignment},
         )
+
+    def add_floor_corner_labels(
+        self, storey: Storey, *, show: bool = True,
+        font_size: Number = 1.8, color: str = "#b00060",
+    ) -> dict[str, Point]:
+        """Mark every room-floor outline vertex as ``room_id.number``.
+
+        Uses all FLOOR layers created in the storey, their optional room_id
+        (falling back to their names), and one-based outline order. Returns
+        unmirrored model XY coordinates even when show=False, so wire routes
+        can keep using the same IDs after the temporary guides are hidden.
+        Labels use small circles/leaders, avoid one another where possible,
+        and render above model geometry. No physical 3D elements are added.
+        """
+        self._require_plan_view("add_floor_corner_labels")
+        if not isinstance(storey, Storey) or storey.house is not self.house:
+            raise ValueError("storey must belong to this house")
+        if not isinstance(show, bool):
+            raise TypeError("show must be a boolean")
+        font_size = _number(font_size, "font_size")
+        if font_size <= 0:
+            raise ValueError("font_size must be greater than zero")
+        _, color, _ = _drawing_line_appearance("solid", color)
+        entries = [(f"{floor.room_id or floor.Name}.{number}", point, floor, number)
+                   for floor in storey.floor_layers if floor.PredefinedType == "FLOOR"
+                   for number, point in enumerate(floor.outline, start=1)]
+        points = {identifier: point for identifier, point, _, _ in entries}
+        if len(points) != len(entries):
+            raise ValueError("floor corner IDs must be unique; assign distinct room_id values")
+        if not show:
+            return points
+        scale = float(Fraction(str(ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Scale"))))
+        text_height = font_size / (1000 * scale)
+        gap = 0.001 / scale
+        occupied = []
+        model = self.house.model
+        for identifier, (x, y), floor, number in entries:
+            polygon = Polygon(floor.outline)
+            inside = polygon.representative_point()
+            sx, sy = (1 if inside.x >= x else -1), (1 if inside.y >= y else -1)
+            width, height = len(identifier) * text_height * 0.6, text_height * 1.35
+            candidates = []
+            for extra in (0, 2 * gap, 4 * gap, 7 * gap, 10 * gap):
+                for dx, dy in ((sx, sy), (-sx, sy), (sx, -sy), (-sx, -sy)):
+                    cx, cy = x + dx * (width / 2 + gap + extra), y + dy * (height / 2 + gap + extra)
+                    bounds = Polygon(((cx-width/2, cy-height/2), (cx+width/2, cy-height/2),
+                                      (cx+width/2, cy+height/2), (cx-width/2, cy+height/2)))
+                    score = (sum(bounds.intersects(other) for other in occupied),
+                             not polygon.covers(bounds), (cx-x)**2 + (cy-y)**2)
+                    candidates.append((score, (cx, cy), bounds))
+            _, label_point, bounds = min(candidates, key=lambda candidate: candidate[0])
+            occupied.append(bounds.buffer(gap / 2))
+            dx, dy = label_point[0] - x, label_point[1] - y
+            fraction = min(width / (2 * abs(dx)), height / (2 * abs(dy)))
+            leader_end = (label_point[0] - fraction * dx, label_point[1] - fraction * dy)
+            leader = self.add_line((x, y), leader_end, color=color, line_width=0.07,
+                                   name=f"{self.name} corner {identifier} Leader")
+            marker = self.add_circle((x, y), radius=0.0003 / scale, color=color,
+                                     name=f"{self.name} corner {identifier} Point")
+            label = self.add_text(label_point, identifier, font_size=font_size, color=color,
+                                  name=f"{self.name} corner {identifier}")
+            for annotation in (leader, marker, label):
+                properties = ifcopenshell.util.element.get_pset(annotation, "EPset_Annotation")
+                ifcopenshell.api.pset.edit_pset(
+                    model, pset=model.by_id(properties["id"]),
+                    properties={"Classes": properties["Classes"] + " floor-corner-guide"},
+                )
+            pset = ifcopenshell.api.pset.add_pset(model, product=label, name="BBIM_FloorCorner")
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+                "Floor": floor.GlobalId, "RoomIdentifier": floor.room_id or floor.Name,
+                "CornerIndex": number, "Point": json.dumps((x, y)), "Identifier": identifier,
+            })
+        return points
 
     def add_line(
         self,
@@ -15161,6 +15642,7 @@ class FloorLayer(ifcopenshell.entity_instance):
         layers: tuple[tuple[str, float], ...],
         insulation_thickness: float,
         placement: np.ndarray,
+        room_id: str | None = None,
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "storey", storey)
@@ -15177,6 +15659,7 @@ class FloorLayer(ifcopenshell.entity_instance):
             thickness - insulation_thickness,
         )
         object.__setattr__(self, "placement", placement)
+        object.__setattr__(self, "room_id", room_id)
 
     @property
     def element(self) -> ifcopenshell.entity_instance:
@@ -16718,11 +17201,17 @@ class Storey:
         self._footing_count = 0
         self._ring_beam_count = 0
         self._walls: list[Wall] = []
+        self._floor_layers: list[FloorLayer] = []
 
     @property
     def walls(self) -> tuple[Wall, ...]:
         """Return walls created in this storey, in insertion order."""
         return tuple(self._walls)
+
+    @property
+    def floor_layers(self) -> tuple[FloorLayer, ...]:
+        """Return floor layers created in this storey, in insertion order."""
+        return tuple(self._floor_layers)
 
     def add_walls_from(
         self,
@@ -17383,6 +17872,7 @@ class Storey:
         insulation_material: str | None = None,
         buildup_material: str = "Floor build-up",
         start_height: Number = 0,
+        room_id: str | None = None,
         kind: SlabKind = "FLOOR",
         load_bearing: bool = False,
         color: str | None = None,
@@ -17402,8 +17892,12 @@ class Storey:
         material layers: insulation at the bottom and ``buildup_material``
         above it.  Their combined thickness remains equal to ``thickness``.
         With no insulation, the slab consists only of ``buildup_material``.
+
+        ``room_id`` optionally associates a room identifier with this floor
+        for plan labels such as those from ``add_floor_corner_labels()``.
         """
         layer_name = _name(name, "name")
+        room_id = _name(room_id, "room_id") if room_id is not None else None
         buildup_material_name = _name(
             buildup_material, "buildup_material"
         )
@@ -17484,6 +17978,7 @@ class Storey:
             layers=material_layers,
             insulation_thickness=insulation_thickness,
             placement=placement,
+            room_id=room_id,
         )
         ifcopenshell.api.spatial.assign_container(
             model,
@@ -17641,6 +18136,8 @@ class Storey:
             "InsulationThickness": insulation_thickness,
             "BuildupMaterial": buildup_material_name,
         }
+        if room_id is not None:
+            layer_properties["RoomIdentifier"] = room_id
         if insulation_material_name is not None:
             layer_properties["InsulationMaterial"] = (
                 insulation_material_name
@@ -17650,6 +18147,7 @@ class Storey:
             pset=layer_pset,
             properties=layer_properties,
         )
+        self._floor_layers.append(layer)
         return layer
 
     def ceiling_layer(

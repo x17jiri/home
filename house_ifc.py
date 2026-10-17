@@ -121,6 +121,13 @@ PDF_KANAL_UPPER = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Kanalizace - Půdorys p
 PDF_VODA_GROUND = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Vodovod - Půdorys 1.NP")
 PDF_VODA_UPPER = DIR_ZDRAVOTECHNICKE_INSTALACE.add_pdf("Vodovod - Půdorys podkroví")
 
+DIR_ELEKTRO = PDFFolder(
+	"D1.4.", "projekt/D1.4. Zařízení Silnoproudé Elektrotechniky/",
+)
+PDF_ELEKTRO_GROUND = DIR_ELEKTRO.add_pdf("Elektro - Půdorys 1.NP")
+# Temporary wiring references; --no-room-corners also hides these guides.
+ELEKTRO_SHOW_ROOM_CORNERS = True
+
 @dataclass(frozen=True)
 class SplitRafter:
 	"""A main rafter divided at an absolute XY point inside a roof opening."""
@@ -395,8 +402,10 @@ STAIR_STRINGER_HEIGHT = 0.30
 GYM_DEPTH = 2.01
 pokoj_dole = ground.floor_layer(
 	"Pokoj",
+	room_id="0.02",
 	outline=(
 		(BWT, BWT+GYM_DEPTH+BWT),
+		(BWT+CUT_WIDTH, BWT+GYM_DEPTH+BWT),
 		(wall2_x-BWT, BWT+GYM_DEPTH+BWT),
 		(wall2_x-BWT, HOUSE_DEPTH-BWT),
 		(BWT, HOUSE_DEPTH-BWT),
@@ -466,6 +475,7 @@ DRAINAGE_STACK_X = wall3_x + 0.1 + 0.12
 DRAINAGE_STACK_Y = wall_zachod_nahore_y - 0.1 - 0.1
 kuchyn = ground.floor_layer(
 	"Kuchyn",
+	room_id="0.01",
 	outline=(
 		(wall2_x, BWT+CHODBA_DEPTH+0.115),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.115),
@@ -488,6 +498,7 @@ kuchyn = ground.floor_layer(
 )
 chodba = ground.floor_layer(
 	"Chodba",
+	room_id="0.04",
 	outline=(
 		(BWT+CUT_WIDTH, BWT),
 		(wall3_x-BWT, BWT),
@@ -504,6 +515,7 @@ chodba = ground.floor_layer(
 )
 koupelna = ground.floor_layer(
 	"Koupelna",
+	room_id="0.03",
 	outline=(
 		(wall3_x, BWT),
 		(HOUSE_WIDTH-BWT, BWT),
@@ -3335,6 +3347,158 @@ if "found" in sys.argv:
 
 	drawing1.render("found.svg", pdf=PDF_FOUND)
 
+if "elektro_ground" in sys.argv:
+	elektro_ground = house.add_drawing(
+		"elektro_ground",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=GROUND_FLOOR_THICKNESS+2.05,
+		radius=8.5,
+		storeys=[ground],
+		door_annotations=False,
+		right_panel_width=60,
+	)
+	elektro_ground.add_line_legend([
+		{"color": "blue", "line_width": 0.3, "description": "Zásuvkový okruh"},
+		{"color": "red", "line_width": 0.3, "description": "3-fázový okruh"},
+		{"color": "#f080f0", "line_width": 0.3, "description": "Světelný okruh"},
+	])
+	elektro_ground.add_symbol_legend([
+		("socket", "Zásuvka"),
+		("d_socket", "Dvojitá zásuvka"),
+		("light", "Světlo"),
+		("switch", "Vypínač"),
+	])
+	elektro_ground.add_stair_annotation(main_stairs)
+	elektro_ground.add_stair_landing_annotation(middle_stair_landing)
+	elektro_ground.add_stair_annotation(gallery_stairs)
+	elektro_ground.add_chimney_annotation(chimney)
+	elektro_ground_corners = elektro_ground.add_floor_corner_labels(
+		ground,
+		show=ELEKTRO_SHOW_ROOM_CORNERS and "--no-room-corners" not in sys.argv,
+	)
+	draw_elektro_line = ElektroLineDrawer(elektro_ground, elektro_ground_corners)
+
+	# zasuvky kuchyn
+	draw_elektro_line([
+		"  0.04.1;1.5,0.1",
+		" +0.03.1",
+		"-+0.03.2",
+		"- 0.03.3",
+		"-+0.01.6",
+		"++0.01.5",
+		"-+0.01.2",
+		"d_socket,1,up",
+		"  0.01.2;-1,0",
+	], color="blue", line_width=0.3)
+
+	draw_elektro_line([
+		"  0.04.1;1.5,0.1",
+		"  0.03.1",
+		"  0.03.2",
+		"  0.03.3",
+		"  0.01.6",
+		"d_socket,0.1,right",
+		"d_socket,0.4,right",
+		"d_socket,0.6,right",
+		"d_socket,0.8,right",
+		"d_socket,0.9,right",
+		"--0.01.7",
+		"+-0.01.8",
+		"--0.01.11",
+		"d_socket,0.2,down",
+		"d_socket,0.5,down",
+		"d_socket,0.8,down",
+		"+-0.01.12",
+		"d_socket,1,left",
+		"+ 0.01.1;0,2",
+	], color="blue", line_width=0.3)
+
+	# zasuvka trouba
+	draw_elektro_line([
+		"  0.04.1;1.5,0.2",
+		" +0.03.1",
+		"-+0.03.2",
+		"- 0.03.3",
+		"-+0.01.6",
+		"socket,1,right",
+		"  0.01.6;0,1",
+	], color="red", line_width=0.3)
+
+	# zasuvky koupelna
+	draw_elektro_line([
+		"  0.04.1;1.5,0.3",
+		" +0.03.1",
+		"d_socket,0.4,up",
+		"d_socket,0.75,up",
+		"-+0.03.2",
+		"d_socket,1,right",
+		"  0.03.2;0,0.7",
+	], color="blue", line_width=0.3)
+
+	# zasuvky pokoj
+	draw_elektro_line([
+		"  0.04.1;1.0,0.1",
+		"  0.04.1;0.1,0.1",
+		"+-0.04.6",
+		"++0.02.2",
+		"d_socket,0.5,up",
+		"++0.02.1",
+		"d_socket,0.1,left",
+		"d_socket,0.9,left",
+		"+-0.02.5",
+		"d_socket,0.1,down",
+		"d_socket,0.9,down",
+		"--0.02.4",
+		"d_socket,0.1,right",
+		"d_socket,0.9,right",
+		"-+0.02.3",
+	], color="blue", line_width=0.3)
+
+	# svetlo kuchyn
+	draw_elektro_line([
+		"  0.04.1;1.5,0.5",
+		"+-0.04.5",
+		"++0.01.1",
+		"  0.01.1;2.3,0",
+		"switch,0.1,right",
+		"light,1",
+		"  0.01.1;2.3,2.5",
+		"light,1",
+		"  0.01.1;5.2,2.5",
+	], color="#f080f0", line_width=0.3)
+
+	# svetlo koupelna
+	draw_elektro_line([
+		"  0.04.1;1.5,0.4",
+		"++0.03.1",
+		"switch,0.9,left",
+		"  0.03.1;0,1",
+		"light,1",
+		"  0.03.1;1,1",
+	], color="#f080f0", line_width=0.3)
+
+	# svetlo pokoj
+	draw_elektro_line([
+		"  0.04.1;1.0,0.2",
+		"  0.04.1;0.2,0.2",
+		"++0.02.2",
+		"switch,0.1,left",
+		"light,1",
+		"  0.02.2;-0.5,3",
+	], color="#f080f0", line_width=0.3)
+
+	# svetlo kuchyn
+	draw_elektro_line([
+		"  0.04.1;1.3,0.5",
+		"  0.04.1;1.5,1.7",
+		"light,1",
+		"  0.04.1;3.5,1.5",
+		"  0.04.1;4.0,2.4",
+	], color="#f080f0", line_width=0.3)
+
+	elektro_ground.render("elektro_ground.svg", pdf=PDF_ELEKTRO_GROUND)
+
 if "voda_ground" in sys.argv:
 	drawing1 = house.add_drawing(
 		"voda_ground",
@@ -3548,28 +3712,28 @@ if "ground" in sys.argv:
 
 	drawing1.add_room_annotation(
 		(wall3_x - 2.5, HOUSE_DEPTH - 2.5),
-		identifier="0.01",
+		identifier=kuchyn.room_id,
 		description="Obývak s KK",
 		area=kuchyn.area,
 		window_area=window_area(window_obyvak, window_kk),
 	)
 	drawing1.add_room_annotation(
 		(1.5, 6),
-		identifier="0.02",
+		identifier=pokoj_dole.room_id,
 		description="Pokoj",
 		area=pokoj_dole.area,
 		window_area=window_area(window_pokoj_dole, window_pokoj_dole_2),
 	)
 	drawing1.add_room_annotation(
 		(HOUSE_WIDTH-1.4, BWT+1.25),
-		identifier="0.03",
+		identifier=koupelna.room_id,
 		description="Koupelna",
 		area=koupelna.area,
 		window_area=window_area(window_bathroom),
 	)
 	drawing1.add_room_annotation(
 		(6, 1+1),
-		identifier="0.04",
+		identifier=chodba.room_id,
 		description="Chodba a schody",
 		area=chodba.area,
 	)
