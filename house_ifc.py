@@ -820,6 +820,14 @@ heat_pump = ground.furniture(
     center=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS+0.1+0.25, 0+0.6),
 	rotation=-90,
 )
+rozvadec = ground.furniture(
+    "Rozvaděč",
+    kind="USERDEFINED",
+    size=(0.8, 0.5, 1.5),
+    color="#ffffff",
+    center=(CUT_WIDTH+1.5, BWT+0.3),
+	start_height=GROUND_FLOOR_THICKNESS+0.1,
+)
 ground.furniture(
     "Zásobník\nTUV",
     kind="USERDEFINED",
@@ -3546,6 +3554,7 @@ if "elektro_upper" in sys.argv:
 		door_annotations=False,
 		right_panel_width=60,
 	)
+	elektro_upper.include_element(rozvadec)
 	add_elektro_legends(elektro_upper)
 	elektro_upper.add_stair_annotation(main_stairs)
 	elektro_upper.add_stair_landing_annotation(middle_stair_landing)
@@ -3944,6 +3953,7 @@ if "upper" in sys.argv:
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
 	drawing1.include_element(heat_pump)
+	drawing1.include_element(rozvadec)
 	drawing1.add_material_legend([
 		("brick", "Nosná zeď - VPC Cihla 240 mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
