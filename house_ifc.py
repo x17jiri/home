@@ -192,7 +192,7 @@ ROOF_TILE_THICKNESS = 0.03
 RIDGE_TILE_WIDTH = 0.40
 RIDGE_TILE_RISE = 0.12
 RIDGE_TILE_THICKNESS = 0.025
-GROUND_FLOOR_THICKNESS = 0.10
+GROUND_FLOOR_THICKNESS = 0.21
 UPPER_FLOOR_THICKNESS = 0.10
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
@@ -207,11 +207,11 @@ RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
 UPPER_RING_BEAM_HEIGHT = 0.25
 VAZNICE_HEIGHT = 0.32
-VAZNICE_BASE = 0.22
+VAZNICE_BASE = 0.20
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
 VAZNICE_DIST = 1.179 - VAZNICE_HALF_BASE
 # Independent side pieces; their tops and outer faces align with the middle.
-VAZNICE_SIDE_HEIGHT = 0.28
+VAZNICE_SIDE_HEIGHT = 0.24
 VAZNICE_SIDE_BASE = 0.16
 PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT
 SEDLO_LENGTH = 1.5  # Retained for the force simulator's sedlo variant, not IFC geometry.
@@ -306,7 +306,7 @@ POLYSTYRENE_INSULATION_THICKNESS = (
 )
 ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.005
 
-ground_floor_height = 2.75
+ground_floor_height = 2.85
 GROUND_WALL_BASE_COURSE_HEIGHT = 0.25
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
@@ -368,14 +368,13 @@ dry_wall = house.wall_type(
 	color="#dfefcf"
 )
 
-ROOM_SUBTRACT = 0.02
 HOUSE_DEPTH = 8.00
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.50 - ROOM_SUBTRACT
+KITCHEN_WIDTH = 4.5 + 0.01
 CUT_WIDTH = 1.75
-KK_WIDTH = 2.50 - ROOM_SUBTRACT
+KK_WIDTH = 2.50 + 0.01
 
-wall2_x = BWT + 3.25 - ROOM_SUBTRACT + BWT;
+wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
 aa_cut = CutDefinition(
@@ -436,19 +435,18 @@ rafters = [
 	(-0.10+1.65)/2,
 	1.65,
 	1.65+0.91,
-	(3.37, "+before"),
-	(4.14, "before"),
-	(5.00, "before"),
-	(5.67, "before"),
-	(6.42, "after"),
-	(7.09, "after"),
-	(7.76, "after"),
-	(8.53, "+after"),
-
-	8.53+0.67,
-	8.53+0.67+0.67,
-	8.53+0.67+0.67+0.67,
-	11.25,
+	(3.40, "+before"),
+	(4.185, "before"),
+	(5.045, "before"),
+	(5.715, "before"),
+	(6.465, "after"),
+	(7.135, "after"),
+	(7.805, "after"),
+	(8.59, "+after"),
+	8.59+0.67,
+	8.59+0.67+0.67,
+	8.59+0.67+0.67+0.67,
+	11.35,
 	]
 
 # chimney
@@ -2046,8 +2044,8 @@ FLAT_CEILING_LAYER_HEIGHTS = {
 	# The horizontal plasterboard remains on its lower suspended-ceiling plane;
 	# the space between it and the vapour barrier is the ceiling/service void.
 	"Gypsum plasterboard": (
-		UPPER_FLOOR_THICKNESS + 2.635,
-		UPPER_FLOOR_THICKNESS + 2.635 +  GYPSUM_PLASTERBOARD_THICKNESS,
+		UPPER_FLOOR_THICKNESS + 2.6,
+		UPPER_FLOOR_THICKNESS + 2.6 +  GYPSUM_PLASTERBOARD_THICKNESS,
 	),
 }
 FLAT_CEILING_INNER_LAYER_LAYOUT = {
@@ -4686,7 +4684,7 @@ if "aa" in sys.argv:
 	aa_x = drawing1.x
 	# Roof pitches measured against horizontal, with the same slopes as the
 	# IFC roof planes. Keep the angular dimensions in clear space below them.
-	add_roof_angles()
+	add_roof_angles(drawing1)
 	# Move each leader endpoint 100 mm into its referenced build-up so the
 	# pointer visibly crosses the outer boundary instead of merely touching it.
 	AA_COMPOSITION_MARKER_PENETRATION = 0.10
@@ -4921,13 +4919,13 @@ if "aa" in sys.argv:
 	# Vyska stropu - podkrovi
 	drawing1.add_dimension(
 		start=(5.3, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
-		end=(5.3, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.635),
+		end=(5.3, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.6),
 		offset=0)
 
 	# Vyska stropu - prizemi
 	drawing1.add_dimension(
 		start=(5.3, GROUND_FLOOR_THICKNESS),
-		end=(5.3, GROUND_FLOOR_THICKNESS+2.635),
+		end=(5.3, ground_floor_height-CEILING_FINISH_THICKNESS),
 		offset=0)
 
 	drawing1.render("aa.svg", pdf=PDF_AA)
@@ -4979,11 +4977,11 @@ if "bb" in sys.argv:
 	# vyska stropu nahore
 	drawing1.add_dimension(
 		start=(HOUSE_WIDTH-2, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
-		end=(HOUSE_WIDTH-2, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.635))
+		end=(HOUSE_WIDTH-2, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.6))
 	# vyska stropu dole
 	drawing1.add_dimension(
 		start=(HOUSE_WIDTH-1.2, 0+GROUND_FLOOR_THICKNESS),
-		end=(HOUSE_WIDTH-1.2, 0+GROUND_FLOOR_THICKNESS+2.635))
+		end=(HOUSE_WIDTH-1.2, ground_floor_height-CEILING_FINISH_THICKNESS))
 
 	# vyska oken na vikyri
 	drawing1.add_dimension(
@@ -5014,7 +5012,7 @@ if "bb" in sys.argv:
 		offset=1)
 	drawing1.add_dimension(
 		start=(0, GROUND_FLOOR_THICKNESS),
-		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.635),
+		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.6),
 		offset=1.5)
 	# house height
 	drawing1.add_dimension(

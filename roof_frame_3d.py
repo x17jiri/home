@@ -965,8 +965,8 @@ def saddle_contact_stiffness(purlin, saddle, area, factor=1.0):
 
 @dataclass(frozen=True)
 class Settings:
-    roof_mass: float = 135.0  # kg/m² actual slope; excludes suspended ceiling
-    snow_load: float = 2.0  # kN/m² horizontal roof projection, NOT ground sk
+    roof_mass: float = 130.0  # kg/m² actual slope; excludes suspended ceiling
+    snow_load: float = 1.5  # kN/m² horizontal roof projection, NOT ground sk
     timber_density: float = 450.0
     gravity: float = 10.0
     purlin_lateral_restraint: bool = True

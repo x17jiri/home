@@ -160,9 +160,9 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 /* A floor build-up masks the MIAKO slab below it in plan.  Bonsai may retain
  * a concrete-cover perimeter where the two solids touch at the same height. */
-.target-view-PLANVIEW .material-Concretetopping.projection {
+/*.target-view-PLANVIEW .material-Concretetopping.projection {
     stroke: none !important;
-}
+}*/
 
 /* The cast-in-place MIAKO cover is continuous concrete.  Its generated cut
  * perimeter creates false seams where it overlaps the ring beam. */
