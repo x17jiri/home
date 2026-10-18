@@ -8127,6 +8127,7 @@ class ElektroLineDrawer:
     Between corner references, ``socket,0.4,up`` branches a socket 40% along
     that segment; ``d_socket`` adds a double socket. Socket directions refer
     to the page, not model axes.
+    ``socket3f`` uses the single-socket shape in red for three-phase outlets.
     ``light,0.4`` places a crossed-circle light directly on the segment.
     ``switch,0.4,up`` branches a circle-and-lever switch like a socket.
     Failed calls do not advance offsets. Create a new helper to start over.
@@ -8159,7 +8160,7 @@ class ElektroLineDrawer:
         line_width: Number = 0.1,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
-        """Draw a route with socket/d_socket/switch,fraction,direction or light,fraction."""
+        """Draw a route with socket/d_socket/socket3f/switch,fraction,direction or light,fraction."""
         if isinstance(corners, (str, bytes)):
             raise TypeError("corners must be a sequence of signed corner IDs")
         try:
@@ -8176,11 +8177,11 @@ class ElektroLineDrawer:
             if not isinstance(reference, str):
                 raise TypeError("each corner reference must be a string")
             reference, separator, shift_text = reference.partition(";")
-            if "," in reference or reference in {"socket", "d_socket", "light", "switch"}:
+            if "," in reference or reference in {"socket", "d_socket", "socket3f", "light", "switch"}:
                 parts = [part.strip() for part in reference.split(",")]
-                if (separator or parts[0] not in {"socket", "d_socket", "light", "switch"}
+                if (separator or parts[0] not in {"socket", "d_socket", "socket3f", "light", "switch"}
                         or len(parts) != (2 if parts[0] == "light" else 3)):
-                    raise ValueError("symbol entry must be 'socket/d_socket/switch,fraction,direction' or 'light,fraction'")
+                    raise ValueError("symbol entry must be 'socket/d_socket/socket3f/switch,fraction,direction' or 'light,fraction'")
                 fraction = _number(parts[1], "symbol fraction")
                 if not 0 <= fraction <= 1:
                     raise ValueError("symbol fraction must be between 0 and 1")
@@ -8219,7 +8220,9 @@ class ElektroLineDrawer:
             elif kind == "switch":
                 self._drawing.add_switch_symbol(point, direction, line_width=line_width)
             else:
-                self._drawing.add_socket_symbol(point, direction, double=kind == "d_socket", line_width=line_width)
+                self._drawing.add_socket_symbol(point, direction, double=kind == "d_socket",
+                                               color="red" if kind == "socket3f" else "#008000",
+                                               line_width=line_width)
         self._offsets = offsets
         return annotation
 
@@ -9444,7 +9447,7 @@ class Drawing:
 
     def add_symbol_legend(
         self,
-        items: Sequence[tuple[Literal["socket", "d_socket", "light", "switch"], str]],
+        items: Sequence[tuple[Literal["socket", "d_socket", "socket3f", "light", "switch"], str]],
         *,
         title: str = "LEGENDA SYMBOLŮ",
         color: str | None = None,
@@ -9453,7 +9456,8 @@ class Drawing:
         """Add electrical symbol samples to the panel, without plan geometry.
 
         Items are (symbol, description) pairs; supported symbols are socket
-        and d_socket (green), switch (green), or light (blue). Samples share the native symbol
+        and d_socket (green), socket3f (red), switch (green), or light (blue).
+        Samples share the native symbol
         geometry; color overrides all default colors when supplied. The line
         width is in printed millimetres. Tables persist in IFC and
         stack in call order with line and material legends.
@@ -9480,13 +9484,13 @@ class Drawing:
             except (TypeError, ValueError) as error:
                 raise TypeError(f"item {index} must contain a symbol and description") from error
             symbol = _name(symbol, f"item {index} symbol")
-            if symbol not in {"socket", "d_socket", "light", "switch"}:
-                raise ValueError(f"item {index} symbol must be socket, d_socket, light or switch")
+            if symbol not in {"socket", "d_socket", "socket3f", "light", "switch"}:
+                raise ValueError(f"item {index} symbol must be socket, d_socket, socket3f, light or switch")
             description = _name(description, f"item {index} description")
             item = {"symbol": symbol, "description": description}
-            if symbol == "light" and color is None:
-                _, _, light_classes = _drawing_line_appearance("solid", "blue")
-                item["classes"] = f"IfcAnnotation PredefinedType-LINEWORK {light_classes} {width_class}"
+            if symbol in {"light", "socket3f"} and color is None:
+                _, _, symbol_classes = _drawing_line_appearance("solid", "blue" if symbol == "light" else "red")
+                item["classes"] = f"IfcAnnotation PredefinedType-LINEWORK {symbol_classes} {width_class}"
             normalised_items.append(item)
         self._right_panel_tables.append({
             "kind": "symbol_legend", "title": title, "items": normalised_items,
@@ -10681,13 +10685,15 @@ class Drawing:
         )
 
     def add_floor_corner_labels(
-        self, storey: Storey, *, show: bool = True,
+        self, storey: Storey, *, extra_floors: Sequence[FloorLayer] = (), show: bool = True,
         font_size: Number = 1.8, color: str = "#b00060",
     ) -> dict[str, Point]:
         """Mark every room-floor outline vertex as ``room_id.number``.
 
         Uses all FLOOR layers created in the storey, their optional room_id
-        (falling back to their names), and one-based outline order. Returns
+        (falling back to their names), and one-based outline order. Optional
+        extra_floors adds selected room floors from other storeys in this
+        house without including their physical geometry in the drawing. Returns
         unmirrored model XY coordinates even when show=False, so wire routes
         can keep using the same IDs after the temporary guides are hidden.
         Labels use small circles/leaders, avoid one another where possible,
@@ -10696,6 +10702,17 @@ class Drawing:
         self._require_plan_view("add_floor_corner_labels")
         if not isinstance(storey, Storey) or storey.house is not self.house:
             raise ValueError("storey must belong to this house")
+        if isinstance(extra_floors, (str, bytes)):
+            raise TypeError("extra_floors must be a sequence of FloorLayer objects")
+        try:
+            extra_floors = tuple(extra_floors)
+        except TypeError as error:
+            raise TypeError("extra_floors must be a sequence of FloorLayer objects") from error
+        for floor in extra_floors:
+            if not isinstance(floor, FloorLayer):
+                raise TypeError("extra_floors must contain FloorLayer objects")
+            if floor.storey.house is not self.house:
+                raise ValueError("extra_floors must belong to this house")
         if not isinstance(show, bool):
             raise TypeError("show must be a boolean")
         font_size = _number(font_size, "font_size")
@@ -10703,7 +10720,7 @@ class Drawing:
             raise ValueError("font_size must be greater than zero")
         _, color, _ = _drawing_line_appearance("solid", color)
         entries = [(f"{floor.room_id or floor.Name}.{number}", point, floor, number)
-                   for floor in storey.floor_layers if floor.PredefinedType == "FLOOR"
+                   for floor in (*storey.floor_layers, *extra_floors) if floor.PredefinedType == "FLOOR"
                    for number, point in enumerate(floor.outline, start=1)]
         points = {identifier: point for identifier, point, _, _ in entries}
         if len(points) != len(entries):

@@ -367,12 +367,24 @@ outline order, e.g. `0.01.1`. Every room floor in `ground.floor_layers` is
 included automatically; `floor_layer(room_id="0.01", ...)` sets the ID, with
 the floor name used as a fallback. No physical 3D guide geometry is added.
 
+Generate the upper-floor electrical draft with
+`python3 house_ifc.py elektro_upper`. It saves `elektro_upper.svg` and
+`PDF_ELEKTRO_UPPER` in the same electrical folder, using the upper plan's
+`P.01`–`P.05` room IDs (e.g. corner `P.01.1`). The ground-floor hallway's
+`0.04.1`–`0.04.6` corners are also included, without adding the rest of the
+ground floor to the plan. Both floors share electrical
+legends. The upper block exposes `elektro_upper_corners` and its own
+`draw_elektro_line` instance for adding routes before rendering.
+
 Set `ELEKTRO_SHOW_ROOM_CORNERS = False` or run
 `python3 house_ifc.py elektro_ground --no-room-corners` to hide the guides.
+The same switch/flag hides guides in `elektro_upper` too.
 The returned `elektro_ground_corners` dictionary always remains available, so
 wire routes can reference `elektro_ground_corners["0.01.1"]` even in the final
 drawing. `drawing.add_floor_corner_labels(storey, show=True)` is reusable for
 other floor-plan drawings.
+Use `extra_floors=[chodba]` to include selected room-floor outlines from another
+storey in the same label layout and returned coordinate map.
 
 Use the stateful `draw_elektro_line` helper before `elektro_ground.render(...)`:
 
@@ -430,6 +442,12 @@ Standalone/custom-sized sockets can use
 add `double=True` for a double socket. Explicit dimensions and line widths
 are used as supplied, without additional scaling.
 
+Three-phase outlets use `"socket3f,0.4,up"`: the same single-socket geometry,
+size and placement rules as `socket`, but red regardless of the route color.
+The shared legend labels them “Zásuvka 380V, 3 fáze”. Existing outlets on red
+electrical routes use `socket3f`; ordinary `socket` and `d_socket` remain green.
+For standalone placement, use `drawing.add_socket_symbol((x, y), "up", color="red")`.
+
 Lights use a blue circle with a diagonal X, placed directly on the route with
 `"light,0.4"` (40% between the neighboring corner points, without a branch).
 Standalone placement uses `drawing.add_light_symbol((x, y))`; its default
@@ -448,7 +466,7 @@ For other drawings with a right panel of at least 40 mm, symbol legends can use
 `drawing.add_symbol_legend([("socket", "Zásuvka"), ("d_socket", "Dvojitá zásuvka"), ("light", "Světlo"), ("switch", "Vypínač")])`.
 They reuse symbol geometry, add no objects to the plan, and stack with other
 legends. Optional `title`, `color` and `line_width` control their appearance;
-omitting `color` uses green sockets/switches and blue lights, while an explicit color
+omitting `color` uses green ordinary sockets/switches, red `socket3f` and blue lights, while an explicit color
 overrides all samples.
 
 Linear and angular dimensions, including labels and extension/reference lines,

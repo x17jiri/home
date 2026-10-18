@@ -125,8 +125,9 @@ DIR_ELEKTRO = PDFFolder(
 	"D1.4.", "projekt/D1.4. Zařízení Silnoproudé Elektrotechniky/",
 )
 PDF_ELEKTRO_GROUND = DIR_ELEKTRO.add_pdf("Elektro - Půdorys 1.NP")
+PDF_ELEKTRO_UPPER = DIR_ELEKTRO.add_pdf("Elektro - Půdorys podkroví")
 # Temporary wiring references; --no-room-corners also hides these guides.
-ELEKTRO_SHOW_ROOM_CORNERS = True
+ELEKTRO_SHOW_ROOM_CORNERS = False
 
 @dataclass(frozen=True)
 class SplitRafter:
@@ -1180,6 +1181,7 @@ ceiling3 = upper.miako_slab(
 
 upper_pokoj_1 = upper.floor_layer(
 		f"Upper Pokoj 1",
+		room_id="P.02",
 		outline=(
 			(BWT, BWT+GYM_DEPTH+BWT),
 			(wall2_x-BWT, BWT+GYM_DEPTH+BWT),
@@ -1194,6 +1196,7 @@ upper_pokoj_1 = upper.floor_layer(
 	)
 upper_pokoj_2 = upper.floor_layer(
 		f"Upper Pokoj 2",
+		room_id="P.01",
 		outline=(
 			(wall2_x, GALERY_END+0.1),
 			(wall3_x-BWT, GALERY_END+0.1),
@@ -1208,6 +1211,7 @@ upper_pokoj_2 = upper.floor_layer(
 	)
 galerie = upper.floor_layer(
 		f"Galerie",
+		room_id="P.05",
 		outline=(
 			(wall2_x, GALERY_START),
 			(wall3_x-BWT, GALERY_START),
@@ -1222,6 +1226,7 @@ galerie = upper.floor_layer(
 	)
 upper_sklad = upper.floor_layer(
 		f"Sklad",
+		room_id="P.03",
 		outline=(
 			(wall3_x, wall_zachod_nahore_y),
 			(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
@@ -1236,6 +1241,7 @@ upper_sklad = upper.floor_layer(
 	)
 zachod_nahore = upper.floor_layer(
 		f"Zachod",
+		room_id="P.04",
 		outline=(
 			(wall3_x, wall_zachod_nahore_y-0.1),
 			(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1),
@@ -3347,6 +3353,22 @@ if "found" in sys.argv:
 
 	drawing1.render("found.svg", pdf=PDF_FOUND)
 
+def add_elektro_legends(drawing):
+	"""Keep circuit colors and electrical symbol samples shared by both floors."""
+	drawing.add_line_legend([
+		{"color": "blue", "line_width": 0.3, "description": "Zásuvkový okruh"},
+		{"color": "red", "line_width": 0.3, "description": "3-fázový okruh"},
+		{"color": "#f080f0", "line_width": 0.3, "description": "Světelný okruh"},
+		{"color": "#80f080", "style": "dashed", "line_width": 0.3, "description": "Pospojování a uzemnění"},
+	])
+	drawing.add_symbol_legend([
+		("socket", "Zásuvka"),
+		("d_socket", "Dvojitá zásuvka"),
+		("light", "Světlo"),
+		("switch", "Vypínač"),
+		("socket3f", "Zásuvka 380V, 3 fáze"),
+	])
+
 if "elektro_ground" in sys.argv:
 	elektro_ground = house.add_drawing(
 		"elektro_ground",
@@ -3358,17 +3380,7 @@ if "elektro_ground" in sys.argv:
 		door_annotations=False,
 		right_panel_width=60,
 	)
-	elektro_ground.add_line_legend([
-		{"color": "blue", "line_width": 0.3, "description": "Zásuvkový okruh"},
-		{"color": "red", "line_width": 0.3, "description": "3-fázový okruh"},
-		{"color": "#f080f0", "line_width": 0.3, "description": "Světelný okruh"},
-	])
-	elektro_ground.add_symbol_legend([
-		("socket", "Zásuvka"),
-		("d_socket", "Dvojitá zásuvka"),
-		("light", "Světlo"),
-		("switch", "Vypínač"),
-	])
+	add_elektro_legends(elektro_ground)
 	elektro_ground.add_stair_annotation(main_stairs)
 	elektro_ground.add_stair_landing_annotation(middle_stair_landing)
 	elektro_ground.add_stair_annotation(gallery_stairs)
@@ -3379,9 +3391,27 @@ if "elektro_ground" in sys.argv:
 	)
 	draw_elektro_line = ElektroLineDrawer(elektro_ground, elektro_ground_corners)
 
-	# zasuvky kuchyn
+	elektro_ground.add_line(
+		(HOUSE_WIDTH-1, BWT+BATHROOM_DEPTH-0.5),
+		(HOUSE_WIDTH+0.5, BWT+BATHROOM_DEPTH-0.5),
+		color="#80f080", style="dashed", line_width=0.3)
+	elektro_ground.add_text(
+		point=(HOUSE_WIDTH+0.6, BWT+BATHROOM_DEPTH-0.6),
+		text="Připojení\nk FeZn\nv základech",
+		font_size=2, color="#80f080")
+
+	# zasuvka tepelne cerpadlo
 	draw_elektro_line([
 		"  0.04.1;1.5,0.1",
+		" +0.03.1",
+		"socket3f,0.4,up",
+		"socket3f,1,left",
+		" +0.03.2;0.3,0",
+	], color="red", line_width=0.3)
+
+	# zasuvky kuchyn
+	draw_elektro_line([
+		"  0.04.1;1.5,0.2",
 		" +0.03.1",
 		"-+0.03.2",
 		"- 0.03.3",
@@ -3393,7 +3423,7 @@ if "elektro_ground" in sys.argv:
 	], color="blue", line_width=0.3)
 
 	draw_elektro_line([
-		"  0.04.1;1.5,0.1",
+		"  0.04.1;1.5,0.2",
 		"  0.03.1",
 		"  0.03.2",
 		"  0.03.3",
@@ -3416,20 +3446,19 @@ if "elektro_ground" in sys.argv:
 
 	# zasuvka trouba
 	draw_elektro_line([
-		"  0.04.1;1.5,0.2",
+		"  0.04.1;1.5,0.3",
 		" +0.03.1",
 		"-+0.03.2",
 		"- 0.03.3",
 		"-+0.01.6",
-		"socket,1,right",
+		"socket3f,1,right",
 		"  0.01.6;0,1",
 	], color="red", line_width=0.3)
 
 	# zasuvky koupelna
 	draw_elektro_line([
-		"  0.04.1;1.5,0.3",
+		"  0.04.1;1.5,0.4",
 		" +0.03.1",
-		"d_socket,0.4,up",
 		"d_socket,0.75,up",
 		"-+0.03.2",
 		"d_socket,1,right",
@@ -3457,7 +3486,7 @@ if "elektro_ground" in sys.argv:
 
 	# svetlo kuchyn
 	draw_elektro_line([
-		"  0.04.1;1.5,0.5",
+		"  0.04.1;1.3,0.5",
 		"+-0.04.5",
 		"++0.01.1",
 		"  0.01.1;2.3,0",
@@ -3470,7 +3499,7 @@ if "elektro_ground" in sys.argv:
 
 	# svetlo koupelna
 	draw_elektro_line([
-		"  0.04.1;1.5,0.4",
+		"  0.04.1;1.5,0.5",
 		"++0.03.1",
 		"switch,0.9,left",
 		"  0.03.1;0,1",
@@ -3488,16 +3517,158 @@ if "elektro_ground" in sys.argv:
 		"  0.02.2;-0.5,3",
 	], color="#f080f0", line_width=0.3)
 
-	# svetlo kuchyn
+	# svetlo chodba
 	draw_elektro_line([
-		"  0.04.1;1.3,0.5",
-		"  0.04.1;1.5,1.7",
+		"  0.04.1;1.4,0.5",
+		"switch,0.75,right",
+		"+ 0.04.5",
+		"+-0.04.4;0.2,0",
+		"  0.04.4;2.2,0",
+		"switch,0.1,right",
 		"light,1",
-		"  0.04.1;3.5,1.5",
-		"  0.04.1;4.0,2.4",
+		"  0.04.4;2.2,-1",
+		"  0.04.4;2.2,0",
+		"--0.04.3",
+		"switch,1,right",
+		"  0.04.3;0,-1",
 	], color="#f080f0", line_width=0.3)
 
 	elektro_ground.render("elektro_ground.svg", pdf=PDF_ELEKTRO_GROUND)
+
+if "elektro_upper" in sys.argv:
+	elektro_upper = house.add_drawing(
+		"elektro_upper",
+		x=HOUSE_WIDTH/2,
+		y=HOUSE_DEPTH/2,
+		z=BWT+2.75+2,
+		radius=8.5,
+		storeys=[upper],
+		door_annotations=False,
+		right_panel_width=60,
+	)
+	add_elektro_legends(elektro_upper)
+	elektro_upper.add_stair_annotation(main_stairs)
+	elektro_upper.add_stair_landing_annotation(middle_stair_landing)
+	elektro_upper.add_stair_annotation(gallery_stairs)
+	elektro_upper.add_chimney_annotation(chimney)
+	elektro_upper_corners = elektro_upper.add_floor_corner_labels(
+		upper,
+		extra_floors=[chodba],
+		show=ELEKTRO_SHOW_ROOM_CORNERS and "--no-room-corners" not in sys.argv,
+	)
+	draw_elektro_line = ElektroLineDrawer(elektro_upper, elektro_upper_corners)
+
+	# zasuvky sklad
+	draw_elektro_line([
+		"  0.04.1;1.5,0.1",
+		"-+0.04.2",
+		" +P.04.4",
+		"-+P.04.3",
+		"--P.04.2",
+		"-+P.03.2",
+		"d_socket,0.5,right",
+		"--P.03.3",
+		"d_socket,0.7,down",
+		"+-P.03.4",
+		"d_socket,1,left",
+		"  P.03.1;0.1,2",
+	], color="blue", line_width=0.3)
+	# zasuvky zachod
+	draw_elektro_line([
+		"  0.04.1;1.5,0.2",
+		"-+0.04.2",
+		" +P.04.4",
+		"d_socket,0.7,up",
+		"-+P.04.3",
+		"d_socket,0.7,right",
+		"--P.04.2",
+	], color="blue", line_width=0.3)
+	# svetlo zachod
+	draw_elektro_line([
+		"  0.04.1;1.5,0.3",
+		"-+0.04.2",
+		" +P.04.4;0.2,0",
+		"+-P.04.1;0.1,0",
+		"switch,1,down",
+		"  P.04.1;0.6,0",
+		"light,1",
+		"  P.04.1;1,-1",
+	], color="#f080f0", line_width=0.3)
+	# svetlo sklad
+	draw_elektro_line([
+		"  0.04.1;1.5,0.4",
+		"-+0.04.2",
+		"++P.04.4",
+		"++P.03.1",
+		"switch,1,left",
+		"  P.03.1;0,1.2",
+		"light,1",
+		"  P.03.1;1,2.5",
+	], color="#f080f0", line_width=0.3)
+	# zasuvky pokoj 1
+	draw_elektro_line([
+		"  0.04.1;1.3,0.5",
+		"+-0.04.5",
+		"++P.01.1",
+		"d_socket,0.25,left",
+		"d_socket,0.75,left",
+		"+-P.01.4",
+		"d_socket,0.25,down",
+		"d_socket,0.75,down",
+		"--P.01.3",
+		"d_socket,0.25,right",
+		"d_socket,0.75,right",
+		"-+P.01.2",
+		"d_socket,0.25,up",
+		"d_socket,1,up",
+		"  P.01.1;1.5,0",
+	], color="blue", line_width=0.3)
+	# svetlo pokoj 1
+	draw_elektro_line([
+		"  0.04.1;1.4,0.5",
+		"+-0.04.5",
+		"+ P.01.1",
+		"switch,1,up",
+		"  P.01.1;1.1,0",
+		"light,1",
+		"  P.01.1;2,2",
+	], color="#f080f0", line_width=0.3)
+	# zasuvky pokoj 2
+	draw_elektro_line([
+		"  0.04.1;1.2,0.5",
+		"-+P.02.2",
+		"d_socket,0.35,right",
+		"d_socket,0.75,right",
+		"--P.02.3",
+		"d_socket,0.25,down",
+		"d_socket,0.75,down",
+		"+-P.02.4",
+		"d_socket,0.25,left",
+		"d_socket,0.75,left",
+		"++P.02.1",
+		"d_socket,1,up",
+		"  P.02.2;-1,0",
+	], color="blue", line_width=0.3)
+	# svetlo pokoj 2
+	draw_elektro_line([
+		"  0.04.1;1.1,0.5",
+		"-+P.02.2",
+		"switch,1,right",
+		"  P.02.2;0,1.2",
+		"light,1",
+		"  P.02.2;-1,2.5",
+	], color="#f080f0", line_width=0.3)
+	# svetlo chodba
+	draw_elektro_line([
+		"  0.04.1;1.5,0.5",
+		"+-0.04.5",
+		"--P.05.3;-4,0",
+		"switch,0.25,down",
+		"switch,1,down",
+		"- P.05.3;-0.2,0",
+	], color="#f080f0", line_width=0.3)
+
+	elektro_upper.render("elektro_upper.svg", pdf=PDF_ELEKTRO_UPPER)
 
 if "voda_ground" in sys.argv:
 	drawing1 = house.add_drawing(
@@ -3793,14 +3964,14 @@ if "upper" in sys.argv:
 
 	drawing1.add_room_annotation(
 		(6.5, 6),
-		identifier="P.01",
+		identifier=upper_pokoj_2.room_id,
 		description="Pokoj 1",
 		area=upper_pokoj_2.area,
 		window_area=window_area(window_dormer_1, window_dormer_2),
 	)
 	drawing1.add_room_annotation(
 		(1.5, 6),
-		identifier="P.02",
+		identifier=upper_pokoj_1.room_id,
 		description="Pokoj 2",
 		area=upper_pokoj_1.area,
 		window_area=1.3+window_area(
@@ -3809,7 +3980,7 @@ if "upper" in sys.argv:
 	)
 	drawing1.add_room_annotation(
 		(9.5, 5),
-		identifier="P.03",
+		identifier=upper_sklad.room_id,
 		description="Skladovací prostor",
 		area=upper_sklad.area,
 		window_area=window_area(window_sklad),
@@ -3817,14 +3988,14 @@ if "upper" in sys.argv:
 
 	drawing1.add_room_annotation(
 		(9.5, 1.5),
-		identifier="P.04",
+		identifier=zachod_nahore.room_id,
 		description="Záchod",
 		area=zachod_nahore.area
 	)
 	drawing1.add_room_annotation(
 		(7, 3),
 		description="Galerie",
-		identifier="P.05",
+		identifier=galerie.room_id,
 		area=galerie.area
 	)
 	drawing1.add_room_legend()

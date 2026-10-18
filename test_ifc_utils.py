@@ -1211,6 +1211,48 @@ class DrainageStackTests(unittest.TestCase):
 
 
 class FloorCornerTests(unittest.TestCase):
+    def test_selected_other_storey_room_corners_are_included_without_its_geometry(self):
+        house = House("Corner references", mirror_x=True)
+        ground = house.storey("Ground", elevation=0)
+        upper = house.storey("Upper", elevation=3)
+        outline = [(1, 1), (4, 1), (4, 3), (1, 3)]
+        hallway = ground.floor_layer("Hallway", room_id="0.04", outline=outline, thickness=.1)
+        ground.floor_layer("Kitchen", room_id="0.01", outline=outline, thickness=.1)
+        room = upper.floor_layer("Room", room_id="P.01", outline=outline, thickness=.1)
+        drawing = house.add_drawing("Upper electrical", 0, 0, 5, 6, storeys=[upper])
+        expected = {f"{floor.room_id}.{i}": p for floor in (room, hallway)
+                    for i, p in enumerate(floor.outline, 1)}
+        before = len(list(house.model))
+        self.assertEqual(drawing.add_floor_corner_labels(upper, extra_floors=[hallway], show=False), expected)
+        self.assertEqual(len(list(house.model)), before)
+        self.assertEqual(drawing.add_floor_corner_labels(upper, extra_floors=[hallway]), expected)
+        self.assertEqual(list(drawing.storeys), [upper])
+        labels = [p for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                  if (p := ifcopenshell.util.element.get_pset(a, "BBIM_FloorCorner"))]
+        self.assertEqual({p["Identifier"] for p in labels}, set(expected))
+        for p in labels:
+            self.assertEqual(p["Floor"], hallway.GlobalId if p["Identifier"].startswith("0.04.") else room.GlobalId)
+        exported = house._export_model()
+        for annotation in drawing.group.IsGroupedBy[0].RelatedObjects:
+            props = ifcopenshell.util.element.get_pset(annotation, "BBIM_DrawingCircle")
+            if props:
+                x, y = json.loads(props["Center"])
+                matrix = ifcopenshell.util.placement.get_local_placement(exported.by_guid(annotation.GlobalId).ObjectPlacement)
+                np.testing.assert_allclose(matrix[:3, 3], (-x, y, 3))
+
+    def test_invalid_extra_floors_do_not_add_partial_guides(self):
+        house = House("Corners")
+        upper = house.storey("Upper", elevation=3)
+        outline = [(0, 0), (3, 0), (3, 3), (0, 3)]
+        floor = upper.floor_layer("Room", room_id="P.01", outline=outline, thickness=.1)
+        drawing = house.add_drawing("Upper electrical", 0, 0, 5, 6, storeys=[upper])
+        foreign = House("Other").storey("Other", elevation=0).floor_layer("Other", outline=outline, thickness=.1)
+        before = len(list(house.model))
+        for extras in (None, "0.04", [123], [foreign], [floor]):
+            with self.subTest(extras=extras), self.assertRaises((TypeError, ValueError)):
+                drawing.add_floor_corner_labels(upper, extra_floors=extras)
+            self.assertEqual(len(list(house.model)), before)
+
     def test_floor_collection_ids_scope_and_hidden_coordinate_map(self):
         house = House("Corner references")
         ground = house.storey("Ground", elevation=0.2)
@@ -1651,18 +1693,52 @@ class ElektroLineDrawerTests(unittest.TestCase):
                              (.225, .1125, "#008000"))
         np.testing.assert_allclose(self.points(self.draw(["  0.03.2", "  0.01.7"])), [(2, 3), (4, 5)])
 
+    def test_three_phase_socket_is_a_red_single_socket_with_all_page_directions(self):
+        for mirror in (False, True):
+            house = House("Three-phase sockets", mirror_x=mirror)
+            drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+            draw = ElektroLineDrawer(drawing, {"a": (0, 0), "b": (4, 2)})
+            for direction in ("up", "down", "left", "right"):
+                with self.subTest(mirror=mirror, direction=direction):
+                    before = set(house.model.by_type("IfcAnnotation"))
+                    draw(["  a;1,0", f"socket3f,0.4,{direction}", "  b"], color="blue", line_width=.3)
+                    socket = next(a for a in set(house.model.by_type("IfcAnnotation")) - before
+                                  if ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol"))
+                    props = ifcopenshell.util.element.get_pset(socket, "BBIM_SocketSymbol")
+                    np.testing.assert_allclose(json.loads(props["Point"]), (2.2, .8))
+                    self.assertEqual((props["Color"], props["Double"], props["Direction"], props["LineWidth"]),
+                                     ("#ff0000", False, direction, .3))
+                    reference = drawing.add_socket_symbol((2.2, .8), direction)
+                    exported = house._export_model()
+                    actual = AngleDimensionTests.world_curves(exported.by_guid(socket.GlobalId))
+                    expected = AngleDimensionTests.world_curves(exported.by_guid(reference.GlobalId))
+                    self.assertEqual(len(actual), 2)
+                    for a, b in zip(actual, expected):
+                        np.testing.assert_allclose(a, b, atol=1e-12)
+            before = set(house.model.by_type("IfcAnnotation"))
+            path = draw(["  a", "socket,0.4,up", "  b"], color="red")
+            np.testing.assert_allclose(self.points(path), [(0, 0), (4, 2)])
+            # Explicit symbol kinds remain independent of the circuit color.
+            green = next(a for a in set(house.model.by_type("IfcAnnotation")) - before
+                         if ifcopenshell.util.element.get_pset(a, "BBIM_SocketSymbol"))
+            self.assertEqual(ifcopenshell.util.element.get_pset(green, "BBIM_SocketSymbol", "Color"), "#008000")
+
     def test_invalid_socket_entries_leave_route_and_offsets_unchanged(self):
         before = set(self.house.model.by_type("IfcAnnotation"))
         invalid = ["socket", "socket,0.4", "socket,0.4,up,extra", "socket,no,up",
                    "socket,nan,up", "socket,inf,up", "socket,-0.1,up", "socket,1.1,up",
                    "socket,0.4,diagonal", "unknown,0.4,up", "d_socket", "d_socket,0.4",
-                   "d_socket,0.4,diagonal", "d_socket,nan,up", "d_socket,1.1,up"]
+                   "d_socket,0.4,diagonal", "d_socket,nan,up", "d_socket,1.1,up",
+                   "socket3f", "socket3f,0.4", "socket3f,nan,up", "socket3f,1.1,up",
+                   "socket3f,0.4,diagonal", "socket3f,0.4,up;1,2"]
         routes = [["++0.03.2", entry, "--0.01.7"] for entry in invalid]
         routes += [["socket,0.4,up", "++0.03.2", "--0.01.7"],
                    ["++0.03.2", "--0.01.7", "socket,0.4,up"],
                    ["++0.03.2", "socket,0.4,up"],
                    ["d_socket,0.4,up", "++0.03.2", "--0.01.7"],
                    ["++0.03.2", "--0.01.7", "d_socket,0.4,up"],
+                   ["socket3f,0.4,up", "++0.03.2", "--0.01.7"],
+                   ["++0.03.2", "--0.01.7", "socket3f,0.4,up"],
                    ["++0.03.2", "socket,0.4,up", "--missing"]]
         for route in routes:
             with self.subTest(route=route), self.assertRaises((TypeError, ValueError)):
@@ -2239,6 +2315,28 @@ class SymbolLegendTests(unittest.TestCase):
         overridden = self.house.add_drawing("Custom", 0, 0, 2, 5, right_panel_width=60)
         overridden.add_symbol_legend([("light", "Light")], color="red")
         self.assertIn("drawing-line-color-ff0000", overridden._right_panel_tables[0]["classes"])
+
+    def test_three_phase_legend_sample_is_red_and_matches_single_socket(self):
+        self.drawing.add_symbol_legend([("socket", "Zásuvka"), ("socket3f", "Zásuvka 380V, 3 fáze")])
+        tables = json.loads(ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing", "RightPanelTables"))
+        self.assertIn("drawing-line-color-ff0000", tables[0]["items"][1]["classes"])
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "socket3f.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" height="160mm" '
+                            'viewBox="0 0 160 160"></svg>', encoding="utf-8")
+            _postprocess_right_panel(path, ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing"))
+            _postprocess_drawing_line_colors(path)
+            root = ET.parse(path).getroot()
+            samples = [e for e in root.iter() if "symbol-legend-sample" in e.get("class", "").split()]
+            self.assertEqual([sample.get("data-symbol") for sample in samples], ["socket", "socket3f"])
+            self.assertIn("drawing-line-color-008000", samples[0].get("class"))
+            self.assertIn("drawing-line-color-ff0000", samples[1].get("class"))
+            self.assertEqual([[curve.get("d").count(" L") for curve in sample] for sample in samples],
+                             [[1, 32], [1, 32]])
+            self.assertIn("Zásuvka 380V, 3 fáze", path.read_text(encoding="utf-8"))
+        custom = self.house.add_drawing("Custom socket", 0, 0, 2, 5, right_panel_width=60)
+        custom.add_symbol_legend([("socket3f", "Socket")], color="blue")
+        self.assertIn("drawing-line-color-0000ff", custom._right_panel_tables[0]["classes"])
 
     def test_switch_legend_has_branch_circle_and_lever(self):
         self.drawing.add_symbol_legend([("switch", "Vypínač")])
