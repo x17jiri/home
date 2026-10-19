@@ -15,6 +15,12 @@ python3 -m venv .venv-roof3d
 .venv-roof3d/bin/python -m unittest test_roof_frame_3d -v
 ```
 
+The simulator reads numeric/data definitions in `house_ifc.py` without running
+the IFC generator. Rafter positions may use named variables, arithmetic and
+`math.floor(expression)` (for example to round spacing down to millimetres).
+Only this exact numeric helper and the supported rafter data wrappers are
+allowed; arbitrary function calls and attribute access remain blocked.
+
 The wall plate/ring beam is one immovable rigid support, not a second elastic
 beam. Horizontal springs act directly at each rafter connection to this
 support **only**, with a separate optional dormer stiffness. Purlin horizontal

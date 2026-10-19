@@ -2837,6 +2837,26 @@ class HouseTests(unittest.TestCase):
                 "RAFTER",
             )
 
+    def test_wall_plate_role_is_persisted_without_changing_beam_geometry(self) -> None:
+        house = House("Wall plates")
+        upper = house.storey("Upper", elevation=3)
+        plate = upper.beam("Plate", start=(0, 0, 4), end=(5, 0, 4),
+                           size=(.16, .16), kind="wall_plate")
+        self.assertEqual(plate.kind, "WALL_PLATE")
+        self.assertEqual(plate.PredefinedType, "USERDEFINED")
+        self.assertEqual(plate.ObjectType, "WALL_PLATE")
+        self.assertEqual(ifcopenshell.util.element.get_predefined_type(plate), "WALL_PLATE")
+        self.assertEqual(plate.start, (0, 0, 4))
+        self.assertEqual(plate.end, (5, 0, 4))
+        self.assertEqual(plate.size, (.16, .16))
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), plate)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), 5 * .16 * .16)
+        with TemporaryDirectory() as directory:
+            path = house.write(Path(directory) / "wall-plate.ifc")
+            reopened = ifcopenshell.open(path)
+            self.assertEqual(ifcopenshell.util.element.get_predefined_type(
+                reopened.by_guid(plate.GlobalId)), "WALL_PLATE")
+
     def test_rolls_and_validates_generic_beams(self) -> None:
         house = House("My house", colors={"beam": "blue"})
         upper = house.storey("Upper floor", elevation=3)
@@ -13510,7 +13530,9 @@ class HouseTests(unittest.TestCase):
         lost_formwork_pattern = patterns.split(
             '<pattern id="ztracene-bedneni"', maxsplit=1
         )[1].split("</pattern>", maxsplit=1)[0]
-        self.assertIn('fill="#fff2cc"', lost_formwork_pattern)
+        self.assertIn('fill="white"', lost_formwork_pattern)
+        self.assertNotIn('#fff2cc', lost_formwork_pattern)
+        self.assertEqual(lost_formwork_pattern.count("<line "), 2)
         rule = stylesheet.split(
             ".cut.layer-material-ztracenebedneni", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
@@ -13637,6 +13659,11 @@ class HouseTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn('<pattern id="thermal-impact-insulation"', patterns)
+        insulation_pattern = patterns.split('<pattern id="thermal-impact-insulation"', maxsplit=1)[1].split("</pattern>", maxsplit=1)[0]
+        liapor_pattern = patterns.split('<pattern id="liapor-brick"', maxsplit=1)[1].split("</pattern>", maxsplit=1)[0]
+        self.assertIn('fill="#fff2cc"', insulation_pattern)
+        self.assertIn('fill="#fff2cc"', liapor_pattern)
+        self.assertEqual(insulation_pattern.count("<path "), 3)
         rule = stylesheet.split(
             ".cut.layer-material-tepelnakrocejovaizolace", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
@@ -13760,7 +13787,7 @@ class HouseTests(unittest.TestCase):
             self.assertTrue(element.tag.endswith("}path"))
             self.assertIn("fill:none", element.get("style", ""))
             self.assertIn("stroke:black", element.get("style", ""))
-        for pattern_id, background in (("thermal-impact-insulation", "white"),
+        for pattern_id, background in (("thermal-impact-insulation", "#fff2cc"),
                                        ("perimeter-polystyrene", "#f4dddd")):
             rect = next(element for element in patterns[pattern_id] if element.tag.endswith("}rect"))
             self.assertEqual(rect.get("fill"), background)

@@ -281,6 +281,53 @@ linework/hull-fill behaviour. Chimney elevations now rely only on Bonsai's
 native surfaces and their white CSS fill; the former hull-fill workaround
 has been removed.
 
+### Exposed section outlines
+
+`house.add_drawing(..., section_outline_width=0.20)` adds heavier exposed
+boundaries to wall, floor and ceiling assemblies (width in printed mm).
+Use `None`, the default, to disable it. Ground/upper plans and AA/BB sections
+enable this pass; roof drawings do not.
+
+`section_outline_projected_walls=True` is the default: visible projected wall
+contours and their insulation join the cut regions. Set it to `False` in any
+drawing definition to restore cut-only outlines. This switch has no effect
+unless `section_outline_width` is set. The standalone postprocessor exposes
+the same switch as `projected_walls=True`.
+
+The independent `section_outlines.add_section_outlines()` postprocessor reads
+Bonsai's actual closed SVG cut polygons and uses IFC metadata to group the
+assemblies. It merges adjoining materials, retains room and opening boundaries,
+and suppresses edges in contact with other cut solids. MIAKO internal ceramic
+cells are not treated as room openings. Roof layers, rafters, purlins and other
+projected objects retain their original line weights. Existing SVG paths are
+unchanged; a replaceable `section-outlines` group is inserted below annotation
+overlays before PDF/PNG export. No convex hulls are constructed. The pass accepts
+closed straight-edged paths/polygons, including wool boundaries exported as
+separate line segments forming closed loops. Floor/roof classification also
+respects IFC types inherited from their definitions. Open or branching wool
+outlines are not closed artificially; unsupported selected geometry is skipped
+with a warning rather than approximated.
+When Bonsai merges adjoining wall cuts, all wall IDs on the resulting polygon
+are recognised as insulation hosts, not just the first one.
+Projected wall regions are polygonized from the exported visible linework,
+merging face divisions and retaining nested holes. Open contours are not closed
+artificially; fragmented contours can use touching rendered cut/closed-wall or
+covering-beam boundaries to complete a region. Faces outside the visible extent
+or inside those supporting solids are rejected. Covering beams used this way
+remain unoutlined and mask their contact edges. Full hidden wall footprints
+are never substituted. Visible ring beams also qualify their source wall as an
+insulation host when the masonry underneath is hidden.
+
+Wall plates created with `storey.beam(..., kind="WALL_PLATE")` are an exception:
+their visible cut/projected regions join the wall assembly outline, removing
+heavy seams between the plate, masonry and facade insulation. IFC stores this
+role as `IfcBeam/USERDEFINED` with `ObjectType="WALL_PLATE"`; it does not depend
+on beam names or change their geometry. The five pozednice in `house_ifc.py`
+use this role. `section_outline_projected_walls=False` still excludes projected
+wall plates while retaining cut wall-plate outlines. Contour completion repeats
+until no new faces can be found, so a plate completed against a wall can in turn
+complete the ring-beam contour without depending on SVG element order.
+
 `House.assets` provides a searchable catalog of the plan-ready objects in
 Bonsai's IFC furniture library. You do not need to remember its original type
 names:

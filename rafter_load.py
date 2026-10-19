@@ -3893,10 +3893,10 @@ def main() -> None:
         )
         check_purlin(
             title="Vaznice Mid, gl24c",
-            material="gl28h",
+            material="gl24c",
             width=0.20,
             height=0.32,
-            span=4.75,
+            span=4.5+0.1,
             rafter_length_above=1.4,
             lower_rafter_span=3.5,
             roof_angle=ROOF_ANGLE_DEGREES,
@@ -3910,9 +3910,9 @@ def main() -> None:
         check_purlin(
             title="Vaznice AC, c22",
             material="gl24c",
-            width=0.20,
+            width=0.16,
             height=0.24,
-            span=3.5,
+            span=3.25+0.2,
             rafter_length_above=1.4,
             lower_rafter_span=3.5,
             roof_angle=ROOF_ANGLE_DEGREES,

@@ -27,7 +27,7 @@
     <line x1="0" y1="0" x2="0" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
 <pattern id="ztracene-bedneni" width="1" height="1" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
-    <rect width="1" height="1" fill="#fff2cc" />
+    <rect width="1" height="1" fill="white" />
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.15" />
     <line x1="0.5" y1="0.375" x2="0.5" y2="0.625" style="stroke:black; stroke-width:0.08" />
 </pattern>
@@ -176,7 +176,7 @@
     <path d="M 6.25,2.165 L 7.5,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round" />
 </pattern>
 <pattern id="thermal-impact-insulation" width="7.5" height="4.33" patternUnits="userSpaceOnUse" patternTransform="scale(0.15)">
-    <rect width="7.5" height="4.33" fill="white" />
+    <rect width="7.5" height="4.33" fill="#fff2cc" />
     <path d="M 0,2.165 L 1.25,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round" />
     <path d="M 1.25,2.165 L 2.5,4.33 L 5,4.33 L 6.25,2.165 L 5,0 L 2.5,0 L 1.25,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round;fill:none" />
     <path d="M 6.25,2.165 L 7.5,2.165" style="stroke:black;stroke-width:0.25;stroke-linecap:round" />

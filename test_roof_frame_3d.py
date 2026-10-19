@@ -3,6 +3,7 @@ from contextlib import redirect_stdout
 from dataclasses import replace
 import importlib.util
 from io import StringIO
+from math import floor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -1032,6 +1033,44 @@ class ChordTests(unittest.TestCase):
 
 
 class InputTests(unittest.TestCase):
+    def test_reader_supports_floor_in_variable_based_rafter_layout(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "house.py"
+            path.write_text(
+                'raise RuntimeError("must not execute")\n'
+                'vk_from = 3.03\nvk_to = 8.53\n'
+                'a = math.floor((vk_to - vk_from - 3*0.67 - 0.75 - 0.86) / 2 * 1000.0) / 1000.0\n'
+                'rafters = [(vk_from, "+before"), (vk_from+a, "before"), vk_to]\n',
+                encoding="utf-8",
+            )
+            data = HouseInputs(path)
+            expected = floor((8.53 - 3.03 - 3*.67 - .75 - .86) / 2 * 1000.0) / 1000.0
+            self.assertEqual(data.get("a"), expected)
+            self.assertEqual(data.get("rafters"), ((3.03, "+before"), (3.03 + expected, "before"), 8.53))
+
+    def test_floor_rounds_negative_values_down_and_allows_nested_arithmetic(self):
+        data = HouseInputs(HOUSE)
+        for expression, expected in (("math.floor(-0.1)", -1), ("math.floor(2.999)", 2),
+                                     ("math.floor(-3)", -3), ("math.floor(math.floor(3.9) / 2)", 1)):
+            with self.subTest(expression=expression):
+                self.assertEqual(data.evaluate(ast.parse(expression, mode="eval").body), expected)
+
+    def test_floor_allowlist_does_not_enable_arbitrary_calls(self):
+        data = HouseInputs(HOUSE)
+        for expression in ('math.ceil(1.1)', 'other.floor(1.1)', 'math.floor()', 'math.floor(1, 2)',
+                           'math.floor(x=1)', 'math.floor(*[1])', 'math.floor.__call__(1)',
+                           'getattr(math, "floor")(1)', 'math.floor("1.2")',
+                           'math.floor(__import__("os").system("false"))'):
+            with self.subTest(expression=expression), self.assertRaises(ValueError):
+                data.evaluate(ast.parse(expression, mode="eval").body)
+
+    def test_current_rafter_variables_match_their_numeric_definitions(self):
+        data = HouseInputs(HOUSE)
+        expected = floor((data.get("vk_to") - data.get("vk_from") - 3*.67 - .75 - .86) / 2 * 1000.0) / 1000.0
+        self.assertEqual(data.get("a"), expected)
+        self.assertEqual(data.get("rafters")[5], (data.get("vk_from") + expected, "before"))
+        self.assertTrue(RoofLayout.from_house(HOUSE).beams)
+
     def test_c16_can_be_selected_independently_or_for_all_timber(self):
         self.assertEqual(Timber(0.08, 0.20, "C16").material, "C16")
         layout = legacy_roof_layout(

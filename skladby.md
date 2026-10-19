@@ -4,25 +4,19 @@ Vrstva | Výška
 ---|---
 Finální podlaha | 10 mm
 Cementový potěr | 60 mm
-Kročejová izolace | 30 mm
+Podlahová izolace | 140 mm
 Základová deska | 150 mm
-Izolace pod deskou | 100 mm
-**Celkem** | 350 mm
+**Celkem** | 360 mm
 
 ### Upřesnění parametrů
 
 Finální podlaha:
 - Linoleum nebo dlaždice
 
-Kročejová izolace:
+Podlahová izolace:
 - λ ≤ 0.039 W/mK
 - užitné zatížení ≥ 500 kg/m²
 - Např. ISOVER T-P
-
-Izolace pod deskou:
-- pevnost v tlaku při 10% stlačení ≥ 150 kPa
-- λ ≤ 0.039 W/mK
-- Např. Dekperimeter SD
 
 ## SK2 - Strop a podlaha v podkroví
 

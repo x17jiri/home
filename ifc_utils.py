@@ -51,6 +51,7 @@ import numpy as np
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 from pdf_utils import markdown_to_pdf
+from section_outlines import add_section_outlines
 
 
 __all__ = [
@@ -4638,6 +4639,7 @@ BeamKind: TypeAlias = Literal[
     "T_BEAM",
     "RAFTER",
     "PURLIN",
+    "WALL_PLATE",
     "USERDEFINED",
     "NOTDEFINED",
 ]
@@ -4707,6 +4709,7 @@ _BEAM_KINDS = {
     "T_BEAM",
     "RAFTER",
     "PURLIN",
+    "WALL_PLATE",
     "USERDEFINED",
     "NOTDEFINED",
 }
@@ -5875,6 +5878,14 @@ def _render_existing_drawing(
             model,
             drawing,
         )
+    section_outline_width = (drawing_properties or {}).get("SectionOutlineWidth")
+    if section_outline_width is not None:
+        count = add_section_outlines(
+            absolute_output, model, drawing, width_mm=float(section_outline_width),
+            projected_walls=(drawing_properties or {}).get("SectionOutlineProjectedWalls", True),
+        )
+        print(f"[drawing render] Added {count} exposed section outlines ({section_outline_width:g} mm)", flush=True)
+    if target_view != "PLAN_VIEW":
         _postprocess_elevation_furniture_labels(absolute_output)
         _postprocess_hexagon_marker_overlays(absolute_output)
     _postprocess_angle_labels(absolute_output, drawing_properties or {})
@@ -8001,6 +8012,8 @@ class House:
         right_panel_width: Number = 0,
         projected_wood_color: str | None = None,
         model_line_width: Number | None = None,
+        section_outline_width: Number | None = None,
+        section_outline_projected_walls: bool = False,
         surface_fills: bool = False,
     ) -> Drawing:
         """Add a persisted square plan or elevation drawing to this IFC model.
@@ -8042,6 +8055,13 @@ class House:
         ``model_line_width`` optionally sets the printed SVG stroke width for
         model cut and projection geometry in this drawing only.  Annotation
         line conventions remain unchanged.
+        ``section_outline_width`` optionally adds a separate exposed-boundary
+        pass for wall, floor and ceiling assemblies (printed mm).
+        ``section_outline_projected_walls=True`` includes closed visible wall
+        projections and their insulation in those regions. Set it to False for
+        cut-only outlines. Other projections, roofs, material seams and
+        annotations keep their original styles. Neither option adds outlines
+        unless ``section_outline_width`` is set.
         ``surface_fills=True`` enables Bonsai's SHAPELY projected surfaces in
         plans. Wood colours/hatches style those surfaces without hull fills
         or drawing_order overrides; visibility follows actual 3D geometry.
@@ -8066,6 +8086,8 @@ class House:
             right_panel_width=right_panel_width,
             projected_wood_color=projected_wood_color,
             model_line_width=model_line_width,
+            section_outline_width=section_outline_width,
+            section_outline_projected_walls=section_outline_projected_walls,
             surface_fills=surface_fills,
         )
         self._drawings.append(drawing)
@@ -8249,6 +8271,8 @@ class Drawing:
         right_panel_width: Number,
         projected_wood_color: str | None,
         model_line_width: Number | None,
+        section_outline_width: Number | None = None,
+        section_outline_projected_walls: bool = True,
         surface_fills: bool = False,
     ) -> None:
         self.house = house
@@ -8263,6 +8287,14 @@ class Drawing:
         if not isinstance(surface_fills, bool):
             raise TypeError("surface_fills must be a boolean")
         self.surface_fills = surface_fills
+        if not isinstance(section_outline_projected_walls, bool):
+            raise TypeError("section_outline_projected_walls must be a boolean")
+        self.section_outline_projected_walls = section_outline_projected_walls
+        self.section_outline_width = None
+        if section_outline_width is not None:
+            self.section_outline_width = _number(section_outline_width, "section_outline_width")
+            if self.section_outline_width <= 0:
+                raise ValueError("section_outline_width must be greater than zero")
         if projected_wood_color is None:
             self.projected_wood_color: str | None = None
         else:
@@ -8534,6 +8566,9 @@ class Drawing:
             )
         if self.model_line_width is not None:
             drawing_properties["ModelLineWidth"] = self.model_line_width
+        if self.section_outline_width is not None:
+            drawing_properties["SectionOutlineWidth"] = self.section_outline_width
+            drawing_properties["SectionOutlineProjectedWalls"] = self.section_outline_projected_walls
         if not self._includes_all_storeys:
             drawing_properties["Include"] = (
                 " + ".join(
@@ -13005,6 +13040,12 @@ class Drawing:
             name=f"{name} Boundary",
             predefined_type="LINEWORK",
         )
+        insulation_pset = ifcopenshell.api.pset.add_pset(
+            model, product=boundary, name="BBIM_WallInsulationBoundary",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=insulation_pset, properties={"HostWall": wall.GlobalId},
+        )
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=boundary,
@@ -13334,6 +13375,12 @@ class Drawing:
                 ifc_class="IfcAnnotation",
                 name=f"{annotation_name} Boundary",
                 predefined_type="LINEWORK",
+            )
+            insulation_pset = ifcopenshell.api.pset.add_pset(
+                model, product=boundary, name="BBIM_WallInsulationBoundary",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                model, pset=insulation_pset, properties={"HostWall": wall.GlobalId},
             )
             ifcopenshell.api.geometry.edit_object_placement(
                 model,
@@ -18411,8 +18458,8 @@ class Storey:
         reference direction, such as a roof-plane normal.  Global three-point
         ``cuts`` retain the side containing the uncut beam centre.
 
-        IFC4 has no dedicated rafter or purlin enum, so ``"RAFTER"`` and
-        ``"PURLIN"`` are stored as user-defined ``IfcBeam`` types.  Wood is
+        IFC4 has no dedicated rafter, purlin or wall-plate enum, so ``"RAFTER"``,
+        ``"PURLIN"`` and ``"WALL_PLATE"`` are user-defined ``IfcBeam`` types. Wood is
         shown brown by default unless the house has a default beam color or an
         explicit ``color`` is supplied.
         """
@@ -18485,7 +18532,7 @@ class Storey:
         )
 
         predefined_type = (
-            "USERDEFINED" if kind in {"RAFTER", "PURLIN"} else kind
+            "USERDEFINED" if kind in {"RAFTER", "PURLIN", "WALL_PLATE"} else kind
         )
         model = self.house.model
         element = ifcopenshell.api.root.create_entity(
@@ -18494,7 +18541,7 @@ class Storey:
             name=beam_name,
             predefined_type=predefined_type,
         )
-        if kind in {"RAFTER", "PURLIN"}:
+        if kind in {"RAFTER", "PURLIN", "WALL_PLATE"}:
             element.ObjectType = kind
         elif kind == "USERDEFINED":
             element.ObjectType = beam_name

@@ -14,7 +14,7 @@ import csv
 import json
 from dataclasses import dataclass, field, replace, asdict
 from importlib.metadata import version
-from math import atan2, ceil, degrees, hypot, isfinite, sqrt
+from math import atan2, ceil, degrees, floor, hypot, isfinite, sqrt
 from pathlib import Path
 from typing import Literal
 
@@ -80,7 +80,7 @@ class RafterEntry:
 
 
 class HouseInputs:
-    """A small, deliberately restricted AST data reader, not Python eval."""
+    """Restricted AST data reader: arithmetic, math.floor and rafter wrappers, not eval."""
 
     def __init__(self, path):
         self.path = Path(path)
@@ -127,6 +127,15 @@ class HouseInputs:
                 return a * b
             if isinstance(node.op, ast.Div):
                 return a / b
+        # Whitelist the numeric helper used to round rafter spacing to mm.
+        # Match its exact syntax; never resolve attributes or run house code.
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "math"
+                and node.func.attr == "floor" and len(node.args) == 1 and not node.keywords):
+            value = self.evaluate(node.args[0], visiting)
+            if type(value) not in (int, float):
+                raise ValueError("math.floor requires a numeric house expression")
+            return floor(value)
         # Decode only these two data wrappers; never call a function from IFC.
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
             args = tuple(self.evaluate(arg, visiting) for arg in node.args)
@@ -3313,7 +3322,7 @@ def main(argv=None):
     parser.add_argument("--rafter-material", type=lambda value: resolve_timber_grade(value).name,
                         choices=TIMBER_GRADE_NAMES, default="C16")
     parser.add_argument("--beam-material", type=lambda value: resolve_timber_grade(value).name,
-                        choices=TIMBER_GRADE_NAMES, default="gl28h")
+                        choices=TIMBER_GRADE_NAMES, default="gl24c")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument(
         "--no-spacers",

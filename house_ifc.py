@@ -150,6 +150,7 @@ def rafter_x_position(rafter):
 		return rafter.x
 	return rafter[0] if isinstance(rafter, tuple) else rafter
 
+SECTION_OUTLINE_WIDTH = 0.6
 RAFTER_Z_OFFSET = -0.05
 RAFTER_THICKNESS = 0.08
 STRONGER_RAFTER_THICKNESS = 0.10
@@ -411,8 +412,8 @@ pokoj_dole = ground.floor_layer(
 		(BWT, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-#	insulation_material=FLOOR_INSULATION_MATERIAL,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -430,23 +431,29 @@ oblouk2_at = HOUSE_DEPTH-BWT-0.5-1.5-0.625-1.5
 # A tuple also creates a touching dormer rafter on the requested side.  "before"
 # and "after" shorten the main rafter on the garden side; "+before" and
 # "+after" leave it full-length.
+
+vk_from = wall2_x-0.24-0.1
+vk_to = wall3_x+0.1
+
+a = math.floor((vk_to - vk_from - 3*0.67 - 0.75 - 0.86) / 2 * 1000.0) / 1000.0
+
 rafters = [
 	-0.10,
 	(-0.10+1.65)/2,
 	1.65,
 	1.65+0.91,
-	(3.40, "+before"),
-	(4.185, "before"),
-	(5.045, "before"),
-	(5.715, "before"),
-	(6.465, "after"),
-	(7.135, "after"),
-	(7.805, "after"),
-	(8.59, "+after"),
-	8.59+0.67,
-	8.59+0.67+0.67,
-	8.59+0.67+0.67+0.67,
-	11.35,
+	(vk_from, "+before"),
+	(vk_from+a, "before"),
+	(vk_from+a+0.86, "before"),
+	(vk_from+a+0.86+0.67, "before"),
+	(vk_from+a+0.86+0.67+0.75, "after"),
+	(vk_from+a+0.86+0.67+0.75+0.67, "after"),
+	(vk_from+a+0.86+0.67+0.75+0.67+0.67, "after"),
+	(vk_to, "+after"),
+	vk_to+0.67,
+	vk_to+0.67+0.67,
+	vk_to+0.67+0.67+0.67,
+	HOUSE_WIDTH+0.1,
 	]
 
 # chimney
@@ -490,8 +497,8 @@ kuchyn = ground.floor_layer(
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-#	insulation_material=FLOOR_INSULATION_MATERIAL,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -507,8 +514,8 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-#	insulation_material=FLOOR_INSULATION_MATERIAL,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -522,8 +529,8 @@ koupelna = ground.floor_layer(
 		(wall3_x, BWT+BATHROOM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-#	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
-#	insulation_material=FLOOR_INSULATION_MATERIAL,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
@@ -1051,7 +1058,7 @@ kamna = ground.furniture(
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
     center=(wall2_x + 0.5, BWT+CHODBA_DEPTH+0.115+0.2+0.25),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
 #    rotation=-45,
 )
 
@@ -1060,52 +1067,52 @@ kamna = ground.furniture(
 ground.furniture(
 	"Dřez",
     kind="USERDEFINED",
-    size=(0.7, 0.7, 0.8),
-	start_height=GROUND_FLOOR_THICKNESS,
+    size=(0.69, 0.69, 0.8),
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
     center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.115+0.35),
 )
 ground.furniture(
 	"Myčka",
     kind="USERDEFINED",
-    size=(0.7, 0.7, 0.8),
-	start_height=GROUND_FLOOR_THICKNESS,
+    size=(0.69, 0.69, 0.8),
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
     center=(HOUSE_WIDTH-BWT-0.35-0.7, BWT+BATHROOM_DEPTH+0.115+0.35),
 )
 ground.furniture(
 	"Lednice",
     kind="USERDEFINED",
-    size=(0.7, 1, 2),
+    size=(0.69, 1, 2),
     center=(HOUSE_WIDTH-BWT-0.35, HOUSE_DEPTH-BWT-0.5),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
 )
 ground.furniture(
 	"Sporák",
     kind="USERDEFINED",
-    size=(0.7, 0.7, 0.8),
+    size=(0.69, 0.69, 0.8),
     center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.115+0.35+0.7),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
 )
 KUCH_LINKA_LEN = HOUSE_DEPTH-2*BWT-0.115-BATHROOM_DEPTH-2.4
 ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
-    size=(0.7, KUCH_LINKA_LEN, 0.8),
+    size=(0.69, KUCH_LINKA_LEN, 0.8),
     center=(HOUSE_WIDTH-BWT-0.35, HOUSE_DEPTH-BWT-1-KUCH_LINKA_LEN/2),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
 )
 KUCH_LINKA_LEN = KK_WIDTH-1.4
 ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
-    size=(KUCH_LINKA_LEN, 0.7, 0.8),
+    size=(KUCH_LINKA_LEN, 0.69, 0.8),
     center=(HOUSE_WIDTH-BWT-1.4-KUCH_LINKA_LEN/2, BWT+BATHROOM_DEPTH+0.115+0.35),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
 )
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
     center=(wall3_x-BWT-1.1, HOUSE_DEPTH - BWT - 1.2),
-	start_height=GROUND_FLOOR_THICKNESS,
+	start_height=GROUND_FLOOR_THICKNESS+0.01,
 	#size=(1.3, 0.8*3),
 )
 
@@ -1195,8 +1202,8 @@ upper_pokoj_1 = upper.floor_layer(
 			(BWT, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-#		insulation_material=FLOOR_INSULATION_MATERIAL,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -1210,8 +1217,8 @@ upper_pokoj_2 = upper.floor_layer(
 			(wall2_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-#		insulation_material=FLOOR_INSULATION_MATERIAL,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -1225,8 +1232,8 @@ galerie = upper.floor_layer(
 			(wall2_x, GALERY_END),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-#		insulation_material=FLOOR_INSULATION_MATERIAL,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -1240,8 +1247,8 @@ upper_sklad = upper.floor_layer(
 			(wall3_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-#		insulation_material=FLOOR_INSULATION_MATERIAL,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -1255,8 +1262,8 @@ zachod_nahore = upper.floor_layer(
 			(wall3_x, BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-#		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
-#		insulation_material=FLOOR_INSULATION_MATERIAL,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
 	)
@@ -1595,7 +1602,7 @@ beam3 = upper.beam(
 	end=(HOUSE_WIDTH+0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
-    kind="BEAM",
+    kind="WALL_PLATE",
 )
 beam_cut_street = upper.beam(
 	"Cut street wall plate",
@@ -1603,7 +1610,7 @@ beam_cut_street = upper.beam(
 	end=(wall2_x, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
 	size=WALL_PLATE_SIZE,
 	material="Wood",
-	kind="BEAM",
+	kind="WALL_PLATE",
 )
 beam4_a = upper.beam(
     "Beam",
@@ -1611,7 +1618,7 @@ beam4_a = upper.beam(
 	end=(wall2_x-BWT, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
-    kind="BEAM",
+    kind="WALL_PLATE",
 )
 beam4_b = upper.beam(
     "Beam",
@@ -1619,7 +1626,7 @@ beam4_b = upper.beam(
 	end=(HOUSE_WIDTH+0.2, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
-    kind="BEAM",
+    kind="WALL_PLATE",
 )
 beam_dormer = upper.beam(
     "Beam",
@@ -1627,7 +1634,7 @@ beam_dormer = upper.beam(
 	end=(wall2_x-BWT-0.3, GARDEN_WALL_PLATE_Y, DORMER_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
-    kind="BEAM",
+    kind="WALL_PLATE",
 )
 
 # Chodba nahore
@@ -2997,38 +3004,38 @@ roof_window_lining = garden_roof.add_opening_lining(
 )
 roof_layer_storeys["Gypsum plasterboard"].add(*roof_window_lining)
 
-add_foundation_insulation(
-	(
-		(CUT_WIDTH+BWT, BWT),
-		(wall3_x-BWT, BWT),
-		(wall3_x-BWT, HOUSE_DEPTH-BWT),
-		(wall2_x, HOUSE_DEPTH-BWT),
-		(wall2_x, GYM_DEPTH+BWT),
-		(CUT_WIDTH+BWT, BWT+GYM_DEPTH),
-	),
-	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
-	height=0.8
-)
-add_foundation_insulation(
-	(
-		(wall3_x, BWT),
-		(wall3_x, HOUSE_DEPTH-BWT),
-		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
-		(HOUSE_WIDTH-BWT, BWT),
-	),
-	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
-	height=0.8
-)
-add_foundation_insulation(
-	(
-		(BWT, BWT+GYM_DEPTH+BWT),
-		(wall2_x-BWT, BWT+GYM_DEPTH+BWT),
-		(wall2_x-BWT, HOUSE_DEPTH-BWT),
-		(BWT, HOUSE_DEPTH-BWT),
-	),
-	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
-	height=0.8
-)
+#add_foundation_insulation(
+#	(
+#		(CUT_WIDTH+BWT, BWT),
+#		(wall3_x-BWT, BWT),
+#		(wall3_x-BWT, HOUSE_DEPTH-BWT),
+#		(wall2_x, HOUSE_DEPTH-BWT),
+#		(wall2_x, GYM_DEPTH+BWT),
+#		(CUT_WIDTH+BWT, BWT+GYM_DEPTH),
+#	),
+#	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
+#	height=0.8
+#)
+#add_foundation_insulation(
+#	(
+#		(wall3_x, BWT),
+#		(wall3_x, HOUSE_DEPTH-BWT),
+#		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
+#		(HOUSE_WIDTH-BWT, BWT),
+#	),
+#	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
+#	height=0.8
+#)
+#add_foundation_insulation(
+#	(
+#		(BWT, BWT+GYM_DEPTH+BWT),
+#		(wall2_x-BWT, BWT+GYM_DEPTH+BWT),
+#		(wall2_x-BWT, HOUSE_DEPTH-BWT),
+#		(BWT, HOUSE_DEPTH-BWT),
+#	),
+#	thickness=FOUNDATION_XPS_INSULATION_THICKNESS,
+#	height=0.8
+#)
 
 GARAGE_POST_SIZE = 0.15
 GARAGE_ROOF_THICKNESS = 0.20
@@ -3834,6 +3841,7 @@ if "ground" in sys.argv:
 		radius=8.5,
 		storeys=[ground],
 		right_panel_width=40,
+		section_outline_width=SECTION_OUTLINE_WIDTH,
 	)
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
@@ -3947,6 +3955,8 @@ if "upper" in sys.argv:
 		radius=8.5,
 		storeys=[upper],
 		right_panel_width=40,
+		section_outline_width=SECTION_OUTLINE_WIDTH,
+		section_outline_projected_walls=True,
 	)
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
@@ -4601,7 +4611,7 @@ def add_section_material_legend(drawing):
 		),
 		(
 			"ztracene-bedneni",
-			"Ztracené bednění\nvyplněné Liapor Betonem",
+			"Ztracené bednění",
 		),
 		(
 			"base-plate",
@@ -4616,13 +4626,14 @@ def add_section_material_legend(drawing):
 		),
 		("wood-solid", "Dřevo"),
 		("drywall-diagonal1", "Sádrokarton"),
+		("thermal-impact-insulation", "podlahová izolace"),
 		(
 			"polystyrene-transparent",
 			f"EPS Fasádní izolace"
 		),
 		(
 			"perimeter-polystyrene",
-			f"XPS Perimetrická izolace"
+			f"Perimetrická izolace"
 		),
 		(
 			"rockwool-wave",
@@ -4648,6 +4659,7 @@ if "aa" in sys.argv:
 		storeys=None,
 		doors_closed=True,
 		right_panel_width=60,
+		section_outline_width=SECTION_OUTLINE_WIDTH,
 	)
 	drawing1.add_furniture_label(kamna)
 	#drawing1.add_furniture_label(gauc)
@@ -4940,6 +4952,7 @@ if "bb" in sys.argv:
 		storeys=None,
 		doors_closed=True,
 		right_panel_width=60,
+		section_outline_width=SECTION_OUTLINE_WIDTH,
 	)
 	add_section_material_legend(drawing1)
 	# Dormer-rafter extensions cross this plane, but their insulation stops
@@ -4997,7 +5010,7 @@ if "bb" in sys.argv:
 	# tloustka podlaha nahore
 	drawing1.add_dimension(
 		start=(0, UPPER_FLOOR_START),
-		end=(0, UPPER_FLOOR_START+GROUND_FLOOR_THICKNESS),
+		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
 		offset=-0.5)
 	# tloustka strop
 	drawing1.add_dimension(

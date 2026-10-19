@@ -329,6 +329,23 @@ class CutDrawingTests(unittest.TestCase):
             cls.values = runpy.run_path(str(source))
             cls.rendered = [call.args[0] for call in render.call_args_list]
 
+    def test_exposed_section_outlines_are_enabled_only_for_plans_and_building_sections(self):
+        for drawing in self.values["house"]._drawings:
+            width = ifcopenshell.util.element.get_pset(
+                drawing.element, "EPset_Drawing", "SectionOutlineWidth")
+            if drawing.name == "Roof plan":
+                self.assertIsNone(width)
+            else:
+                self.assertEqual(width, self.values["SECTION_OUTLINE_WIDTH"])
+                self.assertIs(ifcopenshell.util.element.get_pset(
+                    drawing.element, "EPset_Drawing", "SectionOutlineProjectedWalls"), True)
+
+    def test_all_five_wall_plates_have_an_explicit_ifc_role(self):
+        for name in ("beam3", "beam_cut_street", "beam4_a", "beam4_b", "beam_dormer"):
+            self.assertEqual(ifcopenshell.util.element.get_predefined_type(self.values[name]), "WALL_PLATE")
+        for purlin in (*self.values["street_purlins"], *self.values["garden_purlins"]):
+            self.assertNotEqual(ifcopenshell.util.element.get_predefined_type(purlin), "WALL_PLATE")
+
     def test_aa_legend_uses_plain_mdf_instead_of_wood_fibre_batting(self):
         drawing = next(d for d in self.values["house"]._drawings if d.name == "aa")
         tables = json.loads(ifcopenshell.util.element.get_pset(
@@ -356,7 +373,9 @@ class CutDrawingTests(unittest.TestCase):
                 drawing.element, "EPset_Drawing", "RightPanelTables"))
             legends.append([table for table in tables if table["kind"] == "material_legend"])
         self.assertEqual(len(legends[0]), 1)
-        self.assertEqual(len(legends[0][0]["items"]), 12)
+        self.assertEqual(len(legends[0][0]["items"]), 13)
+        self.assertIn({"pattern": "thermal-impact-insulation", "description": "podlahová izolace"},
+                      legends[0][0]["items"])
         self.assertEqual(legends[0], legends[1])
 
     def test_all_plan_symbols_use_shared_cut_definitions(self):
