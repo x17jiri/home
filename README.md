@@ -288,17 +288,35 @@ boundaries to wall, floor and ceiling assemblies (width in printed mm).
 Use `None`, the default, to disable it. Ground/upper plans and AA/BB sections
 enable this pass; roof drawings do not.
 
-`section_outline_projected_walls=True` is the default: visible projected wall
-contours and their insulation join the cut regions. Set it to `False` in any
+`section_outline_offset_ratio=0.25` shifts the new outline centreline toward
+air by 25% of its printed width, so a 0.6 mm stroke moves outward by 0.15 mm.
+Use `0` for the previous centred stroke or `0.5` to put the heavy stroke fully
+outside the assembly. This also moves hole boundaries into rooms/openings;
+the original SVG lines, fills and dimension positions stay unchanged. The
+offset is applied after assembly merging, and contact masks move with it to
+avoid reintroducing hidden edges. The standalone postprocessor calls this
+option `offset_ratio`.
+
+With `section_outline_projected_walls=True`, visible projected wall contours
+and their insulation join the cut regions. Set it to `False` in any
 drawing definition to restore cut-only outlines. This switch has no effect
 unless `section_outline_width` is set. The standalone postprocessor exposes
 the same switch as `projected_walls=True`.
+Projected wall regions are clipped by the existing door/unfilled-opening
+masks before assembly merging and offsetting. Their 25 mm endpoint insets are
+restored using the SVG drawing scale, so outlines stop at the actual jambs
+without thick stubs. Cut-wall geometry and the original thin lines stay intact;
+cut-only drawings are unchanged.
 
 The independent `section_outlines.add_section_outlines()` postprocessor reads
 Bonsai's actual closed SVG cut polygons and uses IFC metadata to group the
 assemblies. It merges adjoining materials, retains room and opening boundaries,
 and suppresses edges in contact with other cut solids. MIAKO internal ceramic
-cells are not treated as room openings. Roof layers, rafters, purlins and other
+cells are not treated as room openings. Foundation slabs (`BASESLAB`) and walls
+made of `ztracene bedneni` keep their original thin lines in all views; they
+still mask contact edges of adjoining outlined solids. Ordinary walls, floors
+and ceilings remain outlined.
+Roof layers, rafters, purlins and other
 projected objects retain their original line weights. Existing SVG paths are
 unchanged; a replaceable `section-outlines` group is inserted below annotation
 overlays before PDF/PNG export. No convex hulls are constructed. The pass accepts
@@ -309,12 +327,17 @@ outlines are not closed artificially; unsupported selected geometry is skipped
 with a warning rather than approximated.
 When Bonsai merges adjoining wall cuts, all wall IDs on the resulting polygon
 are recognised as insulation hosts, not just the first one.
+SHAPELY surface classes can omit `$` and `_` from IFC identifiers. The outline pass
+resolves these classes through native SVG product groups that retain the exact
+identifier, independent of element order. Ambiguous aliases are not guessed.
 Projected wall regions are polygonized from the exported visible linework,
 merging face divisions and retaining nested holes. Open contours are not closed
 artificially; fragmented contours can use touching rendered cut/closed-wall or
 covering-beam boundaries to complete a region. Faces outside the visible extent
-or inside those supporting solids are rejected. Covering beams used this way
-remain unoutlined and mask their contact edges. Full hidden wall footprints
+or inside those supporting solids are rejected. All closed visible projected
+beam regions remain unoutlined and mask wall contact edges, whether or not they
+were needed for contour completion. Original thin timber lines remain intact;
+the same outward tolerance follows the configured outline offset. Full hidden wall footprints
 are never substituted. Visible ring beams also qualify their source wall as an
 insulation host when the masonry underneath is hidden.
 
@@ -605,6 +628,14 @@ house.generate_plan(
 )
 ```
 
+Door openings use thin solid wall-continuation lines (0.1 mm); pass
+`show_overhead=False` to omit them. Unfilled `wall.add_opening()` openings
+have no continuation lines by default; `show_overhead=True` explicitly opts
+back in. Facade-insulation opening boundaries are independent of this switch.
+Unfilled openings retain an invisible mask source so projected wall/lintel
+edges are covered even when no continuation line is drawn. The cover is only
+used when the plan cut intersects the opening.
+
 Plan drawings automatically label every included door with its width and
 height in millimetres, separated by a line. The label sits inside the door
 swing. Use `clear_height` when the usable passage is lower than the door's
@@ -769,8 +800,8 @@ with the light-pink perimeter-insulation tint. Rockwool uses the conventional
 batting wave and follows the wall direction. Rockwool also receives an
 opening-aware boundary box matching the polystyrene outline; its batting is
 inset slightly inside that box on all four sides and uses a lighter stroke. A
-single dashed outer boundary continues across each door or window opening for
-all insulation materials, using the same dash cadence as the opening;
+single thin solid outer boundary continues across each door or window opening
+for all insulation materials (0.1 mm, without a heavy section outline);
 the wall-side boundary remains absent to avoid duplicating opening linework.
 The insulation begins directly at the finished wall face and is drawn at its
 full requested thickness. It is placed behind the wall linework so the shared

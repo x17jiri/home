@@ -338,7 +338,10 @@ class CutDrawingTests(unittest.TestCase):
             else:
                 self.assertEqual(width, self.values["SECTION_OUTLINE_WIDTH"])
                 self.assertIs(ifcopenshell.util.element.get_pset(
-                    drawing.element, "EPset_Drawing", "SectionOutlineProjectedWalls"), True)
+                    drawing.element, "EPset_Drawing", "SectionOutlineProjectedWalls"),
+                    drawing.section_outline_projected_walls)
+                self.assertEqual(ifcopenshell.util.element.get_pset(
+                    drawing.element, "EPset_Drawing", "SectionOutlineOffsetRatio"), .25)
 
     def test_all_five_wall_plates_have_an_explicit_ifc_role(self):
         for name in ("beam3", "beam_cut_street", "beam4_a", "beam4_b", "beam_dormer"):

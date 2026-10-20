@@ -150,7 +150,7 @@ def rafter_x_position(rafter):
 		return rafter.x
 	return rafter[0] if isinstance(rafter, tuple) else rafter
 
-SECTION_OUTLINE_WIDTH = 0.6
+SECTION_OUTLINE_WIDTH = 0.3
 RAFTER_Z_OFFSET = -0.05
 RAFTER_THICKNESS = 0.08
 STRONGER_RAFTER_THICKNESS = 0.10
@@ -1058,7 +1058,7 @@ kamna = ground.furniture(
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
     center=(wall2_x + 0.5, BWT+CHODBA_DEPTH+0.115+0.2+0.25),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
+	start_height=GROUND_FLOOR_THICKNESS+0.05,
 #    rotation=-45,
 )
 
@@ -4489,6 +4489,8 @@ if "roof" in sys.argv:
 		surface_fills=True,
 		model_line_width=0.06,
 		right_panel_width=65,
+		section_outline_width=SECTION_OUTLINE_WIDTH,
+		section_outline_projected_walls=True,
 	)
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)

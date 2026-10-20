@@ -576,8 +576,8 @@ class AssetCatalog:
         return bounds
 
 
-_DOOR_OVERHEAD_LINE = re.compile(
-    r'(?P<indent>^[ \t]*)<line\b(?P<attrs>[^>\n]*\bdoor-overhead\b[^>\n]*)/>[ \t]*$',
+_OPENING_MASK_LINE = re.compile(
+    r'(?P<indent>^[ \t]*)<line\b(?P<attrs>[^>\n]*\b(?:door-overhead|opening-mask-source)\b[^>\n]*)/>[ \t]*$',
     re.MULTILINE,
 )
 
@@ -602,7 +602,7 @@ def _overhead_mask_global_ids(
             annotation, "EPset_Annotation"
         )
         classes = properties.get("Classes", "") if properties else ""
-        if "door-overhead" not in classes.split():
+        if not {"door-overhead", "opening-mask-source"} & set(classes.split()):
             continue
         bottom = properties.get("OpeningBottom")
         top = properties.get("OpeningTop")
@@ -4485,8 +4485,13 @@ def _postprocess_door_overheads(
 
     if '<polygon class="door-overhead-mask"' not in svg:
         line_groups: dict[str, list[re.Match[str]]] = {}
-        for match in _DOOR_OVERHEAD_LINE.finditer(svg):
+        for match in _OPENING_MASK_LINE.finditer(svg):
             attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match["attrs"]))
+            # Older IFC files tagged insulation continuations as overheads.
+            # Two windows on one wall are separate collinear opening spans,
+            # not opposite sides of a door opening needing a white mask.
+            if "wall-insulation-opening" in attributes.get("class", "").split():
+                continue
             global_id = next(
                 (
                     token
@@ -5883,6 +5888,7 @@ def _render_existing_drawing(
         count = add_section_outlines(
             absolute_output, model, drawing, width_mm=float(section_outline_width),
             projected_walls=(drawing_properties or {}).get("SectionOutlineProjectedWalls", True),
+            offset_ratio=(drawing_properties or {}).get("SectionOutlineOffsetRatio", 0.25),
         )
         print(f"[drawing render] Added {count} exposed section outlines ({section_outline_width:g} mm)", flush=True)
     if target_view != "PLAN_VIEW":
@@ -8014,6 +8020,7 @@ class House:
         model_line_width: Number | None = None,
         section_outline_width: Number | None = None,
         section_outline_projected_walls: bool = False,
+        section_outline_offset_ratio: Number = 0.25,
         surface_fills: bool = False,
     ) -> Drawing:
         """Add a persisted square plan or elevation drawing to this IFC model.
@@ -8038,7 +8045,7 @@ class House:
         :meth:`Drawing.add_door_annotation`.  ``door_annotation_offset`` moves
         every automatic label farther into the door swing in metres.
         ``automatic_plan_annotations`` controls storey-scoped annotations
-        created by model elements, including dashed door/opening overheads and
+        created by model elements, including door/opening continuations and
         furniture labels.  Drawing-specific annotations added explicitly are
         unaffected.
         ``doors_closed`` renders the 3D door leaves closed in an elevation
@@ -8062,6 +8069,10 @@ class House:
         cut-only outlines. Other projections, roofs, material seams and
         annotations keep their original styles. Neither option adds outlines
         unless ``section_outline_width`` is set.
+        ``section_outline_offset_ratio`` moves the outline centreline toward
+        air by this fraction of its width: 0.25 by default, 0 for centred, 0.5
+        for a stroke entirely outside the assembly. Original model lines stay
+        unchanged. The ratio must be non-negative and finite.
         ``surface_fills=True`` enables Bonsai's SHAPELY projected surfaces in
         plans. Wood colours/hatches style those surfaces without hull fills
         or drawing_order overrides; visibility follows actual 3D geometry.
@@ -8088,6 +8099,7 @@ class House:
             model_line_width=model_line_width,
             section_outline_width=section_outline_width,
             section_outline_projected_walls=section_outline_projected_walls,
+            section_outline_offset_ratio=section_outline_offset_ratio,
             surface_fills=surface_fills,
         )
         self._drawings.append(drawing)
@@ -8273,6 +8285,7 @@ class Drawing:
         model_line_width: Number | None,
         section_outline_width: Number | None = None,
         section_outline_projected_walls: bool = True,
+        section_outline_offset_ratio: Number = 0.25,
         surface_fills: bool = False,
     ) -> None:
         self.house = house
@@ -8290,6 +8303,9 @@ class Drawing:
         if not isinstance(section_outline_projected_walls, bool):
             raise TypeError("section_outline_projected_walls must be a boolean")
         self.section_outline_projected_walls = section_outline_projected_walls
+        self.section_outline_offset_ratio = _number(section_outline_offset_ratio, "section_outline_offset_ratio")
+        if self.section_outline_offset_ratio < 0:
+            raise ValueError("section_outline_offset_ratio must not be negative")
         self.section_outline_width = None
         if section_outline_width is not None:
             self.section_outline_width = _number(section_outline_width, "section_outline_width")
@@ -8569,6 +8585,7 @@ class Drawing:
         if self.section_outline_width is not None:
             drawing_properties["SectionOutlineWidth"] = self.section_outline_width
             drawing_properties["SectionOutlineProjectedWalls"] = self.section_outline_projected_walls
+            drawing_properties["SectionOutlineOffsetRatio"] = self.section_outline_offset_ratio
         if not self._includes_all_storeys:
             drawing_properties["Include"] = (
                 " + ".join(
@@ -13155,7 +13172,7 @@ class Drawing:
             properties={
                 "Classes": (
                     f"wall-insulation wall-insulation-{material}-opening "
-                    "wall-insulation-opening door-overhead dashed"
+                    "wall-insulation-opening"
                 )
             },
         )
@@ -13469,7 +13486,7 @@ class Drawing:
                 properties={
                     "Classes": (
                         f"wall-insulation wall-insulation-{material}-opening "
-                        "wall-insulation-opening door-overhead dashed"
+                        "wall-insulation-opening"
                     )
                 },
             )
@@ -16480,7 +16497,7 @@ class Wall(ifcopenshell.entity_instance):
         )
         return recess
 
-    def _add_dashed_overhead_line(
+    def _add_overhead_line(
         self,
         *,
         name: str,
@@ -16489,8 +16506,9 @@ class Wall(ifcopenshell.entity_instance):
         opening_bottom: float,
         opening_top: float,
         wall_faces: bool = False,
+        show_line: bool = True,
     ) -> ifcopenshell.entity_instance:
-        """Add plan-only dashed linework for the wall above an opening."""
+        """Add plan opening linework, or invisible sources for its white mask."""
         model = self.storey.house.model
         annotation = ifcopenshell.api.root.create_entity(
             model,
@@ -16519,7 +16537,7 @@ class Wall(ifcopenshell.entity_instance):
                 "GeometricCurveSet",
                 [model.createIfcGeometricCurveSet(curves)],
             )
-            classes = "door-overhead dashed"
+            classes = "door-overhead"
         else:
             wall_centre = self.body_offset + self.thickness / 2
             representation = ifcopenshell.api.geometry.add_axis_representation(
@@ -16527,7 +16545,9 @@ class Wall(ifcopenshell.entity_instance):
                 context=self.storey.house._annotation_context,
                 axis=[(0.0, wall_centre), (opening_width, wall_centre)],
             )
-            classes = "dashed"
+            classes = "solid"
+        if not show_line:
+            classes = "opening-mask-source"
         ifcopenshell.api.geometry.assign_representation(
             model,
             product=annotation,
@@ -16699,7 +16719,7 @@ class Wall(ifcopenshell.entity_instance):
         width: Number,
         height: Number,
         sill_height: Number = 0,
-        show_overhead: bool = True,
+        show_overhead: bool = False,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Cut an unfilled rectangular opening in this wall.
@@ -16707,8 +16727,10 @@ class Wall(ifcopenshell.entity_instance):
         ``at`` locates the start of the opening along the wall and
         ``sill_height`` and ``height`` are the bottom and top coordinates
         measured above the storey elevation, matching ``add_window`` and
-        ``add_door``.  ``show_overhead`` adds dashed plan-only wall linework
-        across it.
+        ``add_door``. Unfilled openings have no wall-continuation lines by
+        default. ``show_overhead=True`` explicitly adds thin solid plan-only
+        wall linework across the opening. A white mask still hides projected
+        wall edges when the opening intersects the plan's cut height.
         """
         if not isinstance(show_overhead, bool):
             raise TypeError("show_overhead must be a boolean")
@@ -16747,15 +16769,17 @@ class Wall(ifcopenshell.entity_instance):
                 sill_height + opening_height,
             )
         )
-        if show_overhead:
-            self._add_dashed_overhead_line(
-                name=opening_name,
-                opening_start=opening_start,
-                opening_width=width,
-                opening_bottom=sill_height,
-                opening_top=sill_height + opening_height,
-                wall_faces=True,
-            )
+        # Keep the mask independent of the visible wall-continuation style:
+        # Bonsai may project the lintel/wall edges into this clear opening.
+        self._add_overhead_line(
+            name=opening_name,
+            opening_start=opening_start,
+            opening_width=width,
+            opening_bottom=sill_height,
+            opening_top=sill_height + opening_height,
+            wall_faces=True,
+            show_line=show_overhead,
+        )
         return opening
 
     def add_door(
@@ -16793,7 +16817,7 @@ class Wall(ifcopenshell.entity_instance):
         normal plan swing symbol.
         ``reverse_swing`` opens the leaf on the opposite side of the wall
         without changing its hinge end, in both 3D and plan.  ``show_overhead``
-        adds dashed plan-only wall linework across the rough opening.  Casings
+        adds thin solid plan-only wall linework across the rough opening. Casings
         on both wall faces bridge any clearance between the door and rough
         opening; ``casing_overlap`` is how far they continue over the wall
         beyond the rough opening and ``casing_depth`` is their projection from
@@ -16994,7 +17018,7 @@ class Wall(ifcopenshell.entity_instance):
             )
         )
         if show_overhead:
-            self._add_dashed_overhead_line(
+            self._add_overhead_line(
                 name=door_name,
                 opening_start=opening_start,
                 opening_width=opening_width,

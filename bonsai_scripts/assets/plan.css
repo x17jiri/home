@@ -545,13 +545,35 @@ tspan.note-text {
     stroke-width: 0.3 !important;
 }
 
-.PredefinedType-LINEWORK.door-overhead,
+/* Retain opening geometry for the white cover without drawing its edges. */
+.PredefinedType-LINEWORK.opening-mask-source {
+    fill: none !important;
+    stroke: none !important;
+}
+
 .PredefinedType-LINEWORK.load-bearing-wall-outline,
 .PredefinedType-LINEWORK.roof-opening {
     fill: none !important;
     stroke: black !important;
     stroke-width: 0.1 !important;
     stroke-dasharray: 0.7 0.8 !important;
+}
+
+/* Door openings retain thin solid wall-face continuations. */
+.PredefinedType-LINEWORK.door-overhead {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: none !important;
+}
+
+/* Continue the facade edge across door/window openings without a cut outline.
+ * Keep the width used by the former dashed continuation, including old IFCs. */
+.PredefinedType-LINEWORK.wall-insulation-opening {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: none !important;
 }
 
 /* Generic drawing-only lines; export injects their per-color CSS rules. */

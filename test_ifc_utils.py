@@ -7559,7 +7559,7 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.element.get_pset(
                 overhead, "EPset_Annotation", "Classes"
             ),
-            "door-overhead dashed",
+            "door-overhead",
         )
         self.assertAlmostEqual(
             ifcopenshell.util.element.get_pset(
@@ -8040,52 +8040,15 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_volume(wall_shape.geometry),
             5 * 0.25 * 3 - 1.2 * 0.25 * 2,
         )
-        overhead = next(
-            annotation
-            for annotation in house.model.by_type("IfcAnnotation")
-            if annotation.ObjectType == "LINEWORK"
-        )
-        self.assertEqual(
-            ifcopenshell.util.element.get_pset(
-                overhead, "EPset_Annotation", "Classes"
-            ),
-            "door-overhead dashed",
-        )
-        self.assertAlmostEqual(
-            ifcopenshell.util.element.get_pset(
-                overhead, "EPset_Annotation", "OpeningBottom"
-            ),
-            0.2,
-        )
-        self.assertAlmostEqual(
-            ifcopenshell.util.element.get_pset(
-                overhead, "EPset_Annotation", "OpeningTop"
-            ),
-            2.2,
-        )
-        self.assertNotIn(
-            overhead.GlobalId,
-            _overhead_mask_global_ids(house.model, 0.3),
-        )
-        self.assertIn(
-            overhead.GlobalId,
-            _overhead_mask_global_ids(house.model, 1.5),
-        )
-        overhead_representation = ifcopenshell.util.representation.get_representation(
-            overhead, "Plan", "Annotation", "PLAN_VIEW"
-        )
-        self.assertEqual(
-            [
-                curve.Points.CoordList
-                for curve in overhead_representation.Items[0].Elements
-            ],
-            [
-                ((0.025, -0.125), (1.175, -0.125)),
-                ((0.025, 0.125), (1.175, 0.125)),
-            ],
-        )
+        self.assertEqual(len(house._plan_annotations), 1)
+        mask_source = house._plan_annotations[0]
+        self.assertEqual(ifcopenshell.util.element.get_pset(
+            mask_source, "EPset_Annotation", "Classes"), "opening-mask-source")
         drawing = house.add_drawing("Ground plan", 1, 4.5, 1.5, 4)
-        self.assertIn(overhead, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertIn(mask_source, drawing.group.IsGroupedBy[0].RelatedObjects)
+        self.assertNotIn(mask_source.GlobalId, _overhead_mask_global_ids(house.model, .3))
+        self.assertIn(mask_source.GlobalId, _overhead_mask_global_ids(house.model, 1.5))
+        self.assertNotIn(mask_source.GlobalId, _overhead_mask_global_ids(house.model, 2.5))
 
         with TemporaryDirectory() as directory:
             output = Path(directory) / "opening.ifc"
@@ -8093,6 +8056,24 @@ class HouseTests(unittest.TestCase):
             reopened = ifcopenshell.open(output)
             self.assertEqual(len(reopened.by_type("IfcOpeningElement")), 1)
             self.assertEqual(len(reopened.by_type("IfcDoor")), 0)
+
+    def test_opening_continuation_defaults_and_explicit_overrides(self) -> None:
+        house = House("Opening lines")
+        ground = house.storey("Ground", elevation=0)
+        wall = ground.wall((0, 0), (10, 0), thickness=.24, height=3)
+        drawing = house.add_drawing("Plan", 5, 0, 1.5, 6)
+        wall.add_door(at=0.5, width=.9, height=2.1, name="Default door")
+        wall.add_door(at=2, width=.9, height=2.1, show_overhead=False, name="No-line door")
+        wall.add_opening(at=4, width=1, height=2.1, name="Default opening")
+        wall.add_opening(at=6, width=1, height=2.1, show_overhead=True, name="Opt-in opening")
+        overheads = house._plan_annotations
+        self.assertEqual({a.Name for a in overheads},
+                         {"Default door Overhead", "Default opening Overhead", "Opt-in opening Overhead"})
+        for annotation in overheads:
+            self.assertEqual(ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"),
+                "opening-mask-source" if annotation.Name == "Default opening Overhead" else "door-overhead")
+            self.assertIn(annotation, drawing.group.IsGroupedBy[0].RelatedObjects)
 
     def test_adds_partial_depth_wall_recesses_from_either_side(self) -> None:
         house = House("My house")
@@ -10417,24 +10398,25 @@ class HouseTests(unittest.TestCase):
             other_drawing.group.IsGroupedBy[0].RelatedObjects,
         )
 
-    def test_styles_wall_outlines_like_wall_openings(self) -> None:
+    def test_styles_wall_outlines_and_roof_openings_dashed_but_doors_solid(self) -> None:
         stylesheet = (
             Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css"
         ).read_text(encoding="utf-8")
 
         shared_rule = stylesheet.split(
-            ".PredefinedType-LINEWORK.door-overhead", maxsplit=1
+            ".PredefinedType-LINEWORK.load-bearing-wall-outline", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
-        self.assertIn(
-            ".PredefinedType-LINEWORK.load-bearing-wall-outline",
-            shared_rule,
-        )
         self.assertIn(
             ".PredefinedType-LINEWORK.roof-opening",
             shared_rule,
         )
         self.assertIn("stroke-width: 0.1 !important", shared_rule)
         self.assertIn("stroke-dasharray: 0.7 0.8 !important", shared_rule)
+        door_rule = stylesheet.split(
+            ".PredefinedType-LINEWORK.door-overhead {", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("stroke-width: 0.1 !important", door_rule)
+        self.assertIn("stroke-dasharray: none !important", door_rule)
 
         roof_opening_rule = stylesheet.split(
             ".roof-opening-mask", maxsplit=1
@@ -10786,7 +10768,7 @@ class HouseTests(unittest.TestCase):
             )
             == (
                 "wall-insulation wall-insulation-polystyrene-opening "
-                "wall-insulation-opening door-overhead dashed"
+                "wall-insulation-opening"
             )
         )
         opening_curves = (
@@ -10902,7 +10884,7 @@ class HouseTests(unittest.TestCase):
             )
             == (
                 "wall-insulation wall-insulation-rockwool-opening "
-                "wall-insulation-opening door-overhead dashed"
+                "wall-insulation-opening"
             )
         )
         self.assertEqual(
@@ -11100,7 +11082,7 @@ class HouseTests(unittest.TestCase):
             )
             == (
                 "wall-insulation wall-insulation-polystyrene-opening "
-                "wall-insulation-opening door-overhead dashed"
+                "wall-insulation-opening"
             )
         )
         opening_curve = (
@@ -12752,6 +12734,65 @@ class HouseTests(unittest.TestCase):
                 overlay_svg.index("Poznámka"),
             )
 
+    def test_masks_unfilled_openings_without_visible_continuation_lines(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.svg"
+            path.write_text(
+                '<svg>\n'
+                '  <path id="projected-wall-edge" d="M0 10H10 M0 12H10"/>\n'
+                '  <line class="GlobalId-opening IfcAnnotation PredefinedType-LINEWORK '
+                'opening-mask-source" x1="0" y1="10" x2="10" y2="10"/>\n'
+                '  <line class="GlobalId-opening IfcAnnotation PredefinedType-LINEWORK '
+                'opening-mask-source" x1="0" y1="12" x2="10" y2="12"/>\n'
+                '</svg>\n', encoding="utf-8")
+            original = path.read_text()
+            # A cut above/below the opening must not cover the projected wall.
+            _postprocess_door_overheads(path, mask_global_ids=set())
+            self.assertEqual(path.read_text(), original)
+            _postprocess_door_overheads(path, mask_global_ids={"opening"})
+            result = path.read_text()
+            self.assertEqual(result.count('<polygon class="door-overhead-mask"'), 1)
+            self.assertIn('points="0,10 10,10 10,12 0,12"', result)
+            self.assertLess(result.index('id="projected-wall-edge"'),
+                            result.index('<polygon class="door-overhead-mask"'))
+            self.assertNotIn("door-overhead dashed", result)
+            self.assertNotIn("door-overhead solid", result)
+            _postprocess_door_overheads(path, mask_global_ids={"opening"})
+            self.assertEqual(path.read_text(), result)
+        stylesheet = (Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css").read_text()
+        rule = stylesheet.split(".PredefinedType-LINEWORK.opening-mask-source {", 1)[1].split("}", 1)[0]
+        self.assertIn("stroke: none !important", rule)
+        self.assertIn("fill: none !important", rule)
+
+    def test_insulation_continuations_never_create_door_overhead_masks(self) -> None:
+        # Legacy IFCs give two dormer-window spans the same overhead class/ID.
+        # Exclude them even when their linework would form a nondegenerate mask.
+        for y2 in (10, 12):
+            with self.subTest(y2=y2), TemporaryDirectory() as directory:
+                path = Path(directory) / "plan.svg"
+                path.write_text(
+                    '<svg>\n'
+                    '  <line class="GlobalId-insulation IfcAnnotation PredefinedType-LINEWORK '
+                    'wall-insulation wall-insulation-opening door-overhead dashed" '
+                    'x1="0" y1="10" x2="10" y2="10"/>\n'
+                    '  <line class="GlobalId-insulation IfcAnnotation PredefinedType-LINEWORK '
+                    'wall-insulation wall-insulation-opening door-overhead dashed" '
+                    f'x1="20" y1="{y2}" x2="30" y2="{y2}"/>\n'
+                    '  <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK '
+                    'door-overhead dashed" x1="0" y1="20" x2="10" y2="20"/>\n'
+                    '  <line class="GlobalId-door IfcAnnotation PredefinedType-LINEWORK '
+                    'door-overhead dashed" x1="0" y1="22" x2="10" y2="22"/>\n'
+                    '</svg>\n', encoding="utf-8")
+                _postprocess_door_overheads(path)
+                _postprocess_wall_insulation_backdrop(path)
+                result = path.read_text()
+                self.assertEqual(result.count('<polygon class="door-overhead-mask"'), 1)
+                self.assertIn('points="0,20 10,20 10,22 0,22"', result)
+                self.assertEqual(result.count('GlobalId-insulation'), 2)
+                _postprocess_door_overheads(path)
+                _postprocess_wall_insulation_backdrop(path)
+                self.assertEqual(path.read_text(), result)
+
     def test_layers_door_and_furniture_symbols_above_plan_linework(self) -> None:
         with TemporaryDirectory() as directory:
             svg_path = Path(directory) / "plan.svg"
@@ -13741,7 +13782,15 @@ class HouseTests(unittest.TestCase):
         opening_rule = stylesheet.split(
             ".PredefinedType-LINEWORK.door-overhead", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
-        self.assertIn("stroke-dasharray: 0.7 0.8 !important", opening_rule)
+        self.assertIn("stroke-dasharray: none !important", opening_rule)
+        continuation_rule = stylesheet.split(
+            ".PredefinedType-LINEWORK.wall-insulation-opening {", maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("stroke-dasharray: none !important", continuation_rule)
+        self.assertIn("stroke-width: 0.1 !important", continuation_rule)
+        self.assertIn("fill: none !important", continuation_rule)
+        self.assertGreater(stylesheet.index(".PredefinedType-LINEWORK.wall-insulation-opening {"),
+                           stylesheet.index(".PredefinedType-LINEWORK.door-overhead"))
         self.assertNotIn("wall-insulation-interface", stylesheet)
 
     def test_roof_tiles_are_white_in_projection_and_red_in_cut(self) -> None:

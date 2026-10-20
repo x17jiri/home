@@ -152,6 +152,30 @@ def _polygon(element, matrix, grid):
     return result
 
 
+def _opening_exclusion(element, matrix, grid, inset):
+    """Restore the jamb ends trimmed off a rendered opening's white mask.
+
+    The mask generator insets each end by min(25 mm, opening_width / 4).
+    Its four points follow the two wall faces. Extend only along that axis,
+    before applying SVG transforms, so rotations/mirroring/scaling also work.
+    """
+    rings = _rings(element)
+    if len(rings) != 1 or len(rings[0]) != 5:
+        return GeometryCollection()
+    points = np.array(rings[0][:-1], dtype=float)
+    axis = points[1] - points[0]
+    length = np.linalg.norm(axis)
+    if length <= grid:
+        return GeometryCollection()
+    extension = axis / length * min(inset, length / 2)
+    points += np.array((-extension, extension, extension, -extension))
+    points = [tuple(np.round((matrix @ (*p, 1))[:2] / grid) * grid) for p in points]
+    polygon = Polygon(points)
+    if not polygon.is_valid or polygon.area <= grid * grid:
+        return GeometryCollection()
+    return polygon.buffer(grid * 2, join_style=2)
+
+
 def _category(element):
     """Return a category and assembly key, following decomposed slab parts."""
     current = element
@@ -168,6 +192,16 @@ def _category(element):
     if any(e.is_a("IfcRoof") or e.is_a("IfcSlab")
            and ifcopenshell.util.element.get_predefined_type(e) == "ROOF" for e in ancestors):
         return None, element.GlobalId, False
+    # Foundation concrete keeps its native thin strokes in every view. Still
+    # retain its cut geometry as a contact mask for adjoining outlined solids.
+    if any(owner.is_a("IfcSlab")
+           and ifcopenshell.util.element.get_predefined_type(owner) == "BASESLAB"
+           or owner.is_a("IfcWall") and any(
+               material.Name.casefold().replace(" ", "-")
+               in {"ztracene-bedneni", "ztracené-bednění"}
+               for material in ifcopenshell.util.element.get_materials(owner))
+           for owner in ancestors):
+        return None, element.GlobalId, False
     for owner in ancestors:
         if ifcopenshell.util.element.get_pset(owner, "BBIM_MiakoSlab"):
             return "ceilings", owner.GlobalId, not bool(owner.HasOpenings)
@@ -175,7 +209,7 @@ def _category(element):
             return "walls", owner.GlobalId, False
         if owner.is_a("IfcCovering") and ifcopenshell.util.element.get_predefined_type(owner) == "CEILING":
             return "ceilings", owner.GlobalId, False
-        if owner.is_a("IfcSlab") and ifcopenshell.util.element.get_predefined_type(owner) in {"FLOOR", "BASESLAB"}:
+        if owner.is_a("IfcSlab") and ifcopenshell.util.element.get_predefined_type(owner) == "FLOOR":
             return "floors", owner.GlobalId, False
     return None, element.GlobalId, False
 
@@ -321,16 +355,24 @@ def _insert_layer(svg, layer):
 
 def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
                          categories=("walls", "floors", "ceilings"),
-                         projected_walls=True):
+                         projected_walls=True, offset_ratio=0.25):
     """Append exposed assembly boundaries; return the number of polylines.
 
     Geometry comes from the rendered closed cut polygons; IFC supplies assembly
     ownership, roof exclusions and the host of facade-insulation annotations.
     By default, closed visible projected wall contours and their insulation join
     the cut regions. Set projected_walls=False to retain cut-only boundaries.
+    Rendered door/unfilled-opening masks keep projected walls out of the gaps;
+    their 25 mm endpoint insets are restored before subtracting the openings.
     Explicit WALL_PLATE members are included as part of the wall assemblies.
+    The centreline is offset toward air by offset_ratio times the printed line
+    width (default 0.25). Zero restores a centred stroke; 0.5 puts it outside.
     Other cut solids suppress contact edges but never receive thick outlines
     themselves. Internal MIAKO cells are not treated as room openings.
+    With projected_walls enabled, all closed visible projected beam regions
+    also suppress contact edges, without receiving new outlines themselves.
+    Foundation slabs and permanent-formwork walls keep their original thin
+    strokes in all views, but still suppress contact edges of adjacent solids.
 
     The only file changed is svg_path. Re-running replaces our own group. The
     normal renderer calls this before annotation overlays and PDF/PNG export.
@@ -341,6 +383,9 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
         raise ValueError("section outline width must be positive and finite")
     if not isinstance(projected_walls, bool):
         raise TypeError("projected_walls must be a boolean")
+    if isinstance(offset_ratio, bool) or not isinstance(offset_ratio, (int, float)) \
+            or not isfinite(offset_ratio) or offset_ratio < 0:
+        raise ValueError("section outline offset ratio must be non-negative and finite")
     if isinstance(categories, str):
         raise TypeError("categories must be a sequence of category names")
     categories = frozenset(categories)
@@ -356,7 +401,25 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
         raise ValueError("section outlines require a positive mm SVG width and viewBox")
     units_per_mm = view_box[2] / float(physical_width[1])
     grid = .001 * units_per_mm
+    offset = width_mm * offset_ratio * units_per_mm
+    scale = re.fullmatch(rf"\s*({_NUMBER})\s*[:/]\s*({_NUMBER})\s*",
+                         root.get("data-scale", ""))
+    opening_inset = (25 * float(scale[1]) / float(scale[2]) * units_per_mm
+                     if scale and float(scale[1]) > 0 and float(scale[2]) > 0 else 0)
+    # SHAPELY surface paths identify products only through CSS-safe classes,
+    # which drop '$' and '_' from IFC GUIDs. Native product groups retain the exact
+    # ifc:guid; collect aliases up front, since surfaces can precede them.
+    guid_aliases = defaultdict(set)
+    for element in root.iter():
+        guid = element.get(_IFC + "guid", "")
+        if not _GUID.fullmatch(guid):
+            continue
+        normalized_guid = guid.replace("$", "").replace("_", "")
+        for token in element.get("class", "").split():
+            if token in {f"GlobalId-{guid}", f"GlobalId-{normalized_guid}"}:
+                guid_aliases[token.removeprefix("GlobalId-")].add(guid)
     sources, included_walls, cache, category_cache = [], set(), {}, {}
+    opening_masks = []
     host_cache = {}
     insulation_segments, insulation_hosts = defaultdict(list), {}
     projection_segments, projection_aliases = defaultdict(list), defaultdict(set)
@@ -364,7 +427,15 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
 
     def product(element, classes, inherited, is_cut, is_projected):
         candidates = [element.get(_IFC + "guid", "")]
-        candidates += sorted(c.removeprefix("GlobalId-") for c in classes)
+        for token in sorted(classes):
+            guid = token.removeprefix("GlobalId-")
+            aliases = guid_aliases.get(guid)
+            if aliases:
+                # Sanitization can collide; never guess a product in that case.
+                if len(aliases) != 1:
+                    continue
+                guid = next(iter(aliases))
+            candidates.append(guid)
         first = None
         walls = set()
         for guid in candidates:
@@ -412,6 +483,10 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
             is_cut = True
             is_projected = False
         matrix = matrix @ _transform(element.get("transform", ""))
+        if projected_walls and "door-overhead-mask" in own_classes:
+            geometry = _opening_exclusion(element, matrix, grid, opening_inset)
+            if not geometry.is_empty:
+                opening_masks.append(geometry)
         owner = product(element, own_classes, owner, is_cut, is_projected)
         if owner is not None and is_cut and owner.is_a("IfcWall"):
             included_walls.add(owner.GlobalId)
@@ -435,9 +510,9 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
                 except ValueError as error:
                     warnings.warn(f"Section outline skipped projected {owner.Name}: {error}", stacklevel=2)
             elif projected_walls and is_projected and owner.is_a("IfcBeam"):
-                # E.g. a wall plate hiding the middle of a capping ring beam.
-                # Its exported closed contour can complete the visible returns
-                # without making the timber itself an outlined wall assembly.
+                # Visible timber masks wall contact edges, even when no wall
+                # contour needs completion. Its closed contour can also supply
+                # missing returns without becoming an outlined assembly.
                 try:
                     covering_segments[owner.GlobalId].extend(_segments(element, matrix, grid))
                 except ValueError:
@@ -456,6 +531,7 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
             walk(child, matrix, owner, is_cut, is_projected, classes)
 
     walk(root, np.eye(3))
+    cut_source_count = len(sources)
     incomplete = []
     for guid, segments in projection_segments.items():
         geometry = _projected_regions(segments)
@@ -464,10 +540,9 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
             included_walls.update(projection_aliases.get(guid, (guid,)))
         else:
             incomplete.append((guid, segments))
-    covering = [_projected_regions(segments) for segments in covering_segments.values()] if incomplete else []
+    covering = [_projected_regions(segments) for segments in covering_segments.values()]
     covering = [geometry for geometry in covering if not geometry.is_empty]
     supporting = [geometry for _, _, _, geometry, _, insulation in sources if not insulation] + covering
-    used_covering = []
     # A plate can itself need a neighbouring wall to close its contour, then
     # supply the missing boundary of the ring beam beneath it. Repeat until no
     # new faces are found; occupied supporting faces cannot be added twice.
@@ -480,15 +555,22 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
             sources.append(("walls", guid, False, geometry, None, False))
             included_walls.update(projection_aliases.get(guid, (guid,)))
             supporting.append(geometry)
-            used_covering.extend(g for g in covering if g.distance(geometry) <= grid * 2)
             changed = True
         if not changed:
             break
+    if opening_masks:
+        # Do this after contour completion (which could otherwise close the
+        # gaps again), but before merging/offsetting. Cut jambs stay untouched.
+        exclusions = unary_union(opening_masks)
+        sources[cut_source_count:] = [
+            (category, assembly, cells, geometry.difference(exclusions), host, insulation)
+            for category, assembly, cells, geometry, host, insulation in sources[cut_source_count:]
+        ]
     for guid, segments in insulation_segments.items():
         geometry = _closed_segments(segments)
         if not geometry.is_empty:
             sources.append(("walls", guid, False, geometry, insulation_hosts[guid], True))
-    selected, other, fill_cells = defaultdict(list), used_covering, set()
+    selected, other, fill_cells = defaultdict(list), list(covering), set()
     for category, assembly, cells, geometry, host, insulation in sources:
         if insulation:
             if host not in included_walls:
@@ -504,9 +586,16 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
     for key, parts in selected.items():
         assembly = unary_union(parts)
         assemblies.append(_without_internal_cells(assembly) if key in fill_cells else assembly)
-    boundaries = unary_union(assemblies).boundary if assemblies else GeometryCollection()
+    solid = unary_union(assemblies)
+    # Buffer the merged solid, not individual elements or open boundary pieces.
+    # This expands external contours and shrinks room/opening holes toward air,
+    # independent of winding, mirroring or view orientation, without seams.
+    contour = solid.buffer(offset, join_style=2) if offset else solid
+    boundaries = contour.boundary if not contour.is_empty else GeometryCollection()
     if other and not boundaries.is_empty:
-        boundaries = boundaries.difference(unary_union(other).buffer(grid * 2, join_style=2))
+        # Carry the contact mask outward too, so hidden contact edges and their
+        # corner returns cannot reappear merely because the stroke moved.
+        boundaries = boundaries.difference(unary_union(other).buffer(offset + grid * 2, join_style=2))
     parts = sorted(_line_parts(boundaries), key=lambda line: (*line.bounds, line.length))
     paths = []
     for part in parts:
@@ -514,7 +603,9 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
         paths.append(f'<path class="section-outline" d="{escape(d, quote=True)}"/>')
     if paths:
         layer = ('\n<g id="section-outlines" class="section-outlines" '
-                 f'data-width-mm="{width_mm:g}" style="fill:none;stroke:black;stroke-width:{width_mm * units_per_mm:g};'
+                 f'data-width-mm="{width_mm:g}" data-offset-ratio="{offset_ratio:g}" '
+                 f'data-offset-mm="{width_mm * offset_ratio:g}" '
+                 f'style="fill:none;stroke:black;stroke-width:{width_mm * units_per_mm:g};'
                  'stroke-linejoin:round;stroke-linecap:round">\n'
                  + "\n".join(paths) + '\n</g>\n')
         svg = _insert_layer(svg, layer)
