@@ -193,8 +193,9 @@ ROOF_TILE_THICKNESS = 0.03
 RIDGE_TILE_WIDTH = 0.40
 RIDGE_TILE_RISE = 0.12
 RIDGE_TILE_THICKNESS = 0.025
-GROUND_FLOOR_THICKNESS = 0.21
-UPPER_FLOOR_THICKNESS = 0.10
+CEMFLOW_AND_FINISH_THICKNESS = 0.065
+GROUND_FLOOR_THICKNESS = 0.18+CEMFLOW_AND_FINISH_THICKNESS
+UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
 CEILING_FINISH_THICKNESS = 0.015
@@ -210,7 +211,7 @@ UPPER_RING_BEAM_HEIGHT = 0.25
 VAZNICE_HEIGHT = 0.32
 VAZNICE_BASE = 0.20
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
-VAZNICE_DIST = 1.179 - VAZNICE_HALF_BASE
+VAZNICE_DIST = 1.174 - VAZNICE_HALF_BASE
 # Independent side pieces; their tops and outer faces align with the middle.
 VAZNICE_SIDE_HEIGHT = 0.24
 VAZNICE_SIDE_BASE = 0.16
@@ -307,7 +308,7 @@ POLYSTYRENE_INSULATION_THICKNESS = (
 )
 ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.005
 
-ground_floor_height = 2.85
+ground_floor_height = 2.875
 GROUND_WALL_BASE_COURSE_HEIGHT = 0.25
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 door_clear_height = 2.1
@@ -369,7 +370,7 @@ dry_wall = house.wall_type(
 	color="#dfefcf"
 )
 
-HOUSE_DEPTH = 8.00
+HOUSE_DEPTH = 7.99
 HALF_DEPTH = HOUSE_DEPTH / 2.0
 KITCHEN_WIDTH = 4.5 + 0.01
 CUT_WIDTH = 1.75
@@ -412,7 +413,7 @@ pokoj_dole = ground.floor_layer(
 		(BWT, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -464,11 +465,14 @@ CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
 CHIMNEY_Y_START = GALERY_START - 0.45 # override
 
-CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
-CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
-
 CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2
 
+############## overrides
+CHIMNEY_Y_START = BWT + GYM_DEPTH - 0.42
+CHIMNEY_X_START = wall2_x - BWT
+
+CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
+CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
 CHIMNEY_X_MID = CHIMNEY_X_START + 0.2
 CHIMNEY_X_END = CHIMNEY_X_START + 0.4
 
@@ -497,7 +501,7 @@ kuchyn = ground.floor_layer(
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -514,7 +518,7 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -529,7 +533,7 @@ koupelna = ground.floor_layer(
 		(wall3_x, BWT+BATHROOM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
-	insulation_thickness=GROUND_FLOOR_THICKNESS-0.07,
+	insulation_thickness=GROUND_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 	insulation_material=FLOOR_INSULATION_MATERIAL,
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
@@ -580,7 +584,7 @@ ground.connect_wall(wall_4_g, wall_back_g)
 # Front door/window
 
 BOTTOM_STAIR_TREADS = 9
-GROUND_DOOR_HEIGHT = 2.32
+GROUND_DOOR_HEIGHT = 2.375
 GROUND_WINDOW_HEIGHT = 2.5
 GROUND_WINDOW_SILL_HEIGHT = 1.125
 front_door = wall_1b_g.add_door(
@@ -609,7 +613,7 @@ window_pokoj_dole = wall_back_g.add_window(
 	width=1.5, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
 window_kk = wall_back_g.add_door(
 	at=BWT+KK_WIDTH-0.125-1,
-	width=0.8, sill_height=GROUND_WINDOW_HEIGHT-2.0,
+	width=0.8, sill_height=GROUND_WINDOW_HEIGHT-2.125,
 	height=GROUND_WINDOW_HEIGHT, # align height with windows even though this is door
 	opening_width=1, clear_height=2,
 	operation="SINGLE_SWING_RIGHT",)
@@ -913,7 +917,7 @@ kitchen_door = wall_kitchen_1.add_door(
 	at=1.25,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
-	sill_height=GROUND_FLOOR_THICKNESS,
+	sill_height=0,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_LEFT",
 	reverse_swing=False
@@ -924,7 +928,7 @@ pokoj0_door = wall_gym_g.add_door(
 	at=wall2_x-2*BWT-0.25-1,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
-	sill_height=GROUND_FLOOR_THICKNESS,
+	sill_height=0,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_RIGHT",
 #	reverse_swing=True,
@@ -935,14 +939,14 @@ oblouk1 = wall_3.add_opening(
 	at=oblouk1_at,
 	width=1.5,
     height=ground_floor_height-0.5,
-    sill_height=GROUND_FLOOR_THICKNESS,
+    sill_height=0,
 	name="Oblouk1"
 )
 oblouk2 = wall_3.add_opening(
 	at=oblouk2_at,
 	width=1.5,
     height=ground_floor_height-0.5,
-    sill_height=GROUND_FLOOR_THICKNESS,
+    sill_height=0,
 	name="Oblouk2"
 )
 
@@ -1202,7 +1206,7 @@ upper_pokoj_1 = upper.floor_layer(
 			(BWT, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -1217,7 +1221,7 @@ upper_pokoj_2 = upper.floor_layer(
 			(wall2_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -1232,7 +1236,7 @@ galerie = upper.floor_layer(
 			(wall2_x, GALERY_END),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -1247,7 +1251,7 @@ upper_sklad = upper.floor_layer(
 			(wall3_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -1262,7 +1266,7 @@ zachod_nahore = upper.floor_layer(
 			(wall3_x, BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-0.07,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
 		insulation_material=FLOOR_INSULATION_MATERIAL,
 		buildup_material=FLOOR_BUILDUP_MATERIAL,
 		color="#ffff80",
@@ -3107,9 +3111,9 @@ def outside_dims(drawing1):
 
 def common_dims(drawing1):
 	outside_dims(drawing1)
-	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT), end=(wall2_x-BWT, HOUSE_DEPTH-BWT), offset=1)
-	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT), end=(wall3_x-BWT, HOUSE_DEPTH-BWT), offset=1)
-	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=1)
+	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT-2.1), end=(wall2_x-BWT, HOUSE_DEPTH-BWT-2.1), offset=0)
+	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT-2.1), end=(wall3_x-BWT, HOUSE_DEPTH-BWT-2.1), offset=0)
+	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT-2.1), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT-2.1), offset=0)
 
 	# Risankuv pokoj hloubka
 	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1)
@@ -3897,7 +3901,7 @@ if "ground" in sys.argv:
 	)
 
 	drawing1.add_room_annotation(
-		(wall3_x - 2.5, HOUSE_DEPTH - 2.5),
+		(wall3_x - 2, HOUSE_DEPTH - 3),
 		identifier=kuchyn.room_id,
 		description="Obývak s KK",
 		area=kuchyn.area,
@@ -3918,7 +3922,7 @@ if "ground" in sys.argv:
 		window_area=window_area(window_bathroom),
 	)
 	drawing1.add_room_annotation(
-		(6, 1+1),
+		(6.5, 1+0.5),
 		identifier=chodba.room_id,
 		description="Chodba a schody",
 		area=chodba.area,
@@ -3942,6 +3946,15 @@ if "ground" in sys.argv:
 	drawing1.add_lintel(oblouk1, 5)
 	drawing1.add_lintel(oblouk2, 5)
 	drawing1.add_lintel_legend()
+
+	drawing1.add_opening_dimension(kitchen_door, offset=-0.5)
+	drawing1.add_opening_dimension(oblouk1, offset=BWT/2)
+	drawing1.add_opening_dimension(oblouk2, offset=BWT/2)
+	drawing1.add_opening_dimension(window_bathroom, offset=-0.75)
+	drawing1.add_opening_dimension(window_obyvak, offset=-0.6)
+	drawing1.add_opening_dimension(window_pokoj_dole, offset=-0.6)
+	drawing1.add_opening_dimension(window_kk, offset=-0.6)
+	drawing1.add_opening_dimension(pokoj0_door, offset=-0.5)
 
 	drawing1.render("ground.svg", pdf=PDF_GROUND)
 
@@ -4042,12 +4055,6 @@ if "upper" in sys.argv:
 	drawing1.add_lintel(window_sklad, 1, position="after", direction="in")
 	drawing1.add_lintel(sklad_opening, 1, position="after")
 	drawing1.add_lintel_legend()
-
-	# stoupacka kanalizace
-	#drawing1.add_drainage_stack(
-	#    center=(DRAINAGE_STACK_X, DRAINAGE_STACK_Y),
-    #	diameter=0.11,
-	#)
 
 	drawing1.render("upper.svg", pdf=PDF_UPPER)
 

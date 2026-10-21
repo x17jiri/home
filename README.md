@@ -651,6 +651,28 @@ kitchen_door = wall.add_door(
 )
 ```
 
+For an external plan dimension of a door, window, or unfilled wall opening:
+
+```python
+drawing.add_opening_dimension(
+    kitchen_door,
+    offset=-1,
+    finished_floor_height=GROUND_FLOOR_THICKNESS,
+)
+```
+
+The construction width is above the line; `height (sill_height)` is below it,
+all in millimetres. Height is opening top minus bottom, not its top elevation
+or the door's usable passage height. Sill height is relative to finished floor.
+For a negative sill, the lower label instead shows height above floor + depth
+below floor, e.g. `2100 + 100`.
+`finished_floor_height` is in metres above the host storey base, not absolute Z.
+Omit it to use the common top level of that storey's FLOOR layers; absent or
+different floor levels require an explicit value. Offset follows the normal
+dimension convention, relative to the wall's start-to-end direction. Native
+dimension markers, readable mirrored text, and topmost dimension layering are
+preserved. This does not replace automatic labels inside door swings.
+
 Use `opening_width` and `opening_height` for the larger construction opening.
 The door casing automatically bridges that clearance on both wall faces and,
 by default, continues 25 mm over the surrounding wall with a 5 mm projection.

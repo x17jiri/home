@@ -7665,7 +7665,7 @@ class HouseTests(unittest.TestCase):
         )
         plan_coordinates = [
             coordinate
-            for item in plan.Items
+            for item in ifcopenshell.util.representation.resolve_representation(plan).Items
             if item.is_a("IfcIndexedPolyCurve")
             for coordinate in item.Points.CoordList
         ]
@@ -7960,6 +7960,8 @@ class HouseTests(unittest.TestCase):
         reversed_plan = ifcopenshell.util.representation.get_representation(
             reversed_door, "Plan", "Body", "PLAN_VIEW"
         )
+        normal_plan = ifcopenshell.util.representation.resolve_representation(normal_plan)
+        reversed_plan = ifcopenshell.util.representation.resolve_representation(reversed_plan)
         for normal_lining, reversed_lining in zip(
             normal_plan.Items[:2], reversed_plan.Items[:2]
         ):

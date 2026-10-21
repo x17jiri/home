@@ -583,10 +583,8 @@ _OPENING_MASK_LINE = re.compile(
 
 _SVG_NUMBER = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 _DIMENSION_LABEL = re.compile(
-    rf'(?P<prefix><line\b(?P<line_attrs>[^>\n]*\bPredefinedType-DIMENSION\b[^>\n]*)/>'
-    rf'\s*<text\b[^>\n]*\btransform="translate\()'
-    rf'(?P<text_x>{_SVG_NUMBER}),\s*(?P<text_y>{_SVG_NUMBER})'
-    rf'(?P<suffix>\)\s*rotate\([^"\n]+\)"[^>\n]*>)'
+    r'(?P<line><line\b(?P<line_attrs>[^>\n]*\bPredefinedType-DIMENSION\b[^>\n]*)/>)'
+    r'(?P<labels>(?:\s*<text\b[^>]*?(?<!/)>[\s\S]*?</text>){1,2})'
 )
 
 
@@ -4465,21 +4463,27 @@ def _postprocess_door_overheads(
             return match.group(0)
         midpoint_x = (start_x + end_x) / 2
         midpoint_y = (start_y + end_y) / 2
-        text_x = float(match["text_x"])
-        text_y = float(match["text_y"])
-        along_line = (
-            (text_x - midpoint_x) * delta_x
-            + (text_y - midpoint_y) * delta_y
-        ) / squared_length
-        if abs(along_line) <= 1e-12:
-            return match.group(0)
-        centered_x = text_x - along_line * delta_x
-        centered_y = text_y - along_line * delta_y
-        changed = True
-        return (
-            f'{match["prefix"]}{centered_x:.12g}, {centered_y:.12g}'
-            f'{match["suffix"]}'
-        )
+        def center_text(text: re.Match[str]) -> str:
+            if not re.search(r'\bclass="[^"]*\bDIMENSION\b', text[0]):
+                return text[0]
+
+            def center_position(position: re.Match[str]) -> str:
+                nonlocal changed
+                x, y = float(position["x"]), float(position["y"])
+                along = ((x - midpoint_x) * delta_x + (y - midpoint_y) * delta_y) / squared_length
+                if abs(along) <= 1e-12:
+                    return position[0]
+                changed = True
+                return (f'{position["prefix"]}{x - along * delta_x:.12g}, '
+                        f'{y - along * delta_y:.12g})')
+
+            return re.sub(
+                rf'(?P<prefix>\btransform="translate\()(?P<x>{_SVG_NUMBER}),\s*(?P<y>{_SVG_NUMBER})\)',
+                center_position, text[0])
+
+        # Bonsai places short dimensions' labels beyond the endpoint. Centre
+        # both the measured value and optional Description below the line.
+        return match["line"] + re.sub(r'<text\b[^>]*>[\s\S]*?</text>', center_text, match["labels"])
 
     svg = _DIMENSION_LABEL.sub(center_dimension_label, svg)
 
@@ -11299,6 +11303,93 @@ class Drawing:
         )
         return dimension
 
+    def add_opening_dimension(
+        self,
+        opening: ifcopenshell.entity_instance,
+        *,
+        offset: Number = 0,
+        finished_floor_height: Number | None = None,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Dimension a wall opening: width above, clear height (sill) below.
+
+        Accept a door, window, or unfilled wall opening created by Wall. The
+        construction opening is measured, not the door leaf/frame. Heights
+        and widths are displayed in millimetres; clear height is opening top
+        minus bottom, and sill height is bottom minus finished floor.
+        A negative sill is displayed as height above floor + depth below
+        floor instead of clear height (sill).
+        ``finished_floor_height`` is in metres above the host storey base,
+        e.g. GROUND_FLOOR_THICKNESS. When omitted, all FLOOR layers in that
+        storey must have a common top elevation. ``offset`` has the same
+        signed, wall-start-to-end convention as add_dimension().
+        """
+        self._require_plan_view("add_opening_dimension")
+        if not isinstance(opening, ifcopenshell.entity_instance) or not any(
+            opening.is_a(kind) for kind in ("IfcDoor", "IfcWindow", "IfcOpeningElement")
+        ):
+            raise TypeError("opening must be an IfcDoor, IfcWindow, or IfcOpeningElement")
+        if opening.file is not self.house.model:
+            raise ValueError("opening must belong to this house")
+        offset = _number(offset, "offset")
+        annotation_name = _name(name, "name") if name is not None else None
+        product = opening
+        if opening.is_a("IfcDoor") or opening.is_a("IfcWindow"):
+            fills = list(opening.FillsVoids or ())
+            if len(fills) != 1:
+                raise ValueError("door or window must fill exactly one opening")
+            opening = fills[0].RelatingOpeningElement
+        if opening.PredefinedType == "RECESS":
+            raise ValueError("a wall recess cannot have an opening dimension")
+        voids = list(opening.VoidsElements or ())
+        if len(voids) != 1 or not voids[0].RelatingBuildingElement.is_a("IfcWall"):
+            raise ValueError("opening must void exactly one wall")
+        wall = next((wall for storey in self.house._storeys for wall in storey.walls
+                     if wall.id() == voids[0].RelatingBuildingElement.id()), None)
+        if wall is None:
+            raise ValueError("opening must be created by Wall")
+        if not self._includes_storey(wall.storey):
+            raise ValueError("opening storey is not included in this drawing")
+        wall_placement = ifcopenshell.util.placement.get_local_placement(wall.ObjectPlacement)
+        opening_placement = ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
+        local = np.linalg.inv(wall_placement) @ opening_placement
+        intervals = [interval for interval in wall._openings
+                     if isclose(interval[0], float(local[0, 3]), abs_tol=1e-7)
+                     and isclose(interval[2], float(local[2, 3]) + wall.start_height, abs_tol=1e-7)]
+        if len(intervals) != 1:
+            raise ValueError("could not resolve the opening dimensions on its wall")
+        start, end, bottom, top = intervals[0]
+        if finished_floor_height is None:
+            levels = [floor.start_height + floor.thickness for floor in wall.storey.floor_layers
+                      if ifcopenshell.util.element.get_predefined_type(floor) == "FLOOR"]
+            if not levels or max(levels) - min(levels) > 1e-6:
+                raise ValueError("specify finished_floor_height: storey has no common finished-floor level")
+            finished_floor_height = levels[0]
+        else:
+            finished_floor_height = _number(finished_floor_height, "finished_floor_height")
+        height, sill = top - bottom, bottom - finished_floor_height
+        points = [wall_placement @ np.array((x, 0.0, 0.0, 1.0)) for x in (start, end)]
+        dimension = self.add_dimension(
+            tuple(points[0][:2]), tuple(points[1][:2]), offset=offset,
+            name=annotation_name or f"{self.name} {product.Name or 'Opening'} Dimension",
+        )
+        # Bonsai natively renders Description below the dimension's measured
+        # value, preserving its markers, readable orientation, and text size.
+        if sill < 0:
+            dimension.Description = (
+                f"{round((top - finished_floor_height) * 1000)} + {round(-sill * 1000)}"
+            )
+        else:
+            dimension.Description = f"{round(height * 1000)} ({round(sill * 1000)})"
+        pset = ifcopenshell.api.pset.add_pset(
+            self.house.model, product=dimension, name="BBIM_OpeningDimension")
+        ifcopenshell.api.pset.edit_pset(self.house.model, pset=pset, properties={
+            "Opening": opening.GlobalId, "Product": product.GlobalId,
+            "Width": end - start, "Height": height, "SillHeight": sill,
+            "FinishedFloorHeight": finished_floor_height,
+        })
+        return dimension
+
     def add_miako_beam_dimensions(
         self,
         slab: MiakoSlab,
@@ -12034,6 +12125,7 @@ class Drawing:
         )
         if plan is None:
             raise ValueError("door has no plan representation")
+        plan = ifcopenshell.util.representation.resolve_representation(plan)
         y_coordinates = [
             float(point[1])
             for item in plan.Items
@@ -16814,7 +16906,8 @@ class Wall(ifcopenshell.entity_instance):
         annotations without changing the construction geometry and defaults
         to ``height - sill_height``.  ``open_angle`` rotates only the 3D leaf
         and defaults to zero, so the door is closed in 3D while retaining its
-        normal plan swing symbol.
+        normal plan swing symbol. The plan symbol is drawn halfway up the
+        door so finished-floor layers do not hide doors starting at slab level.
         ``reverse_swing`` opens the leaf on the opposite side of the wall
         without changing its hinge end, in both 3D and plan.  ``show_overhead``
         adds thin solid plan-only wall linework across the rough opening. Casings
@@ -17003,6 +17096,15 @@ class Wall(ifcopenshell.entity_instance):
         if plan_representation is not None:
             if reverse_swing:
                 self._reverse_door_plan_swing(plan_representation)
+            # Keep the 2D curves above the floor independently of the rough
+            # opening's sill. Map them upward without moving the 3D door or
+            # changing their XY coordinates, swing direction, or dimensions.
+            plan_representation = ifcopenshell.api.geometry.map_representation(
+                model, representation=plan_representation,
+            )
+            plan_representation.Items[0].MappingTarget.LocalOrigin.Coordinates = (
+                0.0, 0.0, door_height / 2,
+            )
             ifcopenshell.api.geometry.assign_representation(
                 model,
                 product=door,
