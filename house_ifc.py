@@ -194,7 +194,7 @@ RIDGE_TILE_WIDTH = 0.40
 RIDGE_TILE_RISE = 0.12
 RIDGE_TILE_THICKNESS = 0.025
 CEMFLOW_AND_FINISH_THICKNESS = 0.065
-GROUND_FLOOR_THICKNESS = 0.18+CEMFLOW_AND_FINISH_THICKNESS
+GROUND_FLOOR_THICKNESS = 0.20+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
@@ -207,7 +207,7 @@ FOUNDATION_FOOTER_HEIGHT = 0.50
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
-UPPER_RING_BEAM_HEIGHT = 0.25
+UPPER_RING_BEAM_HEIGHT = 0.24
 VAZNICE_HEIGHT = 0.32
 VAZNICE_BASE = 0.20
 VAZNICE_HALF_BASE = VAZNICE_BASE / 2.0
@@ -308,20 +308,20 @@ POLYSTYRENE_INSULATION_THICKNESS = (
 )
 ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.005
 
-ground_floor_height = 2.875
-GROUND_WALL_BASE_COURSE_HEIGHT = 0.25
+GROUND_WALL_BASE_COURSE_HEIGHT = 0.275
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
+ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.625
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.21
 
-UNDER_HOLE = 3.5 - VAZNICE_HEIGHT
-HOLE_HEIGHT = 0.0
-ABOVE_HOLE = 0.0
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.15)
 COLLAR_TIE_EXTENSION = 1.5  # uncut overlength; roof planes define finished ends
-NADEZDIVKA = 1.375
+NADEZDIVKA = 1.125 + UPPER_RING_BEAM_HEIGHT
+UNDER_HOLE = 3.5 - 1.375 + NADEZDIVKA - VAZNICE_HEIGHT
+HOLE_HEIGHT = 0.0
+ABOVE_HOLE = 0.0
 
 house = House(
     "My house",
@@ -418,8 +418,8 @@ pokoj_dole = ground.floor_layer(
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.5
-GALERY_START = BWT+2.5
+CHODBA_DEPTH = 2.55
+GALERY_START = BWT+2.55
 
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 oblouk1_at = HOUSE_DEPTH-BWT-0.5-1.5
@@ -584,9 +584,9 @@ ground.connect_wall(wall_4_g, wall_back_g)
 # Front door/window
 
 BOTTOM_STAIR_TREADS = 9
-GROUND_DOOR_HEIGHT = 2.375
-GROUND_WINDOW_HEIGHT = 2.5
-GROUND_WINDOW_SILL_HEIGHT = 1.125
+GROUND_DOOR_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.125
+GROUND_WINDOW_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.25
+GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 0.875
 front_door = wall_1b_g.add_door(
 	at=2*BWT+GYM_DEPTH-0.5-1.125,
 	opening_width=1.125, width=0.9,
@@ -3101,8 +3101,8 @@ def outside_dims(drawing1):
 	# Vnejsi rozmery
 	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, 0), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH), offset=-1.5)
-	drawing1.add_dimension(start=(0, BWT+GYM_DEPTH), end=(0, HOUSE_DEPTH), offset=1.5)
-	drawing1.add_dimension(start=(CUT_WIDTH, 0), end=(CUT_WIDTH, BWT+GYM_DEPTH), offset=CUT_WIDTH+1.5)
+	drawing1.add_dimension(start=(0, BWT+GYM_DEPTH), end=(0, HOUSE_DEPTH), offset=2.0)
+	drawing1.add_dimension(start=(CUT_WIDTH, 0), end=(CUT_WIDTH, BWT+GYM_DEPTH), offset=CUT_WIDTH+2.0)
 	drawing1.add_dimension(start=(CUT_WIDTH, BWT+GYM_DEPTH), end=(0, BWT+GYM_DEPTH), offset=BWT+GYM_DEPTH+1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH, BWT+GYM_DEPTH), end=(CUT_WIDTH, BWT+GYM_DEPTH), offset=BWT+GYM_DEPTH+1.5)
 
@@ -3116,13 +3116,11 @@ def common_dims(drawing1):
 	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT-2.1), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT-2.1), offset=0)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1)
+	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1.5)
 	# gym hloubka
 	drawing1.add_dimension(start=(wall2_x-BWT, BWT), end=(wall2_x-BWT, BWT+GYM_DEPTH))
 	# chodba delka
 	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
-	# komin
-	drawing1.add_dimension(start=(wall2_x, CHIMNEY_Y_MID-0.1), end=(CHIMNEY_X_START, CHIMNEY_Y_MID-0.1))
 
 def common_wall_insulation(
 	drawing1, wall_front, wall_1a, wall_1b, wall_gym, wall_back, wall_4
@@ -3908,7 +3906,7 @@ if "ground" in sys.argv:
 		window_area=window_area(window_obyvak, window_kk),
 	)
 	drawing1.add_room_annotation(
-		(1.5, 6),
+		(1.3, 6.5),
 		identifier=pokoj_dole.room_id,
 		description="Pokoj",
 		area=pokoj_dole.area,
@@ -3955,6 +3953,9 @@ if "ground" in sys.argv:
 	drawing1.add_opening_dimension(window_pokoj_dole, offset=-0.6)
 	drawing1.add_opening_dimension(window_kk, offset=-0.6)
 	drawing1.add_opening_dimension(pokoj0_door, offset=-0.5)
+	drawing1.add_opening_dimension(front_door, offset=-1.3)
+	drawing1.add_opening_dimension(window_pokoj_dole_2, offset=-0.7)
+	drawing1.add_opening_dimension(bathroom_door, offset=0.9)
 
 	drawing1.render("ground.svg", pdf=PDF_GROUND)
 
