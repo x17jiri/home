@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 from xml.parsers import expat
 
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 import numpy as np
 from shapely.geometry import GeometryCollection, LineString, Polygon
 from shapely.ops import polygonize, unary_union
@@ -321,6 +322,23 @@ def _line_parts(geometry):
             yield from _line_parts(part)
 
 
+def _plasterboard_underside(geometry, normal, offset, grid):
+    """Select only edges on a roof board's room-facing plane, not its perimeter."""
+    if geometry.is_empty:
+        return GeometryCollection()
+    if geometry.geom_type != "Polygon":
+        return unary_union([_plasterboard_underside(part, normal, offset, grid)
+                            for part in geometry.geoms])
+    rings = [geometry.exterior, *geometry.interiors]
+    bottom = min(np.dot(point, normal) for ring in rings for point in ring.coords)
+    edges = []
+    for ring in rings:
+        for a, b in zip(ring.coords, list(ring.coords)[1:]):
+            if all(abs(np.dot(point, normal) - bottom) <= grid * 2 for point in (a, b)):
+                edges.append(LineString([np.array(point) - normal * offset for point in (a, b)]))
+    return unary_union(edges)
+
+
 def _insert_layer(svg, layer):
     """Insert before overlays, compensating any enclosing SVG transforms."""
     data = svg.encode("utf-8")
@@ -355,7 +373,7 @@ def _insert_layer(svg, layer):
 
 def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
                          categories=("walls", "floors", "ceilings"),
-                         projected_walls=True, offset_ratio=0.25):
+                         projected_walls=True, offset_ratio=0.25, color="black"):
     """Append exposed assembly boundaries; return the number of polylines.
 
     Geometry comes from the rendered closed cut polygons; IFC supplies assembly
@@ -367,12 +385,17 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
     Explicit WALL_PLATE members are included as part of the wall assemblies.
     The centreline is offset toward air by offset_ratio times the printed line
     width (default 0.25). Zero restores a centred stroke; 0.5 puts it outside.
+    Color controls only the added stroke (CSS color name or #RGB/#RRGGBB);
+    original thin model lines keep their existing colors.
     Other cut solids suppress contact edges but never receive thick outlines
     themselves. Internal MIAKO cells are not treated as room openings.
     With projected_walls enabled, all closed visible projected beam regions
     also suppress contact edges, without receiving new outlines themselves.
     Foundation slabs and permanent-formwork walls keep their original thin
     strokes in all views, but still suppress contact edges of adjacent solids.
+    In elevations/sections, cut roof plasterboard adds only its underside edge
+    under the ceilings category. It never joins the assembly union; upper/end
+    edges, projected boards and window linings retain their original strokes.
 
     The only file changed is svg_path. Re-running replaces our own group. The
     normal renderer calls this before annotation overlays and PDF/PNG export.
@@ -381,6 +404,10 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
     """
     if isinstance(width_mm, bool) or not isinstance(width_mm, (int, float)) or not isfinite(width_mm) or width_mm <= 0:
         raise ValueError("section outline width must be positive and finite")
+    if not isinstance(color, str):
+        raise TypeError("section outline color must be a string")
+    if not re.fullmatch(r"(?:#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|[a-zA-Z]+)", color):
+        raise ValueError("section outline color must be a CSS color name or #RGB/#RRGGBB")
     if not isinstance(projected_walls, bool):
         raise TypeError("projected_walls must be a boolean")
     if isinstance(offset_ratio, bool) or not isinstance(offset_ratio, (int, float)) \
@@ -424,6 +451,11 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
     insulation_segments, insulation_hosts = defaultdict(list), {}
     projection_segments, projection_aliases = defaultdict(list), defaultdict(set)
     covering_segments = defaultdict(list)
+    plasterboard_edges, plasterboard_ids, plasterboard_normals = [], set(), {}
+    camera = None
+    if drawing is not None and ifcopenshell.util.element.get_pset(
+            drawing, "EPset_Drawing", "TargetView") in {"ELEVATION_VIEW", "SECTION_VIEW"}:
+        camera = ifcopenshell.util.placement.get_local_placement(drawing.ObjectPlacement)
 
     def product(element, classes, inherited, is_cut, is_projected):
         candidates = [element.get(_IFC + "guid", "")]
@@ -525,6 +557,23 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
                         warnings.warn(f"Section outline skipped {owner.Name}: {error}", stacklevel=2)
                 else:
                     if not geometry.is_empty:
+                        if is_cut and camera is not None and "ceilings" in categories:
+                            if owner.id() not in plasterboard_normals:
+                                normal = None
+                                if owner.is_a("IfcSlab") and ifcopenshell.util.element.get_pset(owner, "BBIM_RoofLayer") \
+                                        and any(material.Name == "Gypsum plasterboard" for material in
+                                                ifcopenshell.util.element.get_materials(owner)):
+                                    up = ifcopenshell.util.placement.get_local_placement(owner.ObjectPlacement)[:3, 2]
+                                    normal = np.array((np.dot(up, camera[:3, 0]), -np.dot(up, camera[:3, 1])))
+                                    if np.linalg.norm(normal) <= 1e-9:
+                                        normal = None
+                                plasterboard_normals[owner.id()] = normal
+                            normal = plasterboard_normals[owner.id()]
+                            if normal is not None:
+                                normal = np.linalg.inv(matrix[:2, :2]).T @ normal
+                                normal /= np.linalg.norm(normal)
+                                plasterboard_edges.append(_plasterboard_underside(geometry, normal, offset, grid))
+                                plasterboard_ids.add(assembly)
                         host = ifcopenshell.util.element.get_pset(owner, "BBIM_WallInsulation", "HostWall") if insulation else None
                         sources.append((category, assembly, fill_cells, geometry, host, insulation))
         for child in element:
@@ -571,11 +620,14 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
         if not geometry.is_empty:
             sources.append(("walls", guid, False, geometry, insulation_hosts[guid], True))
     selected, other, fill_cells = defaultdict(list), list(covering), set()
+    plasterboard_contacts = list(covering)
     for category, assembly, cells, geometry, host, insulation in sources:
         if insulation:
             if host not in included_walls:
                 continue
             category, assembly = "walls", host
+        if assembly not in plasterboard_ids:
+            plasterboard_contacts.append(geometry)
         if category in categories:
             selected[assembly].append(geometry)
             if cells:
@@ -596,6 +648,11 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
         # Carry the contact mask outward too, so hidden contact edges and their
         # corner returns cannot reappear merely because the stroke moved.
         boundaries = boundaries.difference(unary_union(other).buffer(offset + grid * 2, join_style=2))
+    if plasterboard_edges:
+        underside = unary_union(plasterboard_edges)
+        if plasterboard_contacts:
+            underside = underside.difference(unary_union(plasterboard_contacts).buffer(offset + grid * 2, join_style=2))
+        boundaries = unary_union([boundaries, underside])
     parts = sorted(_line_parts(boundaries), key=lambda line: (*line.bounds, line.length))
     paths = []
     for part in parts:
@@ -605,7 +662,7 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
         layer = ('\n<g id="section-outlines" class="section-outlines" '
                  f'data-width-mm="{width_mm:g}" data-offset-ratio="{offset_ratio:g}" '
                  f'data-offset-mm="{width_mm * offset_ratio:g}" '
-                 f'style="fill:none;stroke:black;stroke-width:{width_mm * units_per_mm:g};'
+                 f'style="fill:none;stroke:{color};stroke-width:{width_mm * units_per_mm:g};'
                  'stroke-linejoin:round;stroke-linecap:round">\n'
                  + "\n".join(paths) + '\n</g>\n')
         svg = _insert_layer(svg, layer)

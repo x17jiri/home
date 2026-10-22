@@ -31,11 +31,11 @@
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.15" />
     <line x1="0.5" y1="0.375" x2="0.5" y2="0.625" style="stroke:black; stroke-width:0.08" />
 </pattern>
-<pattern id="base-plate" width="1" height="1" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+<!-- Same line/dash hatch as lost formwork, with the opposite diagonal. -->
+<pattern id="base-plate" width="1" height="1" patternTransform="rotate(-45 0 0)" patternUnits="userSpaceOnUse">
     <rect width="1" height="1" fill="white" />
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.15" />
-    <line x1="0.5" y1="0" x2="0.5" y2="0.35" style="stroke:black; stroke-width:0.08" />
-    <circle cx="0.5" cy="0.65" r="0.04" fill="black" />
+    <line x1="0.5" y1="0.375" x2="0.5" y2="0.625" style="stroke:black; stroke-width:0.08" />
 </pattern>
 <pattern id="footing-cross" width="2" height="2" patternUnits="userSpaceOnUse">
     <rect width="2" height="2" fill="white" />
@@ -198,6 +198,10 @@
 <pattern id="rockwool-wave" width="0.73" height="4" patternUnits="userSpaceOnUse">
     <rect width="0.73" height="4" fill="white" />
     <path transform="translate(0 1.0875)" d="M 0 0.365 A 0.365 0.365 0 0 1 0.73 0.365 L 0.365 1.46 M 0 0.365 L 0.365 1.46 A 0.365 0.365 0 0 0 0.73 1.825 M 0.365 1.46 A 0.365 0.365 0 0 1 0 1.825" style="fill:none;stroke:black;stroke-width:0.10" vector-effect="non-scaling-stroke" />
+</pattern>
+<!-- Plain white swatch for materials drawn without hatching. -->
+<pattern id="solid-white" width="1" height="1" patternUnits="userSpaceOnUse">
+    <rect width="1" height="1" fill="white" />
 </pattern>
 <!-- MDF board keeps the model's cut tint, without insulation batting. -->
 <pattern id="mdf-solid" width="1" height="1" patternUnits="userSpaceOnUse">

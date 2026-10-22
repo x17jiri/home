@@ -288,6 +288,21 @@ boundaries to wall, floor and ceiling assemblies (width in printed mm).
 Use `None`, the default, to disable it. Ground/upper plans and AA/BB sections
 enable this pass; roof drawings do not.
 
+`section_outline_color="black"` sets the added outline's color; named colors
+and `#RGB`/`#RRGGBB` values are supported, e.g. `"#555555"`. Original thin model
+lines are unchanged. In `house_ifc.py`, edit `SECTION_OUTLINE_COLOR` next to
+`SECTION_OUTLINE_WIDTH` to change all configured drawings. The standalone
+postprocessor calls this option `color`.
+
+In section/elevation drawings, the same pass also thickens just the cut roof
+plasterboard's room-facing underside. This is an edge-only addition: the board
+does not join the wall/floor/ceiling assembly union, and its upper edges, end
+faces, projections and roof-window linings are not outlined. It shares the
+outline width, color and outward offset, preserves cut opening gaps, and masks
+parts in contact with walls or other solids. The standalone pass needs the
+drawing's elevation camera to identify the underside; the `ceilings` category
+controls this addition.
+
 `section_outline_offset_ratio=0.25` shifts the new outline centreline toward
 air by 25% of its printed width, so a 0.6 mm stroke moves outward by 0.15 mm.
 Use `0` for the previous centred stroke or `0.5` to put the heavy stroke fully

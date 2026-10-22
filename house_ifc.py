@@ -151,6 +151,7 @@ def rafter_x_position(rafter):
 	return rafter[0] if isinstance(rafter, tuple) else rafter
 
 SECTION_OUTLINE_WIDTH = 0.3
+SECTION_OUTLINE_COLOR = "black"
 RAFTER_Z_OFFSET = -0.05
 RAFTER_THICKNESS = 0.08
 STRONGER_RAFTER_THICKNESS = 0.10
@@ -480,7 +481,7 @@ print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
 print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
-BATHROOM_DEPTH = 2.615
+BATHROOM_DEPTH = 2.625
 DRAINAGE_STACK_X = wall3_x + 0.1 + 0.12
 DRAINAGE_STACK_Y = wall_zachod_nahore_y - 0.1 - 0.1
 kuchyn = ground.floor_layer(
@@ -1071,52 +1072,52 @@ kamna = ground.furniture(
 ground.furniture(
 	"Dřez",
     kind="USERDEFINED",
-    size=(0.69, 0.69, 0.8),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
+    size=(0.64, 0.64, 0.75),
+	start_height=GROUND_FLOOR_THICKNESS+0.03,
     center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.115+0.35),
 )
 ground.furniture(
 	"Myčka",
     kind="USERDEFINED",
-    size=(0.69, 0.69, 0.8),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
-    center=(HOUSE_WIDTH-BWT-0.35-0.7, BWT+BATHROOM_DEPTH+0.115+0.35),
+    size=(0.64, 0.64, 0.75),
+	start_height=GROUND_FLOOR_THICKNESS+0.03,
+    center=(HOUSE_WIDTH-BWT-0.35-0.64, BWT+BATHROOM_DEPTH+0.115+0.35),
 )
 ground.furniture(
 	"Lednice",
     kind="USERDEFINED",
-    size=(0.69, 1, 2),
-    center=(HOUSE_WIDTH-BWT-0.35, HOUSE_DEPTH-BWT-0.5),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
+    size=(0.64, 1, 1.95),
+    center=(HOUSE_WIDTH-BWT-0.35, HOUSE_DEPTH-BWT-0.55),
+	start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 ground.furniture(
 	"Sporák",
     kind="USERDEFINED",
-    size=(0.69, 0.69, 0.8),
+    size=(0.64, 0.64, 0.75),
     center=(HOUSE_WIDTH-BWT-0.35, BWT+BATHROOM_DEPTH+0.115+0.35+0.7),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
+	start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
-KUCH_LINKA_LEN = HOUSE_DEPTH-2*BWT-0.115-BATHROOM_DEPTH-2.4
+KUCH_LINKA_LEN = HOUSE_DEPTH-2*BWT-0.115-BATHROOM_DEPTH-0.1-0.64-0.7-1.0
 ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
-    size=(0.69, KUCH_LINKA_LEN, 0.8),
+    size=(0.64, KUCH_LINKA_LEN, 0.75),
     center=(HOUSE_WIDTH-BWT-0.35, HOUSE_DEPTH-BWT-1-KUCH_LINKA_LEN/2),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
+	start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 KUCH_LINKA_LEN = KK_WIDTH-1.4
 ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
-    size=(KUCH_LINKA_LEN, 0.69, 0.8),
-    center=(HOUSE_WIDTH-BWT-1.4-KUCH_LINKA_LEN/2, BWT+BATHROOM_DEPTH+0.115+0.35),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
+    size=(KUCH_LINKA_LEN, 0.64, 0.75),
+    center=(HOUSE_WIDTH-BWT-1.35-KUCH_LINKA_LEN/2, BWT+BATHROOM_DEPTH+0.115+0.35),
+	start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 ground.asset(
     "Stul",
     asset="retail_4_seater_rectangular_table",
     center=(wall3_x-BWT-1.1, HOUSE_DEPTH - BWT - 1.2),
-	start_height=GROUND_FLOOR_THICKNESS+0.01,
+	start_height=GROUND_FLOOR_THICKNESS+0.03,
 	#size=(1.3, 0.8*3),
 )
 
@@ -3844,6 +3845,7 @@ if "ground" in sys.argv:
 		storeys=[ground],
 		right_panel_width=40,
 		section_outline_width=SECTION_OUTLINE_WIDTH,
+		section_outline_color=SECTION_OUTLINE_COLOR,
 	)
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
@@ -3861,7 +3863,7 @@ if "ground" in sys.argv:
 		text_alignment="bottom-right",
 	)
 	drawing1.add_material_legend([
-		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
 		(
 			"polystyrene-transparent",
@@ -3970,6 +3972,7 @@ if "upper" in sys.argv:
 		storeys=[upper],
 		right_panel_width=40,
 		section_outline_width=SECTION_OUTLINE_WIDTH,
+		section_outline_color=SECTION_OUTLINE_COLOR,
 		section_outline_projected_walls=True,
 	)
 	aa_cut.add_symbol(drawing1)
@@ -3977,7 +3980,7 @@ if "upper" in sys.argv:
 	drawing1.include_element(heat_pump)
 	drawing1.include_element(rozvadec)
 	drawing1.add_material_legend([
-		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"polystyrene-transparent",
@@ -4498,6 +4501,7 @@ if "roof" in sys.argv:
 		model_line_width=0.06,
 		right_panel_width=65,
 		section_outline_width=SECTION_OUTLINE_WIDTH,
+		section_outline_color=SECTION_OUTLINE_COLOR,
 		section_outline_projected_walls=True,
 	)
 	aa_cut.add_symbol(drawing1)
@@ -4614,14 +4618,10 @@ if "cut1" in sys.argv:
 def add_section_material_legend(drawing):
 	"""Add the shared material legend used by the house sections."""
 	return drawing.add_material_legend([
-		("brick", "Nosná zeď\nVPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď\nVPC Cihla 240 mm"),
 		(
 			"liapor-brick",
 			f"První řada cihel nosných stěn\nLiapor M AKU, 12 MPa",
-		),
-		(
-			"ztracene-bedneni",
-			"Ztracené bednění",
 		),
 		(
 			"base-plate",
@@ -4629,8 +4629,12 @@ def add_section_material_legend(drawing):
 			f"{FOUNDATION_BASE_PLATE_THICKNESS * 1000:.0f} mm",
 		),
 		(
+			"ztracene-bedneni",
+			"Ztracené bednění",
+		),
+		(
 			"footing-cross",
-			f"Základový pas\nbeton"
+			f"Základový pas\nbeton "
 			f"{FOUNDATION_FOOTER_WIDTH * 1000:.0f} × "
 			f"{FOUNDATION_FOOTER_HEIGHT * 1000:.0f} mm",
 		),
@@ -4670,6 +4674,7 @@ if "aa" in sys.argv:
 		doors_closed=True,
 		right_panel_width=60,
 		section_outline_width=SECTION_OUTLINE_WIDTH,
+		section_outline_color=SECTION_OUTLINE_COLOR,
 	)
 	drawing1.add_furniture_label(kamna)
 	#drawing1.add_furniture_label(gauc)
@@ -4751,7 +4756,7 @@ if "aa" in sys.argv:
 		"SK1",
 		#rotation=180,
 		name="AA ground-floor composition SK1",
-		line_length=0.95,
+		line_length=1.1,
 	)
 	drawing1.add_hexagon_marker(
 		(
@@ -4963,6 +4968,7 @@ if "bb" in sys.argv:
 		doors_closed=True,
 		right_panel_width=60,
 		section_outline_width=SECTION_OUTLINE_WIDTH,
+		section_outline_color=SECTION_OUTLINE_COLOR,
 	)
 	add_section_material_legend(drawing1)
 	# Dormer-rafter extensions cross this plane, but their insulation stops

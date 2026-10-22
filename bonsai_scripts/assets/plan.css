@@ -274,7 +274,7 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 /* Editable house material rules. */
 .cut.layer-material-Brick {
-    fill: url(#brick) !important;
+    fill: white !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }
@@ -299,7 +299,7 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .IfcSlab.cut.layer-material-Floorbuildup,
 .IfcSlab.material-Floorbuildup.cut {
-    fill: white !important;
+    fill: #c5c7c8 !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }

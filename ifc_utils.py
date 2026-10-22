@@ -5891,6 +5891,7 @@ def _render_existing_drawing(
     if section_outline_width is not None:
         count = add_section_outlines(
             absolute_output, model, drawing, width_mm=float(section_outline_width),
+            color=(drawing_properties or {}).get("SectionOutlineColor", "black"),
             projected_walls=(drawing_properties or {}).get("SectionOutlineProjectedWalls", True),
             offset_ratio=(drawing_properties or {}).get("SectionOutlineOffsetRatio", 0.25),
         )
@@ -8023,6 +8024,7 @@ class House:
         projected_wood_color: str | None = None,
         model_line_width: Number | None = None,
         section_outline_width: Number | None = None,
+        section_outline_color: str = "black",
         section_outline_projected_walls: bool = False,
         section_outline_offset_ratio: Number = 0.25,
         surface_fills: bool = False,
@@ -8068,6 +8070,8 @@ class House:
         line conventions remain unchanged.
         ``section_outline_width`` optionally adds a separate exposed-boundary
         pass for wall, floor and ceiling assemblies (printed mm).
+        ``section_outline_color`` sets that added stroke's color (named color
+        or #RGB/#RRGGBB, black by default), leaving native model lines unchanged.
         ``section_outline_projected_walls=True`` includes closed visible wall
         projections and their insulation in those regions. Set it to False for
         cut-only outlines. Other projections, roofs, material seams and
@@ -8102,6 +8106,7 @@ class House:
             projected_wood_color=projected_wood_color,
             model_line_width=model_line_width,
             section_outline_width=section_outline_width,
+            section_outline_color=section_outline_color,
             section_outline_projected_walls=section_outline_projected_walls,
             section_outline_offset_ratio=section_outline_offset_ratio,
             surface_fills=surface_fills,
@@ -8288,6 +8293,7 @@ class Drawing:
         projected_wood_color: str | None,
         model_line_width: Number | None,
         section_outline_width: Number | None = None,
+        section_outline_color: str = "black",
         section_outline_projected_walls: bool = True,
         section_outline_offset_ratio: Number = 0.25,
         surface_fills: bool = False,
@@ -8311,6 +8317,9 @@ class Drawing:
         if self.section_outline_offset_ratio < 0:
             raise ValueError("section_outline_offset_ratio must not be negative")
         self.section_outline_width = None
+        self.section_outline_color = "#" + "".join(
+            f"{round(channel * 255):02x}" for channel in _color(section_outline_color, "section_outline_color")
+        )
         if section_outline_width is not None:
             self.section_outline_width = _number(section_outline_width, "section_outline_width")
             if self.section_outline_width <= 0:
@@ -8588,6 +8597,7 @@ class Drawing:
             drawing_properties["ModelLineWidth"] = self.model_line_width
         if self.section_outline_width is not None:
             drawing_properties["SectionOutlineWidth"] = self.section_outline_width
+            drawing_properties["SectionOutlineColor"] = self.section_outline_color
             drawing_properties["SectionOutlineProjectedWalls"] = self.section_outline_projected_walls
             drawing_properties["SectionOutlineOffsetRatio"] = self.section_outline_offset_ratio
         if not self._includes_all_storeys:

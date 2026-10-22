@@ -343,6 +343,20 @@ class CutDrawingTests(unittest.TestCase):
                 self.assertEqual(ifcopenshell.util.element.get_pset(
                     drawing.element, "EPset_Drawing", "SectionOutlineOffsetRatio"), .25)
 
+    def test_configured_section_outlines_persist_the_shared_color(self):
+        from ifc_utils import _color
+        expected = "#" + "".join(f"{round(channel * 255):02x}" for channel in
+                                _color(self.values["SECTION_OUTLINE_COLOR"], "color"))
+        count = 0
+        for drawing in self.values["house"]._drawings:
+            if drawing.section_outline_width is None:
+                continue
+            self.assertEqual(drawing.section_outline_color, expected)
+            self.assertEqual(ifcopenshell.util.element.get_pset(
+                drawing.element, "EPset_Drawing", "SectionOutlineColor"), expected)
+            count += 1
+        self.assertGreater(count, 0)
+
     def test_all_five_wall_plates_have_an_explicit_ifc_role(self):
         for name in ("beam3", "beam_cut_street", "beam4_a", "beam4_b", "beam_dormer"):
             self.assertEqual(ifcopenshell.util.element.get_predefined_type(self.values[name]), "WALL_PLATE")
@@ -380,6 +394,20 @@ class CutDrawingTests(unittest.TestCase):
         self.assertIn({"pattern": "thermal-impact-insulation", "description": "podlahová izolace"},
                       legends[0][0]["items"])
         self.assertEqual(legends[0], legends[1])
+
+    def test_load_bearing_wall_legends_are_plain_white(self):
+        count = 0
+        for drawing in self.values["house"]._drawings:
+            tables = json.loads(ifcopenshell.util.element.get_pset(
+                drawing.element, "EPset_Drawing", "RightPanelTables") or "[]")
+            for table in tables:
+                if table["kind"] != "material_legend":
+                    continue
+                for item in table["items"]:
+                    if "VPC Cihla 240 mm" in item["description"]:
+                        self.assertEqual(item["pattern"], "solid-white")
+                        count += 1
+        self.assertEqual(count, 4)  # Ground, upper, AA, BB.
 
     def test_all_plan_symbols_use_shared_cut_definitions(self):
         cuts = (self.values["aa_cut"], self.values["bb_cut"])

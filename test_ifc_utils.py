@@ -13582,6 +13582,20 @@ class HouseTests(unittest.TestCase):
         self.assertIn("fill: url(#ztracene-bedneni) !important", rule)
         self.assertIn("stroke-width: 0.05 !important", rule)
 
+    def test_load_bearing_brick_is_white_but_partitions_keep_their_hatch(self) -> None:
+        project_dir = Path(__file__).parent
+        stylesheet = (project_dir / "bonsai_scripts/assets/plan.css").read_text()
+        rule = stylesheet.split(".cut.layer-material-Brick", 1)[1].split("}", 1)[0]
+        self.assertIn("fill: white !important", rule)
+        self.assertNotIn("url(", rule)
+        partition = stylesheet.split(".cut.material-PartitionwallVPC115mm", 1)[1].split("}", 1)[0]
+        self.assertIn("fill: url(#diagonal1) !important", partition)
+        patterns = ET.parse(project_dir / "drawings/assets/patterns.svg")
+        pattern = next(p for p in patterns.getroot().iter() if p.get("id") == "solid-white")
+        self.assertEqual(len(pattern), 1)
+        self.assertTrue(pattern[0].tag.endswith("}rect"))
+        self.assertEqual(pattern[0].get("fill"), "white")
+
     def test_styles_liapor_base_course_like_tinted_brick(self) -> None:
         project_dir = Path(__file__).parent
         patterns = (
@@ -13675,7 +13689,7 @@ class HouseTests(unittest.TestCase):
         self.assertIn("fill: white !important", plan_rule)
         self.assertIn("stroke: white !important", plan_rule)
 
-    def test_styles_base_plate_with_dash_dot_pattern(self) -> None:
+    def test_styles_base_plate_like_lost_formwork_with_opposite_diagonal(self) -> None:
         project_dir = Path(__file__).parent
         patterns = (
             project_dir / "drawings" / "assets" / "patterns.svg"
@@ -13685,7 +13699,16 @@ class HouseTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn('<pattern id="base-plate"', patterns)
-        self.assertIn('<circle cx="0.5" cy="0.65"', patterns)
+        root = ET.fromstring(patterns)
+        base_plate = next(p for p in root if p.get("id") == "base-plate")
+        formwork = next(p for p in root if p.get("id") == "ztracene-bedneni")
+        self.assertEqual(base_plate.get("patternTransform"), "rotate(-45 0 0)")
+        self.assertEqual(formwork.get("patternTransform"), "rotate(45 0 0)")
+        for key in ("width", "height", "patternUnits"):
+            self.assertEqual(base_plate.get(key), formwork.get(key))
+        self.assertEqual([(child.tag, child.attrib) for child in base_plate],
+                         [(child.tag, child.attrib) for child in formwork])
+        self.assertFalse(any(child.tag.endswith("}circle") for child in base_plate))
         rule = stylesheet.split(
             ".IfcSlab.material-Baseplateconcrete.cut", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
@@ -13718,8 +13741,12 @@ class HouseTests(unittest.TestCase):
             ".IfcSlab.cut.layer-material-Floorbuildup,", maxsplit=1
         )[1].split("}", maxsplit=1)[0]
         self.assertIn(".IfcSlab.material-Floorbuildup.cut", buildup_rule)
-        self.assertIn("fill: white !important", buildup_rule)
+        self.assertIn("fill: #c5c7c8 !important", buildup_rule)
         self.assertNotIn("url(#", buildup_rule)
+        concrete_rule = stylesheet.split("\n.material-Concretetopping.cut {", 1)[1].split("}", 1)[0]
+        self.assertIn("fill: #c5c7c8 !important", concrete_rule)
+        general_buildup_rule = stylesheet.split(".material-Floorbuildup {", 1)[1].split("}", 1)[0]
+        self.assertIn("fill: white !important", general_buildup_rule)
 
     def test_styles_facade_insulation_patterns(self) -> None:
         project_dir = Path(__file__).parent

@@ -70,6 +70,70 @@ class SectionOutlineTests(unittest.TestCase):
         walk(root, np.eye(3))
         return unary_union(output)
 
+    def roof_ceiling(self, *, slope=0, view="elevation"):
+        from ifc_utils import House
+        house = House("Roof ceiling", mirror_x=False)
+        self.model = house.model
+        storey = house.storey("Upper", elevation=0)
+        plane = storey.roof("Roof").plane(
+            "Ceiling plane", points=((0, 0, 0), (1, 0, 0), (0, 1, slope)))
+        board = plane.layer("Ceiling", outline=((0, 0), (10, 0), (10, 10), (0, 10)),
+                            thickness=.1, material="Gypsum plasterboard")
+        drawing = house.add_drawing("Section", 0, 0, 3, 20, view=view,
+                                    direction=(1, 0, 0) if view == "elevation" else None)
+        return house, plane, board, drawing
+
+    def test_roof_plasterboard_adds_only_the_cut_underside(self):
+        _, _, board, drawing = self.roof_ceiling()
+        original = self.svg(self.cut(board, "M0 0H10V1H0Z"))
+        self.outline(drawing=drawing.element, color="#445566")
+        self.assertTrue(self.lines().equals(LineString([(0, 1), (10, 1)])))
+        self.assertIn(original[:-6], self.path.read_text())
+        self.assertIn("stroke:#445566;", self.path.read_text())
+        result = self.path.read_text()
+        self.outline(drawing=drawing.element, color="#445566")
+        self.assertEqual(self.path.read_text(), result)
+
+    def test_sloped_plasterboard_underside_respects_winding_mirroring_and_offset(self):
+        _, _, board, drawing = self.roof_ceiling(slope=.5)
+        for d in ("M0 0L10 5L10 6L0 1Z", "M0 1L10 6L10 5L0 0Z"):
+            with self.subTest(d=d):
+                self.svg('<g transform="translate(20,3) scale(-2,2)">' + self.cut(board, d) + '</g>')
+                self.outline(drawing=drawing.element, width_mm=.6, offset_ratio=.25)
+                shift = np.array((.5, 1)) / np.linalg.norm((.5, 1)) * .15
+                expected = LineString([np.array((20, 5)) + shift, np.array((0, 15)) + shift])
+                self.assertLess(self.lines().hausdorff_distance(expected), 1e-7)
+
+    def test_plasterboard_underside_preserves_opening_gaps_and_hides_wall_contacts(self):
+        _, _, board, drawing = self.roof_ceiling()
+        wall = self.product()
+        self.svg(self.cut(board, "M0 0H4V1H0Z M6 0H10V1H6Z")
+                 + self.cut(wall, "M1 1H2V4H1Z"))
+        self.outline(drawing=drawing.element, categories=("ceilings",))
+        lines = self.lines()
+        self.assertLess(lines.distance(LineString([(0, 1), (.5, 1)])), 1e-9)
+        self.assertGreater(lines.distance(LineString([(1.2, 1), (1.8, 1)])), .1)
+        self.assertGreater(lines.distance(LineString([(4.2, 1), (5.8, 1)])), .1)
+        self.assertLess(lines.distance(LineString([(7, 1), (9, 1)])), 1e-9)
+        # No vertical ends or upper edges, even beside a wall or opening.
+        self.assertLess(abs(lines.bounds[1] - 1), 1e-9)
+        self.assertLess(abs(lines.bounds[3] - 1), 1e-9)
+
+    def test_plasterboard_underside_skips_projections_linings_other_materials_and_plans(self):
+        _, plane, board, drawing = self.roof_ceiling()
+        other = plane.layer("Other roof layer", outline=((0, 0), (10, 0), (10, 10), (0, 10)),
+                            thickness=.1, material="Wood")
+        lining = self.product("IfcCovering")
+        self.svg(self.cut(board, "M0 0H10V1H0Z", view="projection")
+                 + self.cut(other, "M0 2H10V3H0Z")
+                 + self.cut(lining, "M0 4H10V5H0Z", "material-Gypsumplasterboard"))
+        self.assertEqual(self.outline(drawing=drawing.element), 0)
+        self.svg(self.cut(board, "M0 0H10V1H0Z"))
+        self.assertEqual(self.outline(drawing=drawing.element, categories=("walls",)), 0)
+        self.assertEqual(self.outline(), 0)  # No elevation camera: never guess a face.
+        plan = plane.roof.storey.house.add_drawing("Plan", 0, 0, 3, 20)
+        self.assertEqual(self.outline(drawing=plan.element), 0)
+
     def test_default_offset_is_a_quarter_of_printed_width_and_preserves_source(self):
         wall = self.product()
         original = self.svg(self.cut(wall, "M0 0H5V10H0Z") + self.cut(wall, "M5 0H10V10H5Z"))
@@ -81,6 +145,22 @@ class SectionOutlineTests(unittest.TestCase):
         self.assertIn('data-offset-mm="0.15"', result)
         add_section_outlines(self.path, self.model, width_mm=.6)
         self.assertEqual(self.path.read_text(), result)
+
+    def test_outline_color_changes_only_the_added_layer(self):
+        wall = self.product()
+        original = self.svg(self.cut(wall, "M0 0H5V10H0Z"))
+        for color in ("black", "red", "#789", "#445566"):
+            with self.subTest(color=color):
+                self.outline(color=color)
+                result = self.path.read_text()
+                self.assertIn(original[:-6], result)
+                self.assertEqual(result.count('id="section-outlines"'), 1)
+                layer = next(e for e in ET.fromstring(result).iter()
+                             if e.get("id") == "section-outlines")
+                self.assertIn(f"stroke:{color};", layer.get("style"))
+                self.assertTrue(self.lines().equals(box(0, 0, 5, 10).boundary))
+                self.outline(color=color)
+                self.assertEqual(self.path.read_text(), result)
 
     def test_offset_moves_into_room_holes_even_with_a_mirrored_view(self):
         wall = self.product()
@@ -680,7 +760,10 @@ class SectionOutlineTests(unittest.TestCase):
                        {"categories": "walls"}, {"categories": ("roof",)},
                        {"projected_walls": 1}, {"projected_walls": "false"},
                        {"offset_ratio": -.1}, {"offset_ratio": True},
-                       {"offset_ratio": float("inf")}, {"offset_ratio": float("nan")}):
+                       {"offset_ratio": float("inf")}, {"offset_ratio": float("nan")},
+                       {"color": None}, {"color": True}, {"color": ""},
+                       {"color": "#ggg"}, {"color": "#12345"},
+                       {"color": "red;stroke-width:99"}, {"color": 'red"/>'}):
             with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
                 self.outline(**kwargs)
             self.assertEqual(self.path.read_text(), original)
@@ -690,11 +773,18 @@ class SectionOutlineTests(unittest.TestCase):
         house = House("Outlines")
         normal = house.add_drawing("Normal", 0, 0, 2, 5)
         outlined = house.add_drawing("Outlined", 0, 0, 2, 5, section_outline_width=.2,
-                                     section_outline_projected_walls=True)
+                                     section_outline_projected_walls=True, section_outline_color="#ABC")
         cut_only = house.add_drawing("Cut only", 0, 0, 2, 5, section_outline_width=.2,
                                      section_outline_projected_walls=False, section_outline_offset_ratio=0)
         self.assertIsNone(ifcopenshell.util.element.get_pset(normal.element, "EPset_Drawing", "SectionOutlineWidth"))
         self.assertEqual(ifcopenshell.util.element.get_pset(outlined.element, "EPset_Drawing", "SectionOutlineWidth"), .2)
+        self.assertEqual(outlined.section_outline_color, "#aabbcc")
+        self.assertEqual(ifcopenshell.util.element.get_pset(
+            outlined.element, "EPset_Drawing", "SectionOutlineColor"), "#aabbcc")
+        self.assertEqual(ifcopenshell.util.element.get_pset(
+            cut_only.element, "EPset_Drawing", "SectionOutlineColor"), "#000000")
+        self.assertIsNone(ifcopenshell.util.element.get_pset(
+            normal.element, "EPset_Drawing", "SectionOutlineColor"))
         self.assertTrue(outlined.section_outline_projected_walls)
         self.assertIs(ifcopenshell.util.element.get_pset(
             outlined.element, "EPset_Drawing", "SectionOutlineProjectedWalls"), True)
@@ -714,11 +804,14 @@ class SectionOutlineTests(unittest.TestCase):
         for value in (-.1, True, float("inf"), float("nan")):
             with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
                 house.add_drawing("Invalid", 0, 0, 2, 5, section_outline_offset_ratio=value)
+        for value in (None, True, 123, "", "not-a-color", "#ggg", "red;stroke-width:99"):
+            with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
+                house.add_drawing("Invalid", 0, 0, 2, 5, section_outline_color=value)
 
     def test_renderer_adds_outlines_before_export_and_above_model_fills(self):
         from ifc_utils import House
-        for view, projected, offset in (("plan", True, .25), ("plan", False, 0),
-                                         ("elevation", True, .5), ("elevation", False, .25)):
+        for view, projected, offset, color in (("plan", True, .25, "black"), ("plan", False, 0, "red"),
+                                               ("elevation", True, .5, "#ABC"), ("elevation", False, .25, "#445566")):
             with self.subTest(view=view, projected=projected, offset=offset):
                 house = House("Outlines")
                 wall = ifcopenshell.api.root.create_entity(house.model, ifc_class="IfcWall", name="Wall")
@@ -726,6 +819,7 @@ class SectionOutlineTests(unittest.TestCase):
                                             direction=(1, 0, 0) if view == "elevation" else None,
                                             section_outline_projected_walls=projected,
                                             section_outline_offset_ratio=offset,
+                                            section_outline_color=color,
                                             section_outline_width=.25)
                 house.write(Path(self.directory.name) / "house.ifc")
                 exports = []
@@ -739,6 +833,9 @@ class SectionOutlineTests(unittest.TestCase):
                         result = self.path.read_text()
                         self.assertIn('id="section-outlines"', result)
                         self.assertIn('data-width-mm="0.25"', result)
+                        layer = next(e for e in ET.fromstring(result).iter()
+                                     if e.get("id") == "section-outlines")
+                        self.assertIn(f"stroke:{drawing.section_outline_color};", layer.get("style"))
                         self.assertLess(result.index('id="section-outlines"'),
                                         result.index('class="dimension-overlays"'))
                         self.assertAlmostEqual(self.lines().bounds[2], (3 if projected else 2) + .25 * offset)
