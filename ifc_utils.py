@@ -5911,6 +5911,14 @@ def _render_existing_drawing(
     _postprocess_floor_corner_overlays(absolute_output)
     _postprocess_drawing_line_colors(absolute_output)
     resolved_title = title if title is not None else Path(pdf if pdf is not None else output_path).stem
+    scale = (drawing_properties or {}).get("Scale")
+    if scale is not None:
+        ratio = Fraction(str(scale))
+        scale_label = f"{ratio.numerator}:{ratio.denominator}"
+    else:
+        scale_label = (drawing_properties or {}).get("HumanScale")
+    if scale_label and not resolved_title.endswith(f" {scale_label}"):
+        resolved_title = f"{resolved_title} {scale_label}"
     _postprocess_drawing_title(absolute_output, resolved_title)
 
     if png:
@@ -14468,7 +14476,8 @@ class Drawing:
         scale. Oversized drawings raise ValueError rather than being shrunk.
         A compact title is added to SVG, PNG and PDF. If omitted, use the PDF
         filename stem (or SVG filename stem when pdf=None). The title adds a
-        10 mm header without rescaling geometry; png_dpi affects only PNG.
+        10 mm header without rescaling geometry and appends the drawing scale,
+        e.g. "Krov 1:100"; png_dpi affects only PNG.
         """
         if self.house._ifc_path is None:
             raise RuntimeError("write the house before rendering a drawing")

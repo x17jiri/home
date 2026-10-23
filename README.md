@@ -868,7 +868,8 @@ linework. Oversized drawings raise an error rather than silently shrinking.
 Existing PDFs are replaced only after a successful export. `title` adds a
 centred, bold 4 mm heading to SVG, PNG and PDF in a compact 10 mm header. If
 omitted, it uses the PDF filename without its directory or extension (or the
-SVG filename when no PDF is requested). The drawing is moved down, not scaled;
+SVG filename when no PDF is requested). The drawing scale is appended to both
+automatic and custom titles, e.g. `D1.1.5. Krov 1:100`. The drawing is moved down, not scaled;
 the header is included in the paper-fit check. Print the PDF at actual size /
 100%, not "fit to page".
 

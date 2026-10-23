@@ -242,7 +242,8 @@ COLLAR_TIE_DRAWING_ORDER = 2
 MAIN_RAFTER_DRAWING_ORDER = 3
 DORMER_WALL_PLATE_DRAWING_ORDER = 4
 DORMER_RAFTER_DRAWING_ORDER = 5
-EXTERIOR_XPS_INSULATION_THICKNESS = 0.20 + 0.005
+PERIMETER_TOP_HEIGHT = 0.6
+EXTERIOR_XPS_INSULATION_THICKNESS = 0.16 + 0.005
 FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.005
 PERIMETER_INSULATION_MATERIAL = "XPS"
 PERIMETER_INSULATION_COLOR = "#f4dddd"
@@ -313,7 +314,7 @@ GROUND_WALL_BASE_COURSE_HEIGHT = 0.275
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.625
 door_clear_height = 2.1
-CEILING_THICKNESS = 0.21
+CEILING_THICKNESS = 0.25
 
 UPPER_FLOOR_START = ground_floor_height + CEILING_THICKNESS
 COLLAR_TIE_THICKNESS = 0.05
@@ -381,8 +382,8 @@ wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
 aa_cut = CutDefinition(
-	start=(wall2_x + 0.56, -2.5),
-	end=(wall2_x + 0.56, HOUSE_DEPTH + 2.5),
+	start=(wall2_x + 0.01, -2.5),
+	end=(wall2_x + 0.01, HOUSE_DEPTH + 2.5),
 	identifier="A",
 	direction=-1,
 )
@@ -423,8 +424,8 @@ CHODBA_DEPTH = 2.55
 GALERY_START = BWT+2.55
 
 wall_zachod_nahore_y = BWT+1.2+1+0.1
-oblouk1_at = HOUSE_DEPTH-BWT-0.5-1.5
-oblouk2_at = HOUSE_DEPTH-BWT-0.5-1.5-0.625-1.5
+OBLOUK_WIDTH = 2.0
+oblouk_at = HOUSE_DEPTH-BWT-1.5-OBLOUK_WIDTH
 
 # Each number is the absolute X coordinate of a main rafter centre.
 # SplitRafter divides its garden-side rafter at an absolute Y coordinate inside
@@ -438,6 +439,7 @@ vk_from = wall2_x-0.24-0.1
 vk_to = wall3_x+0.1
 
 a = math.floor((vk_to - vk_from - 3*0.67 - 0.75 - 0.86) / 2 * 1000.0) / 1000.0
+a = 0.91
 
 rafters = [
 	-0.10,
@@ -445,12 +447,12 @@ rafters = [
 	1.65,
 	1.65+0.91,
 	(vk_from, "+before"),
-	(vk_from+a, "before"),
-	(vk_from+a+0.86, "before"),
-	(vk_from+a+0.86+0.67, "before"),
-	(vk_from+a+0.86+0.67+0.75, "after"),
-	(vk_from+a+0.86+0.67+0.75+0.67, "after"),
-	(vk_from+a+0.86+0.67+0.75+0.67+0.67, "after"),
+	(vk_from+0.91, "before"),
+	(vk_from+0.91+0.67, "before"),
+	(vk_from+0.91+0.67+0.75, "after"),
+	(vk_from+0.91+0.67+0.75+0.67, "after"),
+	(vk_from+0.91+0.67+0.75+0.67+0.67, "after"),
+	(vk_from+0.91+0.67+0.75+0.67+0.67+0.67, "after"),
 	(vk_to, "+after"),
 	vk_to+0.67,
 	vk_to+0.67+0.67,
@@ -469,8 +471,8 @@ CHIMNEY_Y_START = GALERY_START - 0.45 # override
 CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2
 
 ############## overrides
-CHIMNEY_Y_START = BWT + GYM_DEPTH - 0.42
-CHIMNEY_X_START = wall2_x - BWT
+CHIMNEY_Y_START = BWT + math.floor((HALF_DEPTH - BWT - VAZNICE_DIST - VAZNICE_HALF_BASE - 0.70)/0.01)*0.01
+CHIMNEY_X_START = wall2_x + 0.02
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
@@ -490,14 +492,14 @@ kuchyn = ground.floor_layer(
 	outline=(
 		(wall2_x, BWT+CHODBA_DEPTH+0.115),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.115),
-		(wall3_x-BWT, oblouk2_at),
-		(wall3_x, oblouk2_at),
+		(wall3_x-BWT, oblouk_at),
+		(wall3_x, oblouk_at),
 		(wall3_x, BWT+BATHROOM_DEPTH+0.115),
 		(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.115),
 		(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
 		(wall3_x, HOUSE_DEPTH-BWT),
-		(wall3_x, oblouk1_at+1.5),
-		(wall3_x-BWT, oblouk1_at+1.5),
+		(wall3_x, oblouk_at+OBLOUK_WIDTH),
+		(wall3_x-BWT, oblouk_at+OBLOUK_WIDTH),
 		(wall3_x-BWT, HOUSE_DEPTH-BWT),
 		(wall2_x, HOUSE_DEPTH-BWT),
 	),
@@ -862,14 +864,13 @@ ground.furniture(
     color="#ffffff",
     center=(wall3_x+KK_WIDTH/2.0, BWT+0.7),
 )
-if "aa" not in sys.argv:
-	gauc = ground.asset(
-		"Gauc", asset="3_seater_sofa",
-		center=(wall2_x+0.1+0.55, HOUSE_DEPTH-BWT-0.1-1.25),
-		start_height=GROUND_FLOOR_THICKNESS,
-		size=(2.5, 1.1),
-		rotation=90,
-	)
+gauc = ground.asset(
+	"Gauc", asset="3_seater_sofa",
+	center=(wall2_x+0.1+0.55, HOUSE_DEPTH-BWT-0.1-1.25),
+	start_height=GROUND_FLOOR_THICKNESS,
+	size=(2.5, 1.1),
+	rotation=90,
+)
 ground.asset(
 	"Gauc", asset="1_seater_sofa",
 	center=(wall2_x+0.1+1.1+0.1+0.55, HOUSE_DEPTH-BWT-0.1-0.55),
@@ -936,19 +937,12 @@ pokoj0_door = wall_gym_g.add_door(
 )
 
 # Oblouk
-oblouk1 = wall_3.add_opening(
-	at=oblouk1_at,
-	width=1.5,
+oblouk = wall_3.add_opening(
+	at=oblouk_at,
+	width=OBLOUK_WIDTH,
     height=ground_floor_height-0.5,
     sill_height=0,
-	name="Oblouk1"
-)
-oblouk2 = wall_3.add_opening(
-	at=oblouk2_at,
-	width=1.5,
-    height=ground_floor_height-0.5,
-    sill_height=0,
-	name="Oblouk2"
+	name="Oblouk"
 )
 
 # Bathroom
@@ -1129,7 +1123,7 @@ ceiling1 = upper.miako_slab(
     top=0,
 	topping=0.06,
 	beam_height=0.06,
-	block_height=0.15,
+	block_height=CEILING_THICKNESS-0.06,
     direction=(0, -1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
@@ -1152,7 +1146,7 @@ ceiling2 = upper.miako_slab(
     top=0,
 	topping=0.06,
 	beam_height=0.06,
-	block_height=0.15,
+	block_height=CEILING_THICKNESS-0.06,
     direction=(0, 1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
@@ -1176,7 +1170,7 @@ ceiling3 = upper.miako_slab(
     top=0,
 	topping=0.06,
 	beam_height=0.06,
-	block_height=0.15,
+	block_height=CEILING_THICKNESS-0.06,
     direction=(0, -1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
@@ -1612,7 +1606,7 @@ beam3 = upper.beam(
 beam_cut_street = upper.beam(
 	"Cut street wall plate",
 	start=(-0.2, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
-	end=(wall2_x, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
+	end=(wall2_x-0.15, CUT_STREET_WALL_PLATE_Y, CUT_STREET_WALL_PLATE_Z),
 	size=WALL_PLATE_SIZE,
 	material="Wood",
 	kind="WALL_PLATE",
@@ -3112,9 +3106,9 @@ def outside_dims(drawing1):
 
 def common_dims(drawing1):
 	outside_dims(drawing1)
-	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT-2.1), end=(wall2_x-BWT, HOUSE_DEPTH-BWT-2.1), offset=0)
-	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT-2.1), end=(wall3_x-BWT, HOUSE_DEPTH-BWT-2.1), offset=0)
-	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT-2.1), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT-2.1), offset=0)
+	drawing1.add_dimension(start=(BWT, HOUSE_DEPTH-BWT-1.3), end=(wall2_x-BWT, HOUSE_DEPTH-BWT-1.3), offset=0)
+	drawing1.add_dimension(start=(wall2_x, HOUSE_DEPTH-BWT-1.3), end=(wall3_x-BWT, HOUSE_DEPTH-BWT-1.3), offset=0)
+	drawing1.add_dimension(start=(wall3_x, HOUSE_DEPTH-BWT-1.3), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT-1.3), offset=0)
 
 	# Risankuv pokoj hloubka
 	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1.5)
@@ -3883,7 +3877,7 @@ if "ground" in sys.argv:
 	common_dims(drawing1)
 
 	# chodba hloubka
-	drawing1.add_dimension(start=(CHIMNEY_X_END+0.1, BWT), end=(CHIMNEY_X_END+0.1, BWT+CHODBA_DEPTH), offset=0)
+	drawing1.add_dimension(start=(CHIMNEY_X_END+1, BWT), end=(CHIMNEY_X_END+1, BWT+CHODBA_DEPTH), offset=0)
 	# KK hloubka
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT+BATHROOM_DEPTH+0.115), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-1)
 	# kuchyn hloubka
@@ -3908,7 +3902,7 @@ if "ground" in sys.argv:
 		window_area=window_area(window_obyvak, window_kk),
 	)
 	drawing1.add_room_annotation(
-		(1.3, 6.5),
+		(2, 5.7),
 		identifier=pokoj_dole.room_id,
 		description="Pokoj",
 		area=pokoj_dole.area,
@@ -3943,13 +3937,11 @@ if "ground" in sys.argv:
 	drawing1.add_lintel(window_pokoj_dole, 5, direction="in")
 	drawing1.add_lintel(window_pokoj_dole_2, 6, direction="in")
 	drawing1.add_lintel(window_obyvak, 7, position="after", direction="in")
-	drawing1.add_lintel(oblouk1, 5)
-	drawing1.add_lintel(oblouk2, 5)
+	drawing1.add_lintel(oblouk, 8)
 	drawing1.add_lintel_legend()
 
 	drawing1.add_opening_dimension(kitchen_door, offset=-0.5)
-	drawing1.add_opening_dimension(oblouk1, offset=BWT/2)
-	drawing1.add_opening_dimension(oblouk2, offset=BWT/2)
+	drawing1.add_opening_dimension(oblouk, offset=BWT/2)
 	drawing1.add_opening_dimension(window_bathroom, offset=-0.75)
 	drawing1.add_opening_dimension(window_obyvak, offset=-0.6)
 	drawing1.add_opening_dimension(window_pokoj_dole, offset=-0.6)
@@ -3958,6 +3950,13 @@ if "ground" in sys.argv:
 	drawing1.add_opening_dimension(front_door, offset=-1.3)
 	drawing1.add_opening_dimension(window_pokoj_dole_2, offset=-0.7)
 	drawing1.add_opening_dimension(bathroom_door, offset=0.9)
+
+	# vzdalenost komina od kuchynske zdi
+	drawing1.add_dimension(start=(CHIMNEY_X_END, CHIMNEY_Y_END), end=(CHIMNEY_X_END, BWT+CHODBA_DEPTH))
+	# vzdalenost komina od schodu
+	drawing1.add_dimension(start=(wall3_x-BWT-1.0-0.27*9-0.03, BWT+1.0), end=(CHIMNEY_X_END, CHIMNEY_Y_START))
+	# vzdalenost komina od obvodove zdi
+	drawing1.add_dimension(start=(CHIMNEY_X_MID, BWT), end=(CHIMNEY_X_MID, CHIMNEY_Y_START))
 
 	drawing1.render("ground.svg", pdf=PDF_GROUND)
 
@@ -4684,14 +4683,14 @@ if "aa" in sys.argv:
 		wall_front_g,
 		thickness=POLYSTYRENE_INSULATION_THICKNESS,
 		material="polystyrene",
-		start_z=0.3,
+		start_z=PERIMETER_TOP_HEIGHT,
 		end_z=UPPER_FLOOR_START+NADEZDIVKA+0.15,
 	)
 	drawing1.add_wall_insulation(
 		wall_dormer,
 		thickness=ROCKWOOL_INSULATION_THICKNESS,
 		material="rockwool",
-		start_z=0.3,
+		start_z=PERIMETER_TOP_HEIGHT,
 		end_z=UPPER_FLOOR_START+DORMER_WALL_HEIGHT+0.15,
 	)
 	drawing1.add_wall_insulation(
@@ -4699,14 +4698,14 @@ if "aa" in sys.argv:
 		thickness=EXTERIOR_XPS_INSULATION_THICKNESS,
 		material="xps",
 		start_z=-1,
-		end_z=0.3,
+		end_z=PERIMETER_TOP_HEIGHT,
 	)
 	drawing1.add_wall_insulation(
 		wall_dormer,
 		thickness=EXTERIOR_XPS_INSULATION_THICKNESS,
 		material="xps",
 		start_z=-1,
-		end_z=0.3,
+		end_z=PERIMETER_TOP_HEIGHT,
 	)
 	aa_x = drawing1.x
 	# Roof pitches measured against horizontal, with the same slopes as the
@@ -4987,7 +4986,7 @@ if "bb" in sys.argv:
 			wall,
 			thickness=thickness,
 			material=material,
-			start_z=0.3,
+			start_z=PERIMETER_TOP_HEIGHT,
 			end_z=UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT+1.2,
 		)
 		drawing1.add_wall_insulation(
@@ -4995,7 +4994,7 @@ if "bb" in sys.argv:
 			thickness=EXTERIOR_XPS_INSULATION_THICKNESS,
 			material="xps",
 			start_z=-1,
-			end_z=0.3,
+			end_z=PERIMETER_TOP_HEIGHT,
 		)
 
 	# vyska nadezdivky
@@ -5030,7 +5029,7 @@ if "bb" in sys.argv:
 		offset=-0.5)
 	# tloustka strop
 	drawing1.add_dimension(
-		start=(0, UPPER_FLOOR_START-0.210),
+		start=(0, UPPER_FLOOR_START-CEILING_THICKNESS),
 		end=(0, UPPER_FLOOR_START),
 		offset=0.5)
 

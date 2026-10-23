@@ -462,7 +462,7 @@ class DrawingPdfTests(unittest.TestCase):
                     self.assertEqual(root.get("width"), "297mm")
                     self.assertEqual(root.get("height"), "210mm")
                     self.assertIn(">36°</text>", temporary_svg.read_text(encoding="utf-8"))
-                    self.assertIn(">D1.1.5. Krov</text>", temporary_svg.read_text(encoding="utf-8"))
+                    self.assertIn(">D1.1.5. Krov 1:100</text>", temporary_svg.read_text(encoding="utf-8"))
                     self.assertEqual(temporary_svg.parent, svg_path.parent)
                     self.assertIn("--export-type=pdf", command)
                     self.assertNotIn("--export-text-to-path", command)
@@ -565,9 +565,10 @@ class DrawingTitleTests(unittest.TestCase):
             with patch("ifc_utils.shutil.which", return_value="/usr/bin/blender"), \
                     patch("ifc_utils.subprocess.run", side_effect=render), \
                     patch("ifc_utils._export_drawing_pdf") as export:
-                for options, expected in (({}, "source"), ({"pdf": pdf}, pdf.stem),
-                                          ({"pdf": pdf, "title": "Příčný řez"}, "Příčný řez"),
-                                          ({"title": "Custom SVG title"}, "Custom SVG title")):
+                for options, expected in (({}, "source 1:100"), ({"pdf": pdf}, f"{pdf.stem} 1:100"),
+                                          ({"pdf": pdf, "title": "Příčný řez"}, "Příčný řez 1:100"),
+                                          ({"title": "Custom SVG title"}, "Custom SVG title 1:100"),
+                                          ({"title": "Roof 1:100"}, "Roof 1:100")):
                     with self.subTest(options=options):
                         export.reset_mock()
                         drawing.render(svg, **options)
@@ -578,6 +579,31 @@ class DrawingTitleTests(unittest.TestCase):
                             export.assert_called_once()
                         else:
                             export.assert_not_called()
+
+    def test_title_uses_actual_scale_and_handles_legacy_scale_metadata(self):
+        house = House("Scale titles")
+        drawing = house.add_drawing("Roof", 0, 0, 2, 4)
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            house.write(directory / "house.ifc")
+            svg = directory / "roof.svg"
+
+            def render(command, *, check):
+                Path(command[command.index("--output") + 1]).write_text(DrawingPdfTests.SVG, encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0)
+
+            with patch("ifc_utils.shutil.which", return_value="/usr/bin/blender"), \
+                    patch("ifc_utils.subprocess.run", side_effect=render):
+                for scale, human_scale, expected in (("1/50", "1:100", "Roof 1:50"),
+                                                      ("2/100", "1:50", "Roof 1:50"),
+                                                      (None, "1:75", "Roof 1:75"),
+                                                      (None, None, "Roof")):
+                    with self.subTest(scale=scale, human_scale=human_scale):
+                        ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset,
+                                                        properties={"Scale": scale, "HumanScale": human_scale})
+                        drawing.render(svg, title="Roof")
+                        root = ET.parse(svg).getroot()
+                        self.assertEqual(root.find("{http://www.w3.org/2000/svg}text").text, expected)
 
     def test_title_height_is_included_in_pdf_fit_check(self):
         with TemporaryDirectory() as directory:
