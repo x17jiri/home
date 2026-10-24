@@ -1033,6 +1033,27 @@ class ChordTests(unittest.TestCase):
 
 
 class InputTests(unittest.TestCase):
+    def test_collar_min_y_is_accepted_without_ties_but_never_silently_ignored_with_ties(self):
+        data = HouseInputs(HOUSE)
+        original = data.get("rafters")
+        plain = tuple(entry[:2] if isinstance(entry, tuple) else entry for entry in original)
+        data.cache["rafters"] = plain
+        with patch("roof_frame_3d.HouseInputs", return_value=data):
+            baseline = RoofLayout.from_house(HOUSE)
+            paired = next(i for i, entry in enumerate(plain) if isinstance(entry, tuple))
+            entries = list(plain)
+            entries[paired] = (*plain[paired], {"min_y": 2.8})
+            data.cache["rafters"] = tuple(entries)
+            actual = RoofLayout.from_house(HOUSE)
+            self.assertEqual(actual.beams, baseline.beams)
+            with self.assertRaisesRegex(ValueError, "new connection model"):
+                RoofLayout.from_house(HOUSE, collar_ties=CollarTieParameters())
+            for value in (True, None, "2.8", float("inf"), float("nan")):
+                entries[paired] = (*plain[paired], {"min_y": value})
+                data.cache["rafters"] = tuple(entries)
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError, "finite number"):
+                    RoofLayout.from_house(HOUSE)
+
     def test_reader_supports_floor_in_variable_based_rafter_layout(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "house.py"

@@ -519,7 +519,21 @@ class RoofLayout:
         for index, entry in enumerate(g("rafters"), 1):
             pair = None
             if isinstance(entry, tuple):
-                x, pair = entry
+                if len(entry) not in (2, 3):
+                    raise ValueError("paired rafter must be (x, side) or (x, side, options)")
+                x, pair = entry[:2]
+                options = entry[2] if len(entry) == 3 else {}
+                if not isinstance(options, dict) or set(options) - {"min_y"}:
+                    raise ValueError("paired rafter options must be a dictionary containing only min_y")
+                if "min_y" in options:
+                    min_y = options["min_y"]
+                    if isinstance(min_y, bool) or not isinstance(min_y, (int, float)) or not isfinite(min_y):
+                        raise ValueError("collar min_y must be a finite number in metres")
+                    if collar_ties is not None:
+                        raise ValueError(
+                            "min_y-trimmed collar ties require a new connection model; "
+                            "use --no-collar-ties rather than simulating an uncut tie"
+                        )
                 if pair not in {"before", "after", "+before", "+after"}:
                     raise ValueError("invalid paired rafter side")
                 entry = RafterEntry(x)

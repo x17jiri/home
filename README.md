@@ -575,17 +575,22 @@ drawing.add_angle(
 )
 ```
 
-Run `python3 house_ifc.py roof_xx` for a transverse roof-framing section looking
-along +X (parallel to AA). Its `add_roof_elevation()` call selects index 1 in
+Run `python3 house_ifc.py roof` for one A3 portrait sheet containing the roof
+plan above the XX, YY and ZZ framing sections, with a single timber schedule.
+The separate `roof_xx`, `roof_yy` and `roof_zz` command-line targets are removed;
+their previous PDF numbers remain reserved to avoid renumbering later documents.
+The XX framing section looks along +X (parallel to AA). Its
+`add_roof_elevation()` call selects index 1 in
 `rafters` and puts the camera 0.15 m before it. It uses the roof plan's
 structural timber selection and upper-floor walls, without roof build-up layers,
-furniture or dimensions. The complete timber schedule comes from the same
+furniture or roof-layer finishes. The complete timber schedule comes from the same
 `timber_schedule_rows` definition as the roof plan. Only the selected rafter
 assembly (both roof sides, paired dormer members, collar ties and spacer) and
 the purlins cut by the camera, all wall plates and purlin packing blocks receive
 its colours/hatches (including projected plates/blocks); other timber stays
-white with outlines, and Bonsai still determines visibility. Outputs are
-`roof_xx.svg` and `roof_xx.png`; the camera is mirrored with the IFC as usual.
+white with outlines, and Bonsai still determines visibility. The camera is
+mirrored with the IFC as usual. The YY section also includes the chimney and
+its collar-board clearance dimension.
 
 Reuse the same helper in `house_ifc.py` for additional framing sections:
 
@@ -594,6 +599,19 @@ section = add_roof_elevation("roof_yy", rafter_index=5, offset=0.15)
 # Add dimensions or notes here, if needed.
 section.render("roof_yy.svg", png=True, png_dpi=600)
 ```
+
+Paired entries in `rafters` can optionally trim their two IFC collar boards:
+
+```python
+(rafter_x, "before", {"min_y": BWT + CHODBA_DEPTH + 0.02})
+```
+
+`min_y` is an absolute house Y coordinate in metres. Both boards keep only
+the part at or beyond that boundary; the rafters and other collar pairs are
+unchanged. Their shorter finished lengths are reflected in the timber schedule.
+This is an IFC geometry option. The 3D force simulator accepts it with
+`--no-collar-ties`; with collars enabled it stops explicitly, because the
+shortened boards need a new connection model rather than an uncut axial tie.
 
 The index is zero-based and accepts any existing `rafters` entry, including
 paired dormer, stronger and split rafters. Positive offsets move the camera
@@ -614,6 +632,29 @@ Each framing section also calls `add_roof_purlin_dimension()` to show horizontal
 purlin centre-to-centre spacing below the beams. It uses the local purlin pieces
 (side pieces in XX/ZZ, middle pieces in YY), with a default offset of -0.5 m
 from their centreline level. Existing rafter dimensions are unchanged.
+Linear dimension labels stay centred along their dimension lines in plans and
+elevations, even for very short spans. This overrides Bonsai's automatic
+endpoint placement without changing text rotation or its above/below-line
+offset; opening-height labels are centred as well.
+
+To mark an elevation relative to a reference datum, use:
+
+```python
+drawing.add_elevation_dimension(x0=2, x1=4, z0=0, z1=1.5)
+```
+
+This draws a horizontal line from `(2, 1.5)` to `(4, 1.5)`, with an open
+downward arrow at its midpoint and `+1500` above/right of the arrow. `z0`
+only supplies the reference height; no line is drawn there. Labels use signed
+whole millimetres without thousands separators (`±0` at zero); input coordinates
+remain metres. The arrow stem is 2.5 mm tall with a 0.75 mm arrowhead. The horizontal
+coordinate is world X when looking along Y, or world Y when looking along X,
+just like `add_line()`. Axis-aligned elevation views are required. Optional
+`font_size=2` (matching other dimension labels), `line_width=0.1` and
+`color="black"` control appearance; sizes
+are printed millimetres, independent of scale. Mirroring keeps the arrow
+upright, the label readable and the shelf pointing right. The symbol and its
+text are native IFC annotations kept above model fills like other dimensions.
 
 `roof_elevation_definitions` holds the rafter indices, offsets and marker
 letters for `roof_xx`, `roof_yy` and `roof_zz`. The roof plan displays their
@@ -621,6 +662,8 @@ X–X, Y–Y and Z–Z cut lines, derived by `roof_elevation_cut()` from those s
 settings, even when only the plan is being generated. Section cameras use
 that cut-definition helper too, keeping locations and viewing arrows aligned
 through export mirroring. Tune the settings in that shared dictionary.
+Bonsai's automatic camera-position markers are disabled (`GlobalReferencing=False`);
+only explicitly added cut symbols appear in other views.
 
 `drawing.add_timber_schedule(rows, styled_members=members)` limits diagram
 styles without filtering the schedule's counts, lengths, volumes or pattern
@@ -873,6 +916,38 @@ automatic and custom titles, e.g. `D1.1.5. Krov 1:100`. The drawing is moved dow
 the header is included in the paper-fit check. Print the PDF at actual size /
 100%, not "fit to page".
 
+### Multiple drawings on one sheet
+
+```python
+sheet = DrawingSheet(paper="A3", orientation="portrait")
+sheet.add(roof, x=0.5, y=0.25, title="D1.1.5. Krov", crop=False)
+sheet.add(roof_xx, x=0.25, y=0.64, title="Řez XX", tables=False)
+sheet.add(roof_yy, x=0.74, y=0.75, title="Řez YY", tables=False)
+sheet.add(roof_zz, x=0.25, y=0.87, title="Řez ZZ", tables=False)
+sheet.render("roof.svg", pdf=PDF_KROV)
+```
+
+Each `x`, `y` is the drawing's centre as a fraction of the **whole page**:
+`0` is left/top and `1` right/bottom. Placement is manual; overlaps are allowed.
+There is no automatic layout, resizing or fitting. Drawings crossing the sheet
+margins produce an error. Constructor defaults are A4 landscape, 10 mm margins
+and 2 mm cropping padding; the roof sheet explicitly uses A3 portrait.
+
+`crop=True` (the default) trims empty camera space around the actual SVG
+geometry, text and markers, moving the title next to the cropped diagram.
+`crop=False` preserves the entire original viewport: an A4-sized main drawing
+centred at `(0.5, 0.25)` retains its previous position in the top half of A3.
+Neither option changes scale, line widths or text sizes. `title` defaults to
+the drawing name; its actual scale is appended as for standalone drawings.
+
+`tables=False` hides the right-side panel but retains all timber colors and
+hatches. Schedules and document links on the original drawing objects remain
+unchanged. This option is also available on `drawing.render(...)` for standalone
+exports. Sheet SVGs remain vector drawings, with separately scoped styles,
+marker/pattern IDs and references for each view. `house.write(...)` must precede
+rendering, just as with standalone drawings. Old separate-cut PDF files are not
+automatically deleted.
+
 ### Drainage schematic
 
 Run `python3 house_ifc.py kanal_ground` for the ground-floor drainage plan.
@@ -1003,7 +1078,7 @@ elevation.render("south.svg", png=True, png_dpi=600)
 
 Elevation directions must currently be horizontal. Elevations project the
 existing 3D model bodies and deliberately omit plan-only annotations such as
-door dimensions, room labels, and stair arrows. Furniture labels remain
+door dimensions, room labels, and stair tread symbols. Furniture labels remain
 automatic in plan drawings but are opt-in for elevations:
 
 ```python

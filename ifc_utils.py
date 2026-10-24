@@ -51,6 +51,7 @@ import numpy as np
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 from pdf_utils import markdown_to_pdf
+from drawing_sheet import DrawingSheet
 from section_outlines import add_section_outlines
 
 
@@ -62,6 +63,7 @@ __all__ = [
     "Chimney",
     "CutDefinition",
     "Drawing",
+    "DrawingSheet",
     "ElektroLineDrawer",
     "FacadeLayer",
     "FloorLayer",
@@ -4367,6 +4369,9 @@ def _postprocess_change_floor_symbol_overlays(svg_path: Path) -> None:
 
 def _postprocess_dimension_overlays(svg_path: Path) -> None:
     """Move native dimension lines, labels and extensions above model fills."""
+    # This shared pass runs for plans AND elevations. Do not leave label
+    # centring dependent on the plan-only door/wall postprocessing.
+    _postprocess_dimension_labels(svg_path)
     svg = svg_path.read_text(encoding="utf-8")
     if 'class="dimension-overlays"' in svg:
         return
@@ -4374,6 +4379,7 @@ def _postprocess_dimension_overlays(svg_path: Path) -> None:
     dimension_classes = {
         "PredefinedType-DIMENSION", "DIMENSION", "dimension-extension",
         "PredefinedType-ANGLE", "ANGLE", "angle-reference",
+        "elevation-dimension",
     }
 
     def collect(match: re.Match[str]) -> str:
@@ -4435,13 +4441,8 @@ def _postprocess_floor_corner_overlays(svg_path: Path) -> None:
     svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
 
 
-def _postprocess_door_overheads(
-    svg_path: Path,
-    *,
-    mask_global_ids: set[str] | None = None,
-) -> None:
-    """Apply the final wall, reinforcement, symbol, and label drawing order."""
-    _postprocess_miako_reinforcement_overlays(svg_path)
+def _postprocess_dimension_labels(svg_path: Path) -> None:
+    """Centre linear labels along their dimension while keeping normal offsets."""
     svg = svg_path.read_text(encoding="utf-8")
     changed = False
 
@@ -4486,6 +4487,21 @@ def _postprocess_door_overheads(
         return match["line"] + re.sub(r'<text\b[^>]*>[\s\S]*?</text>', center_text, match["labels"])
 
     svg = _DIMENSION_LABEL.sub(center_dimension_label, svg)
+    if changed:
+        svg_path.write_text(svg, encoding="utf-8")
+
+
+def _postprocess_door_overheads(
+    svg_path: Path,
+    *,
+    mask_global_ids: set[str] | None = None,
+) -> None:
+    """Apply the final wall, reinforcement, symbol, and label drawing order."""
+    _postprocess_miako_reinforcement_overlays(svg_path)
+    # Retain centring for callers using this legacy standalone plan pass.
+    _postprocess_dimension_labels(svg_path)
+    svg = svg_path.read_text(encoding="utf-8")
+    changed = False
 
     if '<polygon class="door-overhead-mask"' not in svg:
         line_groups: dict[str, list[re.Match[str]]] = {}
@@ -5712,6 +5728,7 @@ def _render_existing_drawing(
     orientation: str = "landscape",
     margin: Number = 10,
     title: str | None = None,
+    tables: bool = True,
 ) -> Path:
     """Render a persisted Bonsai drawing from an IFC file."""
     output_path = Path(output)
@@ -5719,6 +5736,8 @@ def _render_existing_drawing(
         raise ValueError("drawing output must use the .svg extension")
     if not isinstance(png, bool):
         raise TypeError("png must be a boolean")
+    if not isinstance(tables, bool):
+        raise TypeError("tables must be a boolean")
     png_dpi = _number(png_dpi, "png_dpi")
     if png_dpi <= 0:
         raise ValueError("png_dpi must be greater than zero")
@@ -5902,10 +5921,11 @@ def _render_existing_drawing(
     _postprocess_angle_labels(absolute_output, drawing_properties or {})
     _postprocess_note_overlays(absolute_output)
     _postprocess_cut_symbol_overlays(absolute_output)
-    _postprocess_right_panel(
-        absolute_output,
-        drawing_properties or {},
-    )
+    if tables:
+        _postprocess_right_panel(
+            absolute_output,
+            drawing_properties or {},
+        )
     _postprocess_change_floor_symbol_overlays(absolute_output)
     _postprocess_dimension_overlays(absolute_output)
     _postprocess_floor_corner_overlays(absolute_output)
@@ -8379,6 +8399,7 @@ class Drawing:
         self._ridge_tile_count = 0
         self._wall_insulation_count = 0
         self._dimension_count = 0
+        self._elevation_dimension_count = 0
         self._angle_count = 0
         self._line_count = 0
         self._poly_line_count = 0
@@ -8566,7 +8587,10 @@ class Drawing:
             "HasUnderlay": False,
             "HasLinework": True,
             "HasAnnotation": self.view == "plan",
-            "GlobalReferencing": True,
+            # Section markers are added explicitly with CutDefinition /
+            # add_cut_symbol. Do not let Bonsai add camera-position circles
+            # to other plans when several drawings share the same IFC.
+            "GlobalReferencing": False,
             "DPI": 96,
             "LineworkMode": "OPENCASCADE",
             # Elevations need closed projected surfaces so material styling
@@ -10920,6 +10944,8 @@ class Drawing:
         style: Literal["solid", "dashed", "dashed-arrows"] = "solid",
         color: str = "black",
         line_width: Number = 0.1,
+        arrow_end: bool = False,
+        circle_start: bool = False,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Draw a connected path through two or more 2D model points.
@@ -10928,8 +10954,14 @@ class Drawing:
         kanal, points are (x,z). The path is unfilled; repeat the first point
         at the end to close it. Consecutive duplicate points are rejected.
         dashed-arrows follows the supplied point order and restarts its
-        pattern at each corner. Returns one drawing-scoped LINEWORK annotation
-        suitable for add_line_legend(), without physical 3D geometry.
+        pattern at each corner. arrow_end adds one open arrowhead at the last
+        point, directed along the last segment (2 mm long, 1.5 mm wide on paper).
+        circle_start adds an unfilled circle of 0.5 mm paper radius at the first
+        point. Both default to False, follow export mirroring, and use the line's
+        color and width but remain solid even for dashed routes. Returns the
+        route LINEWORK annotation, suitable for add_line_legend(); endpoint
+        symbols use one companion annotation in the same drawing, with no
+        physical 3D geometry.
         """
         if isinstance(points, (str, bytes)):
             raise TypeError("points must be a sequence of 2D points")
@@ -10942,6 +10974,8 @@ class Drawing:
         points = tuple(_point(point, f"point {index}") for index, point in enumerate(supplied, start=1))
         if any(hypot(b[0] - a[0], b[1] - a[1]) < 1e-9 for a, b in zip(points, points[1:])):
             raise ValueError("consecutive points must be different")
+        if not isinstance(arrow_end, bool) or not isinstance(circle_start, bool):
+            raise TypeError("arrow_end and circle_start must be booleans")
         style, color, classes = _drawing_line_appearance(style, color)
         line_width, width_class = _drawing_line_width(line_width)
         classes += f" {width_class}"
@@ -10953,26 +10987,54 @@ class Drawing:
             local_points.append((float(np.dot(delta, placement[:3, 0])),
                                  float(np.dot(delta, placement[:3, 1]))))
         paths = [local_points]
-        if style == "dashed-arrows":
+        if style == "dashed-arrows" or arrow_end or circle_start:
             scale_value = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Scale")
             try:
                 scale = float(Fraction(str(scale_value)))
                 if not isfinite(scale) or scale <= 0:
                     raise ValueError
             except (ValueError, ZeroDivisionError):
-                raise ValueError("dashed-arrows requires a positive drawing scale") from None
+                raise ValueError("polyline symbols and dashed-arrows require a positive drawing scale") from None
+            units_per_mm = 0.001 / scale
+        if style == "dashed-arrows":
             paths = [path for start, end in zip(local_points, local_points[1:])
-                     for path in _dashed_arrow_segments(start, end, units_per_mm=0.001 / scale)]
+                     for path in _dashed_arrow_segments(start, end, units_per_mm=units_per_mm)]
+        symbols = []
+        if arrow_end:
+            tip, previous = np.array(local_points[-1]), np.array(local_points[-2])
+            tangent = (tip - previous) / np.linalg.norm(tip - previous)
+            normal = np.array((-tangent[1], tangent[0]))
+            base = tip - tangent * 2 * units_per_mm
+            symbols.append([base + normal * .75 * units_per_mm, tip,
+                            base - normal * .75 * units_per_mm])
+        if circle_start:
+            centre = np.array(local_points[0])
+            symbols.append([centre + .5 * units_per_mm * np.array((cos(i * 2 * pi / 32), sin(i * 2 * pi / 32)))
+                            for i in range(33)])
         model = self.house.model
         curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(path), None, False)
                   for path in paths]
         self._poly_line_count += 1
-        return self._add_primitive_annotation(
+        line = self._add_primitive_annotation(
             line_name or f"{self.name} Poly Line {self._poly_line_count}",
             "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)], classes,
             "BBIM_DrawingPolyLine", {"Points": json.dumps(points), "Style": style,
-                                     "Color": color, "LineWidth": line_width},
+                                     "Color": color, "LineWidth": line_width,
+                                     "ArrowEnd": arrow_end, "CircleStart": circle_start},
         )
+        if symbols:
+            symbol_curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(
+                                 [(float(x), float(y)) for x, y in path]), None, False)
+                             for path in symbols]
+            _, _, solid_classes = _drawing_line_appearance("solid", color)
+            self._add_primitive_annotation(
+                f"{line.Name} Endpoint Symbols", "LINEWORK", placement,
+                [model.createIfcGeometricCurveSet(symbol_curves)],
+                f"{solid_classes} {width_class} poly-line-endpoint-symbols", "BBIM_DrawingPolyLineSymbols",
+                {"Polyline": line.GlobalId, "ArrowEnd": arrow_end, "CircleStart": circle_start,
+                 "ArrowLengthMM": 2., "CircleRadiusMM": .5},
+            )
+        return line
 
     def add_angle(
         self,
@@ -11079,6 +11141,86 @@ class Drawing:
             drawing_properties["AngleDecimalPlaces"] = 0
         ifcopenshell.api.pset.edit_pset(model, pset=self._drawing_pset, properties=drawing_properties)
         return angle
+
+    def add_elevation_dimension(
+        self, x0: Number, x1: Number, z0: Number, z1: Number, *,
+        font_size: Number = 2, line_width: Number = 0.1,
+        color: str = "black", name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Mark a level with a horizontal line, downward arrow and signed height.
+
+        The line runs from (x0, z1) to (x1, z1); the arrow touches its midpoint.
+        z0 is the reference datum, not a second line. The label above/right of
+        the arrow shows z1-z0 in whole millimetres without grouping separators
+        (+1500, -250 or ±0). Inputs remain metres, as with add_line(): horizontal
+        world X when looking along Y, or world Y when looking along X.
+        Requires an axis-aligned elevation. Reversed endpoints are supported.
+        Arrow, shelf, text and stroke sizes use printed millimetres and remain
+        upright/right-facing under export mirroring. Returns the linework;
+        both it and its native text label belong only to this drawing.
+        """
+        if self.view != "elevation":
+            raise ValueError("add_elevation_dimension requires an elevation drawing")
+        x0, x1, z0, z1 = (_number(value, key) for key, value in
+                          (("x0", x0), ("x1", x1), ("z0", z0), ("z1", z1)))
+        if abs(x1 - x0) < 1e-9:
+            raise ValueError("x0 and x1 must be different")
+        font_size = _number(font_size, "font_size")
+        if font_size <= 0:
+            raise ValueError("font_size must be greater than zero")
+        _, color, classes = _drawing_line_appearance("solid", color)
+        line_width, width_class = _drawing_line_width(line_width)
+        dimension_name = _name(name, "name") if name is not None else None
+        centre = ((x0 + x1) / 2, z1)
+        placement = self._annotation_frame(centre, "add_elevation_dimension")
+        scale_value = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Scale")
+        try:
+            scale = float(Fraction(str(scale_value)))
+            if not isfinite(scale) or scale <= 0:
+                raise ValueError
+        except (ValueError, ZeroDivisionError):
+            raise ValueError("elevation dimensions require a positive drawing scale") from None
+        units = 0.001 / scale
+        value = round((z1 - z0) * 1000)
+        label = "±0" if value == 0 else f"{value:+d}"
+        # Native geometry is reflected locally during mirrored export, but
+        # text and cameras are kept readable. Precompensate screen-side offsets.
+        screen_sign = -1 if self.house.mirror_x else 1
+        shaft = 2.5 * units
+        wing = 0.75 * units
+        shelf = (font_size * 0.65 * len(label) + 1.5) * units
+        baseline = []
+        for point in ((x0, z1), (x1, z1)):
+            delta = self._annotation_frame(point, "add_elevation_dimension")[:3, 3] - placement[:3, 3]
+            baseline.append((float(np.dot(delta, placement[:3, 0])),
+                             float(np.dot(delta, placement[:3, 1]))))
+        paths = [baseline, [(0, 0), (0, shaft), (screen_sign * shelf, shaft)],
+                 [(-wing, wing), (0, 0), (wing, wing)]]
+        model = self.house.model
+        curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(
+                      [(float(x), float(y)) for x, y in path]), None, False)
+                  for path in paths]
+        self._elevation_dimension_count += 1
+        dimension_name = dimension_name or f"{self.name} Elevation Dimension {self._elevation_dimension_count}"
+        dimension = self._add_primitive_annotation(
+            dimension_name, "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)],
+            f"{classes} {width_class} elevation-dimension", "BBIM_ElevationDimension",
+            {"X0": x0, "X1": x1, "Z0": z0, "Z1": z1, "Height": z1-z0,
+             "Label": label, "FontSize": font_size, "LineWidth": line_width, "Color": color},
+        )
+        label_origin = (placement[:3, 3] + placement[:3, 0] * screen_sign * 0.7 * units
+                        + placement[:3, 1] * (shaft + (font_size / 2 + 0.6) * units))
+        horizontal_axis = 1 if abs(self.direction[0]) > 0.5 else 0
+        text = self.add_text(
+            (float(label_origin[horizontal_axis]), float(label_origin[2])), label,
+            font_size=font_size, color=color, alignment="left", name=f"{dimension_name} Label",
+        )
+        properties = ifcopenshell.util.element.get_pset(text, "EPset_Annotation")
+        ifcopenshell.api.pset.edit_pset(
+            model, pset=model.by_id(properties["id"]),
+            properties={"Classes": properties["Classes"] + " elevation-dimension"},
+        )
+        return dimension
 
     def add_dimension(
         self,
@@ -14233,8 +14375,9 @@ class Drawing:
     ) -> ifcopenshell.entity_instance:
         """Add a conventional plan symbol for ``stair`` to this drawing only.
 
-        A straight stair receives its outline, tread lines, and an upward
-        walking-direction arrow.  A custom stair receives the outline of each
+        A straight stair receives its outline and tread lines. Walking routes
+        are drawn separately so one route can span flights and landings.
+        A custom stair receives the outline of each
         explicitly supplied tread; no walking direction is inferred from an
         arbitrary layout.  If the stair belongs to a different storey, its
         model elements are explicitly included so their projected structural
@@ -14298,20 +14441,6 @@ class Drawing:
             for tread in range(1, stair.treads):
                 x = tread * tread_length
                 polylines.append([(x, -half_width), (x, half_width)])
-
-            arrow_start = min(tread_length / 2, stair.length * 0.1)
-            arrow_end = stair.length * 0.85
-            arrow_size = min(stair.width * 0.18, stair.length * 0.06)
-            polylines.extend(
-                [
-                    [(arrow_start, 0.0), (arrow_end, 0.0)],
-                    [
-                        (arrow_end - arrow_size, -arrow_size),
-                        (arrow_end, 0.0),
-                        (arrow_end - arrow_size, arrow_size),
-                    ],
-                ]
-            )
 
         curves = []
         for points in polylines:
@@ -14465,6 +14594,7 @@ class Drawing:
         orientation: str = "landscape",
         margin: Number = 10,
         title: str | None = None,
+        tables: bool = True,
         blender: str | PathLike[str] = "blender",
         inkscape: str | PathLike[str] = "inkscape",
         stylesheet: str | PathLike[str] | None = None,
@@ -14478,10 +14608,14 @@ class Drawing:
         filename stem (or SVG filename stem when pdf=None). The title adds a
         10 mm header without rescaling geometry and appends the drawing scale,
         e.g. "Krov 1:100"; png_dpi affects only PNG.
+        ``tables=False`` hides the right panel without dropping timber styles
+        or changing the drawing's persisted schedule definitions.
         """
         if self.house._ifc_path is None:
             raise RuntimeError("write the house before rendering a drawing")
         _drawing_pdf_options(pdf, paper, orientation, margin)
+        if not isinstance(tables, bool):
+            raise TypeError("tables must be a boolean")
         if title is not None:
             title = _name(title, "title")
 
@@ -14519,6 +14653,7 @@ class Drawing:
             orientation=orientation,
             margin=margin,
             title=title,
+            tables=tables,
         )
 
 

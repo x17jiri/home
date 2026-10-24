@@ -1376,6 +1376,48 @@ class FloorCornerTests(unittest.TestCase):
 
 
 class DimensionOverlayTests(unittest.TestCase):
+    def test_short_labels_are_centred_in_plan_and_elevation_rendering(self):
+        source = ('<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">'
+                  '<g class="section">'
+                  '<line class="PredefinedType-DIMENSION" x1="0" y1="10" x2="1" y2="10"/>'
+                  '<text id="width" transform="translate(4, 9) rotate(0)"><tspan class="DIMENSION">80</tspan></text>'
+                  '<text id="height" transform="translate(4, 11) rotate(0)"><tspan class="DIMENSION">2100 (0)</tspan></text>'
+                  '<line class="PredefinedType-DIMENSION" x1="10" y1="10" x2="10" y2="9"/>'
+                  '<text id="vertical" transform="translate(9, 6) rotate(-90)"><tspan class="DIMENSION">100</tspan></text>'
+                  '<line class="PredefinedType-DIMENSION" x1="20" y1="20" x2="21" y2="21"/>'
+                  '<text id="diagonal" transform="translate(24, 22) rotate(45)"><tspan class="DIMENSION">141</tspan></text>'
+                  '<text id="note" transform="translate(9, 5) rotate(0)"><tspan class="TEXT">Note</tspan></text>'
+                  '<path id="fill" fill="white" d="M0 0H30V30H0Z"/></g></svg>')
+        for view in ("plan", "elevation"):
+            with self.subTest(view=view), TemporaryDirectory() as directory:
+                directory = Path(directory)
+                house = House("Centre dimensions")
+                drawing = house.add_drawing("View", 0, 0, 2, 4, view=view,
+                                            direction=(1, 0, 0) if view == "elevation" else None)
+                house.write(directory / "house.ifc")
+                path = directory / "drawing.svg"
+
+                def render(command, *, check):
+                    Path(command[command.index("--output") + 1]).write_text(source)
+                    return subprocess.CompletedProcess(command, 0)
+
+                with patch("ifc_utils.shutil.which", return_value="/usr/bin/blender"), \
+                        patch("ifc_utils.subprocess.run", side_effect=render):
+                    drawing.render(path)
+                root = ET.parse(path).getroot()
+                ns = {"s": "http://www.w3.org/2000/svg"}
+                for identifier, expected in {
+                    "width": "translate(0.5, 9) rotate(0)",
+                    "height": "translate(0.5, 11) rotate(0)",
+                    "vertical": "translate(9, 9.5) rotate(-90)",
+                    "diagonal": "translate(21.5, 19.5) rotate(45)",
+                    "note": "translate(9, 5) rotate(0)",
+                }.items():
+                    self.assertEqual(root.find(f".//s:text[@id='{identifier}']", ns).get("transform"), expected)
+                result = path.read_text()
+                _postprocess_dimension_overlays(path)
+                self.assertEqual(path.read_text(), result)
+
     def test_moves_complete_dimensions_after_fills_without_duplicates(self):
         source = ('<svg xmlns="http://www.w3.org/2000/svg">'
                   '<defs><g id="template"><text data-type="text-template"/></g>'
@@ -1406,7 +1448,7 @@ class DimensionOverlayTests(unittest.TestCase):
             self.assertEqual(list(root)[-1], overlay)
             identifiers = ["dimension", "label", "extension", "arc", "angle-label", "reference"]
             self.assertEqual([element.get("id") for element in overlay], identifiers)
-            self.assertEqual(overlay[1].get("transform"), "translate(1,2) rotate(-90)")
+            self.assertEqual(overlay[1].get("transform"), "translate(1, 1) rotate(-90)")
             self.assertEqual(overlay[0].get("marker-start"), "url(#dimension-marker-start)")
             for identifier in identifiers + ["floor", "legend", "arrow", "template", "dimension-marker-start"]:
                 self.assertEqual(result.count(f'id="{identifier}"'), 1)
@@ -4581,9 +4623,9 @@ class HouseTests(unittest.TestCase):
             "GeometricCurveSet",
         )
         curve_set = annotation_representation.Items[0]
-        # Outline + one line per internal tread + shaft + arrowhead. There is
-        # deliberately no zigzag stair break symbol.
-        self.assertEqual(len(curve_set.Elements), stair.treads + 2)
+        # Outline + one line per internal tread; no per-flight walking arrow
+        # or zigzag stair break symbol.
+        self.assertEqual(len(curve_set.Elements), stair.treads)
         self.assertEqual(
             ifcopenshell.util.element.get_pset(
                 annotation, "EPset_Annotation", "Classes"
@@ -4607,6 +4649,31 @@ class HouseTests(unittest.TestCase):
             reopened = ifcopenshell.open(output)
             self.assertEqual(len(reopened.by_type("IfcStair")), 1)
             self.assertEqual(len(reopened.by_type("IfcStairFlight")), 1)
+
+    def test_stair_annotation_keeps_outline_and_treads_without_per_flight_arrow(self) -> None:
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Stair route", mirror_x=mirror)
+                ground = house.storey("Ground", elevation=0)
+                with patch("builtins.print"):
+                    stair = ground.stair((1, 2), (1, 4.7), width=1, height=1.9,
+                                         risers=11, construction="timber")
+                drawing = house.add_drawing("Plan", 1, 3, 1.6, 5)
+                annotation = drawing.add_stair_annotation(stair)
+                curves = annotation.Representation.Representations[0].Items[0].Elements
+                self.assertEqual(len(curves), stair.treads)
+                self.assertEqual(curves[0].Points.CoordList,
+                                 ((0., -.5), (stair.length, -.5), (stair.length, .5),
+                                  (0., .5), (0., -.5)))
+                for index, curve in enumerate(curves[1:], start=1):
+                    points = curve.Points.CoordList
+                    self.assertEqual(len(points), 2)
+                    self.assertAlmostEqual(points[0][0], index * stair.tread_length)
+                    self.assertEqual(points[0][0], points[1][0])
+                    self.assertEqual((points[0][1], points[1][1]), (-.5, .5))
+                exported = house._export_model().by_guid(annotation.GlobalId)
+                resolved = ifcopenshell.util.representation.resolve_items(exported.Representation.Representations[0])
+                self.assertEqual(sum(len(item["item"].Elements) for item in resolved), stair.treads)
 
     def test_creates_open_timber_stair_between_side_stringers(self) -> None:
         house = House("My house", colors={"stair": "#C8B090"})

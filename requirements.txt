@@ -4,3 +4,4 @@ ifcopenshell>=0.8,<0.9
 shapely>=2,<3
 markdown-it-py>=3,<5
 weasyprint>=62,<71
+tinycss2>=1.3,<2

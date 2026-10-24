@@ -82,6 +82,7 @@
 #    https://primavent.cz/primy-zaves-60-125-1-00-mm-akusticky-sylomer-baleni-35ks/
 
 from dataclasses import dataclass
+from pathlib import Path
 from materials import resolve_timber_grade
 from math import acos, degrees, isclose
 import sys, math
@@ -105,6 +106,7 @@ PDF_GROUND = DIR.add_pdf("Půdorys 1.NP")
 PDF_CEILING = DIR.add_pdf("Strop nad 1.NP")
 PDF_UPPER = DIR.add_pdf("Půdorys podkroví")
 PDF_KROV = DIR.add_pdf("Krov")
+# Reserve the existing document numbers; these cuts now share PDF_KROV.
 PDF_KROV_XX = DIR.add_pdf("Krov - řez XX")
 PDF_KROV_YY = DIR.add_pdf("Krov - řez YY")
 PDF_KROV_ZZ = DIR.add_pdf("Krov - řez ZZ")
@@ -149,6 +151,27 @@ def rafter_x_position(rafter):
 	if isinstance(rafter, (SplitRafter, StrongerRafter)):
 		return rafter.x
 	return rafter[0] if isinstance(rafter, tuple) else rafter
+
+
+def rafter_collar_min_y(rafter):
+	"""Optional absolute house-Y limit for both collar boards of a paired rafter."""
+	if not isinstance(rafter, tuple):
+		return None
+	if len(rafter) not in (2, 3):
+		raise ValueError("paired rafter must be (x, side) or (x, side, options)")
+	options = rafter[2] if len(rafter) == 3 else {}
+	if not isinstance(options, dict):
+		raise TypeError("paired rafter options must be a dictionary")
+	if set(options) - {"min_y"}:
+		raise ValueError("unsupported paired rafter option; only min_y is supported")
+	if "min_y" not in options:
+		return None
+	min_y = options["min_y"]
+	if isinstance(min_y, bool) or not isinstance(min_y, (int, float)):
+		raise TypeError("collar min_y must be a finite number in metres")
+	if not math.isfinite(min_y):
+		raise ValueError("collar min_y must be a finite number in metres")
+	return float(min_y)
 
 SECTION_OUTLINE_WIDTH = 0.3
 SECTION_OUTLINE_COLOR = "black"
@@ -398,7 +421,7 @@ MIDDLE_PURLIN_X_MAX = wall3_x - BWT / 2
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
-step_count = 16
+step_count = 17
 STAIR_TREAD_THICKNESS = 0.04
 STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
@@ -420,8 +443,8 @@ pokoj_dole = ground.floor_layer(
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.55
-GALERY_START = BWT+2.55
+CHODBA_DEPTH = 2.5
+GALERY_START = BWT+2.5
 
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 OBLOUK_WIDTH = 2.0
@@ -434,6 +457,8 @@ oblouk_at = HOUSE_DEPTH-BWT-1.5-OBLOUK_WIDTH
 # A tuple also creates a touching dormer rafter on the requested side.  "before"
 # and "after" shorten the main rafter on the garden side; "+before" and
 # "+after" leave it full-length.
+# An optional third tuple item {"min_y": y} trims both collar boards to Y >= y,
+# in absolute house coordinates, without changing either rafter.
 
 vk_from = wall2_x-0.24-0.1
 vk_to = wall3_x+0.1
@@ -447,7 +472,7 @@ rafters = [
 	1.65,
 	1.65+0.91,
 	(vk_from, "+before"),
-	(vk_from+0.91, "before"),
+	(vk_from+0.91, "before", {"min_y": BWT + CHODBA_DEPTH - 0.02}),
 	(vk_from+0.91+0.67, "before"),
 	(vk_from+0.91+0.67+0.75, "after"),
 	(vk_from+0.91+0.67+0.75+0.67, "after"),
@@ -466,12 +491,12 @@ CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - VAZNICE_HALF_BASE - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
-CHIMNEY_Y_START = GALERY_START - 0.45 # override
+CHIMNEY_Y_START = GALERY_START - 0.5 # override
 
 CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2
 
 ############## overrides
-CHIMNEY_Y_START = BWT + math.floor((HALF_DEPTH - BWT - VAZNICE_DIST - VAZNICE_HALF_BASE - 0.70)/0.01)*0.01
+CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.5
 CHIMNEY_X_START = wall2_x + 0.02
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
@@ -586,7 +611,7 @@ ground.connect_wall(wall_4_g, wall_back_g)
 
 # Front door/window
 
-BOTTOM_STAIR_TREADS = 9
+BOTTOM_STAIR_TREADS = 10
 GROUND_DOOR_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.125
 GROUND_WINDOW_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.25
 GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 0.875
@@ -988,7 +1013,7 @@ stair_step_height = stair_height / step_count
 remaining_stair_count = step_count - 2 - BOTTOM_STAIR_TREADS
 straight_stair_start_y = BWT + 1.02
 landing_left_x = wall3_x - BWT - 1
-bottom_stair_start_x = landing_left_x - 0.27*BOTTOM_STAIR_TREADS
+bottom_stair_start_x = landing_left_x - straight_stair_step_size * BOTTOM_STAIR_TREADS
 bottom_stair_center_y = BWT + stairs_width / 2
 
 main_stairs = ground.stair(
@@ -1022,7 +1047,7 @@ gallery_stairs = ground.stair(
 	),
 	(
 		landing_left_x + 0.5,
-		straight_stair_start_y + 0.27 * remaining_stair_count,
+		straight_stair_start_y + straight_stair_step_size * remaining_stair_count,
 	),
 	width=1,
 	start_height=main_stairs.end_height,
@@ -2070,6 +2095,7 @@ rafter_layout = []
 # The collar board on the dormer side must sit outside the touching pair,
 # rather than in the space occupied by the adjacent dormer rafter.
 paired_rafter_dormer_offsets = {}
+collar_tie_min_y = {}
 for rafter in rafters:
 	if isinstance(rafter, SplitRafter):
 		if not any(
@@ -2089,7 +2115,10 @@ for rafter in rafters:
 		rafter_layout.append((rafter, "main", False, None, False))
 		continue
 
-	rafter_x, dormer_side = rafter
+	min_y = rafter_collar_min_y(rafter)
+	rafter_x, dormer_side = rafter[:2]
+	if min_y is not None:
+		collar_tie_min_y[rafter_x] = min_y
 	if dormer_side not in {"before", "after", "+before", "+after"}:
 		raise ValueError(
 			"paired rafter side must be 'before', 'after', "
@@ -2125,7 +2154,7 @@ rafter_assemblies = {x: [] for x in main_rafter_positions}
 
 
 def add_collar_ties():
-	"""Two flanking boards per main-rafter pair, bearing on the purlin tops."""
+	"""Two flanking boards per main-rafter pair, optionally trimmed at min_y."""
 	# Preserve the existing rule for touching MAIN rafters. Offset dormer
 	# rafters do not suppress a board or create another collar-tie pair.
 	blocked_sides = set()
@@ -2141,6 +2170,11 @@ def add_collar_ties():
 	)
 	ties = []
 	for index, (x, rafter_width) in enumerate(main_rafter_sections, start=1):
+		start_y = max(STREET_ROOF_JOINT_Y - COLLAR_TIE_EXTENSION,
+		              collar_tie_min_y.get(x, float("-inf")))
+		end_y = GARDEN_ROOF_JOINT_Y + COLLAR_TIE_EXTENSION
+		if start_y >= end_y:
+			raise ValueError(f"collar min_y leaves no board length at rafter x={x:g}")
 		x_offset = (rafter_width + COLLAR_TIE_THICKNESS) / 2
 		for side, offset in (("left", -x_offset), ("right", x_offset)):
 			if (x, side) in blocked_sides:
@@ -2153,8 +2187,8 @@ def add_collar_ties():
 			centre_z = purlin_top_z_at(x + offset) + COLLAR_TIE_SIZE[1] / 2
 			tie = upper.beam(
 				f"Collar tie {index} {side}",
-				start=(x + offset, STREET_ROOF_JOINT_Y - COLLAR_TIE_EXTENSION, centre_z),
-				end=(x + offset, GARDEN_ROOF_JOINT_Y + COLLAR_TIE_EXTENSION, centre_z),
+				start=(x + offset, start_y, centre_z),
+				end=(x + offset, end_y, centre_z),
 				size=COLLAR_TIE_SIZE,
 				material="Wood",
 				kind="BEAM",
@@ -3954,7 +3988,7 @@ if "ground" in sys.argv:
 	# vzdalenost komina od kuchynske zdi
 	drawing1.add_dimension(start=(CHIMNEY_X_END, CHIMNEY_Y_END), end=(CHIMNEY_X_END, BWT+CHODBA_DEPTH))
 	# vzdalenost komina od schodu
-	drawing1.add_dimension(start=(wall3_x-BWT-1.0-0.27*9-0.03, BWT+1.0), end=(CHIMNEY_X_END, CHIMNEY_Y_START))
+	drawing1.add_dimension(start=(wall3_x-BWT-1.0-straight_stair_step_size*BOTTOM_STAIR_TREADS-0.03, BWT+1.0), end=(CHIMNEY_X_END, CHIMNEY_Y_START))
 	# vzdalenost komina od obvodove zdi
 	drawing1.add_dimension(start=(CHIMNEY_X_MID, BWT), end=(CHIMNEY_X_MID, CHIMNEY_Y_START))
 
@@ -4073,8 +4107,8 @@ roof_outline_walls = (
 	wall_2,
 	wall_3,
 	wall_4_u,
-	wall_pokoj2,
-	wall_zachod_nahore,
+#	wall_pokoj2,
+#	wall_zachod_nahore,
 )
 roof_wall_plates = (beam3, beam_cut_street, beam4_a, beam4_b, beam_dormer)
 roof_structural_beams = (
@@ -4086,6 +4120,9 @@ roof_structural_beams = (
 )
 
 # One schedule definition for every roof drawing; no diagram-specific copies.
+collar_tie_groups = {}
+for tie in collar_ties:
+	collar_tie_groups.setdefault(round(tie.finished_length() * 1000), []).append(tie)
 timber_schedule_rows = [
 	(
 		"Vaznice – pravý díl",
@@ -4251,15 +4288,16 @@ timber_schedule_rows = [
 	),
 	*(
 		(
-			f"Kleštiny",
-			collar_ties,
+			"Kleštiny" if len(collar_tie_groups) == 1 else f"Kleštiny – {length_mm} mm",
+			members,
 			0,
 			{
 				"material": "C16",
 				"color": COLLAR_TIE_DRAWING_COLOR,
 				"drawing_order": COLLAR_TIE_DRAWING_ORDER,
 			},
-		),
+		)
+		for length_mm, members in sorted(collar_tie_groups.items(), reverse=True)
 	),
 ]
 if roof_window_trimmers:
@@ -4462,7 +4500,7 @@ def add_roof_elevation(name, *, rafter_index, offset=0.15, radius=6, identifier=
 # Shared camera/plan-marker inputs; changing a rafter or offset moves both.
 roof_elevation_definitions = {
 	"roof_xx": {"rafter_index": 1, "offset": 0.15, "identifier": "X"},
-	"roof_yy": {"rafter_index": 5, "offset": 0.25, "identifier": "Y"},
+	"roof_yy": {"rafter_index": 5, "offset": 0.20, "identifier": "Y"},
 	"roof_zz": {"rafter_index": 14, "offset": 0.15, "identifier": "Z"},
 }
 roof_elevation_cuts = {
@@ -4470,18 +4508,6 @@ roof_elevation_cuts = {
 	for name, definition in roof_elevation_definitions.items()
 }
 
-
-if "roof_xx" in sys.argv:
-	roof_xx = add_roof_elevation("roof_xx", **roof_elevation_definitions["roof_xx"])
-	roof_xx.render("roof_xx.svg", pdf=PDF_KROV_XX)
-
-if "roof_yy" in sys.argv:
-	roof_yy = add_roof_elevation("roof_yy", **roof_elevation_definitions["roof_yy"])
-	roof_yy.render("roof_yy.svg", pdf=PDF_KROV_YY)
-
-if "roof_zz" in sys.argv:
-	roof_zz = add_roof_elevation("roof_zz", **roof_elevation_definitions["roof_zz"])
-	roof_zz.render("roof_zz.svg", pdf=PDF_KROV_ZZ)
 
 if "roof" in sys.argv:
 	drawing1 = house.add_drawing(
@@ -4557,7 +4583,24 @@ if "roof" in sys.argv:
     	diameter=0.11,
 	)
 
-	drawing1.render("roof.svg", pdf=PDF_KROV)
+	roof_plan = drawing1
+	roof_xx = add_roof_elevation("roof_xx", **roof_elevation_definitions["roof_xx"])
+	roof_yy = add_roof_elevation("roof_yy", **roof_elevation_definitions["roof_yy"])
+	roof_yy.include_element(chimney)
+	roof_yy.add_dimension(
+		start=(CHIMNEY_Y_END, PURLIN_TOP_Z+0.03),
+		end=(rafters[5][2]["min_y"], PURLIN_TOP_Z+0.03),
+	)
+	roof_zz = add_roof_elevation("roof_zz", **roof_elevation_definitions["roof_zz"])
+
+	# Drawing centres as fractions of the whole page (left/top = 0, right/bottom = 1).
+	# The top half keeps the previous A4 landscape layout at its original scale.
+	roof_sheet = DrawingSheet(paper="A3", orientation="portrait")
+	roof_sheet.add(roof_plan, x=0.5, y=0.25, title=Path(PDF_KROV).stem, crop=False)
+	roof_sheet.add(roof_xx, x=0.25, y=0.64, title="Řez XX", tables=False)
+	roof_sheet.add(roof_yy, x=0.74, y=0.75, title="Řez YY", tables=False)
+	roof_sheet.add(roof_zz, x=0.25, y=0.87, title="Řez ZZ", tables=False)
+	roof_sheet.render("roof.svg", pdf=PDF_KROV)
 
 if "ceiling" in sys.argv:
 	drawing1 = house.add_drawing(
@@ -5018,35 +5061,46 @@ if "bb" in sys.argv:
 
 	# tloustka podlaha dole
 	drawing1.add_dimension(
-		start=(0, 0),
-		end=(0, 0+GROUND_FLOOR_THICKNESS),
-		offset=-0.5)
+		start=(BWT, 0),
+		end=(BWT, 0+GROUND_FLOOR_THICKNESS),
+		offset=2.0)
 
 	# tloustka podlaha nahore
 	drawing1.add_dimension(
-		start=(0, UPPER_FLOOR_START),
-		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
-		offset=-0.5)
+		start=(BWT, UPPER_FLOOR_START),
+		end=(BWT, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+		offset=2.0)
 	# tloustka strop
 	drawing1.add_dimension(
-		start=(0, UPPER_FLOOR_START-CEILING_THICKNESS),
-		end=(0, UPPER_FLOOR_START),
-		offset=0.5)
-
-	# rozdil podlazi
-	drawing1.add_dimension(
-		start=(0, GROUND_FLOOR_THICKNESS),
-		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
-		offset=1)
-	drawing1.add_dimension(
-		start=(0, GROUND_FLOOR_THICKNESS),
-		end=(0, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.6),
+		start=(BWT, UPPER_FLOOR_START-CEILING_THICKNESS),
+		end=(BWT, UPPER_FLOOR_START),
 		offset=1.5)
-	# house height
+	# tloustka zakladova deska
 	drawing1.add_dimension(
-		start=(0, GROUND_FLOOR_THICKNESS),
-		end=(0, GROUND_FLOOR_THICKNESS+total_house_height),
-		offset=2.0)
+		start=(BWT, -FOUNDATION_BASE_PLATE_THICKNESS),
+		end=(BWT, 0),
+		offset=1.5)
+
+	# podlaha spodni patro
+	drawing1.add_elevation_dimension(
+	    x0=-0.5, x1=-1,
+    	z0=GROUND_FLOOR_THICKNESS, z1=GROUND_FLOOR_THICKNESS,
+	)
+	# podlaha horni patro
+	drawing1.add_elevation_dimension(
+	    x0=-0.5, x1=-1,
+    	z0=GROUND_FLOOR_THICKNESS, z1=UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS,
+	)
+	# vyska stropu nahore
+	drawing1.add_elevation_dimension(
+	    x0=-0.5, x1=-1,
+		z0=GROUND_FLOOR_THICKNESS, z1=UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS+2.6,
+	)
+	# house height
+	drawing1.add_elevation_dimension(
+	    x0=-0.5, x1=-1,
+		z0=GROUND_FLOOR_THICKNESS, z1=GROUND_FLOOR_THICKNESS+total_house_height,
+	)
 
 	drawing1.render("bb.svg", pdf=PDF_BB)
 
