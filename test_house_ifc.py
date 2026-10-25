@@ -136,6 +136,50 @@ class StairLayoutTests(unittest.TestCase):
         self.assertAlmostEqual(placement[2, 3] + v["STAIR_TREAD_THICKNESS"], lower.end_height)
 
 
+class FacadeCornerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source), "ground", "upper"]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("drawing.svg")),
+            redirect_stdout(StringIO()),
+        ):
+            cls.values = runpy.run_path(str(source))
+
+    def test_full_front_and_side_facades_meet_with_front_polystyrene_extended(self):
+        v = self.values
+        self.assertEqual(len(v["house"]._drawings), 2)
+        for drawing in v["house"]._drawings:
+            ground_plan = drawing.name == "Drawing 1"
+            front, side = ((v["wall_front_g"], v["wall_1_g"]) if ground_plan
+                           else (v["wall_front_u"], v["wall_1_u"]))
+            strips = [ifcopenshell.util.element.get_pset(a, "BBIM_WallInsulation")
+                      for a in drawing.group.IsGroupedBy[0].RelatedObjects]
+            strips = [p for p in strips if p]
+            for wall, material in ((front, "polystyrene"), (side, "rockwool")):
+                with self.subTest(drawing=drawing.name, material=material):
+                    matching = [p for p in strips if p["HostWall"] == wall.GlobalId and p["Material"] == material]
+                    self.assertTrue(matching)
+                    tangent = (np.array(wall.end) - wall.start) / wall.length
+                    for properties in matching:
+                        start = np.array(wall.start) - tangent * properties["StartExtension"]
+                        end = np.array(wall.end) + tangent * properties["EndExtension"]
+                        if material == "polystyrene":
+                            self.assertAlmostEqual(min(start[0], end[0]), -v["ROCKWOOL_INSULATION_THICKNESS"])
+                            self.assertAlmostEqual(max(start[0], end[0]), v["HOUSE_WIDTH"] + v["POLYSTYRENE_INSULATION_THICKNESS"])
+                            self.assertAlmostEqual(start[1], 0)
+                            self.assertAlmostEqual(end[1], 0)
+                        else:
+                            # The wool stops at y=0: no gap or double-thickness
+                            # overlap with the front strip at the outside corner.
+                            self.assertAlmostEqual(min(start[1], end[1]), 0)
+                            self.assertAlmostEqual(max(start[1], end[1]), v["HOUSE_DEPTH"] + .01)
+                            self.assertAlmostEqual(start[0], 0)
+                            self.assertAlmostEqual(end[0], 0)
+
+
 class FoundationDrawingTests(unittest.TestCase):
     def test_foundation_line_legend_matches_wall_outline_and_is_drawing_scoped(self):
         source = Path(__file__).with_name("house_ifc.py")

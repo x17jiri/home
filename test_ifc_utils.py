@@ -1376,6 +1376,55 @@ class FloorCornerTests(unittest.TestCase):
 
 
 class DimensionOverlayTests(unittest.TestCase):
+    def test_reversed_dimensions_keep_text_upright_and_width_before_height(self):
+        cases = (
+            ("left", (10, 10, 0, 10), "180.000005", (13, 11), (13, 9),
+             "translate(5, 9) rotate(0)", "translate(5, 11) rotate(0)"),
+            ("left-negative-angle", (10, 10, 0, 10), "-180", (5, 11), (5, 9),
+             "translate(5, 9) rotate(0)", "translate(5, 11) rotate(0)"),
+            ("down", (10, 0, 10, 10), "90.0000025", (11, 5), (9, 5),
+             "translate(9, 5) rotate(-90)", "translate(11, 5) rotate(-90)"),
+            ("diagonal-up-left", (10, 10, 0, 0), "-135", (4, 6), (6, 4),
+             "translate(6, 4) rotate(45)", "translate(4, 6) rotate(45)"),
+            ("diagonal-down-left", (10, 0, 0, 10), "135", (6, 6), (4, 4),
+             "translate(4, 4) rotate(-45)", "translate(6, 6) rotate(-45)"),
+            ("upright-horizontal", (0, 10, 10, 10), "0", (5, 9), (5, 11),
+             "translate(5, 9) rotate(0)", "translate(5, 11) rotate(0)"),
+            ("upright-vertical", (10, 10, 10, 0), "-90.0000025", (9, 5), (11, 5),
+             "translate(9, 5) rotate(-90)", "translate(11, 5) rotate(-90)"),
+        )
+        for name, (x1, y1, x2, y2), angle, width, height, expected_width, expected_height in cases:
+            for with_description in (False, True):
+                with self.subTest(case=name, description=with_description), TemporaryDirectory() as directory:
+                    source = (f'<svg><line id="dim" class="PredefinedType-DIMENSION" '
+                              f'x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" marker-start="url(#tick)"/>'
+                              f'<text id="width" dominant-baseline="baseline" '
+                              f'transform="translate({width[0]}, {width[1]}) rotate({angle})">'
+                              '<tspan class="DIMENSION">1000</tspan></text>')
+                    if with_description:
+                        source += (f'<text id="height" dominant-baseline="hanging" '
+                                   f'transform="translate({height[0]}, {height[1]}) rotate({angle})">'
+                                   '<tspan class="DIMENSION">2100 (900)</tspan></text>')
+                    source += '<text id="note" transform="translate(1, 2) rotate(180)">Note</text></svg>'
+                    path = Path(directory) / "dimension.svg"
+                    path.write_text(source)
+                    _postprocess_dimension_overlays(path)
+                    result = path.read_text()
+                    root = ET.fromstring(result)
+                    width_text = root.find('.//text[@id="width"]')
+                    self.assertEqual(width_text.get("transform"), expected_width)
+                    self.assertEqual(width_text.get("dominant-baseline"), "baseline")
+                    self.assertEqual(width_text.find("tspan").text, "1000")
+                    if with_description:
+                        height_text = root.find('.//text[@id="height"]')
+                        self.assertEqual(height_text.get("transform"), expected_height)
+                        self.assertEqual(height_text.get("dominant-baseline"), "hanging")
+                        self.assertEqual(height_text.find("tspan").text, "2100 (900)")
+                    self.assertEqual(root.find('.//text[@id="note"]').get("transform"), "translate(1, 2) rotate(180)")
+                    self.assertEqual(root.find('.//line[@id="dim"]').get("marker-start"), "url(#tick)")
+                    _postprocess_dimension_overlays(path)
+                    self.assertEqual(path.read_text(), result)
+
     def test_short_labels_are_centred_in_plan_and_elevation_rendering(self):
         source = ('<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">'
                   '<g class="section">'

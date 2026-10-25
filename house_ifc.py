@@ -350,7 +350,7 @@ ABOVE_HOLE = 0.0
 
 house = House(
     "My house",
-    mirror_x=True,
+    mirror_x=False,
     colors={
         "wall": "#ffffff",
         "door": "#8B5A2B",
@@ -421,7 +421,7 @@ MIDDLE_PURLIN_X_MAX = wall3_x - BWT / 2
 stair_height = (
 	ground_floor_height - GROUND_FLOOR_THICKNESS
 	+ CEILING_THICKNESS + UPPER_FLOOR_THICKNESS)
-step_count = 17
+step_count = 16
 STAIR_TREAD_THICKNESS = 0.04
 STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
@@ -431,9 +431,8 @@ pokoj_dole = ground.floor_layer(
 	"Pokoj",
 	room_id="0.02",
 	outline=(
-		(BWT, BWT+GYM_DEPTH+BWT),
-		(BWT+CUT_WIDTH, BWT+GYM_DEPTH+BWT),
-		(wall2_x-BWT, BWT+GYM_DEPTH+BWT),
+		(BWT, BWT+GYM_DEPTH+0.115),
+		(wall2_x-BWT, BWT+GYM_DEPTH+0.115),
 		(wall2_x-BWT, HOUSE_DEPTH-BWT),
 		(BWT, HOUSE_DEPTH-BWT),
 	),
@@ -540,14 +539,14 @@ chodba = ground.floor_layer(
 	"Chodba",
 	room_id="0.04",
 	outline=(
-		(BWT+CUT_WIDTH, BWT),
+		(BWT, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
 		(wall2_x+1.125, BWT+CHODBA_DEPTH),
 		(wall2_x+1.125, GALERY_START),
 		(wall2_x, GALERY_START),
 		(wall2_x, BWT+GYM_DEPTH),
-		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
+		(BWT, BWT+GYM_DEPTH),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	insulation_thickness=GROUND_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
@@ -594,15 +593,14 @@ ceiling_koupelna = ground.ceiling_layer(
 )
 
 # Load-bearing walls
-wall_front_g = ground.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_front_g = ground.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_4_g = ground.wall((HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_back_g = ground.wall((HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1a_g = ground.wall((0, HOUSE_DEPTH), (0, BWT+GYM_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_1b_g = ground.wall((CUT_WIDTH, GYM_DEPTH+2*BWT), (CUT_WIDTH, 0), wall_type=load_bearing_wall, height=ground_floor_height)
-wall_2 = ground.wall((wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_1_g = ground.wall((0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height)
+wall_2 = ground.wall((wall2_x, BWT), (wall2_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 wall_3 = ground.wall((wall3_x, 0), (wall3_x, HOUSE_DEPTH), wall_type=load_bearing_wall, height=ground_floor_height)
 
-ground.connect_wall(wall_1a_g, wall_back_g)
+ground.connect_wall(wall_1_g, wall_back_g)
 
 #ground.connect_wall(wall_2, wall_front_g, is_atpath=True)
 ground.connect_wall(wall_2, wall_back_g, is_atpath=True)
@@ -615,22 +613,22 @@ ground.connect_wall(wall_4_g, wall_back_g)
 
 # Front door/window
 
-BOTTOM_STAIR_TREADS = 10
+BOTTOM_STAIR_TREADS = 9
 GROUND_DOOR_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.125
 GROUND_WINDOW_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.25
 GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 0.875
-front_door = wall_1b_g.add_door(
-	at=2*BWT+GYM_DEPTH-0.5-1.125,
+front_door = wall_1_g.add_door(
+	at=HOUSE_DEPTH-BWT-GYM_DEPTH+0.125,
 	opening_width=1.125, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=GROUND_FLOOR_THICKNESS,
-	operation="SINGLE_SWING_RIGHT"
+	operation="SINGLE_SWING_LEFT"
 )
 
 # Front windows (koupelna)
 window_bathroom = wall_front_g.add_window(
-	at=wall3_x-CUT_WIDTH+KK_WIDTH/2-0.25, width=0.5,
+	at=wall3_x+KK_WIDTH/2-0.25, width=0.5,
 	sill_height=GROUND_WINDOW_HEIGHT-0.5,
 	height=GROUND_WINDOW_HEIGHT)
 
@@ -652,7 +650,7 @@ window_kk = wall_back_g.add_door(
 
 WINDOW_POKOJ_DOLE_2_AT = 1
 WINDOW_POKOJ_DOLE_2_WIDTH = 1
-window_pokoj_dole_2 = wall_1a_g.add_window(
+window_pokoj_dole_2 = wall_1_g.add_window(
 	at=WINDOW_POKOJ_DOLE_2_AT,#HOUSE_DEPTH/2-0.75-BWT,
 	width=WINDOW_POKOJ_DOLE_2_WIDTH,
 	sill_height=GROUND_WINDOW_HEIGHT-0.75,
@@ -661,7 +659,7 @@ window_pokoj_dole_2 = wall_1a_g.add_window(
 # Posilovna, Gym
 wall_gym_g = ground.wall(
 	(BWT, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
-	wall_type=load_bearing_wall, height=ground_floor_height)
+	wall_type=partition_wall, height=ground_floor_height)
 
 # The ring beam caps the ground-floor walls, but belongs to the upper storey.
 # Its negative local offset keeps it directly below the upper-floor elevation.
@@ -680,12 +678,10 @@ ring_beams = upper.add_ring_beams_from(
 foundation_base_plate = foundation.floor_layer(
 	"Foundation base plate",
 	outline=(
-		(CUT_WIDTH, 0),
+		(0, 0),
 		(HOUSE_WIDTH, 0),
 		(HOUSE_WIDTH, HOUSE_DEPTH),
 		(0, HOUSE_DEPTH),
-		(0, BWT + GYM_DEPTH),
-		(CUT_WIDTH, BWT + GYM_DEPTH),
 	),
 	thickness=FOUNDATION_BASE_PLATE_THICKNESS,
 	start_height=-FOUNDATION_BASE_PLATE_THICKNESS,
@@ -866,7 +862,7 @@ rozvadec = ground.furniture(
     kind="USERDEFINED",
     size=(0.8, 0.5, 1.5),
     color="#ffffff",
-    center=(CUT_WIDTH+1.5, BWT+0.3),
+    center=(3, BWT+0.3),
 	start_height=GROUND_FLOOR_THICKNESS+0.1,
 )
 ground.furniture(
@@ -965,6 +961,14 @@ pokoj0_door = wall_gym_g.add_door(
 #	reverse_swing=True,
 )
 
+# pruchod vchod
+wall_2.add_opening(
+	at=0.625,
+	width=1.0,
+	height=GROUND_DOOR_HEIGHT,
+	sill_height=0,
+)
+
 # Oblouk
 oblouk = wall_3.add_opening(
 	at=oblouk_at,
@@ -989,11 +993,9 @@ ground_load_bearing_walls = (
 	wall_front_g,
 	wall_4_g,
 	wall_back_g,
-	wall_1a_g,
-	wall_1b_g,
+	wall_1_g,
 	wall_2,
 	wall_3,
-	wall_gym_g,
 )
 for wall in ground_load_bearing_walls:
 	wall.set_vertical_material_layers(
@@ -1230,8 +1232,8 @@ upper_pokoj_1 = upper.floor_layer(
 		f"Upper Pokoj 1",
 		room_id="P.02",
 		outline=(
-			(BWT, BWT+GYM_DEPTH+BWT),
-			(wall2_x-BWT, BWT+GYM_DEPTH+BWT),
+			(BWT, BWT),
+			(wall2_x-BWT, BWT),
 			(wall2_x-BWT, HOUSE_DEPTH-BWT),
 			(BWT, HOUSE_DEPTH-BWT),
 		),
@@ -1422,26 +1424,16 @@ wall_cuts_2_3 = [
 wall_dormer = upper.wall(
 	(wall3_x, HOUSE_DEPTH), (wall2_x-BWT, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=DORMER_WALL_HEIGHT-NADEZDIVKA, start_height=NADEZDIVKA)
-wall_front_u = upper.wall((CUT_WIDTH, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
+wall_front_u = upper.wall((0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA)
 wall_back_u = upper.wall(
 	(HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_1a_u = upper.wall(
-	(0, HOUSE_DEPTH-BWT), (0, BWT+GYM_DEPTH+BWT),
+wall_1_u = upper.wall(
+	(0, HOUSE_DEPTH-BWT), (0, BWT),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1_4, )
-wall_1b_u = upper.wall(
-	(CUT_WIDTH, GYM_DEPTH+BWT), (CUT_WIDTH, BWT),
-	wall_type=load_bearing_wall,
-	height=4, cuts=wall_cuts_1_4, )
-wall_gym_u = upper.wall(
-	(0, BWT+GYM_DEPTH), (wall2_x-BWT, BWT+GYM_DEPTH),
-	wall_type=load_bearing_wall,
-	height=CUT_STREET_WALL_HEIGHT,
-	cuts=wall_cuts_1_4,
-)
 wall_2 = upper.wall(
-	(wall2_x, BWT+GYM_DEPTH), (wall2_x, HOUSE_DEPTH-BWT),
+	(wall2_x, BWT), (wall2_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
 	wall_type=load_bearing_wall, height=INNER_SUPPORT_WALL_HEIGHT)
 
@@ -1698,22 +1690,12 @@ window_dormer_2 = wall_dormer.add_window(
 	width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
 pokoj1_door = wall_2.add_door(
-	at=math.ceil((GALERY_START-GYM_DEPTH-BWT)/0.125)*0.125,
+	at=math.ceil((GALERY_START-BWT)/0.125)*0.125,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
-# Okna pokojik 1 nahore
-#window_pokoj_nahore_1 = wall_1a_u.add_window(
-#	at=HOUSE_DEPTH/2-0.75-BWT,
-#	width=1.5,
-#	height=2.375,
-#	sill_height=2.375-0.875, partition="SINGLE_PANEL",)
-# okno do silnice
-window_pokoj_nahore_2 = wall_gym_u.add_window(
-	at=BWT,width=1.25, sill_height=NADEZDIVKA, height=2.375
-)
 # Okno k sousedum nahore
 window_sklad = wall_4_u.add_window(
 	at=HALF_DEPTH-BWT-0.5,
@@ -3141,9 +3123,6 @@ def outside_dims(drawing1):
 	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, 0), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH), offset=-1.5)
 	drawing1.add_dimension(start=(0, BWT+GYM_DEPTH), end=(0, HOUSE_DEPTH), offset=2.0)
-	drawing1.add_dimension(start=(CUT_WIDTH, 0), end=(CUT_WIDTH, BWT+GYM_DEPTH), offset=CUT_WIDTH+2.0)
-	drawing1.add_dimension(start=(CUT_WIDTH, BWT+GYM_DEPTH), end=(0, BWT+GYM_DEPTH), offset=BWT+GYM_DEPTH+1.5)
-	drawing1.add_dimension(start=(HOUSE_WIDTH, BWT+GYM_DEPTH), end=(CUT_WIDTH, BWT+GYM_DEPTH), offset=BWT+GYM_DEPTH+1.5)
 
 	drawing1.add_dimension(start=(-ROCKWOOL_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), offset=2)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, -POLYSTYRENE_INSULATION_THICKNESS), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS), offset=-2)
@@ -3157,42 +3136,27 @@ def common_dims(drawing1):
 	# Risankuv pokoj hloubka
 	drawing1.add_dimension(start=(BWT, BWT+GYM_DEPTH+BWT), end=(BWT, HOUSE_DEPTH-BWT), offset=1.5)
 	# gym hloubka
-	drawing1.add_dimension(start=(wall2_x-BWT, BWT), end=(wall2_x-BWT, BWT+GYM_DEPTH))
-	# chodba delka
-	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
+	drawing1.add_dimension(start=(wall2_x-1.6, BWT), end=(wall2_x-1.6, BWT+GYM_DEPTH))
 	# vzdalenost komina od obvodove zdi
 	drawing1.add_dimension(start=(CHIMNEY_X_MID, BWT), end=(CHIMNEY_X_MID, CHIMNEY_Y_START))
 
 def common_wall_insulation(
-	drawing1, wall_front, wall_1a, wall_1b, wall_gym, wall_back, wall_4
+	drawing1, wall_front, wall_1, wall_back, wall_4
 ):
 	drawing1.add_wall_insulation(
 		wall_front,
 		thickness=POLYSTYRENE_INSULATION_THICKNESS,
 		material="polystyrene",
-		start_x=CUT_WIDTH-POLYSTYRENE_INSULATION_THICKNESS,
+		# The front strip closes the corner over the side-wall wool.
+		start_x=-ROCKWOOL_INSULATION_THICKNESS,
 		end_x=HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS,
 	)
 	drawing1.add_wall_insulation(
-		wall_1a,
+		wall_1,
 		thickness=ROCKWOOL_INSULATION_THICKNESS,
 		material="rockwool",
-		start_y=GYM_DEPTH+BWT,
+		start_y=0,
 		end_y=HOUSE_DEPTH+0.01,
-	)
-	drawing1.add_wall_insulation(
-		wall_1b,
-		thickness=POLYSTYRENE_INSULATION_THICKNESS,
-		material="polystyrene",
-		start_y=-POLYSTYRENE_INSULATION_THICKNESS,
-		end_y=BWT+GYM_DEPTH-ROCKWOOL_INSULATION_THICKNESS,
-	)
-	drawing1.add_wall_insulation(
-		wall_gym,
-		thickness=ROCKWOOL_INSULATION_THICKNESS,
-		material="rockwool",
-		start_x=-ROCKWOOL_INSULATION_THICKNESS,
-		end_x=CUT_WIDTH,
 	)
 	drawing1.add_wall_insulation(
 		wall_back,
@@ -3889,19 +3853,6 @@ if "ground" in sys.argv:
 	)
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
-	drawing1.add_note(
-		point=(
-			wall_1a_g.start[0]+BWT,
-			wall_1a_g.start[1]
-			- WINDOW_POKOJ_DOLE_2_AT
-			- WINDOW_POKOJ_DOLE_2_WIDTH,
-		),
-		angle=-65,
-		distance=1.2,
-		text="Neotvíratelné okno\ns bílým sklem",
-		name="Ground note - neotvíratelné okno s bílým sklem",
-		text_alignment="bottom-right",
-	)
 	drawing1.add_material_legend([
 		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
@@ -3935,7 +3886,7 @@ if "ground" in sys.argv:
 	drawing1.add_dimension(start=(wall2_x, CHODBA_DEPTH+0.5), end=(wall2_x+1, CHODBA_DEPTH+0.5), offset=1)
 
 	drawing1.add_entrance_arrow(
-		(CUT_WIDTH - 0.6, BWT + 0.25 + 0.55),
+		(-0.6, BWT + GYM_DEPTH - 0.125 - 0.55),
 #		rotation=90,  # points left
 		size=0.6,      # metres
 	)
@@ -3971,13 +3922,13 @@ if "ground" in sys.argv:
 
 	common_wall_insulation(
 		drawing1,
-		wall_front_g, wall_1a_g, wall_1b_g, wall_gym_g, wall_back_g, wall_4_g
+		wall_front_g, wall_1_g, wall_back_g, wall_4_g
 	)
 
 	drawing1.add_lintel(front_door, 1, position="after")
 	drawing1.add_lintel(kitchen_door, 2, position="after", direction="in")
+	drawing1.add_lintel(pokoj0_door, 2, direction="in")
 	drawing1.add_lintel(window_kk, 3, direction="in")
-	drawing1.add_lintel(pokoj0_door, 3, direction="in")
 	drawing1.add_lintel(bathroom_door, 3)
 	drawing1.add_lintel(window_bathroom, 4, position="after")
 	drawing1.add_lintel(window_pokoj_dole, 5, direction="in")
@@ -3993,17 +3944,15 @@ if "ground" in sys.argv:
 	drawing1.add_opening_dimension(window_pokoj_dole, offset=-0.6)
 	drawing1.add_opening_dimension(window_kk, offset=-0.6)
 	drawing1.add_opening_dimension(pokoj0_door, offset=-0.5)
-	drawing1.add_opening_dimension(front_door, offset=-1.3)
+	drawing1.add_opening_dimension(front_door, offset=1.5)
 	drawing1.add_opening_dimension(window_pokoj_dole_2, offset=-0.7)
 	drawing1.add_opening_dimension(bathroom_door, offset=-1.25)
 
 	# sirka schodu
-	drawing1.add_dimension(start=(wall3_x-BWT-0.25, BWT), end=(wall3_x-BWT-0.25, BWT+1.0))
-	drawing1.add_dimension(start=(wall3_x-BWT, BWT+0.2), end=(wall3_x-BWT-1.0, BWT+0.2))
+	drawing1.add_dimension(start=(wall3_x-BWT-0.1, BWT), end=(wall3_x-BWT-0.1, BWT+1.0))
+	drawing1.add_dimension(start=(wall3_x-BWT-1.0, BWT+0.1), end=(wall3_x-BWT, BWT+0.1))
 	# zuzena chodba
 	drawing1.add_dimension(start=(CHIMNEY_X_END+0.15, BWT), end=(CHIMNEY_X_END+0.15, GALERY_START))
-	# vzdalenost komina od kuchynske zdi
-	drawing1.add_dimension(start=(CHIMNEY_X_END, CHIMNEY_Y_END), end=(CHIMNEY_X_END, GALERY_START))
 
 	# sipka schody
 	drawing1.add_poly_line(
@@ -4068,9 +4017,7 @@ if "upper" in sys.argv:
 		identifier=upper_pokoj_1.room_id,
 		description="Pokoj 2",
 		area=upper_pokoj_1.area,
-		window_area=1.3+window_area(
-			window_pokoj_nahore_2,
-		),
+		window_area=1.3,
 	)
 	drawing1.add_room_annotation(
 		(9.5, 5),
@@ -4108,7 +4055,7 @@ if "upper" in sys.argv:
 	common_dims(drawing1)
 	common_wall_insulation(
 		drawing1,
-		wall_front_u, wall_1a_u, wall_1b_u, wall_gym_u, wall_dormer, wall_4_u
+		wall_front_u, wall_1_u, wall_dormer, wall_4_u
 	)
 
 	# sipka schody
@@ -4126,7 +4073,6 @@ if "upper" in sys.argv:
 	drawing1.add_lintel(pokoj1_door, 1, position="after", direction="in")
 	drawing1.add_lintel(window_dormer_1, 2, direction="in", position="after")
 	drawing1.add_lintel(window_dormer_2, 2, direction="in")
-	drawing1.add_lintel(window_pokoj_nahore_2, 3)
 	drawing1.add_lintel(window_sklad, 1, position="after", direction="in")
 	drawing1.add_lintel(sklad_opening, 1, position="after")
 	drawing1.add_lintel_legend()
@@ -4140,9 +4086,7 @@ roof_outline_walls = (
 	wall_dormer,
 	wall_front_u,
 	wall_back_u,
-	wall_1a_u,
-	wall_1b_u,
-	wall_gym_u,
+	wall_1_u,
 	wall_2,
 	wall_3,
 	wall_4_u,
@@ -4676,7 +4620,7 @@ if "ceiling" in sys.argv:
 
 	common_wall_insulation(
 		drawing1,
-		wall_front_u, wall_1a_u, wall_1b_u, wall_gym_u, wall_dormer, wall_4_u
+		wall_front_u, wall_1_u, wall_dormer, wall_4_u
 	)
 
 	drawing1.render("ceiling.svg", pdf=PDF_CEILING)
@@ -5061,7 +5005,7 @@ if "bb" in sys.argv:
 		name="BB ridge insulation batting",
 	)
 	for wall, thickness, material in (
-		(wall_1a_g, ROCKWOOL_INSULATION_THICKNESS, "rockwool"),
+		(wall_1_g, ROCKWOOL_INSULATION_THICKNESS, "rockwool"),
 		(wall_4_u, POLYSTYRENE_INSULATION_THICKNESS, "polystyrene"),
 	):
 		drawing1.add_wall_insulation(

@@ -634,8 +634,11 @@ purlin centre-to-centre spacing below the beams. It uses the local purlin pieces
 from their centreline level. Existing rafter dimensions are unchanged.
 Linear dimension labels stay centred along their dimension lines in plans and
 elevations, even for very short spans. This overrides Bonsai's automatic
-endpoint placement without changing text rotation or its above/below-line
-offset; opening-height labels are centred as well.
+endpoint placement. Text is kept upright regardless of endpoint order or X-axis
+mirroring. When a label needs a half-turn, its perpendicular offset is reversed
+too, keeping opening widths above the line and heights below it (widths to the
+left and heights to the right for vertical dimensions). Opening-height labels
+are centred as well.
 
 To mark an elevation relative to a reference datum, use:
 

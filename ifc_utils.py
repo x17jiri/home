@@ -4442,7 +4442,7 @@ def _postprocess_floor_corner_overlays(svg_path: Path) -> None:
 
 
 def _postprocess_dimension_labels(svg_path: Path) -> None:
-    """Centre linear labels along their dimension while keeping normal offsets."""
+    """Centre linear labels and keep text/label sides readable in either export mode."""
     svg = svg_path.read_text(encoding="utf-8")
     changed = False
 
@@ -4472,14 +4472,38 @@ def _postprocess_dimension_labels(svg_path: Path) -> None:
                 nonlocal changed
                 x, y = float(position["x"]), float(position["y"])
                 along = ((x - midpoint_x) * delta_x + (y - midpoint_y) * delta_y) / squared_length
-                if abs(along) <= 1e-12:
+                centered_x, centered_y = x - along * delta_x, y - along * delta_y
+                rotation = position["rotation"] or ""
+                angle = float(position["angle"]) if position["angle"] else None
+                if angle is not None:
+                    readable_angle = (angle + 180) % 360 - 180
+                    # Bonsai's float projection can produce ±90.0000025°.
+                    # Snap axis-aligned text before deciding which way is up.
+                    if isclose(abs(readable_angle), 90, abs_tol=1e-4):
+                        readable_angle = 90. if readable_angle > 0 else -90.
+                    elif isclose(abs(readable_angle), 180, abs_tol=1e-4):
+                        readable_angle = 180.
+                    elif isclose(readable_angle, 0, abs_tol=1e-4):
+                        readable_angle = 0.
+                    flip = readable_angle >= 90 or readable_angle < -90
+                    if flip:
+                        readable_angle += -180 if readable_angle >= 90 else 180
+                        # Rotating the glyphs alone leaves width below the line
+                        # and Description above it. Reverse their normal offsets
+                        # too: width above (left for vertical), height below/right.
+                        centered_x = 2 * midpoint_x - centered_x
+                        centered_y = 2 * midpoint_y - centered_y
+                    if angle != readable_angle:
+                        rotation = f" rotate({readable_angle:.12g})"
+                if abs(along) <= 1e-12 and rotation == (position["rotation"] or ""):
                     return position[0]
                 changed = True
-                return (f'{position["prefix"]}{x - along * delta_x:.12g}, '
-                        f'{y - along * delta_y:.12g})')
+                return (f'{position["prefix"]}{centered_x:.12g}, '
+                        f'{centered_y:.12g}){rotation}')
 
             return re.sub(
-                rf'(?P<prefix>\btransform="translate\()(?P<x>{_SVG_NUMBER}),\s*(?P<y>{_SVG_NUMBER})\)',
+                rf'(?P<prefix>\btransform="translate\()(?P<x>{_SVG_NUMBER}),\s*(?P<y>{_SVG_NUMBER})\)'
+                rf'(?P<rotation>\s+rotate\((?P<angle>{_SVG_NUMBER})\))?',
                 center_position, text[0])
 
         # Bonsai places short dimensions' labels beyond the endpoint. Centre
