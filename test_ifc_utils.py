@@ -2029,6 +2029,64 @@ class SocketSymbolTests(unittest.TestCase):
 
 
 class DrawingPolyLineTests(unittest.TestCase):
+    def test_endpoint_symbols_follow_last_segment_and_first_point_in_all_views(self):
+        points = ((2, 3), (4, 3), (5, 5))
+        for mirror in (False, True):
+            for scale in ("1/100", "1/50"):
+                for direction in (None, (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)):
+                    with self.subTest(mirror=mirror, scale=scale, direction=direction):
+                        house = House("Route ends", mirror_x=mirror)
+                        drawing = house.add_drawing("View", 1, 1.5, 4, 5,
+                                                    view="plan" if direction is None else "elevation", direction=direction)
+                        other = house.add_drawing("Other", 0, 0, 2, 5)
+                        ifcopenshell.api.pset.edit_pset(house.model, pset=drawing._drawing_pset, properties={"Scale": scale})
+                        path = drawing.add_poly_line(points, style="dashed", color="blue", line_width=.2,
+                                                     arrow_end=True, circle_start=True)
+                        symbols = next(a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                                       if ifcopenshell.util.element.get_pset(a, "BBIM_DrawingPolyLineSymbols", "Polyline") == path.GlobalId)
+                        self.assertNotIn(symbols, other.group.IsGroupedBy[0].RelatedObjects)
+                        props = ifcopenshell.util.element.get_pset(path, "BBIM_DrawingPolyLine")
+                        self.assertEqual((props["ArrowEnd"], props["CircleStart"]), (True, True))
+                        classes = ifcopenshell.util.element.get_pset(symbols, "EPset_Annotation", "Classes").split()
+                        self.assertIn("solid", classes)
+                        self.assertNotIn("dashed", classes)
+                        self.assertIn("drawing-line-color-0000ff", classes)
+                        self.assertIn("drawing-line-width-0p2", classes)
+                        exported = house._export_model()
+                        route = AngleDimensionTests.world_curves(exported.by_guid(path.GlobalId))[0]
+                        head, circle = AngleDimensionTests.world_curves(exported.by_guid(symbols.GlobalId))
+                        self.assertEqual(len(head), 3)
+                        self.assertEqual(len(circle), 33)
+                        np.testing.assert_allclose(head[1], route[-1], atol=1e-12)
+                        tangent = (route[-1] - route[-2]) / np.linalg.norm(route[-1] - route[-2])
+                        base = (head[0] + head[2]) / 2
+                        units = .1 if scale == "1/100" else .05
+                        np.testing.assert_allclose(route[-1] - base, tangent * 2 * units, atol=1e-12)
+                        self.assertAlmostEqual(np.linalg.norm(head[0] - head[2]), 1.5 * units)
+                        np.testing.assert_allclose(np.linalg.norm(circle - route[0], axis=1), .5 * units, atol=1e-12)
+                        np.testing.assert_array_equal(circle[0], circle[-1])
+
+    def test_endpoint_options_are_independent_and_persist_with_all_styles(self):
+        for style in ("solid", "dashed", "dashed-arrows"):
+            for arrow, circle in ((False, False), (True, False), (False, True), (True, True)):
+                with self.subTest(style=style, arrow=arrow, circle=circle):
+                    house = House("Route ends")
+                    drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+                    path = drawing.add_poly_line([(0, 0), (1, 0), (1, 2)], style=style,
+                                                 arrow_end=arrow, circle_start=circle)
+                    symbols = [a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                               if ifcopenshell.util.element.get_pset(a, "BBIM_DrawingPolyLineSymbols", "Polyline") == path.GlobalId]
+                    self.assertEqual(len(symbols), int(arrow or circle))
+                    if symbols:
+                        self.assertEqual(len(AngleDimensionTests.world_curves(symbols[0])), int(arrow) + int(circle))
+                    with TemporaryDirectory() as directory:
+                        reopened = ifcopenshell.open(str(house.write(Path(directory) / "route.ifc")))
+                        props = ifcopenshell.util.element.get_pset(reopened.by_guid(path.GlobalId), "BBIM_DrawingPolyLine")
+                        self.assertEqual((props["ArrowEnd"], props["CircleStart"]), (arrow, circle))
+                        if symbols:
+                            self.assertEqual(ifcopenshell.util.element.get_pset(reopened.by_guid(symbols[0].GlobalId),
+                                                                              "BBIM_DrawingPolyLineSymbols", "Polyline"), path.GlobalId)
+
     def test_poly_line_coordinates_in_plans_elevations_and_mirrored_exports(self):
         points = ((2, 3), (4, 3), (4, 5), (2, 3))
         for mirror in (False, True):
@@ -2111,6 +2169,7 @@ class DrawingPolyLineTests(unittest.TestCase):
                 drawing.add_poly_line(points)
             self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
         for kwargs in ({"style": "bad"}, {"color": "bad-color"}, {"line_width": 0},
+                       {"arrow_end": 1}, {"arrow_end": "yes"}, {"circle_start": 0}, {"circle_start": None},
                        {"line_width": True}, {"line_width": float("inf")}, {"name": " "}):
             with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
                 drawing.add_poly_line([(0, 0), (1, 1)], **kwargs)
@@ -2120,6 +2179,10 @@ class DrawingPolyLineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "positive drawing scale"):
             drawing.add_poly_line([(0, 0), (1, 1)], style="dashed-arrows")
         self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
+        for kwargs in ({"arrow_end": True}, {"circle_start": True}):
+            with self.assertRaisesRegex(ValueError, "positive drawing scale"):
+                drawing.add_poly_line([(0, 0), (1, 1)], **kwargs)
+            self.assertEqual(set(house.model.by_type("IfcAnnotation")), before)
         oblique = house.add_drawing("Oblique", 0, 0, 2, 5, view="elevation", direction=(1, 1, 0))
         before = set(house.model.by_type("IfcAnnotation"))
         with self.assertRaisesRegex(ValueError, "axis-aligned"):

@@ -11009,8 +11009,9 @@ class Drawing:
                             base - normal * .75 * units_per_mm])
         if circle_start:
             centre = np.array(local_points[0])
-            symbols.append([centre + .5 * units_per_mm * np.array((cos(i * 2 * pi / 32), sin(i * 2 * pi / 32)))
-                            for i in range(33)])
+            circle = [centre + .5 * units_per_mm * np.array((cos(i * 2 * pi / 32), sin(i * 2 * pi / 32)))
+                      for i in range(32)]
+            symbols.append([*circle, circle[0]])
         model = self.house.model
         curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(path), None, False)
                   for path in paths]

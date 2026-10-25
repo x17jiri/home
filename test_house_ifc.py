@@ -76,11 +76,28 @@ class StairLayoutTests(unittest.TestCase):
     def setUpClass(cls):
         source = Path(__file__).with_name("house_ifc.py")
         with (
-            patch.object(sys, "argv", [str(source)]),
+            patch.object(sys, "argv", [str(source), "ground", "upper"]),
             patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("drawing.svg")),
             redirect_stdout(StringIO()),
         ):
             cls.values = runpy.run_path(str(source))
+
+    def test_both_floor_plans_share_stairway_notes_derived_from_model(self):
+        v = self.values
+        notes = [
+            f"Šířka stupně (nášlap): {v['main_stairs'].tread_length * 1000:.0f} mm",
+            f"Výška stupně: {v['main_stairs'].riser_height * 1000:.1f} mm".replace(".", ","),
+            f"Počet stupňů: {v['main_stairs'].risers + v['gallery_stairs'].risers}",
+        ]
+        self.assertEqual(notes, ["Šířka stupně (nášlap): 270 mm", "Výška stupně: 175,3 mm", "Počet stupňů: 17"])
+        self.assertEqual(len(v["house"]._drawings), 2)
+        for drawing in v["house"]._drawings:
+            with self.subTest(drawing=drawing.name):
+                tables = json.loads(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "RightPanelTables"))
+                stairs = [table for table in tables if table["kind"] == "notes" and table["title"] == "SCHODIŠTĚ"]
+                self.assertEqual(len(stairs), 1)
+                self.assertEqual([item["text"] for item in stairs[0]["items"]], notes)
 
     def test_extra_step_is_in_the_lower_flight_only(self):
         v = self.values

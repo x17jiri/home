@@ -443,8 +443,8 @@ pokoj_dole = ground.floor_layer(
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.5
-GALERY_START = BWT+2.5
+CHODBA_DEPTH = 2.635
+GALERY_START = BWT+2.4
 
 wall_zachod_nahore_y = BWT+1.2+1+0.1
 OBLOUK_WIDTH = 2.0
@@ -472,7 +472,7 @@ rafters = [
 	1.65,
 	1.65+0.91,
 	(vk_from, "+before"),
-	(vk_from+0.91, "before", {"min_y": BWT + CHODBA_DEPTH - 0.02}),
+	(vk_from+0.91, "before", {"min_y": GALERY_START+0.05}),
 	(vk_from+0.91+0.67, "before"),
 	(vk_from+0.91+0.67+0.75, "after"),
 	(vk_from+0.91+0.67+0.75+0.67, "after"),
@@ -496,7 +496,7 @@ CHIMNEY_Y_START = GALERY_START - 0.5 # override
 CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2
 
 ############## overrides
-CHIMNEY_Y_START = BWT + CHODBA_DEPTH - 0.5
+CHIMNEY_Y_START = GALERY_START - 0.45
 CHIMNEY_X_START = wall2_x + 0.02
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
@@ -508,14 +508,16 @@ print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
 print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
-BATHROOM_DEPTH = 2.625
+BATHROOM_DEPTH = 2.635
 DRAINAGE_STACK_X = wall3_x + 0.1 + 0.12
 DRAINAGE_STACK_Y = wall_zachod_nahore_y - 0.1 - 0.1
 kuchyn = ground.floor_layer(
 	"Kuchyn",
 	room_id="0.01",
 	outline=(
-		(wall2_x, BWT+CHODBA_DEPTH+0.115),
+		(wall2_x, GALERY_START+0.115),
+		(wall2_x+1.125, GALERY_START+0.115),
+		(wall2_x+1.125, BWT+CHODBA_DEPTH+0.115),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH+0.115),
 		(wall3_x-BWT, oblouk_at),
 		(wall3_x, oblouk_at),
@@ -541,7 +543,9 @@ chodba = ground.floor_layer(
 		(BWT+CUT_WIDTH, BWT),
 		(wall3_x-BWT, BWT),
 		(wall3_x-BWT, BWT+CHODBA_DEPTH),
-		(wall2_x, BWT+CHODBA_DEPTH),
+		(wall2_x+1.125, BWT+CHODBA_DEPTH),
+		(wall2_x+1.125, GALERY_START),
+		(wall2_x, GALERY_START),
 		(wall2_x, BWT+GYM_DEPTH),
 		(BWT+CUT_WIDTH, BWT+GYM_DEPTH),
 	),
@@ -928,20 +932,20 @@ ground.asset(
 )
 
 # Kitchen, Kuchyn
-#wall_kitchen_0 = ground.wall(
-#	(wall2_x, BWT+GYM_DEPTH+0.5+1.05),
-#	(wall2_x+1.15, BWT+GYM_DEPTH+0.5+1.05),
-#	wall_type=dry_wall, height=ground_floor_height)
 wall_kitchen_1 = ground.wall(
-	(wall2_x, BWT+CHODBA_DEPTH),
-	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
+	(wall2_x, GALERY_START),
+	(wall2_x+1.01, GALERY_START),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen_2 = ground.wall(
-	(wall2_x+1, BWT+CHODBA_DEPTH+0.75),
-	(wall2_x+1, BWT+CHODBA_DEPTH),
+	(wall2_x+1.01, GALERY_START+0.75),
+	(wall2_x+1.01, GALERY_START),
 	wall_type=partition_wall, height=ground_floor_height)
-kitchen_door = wall_kitchen_1.add_door(
-	at=1.25,
+wall_kitchen_3 = ground.wall(
+	(wall2_x+1.125, BWT+CHODBA_DEPTH),
+	(wall2_x+KITCHEN_WIDTH, BWT+CHODBA_DEPTH),
+	wall_type=partition_wall, height=ground_floor_height)
+kitchen_door = wall_kitchen_3.add_door(
+	at=0.05,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=0,
@@ -952,7 +956,7 @@ kitchen_door = wall_kitchen_1.add_door(
 
 # Pokoj Risanek
 pokoj0_door = wall_gym_g.add_door(
-	at=wall2_x-2*BWT-0.25-1,
+	at=wall2_x-2*BWT-0.125-1,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=0,
@@ -972,10 +976,10 @@ oblouk = wall_3.add_opening(
 
 # Bathroom
 bathroom_door = wall_3.add_door(
-    at=BWT+math.floor((CHODBA_DEPTH-1)/0.125)*0.125,
+    at=BWT+math.floor((CHODBA_DEPTH-1.125)/0.125)*0.125,
     opening_width=1.0, width=0.9,
     height=GROUND_DOOR_HEIGHT,
-	sill_height=GROUND_FLOOR_THICKNESS,
+	sill_height=0,
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True,
@@ -1062,6 +1066,12 @@ gallery_stairs = ground.stair(
 	color="#C8B090",
 )
 
+stairway_notes = [
+	f"Šířka stupně (nášlap): {main_stairs.tread_length * 1000:.0f} mm",
+	f"Výška stupně: {main_stairs.riser_height * 1000:.1f} mm".replace(".", ","),
+	f"Počet stupňů: {main_stairs.risers + gallery_stairs.risers}",
+]
+
 # Chimney
 chimney = ground.chimney(
     center=(CHIMNEY_X_MID, CHIMNEY_Y_MID),
@@ -1074,14 +1084,14 @@ chimney = ground.chimney(
     color="#B8A99A",
 )
 
-GALERY_END = GALERY_START + 1.05
+GALERY_END = BWT + math.ceil((GALERY_START - BWT)/0.125)*0.125 + 1.05
 
 kamna = ground.furniture(
     "Kamna",
     kind="USERDEFINED",
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall2_x + 0.5, BWT+CHODBA_DEPTH+0.115+0.2+0.25),
+    center=(wall2_x + 0.5, GALERY_START+0.115+0.2+0.25),
 	start_height=GROUND_FLOOR_THICKNESS+0.05,
 #    rotation=-45,
 )
@@ -1441,7 +1451,7 @@ wall_3 = upper.wall(
 	wall_type=load_bearing_wall, height=INNER_SUPPORT_WALL_HEIGHT)
 
 sklad_opening = wall_3.add_opening(
-    at=GALERY_START-BWT,
+    at=math.ceil((GALERY_START-BWT)/0.125)*0.125,
     width=1,
     height=2.25,
 )
@@ -1688,7 +1698,7 @@ window_dormer_2 = wall_dormer.add_window(
 	width=1.375, sill_height=NADEZDIVKA, height=DORMER_WALL_HEIGHT-0.25)
 # Dvere pokojik 1 nahore
 pokoj1_door = wall_2.add_door(
-	at=GALERY_START-GYM_DEPTH-BWT,
+	at=math.ceil((GALERY_START-GYM_DEPTH-BWT)/0.125)*0.125,
 	opening_width=1, width=0.9,
 	height=UPPER_DOOR_HEIGHT,
 	clear_height=door_clear_height,
@@ -3150,6 +3160,8 @@ def common_dims(drawing1):
 	drawing1.add_dimension(start=(wall2_x-BWT, BWT), end=(wall2_x-BWT, BWT+GYM_DEPTH))
 	# chodba delka
 	drawing1.add_dimension(start=(CUT_WIDTH+BWT, BWT), end=(HOUSE_WIDTH-BWT-KK_WIDTH-BWT, BWT), offset=-1)
+	# vzdalenost komina od obvodove zdi
+	drawing1.add_dimension(start=(CHIMNEY_X_MID, BWT), end=(CHIMNEY_X_MID, CHIMNEY_Y_START))
 
 def common_wall_insulation(
 	drawing1, wall_front, wall_1a, wall_1b, wall_gym, wall_back, wall_4
@@ -3943,7 +3955,7 @@ if "ground" in sys.argv:
 		window_area=window_area(window_pokoj_dole, window_pokoj_dole_2),
 	)
 	drawing1.add_room_annotation(
-		(HOUSE_WIDTH-1.4, BWT+1.25),
+		(HOUSE_WIDTH-1.25, BWT+1.0),
 		identifier=koupelna.room_id,
 		description="Koupelna",
 		area=koupelna.area,
@@ -3983,15 +3995,29 @@ if "ground" in sys.argv:
 	drawing1.add_opening_dimension(pokoj0_door, offset=-0.5)
 	drawing1.add_opening_dimension(front_door, offset=-1.3)
 	drawing1.add_opening_dimension(window_pokoj_dole_2, offset=-0.7)
-	drawing1.add_opening_dimension(bathroom_door, offset=0.9)
+	drawing1.add_opening_dimension(bathroom_door, offset=-1.25)
 
+	# sirka schodu
+	drawing1.add_dimension(start=(wall3_x-BWT-0.25, BWT), end=(wall3_x-BWT-0.25, BWT+1.0))
+	drawing1.add_dimension(start=(wall3_x-BWT, BWT+0.2), end=(wall3_x-BWT-1.0, BWT+0.2))
+	# zuzena chodba
+	drawing1.add_dimension(start=(CHIMNEY_X_END+0.15, BWT), end=(CHIMNEY_X_END+0.15, GALERY_START))
 	# vzdalenost komina od kuchynske zdi
-	drawing1.add_dimension(start=(CHIMNEY_X_END, CHIMNEY_Y_END), end=(CHIMNEY_X_END, BWT+CHODBA_DEPTH))
-	# vzdalenost komina od schodu
-	drawing1.add_dimension(start=(wall3_x-BWT-1.0-straight_stair_step_size*BOTTOM_STAIR_TREADS-0.03, BWT+1.0), end=(CHIMNEY_X_END, CHIMNEY_Y_START))
-	# vzdalenost komina od obvodove zdi
-	drawing1.add_dimension(start=(CHIMNEY_X_MID, BWT), end=(CHIMNEY_X_MID, CHIMNEY_Y_START))
+	drawing1.add_dimension(start=(CHIMNEY_X_END, CHIMNEY_Y_END), end=(CHIMNEY_X_END, GALERY_START))
 
+	# sipka schody
+	drawing1.add_poly_line(
+		[
+			(wall3_x-BWT-1.0-straight_stair_step_size*BOTTOM_STAIR_TREADS, BWT+0.5),
+			(wall3_x-BWT-0.5, BWT+0.5),
+			(wall3_x-BWT-0.5, GALERY_START-0.2),
+		],
+		style="solid",
+		arrow_end=True,
+		circle_start=True,
+	)
+
+	drawing1.add_notes(stairway_notes, title="SCHODIŠTĚ")
 	drawing1.render("ground.svg", pdf=PDF_GROUND)
 
 # Drawing 2 - upper floor
@@ -4085,6 +4111,18 @@ if "upper" in sys.argv:
 		wall_front_u, wall_1a_u, wall_1b_u, wall_gym_u, wall_dormer, wall_4_u
 	)
 
+	# sipka schody
+	drawing1.add_poly_line(
+		[
+			(wall3_x-BWT-1.0-straight_stair_step_size*BOTTOM_STAIR_TREADS, BWT+0.5),
+			(wall3_x-BWT-0.5, BWT+0.5),
+			(wall3_x-BWT-0.5, GALERY_START-0.2),
+		],
+		style="solid",
+		arrow_end=True,
+		circle_start=True,
+	)
+
 	drawing1.add_lintel(pokoj1_door, 1, position="after", direction="in")
 	drawing1.add_lintel(window_dormer_1, 2, direction="in", position="after")
 	drawing1.add_lintel(window_dormer_2, 2, direction="in")
@@ -4093,6 +4131,7 @@ if "upper" in sys.argv:
 	drawing1.add_lintel(sklad_opening, 1, position="after")
 	drawing1.add_lintel_legend()
 
+	drawing1.add_notes(stairway_notes, title="SCHODIŠTĚ")
 	drawing1.render("upper.svg", pdf=PDF_UPPER)
 
 # Roof framing plan. Its camera is above the complete roof build-up, so all

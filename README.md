@@ -1364,6 +1364,25 @@ At least two points are required, with no consecutive duplicates. Repeat the
 first point at the end to close an unfilled outline. For `dashed-arrows`,
 arrows follow point order and the pattern restarts at each corner.
 
+For a single route spanning stair flights and their landing, add optional
+endpoint symbols instead of repeated arrows:
+
+```python
+drawing.add_poly_line(
+    [(1, 1), (3.7, 1), (4.2, 1), (4.2, 2.5)],
+    style="dashed", arrow_end=True, circle_start=True,
+)
+```
+
+Both options default to `False` and may be used independently. The open
+arrowhead sits at the last point and follows the final segment; the small
+unfilled circle is centred on the first point. They share the line's color
+and width, but remain solid even for dashed routes. Symbols have fixed printed
+sizes (arrowhead 2 mm long × 1.5 mm wide; circle radius 0.5 mm), independent of
+drawing scale. They work in plans, axis-aligned elevations and mirrored exports.
+The returned entity is still the route; its endpoint symbols use one additional
+native annotation scoped to the same drawing.
+
 For one diagonal floor-change arrow, use:
 
 ```python
