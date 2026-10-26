@@ -269,7 +269,7 @@ In `house_ifc.py`, `UPPER_RING_BEAM_HEIGHT` controls the additional concrete ban
 whose top is at `UPPER_FLOOR_START + NADEZDIVKA` on the higher perimeter parts
 and internal load-bearing walls, interrupted at existing openings.
 `LOWER_NADEZDIVKA_X` splits the upper front and back walls between wall3 and wall4;
-their right-hand parts and `wall_4_u` use `NADEZDIVKA2 = UPPER_RING_BEAM_HEIGHT`.
+their right-hand parts and `wall_4_u` use `LOWER_NADEZDIVKA`.
 These low walls have no upper ring beam yet, and the storage window is omitted.
 Roof geometry and support levels remain unchanged by this wall-height change.
 
@@ -579,12 +579,56 @@ drawing.add_angle(
 )
 ```
 
-The roof build-up now has three X sections: left normal roof, middle dormer,
-right normal roof. `roof_under_rafter_x_ranges` and `roof_over_rafter_x_ranges`
-remain the authoritative inner/outer extents; the street slope is full length
-in all three sections, and the dormer uses index 1. Flat ceilings and tile
-battens follow the same section layout. There is no shortened house-cut slope
-or raised street-side wall plate.
+The authoritative `roof_under_rafter_x_ranges` and `roof_over_rafter_x_ranges`
+are independent lists of `(x_min, x_max, profile)` entries. Profiles are
+`"normal"`, `"dormer"` (normal street slope and dormer garden slope), and
+`"lower"`. They are explicit: neither list position nor purlin ends decide
+which geometry is used. Inner ranges must not overlap; outer ranges may
+overlap, and the two lists need not have matching lengths or boundaries.
+
+The inner profiles are normal, dormer and lower. The complete wall3–wall4
+inner bay uses the lower support geometry, without a split at
+`LOWER_NADEZDIVKA_X`. Its sloped wool is 140 mm thick and stops at the lower
+purlins' outer faces. Horizontal OSB/parobrzda is directly below those purlins;
+the plasterboard underside is `LOWER_CEILING_CLEAR_HEIGHT` above finished floor
+(initially 2.30 m). Sloped and horizontal finishes meet at independently
+calculated bottom-face intersections. Installation space remains a void;
+horizontal insulation remains a drawing-only batting symbol above the purlins.
+
+The outer profiles are normal, dormer, normal and lower. The high right
+piece ends at `LOWER_NADEZDIVKA_X + ROOF_X_OVERHANG`; the lower piece starts
+at `LOWER_NADEZDIVKA_X`, keeping the full explicit overlap (initially 250 mm).
+The MDF board, underlay, counter-battens, tile battens and tiles follow these
+exterior profiles, independently of the inner ranges. Source outlines use
+small thickness-aware ridge/eave overshoots to keep the correct clipping side.
+Counter-battens use the existing main/dormer rafter positions but are generated
+outside the structural-rafter loop; coincident intervals on the same plane
+are unioned, while high/low pieces on different planes remain separate.
+
+`exterior_roof_sections_at(x)` returns every matching range, not a single
+winner. AA roof angles, SK3 composition markers and ridge-cap symbols include
+each distinct exterior profile crossing the view. Under-rafter batting and
+interior-height dimensions continue to select the independent inner profile.
+Structural framing uses its own unambiguous level rule: main rafter centre X
+below `LOWER_NADEZDIVKA_X` stays high; X at/above the boundary uses the lower
+planes. Exterior overlaps do not duplicate framing, and the interior bay's
+earlier start at wall3 does not lower the high framing before the step.
+Rafter and collar-board widths are checked so the step cannot silently pass
+through an assembly. Dormer pairs must stay on the high side.
+
+The street and right garden wall plates split at the step; lower pieces sit
+on `LOWER_NADEZDIVKA`. Lower rafters use the lower planes and their actual
+ridge/eave cuts. Paired 50×150 mm collar ties sit immediately above the local
+purlins, using their parent rafter's level. Spacers retain their section and
+fit between the selected purlin inner faces, with tops at the purlin tops.
+`purlin_at()` and the support-height helpers select high/low purlins explicitly
+where their X spans overlap; the middle high piece remains the support after
+wall3 up to the step. Timber schedule rows are split by measured section and
+finished length, preserving their existing materials and appearances.
+AA/BB batting and XX/YY/ZZ support dimensions follow the actual assemblies.
+The vertical step closure/flashing and remaining wall details are not modelled.
+The 3D force simulator has not yet been updated for this lower framing.
+There is no shortened house-cut slope or raised street-side wall plate.
 
 Run `python3 house_ifc.py roof` for one A3 portrait sheet containing the roof
 plan above the XX, YY and ZZ framing sections, with a single timber schedule.
@@ -1125,13 +1169,27 @@ attached to the model when its camera or scale changes.
 Each street/garden purlin consists of three independent pieces. The left and
 middle pieces meet at the wall2 centre line and share the top `PURLIN_TOP_Z`.
 The middle piece extends to `LOWER_NADEZDIVKA_X + 0.2`. The right piece starts
-at `wall3_x - BWT` and is lowered by `NADEZDIVKA - NADEZDIVKA2`, so the two
-pieces overlap in X without touching. For now the right piece enters wall3
-without an opening; the roof layers and other roof assemblies remain high.
+at `wall3_x - BWT`, overlapping the middle piece in X at an independently
+configured height. For now the right piece enters wall3 without an opening;
+the last bay's interior and lower exterior layers follow its lower geometry.
+Structural rafters, ties, spacers and wall plates also follow their respective
+high/low assembly levels, not the overlapping purlin ends.
 The middle pieces bear on the unchanged inner-wall level
-`PURLIN_WALL_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE`.
+`PURLIN_WALL_TOP_HEIGHT`.
 `VAZNICE_BASE`, `VAZNICE_HEIGHT` and `VAZNICE_DIST` describe the middle piece.
-`VAZNICE_SIDE_BASE` and `VAZNICE_SIDE_HEIGHT` describe both side pieces.
+`VAZNICE_SIDE_BASE` and `VAZNICE_SIDE_HEIGHT` describe the high left piece.
+
+The lower right pieces have four independent settings in `house_ifc.py`:
+
+- `PURLIN_LOWER_WALL_TOP_HEIGHT`: purlin underside height above the upper
+  structural slab/storey datum; subtract `UPPER_FLOOR_THICKNESS` for clearance
+  above the finished floor. It does not change the wall geometry yet.
+- `VAZNICE_LOWER_HEIGHT` and `VAZNICE_LOWER_BASE`: cross-section height and width.
+- `VAZNICE_LOWER_DIST`: centreline distance from the ridge, on each roof side.
+
+All four values are in metres. The terminal prints `Lower roof angle`, derived
+from the outer top edges of these purlins and the future wall plates on
+`LOWER_NADEZDIVKA`. This is the lower interior/exterior and rafter pitch.
 
 `VAZNICE_SIDE_DIST = VAZNICE_DIST + (VAZNICE_BASE - VAZNICE_SIDE_BASE) / 2`
 aligns the outer faces (DIST measures to the centreline), preserving both the
@@ -1140,9 +1198,9 @@ level by `PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT`.
 The left gable top rises by that amount. At wall2, two
 short timber blocks support just the left-piece halves: width
 `VAZNICE_SIDE_BASE`, height `PURLIN_SIDE_PACKING_HEIGHT`, length `BWT/2`.
-They appear as “Podložky vaznic” in the roof timber schedule. Spacers,
-collar ties and under-rafter insulation endpoints still use the original high
-roof datums until the lower roof section is implemented.
+They appear as “Podložky vaznic” in the roof timber schedule. Spacers and
+collar ties follow the explicitly selected framing supports; lower under-rafter
+insulation independently uses the lower purlin faces throughout its inner bay.
 The timber schedule separates the middle/side collar ties and spacers.
 Its `Material` column starts with `gl24c` for purlins and `c22` for other
 members. Override a row using `"material"` in its fourth settings dictionary
@@ -1166,6 +1224,10 @@ preliminary normal-section model, not a dormer or complete roof safety verificat
 load conventions and remaining checks.
 
 ## 3D roof-frame model (PyNite)
+
+The simulator has not yet been updated for the lowered roof section and split
+wall plates. The description below refers to its previous, single-level framing;
+do not use its results to assess the current stepped IFC roof.
 
 `roof_frame_3d.py` models rafters (including the dormer), the six independent
 purlin pieces, with paired axial kleštiny by default (`--no-collar-ties` for comparison).

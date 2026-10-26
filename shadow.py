@@ -12,12 +12,13 @@ Y_MIN, Y_MAX = -3, 20
 DX_PER_DY = 0.12#0.125
 DISTANCE_ALONG_LINE = 7.75
 SECOND_LINE_ANGLE = 70
-CENTER_HEIGHT = 7.6-1.11 + 1.75
+CENTER_HEIGHT = 7.6-1.375+0.5 - 0.82
+MAX_HEIGHT = CENTER_HEIGHT
 SLOPE = 0.72
-WINDOW_HEIGHT = 1.5 + 0.75 + 0.1
+WINDOW_HEIGHT = 0
 
 # Move the entire polygon by changing only this point.
-POLYGON_ORIGIN = (-3.75, 4.5+8.4/2)
+POLYGON_ORIGIN = (-3.726, 4.5+8.4/2)
 
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
 if 1:
@@ -332,7 +333,7 @@ def main() -> None:
 
         intersection_distance, intersection_point = intersection_result
         local_y = intersection_point[1] - POLYGON_ORIGIN[1]
-        polygon_height = CENTER_HEIGHT - SLOPE * abs(local_y)
+        polygon_height = min(MAX_HEIGHT, CENTER_HEIGHT - SLOPE * abs(local_y))
         if polygon_height > WINDOW_HEIGHT + intersection_distance:
             final_result = (
                 angle_degrees,
@@ -384,7 +385,7 @@ def main() -> None:
 
         intersection_distance, intersection_point = intersection_result
         local_y = intersection_point[1] - POLYGON_ORIGIN[1]
-        polygon_height = CENTER_HEIGHT - SLOPE * abs(local_y)
+        polygon_height = min(MAX_HEIGHT, CENTER_HEIGHT - SLOPE * abs(local_y))
         if polygon_height > WINDOW_HEIGHT + intersection_distance:
             second_final_result = (
                 angle_degrees,
