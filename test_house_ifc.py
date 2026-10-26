@@ -32,26 +32,64 @@ class UpperRingBeamTests(unittest.TestCase):
         ):
             cls.values = runpy.run_path(str(source))
 
-    def test_level_band_follows_all_load_bearing_walls_except_higher_dormer(self):
+    def test_level_band_follows_only_high_load_bearing_walls(self):
         v = self.values
         beams = v["upper_ring_beams"]
         expected_walls = [v[name] for name in (
-            "wall_front_u", "wall_back_u", "wall_1a_u", "wall_1b_u",
-            "wall_gym_u", "wall_2", "wall_3", "wall_4_u",
+            "wall_front1_u", "wall_back1_u", "wall_1_u", "wall_2", "wall_3",
         )]
         self.assertEqual({beam.source_wall for beam in beams}, set(expected_walls))
-        self.assertEqual(len(beams), 10)
-        self.assertAlmostEqual(v["UPPER_RING_BEAM_HEIGHT"], 0.25)
+        self.assertEqual(len(beams), 7)
         for beam in beams:
             with self.subTest(beam=beam.Name):
-                self.assertAlmostEqual(beam.height, 0.25)
+                self.assertAlmostEqual(beam.height, v["UPPER_RING_BEAM_HEIGHT"])
                 self.assertAlmostEqual(beam.start[2] + beam.height / 2,
                                        v["UPPER_FLOOR_START"] + v["NADEZDIVKA"])
                 self.assertAlmostEqual(beam.width, v["BWT"])
                 self.assertEqual(beam.ContainedInStructure[0].RelatingStructure, v["upper"].element)
                 for bar in beam.reinforcement:
                     self.assertAlmostEqual(bar.BarLength, beam.length)
-        self.assertEqual(len(v["ring_beams"]), 8)  # Existing ceiling-level ring stays.
+        self.assertTrue(v["ring_beams"])  # Existing ceiling-level ring stays.
+        for name in ("wall_front2_u", "wall_back2_u", "wall_4_u"):
+            self.assertFalse(any(beam.source_wall == v[name] for beam in beams))
+            self.assertFalse(ifcopenshell.util.element.get_pset(v[name], "BBIM_Boolean", "Data"))
+
+    def test_front_and_back_are_split_at_the_configured_x_with_low_right_side(self):
+        v = self.values
+        x, width, depth = v["LOWER_NADEZDIVKA_X"], v["HOUSE_WIDTH"], v["HOUSE_DEPTH"]
+        self.assertTrue(v["wall3_x"] < x < width)
+        self.assertEqual(v["NADEZDIVKA2"], v["UPPER_RING_BEAM_HEIGHT"])
+        self.assertNotIn("wall_front_u", v)
+        self.assertNotIn("wall_back_u", v)
+        for name, start, end, height in (
+            ("wall_front1_u", (0, 0), (x, 0), v["NADEZDIVKA"]),
+            ("wall_front2_u", (x, 0), (width, 0), v["NADEZDIVKA2"]),
+            ("wall_back1_u", (x, depth), (0, depth), v["NADEZDIVKA"]),
+            ("wall_back2_u", (width, depth), (x, depth), v["NADEZDIVKA2"]),
+        ):
+            wall = v[name]
+            with self.subTest(wall=name):
+                self.assertEqual(wall.start, start)
+                self.assertEqual(wall.end, end)
+                self.assertAlmostEqual(wall.height, height)
+                self.assertAlmostEqual(wall.start_height, 0)
+        self.assertAlmostEqual(v["wall_4_u"].height, v["NADEZDIVKA2"])
+        settings = ifcopenshell.geom.settings()
+        for name in ("wall_front2_u", "wall_back2_u", "wall_4_u"):
+            shape = ifcopenshell.geom.create_shape(settings, v[name])
+            vertices = np.array(shape.geometry.verts).reshape(-1, 3)
+            self.assertAlmostEqual(np.ptp(vertices[:, 2]), v["NADEZDIVKA2"])
+
+    def test_storage_window_removed_but_roof_planes_and_plate_levels_stay_high(self):
+        v = self.values
+        self.assertNotIn("window_sklad", v)
+        self.assertFalse(v["wall_4_u"].HasOpenings)
+        self.assertFalse(v["wall_4_u"]._openings)
+        expected_bottom = v["UPPER_FLOOR_START"] + v["NADEZDIVKA"]
+        for plate in (v["beam3"], v["beam4_a"], v["beam4_b"]):
+            self.assertAlmostEqual(plate.start[2] - plate.height / 2, expected_bottom)
+        self.assertAlmostEqual(v["STREET_ROOF_PLANE_POINTS"][2][2], expected_bottom + .12)
+        self.assertAlmostEqual(v["GARDEN_ROOF_PLANE_POINTS"][2][2], expected_bottom + .12)
 
     def test_internal_openings_interrupt_beams_without_new_hosted_openings(self):
         v = self.values
@@ -67,7 +105,7 @@ class UpperRingBeamTests(unittest.TestCase):
             properties = ifcopenshell.util.element.get_pset(beams[1], "BBIM_RingBeam")
             self.assertAlmostEqual(properties["StartAlongWall"], opening_end)
             self.assertTrue(ifcopenshell.util.element.get_pset(wall, "BBIM_Boolean", "Data"))
-        self.assertAlmostEqual(v["wall_front_u"].height, v["NADEZDIVKA"])
+        self.assertAlmostEqual(v["wall_front1_u"].height, v["NADEZDIVKA"])
         self.assertAlmostEqual(v["wall_dormer"].start_height, v["NADEZDIVKA"])
 
 
@@ -153,12 +191,12 @@ class FacadeCornerTests(unittest.TestCase):
         self.assertEqual(len(v["house"]._drawings), 2)
         for drawing in v["house"]._drawings:
             ground_plan = drawing.name == "Drawing 1"
-            front, side = ((v["wall_front_g"], v["wall_1_g"]) if ground_plan
-                           else (v["wall_front_u"], v["wall_1_u"]))
+            fronts, side = (((v["wall_front_g"],), v["wall_1_g"]) if ground_plan
+                            else ((v["wall_front1_u"], v["wall_front2_u"]), v["wall_1_u"]))
             strips = [ifcopenshell.util.element.get_pset(a, "BBIM_WallInsulation")
                       for a in drawing.group.IsGroupedBy[0].RelatedObjects]
             strips = [p for p in strips if p]
-            for wall, material in ((front, "polystyrene"), (side, "rockwool")):
+            for wall, material in (*((front, "polystyrene") for front in fronts), (side, "rockwool")):
                 with self.subTest(drawing=drawing.name, material=material):
                     matching = [p for p in strips if p["HostWall"] == wall.GlobalId and p["Material"] == material]
                     self.assertTrue(matching)
@@ -167,8 +205,12 @@ class FacadeCornerTests(unittest.TestCase):
                         start = np.array(wall.start) - tangent * properties["StartExtension"]
                         end = np.array(wall.end) + tangent * properties["EndExtension"]
                         if material == "polystyrene":
-                            self.assertAlmostEqual(min(start[0], end[0]), -v["ROCKWOOL_INSULATION_THICKNESS"])
-                            self.assertAlmostEqual(max(start[0], end[0]), v["HOUSE_WIDTH"] + v["POLYSTYRENE_INSULATION_THICKNESS"])
+                            minimum = (-v["ROCKWOOL_INSULATION_THICKNESS"] if wall == fronts[0]
+                                       else v["LOWER_NADEZDIVKA_X"])
+                            maximum = (v["HOUSE_WIDTH"] + v["POLYSTYRENE_INSULATION_THICKNESS"] if wall == fronts[-1]
+                                       else v["LOWER_NADEZDIVKA_X"])
+                            self.assertAlmostEqual(min(start[0], end[0]), minimum)
+                            self.assertAlmostEqual(max(start[0], end[0]), maximum)
                             self.assertAlmostEqual(start[1], 0)
                             self.assertAlmostEqual(end[1], 0)
                         else:
@@ -468,8 +510,8 @@ class CutDrawingTests(unittest.TestCase):
             count += 1
         self.assertGreater(count, 0)
 
-    def test_all_five_wall_plates_have_an_explicit_ifc_role(self):
-        for name in ("beam3", "beam_cut_street", "beam4_a", "beam4_b", "beam_dormer"):
+    def test_all_four_wall_plates_have_an_explicit_ifc_role(self):
+        for name in ("beam3", "beam4_a", "beam4_b", "beam_dormer"):
             self.assertEqual(ifcopenshell.util.element.get_predefined_type(self.values[name]), "WALL_PLATE")
         for purlin in (*self.values["street_purlins"], *self.values["garden_purlins"]):
             self.assertNotEqual(ifcopenshell.util.element.get_predefined_type(purlin), "WALL_PLATE")
@@ -642,14 +684,11 @@ class CutDrawingTests(unittest.TestCase):
                 self.assertEqual(annotation.ObjectType, "BATTING")
                 self.assertLess(properties["BattingThickness"], properties["Thickness"])
 
-    def test_bb_facade_insulation_leaves_upper_window_clear(self):
+    def test_bb_facade_insulation_has_no_gap_for_removed_storage_window(self):
         values = self.values
         drawing = next(d for d in values["house"]._drawings if d.name == "bb")
         wall = values["wall_4_u"]
-        self.assertEqual(len(wall._openings), 1)
-        _, _, bottom, top = wall._openings[0]
-        bottom += wall.storey.elevation
-        top += wall.storey.elevation
+        self.assertFalse(wall._openings)
         annotations = drawing.group.IsGroupedBy[0].RelatedObjects
         strips = [ifcopenshell.util.element.get_pset(a, "BBIM_WallInsulation") for a in annotations]
         strips = [p for p in strips if p and p["HostWall"] == wall.GlobalId
@@ -657,8 +696,7 @@ class CutDrawingTests(unittest.TestCase):
         self.assertEqual(len(strips), 1)
         segments = json.loads(strips[0]["Segments"])
         self.assertTrue(segments)
-        for start, end in segments:
-            self.assertTrue(end <= bottom or start >= top)
+        self.assertEqual(len(segments), 1)
 
 
 class RoofElevationTests(unittest.TestCase):
@@ -699,7 +737,7 @@ class RoofElevationTests(unittest.TestCase):
         self.assertEqual(ifcopenshell.util.element.get_container(values["chimney"]), values["ground"].element)
 
     def test_rafter_span_dimensions_are_scoped_and_suppress_symmetric_duplicate(self):
-        for name, count in (("roof_xx", 3), ("roof_yy", 3), ("roof_zz", 2)):
+        for name, count in (("roof_xx", 2), ("roof_yy", 3), ("roof_zz", 2)):
             with self.subTest(drawing=name):
                 drawing = self.values[name]
                 dimensions = [a for a in drawing.group.IsGroupedBy[0].RelatedObjects
@@ -714,7 +752,7 @@ class RoofElevationTests(unittest.TestCase):
     def test_rafter_span_dimensions_use_outer_top_support_corners_and_keep_ridge(self):
         v = self.values
         for name, street_plate, garden_plate, distance, width in (
-            ("roof_xx", v["beam_cut_street"], v["beam4_a"], v["VAZNICE_SIDE_DIST"], v["VAZNICE_SIDE_BASE"]),
+            ("roof_xx", v["beam3"], v["beam4_a"], v["VAZNICE_SIDE_DIST"], v["VAZNICE_SIDE_BASE"]),
             ("roof_yy", v["beam3"], v["beam_dormer"], v["VAZNICE_DIST"], v["VAZNICE_BASE"]),
             ("roof_zz", v["beam3"], v["beam4_b"], v["VAZNICE_SIDE_DIST"], v["VAZNICE_SIDE_BASE"]),
         ):
@@ -735,7 +773,7 @@ class RoofElevationTests(unittest.TestCase):
                 "street rafter purlin to ridge": (street_support, ridge),
                 "street rafter wall plate to purlin": (street_seat, street_support),
             }
-            if name != "roof_zz":
+            if name == "roof_yy":
                 expected["garden rafter wall plate to purlin"] = (garden_seat, garden_support)
             for suffix, (first_point, second_point) in expected.items():
                 with self.subTest(drawing=name, span=suffix):
@@ -894,8 +932,8 @@ class RoofElevationTests(unittest.TestCase):
                     self.assertEqual(plate.GlobalId in styles, at_rafter)
         xx_styles = _timber_schedule_member_styles(ifcopenshell.util.element.get_pset(
             values["roof_xx"].element, "EPset_Drawing"))
-        self.assertNotIn(values["beam3"].GlobalId, xx_styles)
-        self.assertIn(values["beam_cut_street"].GlobalId, xx_styles)
+        self.assertIn(values["beam3"].GlobalId, xx_styles)
+        self.assertNotIn("beam_cut_street", values)
 
     def test_wall_plate_and_packing_styles_are_shared_with_plan_even_when_not_cut(self):
         values = self.values
@@ -1427,7 +1465,7 @@ class RoofFramingTests(unittest.TestCase):
                 atol=1e-8,
             )
 
-    def test_independent_purlins_have_aligned_tops_and_no_gerber_joints(self):
+    def test_independent_purlins_overlap_with_lowered_right_pieces_and_no_gerber_joints(self):
         values = self.values
         self.assertNotIn("GERBER_JOINT_1", values)
         self.assertNotIn("GERBER_JOINT_2", values)
@@ -1435,30 +1473,34 @@ class RoofFramingTests(unittest.TestCase):
         self.assertNotIn("add_purlin_wall_recess", values)
         self.assertFalse(values["wall_2"]._recesses)
         self.assertFalse(values["wall_3"]._recesses)
-        for beam in (*values["street_purlins"], *values["garden_purlins"]):
-            width, height, distance = values["purlin_dimensions_at"]((beam.start[0] + beam.end[0]) / 2)
-            self.assertEqual(
-                (beam.width, beam.height), (width, height)
-            )
-            self.assertAlmostEqual(beam.start[2] + beam.height / 2, values["PURLIN_TOP_Z"])
-            self.assertAlmostEqual(abs(beam.start[1] - values["HALF_DEPTH"]), distance)
+        drop = values["NADEZDIVKA"] - values["NADEZDIVKA2"]
         for side in ("street", "garden"):
             beams = values[side + "_purlins"]
             self.assertEqual(len(beams), 3)
+            for segment, beam in zip(("left", "middle", "right"), beams):
+                width, height, distance = values["PURLIN_SECTION_DIMENSIONS"][segment]
+                self.assertEqual((beam.width, beam.height), (width, height))
+                top = values["PURLIN_TOP_Z"] - (drop if segment == "right" else 0)
+                self.assertAlmostEqual(beam.start[2] + beam.height / 2, top)
+                self.assertAlmostEqual(beam.end[2], beam.start[2])
+                self.assertAlmostEqual(abs(beam.start[1] - values["HALF_DEPTH"]), distance)
             left, middle, right = beams
             self.assertAlmostEqual(left.end[0], middle.start[0])
-            self.assertAlmostEqual(middle.end[0], right.start[0])
+            self.assertGreater(middle.end[0], right.start[0])
             self.assertAlmostEqual(middle.start[0], values["wall2_x"] - values["BWT"] / 2)
-            self.assertAlmostEqual(middle.end[0], values["wall3_x"] - values["BWT"] / 2)
+            self.assertAlmostEqual(middle.end[0], values["LOWER_NADEZDIVKA_X"] + .2)
+            self.assertAlmostEqual(right.start[0], values["wall3_x"] - values["BWT"])
             self.assertAlmostEqual(
-                middle.length, values["wall3_x"] - values["wall2_x"]
+                middle.length, values["LOWER_NADEZDIVKA_X"] + .2 - values["MIDDLE_PURLIN_X_MIN"]
             )
             self.assertAlmostEqual(left.start[0], -0.2)
             self.assertAlmostEqual(right.end[0], values["HOUSE_WIDTH"] + 0.2)
             self.assertAlmostEqual(left.length, values["MIDDLE_PURLIN_X_MIN"] + 0.2)
             self.assertAlmostEqual(
-                right.length, values["HOUSE_WIDTH"] + 0.2 - values["MIDDLE_PURLIN_X_MAX"]
+                right.length, values["HOUSE_WIDTH"] + 0.2 - (values["wall3_x"] - values["BWT"])
             )
+            self.assertLess(right.start[2] + right.height / 2,
+                            middle.start[2] - middle.height / 2)
         self.assertNotIn("add_purlin_sedla", values)
         self.assertNotIn("street_sedla", values)
         self.assertNotIn("garden_sedla", values)
@@ -1466,9 +1508,10 @@ class RoofFramingTests(unittest.TestCase):
             any("sedlo" in (beam.Name or "").lower() for beam in values["house"].model.by_type("IfcBeam"))
         )
 
-    def test_independent_purlins_are_mirrored_once_and_meet_at_wall_centres_in_x(self):
+    def test_independent_purlins_export_once_with_correct_overlap_and_height(self):
         values = self.values
         exported = values["house"]._export_model()
+        x_sign = -1 if values["house"].mirror_x else 1
         for side in ("street", "garden"):
             bounds = []
             for beam in values[side + "_purlins"]:
@@ -1481,16 +1524,20 @@ class RoofFramingTests(unittest.TestCase):
                 bounds.append((low, high))
                 np.testing.assert_allclose(
                     (low + high) / 2,
-                    (-(beam.start[0] + beam.end[0]) / 2, beam.start[1], beam.start[2]),
+                    (x_sign * (beam.start[0] + beam.end[0]) / 2, beam.start[1], beam.start[2]),
                     atol=1e-8,
                 )
                 np.testing.assert_allclose(
                     high - low, (beam.length, beam.width, beam.height), atol=1e-8
                 )
-            for (left_low, _), (_, right_high) in zip(bounds, bounds[1:]):
-                self.assertAlmostEqual(left_low[0], right_high[0])
+            middle_low, middle_high = bounds[1]
+            right_low, right_high = bounds[2]
+            overlap = min(middle_high[0], right_high[0]) - max(middle_low[0], right_low[0])
+            self.assertAlmostEqual(overlap, values["LOWER_NADEZDIVKA_X"] + .2
+                                   - (values["wall3_x"] - values["BWT"]))
+            self.assertLess(right_high[2], middle_low[2])
 
-    def test_side_purlins_follow_both_main_and_dormer_roof_angles(self):
+    def test_purlin_outer_faces_stay_aligned_and_right_tops_drop_below_unchanged_roof(self):
         values = self.values
         for side in ("street", "garden"):
             plane = values[side + "_roof"]
@@ -1500,19 +1547,21 @@ class RoofFramingTests(unittest.TestCase):
                 # The outer top edge meets the original roof datum, just as
                 # the middle purlin does; the rafter's seat offset is unchanged.
                 roof_z = values["plane_height_at"](*plane.points, x=x, y=y)
-                self.assertAlmostEqual(roof_z, beam.start[2] + beam.height / 2)
+                drop = (values["NADEZDIVKA"] - values["NADEZDIVKA2"]
+                        if beam is values[side + "_purlins"][2] else 0)
+                self.assertAlmostEqual(roof_z - drop, beam.start[2] + beam.height / 2)
                 self.assertAlmostEqual(y, values["STREET_ROOF_JOINT_Y"] if side == "street"
                                        else values["GARDEN_ROOF_JOINT_Y"])
                 if side == "garden":
                     dormer_z = values["plane_height_at"](*values["dormer_roof"].points, x=x, y=y)
-                    self.assertAlmostEqual(dormer_z, beam.start[2] + beam.height / 2)
+                    self.assertAlmostEqual(dormer_z - drop, beam.start[2] + beam.height / 2)
         self.assertAlmostEqual(
             values["PURLIN_WALL_TOP_HEIGHT"],
             values["UNDER_HOLE"] + values["HOLE_HEIGHT"] + values["ABOVE_HOLE"],
         )
         self.assertGreater(values["VAZNICE_SIDE_DIST"], values["VAZNICE_DIST"])
 
-    def test_only_outer_purlin_support_walls_are_raised(self):
+    def test_left_gable_is_raised_but_right_outer_wall_is_low(self):
         values = self.values
         expected = values["PURLIN_WALL_TOP_HEIGHT"]
         for name in ("wall_2", "wall_3"):
@@ -1527,16 +1576,19 @@ class RoofFramingTests(unittest.TestCase):
         self.assertFalse(any("sedlo" in (opening.Name or "").lower() for opening in openings))
         self.assertIn(values["sklad_opening"], openings)
         self.assertEqual(len(values["wall_cuts_2_3"]), 2)
-        for name in ("wall_1a_u", "wall_4_u"):
-            self.assertAlmostEqual(
-                self.finished_vertices(values[name])[:, 2].max(),
-                values["PURLIN_TOP_Z"] - values["VAZNICE_SIDE_HEIGHT"],
-            )
+        self.assertAlmostEqual(
+            self.finished_vertices(values["wall_1_u"])[:, 2].max(),
+            values["PURLIN_TOP_Z"] - values["VAZNICE_SIDE_HEIGHT"],
+        )
+        self.assertAlmostEqual(
+            self.finished_vertices(values["wall_4_u"])[:, 2].max(),
+            values["UPPER_FLOOR_START"] + values["NADEZDIVKA2"],
+        )
 
-    def test_four_packing_blocks_fill_only_side_piece_half_of_inner_walls(self):
+    def test_two_packing_blocks_support_only_high_left_pieces(self):
         values = self.values
         blocks = values["purlin_packing_blocks"]
-        self.assertEqual(len(blocks), 4)
+        self.assertEqual(len(blocks), 2)
         for block in blocks:
             with self.subTest(block=block.Name):
                 self.assertEqual((block.width, block.height), (
@@ -1548,7 +1600,8 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertAlmostEqual(low[2], values["PURLIN_BOTTOM_Z"])
                 self.assertAlmostEqual(high[2], values["PURLIN_TOP_Z"] - values["VAZNICE_SIDE_HEIGHT"])
                 side = "street" if block.Name.startswith("Street") else "garden"
-                piece_index = 0 if "left" in block.Name else 2
+                self.assertIn("left", block.Name)
+                piece_index = 0
                 purlin = values[side + "_purlins"][piece_index]
                 self.assertAlmostEqual(block.start[1], purlin.start[1])
                 self.assertGreaterEqual(low[0], purlin.start[0] - 1e-9)
@@ -1650,12 +1703,17 @@ class RoofFramingTests(unittest.TestCase):
             candidate = next(b for b in simulated if abs(b.start[0] - beam.start[0]) < 1e-7)
             np.testing.assert_allclose(candidate.start, physical_end, atol=1e-7)
 
-    def test_purlin_bottom_helper_matches_actual_normal_and_middle_members(self):
+    def test_roof_assembly_purlin_datums_remain_high_during_purlin_only_update(self):
         values = self.values
-        for beam in (*values["street_purlins"], *values["garden_purlins"]):
-            x = (beam.start[0] + beam.end[0]) / 2
-            expected = beam.start[2] - beam.height / 2
-            self.assertAlmostEqual(values["purlin_bottom_z_at"](x), expected)
+        for side in ("street", "garden"):
+            for index, beam in enumerate(values[side + "_purlins"]):
+                x = (beam.start[0] + beam.end[0]) / 2
+                self.assertAlmostEqual(values["purlin_top_z_at"](x), values["PURLIN_TOP_Z"])
+                expected = values["PURLIN_TOP_Z"] - beam.height
+                self.assertAlmostEqual(values["purlin_bottom_z_at"](x), expected)
+                if index == 2:
+                    self.assertAlmostEqual(expected - (beam.start[2] - beam.height / 2),
+                                           values["NADEZDIVKA"] - values["NADEZDIVKA2"])
 
     def test_sloped_insulation_is_clipped_at_purlin_outer_vertical_face(self):
         values = self.values
@@ -1782,15 +1840,14 @@ class RoofFramingTests(unittest.TestCase):
         }
         outer_materials = {"Wood fiberboard", "Roofing underlay", "Roof tiles"}
         pieces = [
-            (values["cut_street_roof"], "Street segment 0", 0, inner_materials | outer_materials),
             *[(values["street_roof"], f"Street segment {i}", i, inner_materials | outer_materials)
-              for i in (1, 2, 3)],
+              for i in range(3)],
             *[(values["garden_roof"], f"Garden segment {i}", i, inner_materials | outer_materials)
-              for i in (0, 1, 3)],
-            (values["garden_roof"], "Garden segment 2 above dormer", 2, outer_materials),
-            (values["dormer_roof"], "Dormer segment 2", 2, inner_materials | outer_materials),
+              for i in (0, 2)],
+            (values["garden_roof"], "Garden segment 1 above dormer", 1, outer_materials),
+            (values["dormer_roof"], "Dormer segment 1", 1, inner_materials | outer_materials),
             *[(values["flat_ceiling_roof"], f"Flat ceiling segment {i}", i,
-               {"Vapour barrier", "Gypsum plasterboard"}) for i in range(4)],
+               {"Vapour barrier", "Gypsum plasterboard"}) for i in range(3)],
         ]
         for plane, prefix, index, materials in pieces:
             layers = [e for e in plane.elements
@@ -1808,6 +1865,40 @@ class RoofFramingTests(unittest.TestCase):
                     vertices = self.finished_vertices(layer)
                     self.assertAlmostEqual(vertices[:, 0].min(), expected_min, places=6)
                     self.assertAlmostEqual(vertices[:, 0].max(), expected_max, places=6)
+
+    def test_tile_battens_follow_the_three_outer_ranges_on_the_correct_slopes(self):
+        v = self.values
+        for plane, prefix, indices in (
+            (v["street_roof"], "Street segments 0 to 2", (0, 1, 2)),
+            (v["garden_roof"], "Garden segments 0 and 2", (0, 2)),
+            (v["garden_roof"], "Garden segment 1 above dormer", (1,)),
+            (v["dormer_roof"], "Dormer segment 1", (1,)),
+        ):
+            with self.subTest(prefix=prefix):
+                battens = [b for b in plane.elements if (b.Name or "").startswith(prefix + " tile batten ")]
+                self.assertTrue(battens)
+                self.assertEqual({(b.local_start[0], b.local_end[0]) for b in battens},
+                                 {v["roof_over_rafter_x_ranges"][i] for i in indices})
+
+    def test_removed_house_cut_has_no_short_street_rafters_plate_or_schedule_rows(self):
+        v = self.values
+        self.assertNotIn("cut_street_roof", v)
+        self.assertNotIn("beam_cut_street", v)
+        self.assertEqual(len(v["roof_wall_plates"]), 4)
+        self.assertEqual(set(v["roof_under_rafter_insulations"]), {
+            "Street segment 0", "Street segment 1", "Street segment 2",
+            "Garden segment 0", "Garden segment 2", "Dormer segment 1",
+        })
+        names = [row[0] for row in v["timber_schedule_rows"]]
+        self.assertFalse(any("roh" in name or "krátká - ulice" in name for name in names))
+        street_rafters = [b for b in (*v["main_roof_rafters"], *v["stronger_main_roof_rafters"])
+                          if b.roof_plane is v["street_roof"]]
+        self.assertEqual(len(street_rafters), len(v["main_rafter_positions"]))
+        for rafter in street_rafters:
+            self.assertAlmostEqual(self.finished_vertices(rafter)[:, 1].min(), v["STREET_ROOF_EAVE_Y"], places=6)
+        for batten in v["street_roof"].elements:
+            if (batten.Name or "").startswith("Street counter-batten"):
+                self.assertIs(batten.roof_plane, v["street_roof"])
 
     def test_roof_layer_helper_does_not_split_at_purlin_joint_even_when_range_crosses_it(self):
         values = self.values

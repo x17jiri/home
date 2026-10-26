@@ -459,6 +459,8 @@ class RoofLayout:
 
         wp_width, wp_height = g("WALL_PLATE_SIZE")
         wall_timber = Timber(wp_width, wp_height, beam_material)
+        has_street_cut = "CUT_STREET_WALL_PLATE_Y" in data.expressions
+        street_wall_start = g("CUT_WIDTH") if has_street_cut else 0.
 
         def wall_plate(name, lo, hi, y, plane, outside, wall_extent):
             z = plane.z(y + outside * wp_width / 2) - wp_height / 2
@@ -470,22 +472,23 @@ class RoofLayout:
 
         wall_plate(
             "street_wall_plate",
-            g("CUT_WIDTH") - 0.2,
+            street_wall_start - 0.2,
             width + 0.2,
             g("STREET_WALL_PLATE_Y"),
             street,
             -1,
-            (g("CUT_WIDTH"), width),
+            (street_wall_start, width),
         )
-        wall_plate(
-            "cut_street_wall_plate",
-            -0.2,
-            g("wall2_x") - bwt,
-            g("CUT_STREET_WALL_PLATE_Y"),
-            street,
-            -1,
-            (0, g("wall2_x") - bwt),
-        )
+        if has_street_cut:
+            wall_plate(
+                "cut_street_wall_plate",
+                -0.2,
+                g("wall2_x") - bwt,
+                g("CUT_STREET_WALL_PLATE_Y"),
+                street,
+                -1,
+                (0, g("wall2_x") - bwt),
+            )
         wall_plate(
             "garden_wall_plate_left",
             -0.2,
@@ -547,7 +550,7 @@ class RoofLayout:
             if abs(size[1] - g("RAFTER_HEIGHT")) > 1e-9:
                 raise ValueError("stronger rafters must have the same height")
             timber = Timber(*size, rafter_material)
-            corner = entry.x < g("CUT_WIDTH") - g("ROOF_X_OVERHANG")
+            corner = has_street_cut and entry.x < g("CUT_WIDTH") - g("ROOF_X_OVERHANG")
             low_y = g("CUT_STREET_EAVE_Y") if corner else g("STREET_ROOF_EAVE_Y")
             street_name, garden_name = f"rafter_{index:02d}_street", f"rafter_{index:02d}_garden"
             beams.append(
@@ -606,10 +609,11 @@ class RoofLayout:
                 rafter_top_connections.append((name, street_name))
 
         left, right = -g("ROOF_X_OVERHANG"), width + g("ROOF_X_OVERHANG")
-        corner_edge = g("CUT_WIDTH") - g("ROOF_X_OVERHANG")
+        corner_edge = g("CUT_WIDTH") - g("ROOF_X_OVERHANG") if has_street_cut else left
         joint = g("GARDEN_ROOF_JOINT_Y")
-        patches = [
-            RoofPatch(
+        patches = []
+        if has_street_cut:
+            patches.append(RoofPatch(
                 "street corner",
                 left,
                 corner_edge,
@@ -617,7 +621,8 @@ class RoofLayout:
                 ridge,
                 tuple(a for a, b in main),
                 "street",
-            ),
+            ))
+        patches.extend((
             RoofPatch(
                 "street normal",
                 corner_edge,
@@ -630,7 +635,7 @@ class RoofLayout:
             RoofPatch(
                 "garden upper", left, right, ridge, joint, tuple(b for a, b in main), "garden"
             ),
-        ]
+        ))
         if dormer_names:
             patches.extend(
                 (

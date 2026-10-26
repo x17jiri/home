@@ -1033,6 +1033,38 @@ class ChordTests(unittest.TestCase):
 
 
 class InputTests(unittest.TestCase):
+    def test_house_without_street_cut_has_four_wall_plates_and_full_street_roof(self):
+        data = HouseInputs(HOUSE)
+        layout = RoofLayout.from_house(HOUSE)
+        plates = [b for b in layout.beams if b.category == "wall_plate"]
+        self.assertEqual(len(plates), 4)
+        self.assertNotIn("cut_street_wall_plate", {b.name for b in plates})
+        street = next(b for b in plates if b.name == "street_wall_plate")
+        self.assertEqual(street.wall_extent, (0, data.get("HOUSE_WIDTH")))
+        self.assertAlmostEqual(street.start[0], -.2)
+        for rafter in (b for b in layout.beams if b.category == "rafter" and b.name.endswith("_street")):
+            self.assertAlmostEqual(rafter.start[1], data.get("STREET_ROOF_EAVE_Y"))
+        patches = [p for p in layout.patches if p.snow_side == "street"]
+        self.assertEqual(len(patches), 1)
+        self.assertAlmostEqual(patches[0].x_min, -data.get("ROOF_X_OVERHANG"))
+        self.assertAlmostEqual(patches[0].x_max, data.get("HOUSE_WIDTH") + data.get("ROOF_X_OVERHANG"))
+        self.assertAlmostEqual(patches[0].y_min, data.get("STREET_ROOF_EAVE_Y"))
+
+    def test_legacy_street_cut_inputs_are_still_supported(self):
+        data = HouseInputs(HOUSE)
+        for name, expression in (
+            ("CUT_WIDTH", "1.75"),
+            ("CUT_STREET_WALL_PLATE_Y", "BWT + GYM_DEPTH + STREET_WALL_PLATE_Y"),
+            ("CUT_STREET_EAVE_Y", "BWT + GYM_DEPTH - ROOF_EAVE_OVERHANG"),
+        ):
+            data.expressions[name] = ast.parse(expression, mode="eval").body
+        with patch("roof_frame_3d.HouseInputs", return_value=data):
+            layout = RoofLayout.from_house(HOUSE)
+        self.assertIn("cut_street_wall_plate", {b.name for b in layout.beams})
+        self.assertIn("street corner", {p.name for p in layout.patches})
+        first = next(b for b in layout.beams if b.name == "rafter_01_street")
+        self.assertAlmostEqual(first.start[1], data.get("CUT_STREET_EAVE_Y"))
+
     def test_collar_min_y_is_accepted_without_ties_but_never_silently_ignored_with_ties(self):
         data = HouseInputs(HOUSE)
         original = data.get("rafters")
@@ -1147,7 +1179,7 @@ class InputTests(unittest.TestCase):
         categories = [b.category for b in layout.beams]
         self.assertEqual(categories.count("rafter"), 2 * len(inputs.get("rafters")) + paired)
         self.assertEqual(categories.count("purlin"), 6)
-        self.assertEqual(categories.count("wall_plate"), 5)
+        self.assertEqual(categories.count("wall_plate"), 4)
         self.assertNotIn("collar", categories)
         for beam in layout.beams:
             self.assertGreater(beam.length, 0)
@@ -2581,9 +2613,7 @@ class SpringSupportTests(unittest.TestCase):
             self.assertEqual(
                 basis["wall_plate_connection_stiffness_kn_mm"]["dormer_wall_plate"], 0.015
             )
-            self.assertIsNone(
-                basis["wall_plate_connection_stiffness_kn_mm"]["cut_street_wall_plate"]
-            )
+            self.assertNotIn("cut_street_wall_plate", basis["wall_plate_connection_stiffness_kn_mm"])
             with Path(prefix + "_restrained_supports.csv").open() as stream:
                 rows = list(csv.DictReader(stream))
             for row in rows:

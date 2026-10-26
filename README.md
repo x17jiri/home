@@ -265,9 +265,13 @@ and longitudinal bars at existing openings intersecting that level. Walls
 wholly above or below the band are skipped. Call after wall joins and openings;
 the original wall heights and roof clipping planes are preserved. Without
 `replace_wall_band`, the helper retains its existing wall-capping behaviour.
-In `house_ifc.py`, `UPPER_RING_BEAM_HEIGHT` controls the additional 250 mm band,
-whose top is at `UPPER_FLOOR_START + NADEZDIVKA` around the perimeter and along
-the internal load-bearing walls, interrupted at the bedroom and storage openings.
+In `house_ifc.py`, `UPPER_RING_BEAM_HEIGHT` controls the additional concrete band,
+whose top is at `UPPER_FLOOR_START + NADEZDIVKA` on the higher perimeter parts
+and internal load-bearing walls, interrupted at existing openings.
+`LOWER_NADEZDIVKA_X` splits the upper front and back walls between wall3 and wall4;
+their right-hand parts and `wall_4_u` use `NADEZDIVKA2 = UPPER_RING_BEAM_HEIGHT`.
+These low walls have no upper ring beam yet, and the storage window is omitted.
+Roof geometry and support levels remain unchanged by this wall-height change.
 
 ## Library objects and plan symbols
 
@@ -575,6 +579,13 @@ drawing.add_angle(
 )
 ```
 
+The roof build-up now has three X sections: left normal roof, middle dormer,
+right normal roof. `roof_under_rafter_x_ranges` and `roof_over_rafter_x_ranges`
+remain the authoritative inner/outer extents; the street slope is full length
+in all three sections, and the dormer uses index 1. Flat ceilings and tile
+battens follow the same section layout. There is no shortened house-cut slope
+or raised street-side wall plate.
+
 Run `python3 house_ifc.py roof` for one A3 portrait sheet containing the roof
 plan above the XX, YY and ZZ framing sections, with a single timber schedule.
 The separate `roof_xx`, `roof_yy` and `roof_zz` command-line targets are removed;
@@ -624,9 +635,10 @@ These framing sections also dimension the sloping rafter spans between the
 outer top corners of the wall plates and purlins, and from the street purlin's
 outer top corner to the ridge. The ridge endpoint remains on the rafter axis.
 `add_roof_rafter_dimensions()` uses the selected assembly's actual beams,
-including raised house-cut/dormer wall plates and local purlin sections.
-Unequal lower spans are shown on both sides (XX/YY); symmetric ones are shown
-once (ZZ). Dimension lines are offset 0.45 m outward and exclude eave
+including the dormer wall plate and local purlin sections. The street plate
+now spans the whole house; the former raised house-cut plate is removed.
+Unequal lower spans are shown on both sides (YY); symmetric ones are shown
+once (XX/ZZ). Dimension lines are offset 0.45 m outward and exclude eave
 overhangs and fabrication allowances.
 Each framing section also calls `add_roof_purlin_dimension()` to show horizontal
 purlin centre-to-centre spacing below the beams. It uses the local purlin pieces
@@ -1110,8 +1122,12 @@ attached to the model when its camera or scale changes.
 
 ## IFC purlin sections
 
-Each street/garden purlin consists of three independent pieces, split at the
-inner-wall centre lines. Their tops align at `PURLIN_TOP_Z`.
+Each street/garden purlin consists of three independent pieces. The left and
+middle pieces meet at the wall2 centre line and share the top `PURLIN_TOP_Z`.
+The middle piece extends to `LOWER_NADEZDIVKA_X + 0.2`. The right piece starts
+at `wall3_x - BWT` and is lowered by `NADEZDIVKA - NADEZDIVKA2`, so the two
+pieces overlap in X without touching. For now the right piece enters wall3
+without an opening; the roof layers and other roof assemblies remain high.
 The middle pieces bear on the unchanged inner-wall level
 `PURLIN_WALL_TOP_HEIGHT = UNDER_HOLE + HOLE_HEIGHT + ABOVE_HOLE`.
 `VAZNICE_BASE`, `VAZNICE_HEIGHT` and `VAZNICE_DIST` describe the middle piece.
@@ -1119,13 +1135,14 @@ The middle pieces bear on the unchanged inner-wall level
 
 `VAZNICE_SIDE_DIST = VAZNICE_DIST + (VAZNICE_BASE - VAZNICE_SIDE_BASE) / 2`
 aligns the outer faces (DIST measures to the centreline), preserving both the
-main and dormer roof planes. Side pieces sit higher by
-`PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT`.
-The outer gable wall tops rise by that amount. At the two inner walls, four
-short timber blocks support just the side-piece halves: width
+main and dormer roof angles. The high left piece sits above the inner-wall
+level by `PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT`.
+The left gable top rises by that amount. At wall2, two
+short timber blocks support just the left-piece halves: width
 `VAZNICE_SIDE_BASE`, height `PURLIN_SIDE_PACKING_HEIGHT`, length `BWT/2`.
 They appear as “Podložky vaznic” in the roof timber schedule. Spacers,
-collar ties and under-rafter insulation endpoints follow the local section.
+collar ties and under-rafter insulation endpoints still use the original high
+roof datums until the lower roof section is implemented.
 The timber schedule separates the middle/side collar ties and spacers.
 Its `Material` column starts with `gl24c` for purlins and `c22` for other
 members. Override a row using `"material"` in its fourth settings dictionary
@@ -1156,7 +1173,7 @@ The six purlin sections follow the current middle/side dimensions, common
 top level and aligned outer faces from `house_ifc.py`.
 Adjacent pieces have separate supported ends, with no Gerber joints or sedla.
 Spacers and automatic collar heights follow their local purlin sections.
-The five wall-plate outlines represent
+The four wall-plate outlines represent
 one immovable rigid wall plate/ring-beam support, not elastic timber members.
 It safely reads the
 current `house_ifc.py` input geometry without regenerating the IFC. Purlins bend
@@ -1191,7 +1208,7 @@ not use this setting. `DORMER_HORIZONTAL_SUPPORT_STIFFNESS_KN_MM` separately
 controls only dormer seats in both horizontal directions: `"inherit"`,
 a positive kN/mm value, or `None` for rigid. The CLI equivalent is
 `--dormer-horizontal-stiffness 0.12` (or `inherit` / `rigid`). Normal-roof and
-house-cut seats keep the general value. Reports record both effective values.
+legacy house-cut seats keep the general value. Reports record both effective values.
 The original
 0.12 kN/mm sensitivity calibration gave about 39 kN on the street middle
 purlin with 135 kg/m² roof layers in the previous elastic wall-plate model;
