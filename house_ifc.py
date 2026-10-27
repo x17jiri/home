@@ -153,6 +153,20 @@ def rafter_x_position(rafter):
 	return rafter[0] if isinstance(rafter, tuple) else rafter
 
 
+def framing_levels_from_arrays(high, lower):
+	"""Index explicit assembly levels, keeping X-based drawing/support lookup."""
+	levels = {}
+	for level, entries in (("high", high), ("lower", lower)):
+		for entry in entries:
+			x = rafter_x_position(entry)
+			if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+				raise ValueError("rafter X must be a finite number in metres")
+			if x in levels:
+				raise ValueError(f"duplicate main rafter X={x:g}; use distinct X coordinates for separate assemblies")
+			levels[x] = level
+	return levels
+
+
 def rafter_collar_min_y(rafter):
 	"""Optional absolute house-Y limit for both collar boards of a paired rafter."""
 	if not isinstance(rafter, tuple):
@@ -410,7 +424,7 @@ KK_WIDTH = 2.50 + 0.01
 wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
-LOWER_NADEZDIVKA_X = wall3_x + 0.375
+LOWER_NADEZDIVKA_X = wall3_x + 0.25
 if not wall3_x < LOWER_NADEZDIVKA_X < HOUSE_WIDTH:
 	raise ValueError("LOWER_NADEZDIVKA_X must be between wall3 and wall4")
 aa_cut = CutDefinition(
@@ -474,7 +488,9 @@ vk_to = wall3_x+0.1
 a = math.floor((vk_to - vk_from - 3*0.67 - 0.75 - 0.86) / 2 * 1000.0) / 1000.0
 a = 0.91
 
-rafters = [
+# Explicit structural levels; these arrays may overlap in X independently of
+# LOWER_NADEZDIVKA_X and the interior/exterior layer ranges.
+high_rafters = [
 	-0.10,
 	(-0.10+1.65)/2,
 	1.65,
@@ -487,11 +503,18 @@ rafters = [
 	(vk_from+0.91+0.67+0.75+0.67+0.67, "after"),
 	(vk_from+0.91+0.67+0.75+0.67+0.67+0.67, "after"),
 	(vk_to, "+after"),
+	LOWER_NADEZDIVKA_X + 0.2 - RAFTER_THICKNESS/2.0 - RAFTER_THICKNESS - 0.015,
+	]
+lower_rafters = [
+	LOWER_NADEZDIVKA_X + 0.2 - RAFTER_THICKNESS/2.0,
 	vk_to+0.67,
 	vk_to+0.67+0.67,
 	vk_to+0.67+0.67+0.67,
 	HOUSE_WIDTH+0.1,
 	]
+# Shared drawing indices and assembly generation keep the original order.
+rafters = high_rafters + lower_rafters
+framing_levels = framing_levels_from_arrays(high_rafters, lower_rafters)
 
 # chimney
 CHIMNEY_DIST=0.47
@@ -1551,7 +1574,7 @@ PURLIN_TOP_Z = (
 )
 # Independent pieces: the high middle pieces overhang wall3 and overlap the
 # lowered right pieces in X. These are not connected Gerber segments.
-# Framing changes level at LOWER_NADEZDIVKA_X, not at the purlins' overlapping ends.
+# Framing levels come from high_rafters/lower_rafters, not these overlapping ends.
 PURLIN_X_SEGMENTS = (
 	("left", -0.2, MIDDLE_PURLIN_X_MIN, VAZNICE_SIDE_HEIGHT),
 	(
@@ -1583,7 +1606,12 @@ COLLAR_TIE_TOP_HEIGHT = COLLAR_TIE_BOTTOM_HEIGHT + COLLAR_TIE_SIZE[1]
 
 
 def framing_is_lower(x):
-	"""One level per assembly, independent of interior/exterior layer ranges."""
+	"""Use explicit assembly ownership; only non-assembly sections use the step."""
+	if x in framing_levels:
+		return framing_levels[x] == "lower"
+	parent_x = paired_dormer_owners.get(x)
+	if parent_x is not None:
+		return framing_levels[parent_x] == "lower"
 	return x >= LOWER_NADEZDIVKA_X
 
 
@@ -1679,7 +1707,7 @@ purlin_packing_blocks = add_purlin_packing_blocks()
 beam3 = upper.beam(
     "Beam",
 	start=(-0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
-	end=(LOWER_NADEZDIVKA_X, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
+	end=(LOWER_NADEZDIVKA_X + 0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
     kind="WALL_PLATE",
@@ -1695,7 +1723,7 @@ beam4_a = upper.beam(
 beam4_b = upper.beam(
     "Beam",
 	start=(wall3_x, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
-	end=(LOWER_NADEZDIVKA_X, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
+	end=(LOWER_NADEZDIVKA_X + 0.2, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
     kind="WALL_PLATE",
@@ -2245,33 +2273,34 @@ rafter_assemblies = {x: [] for x in main_rafter_positions}
 paired_dormer_owners = {x + offset: x for x, offset in paired_rafter_dormer_offsets.items()}
 
 
-def validate_framing_member_level(center_x, parent_x, width, *, name):
-	"""Do not silently cut or change level inside a timber's cross-section."""
-	lo, hi = center_x - width / 2, center_x + width / 2
-	if ((framing_is_lower(parent_x) and lo < LOWER_NADEZDIVKA_X - 1e-9)
-		or (not framing_is_lower(parent_x) and hi > LOWER_NADEZDIVKA_X + 1e-9)):
-		raise ValueError(f"{name} straddles the roof step; move LOWER_NADEZDIVKA_X between framing assemblies")
-
-
 for x, kind, _, _, stronger in rafter_layout:
 	parent_x = paired_dormer_owners[x] if kind == "dormer" else x
-	validate_framing_member_level(x, parent_x, STRONGER_RAFTER_THICKNESS if stronger else RAFTER_THICKNESS,
-		name="rafter")
 	if kind == "dormer" and framing_is_lower(parent_x):
-		raise ValueError("LOWER_NADEZDIVKA_X must remain beyond the dormer framing assemblies")
+		raise ValueError("dormer pairs must be in high_rafters; there is no lower dormer roof plane")
+	if kind == "main":
+		# A chosen level must still have physical supports at this X. The
+		# independent layer/wall boundary may pass through offset collar boards.
+		for side in ("street", "garden"):
+			purlin_at(x, side=side)
+		wall_plate_at(x, side="street")
+
+
+def touching_rafter_sides(sections):
+	"""Find touching main rafters within each level, ignoring the other level."""
+	blocked_sides = set()
+	for lower in (False, True):
+		local_sections = sorted((x, width) for x, width in sections if framing_is_lower(x) == lower)
+		for (left_x, left_width), (right_x, right_width) in zip(local_sections, local_sections[1:]):
+			if isclose(right_x - left_x, (left_width + right_width) / 2,
+					   rel_tol=0, abs_tol=1e-9):
+				blocked_sides.update(((left_x, "right"), (right_x, "left")))
+	return blocked_sides
 
 
 def add_collar_ties():
 	"""Two flanking boards per main-rafter pair, optionally trimmed at min_y."""
-	# Preserve the existing rule for touching MAIN rafters. Offset dormer
-	# rafters do not suppress a board or create another collar-tie pair.
-	blocked_sides = set()
-	for (left_x, left_width), (right_x, right_width) in zip(
-		main_rafter_sections, main_rafter_sections[1:]
-	):
-		if isclose(right_x - left_x, (left_width + right_width) / 2,
-				   rel_tol=0, abs_tol=1e-9):
-			blocked_sides.update(((left_x, "right"), (right_x, "left")))
+	# Offset dormer rafters do not suppress a board or create another pair.
+	blocked_sides = touching_rafter_sides(main_rafter_sections)
 	ties = []
 	for index, (x, rafter_width) in enumerate(main_rafter_sections, start=1):
 		street_plane, garden_plane = framing_roof_planes_at(x)
@@ -2291,7 +2320,6 @@ def add_collar_ties():
 				# Shift this entire board by one rafter width to the outer
 				# face of the dormer rafter; the opposite board stays put.
 				offset += dormer_offset
-			validate_framing_member_level(x + offset, x, COLLAR_TIE_THICKNESS, name="collar tie")
 			centre_z = purlin_top_z_at(x) + COLLAR_TIE_SIZE[1] / 2
 			tie = upper.beam(
 				f"Collar tie {index} {side}",
@@ -2350,7 +2378,7 @@ roof_over_rafter_x_ranges = (
 	(-ROOF_X_OVERHANG, wall2_x-BWT, "normal"),
 	(wall2_x-BWT-ROOF_X_OVERHANG, wall3_x+ROOF_X_OVERHANG, "dormer"),
 	(wall3_x, LOWER_NADEZDIVKA_X + ROOF_X_OVERHANG, "normal"),
-	(LOWER_NADEZDIVKA_X, HOUSE_WIDTH + ROOF_X_OVERHANG, "lower"),
+	(LOWER_NADEZDIVKA_X + 0.2, HOUSE_WIDTH + ROOF_X_OVERHANG, "lower"),
 )
 
 
@@ -2909,7 +2937,8 @@ for i, (
 	is_stronger_rafter,
 ) in enumerate(rafter_layout):
 	is_dormer_rafter = rafter_kind == "dormer"
-	street_rafter_plane, garden_rafter_plane = framing_roof_planes_at(rafter_x)
+	parent_x = paired_dormer_owners[rafter_x] if is_dormer_rafter else rafter_x
+	street_rafter_plane, garden_rafter_plane = framing_roof_planes_at(parent_x)
 	rafter_size = (
 		STRONGER_RAFTER_SIZE if is_stronger_rafter else RAFTER_SIZE
 	)

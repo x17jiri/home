@@ -609,21 +609,36 @@ are unioned, while high/low pieces on different planes remain separate.
 winner. AA roof angles, SK3 composition markers and ridge-cap symbols include
 each distinct exterior profile crossing the view. Under-rafter batting and
 interior-height dimensions continue to select the independent inner profile.
-Structural framing uses its own unambiguous level rule: main rafter centre X
-below `LOWER_NADEZDIVKA_X` stays high; X at/above the boundary uses the lower
-planes. Exterior overlaps do not duplicate framing, and the interior bay's
-earlier start at wall3 does not lower the high framing before the step.
-Rafter and collar-board widths are checked so the step cannot silently pass
-through an assembly. Dormer pairs must stay on the high side.
+Structural framing has two explicit arrays, `high_rafters` and `lower_rafters`.
+Both accept the existing numbers, paired dormer tuples, `StrongerRafter` and
+`SplitRafter` entries. For example:
 
-The street and right garden wall plates split at the step; lower pieces sit
-on `LOWER_NADEZDIVKA`. Lower rafters use the lower planes and their actual
+```python
+high_rafters = [1.65, (vk_to, "+after")]
+lower_rafters = [vk_to + 0.67, HOUSE_WIDTH + 0.1]
+```
+
+`rafters` combines both arrays for shared drawing indices. Each main rafter X
+must be unique across both arrays; their X ranges can overlap. The selected
+array fixes the level of the complete assembly, including offset collar boards,
+paired dormer rafters and the spacer. Moving `LOWER_NADEZDIVKA_X` no longer
+reassigns assemblies or rejects boards crossing that boundary. Touching rafters
+only suppress their inner collar boards when they belong to the same level.
+Dormer pairs must remain in `high_rafters`, as there is no lower dormer plane.
+Exterior overlaps do not duplicate structural framing. Non-assembly section
+positions still use `LOWER_NADEZDIVKA_X` as their default viewing level.
+
+The street and right garden wall plates split at the step; both high plates
+extend 200 mm beyond it, matching the middle purlins. Lower pieces sit
+on `LOWER_NADEZDIVKA`. An explicitly selected assembly still needs its chosen
+purlin and wall-plate pieces to reach its position; extend those pieces too if
+adding framing beyond their ends. Lower rafters use the lower planes and their actual
 ridge/eave cuts. Paired 50×150 mm collar ties sit immediately above the local
 purlins, using their parent rafter's level. Spacers retain their section and
 fit between the selected purlin inner faces, with tops at the purlin tops.
 `purlin_at()` and the support-height helpers select high/low purlins explicitly
-where their X spans overlap; the middle high piece remains the support after
-wall3 up to the step. Timber schedule rows are split by measured section and
+where their X spans overlap, using the assembly's explicit level. Timber
+schedule rows are split by measured section and
 finished length, preserving their existing materials and appearances.
 AA/BB batting and XX/YY/ZZ support dimensions follow the actual assemblies.
 The vertical step closure/flashing and remaining wall details are not modelled.
@@ -655,7 +670,7 @@ section = add_roof_elevation("roof_yy", rafter_index=5, offset=0.15)
 section.render("roof_yy.svg", png=True, png_dpi=600)
 ```
 
-Paired entries in `rafters` can optionally trim their two IFC collar boards:
+Paired entries in either framing array can optionally trim their two IFC collar boards:
 
 ```python
 (rafter_x, "before", {"min_y": BWT + CHODBA_DEPTH + 0.02})

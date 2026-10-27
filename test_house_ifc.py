@@ -1921,11 +1921,31 @@ class RoofFramingTests(unittest.TestCase):
         with patch.dict(v["framing_is_lower"].__globals__, {"roof_under_rafter_x_ranges": (), "roof_over_rafter_x_ranges": ()}):
             self.assertTrue(v["framing_is_lower"](step+.1))
             self.assertIs(v["purlin_at"](step+.1, side="garden"), v["garden_purlins"][2])
-        validate = v["validate_framing_member_level"]
-        for center, parent in ((step-.01, step-.2), (step+.01, step+.2), (step+.03, step-.2)):
-            with self.assertRaisesRegex(ValueError, "straddles the roof step"):
-                validate(center, parent, .08, name="Test timber")
-        validate(step+.04, step+.2, .08, name="Test timber")
+        with patch.dict(v["framing_levels"], {step-.01: "lower", step+.01: "high"}):
+            for x, index, lower in ((step-.01, 2, True), (step+.01, 1, False)):
+                self.assertEqual(v["framing_is_lower"](x), lower)
+                for side in ("street", "garden"):
+                    self.assertIs(v["purlin_at"](x, side=side), v[side+"_purlins"][index])
+
+    def test_explicit_framing_arrays_validate_unique_finite_main_positions(self):
+        v = self.values
+        build = v["framing_levels_from_arrays"]
+        self.assertEqual(build([1, (2, "before"), v["StrongerRafter"](3)],
+                               [1.5, v["SplitRafter"](4, 7)]),
+                         {1: "high", 2: "high", 3: "high", 1.5: "lower", 4: "lower"})
+        self.assertEqual(v["rafters"], v["high_rafters"] + v["lower_rafters"])
+        for high, lower in (([1], [1]), ([1, (1, "before")], []),
+                            ([True], []), ([], [float("nan")]), ([float("inf")], [])):
+            with self.subTest(high=high, lower=lower), self.assertRaises(ValueError):
+                build(high, lower)
+
+    def test_touching_main_rafters_are_checked_separately_at_each_level(self):
+        v = self.values
+        with patch.dict(v["framing_levels"], {1.: "high", 1.04: "lower", 1.08: "high"}):
+            self.assertEqual(v["touching_rafter_sides"]([(1., .08), (1.04, .08), (1.08, .08)]),
+                             {(1., "right"), (1.08, "left")})
+        with patch.dict(v["framing_levels"], {1.: "high", 1.08: "lower"}):
+            self.assertEqual(v["touching_rafter_sides"]([(1., .08), (1.08, .08)]), set())
 
     def test_lower_assemblies_follow_the_lower_planes_and_support_contacts(self):
         v = self.values
@@ -1969,7 +1989,7 @@ class RoofFramingTests(unittest.TestCase):
         self.assertEqual(len(v["roof_wall_plates"]), 6)
         for high, low, plane in ((v["beam3"], v["beam3_lower"], v["lower_street_roof"]),
                                   (v["beam4_b"], v["beam4_lower"], v["lower_garden_roof"])):
-            self.assertAlmostEqual(high.end[0], v["LOWER_NADEZDIVKA_X"])
+            self.assertAlmostEqual(high.end[0], v["LOWER_NADEZDIVKA_X"] + .2)
             self.assertAlmostEqual(low.start[0], v["LOWER_NADEZDIVKA_X"])
             self.assertAlmostEqual(low.end[0], v["HOUSE_WIDTH"] + .2)
             self.assertAlmostEqual(low.start[2] - low.height/2, v["UPPER_FLOOR_START"] + v["LOWER_NADEZDIVKA"])
@@ -1979,6 +1999,25 @@ class RoofFramingTests(unittest.TestCase):
             self.assertIn(v["wall_plate_at"](x, side="street"), plates)
             if v["framing_is_lower"](x):
                 self.assertEqual(set(plates), {v["beam3_lower"], v["beam4_lower"]})
+
+    def test_short_garden_wall_plate_ends_with_the_middle_purlin(self):
+        v = self.values
+        plate = v["beam4_b"]
+        self.assertAlmostEqual(plate.start[0], v["wall3_x"])
+        self.assertAlmostEqual(plate.end[0], v["LOWER_NADEZDIVKA_X"] + .2)
+        self.assertAlmostEqual(plate.end[0], v["garden_purlins"][1].end[0])
+        self.assertIs(v["wall_plate_at"](v["LOWER_NADEZDIVKA_X"] + .1, side="garden"),
+                      v["beam4_lower"])
+
+    def test_high_street_wall_plate_ends_with_the_middle_purlin_and_covers_overlap(self):
+        v = self.values
+        plate = v["beam3"]
+        self.assertAlmostEqual(plate.end[0], v["LOWER_NADEZDIVKA_X"] + .2)
+        self.assertAlmostEqual(plate.end[0], v["street_purlins"][1].end[0])
+        self.assertAlmostEqual(plate.end[0], v["beam4_b"].end[0])
+        x = v["LOWER_NADEZDIVKA_X"] + .105
+        with patch.dict(v["framing_levels"], {x: "high"}):
+            self.assertIs(v["wall_plate_at"](x, side="street"), plate)
 
     def test_measured_schedule_lists_each_split_plate_and_framing_member_once(self):
         v = self.values
@@ -2388,6 +2427,111 @@ class RoofFramingTests(unittest.TestCase):
                 "Wood fiberboard", "Roofing underlay", "Roof tiles",
             } else (x_min, x_max)
             self.assertEqual((min(xs), max(xs)), expected)
+
+
+class ExplicitFramingLevelTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        cls.runs = {}
+        for case in ("moved", "overlap"):
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            for node in tree.body:
+                if not isinstance(node, ast.Assign) or len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                    continue
+                name = node.targets[0].id
+                if name == "LOWER_NADEZDIVKA_X":
+                    expression = "wall3_x + .12" if case == "moved" else "wall3_x + .4"
+                    node.value = ast.parse(expression, mode="eval").body
+                elif case == "overlap":
+                    if name == "high_rafters":
+                        node.value.elts.extend(ast.parse(expression, mode="eval").body for expression in (
+                            "LOWER_NADEZDIVKA_X + .1",
+                            "StrongerRafter(LOWER_NADEZDIVKA_X - .045)",
+                        ))
+                    elif name == "lower_rafters":
+                        node.value.elts.extend(ast.parse(expression, mode="eval").body for expression in (
+                            "LOWER_NADEZDIVKA_X - .1",
+                            "LOWER_NADEZDIVKA_X + .045",
+                        ))
+                    elif name in ("beam3", "beam3_lower", "beam4_lower"):
+                        # Explicitly extend the seats as well as adding framing.
+                        # Production support coverage must not be bypassed.
+                        keyword_name = "end" if name == "beam3" else "start"
+                        expression = "LOWER_NADEZDIVKA_X + .2" if name == "beam3" else "LOWER_NADEZDIVKA_X - .2"
+                        keyword = next(k for k in node.value.keywords if k.arg == keyword_name)
+                        keyword.value.elts[0] = ast.parse(expression, mode="eval").body
+            ast.fix_missing_locations(tree)
+            values = {"__file__": str(source), "__name__": "__main__"}
+            with (
+                patch.object(sys, "argv", [str(source)]),
+                patch.object(House, "write", return_value=Path("house.ifc")),
+                redirect_stdout(StringIO()),
+            ):
+                exec(compile(tree, str(source), "exec"), values)
+            cls.runs[case] = values
+
+    def test_moving_step_through_a_dormer_assembly_keeps_its_explicit_high_level(self):
+        v = self.runs["moved"]
+        x = v["vk_to"]
+        step = v["LOWER_NADEZDIVKA_X"]
+        self.assertGreater(x + v["RAFTER_THICKNESS"] / 2, step)
+        dormer_x = x + v["paired_rafter_dormer_offsets"][x]
+        self.assertGreater(dormer_x, step)
+        self.assertFalse(v["framing_is_lower"](x))
+        self.assertFalse(v["framing_is_lower"](dormer_x))
+        members = v["rafter_assemblies"][x]
+        ties = [b for b in members if b in v["collar_ties"]]
+        self.assertEqual(len(ties), 2)
+        self.assertTrue(any(tie.start[0] - tie.width/2 > step for tie in ties))
+        for tie in ties:
+            self.assertAlmostEqual(tie.start[2] - tie.height/2, v["PURLIN_TOP_Z"])
+        dormer = next(b for b in members if b in v["dormer_roof_rafters"])
+        self.assertIs(dormer.roof_plane, v["dormer_rafter_roof"])
+        street = next(b for b in members if getattr(b, "roof_plane", None) is v["street_roof"])
+        self.assertIn(street, v["main_roof_rafters"])
+
+    def test_overlapping_arrays_select_their_own_planes_supports_ties_and_spacers(self):
+        v = self.runs["overlap"]
+        step = v["LOWER_NADEZDIVKA_X"]
+        for x, lower in ((step+.1, False), (step-.1, True)):
+            with self.subTest(x=x, lower=lower):
+                self.assertEqual(v["framing_is_lower"](x), lower)
+                members = v["rafter_assemblies"][x]
+                planes = (v["lower_street_roof"], v["lower_garden_roof"]) if lower else (v["street_roof"], v["garden_roof"])
+                rafters = [b for b in members if b.kind == "RAFTER"]
+                self.assertEqual({b.roof_plane for b in rafters}, set(planes))
+                self.assertEqual(len(rafters), 2)
+                for side in ("street", "garden"):
+                    self.assertIs(v["purlin_at"](x, side=side), v[side+"_purlins"][2 if lower else 1])
+                support_top = v["LOWER_ROOF_JOINT_Z"] if lower else v["PURLIN_TOP_Z"]
+                ties = [b for b in members if b in v["collar_ties"]]
+                self.assertEqual(len(ties), 2)
+                for tie in ties:
+                    self.assertAlmostEqual(tie.start[2] - tie.height/2, support_top)
+                spacer = next(b for b in members if b in v["purlin_spacers"])
+                self.assertAlmostEqual(spacer.start[2] + spacer.height/2, support_top)
+                width, _, distance = v["purlin_dimensions_at"](x)
+                self.assertAlmostEqual(spacer.length, 2 * distance - width)
+                expected_plates = {v["beam3_lower"], v["beam4_lower"]} if lower else {v["beam3"], v["beam4_b"]}
+                self.assertEqual(set(v["assembly_wall_plates"](x)), expected_plates)
+                index = next(i for i, entry in enumerate(v["rafters"])
+                             if v["rafter_x_position"](entry) == x)
+                drawing = v["add_roof_elevation"](
+                    f"overlap_{'lower' if lower else 'high'}", rafter_index=index, offset=.01)
+                self.assertTrue(drawing)
+
+    def test_touching_rafters_at_different_levels_keep_both_flanking_boards(self):
+        v = self.runs["overlap"]
+        step = v["LOWER_NADEZDIVKA_X"]
+        high_x, lower_x = step-.045, step+.045
+        self.assertAlmostEqual(lower_x-high_x,
+                               (v["STRONGER_RAFTER_THICKNESS"] + v["RAFTER_THICKNESS"])/2)
+        for x in (high_x, lower_x):
+            self.assertEqual(len([b for b in v["rafter_assemblies"][x] if b in v["collar_ties"]]), 2)
+        stronger = [b for b in v["rafter_assemblies"][high_x] if b.kind == "RAFTER"]
+        self.assertEqual(len(stronger), 2)
+        self.assertTrue(all(b in v["stronger_main_roof_rafters"] for b in stronger))
 
 
 if __name__ == "__main__":
