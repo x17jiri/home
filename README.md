@@ -641,7 +641,14 @@ where their X spans overlap, using the assembly's explicit level. Timber
 schedule rows are split by measured section and
 finished length, preserving their existing materials and appearances.
 AA/BB batting and XX/YY/ZZ support dimensions follow the actual assemblies.
-The vertical step closure/flashing and remaining wall details are not modelled.
+`roof_step_closure` adds white, non-structural 15 mm gable cladding in the
+visibility container `Roof - Gable closure`. Its source box spans X from
+`LOWER_NADEZDIVKA_X` to `LOWER_NADEZDIVKA_X + 0.015`, Y from 0 to `HOUSE_DEPTH`,
+and Z from `UPPER_FLOOR_START` to `UPPER_FLOOR_START + 5.0`. Two panels meet at
+the ridge: each is cut below its high rafter top face and above its low rafter
+bottom face, using the actual normal offsets `RAFTER_Z_OFFSET + RAFTER_HEIGHT`
+and `RAFTER_Z_OFFSET`. This does not add timber, roof layers or simulator members.
+Flashing, attachment details and remaining wall details are not modelled.
 The 3D force simulator has not yet been updated for this lower framing.
 There is no shortened house-cut slope or raised street-side wall plate.
 

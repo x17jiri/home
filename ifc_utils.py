@@ -7979,6 +7979,8 @@ class House:
         color: str | None = None,
         transparency: Number = 0,
         show_in_drawings: bool = True,
+        cuts: Sequence[PlaneCut] | None = None,
+        retained_point: Point3D | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add an axis-aligned box, using absolute, unmirrored coordinates.
 
@@ -7987,6 +7989,10 @@ class House:
         IFC for 3D viewing, but is omitted from plans and sections, including
         their occlusion calculations. It is a generic, non-structural element
         contained directly in the building, not a piece of furniture.
+        ``cuts`` are global three-point clipping planes. Each retains the side
+        containing ``retained_point`` (absolute XYZ), or the uncut box centre
+        when omitted. An explicit point must be inside the uncut box and lets
+        a large source box keep a thin region between several cutting planes.
         """
         box_name = _name(name, "name")
         x, y, z = _point_3d(origin, "origin")
@@ -8005,6 +8011,17 @@ class House:
         if not isinstance(show_in_drawings, bool):
             raise TypeError("show_in_drawings must be a boolean")
         surface_style = self._surface_style("box", color=color, transparency=transparency)
+        normalised_cuts = _plane_cuts(cuts)
+        placement = np.eye(4)
+        placement[:3, 3] = (x + width / 2, y + depth / 2, z)
+        retained = (0.0, 0.0, height / 2)
+        if retained_point is not None:
+            keep_x, keep_y, keep_z = _point_3d(retained_point, "retained_point")
+            if not (x <= keep_x <= x + width and y <= keep_y <= y + depth
+                    and z <= keep_z <= z + height):
+                raise ValueError("retained_point must be inside the uncut box")
+            retained = (keep_x - x - width / 2, keep_y - y - depth / 2, keep_z - z)
+        clippings = _local_clippings(normalised_cuts, placement, retained)
 
         model = self.model
         box = ifcopenshell.api.root.create_entity(
@@ -8015,8 +8032,6 @@ class House:
         ifcopenshell.api.spatial.assign_container(
             model, products=[box], relating_structure=self.building,
         )
-        placement = np.eye(4)
-        placement[:3, 3] = (x + width / 2, y + depth / 2, z)
         ifcopenshell.api.geometry.edit_object_placement(
             model, product=box, matrix=placement, is_si=True,
         )
@@ -8027,6 +8042,7 @@ class House:
             model, context=self._body_context, profile=profile,
             depth=height, cardinal_point=None,
         )
+        _clip_body_representation(model, box, body, clippings)
         ifcopenshell.api.geometry.assign_representation(
             model, product=box, representation=body,
         )

@@ -503,10 +503,10 @@ high_rafters = [
 	(vk_from+0.91+0.67+0.75+0.67+0.67, "after"),
 	(vk_from+0.91+0.67+0.75+0.67+0.67+0.67, "after"),
 	(vk_to, "+after"),
-	LOWER_NADEZDIVKA_X + 0.2 - RAFTER_THICKNESS/2.0 - RAFTER_THICKNESS - 0.015,
+	LOWER_NADEZDIVKA_X + 0.1 - RAFTER_THICKNESS/2.0,
 	]
 lower_rafters = [
-	LOWER_NADEZDIVKA_X + 0.2 - RAFTER_THICKNESS/2.0,
+	LOWER_NADEZDIVKA_X + 0.1 + RAFTER_THICKNESS/2.0 + 0.015,
 	vk_to+0.67,
 	vk_to+0.67+0.67,
 	vk_to+0.67+0.67+0.67,
@@ -2146,11 +2146,48 @@ roof_layer_storeys.update({
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
 	"Roof windows": house.storey("Roof - +6: Windows", elevation=upper.elevation),
+	"Gable closure": house.storey("Roof - Gable closure", elevation=upper.elevation),
 })
 roof_under_rafter_insulations = {}
 for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.ObjectType = "ROOF_LAYER"
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
+
+
+def add_roof_step_closure():
+	"""White 15 mm gable infill between the high rafter tops and low bottoms."""
+	z0 = UPPER_FLOOR_START
+	z1 = z0 + 5.0
+	x0 = LOWER_NADEZDIVKA_X + 0.1
+	x1 = x0 + 0.015
+	panels = []
+	# The band between two pitched roofs is not convex across the ridge.
+	# Clip one box per slope, meeting exactly at HALF_DEPTH without overlap.
+	for side, y0, y1, high, low in (
+		("Street", 0.0, HALF_DEPTH, street_roof, lower_street_roof),
+		("Garden", HALF_DEPTH, HOUSE_DEPTH, garden_roof, lower_garden_roof),
+	):
+		top = offset_plane(*high.points, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT)
+		bottom = offset_plane(*low.points, offset=RAFTER_Z_OFFSET)
+		keep_x, keep_y = (x0 + x1) / 2, (y0 + y1) / 2
+		keep_bottom = max(z0, plane_height_at(*bottom, x=keep_x, y=keep_y))
+		keep_top = min(z1, plane_height_at(*top, x=keep_x, y=keep_y))
+		if keep_top <= keep_bottom:
+			raise ValueError(f"{side.lower()} roof-step closure has no space between the rafter faces")
+		panel = house.add_box(
+			f"{side} roof-step gable closure",
+			origin=(x0, y0, z0), size=(x1-x0, y1-y0, z1-z0),
+			material="Roof step cladding", color="#ffffff",
+			cuts=(top, bottom),
+			retained_point=(keep_x, keep_y, (keep_bottom + keep_top) / 2),
+		)
+		panel.Description = "Non-structural gable cladding between the high and lower roofs"
+		roof_layer_storeys["Gable closure"].add(panel)
+		panels.append(panel)
+	return tuple(panels)
+
+
+roof_step_closure = add_roof_step_closure()
 
 # The under-rafter insulation follows each occupied roof slope only as far as
 # the outer vertical face of the purlin. The vapour barrier and plasterboard transition

@@ -143,6 +143,52 @@ class ReferenceBoxTests(unittest.TestCase):
                 house.add_box(**(defaults | overrides))
         self.assertFalse(house.model.by_type("IfcBuildingElementProxy"))
 
+    def test_multiple_cuts_keep_an_explicit_world_point_and_mirror_correctly(self):
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Clipped box", mirror_x=mirror)
+                cuts = (
+                    ((0, 0, 2), (1, 0, 2), (0, 1, 2)),
+                    ((0, 0, 3), (1, 0, 3), (0, 1, 3)),
+                )
+                # The source box centre is above BOTH planes. A supplied
+                # interior point must retain the band rather than the cap.
+                box = house.add_box("Band", origin=(2, -3, 1), size=(1, 2, 5),
+                                    cuts=cuts, retained_point=(2.5, -2, 2.5), color="#ffffff")
+                lower, upper = self.bounds(box)
+                np.testing.assert_allclose(lower, (2, -3, 2))
+                np.testing.assert_allclose(upper, (3, -1, 3))
+                body = ifcopenshell.util.representation.get_representation(box, "Model", "Body", "MODEL_VIEW")
+                self.assertEqual(body.RepresentationType, "Clipping")
+                self.assertEqual(len(json.loads(ifcopenshell.util.element.get_pset(box, "BBIM_Boolean", "Data"))), 2)
+                exported = house._export_model().by_guid(box.GlobalId)
+                lower, upper = self.bounds(exported)
+                np.testing.assert_allclose(lower, (-3 if mirror else 2, -3, 2))
+                np.testing.assert_allclose(upper, (-2 if mirror else 3, -1, 3))
+
+    def test_cuts_default_to_the_uncut_box_centre(self):
+        house = House("Clipped box")
+        box = house.add_box("Cap", origin=(0, 0, 0), size=(1, 1, 4),
+                            cuts=[((0, 0, 1), (1, 0, 1), (0, 1, 1))])
+        lower, upper = self.bounds(box)
+        np.testing.assert_allclose(lower, (0, 0, 1))
+        np.testing.assert_allclose(upper, (1, 1, 4))
+
+    def test_validates_box_cuts_and_keep_point_before_creating_elements(self):
+        house = House("Clipped box")
+        plane = ((0, 0, 1), (1, 0, 1), (0, 1, 1))
+        for overrides in (
+            {"cuts": "plane"},
+            {"cuts": [((0, 0, 0), (1, 1, 1), (2, 2, 2))]},
+            {"retained_point": (1, 2)},
+            {"retained_point": (2, .5, 1)},
+            {"cuts": [plane]},  # Default centre lies on the cut.
+            {"cuts": [plane], "retained_point": (.5, .5, 1)},
+        ):
+            with self.subTest(overrides=overrides), self.assertRaises((ValueError, TypeError)):
+                house.add_box("Invalid", origin=(0, 0, 0), size=(1, 1, 2), **overrides)
+        self.assertFalse(house.model.by_type("IfcBuildingElementProxy"))
+
     def test_persisted_rule_excludes_only_3d_only_boxes_created_before_or_after_drawings(self):
         house = House("Boxes")
         before = house.add_box("Before", origin=(0, 0, 0), size=(1, 1, 1),

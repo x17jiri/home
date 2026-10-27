@@ -2429,6 +2429,94 @@ class RoofFramingTests(unittest.TestCase):
             self.assertEqual((min(xs), max(xs)), expected)
 
 
+class RoofStepClosureTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        cls.runs = []
+        for tuned in (False, True):
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            # Isolate cladding geometry from later, independently editable
+            # rafter/support configuration (which can legitimately be invalid).
+            stop = next(i for i, node in enumerate(tree.body)
+                        if isinstance(node, ast.Assign) and any(
+                            isinstance(target, ast.Name) and target.id == "rafter_layout"
+                            for target in node.targets))
+            tree.body = tree.body[:stop]
+            if tuned:
+                replacements = {
+                    "LOWER_NADEZDIVKA_X": "wall3_x + .5",
+                    "PURLIN_LOWER_WALL_TOP_HEIGHT": "2.60",
+                    "VAZNICE_LOWER_HEIGHT": ".30",
+                    "VAZNICE_LOWER_DIST": ".65",
+                }
+                for node in tree.body:
+                    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                        if node.targets[0].id in replacements:
+                            node.value = ast.parse(replacements[node.targets[0].id], mode="eval").body
+            ast.fix_missing_locations(tree)
+            values = {"__file__": str(source), "__name__": "__main__"}
+            with patch.object(sys, "argv", [str(source)]), redirect_stdout(StringIO()):
+                exec(compile(tree, str(source), "exec"), values)
+            cls.runs.append(values)
+
+    def test_panels_fill_the_exact_band_between_both_rafter_faces(self):
+        for v in self.runs:
+            self.assertEqual(len(v["roof_step_closure"]), 2)
+            x0 = v["LOWER_NADEZDIVKA_X"]
+            for panel, y0, y1, high, low in zip(
+                v["roof_step_closure"], (0, v["HALF_DEPTH"]), (v["HALF_DEPTH"], v["HOUSE_DEPTH"]),
+                (v["street_roof"], v["garden_roof"]), (v["lower_street_roof"], v["lower_garden_roof"]),
+            ):
+                with self.subTest(panel=panel.Name, x=x0):
+                    vertices = RoofFramingTests.finished_vertices(panel)
+                    top = v["offset_plane"](*high.points, offset=v["RAFTER_Z_OFFSET"] + v["RAFTER_HEIGHT"])
+                    bottom = v["offset_plane"](*low.points, offset=v["RAFTER_Z_OFFSET"])
+                    expected = [(x, y, v["plane_height_at"](*plane, x=x, y=y))
+                                for x in (x0, x0+.015) for y in (y0, y1) for plane in (top, bottom)]
+                    self.assertEqual({tuple(np.round(p, 7)) for p in vertices},
+                                     {tuple(np.round(p, 7)) for p in expected})
+                    self.assertGreaterEqual(vertices[:, 2].min(), v["UPPER_FLOOR_START"])
+                    self.assertLessEqual(vertices[:, 2].max(), v["UPPER_FLOOR_START"]+5)
+
+    def test_panels_meet_at_the_ridge_without_a_gap_or_overlap(self):
+        for v in self.runs:
+            seams = []
+            for panel in v["roof_step_closure"]:
+                vertices = RoofFramingTests.finished_vertices(panel)
+                seam = vertices[np.abs(vertices[:, 1]-v["HALF_DEPTH"]) < 1e-7]
+                self.assertEqual(len(seam), 4)
+                seams.append({tuple(np.round(p, 7)) for p in seam})
+            self.assertEqual(seams[0], seams[1])
+
+    def test_cladding_is_white_non_structural_and_in_its_own_roof_container(self):
+        for v in self.runs:
+            for panel in v["roof_step_closure"]:
+                self.assertTrue(panel.is_a("IfcBuildingElementProxy"))
+                self.assertEqual(ifcopenshell.util.element.get_container(panel),
+                                 v["roof_layer_storeys"]["Gable closure"].element)
+                self.assertEqual(ifcopenshell.util.element.get_material(panel).Name, "Roof step cladding")
+                body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
+                shading = body.Items[0].StyledByItem[0].Styles[0].Styles[0]
+                rgb = shading.SurfaceColour
+                self.assertEqual((rgb.Red, rgb.Green, rgb.Blue), (1, 1, 1))
+                self.assertEqual(shading.Transparency, 0)
+                self.assertTrue(ifcopenshell.util.element.get_pset(panel, "BBIM_DrawingVisibility", "ShowInDrawings"))
+
+    def test_clipped_panels_export_mirrored_once_without_changing_live_coordinates(self):
+        v = self.runs[0]
+        with patch.object(v["house"], "mirror_x", True):
+            exported = v["house"]._export_model()
+        for panel in v["roof_step_closure"]:
+            original = RoofFramingTests.finished_vertices(panel)
+            reflected = RoofFramingTests.finished_vertices(exported.by_guid(panel.GlobalId))
+            expected = original.copy()
+            expected[:, 0] *= -1
+            self.assertEqual({tuple(np.round(p, 7)) for p in reflected},
+                             {tuple(np.round(p, 7)) for p in expected})
+            np.testing.assert_allclose(RoofFramingTests.finished_vertices(panel), original)
+
+
 class ExplicitFramingLevelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
