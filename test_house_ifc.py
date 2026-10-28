@@ -299,7 +299,7 @@ class ExteriorElevationTests(unittest.TestCase):
     def setUpClass(cls):
         source = Path(__file__).with_name("house_ifc.py")
         with (
-            patch.object(sys, "argv", [str(source), "pohled_zapad", "pohled_sever"]),
+            patch.object(sys, "argv", [str(source), "pohled_zapad", "pohled_ulice", "pohled_zahrada"]),
             patch.object(House, "write", return_value=Path("house.ifc")),
             patch.object(Drawing, "render", return_value=Path("pohled_zapad.svg")) as render,
             redirect_stdout(StringIO()),
@@ -317,18 +317,27 @@ class ExteriorElevationTests(unittest.TestCase):
         self.assertEqual(drawing.y, v["HALF_DEPTH"])
         self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
 
-    def test_north_elevation_looks_from_outside_the_street_eave_towards_the_garden(self):
+    def test_street_elevation_looks_from_outside_the_street_eave_towards_the_garden(self):
         v = self.values
-        drawing = next(d for d in v["house"]._drawings if d.name == "Pohled - sever")
+        drawing = next(d for d in v["house"]._drawings if d.name == "Pohled - Ulice")
         self.assertEqual(drawing.view, "elevation")
         self.assertEqual(drawing.direction, (0, 1, 0))
         self.assertLess(drawing.y, v["STREET_ROOF_EAVE_Y"])
         self.assertEqual(drawing.x, v["HOUSE_WIDTH"] / 2)
         self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
 
+    def test_garden_elevation_looks_from_outside_the_garden_eave_towards_the_street(self):
+        v = self.values
+        drawing = next(d for d in v["house"]._drawings if d.name == "Pohled - Zahrada")
+        self.assertEqual(drawing.view, "elevation")
+        self.assertEqual(drawing.direction, (0, -1, 0))
+        self.assertGreater(drawing.y, v["GARDEN_ROOF_EAVE_Y"])
+        self.assertEqual(drawing.x, v["HOUSE_WIDTH"] / 2)
+        self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
+
     def test_elevation_includes_both_storeys_and_all_roof_layers_without_plan_symbols(self):
         v = self.values
-        self.assertEqual(len(v["house"]._drawings), 2)
+        self.assertEqual(len(v["house"]._drawings), 3)
         for drawing in v["house"]._drawings:
             with self.subTest(drawing=drawing.name):
                 self.assertEqual(set(drawing.storeys), {v["ground"], v["upper"], *v["roof_layer_storeys"].values()})
@@ -343,11 +352,91 @@ class ExteriorElevationTests(unittest.TestCase):
                 self.assertTrue(set(v["roof_siding"]).issubset(selected))
 
     def test_elevation_renders_to_the_configured_pdf(self):
-        self.assertEqual(len(self.render_calls), 2)
-        for call, stem, pdf in zip(self.render_calls, ("pohled_zapad", "pohled_sever"),
-                                  ("PDF_POHLED_ZAPAD", "PDF_POHLED_SEVER")):
+        self.assertEqual(len(self.render_calls), 3)
+        for call, stem, pdf in zip(self.render_calls, ("pohled_zapad", "pohled_ulice", "pohled_zahrada"),
+                                  ("PDF_POHLED_ZAPAD", "PDF_POHLED_ULICE", "PDF_POHLED_ZAHRADA")):
             self.assertEqual(call.args, (f"{stem}.svg",))
             self.assertEqual(call.kwargs, {"pdf": self.values[pdf]})
+
+    def test_chimney_penetration_uses_the_exact_vertical_footprint_without_trimmers(self):
+        v = self.values
+        opening, chimney = v["chimney_roof_opening"], v["chimney"]
+        self.assertIs(opening.roof, v["roof"])
+        self.assertTrue(opening.vertical)
+        self.assertFalse(opening.trimmers)
+        self.assertIsNone(opening.window)
+        self.assertEqual(opening.rectangle, (
+            (chimney.center[0]-chimney.size/2, chimney.center[1]-chimney.size/2),
+            (chimney.center[0]+chimney.size/2, chimney.center[1]+chimney.size/2),
+        ))
+        hosts = {void.VoidsElements[0].RelatingBuildingElement for void in opening.elements}
+        materials = {ifcopenshell.util.element.get_material(host).Name for host in hosts}
+        self.assertTrue({"Thermal insulation", "Vapour barrier", "Gypsum plasterboard",
+                         "Wood fiberboard", "Roofing underlay", "Roof tiles"}.issubset(materials))
+        self.assertFalse(set((*v["main_roof_rafters"], *v["stronger_main_roof_rafters"],
+                              *v["dormer_roof_rafters"], *v["dormer_short_rafters"])) & hosts)
+        self.assertFalse(v["roof_window_opening"].vertical)
+
+    def test_street_facade_has_two_full_height_panels_with_the_requested_materials(self):
+        v = self.values
+        panels = v["street_facade"]
+        self.assertEqual(len(panels), 2)
+        for panel, material in zip(panels, ("Facade finish", "Wood siding")):
+            with self.subTest(panel=panel.Name):
+                self.assertTrue(panel.is_a("IfcCovering"))
+                self.assertEqual(panel.PredefinedType, "CLADDING")
+                self.assertEqual(panel.material_name, material)
+                self.assertEqual(panel.wall, v["wall_front_g"])
+                self.assertEqual(panel.start_height, 0)
+                self.assertEqual(panel.thickness, v["FACADE_THICKNESS"])
+                self.assertEqual(panel.offset, v["POLYSTYRENE_INSULATION_THICKNESS"])
+                self.assertEqual(panel.ContainedInStructure[0].RelatingStructure, v["ground"].element)
+
+    def test_street_facade_bounds_meet_at_the_roof_step_and_touch_the_insulation(self):
+        v = self.values
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        expected_x = (
+            (-v["ROCKWOOL_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"] + 0.001,
+             v["LOWER_NADEZDIVKA_X"]),
+            (v["LOWER_NADEZDIVKA_X"],
+             v["HOUSE_WIDTH"] + v["POLYSTYRENE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"] + 0.001),
+        )
+        outer_y = -v["POLYSTYRENE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"]
+        for panel, (x0, x1), plane in zip(v["street_facade"], expected_x,
+                                        (v["street_roof"], v["lower_street_roof"])):
+            with self.subTest(panel=panel.Name):
+                shape = ifcopenshell.geom.create_shape(settings, panel)
+                vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                np.testing.assert_allclose(vertices.min(axis=0), (x0, outer_y, 0), atol=1e-8)
+                np.testing.assert_allclose(vertices.max(axis=0), (
+                    x1, -v["POLYSTYRENE_INSULATION_THICKNESS"],
+                    v["roof_layer_height_at_y"](plane, v["RAFTER_Z_OFFSET"], outer_y, 0),
+                ), atol=1e-8)
+
+    def test_street_facade_preserves_the_bathroom_window_and_is_included_in_elevations(self):
+        v = self.values
+        high, low = v["street_facade"]
+        self.assertEqual(len(high.openings), 0)
+        self.assertEqual(len(low.openings), 1)
+        self.assertEqual(low.opening_walls, (v["wall_front_g"], v["wall_front1_u"], v["wall_front2_u"]))
+        void = low.openings[0]
+        self.assertEqual(void.VoidsElements[0].RelatingBuildingElement, low)
+        for drawing in v["house"]._drawings:
+            selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
+                ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+            self.assertTrue(set(v["street_facade"]).issubset(selected))
+
+    def test_chimney_shaft_is_open_through_all_layers_but_not_beside_the_chimney(self):
+        v = self.values
+        x, y = v["chimney"].center
+        for material in ("Thermal insulation", "Vapour barrier", "Gypsum plasterboard",
+                         "Wood fiberboard", "Roofing underlay", "Roof tiles"):
+            with self.subTest(material=material):
+                with self.assertRaisesRegex(ValueError, "no .* roof layer at"):
+                    v["roof"].layer_vertical_extent(material, x=x, y=y)
+                lower, upper = v["roof"].layer_vertical_extent(material, x=x+v["chimney"].size, y=y)
+                self.assertLess(lower, upper)
 
 
 class ElectricalDrawingTests(unittest.TestCase):

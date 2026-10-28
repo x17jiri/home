@@ -53,6 +53,7 @@ from shapely.ops import unary_union
 from pdf_utils import markdown_to_pdf
 from drawing_sheet import DrawingSheet
 from section_outlines import add_section_outlines
+from roof_tile_patterns import add_roof_tile_patterns
 
 
 __all__ = [
@@ -2034,6 +2035,9 @@ def _postprocess_wood_siding_pattern(svg_path: Path, properties: Mapping[str, ob
     if pattern is None:
         return
     attrs = dict(re.findall(r'([\w:-]+)="([^"]*)"', pattern["attrs"]))
+    background_rect = re.search(r'<rect\b([^>]*)>', pattern[0])
+    background_attrs = dict(re.findall(r'([\w:-]+)="([^"]*)"', background_rect[1])) if background_rect else {}
+    background = background_attrs.get("fill", "white")
     board_height = float(attrs.get("data-board-height-mm", "150"))
     scale = float(Fraction(str(properties.get("Scale", "1/100"))))
     if not isfinite(board_height) or board_height <= 0 or not isfinite(scale) or scale <= 0:
@@ -2046,7 +2050,7 @@ def _postprocess_wood_siding_pattern(svg_path: Path, properties: Mapping[str, ob
     replacement = (
         f'<pattern id="wood-siding" width="{width:g}" height="{pitch:g}" '
         f'patternUnits="userSpaceOnUse" data-board-height-mm="{board_height:g}">\n'
-        f'    <rect width="{width:g}" height="{pitch:g}" fill="white" />\n'
+        f'    <rect width="{width:g}" height="{pitch:g}" fill="{escape(background, quote=True)}" />\n'
         f'    <path d="M 0 {pitch/2:g} H {width:g}" style="fill:none;stroke:black;stroke-width:{stroke:g}" />\n'
         '</pattern>'
     )
@@ -5880,6 +5884,7 @@ def _render_existing_drawing(
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
     _postprocess_drawing_circles(absolute_output, model, drawing)
     _postprocess_wood_siding_pattern(absolute_output, drawing_properties or {})
+    add_roof_tile_patterns(absolute_output, model)
     model_line_width = (
         drawing_properties.get("ModelLineWidth")
         if drawing_properties
@@ -8688,7 +8693,7 @@ class Drawing:
             # Persist the rule for drawings rendered directly in Bonsai, too.
             "Exclude": "IfcElement, BBIM_DrawingVisibility.ShowInDrawings=FALSE",
         }
-        if self.surface_fills:
+        if self.surface_fills or self.view == "elevation":
             drawing_properties["Metadata"] = "GlobalId"
         if self.projected_wood_color is not None:
             drawing_properties["ProjectedWoodColor"] = (
@@ -15022,19 +15027,23 @@ class Roof(ifcopenshell.entity_instance):
         *,
         rectangle: Sequence[Point],
         trimmers: bool = True,
+        vertical: bool = False,
     ) -> RoofOpening:
-        """Cut a roof-normal void through every intersecting roof-plane part.
+        """Cut a roof-normal or vertical void through roof-plane parts.
 
         ``rectangle`` contains two opposite corners in absolute global XY
         coordinates where the void crosses each roof plane's local-Z-zero
-        datum.  Its order does not matter.  A separate opening aligned to its
-        host roof plane is created for every intersecting slab or beam,
-        because IFC permits an opening to void only one building element.
+        datum. Its order does not matter. A separate opening is created for
+        every intersecting slab or beam, because IFC permits an opening to
+        void only one building element. It follows the host roof normal by
+        default, or global Z with ``vertical=True``.
 
         Openings are also applied to roof-plane elements created later, so an
         opening may be registered before or after the roof build-up.
         ``trimmers`` records whether downstream roof framing should add the
         pair of headers at the opening ends; it does not affect the void.
+        ``vertical=True`` keeps the absolute XY footprint at every height,
+        suitable for a chimney shaft rather than a slope-aligned roof window.
         """
         opening_name = (
             _name(name, "name")
@@ -15047,6 +15056,8 @@ class Roof(ifcopenshell.entity_instance):
             )
         if not isinstance(trimmers, bool):
             raise TypeError("trimmers must be a boolean")
+        if not isinstance(vertical, bool):
+            raise TypeError("vertical must be a boolean")
         if isinstance(rectangle, (str, bytes)):
             raise TypeError("rectangle must contain exactly two opposite corners")
         try:
@@ -15084,6 +15095,7 @@ class Roof(ifcopenshell.entity_instance):
             rectangle_bounds,
             roof=self,
             trimmers=trimmers,
+            vertical=vertical,
         )
         self._openings.append(opening)
         for plane in self._planes:
@@ -15108,7 +15120,7 @@ class Roof(ifcopenshell.entity_instance):
         *,
         plane: RoofPlane,
     ) -> None:
-        """Create one host-specific opening normal to its roof plane."""
+        """Create one host-specific roof-normal or vertical opening."""
         if element in roof_opening.lining:
             return
         if any(
@@ -15135,23 +15147,30 @@ class Roof(ifcopenshell.entity_instance):
         if not len(vertices):
             return
 
-        inverse_plane = np.linalg.inv(plane.coordinate_matrix)
-        homogeneous_vertices = np.column_stack(
-            (vertices, np.ones(len(vertices), dtype=float))
-        )
-        local_vertices = (inverse_plane @ homogeneous_vertices.T).T[:, :3]
+        if roof_opening.vertical:
+            # Clipped solids can retain unused source vertices; never create
+            # shafts through another slope solely because of that overshoot.
+            faces = np.asarray(shape.geometry.faces, dtype=int)
+            if not faces.size:
+                return
+            local_vertices = vertices[np.unique(faces)]
+        else:
+            inverse_plane = np.linalg.inv(plane.coordinate_matrix)
+            homogeneous_vertices = np.column_stack(
+                (vertices, np.ones(len(vertices), dtype=float))
+            )
+            local_vertices = (inverse_plane @ homogeneous_vertices.T).T[:, :3]
         minimum = local_vertices.min(axis=0)
         maximum = local_vertices.max(axis=0)
         (x_min, y_min), (x_max, y_max) = roof_opening.rectangle
-        opening_outline = tuple(
-            plane.to_local_xy(point)
-            for point in (
-                (x_min, y_min),
-                (x_max, y_min),
-                (x_max, y_max),
-                (x_min, y_max),
-            )
+        rectangle_points = (
+            (x_min, y_min),
+            (x_max, y_min),
+            (x_max, y_max),
+            (x_min, y_max),
         )
+        opening_outline = (rectangle_points if roof_opening.vertical else
+                           tuple(plane.to_local_xy(point) for point in rectangle_points))
         opening_x_min = min(point[0] for point in opening_outline)
         opening_x_max = max(point[0] for point in opening_outline)
         opening_y_min = min(point[1] for point in opening_outline)
@@ -15181,7 +15200,7 @@ class Roof(ifcopenshell.entity_instance):
             context=self.storey.house._body_context,
             depth=opening_height,
             polyline=tuple(
-                (local_x, plane.geometry_y_sign * local_y)
+                (local_x, (1 if roof_opening.vertical else plane.geometry_y_sign) * local_y)
                 for local_x, local_y in opening_outline
             ),
         )
@@ -15195,10 +15214,9 @@ class Roof(ifcopenshell.entity_instance):
             feature=opening,
             element=element,
         )
-        placement = plane.placement.copy()
-        placement[:3, 3] = np.array(
-            plane.to_world((0.0, 0.0, opening_bottom))
-        )
+        placement = np.eye(4) if roof_opening.vertical else plane.placement.copy()
+        placement[:3, 3] = ((0.0, 0.0, opening_bottom) if roof_opening.vertical else
+                          plane.to_world((0.0, 0.0, opening_bottom)))
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=opening,
@@ -15219,6 +15237,7 @@ class Roof(ifcopenshell.entity_instance):
                 "Rectangle": json.dumps(roof_opening.rectangle),
                 "Host": element.GlobalId,
                 "Trimmers": roof_opening.trimmers,
+                "Vertical": roof_opening.vertical,
             },
         )
         roof_opening._elements.append(opening)
@@ -15507,6 +15526,8 @@ class RoofPlane(ifcopenshell.entity_instance):
             raise TypeError("opening must be a RoofOpening")
         if opening.roof is not self.roof or opening not in self.roof.openings:
             raise ValueError("opening must belong to this roof")
+        if opening.vertical:
+            raise ValueError("roof windows require a roof-normal opening")
         if opening.window is not None:
             raise ValueError("roof opening already has a window")
         if not isinstance(top_layer, RoofLayer):
@@ -15964,11 +15985,13 @@ class RoofOpening:
         *,
         roof: Roof | None = None,
         trimmers: bool = True,
+        vertical: bool = False,
     ) -> None:
         self.name = name
         self.rectangle = rectangle
         self.roof = roof
         self.trimmers = trimmers
+        self.vertical = vertical
         self._elements: list[ifcopenshell.entity_instance] = []
         self._window: ifcopenshell.entity_instance | None = None
         self._lining: tuple[ifcopenshell.entity_instance, ...] = ()
@@ -15985,7 +16008,7 @@ class RoofOpening:
 
     @property
     def elements(self) -> tuple[ifcopenshell.entity_instance, ...]:
-        """Return the aligned ``IfcOpeningElement`` objects cutting roof parts."""
+        """Return the host-specific ``IfcOpeningElement`` objects cutting roof parts."""
         return tuple(self._elements)
 
 
@@ -16020,6 +16043,24 @@ class RoofLayer(ifcopenshell.entity_instance):
     @property
     def element(self) -> ifcopenshell.entity_instance:
         """Return this roof layer as its underlying IFC entity."""
+        return self
+
+    def set_tile_pattern(self, *, width: Number, course_length: Number) -> RoofLayer:
+        """Persist real tile width/course in metres for projected outline hatching.
+
+        This changes drawing metadata only, never the roof slab's 3D geometry.
+        """
+        width = _number(width, "tile width")
+        course_length = _number(course_length, "tile course length")
+        if width <= 0 or course_length <= 0:
+            raise ValueError("tile width and course length must be positive")
+        if self.material_name != "Roof tiles":
+            raise ValueError("tile pattern requires a Roof tiles layer")
+        existing = ifcopenshell.util.element.get_pset(self, "BBIM_RoofTilePattern")
+        pset = (self.file.by_id(existing["id"]) if existing else
+                ifcopenshell.api.pset.add_pset(self.file, product=self, name="BBIM_RoofTilePattern"))
+        ifcopenshell.api.pset.edit_pset(self.file, pset=pset,
+            properties={"TileWidth": width, "CourseLength": course_length})
         return self
 
 

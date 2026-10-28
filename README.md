@@ -184,6 +184,25 @@ opening = roof.add_opening(
 )
 ```
 
+For a vertical chimney shaft, use `vertical=True`. Its XY rectangle stays
+fixed through all layer heights, rather than shifting along the roof normal:
+
+```python
+chimney_opening = roof.add_opening(
+    "Chimney penetration", rectangle=((x0, y0), (x1, y1)),
+    vertical=True, trimmers=False,
+)
+```
+
+The house's `chimney_roof_opening` follows the chimney's exact outside
+footprint and cuts intersecting roof layers and plane-based members. This is
+geometry only: it does not specify required fire clearance or flashing, add
+headers, or change the roof-force simulator. Skylight openings retain the
+existing roof-normal default. The real penetration gives Bonsai the missing
+roof/chimney boundary, so its native SHAPELY fill creates the opaque chimney
+face in the street elevation; no extra 2D edge or chimney-fill workaround is
+needed.
+
 The opening may be registered before or after the roof planes, layers, and
 beams are created. IFC permits one opening to void only one host, so the
 returned `RoofOpening.elements` contains one aligned `IfcOpeningElement` for
@@ -1181,10 +1200,52 @@ Generate the west exterior elevation from the lower-roof end with
 `python3 house_ifc.py pohled_zapad`. It looks from +X towards -X, includes both
 storeys and all roof layers (without foundations or plan annotations), and
 saves `pohled_zapad.svg` and the PDF configured by `PDF_POHLED_ZAPAD`.
-For the north elevation from the street, use `python3 house_ifc.py pohled_sever`.
+For the street elevation, use `python3 house_ifc.py pohled_ulice`.
 The camera looks from negative Y towards positive Y, with both storeys and all
 roof layers (including eave siding), without foundations or plan annotations.
-It saves `pohled_sever.svg` and `PDF_POHLED_SEVER` ("Pohled - sever").
+It saves `pohled_ulice.svg` and `PDF_POHLED_ULICE` ("Pohled - Ulice").
+For the opposite, garden-side elevation, use `python3 house_ifc.py pohled_zahrada`.
+It looks from positive Y towards negative Y with the same storey and annotation
+settings, saving `pohled_zahrada.svg` and `PDF_POHLED_ZAHRADA` ("Pohled - Zahrada").
+
+`add_facade()` currently creates only the street finish: two continuous,
+full-height IFC coverings meeting at `LOWER_NADEZDIVKA_X`, white on the high
+part and `Wood siding` on the low part. Their thickness is `FACADE_THICKNESS`,
+immediately outside `POLYSTYRENE_INSULATION_THICKNESS`; tops meet the respective
+rafter undersides. Wall openings are cut through the coverings automatically.
+The outer X limits are `-ROCKWOOL_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001`
+and `HOUSE_WIDTH + POLYSTYRENE_INSULATION_THICKNESS + FACADE_THICKNESS + 0.001`,
+staggering the future perpendicular corner joints by 1 mm. Panels span the
+storey/construction joints rather than introducing horizontal finish seams.
+
+Projected roof tiles use the `roof-tiles` SVG pattern: terracotta red
+background, thin black side joints and curved course edges. Projected siding
+uses the `wood-siding` pattern with a warm timber-brown background. Change the
+background `<rect fill="...">` in either pattern in `drawings/assets/patterns.svg`
+to tune its view color; the render passes preserve it while scaling/projecting
+the pattern. Exposed tile edges use that same color as a solid fill, without
+the top-face tile pattern. Section-cut colors are independent and remain unchanged. Tile width is
+`ROOF_TILE_PATTERN_WIDTH` (initially 300 mm); course length follows
+`TILE_BATTEN_SPACING` (320 mm along the slope). `RoofLayer.set_tile_pattern()`
+persists these dimensions in `BBIM_RoofTilePattern`, without changing the 3D
+slab. The render pass in `roof_tile_patterns.py` maps the pattern through each
+exported roof layer's frame into the drawing, so main, dormer and lower roofs
+have independently foreshortened courses. Pattern anchoring is shared by
+adjoining pieces on the same plane and works with X mirroring and any drawing
+scale. The glyph and 0.06 mm printed stroke are defined in
+`drawings/assets/patterns.svg`. Fixed-width stroke outlines are baked before
+the pattern transform, so SVG, raster and PDF backends keep the same line
+weight even for the shallow dormer (rather than relying on vector-effect).
+Hatching uses Bonsai's existing visible `GlobalId` surface paths and a clip
+from the actual top-face triangles, not convex hulls or replacement fills.
+Bonsai can merge touching regions of the same material even across different
+roof slopes and give the combined region only one product identifier. The
+pass resolves the nearest roof faces in projected depth, so a merged main/
+dormer region still gets separate patterns; tile edge faces also mask hatches.
+Openings and depth order stay intact. Undersides, edge-on roofs, thin tile
+edges and native projection linework are not hatched; section cuts remain red.
+This projected pattern is added by the Python render pass (including PDF/PNG
+export), not by creating individual 3D tiles or changing their 3D appearance.
 
 A basic side elevation uses the same persisted drawing interface.  Place the
 camera outside the building and point ``direction`` toward it:

@@ -114,7 +114,8 @@ PDF_AA = DIR.add_pdf("Řez AA")
 PDF_BB = DIR.add_pdf("Podélný řez BB")
 PDF_LAYERS = DIR.add_pdf("Skladby")
 PDF_POHLED_ZAPAD = DIR.add_pdf("Pohled - Západ")
-PDF_POHLED_SEVER = DIR.add_pdf("Pohled - sever")
+PDF_POHLED_ULICE = DIR.add_pdf("Pohled - Ulice")
+PDF_POHLED_ZAHRADA = DIR.add_pdf("Pohled - Zahrada")
 
 DIR_ZDRAVOTECHNICKE_INSTALACE = PDFFolder(
 	"D1.5.", "projekt/D1.5. Zdravotechnické Instalace/",
@@ -229,6 +230,7 @@ UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.06, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
+ROOF_TILE_PATTERN_WIDTH = 0.30
 ROOF_TILE_THICKNESS = 0.03
 RIDGE_TILE_WIDTH = 0.40
 RIDGE_TILE_RISE = 0.12
@@ -346,11 +348,9 @@ print(f"  Effective R = {roof_u_value.effective_resistance:.3f} m²K/W")
 print(f"  U = {roof_u_value.u_value:.3f} W/(m²K)")
 
 BWT = 0.24 # Basic wall thickness
-POLYSTYRENE_INSULATION_NOMINAL_THICKNESS = 0.20
-POLYSTYRENE_INSULATION_THICKNESS = (
-	POLYSTYRENE_INSULATION_NOMINAL_THICKNESS + 0.005
-)
-ROCKWOOL_INSULATION_THICKNESS = 0.20 + 0.005
+POLYSTYRENE_INSULATION_THICKNESS = 0.20
+ROCKWOOL_INSULATION_THICKNESS = 0.20
+FACADE_THICKNESS = 0.005
 
 GROUND_WALL_BASE_COURSE_HEIGHT = 0.275
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
@@ -1833,6 +1833,17 @@ wall_4_u = upper.wall(
 
 roof = upper.roof("Main roof")
 
+# Exact vertical chimney footprint; clearance/flashing design is separate.
+chimney_roof_opening = roof.add_opening(
+	name="Chimney roof penetration",
+	rectangle=(
+		(chimney.center[0] - chimney.size/2, chimney.center[1] - chimney.size/2),
+		(chimney.center[0] + chimney.size/2, chimney.center[1] + chimney.size/2),
+	),
+	trimmers=False,
+	vertical=True,
+)
+
 ROOF_WINDOW_Y1 = HOUSE_DEPTH - BWT - 0.25
 roof_window_x = (rafters[2] + rafters[3]) / 2.0
 roof_window_opening = roof.add_opening(
@@ -2705,6 +2716,7 @@ def add_continuous_roof_layers(
 			color="#A64B35",
 		)
 		roof_layer_storeys["Roof tiles"].add(tiles)
+		tiles.set_tile_pattern(width=ROOF_TILE_PATTERN_WIDTH, course_length=TILE_BATTEN_SPACING)
 
 
 def independent_inner_layer_boundaries(
@@ -3320,6 +3332,43 @@ roof_window_lining = garden_roof.add_opening_lining(
 )
 roof_layer_storeys["Gypsum plasterboard"].add(*roof_window_lining)
 
+
+def add_facade():
+	"""Add the street finish as two full-height, opening-aware coverings.
+
+	Panels meet at the roof step, not at storey/construction boundaries. The
+	outer ends are staggered by 1 mm for future perpendicular corner panels.
+	"""
+	x0 = -ROCKWOOL_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001
+	x1 = HOUSE_WIDTH + POLYSTYRENE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
+	outer_y = -POLYSTYRENE_INSULATION_THICKNESS - FACADE_THICKNESS
+	panels = []
+	for name, start_x, end_x, plane, material, color in (
+		("Street facade - high", x0, LOWER_NADEZDIVKA_X+0.1,
+		 street_roof, "Facade finish", "#ffffff"),
+		("Street facade - low", LOWER_NADEZDIVKA_X+0.1, x1,
+		 lower_street_roof, "Wood siding", "#8B5A2B"),
+	):
+		top = roof_layer_height_at_y(plane, RAFTER_Z_OFFSET, outer_y, ground.elevation)
+		panels.append(house.add_facade_layer(
+			wall_front_g,
+			name=name,
+			offset=POLYSTYRENE_INSULATION_THICKNESS,
+			thickness=FACADE_THICKNESS,
+			side="right",
+			start_height=0,
+			height=top,
+			start_extension=-start_x,
+			end_extension=end_x - HOUSE_WIDTH,
+			opening_walls=[wall_front1_u, wall_front2_u],
+			material=material,
+			color=color,
+		))
+	return tuple(panels)
+
+
+street_facade = add_facade()
+
 GARAGE_POST_SIZE = 0.15
 GARAGE_ROOF_THICKNESS = 0.20
 
@@ -3380,8 +3429,14 @@ def outside_dims(drawing1):
 	drawing1.add_dimension(start=(0, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH, HOUSE_DEPTH-BWT), offset=1.5)
 	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, 0), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH), offset=-1.5)
 
-	drawing1.add_dimension(start=(-ROCKWOOL_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS, HOUSE_DEPTH-BWT), offset=2)
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, -POLYSTYRENE_INSULATION_THICKNESS), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS), offset=-2)
+	drawing1.add_dimension(
+		start=(-ROCKWOOL_INSULATION_THICKNESS-FACADE_THICKNESS, HOUSE_DEPTH-BWT),
+		end=(HOUSE_WIDTH+POLYSTYRENE_INSULATION_THICKNESS+FACADE_THICKNESS, HOUSE_DEPTH-BWT),
+		offset=2)
+	drawing1.add_dimension(
+		start=(HOUSE_WIDTH-BWT, -POLYSTYRENE_INSULATION_THICKNESS-FACADE_THICKNESS),
+		end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS+FACADE_THICKNESS),
+		offset=-2)
 
 def common_dims(drawing1):
 	outside_dims(drawing1)
@@ -5351,9 +5406,9 @@ if "pohled_zapad" in sys.argv:
 	drawing1.render("pohled_zapad.svg", pdf=PDF_POHLED_ZAPAD)
 
 # Exterior elevation from the street (negative Y), looking towards the garden.
-if "pohled_sever" in sys.argv:
+if "pohled_ulice" in sys.argv:
 	drawing1 = house.add_drawing(
-		"Pohled - sever",
+		"Pohled - Ulice",
 		x=HOUSE_WIDTH / 2,
 		y=STREET_ROOF_EAVE_Y - 1.0,
 		z=ground_floor_top + total_house_height / 2,
@@ -5365,7 +5420,24 @@ if "pohled_sever" in sys.argv:
 		automatic_plan_annotations=False,
 		doors_closed=True,
 	)
-	drawing1.render("pohled_sever.svg", pdf=PDF_POHLED_SEVER)
+	drawing1.render("pohled_ulice.svg", pdf=PDF_POHLED_ULICE)
+
+# Exterior elevation from the garden (positive Y), looking towards the street.
+if "pohled_zahrada" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Pohled - Zahrada",
+		x=HOUSE_WIDTH / 2,
+		y=GARDEN_ROOF_EAVE_Y + 1.0,
+		z=ground_floor_top + total_house_height / 2,
+		radius=8,
+		view="elevation",
+		direction=(0, -1, 0),
+		storeys=[ground, upper, *roof_layer_storeys.values()],
+		door_annotations=False,
+		automatic_plan_annotations=False,
+		doors_closed=True,
+	)
+	drawing1.render("pohled_zahrada.svg", pdf=PDF_POHLED_ZAHRADA)
 
 # Drawing - cut3
 if "cut3" in sys.argv:

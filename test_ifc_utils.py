@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 import xml.etree.ElementTree as ET
 from math import hypot
@@ -90,13 +91,13 @@ from ifc_utils import (
 
 
 class WoodSidingMaterialTests(unittest.TestCase):
-    def test_siding_has_only_horizontal_joints_on_white_and_yellow_section_cuts(self):
+    def test_siding_has_horizontal_joints_on_timber_brown_and_yellow_section_cuts(self):
         root = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg").getroot()
         pattern = next(p for p in root.iter() if p.get("id") == "wood-siding")
         self.assertEqual(pattern.get("data-board-height-mm"), "150")
         self.assertEqual(len(pattern), 2)
         self.assertTrue(pattern[0].tag.endswith("}rect"))
-        self.assertEqual(pattern[0].get("fill"), "white")
+        self.assertEqual(pattern[0].get("fill"), "#c99a64")
         self.assertEqual(pattern[1].get("d"), "M 0 0.75 H 10")
         self.assertIn("stroke-width:0.06", pattern[1].get("style"))
         stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
@@ -141,6 +142,19 @@ class WoodSidingMaterialTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     _postprocess_wood_siding_pattern(path, {"Scale": scale})
                 self.assertEqual(path.read_text(encoding="utf-8"), svg)
+
+    def test_siding_background_color_survives_pattern_rescaling(self):
+        assets = (Path(__file__).parent / "drawings/assets/patterns.svg").read_text(encoding="utf-8")
+        template = re.search(r'<pattern id="wood-siding".*?</pattern>', assets, re.DOTALL)[0]
+        for color in ("#c99a64", "#ddeeff", "white"):
+            with self.subTest(color=color), TemporaryDirectory() as directory:
+                path = Path(directory) / "siding.svg"
+                path.write_text('<svg width="100mm" height="100mm" viewBox="0 0 100 100"><defs>'
+                                + template.replace("#c99a64", color) + '</defs></svg>', encoding="utf-8")
+                _postprocess_wood_siding_pattern(path, {"Scale": "1/50"})
+                root = ET.parse(path).getroot()
+                self.assertEqual(root.find("defs/pattern/rect").get("fill"), color)
+                self.assertAlmostEqual(float(root.find("defs/pattern").get("height")), 3)
 
 
 class ReferenceBoxTests(unittest.TestCase):

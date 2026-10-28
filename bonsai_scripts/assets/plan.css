@@ -112,6 +112,11 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: #f4d35e !important;
 }
 
+/* Opaque finish over the facade insulation, including in sections. */
+.material-Facadefinish {
+    fill: white !important;
+}
+
 /* Legacy roof-board material and the explicit MDF legend/material name. */
 .material-Woodfiberboard,
 .material-mdfsolid {
@@ -263,6 +268,7 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 .target-view-ELEVATIONVIEW .material-Rooftiles.projection {
+    fill: none !important;
     stroke: black !important;
     stroke-width: 0.06 !important;
 }
