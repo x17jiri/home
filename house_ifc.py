@@ -113,6 +113,8 @@ PDF_KROV_ZZ = DIR.add_pdf("Krov - řez ZZ")
 PDF_AA = DIR.add_pdf("Řez AA")
 PDF_BB = DIR.add_pdf("Podélný řez BB")
 PDF_LAYERS = DIR.add_pdf("Skladby")
+PDF_POHLED_ZAPAD = DIR.add_pdf("Pohled - Západ")
+PDF_POHLED_SEVER = DIR.add_pdf("Pohled - sever")
 
 DIR_ZDRAVOTECHNICKE_INSTALACE = PDFFolder(
 	"D1.5.", "projekt/D1.5. Zdravotechnické Instalace/",
@@ -424,7 +426,7 @@ KK_WIDTH = 2.50 + 0.01
 wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
-LOWER_NADEZDIVKA_X = wall3_x + 0.25
+LOWER_NADEZDIVKA_X = wall3_x + 0.375
 if not wall3_x < LOWER_NADEZDIVKA_X < HOUSE_WIDTH:
 	raise ValueError("LOWER_NADEZDIVKA_X must be between wall3 and wall4")
 aa_cut = CutDefinition(
@@ -503,10 +505,10 @@ high_rafters = [
 	(vk_from+0.91+0.67+0.75+0.67+0.67, "after"),
 	(vk_from+0.91+0.67+0.75+0.67+0.67+0.67, "after"),
 	(vk_to, "+after"),
-	LOWER_NADEZDIVKA_X + 0.1 - RAFTER_THICKNESS/2.0,
+	LOWER_NADEZDIVKA_X + 0.1 - RAFTER_THICKNESS/2.0 - COLLAR_TIE_THICKNESS,
 	]
 lower_rafters = [
-	LOWER_NADEZDIVKA_X + 0.1 + RAFTER_THICKNESS/2.0 + 0.015,
+	LOWER_NADEZDIVKA_X + 0.1 + RAFTER_THICKNESS/2.0 + COLLAR_TIE_THICKNESS + 0.015,
 	vk_to+0.67,
 	vk_to+0.67+0.67,
 	vk_to+0.67+0.67+0.67,
@@ -1465,7 +1467,7 @@ STREET_GYPSUM_PLASTERBOARD_CUT = offset_plane(
 )
 
 # upper floor
-wall_cuts_1_4 = [
+wall_cuts_1 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	(
@@ -1474,6 +1476,10 @@ wall_cuts_1_4 = [
 		(5, HALF_DEPTH+VAZNICE_DIST+VAZNICE_HALF_BASE, UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT),
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
+]
+wall_cuts_4 = [
+	offset_plane(*LOWER_STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
+	offset_plane(*LOWER_GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 ]
 wall_cuts_2_3 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
@@ -1500,7 +1506,7 @@ wall_back2_u = upper.wall(
 wall_1_u = upper.wall(
 	(0, HOUSE_DEPTH-BWT), (0, BWT),
 	wall_type=load_bearing_wall,
-	height=4, cuts=wall_cuts_1_4, )
+	height=4, cuts=wall_cuts_1, )
 wall_2 = upper.wall(
 	(wall2_x, BWT), (wall2_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
@@ -1517,12 +1523,6 @@ sklad_opening = wall_3.add_opening(
     height=2.25,
 )
 
-
-wall_4_u = upper.wall(
-	(HOUSE_WIDTH, BWT), (HOUSE_WIDTH, HOUSE_DEPTH-BWT),
-	wall_type=load_bearing_wall,
-	height=LOWER_NADEZDIVKA,
-)
 
 wall_pokoj2 = upper.wall(
 	start=(wall2_x, GALERY_END),
@@ -1565,8 +1565,6 @@ upper.asset(
 #upper.connect_wall(wall_3, wall_back1_u, is_atpath=True)
 #upper.connect_wall(wall_3, wall_dormer)
 #
-#upper.connect_wall(wall_4_u, wall_front2_u)
-#upper.connect_wall(wall_4_u, wall_back2_u)
 
 
 PURLIN_TOP_Z = (
@@ -1801,7 +1799,7 @@ pokoj1_door = wall_2.add_door(
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
-# The former storage-room window is omitted while wall_4_u is lowered.
+# The former storage-room window remains omitted from the lower gable.
 # A level concrete band through the HIGH upper load-bearing walls, below
 # the normal wall plates and dormer windows. Low wall parts lie entirely
 # below this band and are skipped; no low-level ring beam is added yet.
@@ -1818,6 +1816,18 @@ upper_ring_beams = upper.add_ring_beams_from(
 	stirrup_diameter=RING_BEAM_STIRRUP_DIAMETER,
 	concrete_cover=RING_BEAM_CONCRETE_COVER,
 )
+
+# Build the lower gable after the HIGH ring-beam band so it does not acquire
+# that unrelated band. Like wall 1 it follows both rafter undersides and has
+# a flat bearing top, here at the lower purlin underside. The source height
+# supplies the horizontal cap, without another Boolean clipping plane.
+wall_4_u = upper.wall(
+	(HOUSE_WIDTH, BWT), (HOUSE_WIDTH, HOUSE_DEPTH-BWT),
+	wall_type=load_bearing_wall,
+	height=PURLIN_LOWER_WALL_TOP_HEIGHT, cuts=wall_cuts_4,
+)
+#upper.connect_wall(wall_4_u, wall_front2_u)
+#upper.connect_wall(wall_4_u, wall_back2_u)
 
 # Roof
 
@@ -1846,8 +1856,32 @@ roof_inner_cuts = [
 ]
 
 ROOF_EAVE_OVERHANG = 0.75
+ROOF_EAVE_SETBACK = 0.02  # Horizontal inset of everything below the roof tiles.
+if not math.isfinite(ROOF_EAVE_SETBACK) or not 0 <= ROOF_EAVE_SETBACK < ROOF_EAVE_OVERHANG:
+	raise ValueError("ROOF_EAVE_SETBACK must be finite, non-negative and less than ROOF_EAVE_OVERHANG")
 STREET_ROOF_EAVE_Y = -ROOF_EAVE_OVERHANG
 GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + ROOF_EAVE_OVERHANG
+
+
+def roof_eave_setback_cuts(plane):
+	"""Additional vertical eave cuts; leave ridge and joint planes untouched."""
+	if ROOF_EAVE_SETBACK == 0:
+		return ()
+	cuts = []
+	for cut in plane.cuts:
+		if max(p[1] for p in cut) - min(p[1] for p in cut) > 1e-9:
+			continue
+		y = cut[0][1]
+		if isclose(y, STREET_ROOF_EAVE_Y, abs_tol=1e-9):
+			y += ROOF_EAVE_SETBACK
+		elif isclose(y, GARDEN_ROOF_EAVE_Y, abs_tol=1e-9):
+			y -= ROOF_EAVE_SETBACK
+		else:
+			continue
+		cuts.append(((0, y, 0), (10, y, 0), (0, y, 10)))
+	return tuple(cuts)
+
+
 street_roof = roof.plane(
     "Street slope",
 	points=STREET_ROOF_PLANE_POINTS,
@@ -2147,6 +2181,7 @@ roof_layer_storeys.update({
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
 	"Roof windows": house.storey("Roof - +6: Windows", elevation=upper.elevation),
 	"Gable closure": house.storey("Roof - Gable closure", elevation=upper.elevation),
+	"Eave siding": house.storey("Roof - Eave siding", elevation=upper.elevation),
 })
 roof_under_rafter_insulations = {}
 for layer_name, layer_storey in roof_layer_storeys.items():
@@ -2155,39 +2190,42 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 
 
 def add_roof_step_closure():
-	"""White 15 mm gable infill between the high rafter tops and low bottoms."""
+	"""Gable infill: 15 mm MDF plus 20 mm siding, cut to both roof levels."""
 	z0 = UPPER_FLOOR_START
 	z1 = z0 + 5.0
 	x0 = LOWER_NADEZDIVKA_X + 0.1
 	x1 = x0 + 0.015
+	x2 = x1 + 0.02
 	panels = []
 	# The band between two pitched roofs is not convex across the ridge.
 	# Clip one box per slope, meeting exactly at HALF_DEPTH without overlap.
-	for side, y0, y1, high, low in (
-		("Street", 0.0, HALF_DEPTH, street_roof, lower_street_roof),
-		("Garden", HALF_DEPTH, HOUSE_DEPTH, garden_roof, lower_garden_roof),
+	for layer_name, start_x, end_x, material, bottom_offset in (
+		("gable closure", x0, x1, "mdf-solid", RAFTER_Z_OFFSET),
+		("wood siding", x1, x2, "Wood siding", UNDERLAY_BOTTOM + UNDERLAY_THICKNESS),
 	):
-		top = offset_plane(*high.points, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT)
-		bottom = offset_plane(*low.points, offset=RAFTER_Z_OFFSET)
-		keep_x, keep_y = (x0 + x1) / 2, (y0 + y1) / 2
-		keep_bottom = max(z0, plane_height_at(*bottom, x=keep_x, y=keep_y))
-		keep_top = min(z1, plane_height_at(*top, x=keep_x, y=keep_y))
-		if keep_top <= keep_bottom:
-			raise ValueError(f"{side.lower()} roof-step closure has no space between the rafter faces")
-		panel = house.add_box(
-			f"{side} roof-step gable closure",
-			origin=(x0, y0, z0), size=(x1-x0, y1-y0, z1-z0),
-			material="Roof step cladding", color="#ffffff",
-			cuts=(top, bottom),
-			retained_point=(keep_x, keep_y, (keep_bottom + keep_top) / 2),
-		)
-		panel.Description = "Non-structural gable cladding between the high and lower roofs"
-		roof_layer_storeys["Gable closure"].add(panel)
-		panels.append(panel)
+		for side, y0, y1, high, low in (
+			("Street", 0.0, HALF_DEPTH, street_roof, lower_street_roof),
+			("Garden", HALF_DEPTH, HOUSE_DEPTH, garden_roof, lower_garden_roof),
+		):
+			top = offset_plane(*high.points, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT)
+			bottom = offset_plane(*low.points, offset=bottom_offset)
+			keep_x, keep_y = (start_x + end_x) / 2, (y0 + y1) / 2
+			keep_bottom = max(z0, plane_height_at(*bottom, x=keep_x, y=keep_y))
+			keep_top = min(z1, plane_height_at(*top, x=keep_x, y=keep_y))
+			if keep_top <= keep_bottom:
+				raise ValueError(f"{side.lower()} roof-step closure has no space between the rafter faces")
+			panel = house.add_box(
+				f"{side} roof-step {layer_name}",
+				origin=(start_x, y0, z0), size=(end_x-start_x, y1-y0, z1-z0),
+				material=material, color="#ffffff",
+				cuts=(top, bottom),
+				retained_point=(keep_x, keep_y, (keep_bottom + keep_top) / 2),
+			)
+			panel.Description = "Non-structural gable cladding between the high and lower roofs"
+			roof_layer_storeys["Gable closure"].add(panel)
+			panels.append(panel)
 	return tuple(panels)
 
-
-roof_step_closure = add_roof_step_closure()
 
 # The under-rafter insulation follows each occupied roof slope only as far as
 # the outer vertical face of the purlin. The vapour barrier and plasterboard transition
@@ -2246,6 +2284,8 @@ UNDERLAY_BOTTOM = WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
+
+roof_step_closure = add_roof_step_closure()
 
 rafter_layout = []
 # The collar board on the dormer side must sit outside the touching pair,
@@ -2414,8 +2454,8 @@ roof_under_rafter_x_ranges = (
 roof_over_rafter_x_ranges = (
 	(-ROOF_X_OVERHANG, wall2_x-BWT, "normal"),
 	(wall2_x-BWT-ROOF_X_OVERHANG, wall3_x+ROOF_X_OVERHANG, "dormer"),
-	(wall3_x, LOWER_NADEZDIVKA_X + ROOF_X_OVERHANG, "normal"),
-	(LOWER_NADEZDIVKA_X + 0.2, HOUSE_WIDTH + ROOF_X_OVERHANG, "lower"),
+	(wall3_x, LOWER_NADEZDIVKA_X + 0.1 + 0.015 + 0.05, "normal"),
+	(LOWER_NADEZDIVKA_X + 0.1 + 0.015, HOUSE_WIDTH + ROOF_X_OVERHANG, "lower"),
 )
 
 
@@ -2643,6 +2683,7 @@ def add_continuous_roof_layers(
 			thickness=WOOD_FIBERBOARD_THICKNESS,
 			material="Wood fiberboard",
 			color="#C9B56D",
+			extra_cuts=roof_eave_setback_cuts(plane),
 		)
 		roof_layer_storeys["Wood fiberboard"].add(fiberboard)
 		underlay = plane.layer(
@@ -2652,6 +2693,7 @@ def add_continuous_roof_layers(
 			thickness=UNDERLAY_THICKNESS,
 			material="Roofing underlay",
 			color="#3B4148",
+			extra_cuts=roof_eave_setback_cuts(plane),
 		)
 		roof_layer_storeys["Roofing underlay"].add(underlay)
 		tiles = plane.layer(
@@ -2683,15 +2725,21 @@ def independent_inner_layer_boundaries(
 	return boundaries
 
 
-def local_y_limits_from_cuts(plane, local_z=0):
+def local_y_limits_from_cuts(plane, local_z=0, *, eave_setback=False):
 	"""Return local Y limits for the two constant-global-Y roof cuts."""
 	limits = []
 	for cut in plane.cuts:
 		global_y_values = [point[1] for point in cut]
 		if max(global_y_values) - min(global_y_values) <= 1e-9:
+			y = global_y_values[0]
+			if eave_setback:
+				if isclose(y, STREET_ROOF_EAVE_Y, abs_tol=1e-9):
+					y += ROOF_EAVE_SETBACK
+				elif isclose(y, GARDEN_ROOF_EAVE_Y, abs_tol=1e-9):
+					y -= ROOF_EAVE_SETBACK
 			limits.append(
 				(
-					global_y_values[0]
+					y
 					- plane.origin[1]
 					- local_z * plane.z_axis[1]
 				) / plane.y_axis[1]
@@ -2761,6 +2809,7 @@ def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 				size=TILE_BATTEN_SIZE,
 				material="Wood",
 				kind="BEAM",
+				extra_cuts=roof_eave_setback_cuts(plane),
 			)
 			roof_layer_storeys["Tile battens"].add(tile_batten)
 		row += 1
@@ -2915,17 +2964,69 @@ for segment, (x_min, x_max, profile_name) in enumerate(roof_over_rafter_x_ranges
 		x_min, x_max, side="garden", y_min=0 if profile_name == "dormer" else None,
 	)
 
+def add_roof_siding():
+	"""Fill the eave setback with vertical siding, tiles underside to rafter bottom.
+
+	Merge touching/overlapping X ranges only on the same side and roof plane.
+	This makes two street boards and four garden boards in the current layout;
+	the main-roof strip above the dormer does not reach the eave.
+	"""
+	if ROOF_EAVE_SETBACK == 0:
+		return ()
+	boards = []
+	for side in ("street", "garden"):
+		groups = {}
+		for x_min, x_max, profile in roof_over_rafter_x_ranges:
+			if side == "street":
+				plane = lower_street_roof if profile == "lower" else street_roof
+			else:
+				plane = {"normal": garden_roof, "dormer": dormer_roof, "lower": lower_garden_roof}[profile]
+			groups.setdefault(plane, []).append((x_min, x_max))
+		if side == "street":
+			y0, y1 = STREET_ROOF_EAVE_Y, STREET_ROOF_EAVE_Y + ROOF_EAVE_SETBACK
+		else:
+			y0, y1 = GARDEN_ROOF_EAVE_Y - ROOF_EAVE_SETBACK, GARDEN_ROOF_EAVE_Y
+		for plane, ranges in groups.items():
+			merged = []
+			for lo, hi in sorted(ranges):
+				if merged and lo <= merged[-1][1] + 1e-9:
+					merged[-1] = (merged[-1][0], max(merged[-1][1], hi))
+				else:
+					merged.append((lo, hi))
+			top = offset_plane(*plane.points, offset=ROOF_TILE_BOTTOM)
+			bottom = offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
+			for index, (x0, x1) in enumerate(merged, 1):
+				corners = [(x, y) for x in (x0, x1) for y in (y0, y1)]
+				z0 = min(plane_height_at(*bottom, x=x, y=y) for x, y in corners) - 0.10
+				z1 = max(plane_height_at(*top, x=x, y=y) for x, y in corners) + 0.10
+				keep_x, keep_y = (x0+x1)/2, (y0+y1)/2
+				keep_z = (plane_height_at(*bottom, x=keep_x, y=keep_y)
+				          + plane_height_at(*top, x=keep_x, y=keep_y)) / 2
+				board = house.add_box(
+					f"{side.title()} eave siding - {plane.Name} {index}",
+					origin=(x0, y0, z0), size=(x1-x0, y1-y0, z1-z0),
+					material="Wood siding", color="#ffffff", cuts=(top, bottom),
+					retained_point=(keep_x, keep_y, keep_z),
+				)
+				board.Description = "Non-structural eave fascia between the roof tiles and rafter underside"
+				roof_layer_storeys["Eave siding"].add(board)
+				boards.append(board)
+	return tuple(boards)
+
+
+roof_siding = add_roof_siding()
+
 # A batten whose centre lies completely beyond a cut would retain the wrong
 # half-space, so derive the first and last tile-batten rows from the cuts.
 tile_batten_centerline_z = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1] / 2
 street_y_min, street_y_max = local_y_limits_from_cuts(
-	street_roof, tile_batten_centerline_z
+	street_roof, tile_batten_centerline_z, eave_setback=True,
 )
 garden_y_min, garden_y_max = local_y_limits_from_cuts(
-	garden_roof, tile_batten_centerline_z
+	garden_roof, tile_batten_centerline_z, eave_setback=True,
 )
 dormer_y_min, dormer_y_max = local_y_limits_from_cuts(
-	dormer_roof, tile_batten_centerline_z
+	dormer_roof, tile_batten_centerline_z, eave_setback=True,
 )
 add_tile_battens(
 	street_roof, "Street segments 0 to 2",
@@ -2954,7 +3055,7 @@ add_tile_battens(
 	dormer_y_max,
 )
 for side, plane in (("street", lower_street_roof), ("garden", lower_garden_roof)):
-	y_min, y_max = local_y_limits_from_cuts(plane, tile_batten_centerline_z)
+	y_min, y_max = local_y_limits_from_cuts(plane, tile_batten_centerline_z, eave_setback=True)
 	add_tile_battens(
 		plane, f"Lower {side} exterior",
 		[(lo, hi) for lo, hi, profile in roof_over_rafter_x_ranges if profile == "lower"],
@@ -2989,6 +3090,7 @@ for i, (
 			z_offset=RAFTER_Z_OFFSET,
 			size=rafter_size,
 			kind="RAFTER",
+			extra_cuts=roof_eave_setback_cuts(street_rafter_plane),
 		)
 		roof_layer_storeys["Rafters"].add(rafter)
 		(
@@ -3016,6 +3118,7 @@ for i, (
 			z_offset=RAFTER_Z_OFFSET,
 			size=rafter_size,
 			kind="RAFTER",
+			extra_cuts=roof_eave_setback_cuts(dormer_rafter_roof),
 		)
 		roof_layer_storeys["Rafters"].add(rafter)
 		dormer_roof_rafters.append(rafter)
@@ -3071,7 +3174,7 @@ for i, (
 				z_offset=RAFTER_Z_OFFSET,
 				size=rafter_size,
 				kind="RAFTER",
-				extra_cuts=rafter_extra_cuts,
+				extra_cuts=(*rafter_extra_cuts, *roof_eave_setback_cuts(garden_rafter_plane)),
 			)
 			roof_layer_storeys["Rafters"].add(rafter)
 			if shorten_garden_side:
@@ -3085,11 +3188,15 @@ for i, (
 
 
 def add_exterior_counter_battens(pieces):
-	"""Follow exterior profiles, unioning coincident intervals on the same plane."""
+	"""Follow each rafter's level and union exterior intervals on its plane."""
 	lines = {}
 	for piece in pieces:
 		plane = piece["plane"]
-		positions = dormer_rafter_positions if plane is dormer_roof else main_rafter_positions
+		if plane is dormer_roof:
+			positions = dormer_rafter_positions
+		else:
+			lower = plane in (lower_street_roof, lower_garden_roof)
+			positions = (x for x in main_rafter_positions if framing_is_lower(x) == lower)
 		for x in positions:
 			if piece["x_min"] <= x <= piece["x_max"]:
 				key = (plane.GlobalId, x)
@@ -3109,6 +3216,7 @@ def add_exterior_counter_battens(pieces):
 				f"{labels[plane]} counter-batten {len(battens) + 1}",
 				start=(x, lo), end=(x, hi), z_offset=COUNTER_BATTEN_BOTTOM,
 				size=COUNTER_BATTEN_SIZE, material="Wood", kind="BEAM",
+				extra_cuts=roof_eave_setback_cuts(plane),
 			)
 			roof_layer_storeys["Counter-battens"].add(batten)
 			battens.append(batten)
@@ -4803,6 +4911,7 @@ def add_section_material_legend(drawing):
 			f"{FOUNDATION_FOOTER_HEIGHT * 1000:.0f} mm",
 		),
 		("wood-solid", "Dřevo"),
+		("wood-siding", "Dřevěný obklad (pohled)"),
 		("drywall-diagonal1", "Sádrokarton"),
 		("thermal-impact-insulation", "podlahová izolace"),
 		(
@@ -5223,6 +5332,40 @@ if "bb" in sys.argv:
 	)
 
 	drawing1.render("bb.svg", pdf=PDF_BB)
+
+# Exterior elevation from the lower-roof end (+X), looking back at the house.
+if "pohled_zapad" in sys.argv:
+	drawing1 = house.add_drawing(
+		"pohled_zapad",
+		x=max(end for _, end, _ in roof_over_rafter_x_ranges) + 1.0,
+		y=HALF_DEPTH,
+		z=ground_floor_top + total_house_height / 2,
+		radius=6,
+		view="elevation",
+		direction=(-1, 0, 0),
+		storeys=[ground, upper, *roof_layer_storeys.values()],
+		door_annotations=False,
+		automatic_plan_annotations=False,
+		doors_closed=True,
+	)
+	drawing1.render("pohled_zapad.svg", pdf=PDF_POHLED_ZAPAD)
+
+# Exterior elevation from the street (negative Y), looking towards the garden.
+if "pohled_sever" in sys.argv:
+	drawing1 = house.add_drawing(
+		"Pohled - sever",
+		x=HOUSE_WIDTH / 2,
+		y=STREET_ROOF_EAVE_Y - 1.0,
+		z=ground_floor_top + total_house_height / 2,
+		radius=8,
+		view="elevation",
+		direction=(0, 1, 0),
+		storeys=[ground, upper, *roof_layer_storeys.values()],
+		door_annotations=False,
+		automatic_plan_annotations=False,
+		doors_closed=True,
+	)
+	drawing1.render("pohled_sever.svg", pdf=PDF_POHLED_SEVER)
 
 # Drawing - cut3
 if "cut3" in sys.argv:

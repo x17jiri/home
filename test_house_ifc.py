@@ -52,7 +52,11 @@ class UpperRingBeamTests(unittest.TestCase):
         self.assertTrue(v["ring_beams"])  # Existing ceiling-level ring stays.
         for name in ("wall_front2_u", "wall_back2_u", "wall_4_u"):
             self.assertFalse(any(beam.source_wall == v[name] for beam in beams))
+        for name in ("wall_front2_u", "wall_back2_u"):
             self.assertFalse(ifcopenshell.util.element.get_pset(v[name], "BBIM_Boolean", "Data"))
+        # Gable Boolean cuts shape the roof profile, not a high ring-beam band.
+        self.assertEqual(len(v["wall_4_u"].cuts), 2)
+        self.assertFalse(v["wall_4_u"]._recesses)
 
     def test_front_and_back_are_split_at_the_configured_x_with_low_right_side(self):
         v = self.values
@@ -72,12 +76,45 @@ class UpperRingBeamTests(unittest.TestCase):
                 self.assertEqual(wall.end, end)
                 self.assertAlmostEqual(wall.height, height)
                 self.assertAlmostEqual(wall.start_height, 0)
-        self.assertAlmostEqual(v["wall_4_u"].height, v["LOWER_NADEZDIVKA"])
         settings = ifcopenshell.geom.settings()
-        for name in ("wall_front2_u", "wall_back2_u", "wall_4_u"):
+        for name in ("wall_front2_u", "wall_back2_u"):
             shape = ifcopenshell.geom.create_shape(settings, v[name])
             vertices = np.array(shape.geometry.verts).reshape(-1, 3)
             self.assertAlmostEqual(np.ptp(vertices[:, 2]), v["LOWER_NADEZDIVKA"])
+
+    def test_lower_gable_has_both_slopes_and_a_flat_lower_purlin_bearing_top(self):
+        v = self.values
+        wall = v["wall_4_u"]
+        self.assertEqual(wall.start, (v["HOUSE_WIDTH"], v["BWT"]))
+        self.assertEqual(wall.end, (v["HOUSE_WIDTH"], v["HOUSE_DEPTH"]-v["BWT"]))
+        self.assertAlmostEqual(wall.height, v["PURLIN_LOWER_WALL_TOP_HEIGHT"])
+        self.assertAlmostEqual(wall.thickness, v["BWT"])
+        bottom = v["UPPER_FLOOR_START"]
+        cap = bottom + v["PURLIN_LOWER_WALL_TOP_HEIGHT"]
+        cuts = [v["offset_plane"](*v[name], offset=v["RAFTER_Z_OFFSET"])
+                for name in ("LOWER_STREET_ROOF_PLANE_POINTS", "LOWER_GARDEN_ROOF_PLANE_POINTS")]
+        self.assertEqual(wall.cuts, tuple(cuts))
+        y_min, y_max = v["BWT"], v["HOUSE_DEPTH"]-v["BWT"]
+        shoulders = []
+        for cut in cuts:
+            z0 = v["plane_height_at"](*cut, x=v["HOUSE_WIDTH"], y=0)
+            dz = v["plane_height_at"](*cut, x=v["HOUSE_WIDTH"], y=1)-z0
+            shoulders.append((cap-z0)/dz)
+        self.assertTrue(y_min < shoulders[0] < v["HALF_DEPTH"] < shoulders[1] < y_max)
+        profile = ((y_min, bottom), (y_max, bottom),
+                   (y_min, v["plane_height_at"](*cuts[0], x=v["HOUSE_WIDTH"], y=y_min)),
+                   (shoulders[0], cap), (shoulders[1], cap),
+                   (y_max, v["plane_height_at"](*cuts[1], x=v["HOUSE_WIDTH"], y=y_max)))
+        expected = {(round(x, 6), round(y, 6), round(z, 6))
+                    for x in (v["HOUSE_WIDTH"]-v["BWT"], v["HOUSE_WIDTH"]) for y, z in profile}
+        vertices = RoofFramingTests.finished_vertices(wall)
+        self.assertEqual({tuple(np.round(p, 6)) for p in vertices}, expected)
+        self.assertLess(vertices[:, 2].max(), RoofFramingTests.finished_vertices(v["wall_1_u"])[:, 2].max())
+        for side in ("street", "garden"):
+            purlin = v[side+"_purlins"][2]
+            self.assertAlmostEqual(purlin.start[2]-purlin.height/2, cap)
+            self.assertLess(purlin.start[0], v["HOUSE_WIDTH"]-v["BWT"])
+            self.assertGreater(purlin.end[0], v["HOUSE_WIDTH"])
 
     def test_storage_window_removed_but_roof_planes_and_plate_levels_stay_high(self):
         v = self.values
@@ -255,6 +292,62 @@ class FoundationDrawingTests(unittest.TestCase):
             self.assertIn(f"drawing-line-color-{color}", item["classes"].split())
         ground_tables = json.loads(ifcopenshell.util.element.get_pset(ground.element, "EPset_Drawing", "RightPanelTables"))
         self.assertNotIn("line_legend", [t["kind"] for t in ground_tables])
+
+
+class ExteriorElevationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source), "pohled_zapad", "pohled_sever"]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("pohled_zapad.svg")) as render,
+            redirect_stdout(StringIO()),
+        ):
+            cls.values = runpy.run_path(str(source))
+            cls.render_calls = render.call_args_list
+
+    def test_west_elevation_looks_from_outside_the_lower_roof_end(self):
+        v = self.values
+        drawing = next(d for d in v["house"]._drawings if d.name == "pohled_zapad")
+        self.assertEqual(drawing.name, "pohled_zapad")
+        self.assertEqual(drawing.view, "elevation")
+        self.assertEqual(drawing.direction, (-1, 0, 0))
+        self.assertGreater(drawing.x, max(end for _, end, _ in v["roof_over_rafter_x_ranges"]))
+        self.assertEqual(drawing.y, v["HALF_DEPTH"])
+        self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
+
+    def test_north_elevation_looks_from_outside_the_street_eave_towards_the_garden(self):
+        v = self.values
+        drawing = next(d for d in v["house"]._drawings if d.name == "Pohled - sever")
+        self.assertEqual(drawing.view, "elevation")
+        self.assertEqual(drawing.direction, (0, 1, 0))
+        self.assertLess(drawing.y, v["STREET_ROOF_EAVE_Y"])
+        self.assertEqual(drawing.x, v["HOUSE_WIDTH"] / 2)
+        self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
+
+    def test_elevation_includes_both_storeys_and_all_roof_layers_without_plan_symbols(self):
+        v = self.values
+        self.assertEqual(len(v["house"]._drawings), 2)
+        for drawing in v["house"]._drawings:
+            with self.subTest(drawing=drawing.name):
+                self.assertEqual(set(drawing.storeys), {v["ground"], v["upper"], *v["roof_layer_storeys"].values()})
+                self.assertNotIn(v["foundation"], drawing.storeys)
+                self.assertFalse(drawing._automatic_plan_annotations)
+                self.assertFalse(drawing._automatic_door_annotations)
+                self.assertTrue(drawing.doors_closed)
+                self.assertEqual(ifcopenshell.util.element.get_pset(
+                    drawing.element, "EPset_Drawing", "FillMode"), "SHAPELY")
+                selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
+                    ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+                self.assertTrue(set(v["roof_siding"]).issubset(selected))
+
+    def test_elevation_renders_to_the_configured_pdf(self):
+        self.assertEqual(len(self.render_calls), 2)
+        for call, stem, pdf in zip(self.render_calls, ("pohled_zapad", "pohled_sever"),
+                                  ("PDF_POHLED_ZAPAD", "PDF_POHLED_SEVER")):
+            self.assertEqual(call.args, (f"{stem}.svg",))
+            self.assertEqual(call.kwargs, {"pdf": self.values[pdf]})
 
 
 class ElectricalDrawingTests(unittest.TestCase):
@@ -542,7 +635,9 @@ class CutDrawingTests(unittest.TestCase):
                 drawing.element, "EPset_Drawing", "RightPanelTables"))
             legends.append([table for table in tables if table["kind"] == "material_legend"])
         self.assertEqual(len(legends[0]), 1)
-        self.assertEqual(len(legends[0][0]["items"]), 13)
+        self.assertEqual(len(legends[0][0]["items"]), 14)
+        self.assertIn({"pattern": "wood-siding", "description": "Dřevěný obklad (pohled)"},
+                      legends[0][0]["items"])
         self.assertIn({"pattern": "thermal-impact-insulation", "description": "podlahová izolace"},
                       legends[0][0]["items"])
         self.assertEqual(legends[0], legends[1])
@@ -1148,7 +1243,7 @@ class LowerPurlinConfigurationTests(unittest.TestCase):
             for before, after in zip(original[side + "_purlins"][:2], tuned[side + "_purlins"][:2]):
                 self.assertEqual((before.start, before.end, before.width, before.height),
                                  (after.start, after.end, after.width, after.height))
-        for name in ("wall_2", "wall_3", "wall_4_u"):
+        for name in ("wall_1_u", "wall_2", "wall_3"):
             self.assertEqual(original[name].height, tuned[name].height)
             self.assertEqual(original[name]._recesses, tuned[name]._recesses)
             self.assertEqual(original[name]._openings, tuned[name]._openings)
@@ -1158,6 +1253,20 @@ class LowerPurlinConfigurationTests(unittest.TestCase):
         for before, after in zip(original["collar_ties"], tuned["collar_ties"]):
             if before.start[0] < original["LOWER_NADEZDIVKA_X"]:
                 self.assertEqual((before.start, before.end), (after.start, after.end))
+
+    def test_lower_gable_follows_changed_lower_purlin_level_and_pitch(self):
+        for values, _ in self.runs:
+            wall = values["wall_4_u"]
+            self.assertAlmostEqual(wall.height, values["PURLIN_LOWER_WALL_TOP_HEIGHT"])
+            expected_cuts = tuple(values["offset_plane"](*values[name], offset=values["RAFTER_Z_OFFSET"])
+                                  for name in ("LOWER_STREET_ROOF_PLANE_POINTS", "LOWER_GARDEN_ROOF_PLANE_POINTS"))
+            self.assertEqual(wall.cuts, expected_cuts)
+            vertices = RoofFramingTests.finished_vertices(wall)
+            self.assertAlmostEqual(vertices[:, 2].max(),
+                                   values["UPPER_FLOOR_START"]+values["PURLIN_LOWER_WALL_TOP_HEIGHT"])
+            for x, y, z in vertices:
+                for cut in expected_cuts:
+                    self.assertLessEqual(z, values["plane_height_at"](*cut, x=x, y=y)+1e-7)
 
 
 class IndependentInteriorRangeTests(unittest.TestCase):
@@ -1767,7 +1876,7 @@ class RoofFramingTests(unittest.TestCase):
                     self.assertAlmostEqual(dormer_z, beam.start[2] + beam.height / 2)
         self.assertGreater(values["VAZNICE_SIDE_DIST"], values["VAZNICE_DIST"])
 
-    def test_left_gable_is_raised_but_right_outer_wall_is_low(self):
+    def test_left_and_right_gables_follow_their_own_purlin_bearing_levels(self):
         values = self.values
         expected = values["PURLIN_WALL_TOP_HEIGHT"]
         for name in ("wall_2", "wall_3"):
@@ -1788,7 +1897,7 @@ class RoofFramingTests(unittest.TestCase):
         )
         self.assertAlmostEqual(
             self.finished_vertices(values["wall_4_u"])[:, 2].max(),
-            values["UPPER_FLOOR_START"] + values["LOWER_NADEZDIVKA"],
+            values["UPPER_FLOOR_START"] + values["PURLIN_LOWER_WALL_TOP_HEIGHT"],
         )
 
     def test_two_packing_blocks_support_only_high_left_pieces(self):
@@ -1876,7 +1985,7 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertGreaterEqual(len(face), 4)
                 self.assertGreater(np.ptp(face[:, 1]), 0.01)
                 self.assertLess(vertices[:, 1].min(), values["HALF_DEPTH"])
-                self.assertAlmostEqual(vertices[:, 1].max(), values["GARDEN_ROOF_EAVE_Y"])
+                self.assertAlmostEqual(vertices[:, 1].max(), values["GARDEN_ROOF_EAVE_Y"] - values["ROOF_EAVE_SETBACK"])
                 # Both faces of the raw prism extend past the trimming plane.
                 for local_z in (beam.z_offset, beam.z_offset + beam.height):
                     x, y, z = plane.to_world((*beam.local_start, local_z))
@@ -1965,11 +2074,11 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertAlmostEqual(local[:, 2].min(), v["RAFTER_Z_OFFSET"])
                 self.assertAlmostEqual(local[:, 2].max(), v["RAFTER_Z_OFFSET"] + rafter.height)
                 if side == "street":
-                    self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"])
+                    self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"])
                     self.assertAlmostEqual(vertices[:, 1].max(), v["HALF_DEPTH"])
                 else:
                     self.assertAlmostEqual(vertices[:, 1].min(), v["HALF_DEPTH"])
-                    self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"])
+                    self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"])
                 for support in (v["purlin_at"](x, side=side), v["wall_plate_at"](x, side=side)):
                     contact = (x, support.start[1] + (-1 if side == "street" else 1) * support.width/2,
                                support.start[2] + support.height/2)
@@ -2264,10 +2373,12 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertAlmostEqual(np.ptp(local[:, 2]), layer.thickness)
                 if plane in (v["street_roof"], v["lower_street_roof"]):
                     self.assertAlmostEqual(vertices[:, 1].max(), v["HALF_DEPTH"])
-                    self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"])
+                    setback = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
+                    self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + setback)
                 else:
                     self.assertAlmostEqual(vertices[:, 1].min(), v["HALF_DEPTH"])
-                    self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"])
+                    setback = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
+                    self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - setback)
         for side in ("street", "garden"):
             high_plane, low_plane = v[side + "_roof"], v["lower_" + side + "_roof"]
             self.assertGreater(v["roof_batting_point"](high_plane, x=high[1], y=2 if side == "street" else 6)[2],
@@ -2282,6 +2393,9 @@ class RoofFramingTests(unittest.TestCase):
         for batten in battens:
             plane = batten.roof_plane
             x = batten.local_start[0]
+            if plane is not v["dormer_roof"]:
+                self.assertEqual(v["framing_is_lower"](x),
+                                 plane in (v["lower_street_roof"], v["lower_garden_roof"]))
             pieces = [p for p in v["roof_exterior_pieces"] if p["plane"] is plane and p["x_min"] <= x <= p["x_max"]]
             self.assertTrue(pieces)
             self.assertAlmostEqual(batten.z_offset, v["COUNTER_BATTEN_BOTTOM"])
@@ -2292,19 +2406,48 @@ class RoofFramingTests(unittest.TestCase):
         for spans in intervals.values():
             spans.sort()
             self.assertTrue(all(a[1] < b[0] for a, b in zip(spans, spans[1:])))
-        # Repeating the ranges must not repeat wood on coincident planes;
-        # different high/low planes at the same X must both remain present.
+        # Repeating the ranges must not repeat wood. Even where both roof
+        # levels cover X, only the owning rafter's level gets counter-battens.
         helper = v["add_exterior_counter_battens"]
-        x = v["LOWER_NADEZDIVKA_X"] + .1
-        with (
-            patch.dict(helper.__globals__, {"roof_layer_storeys": {"Counter-battens": Mock()},
-                                           "main_rafter_positions": (x,), "dormer_rafter_positions": ()}),
-            patch.object(type(v["street_roof"]), "beam", autospec=True, return_value=Mock()) as create,
+        high_range = [r for r in v["roof_over_rafter_x_ranges"] if r[2] == "normal"][-1]
+        low_range = next(r for r in v["roof_over_rafter_x_ranges"] if r[2] == "lower")
+        lo, hi = max(high_range[0], low_range[0]), min(high_range[1], low_range[1])
+        self.assertLess(lo, hi)
+        x = (lo + hi) / 2
+        for level, expected_planes in (
+            ("high", {v["street_roof"], v["garden_roof"]}),
+            ("lower", {v["lower_street_roof"], v["lower_garden_roof"]}),
         ):
-            helper(v["roof_exterior_pieces"] * 2)
-        self.assertEqual(create.call_count, 4)
-        self.assertEqual({call.args[0] for call in create.call_args_list},
-                         {v["street_roof"], v["garden_roof"], v["lower_street_roof"], v["lower_garden_roof"]})
+            with (
+                self.subTest(level=level),
+                patch.dict(v["framing_levels"], {x: level}),
+                patch.dict(helper.__globals__, {"roof_layer_storeys": {"Counter-battens": Mock()},
+                                               "main_rafter_positions": (x,), "dormer_rafter_positions": ()}),
+                patch.object(type(v["street_roof"]), "beam", autospec=True, return_value=Mock()) as create,
+            ):
+                helper(v["roof_exterior_pieces"] * 2)
+                self.assertEqual(create.call_count, 2)
+                self.assertEqual({call.args[0] for call in create.call_args_list}, expected_planes)
+
+    def test_dormer_counter_battens_still_follow_paired_dormer_positions(self):
+        v = self.values
+        positions = set(v["dormer_rafter_positions"])
+        battens = [b for b in v["exterior_counter_battens"] if b.roof_plane is v["dormer_roof"]]
+        expected = {x for x in positions if any(
+            p["plane"] is v["dormer_roof"] and p["x_min"] <= x <= p["x_max"]
+            for p in v["roof_exterior_pieces"])}
+        self.assertTrue(expected)
+        self.assertEqual({b.local_start[0] for b in battens}, expected)
+
+    def test_counter_battens_cover_both_sides_of_each_rafter_on_its_own_level(self):
+        v = self.values
+        actual = {(b.roof_plane, b.local_start[0]) for b in v["exterior_counter_battens"]}
+        for x in v["main_rafter_positions"]:
+            planes = (v["lower_street_roof"], v["lower_garden_roof"]) if v["framing_is_lower"](x) else (v["street_roof"], v["garden_roof"])
+            for plane in planes:
+                covered = any(p["plane"] is plane and p["x_min"] <= x <= p["x_max"]
+                              for p in v["roof_exterior_pieces"])
+                self.assertEqual((plane, x) in actual, covered)
 
     def test_short_exterior_sources_keep_the_correct_ridge_side_for_different_pitches(self):
         v = self.values
@@ -2382,6 +2525,157 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertEqual({(b.local_start[0], b.local_end[0]) for b in battens},
                                  {v["roof_over_rafter_x_ranges"][i][:2] for i in indices})
 
+    def test_eave_setback_trims_boards_and_underlay_but_not_tiles_or_gable_ends(self):
+        v = self.values
+        self.assertEqual(v["ROOF_EAVE_SETBACK"], .02)
+        for plane in (v["street_roof"], v["garden_roof"], v["dormer_roof"],
+                      v["lower_street_roof"], v["lower_garden_roof"]):
+            street = plane in (v["street_roof"], v["lower_street_roof"])
+            layers = [e for e in plane.elements if hasattr(e, "outline") and e.material_name in
+                      {"Wood fiberboard", "Roofing underlay", "Roof tiles"}]
+            self.assertTrue(layers)
+            for layer in layers:
+                with self.subTest(layer=layer.Name):
+                    vertices = self.finished_vertices(layer)
+                    inset = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
+                    self.assertGreaterEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + inset - 1e-7)
+                    self.assertLessEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - inset + 1e-7)
+                    if "above dormer" not in layer.Name:
+                        if street:
+                            self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + inset)
+                        else:
+                            self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - inset)
+                    # No X/gable setback and no change to the layer thickness.
+                    self.assertAlmostEqual(vertices[:, 0].min(), min(x for x, y in layer.outline))
+                    self.assertAlmostEqual(vertices[:, 0].max(), max(x for x, y in layer.outline))
+                    local = np.array([plane.to_local(p) for p in vertices])
+                    self.assertAlmostEqual(np.ptp(local[:, 2]), layer.thickness)
+                    if plane is not v["dormer_roof"]:
+                        self.assertAlmostEqual(vertices[:, 1].max() if street else vertices[:, 1].min(), v["HALF_DEPTH"])
+
+    def test_all_eave_timber_stays_inside_the_shorter_boundary(self):
+        v = self.values
+        lo = v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"]
+        hi = v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"]
+        rafters = (*v["main_roof_rafters"], *v["stronger_main_roof_rafters"],
+                   *v["dormer_roof_rafters"], *v["dormer_short_rafters"])
+        tiles = [b for plane in (v["street_roof"], v["garden_roof"], v["dormer_roof"],
+                                v["lower_street_roof"], v["lower_garden_roof"])
+                 for b in plane.elements if " tile batten " in (b.Name or "")]
+        self.assertTrue(tiles)
+        for beam in (*rafters, *v["exterior_counter_battens"], *tiles):
+            with self.subTest(beam=beam.GlobalId):
+                vertices = self.finished_vertices(beam)
+                self.assertGreaterEqual(vertices[:, 1].min(), lo - 1e-7)
+                self.assertLessEqual(vertices[:, 1].max(), hi + 1e-7)
+        for beam in (*v["main_roof_rafters"], *v["stronger_main_roof_rafters"], *v["dormer_roof_rafters"]):
+            vertices = self.finished_vertices(beam)
+            street = beam.roof_plane in (v["street_roof"], v["lower_street_roof"])
+            self.assertAlmostEqual(vertices[:, 1].min() if street else vertices[:, 1].max(), lo if street else hi)
+
+    def test_eave_setback_can_be_disabled_or_tuned_without_changing_roof_plane_cuts(self):
+        v = self.values
+        helper = v["roof_eave_setback_cuts"]
+        for plane in (v["street_roof"], v["garden_roof"], v["dormer_roof"],
+                      v["lower_street_roof"], v["lower_garden_roof"], v["dormer_rafter_roof"]):
+            original = plane.cuts
+            with patch.dict(helper.__globals__, {"ROOF_EAVE_SETBACK": 0}):
+                self.assertEqual(helper(plane), ())
+                if plane is not v["dormer_rafter_roof"]:
+                    self.assertEqual(v["local_y_limits_from_cuts"](plane, eave_setback=True),
+                                     v["local_y_limits_from_cuts"](plane))
+            with patch.dict(helper.__globals__, {"ROOF_EAVE_SETBACK": .08}):
+                cut, = helper(plane)
+                street = plane in (v["street_roof"], v["lower_street_roof"])
+                expected = v["STREET_ROOF_EAVE_Y"] + .08 if street else v["GARDEN_ROOF_EAVE_Y"] - .08
+                self.assertTrue(all(p[1] == expected for p in cut))
+                self.assertEqual(plane.cuts, original)
+
+    def test_roof_siding_has_two_street_and_four_garden_boards_with_correct_spans(self):
+        v = self.values
+        boards = v["roof_siding"]
+        self.assertEqual(len(boards), 6)
+        self.assertEqual(sum(b.Name.startswith("Street ") for b in boards), 2)
+        self.assertEqual(sum(b.Name.startswith("Garden ") for b in boards), 4)
+        high = [r for r in v["roof_over_rafter_x_ranges"] if r[2] != "lower"]
+        low, = [r for r in v["roof_over_rafter_x_ranges"] if r[2] == "lower"]
+        normal = [r for r in v["roof_over_rafter_x_ranges"] if r[2] == "normal"]
+        dormer, = [r for r in v["roof_over_rafter_x_ranges"] if r[2] == "dormer"]
+        expected = (
+            (v["street_roof"], "street", min(r[0] for r in high), max(r[1] for r in high)),
+            (v["lower_street_roof"], "street", *low[:2]),
+            *((v["garden_roof"], "garden", *r[:2]) for r in normal),
+            (v["dormer_roof"], "garden", *dormer[:2]),
+            (v["lower_garden_roof"], "garden", *low[:2]),
+        )
+        for board, (plane, side, x0, x1) in zip(boards, expected):
+            with self.subTest(board=board.Name):
+                self.assertIn(plane.Name, board.Name)
+                vertices = self.finished_vertices(board)
+                self.assertAlmostEqual(vertices[:, 0].min(), x0)
+                self.assertAlmostEqual(vertices[:, 0].max(), x1)
+                y0, y1 = ((v["STREET_ROOF_EAVE_Y"], v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"])
+                          if side == "street" else
+                          (v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"], v["GARDEN_ROOF_EAVE_Y"]))
+                top = v["offset_plane"](*plane.points, offset=v["ROOF_TILE_BOTTOM"])
+                bottom = v["offset_plane"](*plane.points, offset=v["RAFTER_Z_OFFSET"])
+                corners = [(x, y, v["plane_height_at"](*cut, x=x, y=y))
+                           for x in (x0, x1) for y in (y0, y1) for cut in (bottom, top)]
+                self.assertEqual({tuple(np.round(p, 7)) for p in vertices},
+                                 {tuple(np.round(p, 7)) for p in corners})
+
+    def test_roof_siding_is_white_non_structural_wood_siding_in_its_own_container(self):
+        v = self.values
+        material = ifcopenshell.util.element.get_material(v["roof_step_closure"][-1])
+        for board in v["roof_siding"]:
+            self.assertTrue(board.is_a("IfcBuildingElementProxy"))
+            self.assertEqual(ifcopenshell.util.element.get_material(board), material)
+            self.assertEqual(ifcopenshell.util.element.get_container(board),
+                             v["roof_layer_storeys"]["Eave siding"].element)
+            self.assertTrue(ifcopenshell.util.element.get_pset(board, "BBIM_DrawingVisibility", "ShowInDrawings"))
+            body = ifcopenshell.util.representation.get_representation(board, "Model", "Body", "MODEL_VIEW")
+            shading = body.Items[0].StyledByItem[0].Styles[0].Styles[0]
+            self.assertEqual((shading.SurfaceColour.Red, shading.SurfaceColour.Green, shading.SurfaceColour.Blue),
+                             (1, 1, 1))
+            self.assertEqual(shading.Transparency, 0)
+        self.assertTrue(v["roof_layer_storeys"]["Eave siding"].element.ObjectType == "ROOF_LAYER")
+        self.assertFalse(set(v["roof_siding"]) & set(v["roof_structural_beams"]))
+
+    def test_roof_siding_zero_setback_disables_boards_without_creating_geometry(self):
+        v = self.values
+        helper = v["add_roof_siding"]
+        with patch.dict(helper.__globals__, {"ROOF_EAVE_SETBACK": 0}), patch.object(v["house"], "add_box") as add:
+            self.assertEqual(helper(), ())
+            add.assert_not_called()
+
+    def test_roof_siding_tuned_thickness_and_duplicate_ranges_do_not_duplicate_boards(self):
+        v = self.values
+        helper = v["add_roof_siding"]
+        house = House("Eave siding regression")
+        container = house.storey("Eave siding", elevation=0)
+        with patch.dict(helper.__globals__, {
+            "house": house, "roof_layer_storeys": {"Eave siding": container},
+            "ROOF_EAVE_SETBACK": .04,
+            "roof_over_rafter_x_ranges": v["roof_over_rafter_x_ranges"] * 2,
+        }):
+            boards = helper()
+        self.assertEqual(len(boards), 6)
+        for board in boards:
+            self.assertAlmostEqual(np.ptp(self.finished_vertices(board)[:, 1]), .04)
+
+    def test_roof_siding_is_mirrored_once_without_changing_live_coordinates(self):
+        v = self.values
+        with patch.object(v["house"], "mirror_x", True):
+            exported = v["house"]._export_model()
+        for board in v["roof_siding"]:
+            original = self.finished_vertices(board)
+            reflected = self.finished_vertices(exported.by_guid(board.GlobalId))
+            expected = original.copy()
+            expected[:, 0] *= -1
+            self.assertEqual({tuple(np.round(p, 7)) for p in reflected},
+                             {tuple(np.round(p, 7)) for p in expected})
+            np.testing.assert_allclose(self.finished_vertices(board), original)
+
     def test_removed_house_cut_has_no_short_street_rafters_plate_or_schedule_rows(self):
         v = self.values
         self.assertNotIn("cut_street_roof", v)
@@ -2397,7 +2691,8 @@ class RoofFramingTests(unittest.TestCase):
                           if b.roof_plane in (v["street_roof"], v["lower_street_roof"])]
         self.assertEqual(len(street_rafters), len(v["main_rafter_positions"]))
         for rafter in street_rafters:
-            self.assertAlmostEqual(self.finished_vertices(rafter)[:, 1].min(), v["STREET_ROOF_EAVE_Y"], places=6)
+            self.assertAlmostEqual(self.finished_vertices(rafter)[:, 1].min(),
+                                   v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"], places=6)
         for batten in v["street_roof"].elements:
             if (batten.Name or "").startswith("Street counter-batten"):
                 self.assertIs(batten.roof_plane, v["street_roof"])
@@ -2449,6 +2744,8 @@ class RoofStepClosureTests(unittest.TestCase):
                     "PURLIN_LOWER_WALL_TOP_HEIGHT": "2.60",
                     "VAZNICE_LOWER_HEIGHT": ".30",
                     "VAZNICE_LOWER_DIST": ".65",
+                    "WOOD_FIBERBOARD_THICKNESS": ".035",
+                    "UNDERLAY_THICKNESS": ".012",
                 }
                 for node in tree.body:
                     if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
@@ -2460,20 +2757,22 @@ class RoofStepClosureTests(unittest.TestCase):
                 exec(compile(tree, str(source), "exec"), values)
             cls.runs.append(values)
 
-    def test_panels_fill_the_exact_band_between_both_rafter_faces(self):
+    def test_panels_follow_high_rafter_top_and_their_own_lower_cut(self):
         for v in self.runs:
-            self.assertEqual(len(v["roof_step_closure"]), 2)
-            x0 = v["LOWER_NADEZDIVKA_X"]
-            for panel, y0, y1, high, low in zip(
-                v["roof_step_closure"], (0, v["HALF_DEPTH"]), (v["HALF_DEPTH"], v["HOUSE_DEPTH"]),
-                (v["street_roof"], v["garden_roof"]), (v["lower_street_roof"], v["lower_garden_roof"]),
+            self.assertEqual(len(v["roof_step_closure"]), 4)
+            x0 = v["LOWER_NADEZDIVKA_X"] + .1
+            for panel, y0, y1, high, low, x_min, thickness, bottom_offset in zip(
+                v["roof_step_closure"], (0, v["HALF_DEPTH"])*2, (v["HALF_DEPTH"], v["HOUSE_DEPTH"])*2,
+                (v["street_roof"], v["garden_roof"])*2, (v["lower_street_roof"], v["lower_garden_roof"])*2,
+                (x0, x0, x0+.015, x0+.015), (.015, .015, .02, .02),
+                (v["RAFTER_Z_OFFSET"],)*2 + (v["UNDERLAY_BOTTOM"] + v["UNDERLAY_THICKNESS"],)*2,
             ):
                 with self.subTest(panel=panel.Name, x=x0):
                     vertices = RoofFramingTests.finished_vertices(panel)
                     top = v["offset_plane"](*high.points, offset=v["RAFTER_Z_OFFSET"] + v["RAFTER_HEIGHT"])
-                    bottom = v["offset_plane"](*low.points, offset=v["RAFTER_Z_OFFSET"])
+                    bottom = v["offset_plane"](*low.points, offset=bottom_offset)
                     expected = [(x, y, v["plane_height_at"](*plane, x=x, y=y))
-                                for x in (x0, x0+.015) for y in (y0, y1) for plane in (top, bottom)]
+                                for x in (x_min, x_min+thickness) for y in (y0, y1) for plane in (top, bottom)]
                     self.assertEqual({tuple(np.round(p, 7)) for p in vertices},
                                      {tuple(np.round(p, 7)) for p in expected})
                     self.assertGreaterEqual(vertices[:, 2].min(), v["UPPER_FLOOR_START"])
@@ -2481,13 +2780,31 @@ class RoofStepClosureTests(unittest.TestCase):
 
     def test_panels_meet_at_the_ridge_without_a_gap_or_overlap(self):
         for v in self.runs:
-            seams = []
-            for panel in v["roof_step_closure"]:
-                vertices = RoofFramingTests.finished_vertices(panel)
-                seam = vertices[np.abs(vertices[:, 1]-v["HALF_DEPTH"]) < 1e-7]
-                self.assertEqual(len(seam), 4)
-                seams.append({tuple(np.round(p, 7)) for p in seam})
-            self.assertEqual(seams[0], seams[1])
+            for panels in (v["roof_step_closure"][:2], v["roof_step_closure"][2:]):
+                seams = []
+                for panel in panels:
+                    vertices = RoofFramingTests.finished_vertices(panel)
+                    seam = vertices[np.abs(vertices[:, 1]-v["HALF_DEPTH"]) < 1e-7]
+                    self.assertEqual(len(seam), 4)
+                    seams.append({tuple(np.round(p, 7)) for p in seam})
+                self.assertEqual(seams[0], seams[1])
+
+    def test_twenty_mm_siding_touches_the_mdf_outer_face_without_overlapping(self):
+        for v in self.runs:
+            for mdf, siding in zip(v["roof_step_closure"][:2], v["roof_step_closure"][2:]):
+                inner = RoofFramingTests.finished_vertices(mdf)
+                outer = RoofFramingTests.finished_vertices(siding)
+                self.assertAlmostEqual(np.ptp(inner[:, 0]), .015)
+                self.assertAlmostEqual(np.ptp(outer[:, 0]), .02)
+                self.assertAlmostEqual(inner[:, 0].max(), outer[:, 0].min())
+                self.assertAlmostEqual(outer[:, 0].max(), v["LOWER_NADEZDIVKA_X"]+.135)
+                # The siding shares the top edge but stops above the underlay;
+                # the MDF still extends down to the lower rafter's underside.
+                for y in (inner[:, 1].min(), inner[:, 1].max()):
+                    inner_z = inner[np.isclose(inner[:, 1], y), 2]
+                    outer_z = outer[np.isclose(outer[:, 1], y), 2]
+                    self.assertAlmostEqual(inner_z.max(), outer_z.max())
+                    self.assertGreater(outer_z.min(), inner_z.min())
 
     def test_cladding_is_white_non_structural_and_in_its_own_roof_container(self):
         for v in self.runs:
@@ -2495,7 +2812,8 @@ class RoofStepClosureTests(unittest.TestCase):
                 self.assertTrue(panel.is_a("IfcBuildingElementProxy"))
                 self.assertEqual(ifcopenshell.util.element.get_container(panel),
                                  v["roof_layer_storeys"]["Gable closure"].element)
-                self.assertEqual(ifcopenshell.util.element.get_material(panel).Name, "Roof step cladding")
+                material = "mdf-solid" if panel in v["roof_step_closure"][:2] else "Wood siding"
+                self.assertEqual(ifcopenshell.util.element.get_material(panel).Name, material)
                 body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
                 shading = body.Items[0].StyledByItem[0].Styles[0].Styles[0]
                 rgb = shading.SurfaceColour

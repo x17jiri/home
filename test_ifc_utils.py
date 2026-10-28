@@ -61,6 +61,7 @@ from ifc_utils import (
     _postprocess_miako_beam_shell_shared_edges,
     _postprocess_miako_slab_end_faces,
     _postprocess_model_line_width,
+    _postprocess_wood_siding_pattern,
     _postprocess_note_overlays,
     _postprocess_cut_symbol_overlays,
     _postprocess_change_floor_symbol_overlays,
@@ -86,6 +87,60 @@ from ifc_utils import (
     plane_height_at,
     window_area,
 )
+
+
+class WoodSidingMaterialTests(unittest.TestCase):
+    def test_siding_has_only_horizontal_joints_on_white_and_yellow_section_cuts(self):
+        root = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg").getroot()
+        pattern = next(p for p in root.iter() if p.get("id") == "wood-siding")
+        self.assertEqual(pattern.get("data-board-height-mm"), "150")
+        self.assertEqual(len(pattern), 2)
+        self.assertTrue(pattern[0].tag.endswith("}rect"))
+        self.assertEqual(pattern[0].get("fill"), "white")
+        self.assertEqual(pattern[1].get("d"), "M 0 0.75 H 10")
+        self.assertIn("stroke-width:0.06", pattern[1].get("style"))
+        stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
+        surface = stylesheet.split(".material-Woodsiding.surface {", 1)[1].split("}", 1)[0]
+        projection = stylesheet.split(".material-Woodsiding.projection {", 1)[1].split("}", 1)[0]
+        cut = stylesheet.split(".material-Woodsiding.cut {", 1)[1].split("}", 1)[0]
+        self.assertIn("fill: url(#wood-siding) !important", surface)
+        self.assertIn("fill: none !important", projection)
+        self.assertNotIn("url(#wood-siding)", projection)
+        self.assertIn("fill: #f4d35e !important", cut)
+        self.assertIn("stroke-width: 0.06 !important", cut)
+        self.assertNotIn("url(#wood-siding)", cut)
+
+    def test_joint_pitch_scales_but_printed_line_weight_stays_constant(self):
+        for scale, ratio in (("1/100", .01), ("1/50", .02)):
+            for units in (1, 2):
+                for board_height in (150, 200):
+                    with self.subTest(scale=scale, units=units, board_height=board_height), TemporaryDirectory() as directory:
+                        path = Path(directory) / "siding.svg"
+                        path.write_text(
+                            f'<svg width="100mm" height="100mm" viewBox="0 0 {100*units} {100*units}">'
+                            f'<defs><pattern id="wood-siding" data-board-height-mm="{board_height}"></pattern></defs>'
+                            '<path id="face" d="M 0 0 L 10 0 L 10 10 Z"/></svg>', encoding="utf-8")
+                        _postprocess_wood_siding_pattern(path, {"Scale": scale})
+                        root = ET.parse(path).getroot()
+                        pattern = root.find("defs/pattern")
+                        self.assertAlmostEqual(float(pattern.get("height")), board_height*ratio*units)
+                        self.assertAlmostEqual(float(pattern[0].get("height")), board_height*ratio*units)
+                        self.assertEqual(pattern[1].get("style"), f"fill:none;stroke:black;stroke-width:{.06*units:g}")
+                        self.assertEqual(root.find("path").get("d"), "M 0 0 L 10 0 L 10 10 Z")
+                        before = path.read_text(encoding="utf-8")
+                        _postprocess_wood_siding_pattern(path, {"Scale": scale})
+                        self.assertEqual(path.read_text(encoding="utf-8"), before)
+
+    def test_invalid_board_heights_or_scales_are_rejected_without_changing_svg(self):
+        for board_height, scale in (("0", "1/100"), ("-1", "1/100"), ("nan", "1/100"), ("150", "0")):
+            with self.subTest(board_height=board_height, scale=scale), TemporaryDirectory() as directory:
+                path = Path(directory) / "siding.svg"
+                svg = (f'<svg width="100mm" height="100mm" viewBox="0 0 100 100"><defs>'
+                       f'<pattern id="wood-siding" data-board-height-mm="{board_height}"></pattern></defs></svg>')
+                path.write_text(svg, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    _postprocess_wood_siding_pattern(path, {"Scale": scale})
+                self.assertEqual(path.read_text(encoding="utf-8"), svg)
 
 
 class ReferenceBoxTests(unittest.TestCase):
@@ -11713,7 +11768,7 @@ class HouseTests(unittest.TestCase):
         pattern = next(p for p in patterns.getroot().iter() if p.get("id") == "mdf-solid")
         self.assertEqual(len(pattern), 1)
         self.assertTrue(pattern[0].tag.endswith("}rect"))
-        self.assertEqual(pattern[0].get("fill"), "#c9b56d")
+        self.assertEqual(pattern[0].get("fill"), "#f2b6d0")
         with TemporaryDirectory() as directory:
             path = Path(directory) / "drawing.svg"
             path.write_text('<svg width="160mm" height="160mm" viewBox="0 0 160 160">'
@@ -14096,14 +14151,17 @@ class HouseTests(unittest.TestCase):
 
     def test_wood_fiberboard_is_white_in_projection_and_tinted_in_cut(self) -> None:
         stylesheet = (Path(__file__).parent / "bonsai_scripts" / "assets" / "plan.css").read_text(encoding="utf-8")
-        projection_rule = stylesheet.split(".material-Woodfiberboard {", maxsplit=1)[1].split("}", maxsplit=1)[0]
-        cut_rule = stylesheet.split(".material-Woodfiberboard.cut {", maxsplit=1)[1].split("}", maxsplit=1)[0]
+        projection_selector = ".material-Woodfiberboard,\n.material-mdfsolid {"
+        cut_selector = ".material-Woodfiberboard.cut,\n.material-mdfsolid.cut {"
+        projection_rule = stylesheet.split(projection_selector, maxsplit=1)[1].split("}", maxsplit=1)[0]
+        cut_rule = stylesheet.split(cut_selector, maxsplit=1)[1].split("}", maxsplit=1)[0]
         self.assertIn("fill: white !important", projection_rule)
-        self.assertNotIn("#c9b56d", projection_rule)
-        self.assertIn("fill: #c9b56d !important", cut_rule)
+        self.assertNotIn("#f2b6d0", projection_rule)
+        self.assertNotIn("stroke:", projection_rule)
+        self.assertIn("fill: #f2b6d0 !important", cut_rule)
+        self.assertIn("stroke: #f2b6d0 !important", cut_rule)
         # Equal importance and greater specificity keep the cut tint.
-        self.assertLess(stylesheet.index(".material-Woodfiberboard {"),
-                        stylesheet.index(".material-Woodfiberboard.cut {"))
+        self.assertLess(stylesheet.index(projection_selector), stylesheet.index(cut_selector))
 
     def test_facade_eps_pattern_is_transparent_without_changing_floor_or_xps(self) -> None:
         patterns_path = Path(__file__).parent / "drawings" / "assets" / "patterns.svg"

@@ -2026,6 +2026,34 @@ def _postprocess_angle_labels(svg_path: Path, drawing_properties: Mapping) -> No
         svg_path.write_text(updated, encoding="utf-8")
 
 
+def _postprocess_wood_siding_pattern(svg_path: Path, properties: Mapping[str, object]) -> None:
+    """Keep siding board pitch in real millimetres and line weight on paper."""
+    svg = svg_path.read_text(encoding="utf-8")
+    pattern = re.search(
+        r'<pattern\b(?P<attrs>[^>]*\bid="wood-siding"[^>]*)>.*?</pattern>', svg, re.DOTALL)
+    if pattern is None:
+        return
+    attrs = dict(re.findall(r'([\w:-]+)="([^"]*)"', pattern["attrs"]))
+    board_height = float(attrs.get("data-board-height-mm", "150"))
+    scale = float(Fraction(str(properties.get("Scale", "1/100"))))
+    if not isfinite(board_height) or board_height <= 0 or not isfinite(scale) or scale <= 0:
+        raise ValueError("wood siding board height and drawing scale must be positive and finite")
+    _, width_mm, _, (_, _, view_width, _) = _drawing_svg_frame(svg)
+    units_per_mm = view_width / width_mm
+    width = 10 * units_per_mm
+    pitch = board_height * scale * units_per_mm
+    stroke = .06 * units_per_mm
+    replacement = (
+        f'<pattern id="wood-siding" width="{width:g}" height="{pitch:g}" '
+        f'patternUnits="userSpaceOnUse" data-board-height-mm="{board_height:g}">\n'
+        f'    <rect width="{width:g}" height="{pitch:g}" fill="white" />\n'
+        f'    <path d="M 0 {pitch/2:g} H {width:g}" style="fill:none;stroke:black;stroke-width:{stroke:g}" />\n'
+        '</pattern>'
+    )
+    if pattern[0] != replacement:
+        svg_path.write_text(svg[:pattern.start()] + replacement + svg[pattern.end():], encoding="utf-8")
+
+
 def _postprocess_model_line_width(
     svg_path: Path,
     *,
@@ -5851,6 +5879,7 @@ def _render_existing_drawing(
     if not absolute_output.is_file() or absolute_output.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG drawing: {absolute_output}")
     _postprocess_drawing_circles(absolute_output, model, drawing)
+    _postprocess_wood_siding_pattern(absolute_output, drawing_properties or {})
     model_line_width = (
         drawing_properties.get("ModelLineWidth")
         if drawing_properties

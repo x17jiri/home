@@ -112,12 +112,33 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: #f4d35e !important;
 }
 
-.material-Woodfiberboard {
+/* Legacy roof-board material and the explicit MDF legend/material name. */
+.material-Woodfiberboard,
+.material-mdfsolid {
     fill: white !important;
 }
 
-.material-Woodfiberboard.cut {
-    fill: #c9b56d !important;
+.material-Woodfiberboard.cut,
+.material-mdfsolid.cut {
+    fill: #f2b6d0 !important;
+    stroke: #f2b6d0 !important;
+}
+
+/* Fill closed projected faces, never open edge paths, with board joints. */
+.material-Woodsiding.surface {
+    fill: url(#wood-siding) !important;
+    stroke: none !important;
+}
+
+.material-Woodsiding.projection {
+    fill: none !important;
+    stroke: black !important;
+}
+
+.material-Woodsiding.cut {
+    fill: #f4d35e !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
 }
 
 /* Bonsai emits projected plan beams as separate open edge paths. */

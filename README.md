@@ -269,9 +269,13 @@ In `house_ifc.py`, `UPPER_RING_BEAM_HEIGHT` controls the additional concrete ban
 whose top is at `UPPER_FLOOR_START + NADEZDIVKA` on the higher perimeter parts
 and internal load-bearing walls, interrupted at existing openings.
 `LOWER_NADEZDIVKA_X` splits the upper front and back walls between wall3 and wall4;
-their right-hand parts and `wall_4_u` use `LOWER_NADEZDIVKA`.
-These low walls have no upper ring beam yet, and the storage window is omitted.
-Roof geometry and support levels remain unchanged by this wall-height change.
+their right-hand parts use `LOWER_NADEZDIVKA`. `wall_4_u` is a full lower gable,
+clipped by both lower-roof planes at the rafter undersides (`RAFTER_Z_OFFSET`)
+and capped at `PURLIN_LOWER_WALL_TOP_HEIGHT`, where the lower purlins bear.
+This matches wall1's sloped-and-flat profile at the lower roof level. It is
+created after the high ring-beam band so that band remains limited to the high
+walls. No low-level ring beam or storage window is added. Roof geometry and
+support levels remain unchanged by this wall-profile change.
 
 ## Library objects and plan symbols
 
@@ -601,9 +605,26 @@ at `LOWER_NADEZDIVKA_X`, keeping the full explicit overlap (initially 250 mm).
 The MDF board, underlay, counter-battens, tile battens and tiles follow these
 exterior profiles, independently of the inner ranges. Source outlines use
 small thickness-aware ridge/eave overshoots to keep the correct clipping side.
+`ROOF_EAVE_OVERHANG = 0.75` sets the tiles' horizontal overhang beyond the
+street/garden masonry faces. `ROOF_EAVE_SETBACK = 0.02` trims rafters, MDF,
+underlay, counter-battens and tile battens 20 mm back from that eave line
+(730 mm overhang), including dormer and lower slopes. Tile-batten rows use the
+shorter boundary too. Set the setback to zero to restore matching eaves.
+Ridge cuts, X/gable overhangs and interior finishes are unchanged.
+`add_roof_siding()` fills that setback with vertical, non-structural fascia
+boards using the same `Wood siding` material as the roof-step cladding.
+Their top follows the roof tiles' underside and their bottom follows the
+rafter underside. Thickness equals `ROOF_EAVE_SETBACK`; zero disables them.
+X extents follow `roof_over_rafter_x_ranges`, merging touching or overlapping
+ranges on the same side/roof plane. The current layout creates six boards:
+two street (high/low) and four garden (high/dormer/high/low), without a board
+on the main-roof strip above the dormer. They are returned as `roof_siding`
+and live in the `Roof - Eave siding` visibility container.
 Counter-battens use the existing main/dormer rafter positions but are generated
-outside the structural-rafter loop; coincident intervals on the same plane
-are unioned, while high/low pieces on different planes remain separate.
+outside the structural-rafter loop. Main positions are filtered by their explicit
+high/lower framing level, so overlapping exterior ranges do not create a second
+counter-batten on the wrong roof level. Dormer battens keep their paired dormer
+positions. Coincident intervals on the same plane are unioned as before.
 
 `exterior_roof_sections_at(x)` returns every matching range, not a single
 winner. AA roof angles, SK3 composition markers and ridge-cap symbols include
@@ -641,13 +662,30 @@ where their X spans overlap, using the assembly's explicit level. Timber
 schedule rows are split by measured section and
 finished length, preserving their existing materials and appearances.
 AA/BB batting and XX/YY/ZZ support dimensions follow the actual assemblies.
-`roof_step_closure` adds white, non-structural 15 mm gable cladding in the
-visibility container `Roof - Gable closure`. Its source box spans X from
-`LOWER_NADEZDIVKA_X` to `LOWER_NADEZDIVKA_X + 0.015`, Y from 0 to `HOUSE_DEPTH`,
-and Z from `UPPER_FLOOR_START` to `UPPER_FLOOR_START + 5.0`. Two panels meet at
-the ridge: each is cut below its high rafter top face and above its low rafter
-bottom face, using the actual normal offsets `RAFTER_Z_OFFSET + RAFTER_HEIGHT`
-and `RAFTER_Z_OFFSET`. This does not add timber, roof layers or simulator members.
+`roof_step_closure` adds non-structural 15 mm MDF plus 20 mm wood siding in the
+visibility container `Roof - Gable closure`. MDF spans X from
+`LOWER_NADEZDIVKA_X + 0.1` to `LOWER_NADEZDIVKA_X + 0.115`; siding continues
+from there to `LOWER_NADEZDIVKA_X + 0.135`, without a gap or overlap. Both source
+layers span Y from 0 to `HOUSE_DEPTH` and Z from `UPPER_FLOOR_START` to
+`UPPER_FLOOR_START + 5.0`. Each layer has two panels meeting at
+the ridge. Both layers are cut at the high rafter top face, using the normal
+offset `RAFTER_Z_OFFSET + RAFTER_HEIGHT`. MDF extends down to the low rafter
+bottom face (`RAFTER_Z_OFFSET`); the siding stops at the top of the lower-roof
+underlay (`UNDERLAY_BOTTOM + UNDERLAY_THICKNESS`). This does not add structural
+timber, other roof layers or simulator members.
+The explicit `mdf-solid` material and the roof boards' legacy `Wood fiberboard`
+material share a pink (`#f2b6d0`) cut fill and outline, with white projections. The `mdf-solid` legend
+pattern uses the same pink. Material names and legend pattern IDs are separate:
+Bonsai strips punctuation from material classes (`mdf-solid` becomes
+`material-mdfsolid`), so both material classes have explicit stylesheet rules.
+The reusable `Wood siding` material uses white closed projected faces with thin
+horizontal board joints (`wood-siding` pattern), and yellow wood fill in cuts.
+Open projected edges stay unfilled; no grain texture or individual-board solids
+are generated. Both closure layers remain white in 3D. Joint pitch is 150 mm by
+default: edit `data-board-height-mm` on `wood-siding` in
+`drawings/assets/patterns.svg` to change it. Rendering adjusts the pitch to the
+drawing scale while keeping the joint stroke at 0.06 mm on paper. AA/BB share
+the same projected-siding legend swatch.
 Flashing, attachment details and remaining wall details are not modelled.
 The 3D force simulator has not yet been updated for this lower framing.
 There is no shortened house-cut slope or raised street-side wall plate.
@@ -1138,6 +1176,15 @@ For a fresh environment:
 python3 -m venv --system-site-packages .venv-pdf
 .venv-pdf/bin/python -m pip install -r requirements.txt
 ```
+
+Generate the west exterior elevation from the lower-roof end with
+`python3 house_ifc.py pohled_zapad`. It looks from +X towards -X, includes both
+storeys and all roof layers (without foundations or plan annotations), and
+saves `pohled_zapad.svg` and the PDF configured by `PDF_POHLED_ZAPAD`.
+For the north elevation from the street, use `python3 house_ifc.py pohled_sever`.
+The camera looks from negative Y towards positive Y, with both storeys and all
+roof layers (including eave siding), without foundations or plan annotations.
+It saves `pohled_sever.svg` and `PDF_POHLED_SEVER` ("Pohled - sever").
 
 A basic side elevation uses the same persisted drawing interface.  Place the
 camera outside the building and point ``direction`` toward it:
