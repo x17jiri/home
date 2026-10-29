@@ -624,20 +624,24 @@ at `LOWER_NADEZDIVKA_X`, keeping the full explicit overlap (initially 250 mm).
 The MDF board, underlay, counter-battens, tile battens and tiles follow these
 exterior profiles, independently of the inner ranges. Source outlines use
 small thickness-aware ridge/eave overshoots to keep the correct clipping side.
-`ROOF_EAVE_OVERHANG = 0.75` sets the tiles' horizontal overhang beyond the
-street/garden masonry faces. `ROOF_EAVE_SETBACK = 0.02` trims rafters, MDF,
-underlay, counter-battens and tile battens 20 mm back from that eave line
-(730 mm overhang), including dormer and lower slopes. Tile-batten rows use the
-shorter boundary too. Set the setback to zero to restore matching eaves.
+All roofs retain vertical eave cuts at `ROOF_EAVE_OVERHANG = 0.75` metres
+beyond the outside walls. Main roofs (both high and low, street and garden)
+also have a horizontal cut `ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.30` metres
+below their own wall-plate underside. The dormer has no horizontal eave cut.
+`ROOF_EAVE_SETBACK = 0.02` trims rafters, MDF, underlay, counter-battens and
+tile battens 20 mm back from the vertical tile edge. Source limits intersect
+all cut half-spaces, so batten rows stop at whichever eave cut is reached
+first at their height. Set the setback to zero to restore matching vertical edges.
 Ridge cuts, X/gable overhangs and interior finishes are unchanged.
-`add_roof_siding()` fills that setback with vertical, non-structural fascia
+`add_roof_siding()` fills the setbacks with vertical, non-structural fascia
 boards using the same `Wood siding` material as the roof-step cladding.
-Their top follows the roof tiles' underside and their bottom follows the
-rafter underside. Thickness equals `ROOF_EAVE_SETBACK`; zero disables them.
+Their top follows the roof tiles' underside. Main fascia bottoms use the
+horizontal eave-cut height (wall-plate underside minus 300 mm); the dormer
+bottom still follows the rafter underside. Thickness equals
+`ROOF_EAVE_SETBACK`; zero disables them.
 X extents follow `roof_over_rafter_x_ranges`, merging touching or overlapping
-ranges on the same side/roof plane. The current layout creates six boards:
-two street (high/low) and four garden (high/dormer/high/low), without a board
-on the main-roof strip above the dormer. They are returned as `roof_siding`
+ranges on each roof plane. The current layout creates six boards: two street
+(high/low) and four garden (high/dormer/high/low). They are returned as `roof_siding`
 and live in the `Roof - Eave siding` visibility container.
 Counter-battens use the existing main/dormer rafter positions but are generated
 outside the structural-rafter loop. Main positions are filtered by their explicit

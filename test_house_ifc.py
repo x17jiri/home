@@ -2038,6 +2038,16 @@ class RoofFramingTests(unittest.TestCase):
         # Boolean cuts can leave unused vertices from the source solid.
         return vertices[np.unique(np.asarray(shape.geometry.faces))]
 
+    def main_eave_z(self, plane):
+        v = self.values
+        plate_z = {
+            v["street_roof"]: v["STREET_WALL_PLATE_Z"],
+            v["garden_roof"]: v["GARDEN_WALL_PLATE_Z"],
+            v["lower_street_roof"]: v["LOWER_STREET_WALL_PLATE_Z"],
+            v["lower_garden_roof"]: v["LOWER_GARDEN_WALL_PLATE_Z"],
+        }[plane]
+        return plate_z - v["WALL_PLATE_SIZE"][1]/2 - v["ROOF_EAVE_DROP_BELOW_WALL_PLATE"]
+
     def test_short_dormer_rafters_are_cut_at_actual_purlin_bottom(self):
         values = self.values
         for beam in values["dormer_short_rafters"]:
@@ -2163,11 +2173,10 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertAlmostEqual(local[:, 2].min(), v["RAFTER_Z_OFFSET"])
                 self.assertAlmostEqual(local[:, 2].max(), v["RAFTER_Z_OFFSET"] + rafter.height)
                 if side == "street":
-                    self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"])
                     self.assertAlmostEqual(vertices[:, 1].max(), v["HALF_DEPTH"])
                 else:
                     self.assertAlmostEqual(vertices[:, 1].min(), v["HALF_DEPTH"])
-                    self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"])
+                self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(plane))
                 for support in (v["purlin_at"](x, side=side), v["wall_plate_at"](x, side=side)):
                     contact = (x, support.start[1] + (-1 if side == "street" else 1) * support.width/2,
                                support.start[2] + support.height/2)
@@ -2462,12 +2471,9 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertAlmostEqual(np.ptp(local[:, 2]), layer.thickness)
                 if plane in (v["street_roof"], v["lower_street_roof"]):
                     self.assertAlmostEqual(vertices[:, 1].max(), v["HALF_DEPTH"])
-                    setback = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
-                    self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + setback)
                 else:
                     self.assertAlmostEqual(vertices[:, 1].min(), v["HALF_DEPTH"])
-                    setback = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
-                    self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - setback)
+                self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(plane))
         for side in ("street", "garden"):
             high_plane, low_plane = v[side + "_roof"], v["lower_" + side + "_roof"]
             self.assertGreater(v["roof_batting_point"](high_plane, x=high[1], y=2 if side == "street" else 6)[2],
@@ -2489,8 +2495,10 @@ class RoofFramingTests(unittest.TestCase):
             self.assertTrue(pieces)
             self.assertAlmostEqual(batten.z_offset, v["COUNTER_BATTEN_BOTTOM"])
             vertices = self.finished_vertices(batten)
-            self.assertGreaterEqual(vertices[:, 1].min(), min(v["STREET_ROOF_EAVE_Y"], v["HALF_DEPTH"]) - 1e-7)
-            self.assertLessEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] + 1e-7)
+            if plane is v["dormer_roof"]:
+                self.assertLessEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"] + 1e-7)
+            else:
+                self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(plane) - 1e-7)
             intervals.setdefault((plane.GlobalId, x), []).append((batten.local_start[1], batten.local_end[1]))
         for spans in intervals.values():
             spans.sort()
@@ -2614,7 +2622,7 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertEqual({(b.local_start[0], b.local_end[0]) for b in battens},
                                  {v["roof_over_rafter_x_ranges"][i][:2] for i in indices})
 
-    def test_eave_setback_trims_boards_and_underlay_but_not_tiles_or_gable_ends(self):
+    def test_main_layers_respect_both_eave_cuts_and_dormer_keeps_vertical_setback(self):
         v = self.values
         self.assertEqual(v["ROOF_EAVE_SETBACK"], .02)
         for plane in (v["street_roof"], v["garden_roof"], v["dormer_roof"],
@@ -2629,11 +2637,15 @@ class RoofFramingTests(unittest.TestCase):
                     inset = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
                     self.assertGreaterEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + inset - 1e-7)
                     self.assertLessEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - inset + 1e-7)
-                    if "above dormer" not in layer.Name:
-                        if street:
-                            self.assertAlmostEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + inset)
-                        else:
-                            self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - inset)
+                    if plane is v["dormer_roof"]:
+                        self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - inset)
+                    else:
+                        self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(plane) - 1e-7)
+                        if "above dormer" not in layer.Name:
+                            eave_y = v["STREET_ROOF_EAVE_Y"] + inset if street else v["GARDEN_ROOF_EAVE_Y"] - inset
+                            expected_z = max(self.main_eave_z(plane),
+                                v["roof_layer_height_at_y"](plane, layer.z_offset, eave_y, 0))
+                            self.assertAlmostEqual(vertices[:, 2].min(), expected_z)
                     # No X/gable setback and no change to the layer thickness.
                     self.assertAlmostEqual(vertices[:, 0].min(), min(x for x, y in layer.outline))
                     self.assertAlmostEqual(vertices[:, 0].max(), max(x for x, y in layer.outline))
@@ -2642,7 +2654,7 @@ class RoofFramingTests(unittest.TestCase):
                     if plane is not v["dormer_roof"]:
                         self.assertAlmostEqual(vertices[:, 1].max() if street else vertices[:, 1].min(), v["HALF_DEPTH"])
 
-    def test_all_eave_timber_stays_inside_the_shorter_boundary(self):
+    def test_all_eave_timber_respects_vertical_setback_and_main_horizontal_cut(self):
         v = self.values
         lo = v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"]
         hi = v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"]
@@ -2657,10 +2669,39 @@ class RoofFramingTests(unittest.TestCase):
                 vertices = self.finished_vertices(beam)
                 self.assertGreaterEqual(vertices[:, 1].min(), lo - 1e-7)
                 self.assertLessEqual(vertices[:, 1].max(), hi + 1e-7)
+                if beam.roof_plane in (v["dormer_roof"], v["dormer_rafter_roof"]):
+                    self.assertLessEqual(vertices[:, 1].max(), hi + 1e-7)
+                else:
+                    self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(beam.roof_plane) - 1e-7)
         for beam in (*v["main_roof_rafters"], *v["stronger_main_roof_rafters"], *v["dormer_roof_rafters"]):
             vertices = self.finished_vertices(beam)
-            street = beam.roof_plane in (v["street_roof"], v["lower_street_roof"])
-            self.assertAlmostEqual(vertices[:, 1].min() if street else vertices[:, 1].max(), lo if street else hi)
+            if beam.roof_plane is v["dormer_rafter_roof"]:
+                self.assertAlmostEqual(vertices[:, 1].max(), hi)
+            else:
+                self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(beam.roof_plane) - 1e-7)
+                on_horizontal = np.isclose(vertices[:, 2], self.main_eave_z(beam.roof_plane))
+                eave_y = lo if beam.roof_plane in (v["street_roof"], v["lower_street_roof"]) else hi
+                self.assertTrue(np.any(on_horizontal) or np.any(np.isclose(vertices[:, 1], eave_y)))
+
+    def test_main_eaves_use_each_wall_plate_bottom_minus_300mm(self):
+        v = self.values
+        self.assertEqual(v["ROOF_EAVE_DROP_BELOW_WALL_PLATE"], .30)
+        for plane in (v["street_roof"], v["garden_roof"], v["lower_street_roof"], v["lower_garden_roof"]):
+            with self.subTest(plane=plane.Name):
+                self.assertEqual(plane.cuts[0], v["street_roof"].cuts[0])
+                self.assertTrue(all(abs(p[2] - self.main_eave_z(plane)) < 1e-9 for p in plane.cuts[1]))
+                self.assertGreater(np.ptp(np.asarray(plane.cuts[1])[:, 1]), 0)
+                eave_y = v["STREET_ROOF_EAVE_Y"] if plane in (v["street_roof"], v["lower_street_roof"]) else v["GARDEN_ROOF_EAVE_Y"]
+                self.assertTrue(all(p[1] == eave_y for p in plane.cuts[2]))
+                # Source limits intersect all three cuts, not their union.
+                for local_z in (v["RAFTER_Z_OFFSET"], v["WOOD_FIBERBOARD_BOTTOM"],
+                                v["ROOF_TILE_BOTTOM"] + v["ROOF_TILE_THICKNESS"]):
+                    limits = v["local_y_limits_from_cuts"](plane, local_z)
+                    ridge_y = v["local_y_at_global_y"](plane, v["HALF_DEPTH"], local_z=local_z)
+                    vertical_y = v["local_y_at_global_y"](plane, eave_y, local_z=local_z)
+                    horizontal_y = v["local_y_at_global_z"](plane, self.main_eave_z(plane), local_z=local_z)
+                    self.assertAlmostEqual(limits[0], ridge_y)
+                    self.assertAlmostEqual(limits[1], min(vertical_y, horizontal_y))
 
     def test_eave_setback_can_be_disabled_or_tuned_without_changing_roof_plane_cuts(self):
         v = self.values
@@ -2680,7 +2721,7 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertTrue(all(p[1] == expected for p in cut))
                 self.assertEqual(plane.cuts, original)
 
-    def test_roof_siding_has_two_street_and_four_garden_boards_with_correct_spans(self):
+    def test_roof_siding_has_six_boards_with_level_main_bottoms_and_sloped_dormer_bottom(self):
         v = self.values
         boards = v["roof_siding"]
         self.assertEqual(len(boards), 6)
@@ -2707,11 +2748,15 @@ class RoofFramingTests(unittest.TestCase):
                           if side == "street" else
                           (v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"], v["GARDEN_ROOF_EAVE_Y"]))
                 top = v["offset_plane"](*plane.points, offset=v["ROOF_TILE_BOTTOM"])
-                bottom = v["offset_plane"](*plane.points, offset=v["RAFTER_Z_OFFSET"])
+                bottom = (v["offset_plane"](*plane.points, offset=v["RAFTER_Z_OFFSET"])
+                          if plane is v["dormer_roof"] else plane.cuts[1])
                 corners = [(x, y, v["plane_height_at"](*cut, x=x, y=y))
                            for x in (x0, x1) for y in (y0, y1) for cut in (bottom, top)]
                 self.assertEqual({tuple(np.round(p, 7)) for p in vertices},
                                  {tuple(np.round(p, 7)) for p in corners})
+                if plane is not v["dormer_roof"]:
+                    self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(plane))
+                    self.assertEqual(len(vertices[np.isclose(vertices[:, 2], self.main_eave_z(plane))]), 4)
 
     def test_roof_siding_is_white_non_structural_wood_siding_in_its_own_container(self):
         v = self.values
@@ -2780,8 +2825,8 @@ class RoofFramingTests(unittest.TestCase):
                           if b.roof_plane in (v["street_roof"], v["lower_street_roof"])]
         self.assertEqual(len(street_rafters), len(v["main_rafter_positions"]))
         for rafter in street_rafters:
-            self.assertAlmostEqual(self.finished_vertices(rafter)[:, 1].min(),
-                                   v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"], places=6)
+            self.assertAlmostEqual(self.finished_vertices(rafter)[:, 2].min(),
+                                   self.main_eave_z(rafter.roof_plane), places=6)
         for batten in v["street_roof"].elements:
             if (batten.Name or "").startswith("Street counter-batten"):
                 self.assertIs(batten.roof_plane, v["street_roof"])

@@ -1868,14 +1868,21 @@ roof_inner_cuts = [
 
 ROOF_EAVE_OVERHANG = 0.75
 ROOF_EAVE_SETBACK = 0.02  # Horizontal inset of everything below the roof tiles.
+ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.30
 if not math.isfinite(ROOF_EAVE_SETBACK) or not 0 <= ROOF_EAVE_SETBACK < ROOF_EAVE_OVERHANG:
 	raise ValueError("ROOF_EAVE_SETBACK must be finite, non-negative and less than ROOF_EAVE_OVERHANG")
 STREET_ROOF_EAVE_Y = -ROOF_EAVE_OVERHANG
 GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + ROOF_EAVE_OVERHANG
 
 
+def horizontal_roof_eave_cut(wall_plate_center_z):
+	"""Trim above a horizontal plane 300 mm below the wall-plate underside."""
+	z = wall_plate_center_z - WALL_PLATE_SIZE[1] / 2 - ROOF_EAVE_DROP_BELOW_WALL_PLATE
+	return ((0, 0, z), (10, 0, z), (0, 10, z))
+
+
 def roof_eave_setback_cuts(plane):
-	"""Additional vertical eave cuts; leave ridge and joint planes untouched."""
+	"""Inset vertical eave cuts; leave horizontal and ridge cuts untouched."""
 	if ROOF_EAVE_SETBACK == 0:
 		return ()
 	cuts = []
@@ -1898,11 +1905,8 @@ street_roof = roof.plane(
 	points=STREET_ROOF_PLANE_POINTS,
     cuts=[
 		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
-		(
-			(0, STREET_ROOF_EAVE_Y, 0),
-			(10, STREET_ROOF_EAVE_Y, 0),
-			(0, STREET_ROOF_EAVE_Y, 10),
-		),
+		horizontal_roof_eave_cut(STREET_WALL_PLATE_Z),
+		((0, STREET_ROOF_EAVE_Y, 0), (10, STREET_ROOF_EAVE_Y, 0), (0, STREET_ROOF_EAVE_Y, 10)),
 	],
 )
 garden_roof = roof.plane(
@@ -1910,11 +1914,8 @@ garden_roof = roof.plane(
 	points=GARDEN_ROOF_PLANE_POINTS,
     cuts=[
 		((0, HALF_DEPTH, 0), (10, HALF_DEPTH, 0), (0, HALF_DEPTH, 10)),
-		(
-			(0, GARDEN_ROOF_EAVE_Y, 0),
-			(10, GARDEN_ROOF_EAVE_Y, 0),
-			(0, GARDEN_ROOF_EAVE_Y, 10),
-		),
+		horizontal_roof_eave_cut(GARDEN_WALL_PLATE_Z),
+		((0, GARDEN_ROOF_EAVE_Y, 0), (10, GARDEN_ROOF_EAVE_Y, 0), (0, GARDEN_ROOF_EAVE_Y, 10)),
 	],
 )
 dormer_roof = roof.plane(
@@ -1947,11 +1948,11 @@ flat_ceiling_roof = roof.plane(
 # Shared lower interior/exterior and structural-framing planes.
 lower_street_roof = roof.plane(
 	"Lower street slope", points=LOWER_STREET_ROOF_PLANE_POINTS,
-	cuts=street_roof.cuts,
+	cuts=(street_roof.cuts[0], horizontal_roof_eave_cut(LOWER_STREET_WALL_PLATE_Z), street_roof.cuts[2]),
 )
 lower_garden_roof = roof.plane(
 	"Lower garden slope", points=LOWER_GARDEN_ROOF_PLANE_POINTS,
-	cuts=garden_roof.cuts,
+	cuts=(garden_roof.cuts[0], horizontal_roof_eave_cut(LOWER_GARDEN_WALL_PLATE_Z), garden_roof.cuts[2]),
 )
 lower_flat_ceiling_roof = roof.plane(
 	"Lower flat ceiling",
@@ -2215,8 +2216,8 @@ def add_roof_step_closure():
 		("wood siding", x1, x2, "Wood siding", UNDERLAY_BOTTOM + UNDERLAY_THICKNESS),
 	):
 		for side, y0, y1, high, low in (
-			("Street", 0.0, HALF_DEPTH, street_roof, lower_street_roof),
-			("Garden", HALF_DEPTH, HOUSE_DEPTH, garden_roof, lower_garden_roof),
+			("Street", 0.0-POLYSTYRENE_INSULATION_THICKNESS-FACADE_THICKNESS+0.001, HALF_DEPTH, street_roof, lower_street_roof),
+			("Garden", HALF_DEPTH, HOUSE_DEPTH+ROCKWOOL_INSULATION_THICKNESS+FACADE_THICKNESS-0.001, garden_roof, lower_garden_roof),
 		):
 			top = offset_plane(*high.points, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT)
 			bottom = offset_plane(*low.points, offset=bottom_offset)
@@ -2738,8 +2739,13 @@ def independent_inner_layer_boundaries(
 
 
 def local_y_limits_from_cuts(plane, local_z=0, *, eave_setback=False):
-	"""Return local Y limits for the two constant-global-Y roof cuts."""
-	limits = []
+	"""Intersect ridge and all eave half-spaces, retaining the roof origin side.
+
+	Main roofs have both vertical and horizontal eaves. At each layer offset,
+	the more restrictive boundary wins; extending to the outermost crossing
+	would place batten rows beyond the finished roof.
+	"""
+	lower, upper = -math.inf, math.inf
 	for cut in plane.cuts:
 		global_y_values = [point[1] for point in cut]
 		if max(global_y_values) - min(global_y_values) <= 1e-9:
@@ -2749,16 +2755,20 @@ def local_y_limits_from_cuts(plane, local_z=0, *, eave_setback=False):
 					y += ROOF_EAVE_SETBACK
 				elif isclose(y, GARDEN_ROOF_EAVE_Y, abs_tol=1e-9):
 					y -= ROOF_EAVE_SETBACK
-			limits.append(
-				(
-					y
-					- plane.origin[1]
-					- local_z * plane.z_axis[1]
-				) / plane.y_axis[1]
-			)
-	if len(limits) != 2:
-		raise ValueError(f"{plane.Name} must have two constant-global-Y cuts")
-	return min(limits), max(limits)
+			axis, value = 1, y
+		elif max(p[2] for p in cut) - min(p[2] for p in cut) <= 1e-9:
+			axis, value = 2, cut[0][2]
+		else:
+			continue
+		direction = plane.y_axis[axis]
+		limit = (value - plane.origin[axis] - local_z * plane.z_axis[axis]) / direction
+		if (plane.origin[axis] - value) * direction > 0:
+			lower = max(lower, limit)
+		else:
+			upper = min(upper, limit)
+	if not math.isfinite(lower) or not math.isfinite(upper) or lower >= upper:
+		raise ValueError(f"{plane.Name} must have a bounded local-Y span inside its ridge/eave cuts")
+	return lower, upper
 
 
 def exterior_source_y_limits(plane, *, y_min=None, y_max=None):
@@ -2977,11 +2987,10 @@ for segment, (x_min, x_max, profile_name) in enumerate(roof_over_rafter_x_ranges
 	)
 
 def add_roof_siding():
-	"""Fill the eave setback with vertical siding, tiles underside to rafter bottom.
+	"""Fill vertical eave setbacks; main fascia bottoms follow the level cut.
 
-	Merge touching/overlapping X ranges only on the same side and roof plane.
-	This makes two street boards and four garden boards in the current layout;
-	the main-roof strip above the dormer does not reach the eave.
+	Dormer fascia still ends at the rafter underside. Main fascia stops at
+	wall-plate bottom minus ROOF_EAVE_DROP_BELOW_WALL_PLATE instead.
 	"""
 	if ROOF_EAVE_SETBACK == 0:
 		return ()
@@ -2994,10 +3003,9 @@ def add_roof_siding():
 			else:
 				plane = {"normal": garden_roof, "dormer": dormer_roof, "lower": lower_garden_roof}[profile]
 			groups.setdefault(plane, []).append((x_min, x_max))
-		if side == "street":
-			y0, y1 = STREET_ROOF_EAVE_Y, STREET_ROOF_EAVE_Y + ROOF_EAVE_SETBACK
-		else:
-			y0, y1 = GARDEN_ROOF_EAVE_Y - ROOF_EAVE_SETBACK, GARDEN_ROOF_EAVE_Y
+		y0, y1 = ((STREET_ROOF_EAVE_Y, STREET_ROOF_EAVE_Y + ROOF_EAVE_SETBACK)
+		          if side == "street" else
+		          (GARDEN_ROOF_EAVE_Y - ROOF_EAVE_SETBACK, GARDEN_ROOF_EAVE_Y))
 		for plane, ranges in groups.items():
 			merged = []
 			for lo, hi in sorted(ranges):
@@ -3006,7 +3014,8 @@ def add_roof_siding():
 				else:
 					merged.append((lo, hi))
 			top = offset_plane(*plane.points, offset=ROOF_TILE_BOTTOM)
-			bottom = offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
+			bottom = (offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
+			          if plane is dormer_roof else plane.cuts[1])
 			for index, (x0, x1) in enumerate(merged, 1):
 				corners = [(x, y) for x in (x0, x1) for y in (y0, y1)]
 				z0 = min(plane_height_at(*bottom, x=x, y=y) for x, y in corners) - 0.10
@@ -3020,7 +3029,7 @@ def add_roof_siding():
 					material="Wood siding", color="#ffffff", cuts=(top, bottom),
 					retained_point=(keep_x, keep_y, keep_z),
 				)
-				board.Description = "Non-structural eave fascia between the roof tiles and rafter underside"
+				board.Description = "Non-structural eave fascia below the roof tiles"
 				roof_layer_storeys["Eave siding"].add(board)
 				boards.append(board)
 	return tuple(boards)
