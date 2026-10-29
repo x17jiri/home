@@ -10924,8 +10924,9 @@ class HouseTests(unittest.TestCase):
         vertical = ground.wall(
             (2, 0), (2, 2), thickness=1, height=2.8
         )
+        foundation = house.storey("Foundations", elevation=-1)
         drawing = house.add_drawing(
-            "Foundation", 2, 1, -1, 4, storeys=[ground]
+            "Foundation", 2, 1, -1, 4, storeys=[foundation]
         )
         other_drawing = house.add_drawing(
             "Other plan", 2, 1, -1, 4, storeys=[ground]
@@ -10964,6 +10965,10 @@ class HouseTests(unittest.TestCase):
             },
         )
         self.assertIn(outline, drawing.group.IsGroupedBy[0].RelatedObjects)
+        included = ifcopenshell.util.selector.filter_elements(
+            house.model, ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+        self.assertNotIn(horizontal, included)
+        self.assertNotIn(vertical, included)
         self.assertNotIn(
             outline,
             other_drawing.group.IsGroupedBy[0].RelatedObjects,

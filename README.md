@@ -1107,7 +1107,7 @@ Run `python3 house_ifc.py kanal` to create the annotation-only drawing
 `kanal.svg` and `projekt/D1.5. Zdravotechnické instalace/D1.5.1. Kanalizace.pdf`.
 It uses `storeys=[]`, so no house plans or other model geometry are shown.
 Its seven horizontal reference lines use the finished ground-floor surface
-as height zero: ground-floor surface and foundation slab top; MIAKO bottom,
+as height zero: ground-floor surface and basement foundation-slab top; MIAKO bottom,
 MIAKO top and upper-floor surface; plasterboard bottom and roof-tile top.
 The last two are measured at `DRAINAGE_STACK_X, DRAINAGE_STACK_Y` using
 `roof.layer_vertical_extent(material, x=..., y=...)`, which intersects the
@@ -1348,6 +1348,29 @@ drawing.add_ridge_tile(
 
 The curved, terracotta-filled annotation is scoped to that drawing and stays
 attached to the model when its camera or scale changes.
+
+## IFC basement and foundations
+
+The ground-floor storey stays at Z = 0. `BASEMENT_FLOOR_START` is the top of
+the basement slab, derived from `FOUNDATION_WALL_HEIGHT = 2.25` and
+`BASEMENT_CEILING_SPACE = 0.25`. The latter reserves space for a future
+ceiling; no ceiling element is generated yet.
+
+| Part | Absolute Z range (m) | Storey |
+|---|---|---|
+| Strip footers | −3.15 to −2.65 | Foundations |
+| 150 mm base plate | −2.65 to −2.50 | Basement |
+| 2.25 m walls | −2.50 to −0.25 | Basement |
+| Reserved ceiling space | −0.25 to 0.00 | — |
+
+The slab sits directly on the footer tops; the walls start at the slab top.
+The Foundations storey is at `FOUNDATION_FOOTER_BOTTOM_Z`, and Basement is
+at `BASEMENT_FLOOR_START`. All above-ground storey elevations are preserved.
+`found` cuts the footers at mid-height and adds the basement wall footprints
+as drawing-only dashed outlines. `add_wall_outlines()` can use walls from
+other storeys without including their 3D bodies in the drawing.
+The AA/BB sections and the drainage schematic reference the relocated slab.
+The optional foundation-insulation helper follows that slab in Basement.
 
 ## IFC purlin sections
 

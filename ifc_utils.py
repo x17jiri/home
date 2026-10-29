@@ -13114,7 +13114,8 @@ class Drawing:
         The walls are geometry sources only: hosted openings are ignored and
         the resulting linework belongs exclusively to this drawing.  Wall
         rectangles are unioned before their boundary is drawn, preventing
-        internal end lines at corners and T-junctions.
+        internal end lines at corners and T-junctions. Source walls may belong
+        to any storey of this house.
         """
         self._require_plan_view("add_wall_outlines")
         if isinstance(walls, (str, bytes)):
@@ -13135,10 +13136,6 @@ class Drawing:
                 or wall.storey.house is not self.house
             ):
                 raise ValueError(f"wall {index} must belong to this house")
-            if not self._includes_storey(wall.storey):
-                raise ValueError(
-                    f"wall {index} storey is not included in this drawing"
-                )
         style_name = _enum(style, "style", {"DASHED", "SOLID"}).lower()
         annotation_name = (
             _name(name, "name")

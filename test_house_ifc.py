@@ -158,7 +158,7 @@ class FoundationDrawingTests(unittest.TestCase):
         table = tables[0]
         self.assertEqual(table["kind"], "line_legend")
         self.assertEqual(table["title"], "LEGENDA ČAR")
-        self.assertEqual(len(table["items"]), 6)
+        self.assertEqual(len(table["items"]), 7)
         items = {item["description"]: item for item in table["items"]}
         item = items["Obrys nosných stěn"]
         outlines = [a for a in foundation.group.IsGroupedBy[0].RelatedObjects

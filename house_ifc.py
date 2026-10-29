@@ -247,9 +247,13 @@ FLOOR_BUILDUP_MATERIAL = "Floor build-up"
 CEILING_FINISH_THICKNESS = 0.015
 CEILING_FINISH_MATERIAL = "Ceiling finish"
 FOUNDATION_BASE_PLATE_THICKNESS = 0.15
-FOUNDATION_WALL_HEIGHT = 0.80
+FOUNDATION_WALL_HEIGHT = 2.25
 FOUNDATION_FOOTER_WIDTH = 0.70
 FOUNDATION_FOOTER_HEIGHT = 0.50
+BASEMENT_CEILING_SPACE = 0.25  # Reserved below the ground floor; no ceiling yet.
+BASEMENT_FLOOR_START = -FOUNDATION_WALL_HEIGHT - BASEMENT_CEILING_SPACE
+FOUNDATION_FOOTER_TOP_Z = BASEMENT_FLOOR_START - FOUNDATION_BASE_PLATE_THICKNESS
+FOUNDATION_FOOTER_BOTTOM_Z = FOUNDATION_FOOTER_TOP_Z - FOUNDATION_FOOTER_HEIGHT
 RING_BEAM_BAR_DIAMETER = 0.03
 RING_BEAM_STIRRUP_DIAMETER = 0.008
 RING_BEAM_CONCRETE_COVER = 0.05
@@ -288,7 +292,7 @@ COLLAR_TIE_DRAWING_ORDER = 2
 MAIN_RAFTER_DRAWING_ORDER = 3
 DORMER_WALL_PLATE_DRAWING_ORDER = 4
 DORMER_RAFTER_DRAWING_ORDER = 5
-PERIMETER_TOP_HEIGHT = 0.6
+PERIMETER_TOP_HEIGHT = 0.0
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.16 + 0.005
 FOUNDATION_XPS_INSULATION_THICKNESS = 0.10 + 0.005
 PERIMETER_INSULATION_MATERIAL = "XPS"
@@ -381,7 +385,8 @@ house = House(
     },
 )
 
-foundation = house.storey("Foundations", elevation=0)
+foundation = house.storey("Foundations", elevation=FOUNDATION_FOOTER_BOTTOM_Z)
+basement = house.storey("Basement", elevation=BASEMENT_FLOOR_START)
 ground = house.storey("Ground floor", elevation=0)
 upper = house.storey("Upper floor", elevation=UPPER_FLOOR_START)
 
@@ -722,7 +727,7 @@ ring_beams = upper.add_ring_beams_from(
 	concrete_cover=RING_BEAM_CONCRETE_COVER,
 )
 
-foundation_base_plate = foundation.floor_layer(
+foundation_base_plate = basement.floor_layer(
 	"Foundation base plate",
 	outline=(
 		(0, 0),
@@ -737,25 +742,19 @@ foundation_base_plate = foundation.floor_layer(
 	buildup_material="Base plate concrete",
 	color="#B8B8B8",
 )
-foundation_walls = foundation.add_walls_from(
+foundation_walls = basement.add_walls_from(
 	ground,
 	source_wall_type=load_bearing_wall,
 	wall_type=foundation_wall,
 	height=FOUNDATION_WALL_HEIGHT,
-	start_height=(
-		-FOUNDATION_BASE_PLATE_THICKNESS - FOUNDATION_WALL_HEIGHT
-	),
+	start_height=0,
 )
 foundation_footers = foundation.add_strip_footings_from(
 	ground,
 	source_wall_type=load_bearing_wall,
 	width=FOUNDATION_FOOTER_WIDTH,
 	height=FOUNDATION_FOOTER_HEIGHT,
-	start_height=(
-		-FOUNDATION_BASE_PLATE_THICKNESS
-		- FOUNDATION_WALL_HEIGHT
-		- FOUNDATION_FOOTER_HEIGHT
-	),
+	start_height=0,
 	material="Concrete",
 	color="#969696",
 )
@@ -848,7 +847,7 @@ def add_foundation_insulation(outline, *, thickness, height):
 
 	set_number = len(_foundation_insulation_sets) + 1
 	base_plate_bottom = foundation_base_plate.start_height
-	horizontal = foundation.floor_layer(
+	horizontal = basement.floor_layer(
 		f"Foundation insulation {set_number} horizontal",
 		outline=points,
 		thickness=thickness,
@@ -869,7 +868,7 @@ def add_foundation_insulation(outline, *, thickness, height):
 		_foundation_insulation_wall_types[thickness] = wall_type
 
 	vertical = tuple(
-		foundation.wall(
+		basement.wall(
 			wall_start,
 			wall_end,
 			wall_type=wall_type,
@@ -886,7 +885,7 @@ def add_foundation_insulation(outline, *, thickness, height):
 			f"Foundation insulation {set_number} vertical {side_number}"
 		)
 	for wall, next_wall in zip(vertical, (*vertical[1:], vertical[0])):
-		foundation.connect_wall(wall, next_wall)
+		basement.connect_wall(wall, next_wall)
 
 	result = (horizontal, vertical)
 	_foundation_insulation_sets.append(result)
@@ -3855,8 +3854,8 @@ if "kanal" in sys.argv:
 	)
 	levels = (
 		("Přízemí - hotová podlaha", 0.0),
-		("Přízemí - horní líc základové desky",
-		 foundation.elevation + foundation_base_plate.start_height + foundation_base_plate.thickness - datum),
+		("Suterén - horní líc základové desky",
+		 foundation_base_plate.storey.elevation + foundation_base_plate.start_height + foundation_base_plate.thickness - datum),
 		("Podkroví - spodní líc stropu MIAKO", miako_bottom),
 		("Podkroví - horní líc stropu MIAKO", miako_top),
 		("Podkroví - hotová podlaha", upper_floor_top),
@@ -3992,7 +3991,7 @@ if "found" in sys.argv:
 		"Foundation",
 		x=5,
 		y=3,
-		z=-1.3,
+		z=foundation.elevation + FOUNDATION_FOOTER_HEIGHT / 2,
 		radius=8,
 		storeys=[foundation],
 		right_panel_width=40,
@@ -5640,6 +5639,10 @@ if "aa" in sys.argv:
 		start=(5.3, GROUND_FLOOR_THICKNESS),
 		end=(5.3, ground_floor_height-CEILING_FINISH_THICKNESS),
 		offset=0)
+	drawing1.add_dimension(
+		start=(5.3, BASEMENT_FLOOR_START),
+		end=(5.3, BASEMENT_FLOOR_START+FOUNDATION_WALL_HEIGHT),
+		offset=0)
 
 	drawing1.render("aa.svg", pdf=PDF_AA)
 
@@ -5717,9 +5720,13 @@ if "bb" in sys.argv:
 		offset=1.5)
 	# tloustka zakladova deska
 	drawing1.add_dimension(
-		start=(BWT, -FOUNDATION_BASE_PLATE_THICKNESS),
-		end=(BWT, 0),
+		start=(BWT, BASEMENT_FLOOR_START-FOUNDATION_BASE_PLATE_THICKNESS),
+		end=(BWT, BASEMENT_FLOOR_START),
 		offset=1.5)
+	drawing1.add_dimension(
+		start=(HOUSE_WIDTH-2, BASEMENT_FLOOR_START),
+		end=(HOUSE_WIDTH-2, BASEMENT_FLOOR_START+FOUNDATION_WALL_HEIGHT),
+		offset=0)
 
 	# podlaha spodni patro
 	drawing1.add_elevation_dimension(
