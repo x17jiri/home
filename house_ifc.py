@@ -219,9 +219,9 @@ UNDER_RAFTER_BATTING_THICKNESS = (
 UNDER_RAFTER_BATTING_END_INSET = 0.015
 INSTALLATION_SPACE_THICKNESS = 0.040
 GYPSUM_PLASTERBOARD_THICKNESS = 0.025
-WOOD_FIBERBOARD_THICKNESS = 0.015
+MDF_THICKNESS = 0.015
 # Thermal conductivities used by calculate_roof_u_value(), in W/(m K).
-WOOD_FIBERBOARD_LAMBDA = 0.15
+MDF_LAMBDA = 0.15
 RAFTER_WOOD_LAMBDA = 0.15
 BETWEEN_RAFTER_WOOL_LAMBDA = 0.04
 UNDER_RAFTER_WOOL_LAMBDA = 0.04
@@ -229,7 +229,7 @@ UNDER_RAFTER_WOOL_LAMBDA = 0.04
 # because convection and radiation make thickness / lambda inappropriate.
 INSTALLATION_SPACE_THERMAL_RESISTANCE = 0.16
 ROOF_THERMAL_RAFTER_SPACING = 0.80
-WOOD_FIBERBOARD_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
+MDF_BOTTOM = RAFTER_Z_OFFSET + RAFTER_SIZE[1]
 UNDERLAY_THICKNESS = 0.005
 COUNTER_BATTEN_SIZE = (0.06, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
@@ -240,7 +240,7 @@ RIDGE_TILE_WIDTH = 0.40
 RIDGE_TILE_RISE = 0.12
 RIDGE_TILE_THICKNESS = 0.025
 CEMFLOW_AND_FINISH_THICKNESS = 0.065
-GROUND_FLOOR_THICKNESS = 0.20+CEMFLOW_AND_FINISH_THICKNESS
+GROUND_FLOOR_THICKNESS = 0.08+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
@@ -261,10 +261,8 @@ VAZNICE_DIST = 1.167 - VAZNICE_HALF_BASE
 # High left pieces: tops and outer faces align with the middle.
 VAZNICE_SIDE_HEIGHT = 0.24
 VAZNICE_SIDE_BASE = 0.16
-# Lower right pieces: independent dimensions and centreline distance to ridge.
-VAZNICE_LOWER_HEIGHT = 0.24
-VAZNICE_LOWER_BASE = 0.16
-VAZNICE_LOWER_DIST = 0.913
+# New perpendicular roof: purlin TOP above the finished upper-floor surface.
+TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR = 0.92
 PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT
 SEDLO_LENGTH = 1.5  # Retained for the force simulator's sedlo variant, not IFC geometry.
 PURLIN_SPACER_SIZE = (0.08, 0.20)
@@ -314,8 +312,8 @@ GYPSUM_PLASTERBOARD_BOTTOM = (
 )
 
 roof_u_value = calculate_roof_u_value(
-	wood_fiberboard_thickness=WOOD_FIBERBOARD_THICKNESS,
-	wood_fiberboard_lambda=WOOD_FIBERBOARD_LAMBDA,
+	wood_fiberboard_thickness=MDF_THICKNESS,
+	wood_fiberboard_lambda=MDF_LAMBDA,
 	rafter_height=RAFTER_HEIGHT,
 	rafter_width=RAFTER_THICKNESS,
 	rafter_spacing=ROOF_THERMAL_RAFTER_SPACING,
@@ -331,7 +329,7 @@ roof_u_value = calculate_roof_u_value(
 )
 print("Roof thermal calculation (main layers only):")
 print(
-	f"  Wood fiberboard R = "
+	f"  MDF R = "
 	f"{roof_u_value.wood_fiberboard_resistance:.3f} m²K/W"
 )
 print(
@@ -355,9 +353,9 @@ BWT = 0.24 # Basic wall thickness
 FACADE_INSULATION_THICKNESS = 0.20
 FACADE_THICKNESS = 0.005
 
-GROUND_WALL_BASE_COURSE_HEIGHT = 0.275
+GROUND_WALL_BASE_COURSE_HEIGHT = 0.27
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
-ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.625
+ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.5
 door_clear_height = 2.1
 CEILING_THICKNESS = 0.25
 
@@ -366,13 +364,12 @@ COLLAR_TIE_THICKNESS = 0.05
 COLLAR_TIE_SIZE = (COLLAR_TIE_THICKNESS, 0.15)
 COLLAR_TIE_EXTENSION = 1.5  # uncut overlength; roof planes define finished ends
 NADEZDIVKA = 1.125 + UPPER_RING_BEAM_HEIGHT
-LOWER_NADEZDIVKA = 0.25 + UPPER_RING_BEAM_HEIGHT
 # Lower horizontal plasterboard underside above the upper finished floor.
 # Independent of the high bay's suspended-ceiling height.
 LOWER_CEILING_CLEAR_HEIGHT = 2.30
 PURLIN_WALL_TOP_HEIGHT = 3.5 - 1.375 + NADEZDIVKA - VAZNICE_HEIGHT
-# Lower purlin underside, measured above the upper structural slab (not finish).
-PURLIN_LOWER_WALL_TOP_HEIGHT = 2.25 + 0.25
+# Retained OSB/vapour-barrier top above the upper slab, no longer tied to a purlin.
+LOWER_VAPOUR_BARRIER_TOP_HEIGHT = 2.5
 
 house = House(
     "My house",
@@ -429,9 +426,34 @@ KK_WIDTH = 2.50 + 0.01
 wall2_x = BWT + 3.25 + 0.01 + BWT;
 wall3_x = wall2_x + KITCHEN_WIDTH + BWT;
 HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
-LOWER_NADEZDIVKA_X = wall3_x + 0.375
+LOWER_NADEZDIVKA_X = wall3_x + 1.375
 if not wall3_x < LOWER_NADEZDIVKA_X < HOUSE_WIDTH:
 	raise ValueError("LOWER_NADEZDIVKA_X must be between wall3 and wall4")
+
+
+def west_roof_closure_layout():
+	"""Shared layer positions for the closure and rooms meeting its inner face."""
+	specs = (
+		("Siding", FACADE_THICKNESS, "Facade finish", "#ffffff",
+		 RAFTER_Z_OFFSET + RAFTER_HEIGHT, None),
+		("MDF", MDF_THICKNESS, "MDF", "#f2b6d0", MDF_BOTTOM, None),
+		("Insulation", FACADE_INSULATION_THICKNESS, None, None, None, None),
+		("Vapour barrier", VAPOUR_BARRIER_THICKNESS, "Vapour barrier", "#4A90E2",
+		 VAPOUR_BARRIER_BOTTOM, "Vapour barrier"),
+		("Installation space", INSTALLATION_SPACE_THICKNESS, None, None, None, None),
+		("Gypsum plasterboard", GYPSUM_PLASTERBOARD_THICKNESS, "Gypsum plasterboard", "#E8E5DE",
+		 GYPSUM_PLASTERBOARD_BOTTOM, "Gypsum plasterboard"),
+	)
+	edge = LOWER_NADEZDIVKA_X - 0.03
+	ranges = {}
+	for name, thickness, *_ in specs:
+		ranges[name] = (edge-thickness, edge)
+		edge -= thickness
+	return specs, ranges
+
+
+WEST_CLOSURE_INNER_X = west_roof_closure_layout()[1]["Gypsum plasterboard"][0]
+
 aa_cut = CutDefinition(
 	start=(wall2_x + 0.01, -2.5),
 	end=(wall2_x + 0.01, HOUSE_DEPTH + 2.5),
@@ -473,7 +495,8 @@ pokoj_dole = ground.floor_layer(
 CHODBA_DEPTH = 2.635
 GALERY_START = BWT+2.4
 
-wall_zachod_nahore_y = BWT+1.2+1+0.1
+wall_zachod_nahore_y = math.ceil((GALERY_START)/0.125)*0.125
+wall_za_umyvadlem_y = wall_zachod_nahore_y + 2.0
 OBLOUK_WIDTH = 2.0
 oblouk_at = HOUSE_DEPTH-BWT-1.5-OBLOUK_WIDTH
 
@@ -493,8 +516,7 @@ vk_to = wall3_x+0.1
 a = math.floor((vk_to - vk_from - 3*0.67 - 0.75 - 0.86) / 2 * 1000.0) / 1000.0
 a = 0.91
 
-# Explicit structural levels; these arrays may overlap in X independently of
-# LOWER_NADEZDIVKA_X and the interior/exterior layer ranges.
+# Remaining high/dormer assemblies, independent of the interior-layer ranges.
 high_rafters = [
 	-0.10,
 	(-0.10+1.65)/2,
@@ -508,18 +530,11 @@ high_rafters = [
 	(vk_from+0.91+0.67+0.75+0.67+0.67, "after"),
 	(vk_from+0.91+0.67+0.75+0.67+0.67+0.67, "after"),
 	(vk_to, "+after"),
-	LOWER_NADEZDIVKA_X + 0.1 - RAFTER_THICKNESS/2.0 - COLLAR_TIE_THICKNESS,
-	]
-lower_rafters = [
-	LOWER_NADEZDIVKA_X + 0.1 + RAFTER_THICKNESS/2.0 + COLLAR_TIE_THICKNESS + 0.015,
-	vk_to+0.67,
-	vk_to+0.67+0.67,
-	vk_to+0.67+0.67+0.67,
-	HOUSE_WIDTH+0.1,
+	LOWER_NADEZDIVKA_X - 0.15,
 	]
 # Shared drawing indices and assembly generation keep the original order.
-rafters = high_rafters + lower_rafters
-framing_levels = framing_levels_from_arrays(high_rafters, lower_rafters)
+rafters = high_rafters
+framing_levels = framing_levels_from_arrays(high_rafters, ())
 
 # chimney
 CHIMNEY_DIST=0.47
@@ -665,7 +680,7 @@ front_door = wall_1_g.add_door(
 
 # Front windows (koupelna)
 window_bathroom = wall_front_g.add_window(
-	at=wall3_x+KK_WIDTH/2-0.5, width=1.0,
+	at=HOUSE_WIDTH-BWT-1.0, width=0.5,
 	sill_height=GROUND_WINDOW_HEIGHT-0.75,
 	height=GROUND_WINDOW_HEIGHT)
 
@@ -678,12 +693,10 @@ window_obyvak = wall_back_g.add_window(
 window_pokoj_dole = wall_back_g.add_window(
 	at=HOUSE_WIDTH-wall2_x+BWT+0.875,
 	width=1.5, sill_height=GROUND_WINDOW_SILL_HEIGHT, height=GROUND_WINDOW_HEIGHT)
-window_kk = wall_back_g.add_door(
+window_kk = wall_back_g.add_window(
 	at=BWT+KK_WIDTH-0.125-1,
-	width=0.8, sill_height=GROUND_WINDOW_HEIGHT-2.125,
-	height=GROUND_WINDOW_HEIGHT, # align height with windows even though this is door
-	opening_width=1, clear_height=2,
-	operation="SINGLE_SWING_RIGHT", glazed=True,)
+	width=1.0, sill_height=GROUND_WINDOW_SILL_HEIGHT,
+	height=GROUND_WINDOW_HEIGHT,)
 window_kk1 = wall_4_g.add_window(
 	at=HOUSE_DEPTH-BWT-1.5-1.5,
 	sill_height=GROUND_WINDOW_SILL_HEIGHT,
@@ -898,6 +911,14 @@ rozvadec = ground.furniture(
     color="#ffffff",
     center=(3, BWT+0.3),
 	start_height=GROUND_FLOOR_THICKNESS+0.1,
+)
+ground.furniture(
+    "Pračka",
+    kind="USERDEFINED",
+	start_height=GROUND_FLOOR_THICKNESS,
+    size=(0.7, 0.7, 0.8),
+    color="#ffffff",
+    center=(wall3_x-BWT-0.4, BWT+0.4),
 )
 ground.furniture(
     "Zásobník\nTUV",
@@ -1294,27 +1315,18 @@ upper_pokoj_2 = upper.floor_layer(
 	)
 galerie = upper.floor_layer(
 		f"Galerie",
-		room_id="P.05",
+		room_id="P.03",
 		outline=(
 			(wall2_x, GALERY_START),
 			(wall3_x-BWT, GALERY_START),
+			(wall3_x-BWT, wall_zachod_nahore_y),
+			(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y),
+			(WEST_CLOSURE_INNER_X, wall_za_umyvadlem_y-0.1),
+			(wall3_x, wall_za_umyvadlem_y-0.1),
+			(wall3_x, wall_zachod_nahore_y+1.0),
+			(wall3_x-BWT, wall_zachod_nahore_y+1.0),
 			(wall3_x-BWT, GALERY_END),
 			(wall2_x, GALERY_END),
-		),
-		thickness=UPPER_FLOOR_THICKNESS,
-		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
-		insulation_material=FLOOR_INSULATION_MATERIAL,
-		buildup_material=FLOOR_BUILDUP_MATERIAL,
-		color="#ffff80",
-	)
-upper_sklad = upper.floor_layer(
-		f"Sklad",
-		room_id="P.03",
-		outline=(
-			(wall3_x, wall_zachod_nahore_y),
-			(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
-			(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
-			(wall3_x, HOUSE_DEPTH-BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
 		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
@@ -1327,8 +1339,8 @@ zachod_nahore = upper.floor_layer(
 		room_id="P.04",
 		outline=(
 			(wall3_x, wall_zachod_nahore_y-0.1),
-			(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1),
-			(HOUSE_WIDTH-BWT, BWT),
+			(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y-0.1),
+			(WEST_CLOSURE_INNER_X, BWT),
 			(wall3_x, BWT),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
@@ -1371,8 +1383,6 @@ VAZNICE_SIDE_DIST = (
 if any(not math.isfinite(value) or value <= 0 for value in (
 	VAZNICE_HEIGHT, VAZNICE_BASE, VAZNICE_DIST,
 	VAZNICE_SIDE_HEIGHT, VAZNICE_SIDE_BASE, VAZNICE_SIDE_DIST,
-	VAZNICE_LOWER_HEIGHT, VAZNICE_LOWER_BASE, VAZNICE_LOWER_DIST,
-	PURLIN_LOWER_WALL_TOP_HEIGHT,
 )):
 	raise ValueError("purlin dimensions and ridge distances must be positive and finite")
 if PURLIN_SIDE_PACKING_HEIGHT < 0:
@@ -1391,38 +1401,6 @@ FLAT_CEILING_ROOF_PLANE_POINTS = (
 WALL_PLATE_SIZE = (0.16, 0.12)
 STREET_WALL_PLATE_Y = 0.125
 GARDEN_WALL_PLATE_Y = HOUSE_DEPTH - 0.125
-
-# Lower roof pitch: outer top edge of the lower purlin to the outer top
-# edge of the lowered wall plate.
-lower_roof_run = (
-	HALF_DEPTH - VAZNICE_LOWER_DIST - VAZNICE_LOWER_BASE / 2
-	- (STREET_WALL_PLATE_Y - WALL_PLATE_SIZE[0] / 2)
-)
-lower_roof_rise = (
-	PURLIN_LOWER_WALL_TOP_HEIGHT + VAZNICE_LOWER_HEIGHT
-	- (LOWER_NADEZDIVKA + WALL_PLATE_SIZE[1])
-)
-if lower_roof_run <= 0 or lower_roof_rise <= 0:
-	raise ValueError("lower purlins must be above and inward of the lowered wall-plate contact")
-lower_roof_angle = degrees(math.atan2(lower_roof_rise, lower_roof_run))
-LOWER_ROOF_JOINT_Z = (
-	UPPER_FLOOR_START + PURLIN_LOWER_WALL_TOP_HEIGHT + VAZNICE_LOWER_HEIGHT
-)
-LOWER_STREET_ROOF_JOINT_Y = HALF_DEPTH - VAZNICE_LOWER_DIST - VAZNICE_LOWER_BASE / 2
-LOWER_GARDEN_ROOF_JOINT_Y = HALF_DEPTH + VAZNICE_LOWER_DIST + VAZNICE_LOWER_BASE / 2
-LOWER_STREET_ROOF_PLANE_POINTS = (
-	(0, LOWER_STREET_ROOF_JOINT_Y, LOWER_ROOF_JOINT_Z),
-	(10, LOWER_STREET_ROOF_JOINT_Y, LOWER_ROOF_JOINT_Z),
-	(0, STREET_WALL_PLATE_Y - WALL_PLATE_SIZE[0] / 2,
-	 UPPER_FLOOR_START + LOWER_NADEZDIVKA + WALL_PLATE_SIZE[1]),
-)
-LOWER_GARDEN_ROOF_PLANE_POINTS = (
-	(0, LOWER_GARDEN_ROOF_JOINT_Y, LOWER_ROOF_JOINT_Z),
-	(10, LOWER_GARDEN_ROOF_JOINT_Y, LOWER_ROOF_JOINT_Z),
-	(0, GARDEN_WALL_PLATE_Y + WALL_PLATE_SIZE[0] / 2,
-	 UPPER_FLOOR_START + LOWER_NADEZDIVKA + WALL_PLATE_SIZE[1]),
-)
-
 
 def wall_plate_center_z(roof_plane_points, center_y, *, side):
 	"""Return a wall plate centre Z with its outer top edge on the roof plane."""
@@ -1453,12 +1431,6 @@ DORMER_WALL_PLATE_Z = wall_plate_center_z(
 	GARDEN_WALL_PLATE_Y,
 	side="garden",
 )
-LOWER_STREET_WALL_PLATE_Z = wall_plate_center_z(
-	LOWER_STREET_ROOF_PLANE_POINTS, STREET_WALL_PLATE_Y, side="street",
-)
-LOWER_GARDEN_WALL_PLATE_Z = wall_plate_center_z(
-	LOWER_GARDEN_ROOF_PLANE_POINTS, GARDEN_WALL_PLATE_Y, side="garden",
-)
 
 
 STREET_GYPSUM_PLASTERBOARD_CUT = offset_plane(
@@ -1477,10 +1449,6 @@ wall_cuts_1 = [
 	),
 #	((0, 0.25, 0), (10, 0.25, 0), (0, 0.25, 10)),
 ]
-wall_cuts_4 = [
-	offset_plane(*LOWER_STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
-	offset_plane(*LOWER_GARDEN_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
-]
 wall_cuts_2_3 = [
 	offset_plane(*STREET_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
 	offset_plane(*DORMER_ROOF_PLANE_POINTS, offset=RAFTER_Z_OFFSET),
@@ -1492,21 +1460,31 @@ wall_dormer = upper.wall(
 wall_front1_u = upper.wall(
 	(0, 0), (LOWER_NADEZDIVKA_X, 0),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_front2_u = upper.wall(
-	(LOWER_NADEZDIVKA_X, 0), (HOUSE_WIDTH, 0),
-	wall_type=load_bearing_wall, height=LOWER_NADEZDIVKA)
 # Both back-wall parts retain the original right-to-left orientation.
 # Part 1 is the higher (left) portion, matching front part 1.
 wall_back1_u = upper.wall(
 	(LOWER_NADEZDIVKA_X, HOUSE_DEPTH), (0, HOUSE_DEPTH),
 	wall_type=load_bearing_wall, height=NADEZDIVKA)
-wall_back2_u = upper.wall(
-	(HOUSE_WIDTH, HOUSE_DEPTH), (LOWER_NADEZDIVKA_X, HOUSE_DEPTH),
-	wall_type=load_bearing_wall, height=LOWER_NADEZDIVKA)
 wall_1_u = upper.wall(
 	(0, HOUSE_DEPTH-BWT), (0, BWT),
 	wall_type=load_bearing_wall,
 	height=4, cuts=wall_cuts_1, )
+
+EAST_UPPER_WINDOW_WIDTH = 1.0
+EAST_UPPER_WINDOW_GAP = 1.0
+EAST_UPPER_WINDOW_SILL_HEIGHT = 1.0  # Above the upper-floor start, before finishes.
+EAST_UPPER_WINDOW_TOP_HEIGHT = 2.375
+east_upper_window_start = (wall_1_u.length - (2*EAST_UPPER_WINDOW_WIDTH + EAST_UPPER_WINDOW_GAP)) / 2
+east_upper_windows = tuple(
+	wall_1_u.add_window(
+		name=f"East upper window {index+1}",
+		at=east_upper_window_start + index*(EAST_UPPER_WINDOW_WIDTH+EAST_UPPER_WINDOW_GAP),
+		width=EAST_UPPER_WINDOW_WIDTH, sill_height=EAST_UPPER_WINDOW_SILL_HEIGHT,
+		height=EAST_UPPER_WINDOW_TOP_HEIGHT, color="#ffffff",
+	)
+	for index in range(2)
+)
+
 wall_2 = upper.wall(
 	(wall2_x, BWT), (wall2_x, HOUSE_DEPTH-BWT),
 	cuts=wall_cuts_2_3,
@@ -1518,7 +1496,7 @@ wall_3 = upper.wall(
 	wall_type=load_bearing_wall, height=INNER_SUPPORT_WALL_HEIGHT)
 
 sklad_opening = wall_3.add_opening(
-    at=math.ceil((GALERY_START-BWT)/0.125)*0.125,
+    at=wall_zachod_nahore_y - BWT,
     width=1,
     height=2.25,
 )
@@ -1537,22 +1515,26 @@ pokoj2_door = wall_pokoj2.add_door(
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
 wall_zachod_nahore = upper.wall(
-	start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y),
+	start=(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y),
 	end=(wall3_x, wall_zachod_nahore_y),
 	wall_type=dry_wall, height=2.0)
+wall_za_umyvadlem = upper.wall(
+	start=(WEST_CLOSURE_INNER_X, wall_za_umyvadlem_y),
+	end=(wall3_x, wall_za_umyvadlem_y),
+	wall_type=dry_wall, height=wall_zachod_nahore.height)
 upper.asset(
     "WC",
     asset="toilet_without_cistern",
 	start_height=GROUND_FLOOR_THICKNESS,
-    center=(HOUSE_WIDTH-(BWT+KK_WIDTH)+0.4, wall_zachod_nahore_y-0.1-0.5),
-    rotation=90,
+    center=(wall3_x + 0.5, wall_zachod_nahore_y - 0.1 - 1.0),
+    rotation=180,
 )
 upper.asset(
     "Umyv",
     asset="basin_large",
-    center=(HOUSE_WIDTH-BWT-0.4, wall_zachod_nahore_y+0.35),
+    center=(wall3_x + 0.5, wall_zachod_nahore_y+1.0+0.35),
 	start_height=UPPER_FLOOR_THICKNESS + 0.85 - 0.25,
-	rotation=180,
+#	rotation=180,
 )
 
 #upper.connect_wall(wall_1_u, wall_back1_u)
@@ -1570,30 +1552,26 @@ upper.asset(
 PURLIN_TOP_Z = (
 	UPPER_FLOOR_START + PURLIN_WALL_TOP_HEIGHT + VAZNICE_HEIGHT
 )
-# Independent pieces: the high middle pieces overhang wall3 and overlap the
-# lowered right pieces in X. These are not connected Gerber segments.
-# Framing levels come from high_rafters/lower_rafters, not these overlapping ends.
+# Two independent high-roof pieces; the middle ones overhang wall3 and end
+# at the remaining roof boundary. These are not connected Gerber segments.
 PURLIN_X_SEGMENTS = (
 	("left", -0.2, MIDDLE_PURLIN_X_MIN, VAZNICE_SIDE_HEIGHT),
 	(
 		"middle",
 		MIDDLE_PURLIN_X_MIN,
-		LOWER_NADEZDIVKA_X + 0.2,
+		LOWER_NADEZDIVKA_X - 0.05,
 		VAZNICE_HEIGHT,
 	),
-	("right", wall3_x - BWT, HOUSE_WIDTH + 0.2, VAZNICE_LOWER_HEIGHT),
 )
 PURLIN_SECTION_DIMENSIONS = {
 	"left": (VAZNICE_SIDE_BASE, VAZNICE_SIDE_HEIGHT, VAZNICE_SIDE_DIST),
 	"middle": (VAZNICE_BASE, VAZNICE_HEIGHT, VAZNICE_DIST),
-	"right": (VAZNICE_LOWER_BASE, VAZNICE_LOWER_HEIGHT, VAZNICE_LOWER_DIST),
 }
 # Bottom of the MIDDLE pieces (and top of the unchanged inner walls).
 PURLIN_BOTTOM_Z = PURLIN_TOP_Z - VAZNICE_HEIGHT
 PURLIN_SECTION_BOTTOM_Z = {
 	"left": PURLIN_TOP_Z - VAZNICE_SIDE_HEIGHT,
 	"middle": PURLIN_BOTTOM_Z,
-	"right": UPPER_FLOOR_START + PURLIN_LOWER_WALL_TOP_HEIGHT,
 }
 # One horizontal barrier level throughout, at the top of the inner support walls.
 FLAT_VAPOUR_BARRIER_TOP_Z = UPPER_FLOOR_START + INNER_SUPPORT_WALL_HEIGHT
@@ -1604,19 +1582,12 @@ COLLAR_TIE_TOP_HEIGHT = COLLAR_TIE_BOTTOM_HEIGHT + COLLAR_TIE_SIZE[1]
 
 
 def framing_is_lower(x):
-	"""Use explicit assembly ownership; only non-assembly sections use the step."""
-	if x in framing_levels:
-		return framing_levels[x] == "lower"
-	parent_x = paired_dormer_owners.get(x)
-	if parent_x is not None:
-		return framing_levels[parent_x] == "lower"
-	return x >= LOWER_NADEZDIVKA_X
+	"""Only the high roof remains; the former low bay has no framing."""
+	return False
 
 
 def purlin_segment_at(x):
 	"""Select the high or low support explicitly where their X spans overlap."""
-	if framing_is_lower(x):
-		return "right"
 	return "middle" if x >= MIDDLE_PURLIN_X_MIN else "left"
 
 
@@ -1637,7 +1608,7 @@ def purlin_at(x, *, side):
 	if side not in {"street", "garden"}:
 		raise ValueError("purlin side must be street or garden")
 	pieces = street_purlins if side == "street" else garden_purlins
-	beam = pieces[{"left": 0, "middle": 1, "right": 2}[purlin_segment_at(x)]]
+	beam = pieces[{"left": 0, "middle": 1}[purlin_segment_at(x)]]
 	if not min(beam.start[0], beam.end[0]) - 1e-9 <= x <= max(beam.start[0], beam.end[0]) + 1e-9:
 		raise ValueError(f"selected {side} purlin does not reach framing at x={x:g}")
 	return beam
@@ -1705,7 +1676,7 @@ purlin_packing_blocks = add_purlin_packing_blocks()
 beam3 = upper.beam(
     "Beam",
 	start=(-0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
-	end=(LOWER_NADEZDIVKA_X + 0.2, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
+	end=(LOWER_NADEZDIVKA_X - 0.05, STREET_WALL_PLATE_Y, STREET_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
     kind="WALL_PLATE",
@@ -1721,43 +1692,61 @@ beam4_a = upper.beam(
 beam4_b = upper.beam(
     "Beam",
 	start=(wall3_x, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
-	end=(LOWER_NADEZDIVKA_X + 0.2, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
+	end=(LOWER_NADEZDIVKA_X - 0.05, GARDEN_WALL_PLATE_Y, GARDEN_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
     kind="WALL_PLATE",
 )
 beam_dormer = upper.beam(
     "Beam",
-	start=(wall3_x+0.3, GARDEN_WALL_PLATE_Y, DORMER_WALL_PLATE_Z),
-	end=(wall2_x-BWT-0.3, GARDEN_WALL_PLATE_Y, DORMER_WALL_PLATE_Z),
+	start=(wall3_x+0.2, GARDEN_WALL_PLATE_Y, DORMER_WALL_PLATE_Z),
+	end=(wall2_x-BWT-0.2, GARDEN_WALL_PLATE_Y, DORMER_WALL_PLATE_Z),
     size=WALL_PLATE_SIZE,
     material="Wood",
     kind="WALL_PLATE",
 )
-beam3_lower = upper.beam(
-	"Lower street wall plate",
-	start=(LOWER_NADEZDIVKA_X, STREET_WALL_PLATE_Y, LOWER_STREET_WALL_PLATE_Z),
-	end=(HOUSE_WIDTH+0.2, STREET_WALL_PLATE_Y, LOWER_STREET_WALL_PLATE_Z),
-	size=WALL_PLATE_SIZE, material="Wood", kind="WALL_PLATE",
-)
-beam4_lower = upper.beam(
-	"Lower garden wall plate",
-	start=(LOWER_NADEZDIVKA_X, GARDEN_WALL_PLATE_Y, LOWER_GARDEN_WALL_PLATE_Z),
-	end=(HOUSE_WIDTH+0.2, GARDEN_WALL_PLATE_Y, LOWER_GARDEN_WALL_PLATE_Z),
-	size=WALL_PLATE_SIZE, material="Wood", kind="WALL_PLATE",
-)
-street_wall_plates = (beam3, beam3_lower)
-garden_wall_plates = (beam4_a, beam4_b, beam_dormer, beam4_lower)
+street_wall_plates = (beam3,)
+garden_wall_plates = (beam4_a, beam4_b, beam_dormer)
+
+
+def add_transverse_roof_supports():
+	"""One continuous Y-aligned purlin and a plate seated on wall 4's ring beam."""
+	if not math.isfinite(TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR) or TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR <= 0:
+		raise ValueError("TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR must be positive and finite")
+	bearings = [beam for beam in ring_beams if beam.source_wall == wall_4_g]
+	if not bearings:
+		raise ValueError("the transverse wall plate needs the ring beam on wall 4")
+	x = bearings[0].start[0]
+	top = bearings[0].start[2] + bearings[0].height / 2
+	if any(not isclose(point[0], x, abs_tol=1e-9)
+	       or not isclose(point[2] + beam.height / 2, top, abs_tol=1e-9)
+	       for beam in bearings for point in (beam.start, beam.end)):
+		raise ValueError("wall 4 ring-beam pieces must share one horizontal bearing line")
+	y0 = min(point[1] for beam in bearings for point in (beam.start, beam.end))
+	y1 = max(point[1] for beam in bearings for point in (beam.start, beam.end))
+	purlin_x = LOWER_NADEZDIVKA_X + 0.125
+	purlin_z = (UPPER_FLOOR_START + TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR - VAZNICE_SIDE_HEIGHT / 2)
+	purlin = upper.beam(
+		"Transverse roof purlin", start=(purlin_x, y0, purlin_z), end=(purlin_x, y1, purlin_z),
+		size=(VAZNICE_SIDE_BASE, VAZNICE_SIDE_HEIGHT), material="Wood", kind="BEAM",
+	)
+	plate_z = top + WALL_PLATE_SIZE[1] / 2
+	plate = upper.beam(
+		"Transverse wall plate - wall 4", start=(x, y0, plate_z), end=(x, y1, plate_z),
+		size=WALL_PLATE_SIZE, material="Wood", kind="WALL_PLATE",
+	)
+	return purlin, plate
+
+
+transverse_purlin, transverse_wall_plate = add_transverse_roof_supports()
 
 
 def wall_plate_at(x, *, side, dormer=False):
 	if side == "street":
-		plate = beam3_lower if framing_is_lower(x) else beam3
+		plate = beam3
 	elif side == "garden":
 		if dormer:
 			plate = beam_dormer
-		elif framing_is_lower(x):
-			plate = beam4_lower
 		else:
 			plate = beam4_a if x <= max(beam4_a.start[0], beam4_a.end[0]) else beam4_b
 	else:
@@ -1776,14 +1765,6 @@ upper.furniture(
 	rotation=90,
 	start_height=UPPER_FLOOR_THICKNESS,
 )
-upper.furniture(
-    "Pračka",
-    kind="USERDEFINED",
-	start_height=GROUND_FLOOR_THICKNESS,
-    size=(0.7, 0.7, 0.8),
-    color="#ffffff",
-    center=(HOUSE_WIDTH-(BWT+0.5)-0.4, BWT+0.4),
-)
 
 # Okna obyvak
 window_dormer_1 = wall_dormer.add_window(
@@ -1799,10 +1780,9 @@ pokoj1_door = wall_2.add_door(
 	clear_height=door_clear_height,
 	sill_height=UPPER_FLOOR_THICKNESS,
 	operation="SINGLE_SWING_LEFT")
-# The former storage-room window remains omitted from the lower gable.
 # A level concrete band through the HIGH upper load-bearing walls, below
 # the normal wall plates and dormer windows. Low wall parts lie entirely
-# below this band and are skipped; no low-level ring beam is added yet.
+# outside the remaining upper perimeter; no low-level ring beam is added.
 # Openings interrupt concrete and bars. All roof support levels stay unchanged.
 upper_ring_beams = upper.add_ring_beams_from(
 	upper,
@@ -1817,17 +1797,7 @@ upper_ring_beams = upper.add_ring_beams_from(
 	concrete_cover=RING_BEAM_CONCRETE_COVER,
 )
 
-# Build the lower gable after the HIGH ring-beam band so it does not acquire
-# that unrelated band. Like wall 1 it follows both rafter undersides and has
-# a flat bearing top, here at the lower purlin underside. The source height
-# supplies the horizontal cap, without another Boolean clipping plane.
-wall_4_u = upper.wall(
-	(HOUSE_WIDTH, BWT), (HOUSE_WIDTH, HOUSE_DEPTH-BWT),
-	wall_type=load_bearing_wall,
-	height=PURLIN_LOWER_WALL_TOP_HEIGHT, cuts=wall_cuts_4,
-)
-#upper.connect_wall(wall_4_u, wall_front2_u)
-#upper.connect_wall(wall_4_u, wall_back2_u)
+# No upper west gable or knee walls in the former low-roof bay.
 
 # Roof
 
@@ -1882,6 +1852,7 @@ if not math.isfinite(ROOF_EAVE_SETBACK) or not 0 <= ROOF_EAVE_SETBACK < min(ROOF
 STREET_ROOF_EAVE_Y = -ROOF_EAVE_OVERHANG
 GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + ROOF_EAVE_OVERHANG
 DORMER_ROOF_EAVE_Y = HOUSE_DEPTH + DORMER_ROOF_EAVE_OVERHANG
+TRANSVERSE_ROOF_EAVE_X = HOUSE_WIDTH + ROOF_EAVE_OVERHANG
 
 
 def horizontal_roof_eave_cut(wall_plate_center_z, *, drop=None):
@@ -1898,6 +1869,11 @@ def roof_eave_setback_cuts(plane):
 		return ()
 	cuts = []
 	for cut in plane.cuts:
+		if (max(p[0] for p in cut) - min(p[0] for p in cut) <= 1e-9
+		    and isclose(cut[0][0], TRANSVERSE_ROOF_EAVE_X, abs_tol=1e-9)):
+			x = TRANSVERSE_ROOF_EAVE_X - ROOF_EAVE_SETBACK
+			cuts.append(((x, 0, 0), (x, 10, 0), (x, 0, 10)))
+			continue
 		if max(p[1] for p in cut) - min(p[1] for p in cut) > 1e-9:
 			continue
 		y = cut[0][1]
@@ -1957,27 +1933,37 @@ flat_ceiling_roof = roof.plane(
 	"Flat ceiling",
 	points=FLAT_CEILING_ROOF_PLANE_POINTS,
 )
-# Shared lower interior/exterior and structural-framing planes.
-lower_street_roof = roof.plane(
-	"Lower street slope", points=LOWER_STREET_ROOF_PLANE_POINTS,
-	cuts=(street_roof.cuts[0], horizontal_roof_eave_cut(LOWER_STREET_WALL_PLATE_Z), street_roof.cuts[2]),
-)
-lower_garden_roof = roof.plane(
-	"Lower garden slope", points=LOWER_GARDEN_ROOF_PLANE_POINTS,
-	cuts=(garden_roof.cuts[0], horizontal_roof_eave_cut(LOWER_GARDEN_WALL_PLATE_Z), garden_roof.cuts[2]),
-)
+# Independent retained ceiling plane; no lower sloped roof remains.
 lower_flat_ceiling_roof = roof.plane(
-	"Lower flat ceiling",
-	points=(
-		(0, LOWER_STREET_ROOF_JOINT_Y, LOWER_ROOF_JOINT_Z),
-		(10, LOWER_STREET_ROOF_JOINT_Y, LOWER_ROOF_JOINT_Z),
-		(0, LOWER_GARDEN_ROOF_JOINT_Y, LOWER_ROOF_JOINT_Z),
-	),
+	"Retained lower flat ceiling",
+	points=((0, 0, UPPER_FLOOR_START), (10, 0, UPPER_FLOOR_START), (0, 1, UPPER_FLOOR_START)),
 )
+
+
+def add_transverse_roof_plane():
+	"""Pitch through the outer top bearing edges, with the shared eave cuts."""
+	purlin_x = transverse_purlin.start[0] + transverse_purlin.width / 2
+	purlin_top = transverse_purlin.start[2] + transverse_purlin.height / 2
+	plate_x = transverse_wall_plate.start[0] + transverse_wall_plate.width / 2
+	plate_top = transverse_wall_plate.start[2] + transverse_wall_plate.height / 2
+	if plate_x <= purlin_x or purlin_top <= plate_top:
+		raise ValueError("transverse purlin must be higher than and inward of the wall plate")
+	return roof.plane(
+		"Transverse slope",
+		points=((purlin_x, 0, purlin_top), (purlin_x, 10, purlin_top), (plate_x, 0, plate_top)),
+		cuts=(
+			((LOWER_NADEZDIVKA_X, 0, 0), (LOWER_NADEZDIVKA_X, 10, 0), (LOWER_NADEZDIVKA_X, 0, 10)),
+			horizontal_roof_eave_cut(transverse_wall_plate.start[2]),
+			((TRANSVERSE_ROOF_EAVE_X, 0, 0), (TRANSVERSE_ROOF_EAVE_X, 10, 0), (TRANSVERSE_ROOF_EAVE_X, 0, 10)),
+		),
+	)
+
+
+transverse_roof = add_transverse_roof_plane()
 
 
 def framing_roof_planes_at(x):
-	return (lower_street_roof, lower_garden_roof) if framing_is_lower(x) else (street_roof, garden_roof)
+	return street_roof, garden_roof
 
 
 def roof_batting_point(
@@ -2111,6 +2097,7 @@ def rafter_support_span(plane, first_support_y, second_support_y):
 street_roof_angle = roof_angle_degrees(street_roof)
 garden_roof_angle = roof_angle_degrees(garden_roof)
 dormer_roof_angle = roof_angle_degrees(dormer_roof)
+transverse_roof_angle = roof_angle_degrees(transverse_roof)
 if not isclose(street_roof_angle, garden_roof_angle, abs_tol=1e-9):
 	raise ValueError("street and garden roof angles must match")
 street_rafter_span = rafter_support_span(
@@ -2151,7 +2138,6 @@ if not isclose(
 purlin_support_spans = (
 	wall2_x,
 	wall3_x - wall2_x,
-	HOUSE_WIDTH - wall3_x,
 )
 print(
 	f"Main roof angle: {street_roof_angle:.2f}° "
@@ -2162,8 +2148,8 @@ print(
 	f"({100 * math.tan(math.radians(dormer_roof_angle)):.2f}%)"
 )
 print(
-	f"Lower roof angle: {lower_roof_angle:.2f}° "
-	f"({100 * math.tan(math.radians(lower_roof_angle)):.2f}%)"
+	f"Transverse roof angle: {transverse_roof_angle:.2f}° "
+	f"({100 * math.tan(math.radians(transverse_roof_angle)):.2f}%)"
 )
 print("Rafter load inputs (support centreline to centreline):")
 print(f"  SUPPORT_SPAN_M = {street_rafter_span:.3f}")
@@ -2197,14 +2183,13 @@ roof_layer_storeys.update({
 	"Rafters": house.storey("Roof - 0: Rafters", elevation=upper.elevation),
 	"Collar ties": house.storey(
 		"Roof - 0a: Collar ties", elevation=upper.elevation),
-	"Wood fiberboard": house.storey(
-		"Roof - +1: Wood fiberboard", elevation=upper.elevation),
+	"MDF": house.storey(
+		"Roof - +1: MDF", elevation=upper.elevation),
 	"Roofing underlay": house.storey("Roof - +2: Underlay", elevation=upper.elevation),
 	"Counter-battens": house.storey("Roof - +3: Counter-battens", elevation=upper.elevation),
 	"Tile battens": house.storey("Roof - +4: Tile battens", elevation=upper.elevation),
 	"Roof tiles": house.storey("Roof - +5: Tiles", elevation=upper.elevation),
 	"Roof windows": house.storey("Roof - +6: Windows", elevation=upper.elevation),
-	"Gable closure": house.storey("Roof - Gable closure", elevation=upper.elevation),
 	"Eave siding": house.storey("Roof - Eave siding", elevation=upper.elevation),
 	"Sloped siding": house.storey("Roof - Sloped siding", elevation=upper.elevation),
 })
@@ -2222,44 +2207,6 @@ def wood_siding_color(*, patterned=False):
 	patterns = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg").getroot()
 	siding = next(p for p in patterns if p.get("id") == "wood-siding")
 	return siding.find("{http://www.w3.org/2000/svg}rect").get("fill")
-
-
-def add_roof_step_closure():
-	"""Gable infill: 15 mm MDF plus 20 mm siding, cut to both roof levels."""
-	z0 = UPPER_FLOOR_START
-	z1 = z0 + 5.0
-	x0 = LOWER_NADEZDIVKA_X + 0.1
-	x1 = x0 + 0.015
-	x2 = x1 + 0.02
-	panels = []
-	# The band between two pitched roofs is not convex across the ridge.
-	# Clip one box per slope, meeting exactly at HALF_DEPTH without overlap.
-	for layer_name, start_x, end_x, material, bottom_offset in (
-		("gable closure", x0, x1, "mdf-solid", RAFTER_Z_OFFSET),
-		("wood siding", x1, x2, "Wood siding", UNDERLAY_BOTTOM + UNDERLAY_THICKNESS),
-	):
-		for side, y0, y1, high, low in (
-			("Street", 0.0-FACADE_INSULATION_THICKNESS-FACADE_THICKNESS+0.001, HALF_DEPTH, street_roof, lower_street_roof),
-			("Garden", HALF_DEPTH, HOUSE_DEPTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS-0.001, garden_roof, lower_garden_roof),
-		):
-			top = offset_plane(*high.points, offset=RAFTER_Z_OFFSET + RAFTER_HEIGHT)
-			bottom = offset_plane(*low.points, offset=bottom_offset)
-			keep_x, keep_y = (start_x + end_x) / 2, (y0 + y1) / 2
-			keep_bottom = max(z0, plane_height_at(*bottom, x=keep_x, y=keep_y))
-			keep_top = min(z1, plane_height_at(*top, x=keep_x, y=keep_y))
-			if keep_top <= keep_bottom:
-				raise ValueError(f"{side.lower()} roof-step closure has no space between the rafter faces")
-			panel = house.add_box(
-				f"{side} roof-step {layer_name}",
-				origin=(start_x, y0, z0), size=(end_x-start_x, y1-y0, z1-z0),
-				material=material, color=wood_siding_color(patterned=True) if material == "Wood siding" else "#ffffff",
-				cuts=(top, bottom),
-				retained_point=(keep_x, keep_y, (keep_bottom + keep_top) / 2),
-			)
-			panel.Description = "Non-structural gable cladding between the high and lower roofs"
-			roof_layer_storeys["Gable closure"].add(panel)
-			panels.append(panel)
-	return tuple(panels)
 
 
 # The under-rafter insulation follows each occupied roof slope only as far as
@@ -2299,8 +2246,8 @@ FLAT_CEILING_INNER_LAYER_LAYOUT = {
 }
 LOWER_FLAT_CEILING_LAYER_HEIGHTS = {
 	"Vapour barrier": (
-		PURLIN_LOWER_WALL_TOP_HEIGHT - VAPOUR_BARRIER_THICKNESS,
-		PURLIN_LOWER_WALL_TOP_HEIGHT,
+		LOWER_VAPOUR_BARRIER_TOP_HEIGHT - VAPOUR_BARRIER_THICKNESS,
+		LOWER_VAPOUR_BARRIER_TOP_HEIGHT,
 	),
 	"Gypsum plasterboard": (
 		UPPER_FLOOR_THICKNESS + LOWER_CEILING_CLEAR_HEIGHT,
@@ -2312,15 +2259,18 @@ if not math.isfinite(LOWER_CEILING_CLEAR_HEIGHT) or LOWER_CEILING_CLEAR_HEIGHT <
 if LOWER_FLAT_CEILING_LAYER_HEIGHTS["Gypsum plasterboard"][1] > LOWER_FLAT_CEILING_LAYER_HEIGHTS["Vapour barrier"][0]:
 	raise ValueError("lower plasterboard ceiling must fit below the vapour barrier")
 LOWER_FLAT_CEILING_INNER_LAYER_LAYOUT = {
-	layer_name: (UPPER_FLOOR_START + bottom - LOWER_ROOF_JOINT_Z, top - bottom)
+	layer_name: (bottom, top - bottom)
 	for layer_name, (bottom, top) in LOWER_FLAT_CEILING_LAYER_HEIGHTS.items()
 }
-UNDERLAY_BOTTOM = WOOD_FIBERBOARD_BOTTOM + WOOD_FIBERBOARD_THICKNESS
+# Preserve the existing horizontal ceiling footprints without roof slopes.
+LOWER_CEILING_Y_LIMITS = {
+	"Vapour barrier": (HALF_DEPTH - 0.996266844889948, HALF_DEPTH + 0.996266844889948),
+	"Gypsum plasterboard": (HALF_DEPTH - 1.0100002003806446, HALF_DEPTH + 1.0100002003806446),
+}
+UNDERLAY_BOTTOM = MDF_BOTTOM + MDF_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM + UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM + COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1]
-
-roof_step_closure = add_roof_step_closure()
 
 rafter_layout = []
 # The collar board on the dormer side must sit outside the touching pair,
@@ -2478,6 +2428,10 @@ dormer_x_min = min(dormer_rafter_positions)
 dormer_x_max = max(dormer_rafter_positions)
 
 ROOF_X_OVERHANG = 0.25
+# Transverse roof: overhang past both street/garden walls in global Y.
+TRANSVERSE_ROOF_Y_OVERHANG = 0.25
+if not math.isfinite(TRANSVERSE_ROOF_Y_OVERHANG) or TRANSVERSE_ROOF_Y_OVERHANG < 0:
+	raise ValueError("TRANSVERSE_ROOF_Y_OVERHANG must be non-negative and finite")
 # Authoritative layer X extents: inner finishes stop at the room boundaries;
 # tiles use their separately specified overhangs; boards and battens below
 # them leave ROOF_EAVE_SETBACK at each X end. Neither range list is split or
@@ -2485,13 +2439,12 @@ ROOF_X_OVERHANG = 0.25
 roof_under_rafter_x_ranges = (
 	(BWT, wall2_x-BWT, "normal"),
 	(wall2_x, wall3_x-BWT, "dormer"),
-	(wall3_x, HOUSE_WIDTH-BWT, "lower"),
+	(wall3_x, LOWER_NADEZDIVKA_X - 0.25, "normal"),
 )
 roof_over_rafter_x_ranges = (
-	(-ROOF_X_OVERHANG, wall2_x-BWT, "normal"),
+	(-ROOF_X_OVERHANG, wall2_x-BWT-FACADE_INSULATION_THICKNESS, "normal"),
 	(wall2_x-BWT-ROOF_X_OVERHANG, wall3_x+ROOF_X_OVERHANG, "dormer"),
-	(wall3_x, LOWER_NADEZDIVKA_X + 0.1 + 0.015 + 0.05, "normal"),
-	(LOWER_NADEZDIVKA_X + 0.1 + 0.015, HOUSE_WIDTH + ROOF_X_OVERHANG, "lower"),
+	(wall3_x+FACADE_INSULATION_THICKNESS, LOWER_NADEZDIVKA_X, "normal"),
 )
 
 
@@ -2499,7 +2452,7 @@ def validate_roof_layer_ranges(ranges, *, allow_overlap=False):
 	"""Validate explicit profiles; only exterior layer ranges may overlap."""
 	intervals = []
 	for x_min, x_max, profile in ranges:
-		if profile not in {"normal", "dormer", "lower"}:
+		if profile not in ({"normal", "dormer"} if allow_overlap else {"normal", "dormer", "ceiling"}):
 			raise ValueError(f"unknown roof layer profile: {profile!r}")
 		if not all(math.isfinite(x) for x in (x_min, x_max)) or x_min >= x_max:
 			raise ValueError("roof layer ranges need finite x_min < x_max")
@@ -2534,10 +2487,9 @@ roof_inner_profiles = {
 		"flat_plane": flat_ceiling_roof, "flat_layout": FLAT_CEILING_INNER_LAYER_LAYOUT,
 		"purlin_distance": VAZNICE_DIST, "purlin_top_z": PURLIN_TOP_Z,
 	},
-	"lower": {
-		"street_plane": lower_street_roof, "garden_plane": lower_garden_roof,
+	"ceiling": {
 		"flat_plane": lower_flat_ceiling_roof, "flat_layout": LOWER_FLAT_CEILING_INNER_LAYER_LAYOUT,
-		"purlin_distance": VAZNICE_LOWER_DIST, "purlin_top_z": LOWER_ROOF_JOINT_Z,
+		"ceiling_only": True,
 	},
 }
 
@@ -2574,9 +2526,7 @@ def exterior_roof_planes_at(x, *, side):
 		raise ValueError("roof side must be street or garden")
 	planes = []
 	for _, profile in exterior_roof_sections_at(x):
-		if profile == "lower":
-			candidates = (lower_street_roof if side == "street" else lower_garden_roof,)
-		elif side == "street":
+		if side == "street":
 			candidates = (street_roof,)
 		else:
 			candidates = (garden_roof, dormer_roof) if profile == "dormer" else (garden_roof,)
@@ -2590,7 +2540,7 @@ def exterior_ridge_planes_at(x):
 	"""Ridge pairs at X; the dormer still has the main roof above its joint."""
 	pairs = []
 	for _, profile in exterior_roof_sections_at(x):
-		pair = (lower_street_roof, lower_garden_roof) if profile == "lower" else (street_roof, garden_roof)
+		pair = (street_roof, garden_roof)
 		if pair not in pairs:
 			pairs.append(pair)
 	return tuple(pairs)
@@ -2727,16 +2677,16 @@ def add_continuous_roof_layers(
 			(board_x_min, y_min), (board_x_max, y_min),
 			(board_x_max, y_max), (board_x_min, y_max),
 		)
-		fiberboard = plane.layer(
-			f"{name} wood fiberboard",
+		mdf = plane.layer(
+			f"{name} MDF",
 			outline=board_outline,
-			z_offset=WOOD_FIBERBOARD_BOTTOM,
-			thickness=WOOD_FIBERBOARD_THICKNESS,
-			material="Wood fiberboard",
-			color="#C9B56D",
+			z_offset=MDF_BOTTOM,
+			thickness=MDF_THICKNESS,
+			material="MDF",
+			color="#f2b6d0",
 			extra_cuts=roof_eave_setback_cuts(plane),
 		)
-		roof_layer_storeys["Wood fiberboard"].add(fiberboard)
+		roof_layer_storeys["MDF"].add(mdf)
 		underlay = plane.layer(
 			f"{name} roofing underlay",
 			outline=board_outline,
@@ -2786,20 +2736,22 @@ def local_y_limits_from_cuts(plane, local_z=0, *, eave_setback=False):
 	"""
 	lower, upper = -math.inf, math.inf
 	for cut in plane.cuts:
-		global_y_values = [point[1] for point in cut]
-		if max(global_y_values) - min(global_y_values) <= 1e-9:
-			y = global_y_values[0]
-			if eave_setback:
-				if isclose(y, STREET_ROOF_EAVE_Y, abs_tol=1e-9):
-					y += ROOF_EAVE_SETBACK
-				elif any(isclose(y, end, abs_tol=1e-9) for end in (GARDEN_ROOF_EAVE_Y, DORMER_ROOF_EAVE_Y)):
-					y -= ROOF_EAVE_SETBACK
-			axis, value = 1, y
-		elif max(p[2] for p in cut) - min(p[2] for p in cut) <= 1e-9:
-			axis, value = 2, cut[0][2]
-		else:
+		axes = [axis for axis in range(3) if max(p[axis] for p in cut) - min(p[axis] for p in cut) <= 1e-9]
+		if len(axes) != 1:
 			continue
+		axis = axes[0]
+		value = cut[0][axis]
+		if eave_setback:
+			if axis == 0 and isclose(value, TRANSVERSE_ROOF_EAVE_X, abs_tol=1e-9):
+				value -= ROOF_EAVE_SETBACK
+			elif axis == 1:
+				if isclose(value, STREET_ROOF_EAVE_Y, abs_tol=1e-9):
+					value += ROOF_EAVE_SETBACK
+				elif any(isclose(value, end, abs_tol=1e-9) for end in (GARDEN_ROOF_EAVE_Y, DORMER_ROOF_EAVE_Y)):
+					value -= ROOF_EAVE_SETBACK
 		direction = plane.y_axis[axis]
+		if abs(direction) <= 1e-12:
+			continue
 		limit = (value - plane.origin[axis] - local_z * plane.z_axis[axis]) / direction
 		if (plane.origin[axis] - value) * direction > 0:
 			lower = max(lower, limit)
@@ -2813,7 +2765,7 @@ def local_y_limits_from_cuts(plane, local_z=0, *, eave_setback=False):
 def exterior_source_y_limits(plane, *, y_min=None, y_max=None):
 	"""Small, thickness-aware source overshoots keep the intended cut side."""
 	limits = [local_y_limits_from_cuts(plane, z) for z in
-		(WOOD_FIBERBOARD_BOTTOM, ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS)]
+		(MDF_BOTTOM, ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS)]
 	lo = min(limit[0] for limit in limits) - 0.10 if y_min is None else y_min
 	hi = max(limit[1] for limit in limits) + 0.10 if y_max is None else y_max
 	if lo >= hi:
@@ -2885,6 +2837,8 @@ def add_tile_battens(plane, name, x_ranges, y_min, y_max):
 roof_y_min = -3
 roof_y_max = +10
 for profile in roof_inner_profiles.values():
+	if profile.get("ceiling_only"):
+		continue
 	for side in ("street", "garden"):
 		profile[f"{side}_boundaries"] = independent_inner_layer_boundaries(
 			profile[f"{side}_plane"], profile["flat_plane"], profile["flat_layout"],
@@ -2968,6 +2922,13 @@ def flat_inner_y_limits(left_boundaries, right_boundaries, flat_layout):
 # Interior ranges are independent of exterior ranges and never overlap.
 for segment, (x_min, x_max, profile_name) in enumerate(roof_under_rafter_x_ranges):
 	profile = roof_inner_profiles[profile_name]
+	if profile.get("ceiling_only"):
+		add_continuous_roof_layers(
+			profile["flat_plane"], f"Flat ceiling segment {segment}", x_min, x_max, BWT, HOUSE_DEPTH-BWT,
+			inner_cuts=roof_inner_cuts, inner_y_limits=LOWER_CEILING_Y_LIMITS,
+			inner_layout=profile["flat_layout"], include_under_rafter_insulation=False, include_outer=False,
+		)
+		continue
 	for side, eave_y in (("street", 0.25), ("garden", 7.75)):
 		plane = profile[f"{side}_plane"]
 		label = "Dormer" if side == "garden" and profile_name == "dormer" else side.title()
@@ -3013,8 +2974,8 @@ def add_exterior_roof_piece(plane, name, x_min, x_max, *, side, y_min=None, y_ma
 
 # Exterior ranges may overlap. Do not pair them with the interior ranges.
 for segment, (x_min, x_max, profile_name) in enumerate(roof_over_rafter_x_ranges):
-	street_plane = lower_street_roof if profile_name == "lower" else street_roof
-	garden_plane = {"normal": garden_roof, "dormer": dormer_roof, "lower": lower_garden_roof}[profile_name]
+	street_plane = street_roof
+	garden_plane = {"normal": garden_roof, "dormer": dormer_roof}[profile_name]
 	add_exterior_roof_piece(
 		street_plane, f"Street segment {segment}", x_min, x_max, side="street",
 	)
@@ -3028,6 +2989,28 @@ for segment, (x_min, x_max, profile_name) in enumerate(roof_over_rafter_x_ranges
 		x_min, x_max, side="garden", y_min=0 if profile_name == "dormer" else None,
 	)
 
+
+def add_transverse_roof_layers():
+	"""Reuse the exterior build-up; plane-local X is global Y on this slope."""
+	add_exterior_roof_piece(
+		transverse_roof, "Transverse roof",
+		-TRANSVERSE_ROOF_Y_OVERHANG, HOUSE_DEPTH + TRANSVERSE_ROOF_Y_OVERHANG,
+		side="transverse",
+	)
+	lo, hi = local_y_limits_from_cuts(
+		transverse_roof, TILE_BATTEN_BOTTOM + TILE_BATTEN_SIZE[1] / 2,
+		eave_setback=True,
+	)
+	add_tile_battens(
+		transverse_roof, "Transverse roof",
+		[(-TRANSVERSE_ROOF_Y_OVERHANG, HOUSE_DEPTH + TRANSVERSE_ROOF_Y_OVERHANG)],
+		lo, hi,
+	)
+
+
+add_transverse_roof_layers()
+
+
 def add_roof_siding():
 	"""Fill each vertical eave setback down to its roof's horizontal cut."""
 	if ROOF_EAVE_SETBACK == 0:
@@ -3038,9 +3021,9 @@ def add_roof_siding():
 		for x_min, x_max, profile in roof_over_rafter_x_ranges:
 			x_min, x_max = roof_under_tile_x_range(x_min, x_max)
 			if side == "street":
-				plane = lower_street_roof if profile == "lower" else street_roof
+				plane = street_roof
 			else:
-				plane = {"normal": garden_roof, "dormer": dormer_roof, "lower": lower_garden_roof}[profile]
+				plane = {"normal": garden_roof, "dormer": dormer_roof}[profile]
 			groups.setdefault(plane, []).append((x_min, x_max))
 		for plane, ranges in groups.items():
 			eave_y = DORMER_ROOF_EAVE_Y if plane is dormer_roof else GARDEN_ROOF_EAVE_Y
@@ -3082,16 +3065,14 @@ def add_sloped_roof_siding():
 	Each main cap follows both roof pitches, filling the X-end allowance
 	between the rafter underside and tile underside. Dormer caps follow their
 	single pitch and stop at the exterior layers' ridge-side source boundary,
-	not at the extended structural rafter ends. The low inner end stays open.
+	not at the extended structural rafter ends.
 	"""
 	if ROOF_EAVE_SETBACK == 0:
 		return ()
 	color = wood_siding_color()
 	high_ranges = [(lo, hi) for lo, hi, profile in roof_over_rafter_x_ranges if profile == "normal"]
-	low_ranges = [(lo, hi) for lo, hi, profile in roof_over_rafter_x_ranges if profile == "lower"]
 	high_start = min(lo for lo, hi in high_ranges)
 	high_end = max(hi for lo, hi in high_ranges)
-	low_end = max(hi for lo, hi in low_ranges)
 	panels = []
 	def add_cap(name, x0, profile):
 		profile = profile.simplify(1e-9, preserve_topology=True)
@@ -3112,7 +3093,6 @@ def add_sloped_roof_siding():
 	for name, x0, planes in (
 		("High roof left sloped siding", high_start, (street_roof, garden_roof)),
 		("High roof right sloped siding", high_end - ROOF_EAVE_SETBACK, (street_roof, garden_roof)),
-		("Low roof outer sloped siding", low_end - ROOF_EAVE_SETBACK, (lower_street_roof, lower_garden_roof)),
 	):
 		bands = []
 		for plane, y0, y1 in (
@@ -3150,6 +3130,130 @@ def add_sloped_roof_siding():
 
 
 roof_sloped_siding = add_sloped_roof_siding()
+
+
+def add_transverse_roof_siding():
+	"""Two sloped Y-end caps and the west fascia, inside the tile-edge slots."""
+	if ROOF_EAVE_SETBACK == 0:
+		return ()
+	plane = transverse_roof
+	top = offset_plane(*plane.points, offset=ROOF_TILE_BOTTOM)
+	bottom = offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
+	horizontal = plane.cuts[1]
+	y0, y1 = -TRANSVERSE_ROOF_Y_OVERHANG, HOUSE_DEPTH + TRANSVERSE_ROOF_Y_OVERHANG
+	x0, x1 = LOWER_NADEZDIVKA_X, TRANSVERSE_ROOF_EAVE_X
+	boards = []
+	for side, xa, xb, ya, yb, cuts, container in (
+		("Street", x0, x1-ROOF_EAVE_SETBACK, y0, y0+ROOF_EAVE_SETBACK,
+		 (top, bottom, horizontal), "Sloped siding"),
+		("Garden", x0, x1-ROOF_EAVE_SETBACK, y1-ROOF_EAVE_SETBACK, y1,
+		 (top, bottom, horizontal), "Sloped siding"),
+		("West", x1-ROOF_EAVE_SETBACK, x1, y0, y1,
+		 (top, horizontal), "Eave siding"),
+	):
+		corners = [(x, y) for x in (xa, xb) for y in (ya, yb)]
+		heights = [plane_height_at(*cut, x=x, y=y) for cut in cuts for x, y in corners]
+		z0, z1 = min(heights)-0.10, max(heights)+0.10
+		keep_x, keep_y = (xa+xb)/2, (ya+yb)/2
+		keep_z = (plane_height_at(*top, x=keep_x, y=keep_y)
+		          + max(plane_height_at(*cut, x=keep_x, y=keep_y) for cut in cuts[1:])) / 2
+		board = house.add_box(
+			f"Transverse roof {side.lower()} siding",
+			origin=(xa, ya, z0), size=(xb-xa, yb-ya, z1-z0),
+			material="Wood siding solid", color=wood_siding_color(), cuts=cuts,
+			retained_point=(keep_x, keep_y, keep_z),
+		)
+		board.Description = "Non-structural transverse roof edge below the roof tiles"
+		roof_layer_storeys[container].add(board)
+		boards.append(board)
+	return tuple(boards)
+
+
+transverse_roof_siding = add_transverse_roof_siding()
+
+
+WEST_CLOSURE_WINDOW_CENTER_Y = HALF_DEPTH
+WEST_CLOSURE_WINDOW_WIDTH = 1.0
+WEST_CLOSURE_WINDOW_HEIGHT = 1.0
+WEST_CLOSURE_WINDOW_SILL_HEIGHT = 1.5  # Above the finished upper floor.
+
+
+def add_west_roof_closure():
+	"""Window-bearing insulated gable with opening-aware finish coverings."""
+	y0 = -FACADE_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001
+	y1 = HOUSE_DEPTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
+	z0 = UPPER_FLOOR_START
+	specs, ranges = west_roof_closure_layout()
+
+	def profile_at(roof_offset, ceiling_layer=None):
+		street_top = offset_plane(*street_roof.points, offset=roof_offset)
+		garden_top = offset_plane(*garden_roof.points, offset=roof_offset)
+		profile = Polygon((
+			(y0, z0), (y1, z0),
+			(y1, plane_height_at(*garden_top, x=LOWER_NADEZDIVKA_X, y=y1)),
+			(HALF_DEPTH, plane_height_at(*street_top, x=LOWER_NADEZDIVKA_X, y=HALF_DEPTH)),
+			(y0, plane_height_at(*street_top, x=LOWER_NADEZDIVKA_X, y=y0)),
+		))
+		if ceiling_layer is not None:
+			ceiling_z = flat_ceiling_roof.to_world(
+				(0, 0, FLAT_CEILING_INNER_LAYER_LAYOUT[ceiling_layer][0])
+			)[2]
+			profile = profile.intersection(geometry_box(y0, z0, y1, ceiling_z))
+		if profile.is_empty or profile.geom_type != "Polygon" or profile.interiors:
+			raise ValueError("west closure must have one continuous profile above the upper slab")
+		return profile
+
+	profiles = {name: profile_at(roof_offset, ceiling_layer)
+	            for name, _, material, _, roof_offset, ceiling_layer in specs if material is not None}
+	core_profile = profile_at(MDF_BOTTOM)
+	core_x0, core_x1 = ranges["Insulation"]
+	wall_type = house.wall_type(
+		"West closure - insulated timber wall",
+		layers=[("Thermal insulation", FACADE_INSULATION_THICKNESS), "axis"],
+		color="#E8D36D",
+	)
+	wall = upper.wall(
+		(core_x1, y0), (core_x1, y1), wall_type=wall_type,
+		height=core_profile.bounds[3]-z0,
+		cuts=tuple(offset_plane(*plane.points, offset=MDF_BOTTOM) for plane in (street_roof, garden_roof)),
+	)
+	wall.Name = "West roof closure - insulated wall"
+	wall.Description = "Insulated upper-floor gable with a service cavity and separate finishes"
+	sill = UPPER_FLOOR_THICKNESS + WEST_CLOSURE_WINDOW_SILL_HEIGHT
+	window_y0 = WEST_CLOSURE_WINDOW_CENTER_Y - WEST_CLOSURE_WINDOW_WIDTH / 2
+	window_rectangle = geometry_box(
+		window_y0, z0+sill, window_y0+WEST_CLOSURE_WINDOW_WIDTH, z0+sill+WEST_CLOSURE_WINDOW_HEIGHT,
+	)
+	for name, profile in {"Insulation": core_profile, **profiles}.items():
+		if not profile.covers(window_rectangle):
+			raise ValueError(f"west closure window must fit within the {name} roof/ceiling profile")
+	# Coverings copy existing host openings, so create the window first.
+	window = wall.add_window(
+		name="West closure window", at=window_y0-y0, width=WEST_CLOSURE_WINDOW_WIDTH,
+		sill_height=sill, height=sill+WEST_CLOSURE_WINDOW_HEIGHT, color="#ffffff",
+	)
+	panels = {}
+	for name, thickness, material, color, _, _ in specs:
+		if material is None:
+			continue
+		x0, x1 = ranges[name]
+		profile = profiles[name]
+		points = list(profile.exterior.coords)[:-1]
+		if not profile.exterior.is_ccw:
+			points.reverse()
+		side, offset = ("right", x0-core_x1) if x0 >= core_x1 else ("left", core_x0-x1)
+		panel = house.add_facade_layer(
+			wall, name=f"West roof closure - {name}", side=side, offset=offset, thickness=thickness,
+			start_height=0, height=profile.bounds[3]-z0,
+			outline=tuple((y-y0, z-z0) for y, z in points),
+			material=material, color=color,
+		)
+		panels[name] = panel
+	return wall, window, panels, ranges
+
+
+(west_closure_wall, west_closure_window,
+ west_roof_closure, west_roof_closure_x_ranges) = add_west_roof_closure()
 
 # A batten whose centre lies completely beyond a cut would retain the wrong
 # half-space, so derive the first and last tile-batten rows from the cuts.
@@ -3189,13 +3293,6 @@ add_tile_battens(
 	0,
 	dormer_y_max,
 )
-for side, plane in (("street", lower_street_roof), ("garden", lower_garden_roof)):
-	y_min, y_max = local_y_limits_from_cuts(plane, tile_batten_centerline_z, eave_setback=True)
-	add_tile_battens(
-		plane, f"Lower {side} exterior",
-		[(lo, hi) for lo, hi, profile in roof_over_rafter_x_ranges if profile == "lower"],
-		y_min, y_max,
-	)
 
 main_roof_rafters = []
 stronger_main_roof_rafters = []
@@ -3322,23 +3419,50 @@ for i, (
 				).append(rafter)
 
 
+def transverse_rafter_y_positions():
+	"""Wall-aligned edge centres, with integer-metre centres strictly between."""
+	if not all(math.isfinite(value) and value > 0 for value in (HOUSE_DEPTH, RAFTER_THICKNESS)) or HOUSE_DEPTH <= RAFTER_THICKNESS:
+		raise ValueError("house depth must exceed the positive, finite rafter thickness")
+	first, last = RAFTER_THICKNESS / 2, HOUSE_DEPTH - RAFTER_THICKNESS / 2
+	return (first, *(float(y) for y in range(math.floor(first) + 1, math.ceil(last))), last)
+
+
+def add_transverse_rafters():
+	"""Normal-section rafters, cut at the roof step and both outside eave planes."""
+	positions = transverse_rafter_y_positions()
+	lo, hi = rafter_source_y_limits(transverse_roof, RAFTER_SIZE[1])
+	beams = []
+	for index, y in enumerate(positions, 1):
+		beam = transverse_roof.beam(
+			f"Transverse rafter {index}", start=(y, lo), end=(y, hi),
+			z_offset=RAFTER_Z_OFFSET, size=RAFTER_SIZE, material="Wood", kind="RAFTER",
+			extra_cuts=roof_eave_setback_cuts(transverse_roof),
+		)
+		roof_layer_storeys["Rafters"].add(beam)
+		beams.append(beam)
+	return tuple(beams)
+
+
+transverse_rafters = add_transverse_rafters()
+
+
 def add_exterior_counter_battens(pieces):
 	"""Follow each rafter's level and union exterior intervals on its plane."""
 	lines = {}
 	for piece in pieces:
 		plane = piece["plane"]
-		if plane is dormer_roof:
+		if plane is transverse_roof:
+			positions = transverse_rafter_y_positions()
+		elif plane is dormer_roof:
 			positions = dormer_rafter_positions
 		else:
-			lower = plane in (lower_street_roof, lower_garden_roof)
-			positions = (x for x in main_rafter_positions if framing_is_lower(x) == lower)
+			positions = main_rafter_positions
 		for x in positions:
 			if piece["x_min"] <= x <= piece["x_max"]:
 				key = (plane.GlobalId, x)
 				lines.setdefault(key, (plane, []))[1].append((piece["source_y_min"], piece["source_y_max"]))
 	battens = []
-	labels = {street_roof: "Street", garden_roof: "Garden", dormer_roof: "Dormer",
-		lower_street_roof: "Lower street", lower_garden_roof: "Lower garden"}
+	labels = {street_roof: "Street", garden_roof: "Garden", dormer_roof: "Dormer", transverse_roof: "Transverse"}
 	for (_, x), (plane, intervals) in lines.items():
 		merged = []
 		for lo, hi in sorted(intervals):
@@ -3464,15 +3588,21 @@ def add_facade(side="street"):
 	"""
 	if side not in {"street", "garden", "east", "west"}:
 		raise ValueError("facade side must be 'street', 'garden', 'east' or 'west'")
-	if side in {"east", "west"}:
+	if side == "west":
 		y0 = -FACADE_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001
 		y1 = HOUSE_DEPTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
-		if side == "east":
-			wall, upper_wall = wall_1_g, wall_1_u
-			street_plane, garden_plane = street_roof, garden_roof
-		else:
-			wall, upper_wall = wall_4_g, wall_4_u
-			street_plane, garden_plane = lower_street_roof, lower_garden_roof
+		top = transverse_wall_plate.start[2] - transverse_wall_plate.height / 2
+		return (house.add_facade_layer(
+			wall_4_g, name="West facade", material="Facade finish", color="#ffffff",
+			offset=FACADE_INSULATION_THICKNESS, thickness=FACADE_THICKNESS, side="right",
+			start_height=0, height=top - ground.elevation,
+			start_extension=-y0, end_extension=y1-HOUSE_DEPTH,
+		),)
+	if side == "east":
+		y0 = -FACADE_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001
+		y1 = HOUSE_DEPTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
+		wall, upper_wall = wall_1_g, wall_1_u
+		street_plane, garden_plane = street_roof, garden_roof
 		street_top = roof_layer_height_at_y(street_plane, RAFTER_Z_OFFSET, y0, ground.elevation)
 		garden_top = roof_layer_height_at_y(garden_plane, RAFTER_Z_OFFSET, y1, ground.elevation)
 		ridge_top = roof_layer_height_at_y(street_plane, RAFTER_Z_OFFSET, HALF_DEPTH, ground.elevation)
@@ -3494,26 +3624,36 @@ def add_facade(side="street"):
 		wall = wall_front_g
 		insulation = FACADE_INSULATION_THICKNESS
 		outer_y = -insulation - FACADE_THICKNESS
-		high_roof, low_roof = street_roof, lower_street_roof
-		opening_walls = [wall_front1_u, wall_front2_u]
+		high_roof = street_roof
+		opening_walls = [wall_front1_u]
 	else:
 		wall = wall_back_g  # Host runs right-to-left; its right side faces the garden.
 		insulation = FACADE_INSULATION_THICKNESS
 		outer_y = HOUSE_DEPTH + insulation + FACADE_THICKNESS
-		high_roof, low_roof = garden_roof, lower_garden_roof
-		opening_walls = [wall_back1_u, wall_back2_u, wall_dormer]
+		high_roof = garden_roof
+		opening_walls = [wall_back1_u, wall_dormer]
 	panels = []
 	for name, start_x, end_x, plane, material, color in (
-		(f"{side.title()} facade - high", x0, LOWER_NADEZDIVKA_X+0.1,
+		(f"{side.title()} facade - high", x0, LOWER_NADEZDIVKA_X - 0.05,
 		 high_roof, "Facade finish", "#ffffff"),
-		(f"{side.title()} facade - low", LOWER_NADEZDIVKA_X+0.1, x1,
-		 low_roof, "Wood siding", wood_siding_color(patterned=True)),
+		(f"{side.title()} facade - low", LOWER_NADEZDIVKA_X - 0.05, x1,
+		 transverse_roof, "Wood siding", wood_siding_color(patterned=True)),
 	):
-		top = roof_layer_height_at_y(plane, RAFTER_Z_OFFSET, outer_y, ground.elevation)
 		outline = None
+		if plane is transverse_roof:
+			rafter_bottom = offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
+			start_top, end_top = (
+				plane_height_at(*rafter_bottom, x=x, y=outer_y) - ground.elevation
+				for x in (start_x, end_x)
+			)
+			profile = ((start_x, 0), (end_x, 0), (end_x, end_top), (start_x, start_top))
+			outline = tuple((x-start_x if side == "street" else end_x-x, z) for x, z in profile)
+			top = max(start_top, end_top)
+		else:
+			top = roof_layer_height_at_y(plane, RAFTER_Z_OFFSET, outer_y, ground.elevation)
 		if side == "garden" and plane is high_roof:
-			dormer_start = min(wall_dormer.start[0], wall_dormer.end[0])
-			dormer_end = max(wall_dormer.start[0], wall_dormer.end[0])
+			dormer_start = min(wall_dormer.start[0], wall_dormer.end[0]) - FACADE_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001
+			dormer_end = max(wall_dormer.start[0], wall_dormer.end[0]) + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
 			dormer_top = roof_layer_height_at_y(dormer_roof, RAFTER_Z_OFFSET, outer_y, ground.elevation)
 			# One concave profile, not two touching solids: no storey/dormer seam.
 			profile = (
@@ -3545,6 +3685,40 @@ street_facade = add_facade()
 garden_facade = add_facade("garden")
 east_facade = add_facade("east")
 west_facade = add_facade("west")
+
+
+def add_dormer_side_facades():
+	"""White cheek finishes between main-roof tiles and dormer rafters."""
+	bottom = offset_plane(*garden_roof.points, offset=ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS)
+	top = offset_plane(*dormer_roof.points, offset=RAFTER_Z_OFFSET)
+	y1 = HOUSE_DEPTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
+	panels = []
+	for name, wall, side in (("east", wall_2, "left"), ("west", wall_3, "right")):
+		def height(cut, y):
+			return plane_height_at(*cut, x=wall.start[0], y=y)
+
+		gap_at_zero = height(top, 0)-height(bottom, 0)
+		gap_slope = height(top, 1)-height(bottom, 1)-gap_at_zero
+		if gap_slope <= 1e-12:
+			raise ValueError("dormer side facades need the dormer roof to rise above the main tiles towards the garden")
+		y0 = -gap_at_zero/gap_slope
+		if y0 >= y1:
+			raise ValueError("dormer side facade has no exposed area above the main roof")
+		z0 = height(bottom, y1)
+		z1 = height(top, y0)
+		panel = house.add_facade_layer(
+			wall, name=f"Dormer {name} side facade", side=side,
+			offset=FACADE_INSULATION_THICKNESS, thickness=FACADE_THICKNESS,
+			start_height=z0-upper.elevation, height=z1-z0,
+			start_extension=wall.start[1]-y0, end_extension=y1-wall.end[1],
+			outline=((0, z1-z0), (y1-y0, 0), (y1-y0, height(top, y1)-z0)),
+			material="Facade finish", color="#ffffff",
+		)
+		panels.append(panel)
+	return tuple(panels)
+
+
+dormer_side_facades = add_dormer_side_facades()
 
 GARAGE_POST_SIZE = 0.15
 GARAGE_ROOF_THICKNESS = 0.20
@@ -3627,8 +3801,7 @@ def common_dims(drawing1):
 def common_wall_insulation(
 	drawing1, wall_front, wall_1, wall_back, wall_4
 ):
-	# The upper front wall has high/low parts; keep insulation attached to
-	# each host, extending only the outer ends, never across the split.
+	# Keep insulation attached to actual hosts, never across the open bay.
 	front_parts = wall_front if isinstance(wall_front, tuple) else (wall_front,)
 	for index, front_part in enumerate(front_parts):
 		drawing1.add_wall_insulation(
@@ -3638,8 +3811,9 @@ def common_wall_insulation(
 			# The front strip closes the corner over the side-wall wool.
 			start_x=(-FACADE_INSULATION_THICKNESS if index == 0
 				else min(front_part.start[0], front_part.end[0])),
-			end_x=(HOUSE_WIDTH+FACADE_INSULATION_THICKNESS if index == len(front_parts)-1
-				else max(front_part.start[0], front_part.end[0])),
+			end_x=(HOUSE_WIDTH+FACADE_INSULATION_THICKNESS
+			       if isclose(max(front_part.start[0], front_part.end[0]), HOUSE_WIDTH)
+			       else max(front_part.start[0], front_part.end[0])),
 		)
 	drawing1.add_wall_insulation(
 		wall_1,
@@ -3655,13 +3829,11 @@ def common_wall_insulation(
 		start_x=-FACADE_INSULATION_THICKNESS,
 		end_x=HOUSE_WIDTH,
 	)
-	drawing1.add_wall_insulation(
-		wall_4,
-		thickness=FACADE_INSULATION_THICKNESS,
-		material="polystyrene",
-		start_y=-FACADE_INSULATION_THICKNESS,
-		end_y=HOUSE_DEPTH+FACADE_INSULATION_THICKNESS,
-	)
+	if wall_4 is not None:
+		drawing1.add_wall_insulation(
+			wall_4, thickness=FACADE_INSULATION_THICKNESS, material="polystyrene",
+			start_y=-FACADE_INSULATION_THICKNESS, end_y=HOUSE_DEPTH+FACADE_INSULATION_THICKNESS,
+		)
 
 if "kanal" in sys.argv:
 	# Schematic coordinates: horizontal distance is diagram layout, vertical
@@ -3670,9 +3842,14 @@ if "kanal" in sys.argv:
 	miako_bottom = ceiling3.storey.elevation + ceiling3.bottom - datum
 	miako_top = ceiling3.storey.elevation + ceiling3.top - datum
 	upper_floor_top = upper.elevation + upper_pokoj_1.start_height + upper_pokoj_1.thickness - datum
-	plasterboard_bottom, _ = roof.layer_vertical_extent(
-		"Gypsum plasterboard", x=DRAINAGE_STACK_X, y=DRAINAGE_STACK_Y,
-	)
+	if inner_roof_section_at(DRAINAGE_STACK_X)[2].get("ceiling_only"):
+		# The sloped lining was removed with the roof; retain the independent
+		# suspended-ceiling level as the drainage schematic's reference.
+		plasterboard_bottom = interior_ceiling_bottom_z_at(DRAINAGE_STACK_X)
+	else:
+		plasterboard_bottom, _ = roof.layer_vertical_extent(
+			"Gypsum plasterboard", x=DRAINAGE_STACK_X, y=DRAINAGE_STACK_Y,
+		)
 	_, tiles_top = roof.layer_vertical_extent(
 		"Roof tiles", x=DRAINAGE_STACK_X, y=DRAINAGE_STACK_Y,
 	)
@@ -4507,18 +4684,10 @@ if "upper" in sys.argv:
 		identifier=upper_pokoj_1.room_id,
 		description="Pokoj 2",
 		area=upper_pokoj_1.area,
-		window_area=1.3,
+		window_area=window_area(*east_upper_windows),
 	)
 	drawing1.add_room_annotation(
-		(9.5, 5),
-		identifier=upper_sklad.room_id,
-		description="Skladovací prostor",
-		area=upper_sklad.area,
-		window_area=0,
-	)
-
-	drawing1.add_room_annotation(
-		(9.5, 1.5),
+		((wall3_x + WEST_CLOSURE_INNER_X) / 2, BWT+0.5),
 		identifier=zachod_nahore.room_id,
 		description="Záchod",
 		area=zachod_nahore.area
@@ -4532,9 +4701,9 @@ if "upper" in sys.argv:
 	drawing1.add_room_legend()
 
 	# sklad nahore hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y), end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT), offset=-1)
+	drawing1.add_dimension(start=(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y), end=(WEST_CLOSURE_INNER_X, wall_za_umyvadlem_y-wall_za_umyvadlem.thickness), offset=-1)
 	# zachod nahore hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-BWT, BWT), end=(HOUSE_WIDTH-BWT, wall_zachod_nahore_y-0.1), offset=-1)
+	drawing1.add_dimension(start=(WEST_CLOSURE_INNER_X, BWT), end=(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y-wall_zachod_nahore.thickness), offset=-1)
 	# Pokoj 2, hloubka
 	drawing1.add_dimension(start=(5.5, GALERY_END+0.1), end=(5.5, HOUSE_DEPTH-BWT), offset=0)
 	# galerie hloubka
@@ -4545,7 +4714,7 @@ if "upper" in sys.argv:
 	common_dims(drawing1)
 	common_wall_insulation(
 		drawing1,
-		(wall_front1_u, wall_front2_u), wall_1_u, wall_dormer, wall_4_u
+		wall_front1_u, wall_1_u, wall_dormer, None
 	)
 
 	# sipka schody
@@ -4574,20 +4743,18 @@ if "upper" in sys.argv:
 roof_outline_walls = (
 	wall_dormer,
 	wall_front1_u,
-	wall_front2_u,
 	wall_back1_u,
-	wall_back2_u,
 	wall_1_u,
 	wall_2,
 	wall_3,
-	wall_4_u,
 #	wall_pokoj2,
 #	wall_zachod_nahore,
 )
-roof_wall_plates = (beam3, beam4_a, beam4_b, beam_dormer, beam3_lower, beam4_lower)
+roof_wall_plates = (beam3, beam4_a, beam4_b, beam_dormer, transverse_wall_plate)
 roof_structural_beams = (
 	*street_purlins,
 	*garden_purlins,
+	transverse_purlin,
 	*purlin_packing_blocks,
 	*purlin_spacers,
 	*roof_wall_plates,
@@ -4621,14 +4788,35 @@ timber_schedule_rows = [
 		},
 	),
 	(
-		"Vaznice – levý díl",
-		(street_purlins[2], garden_purlins[2]),
+		"Vaznice – příčná",
+		(transverse_purlin,),
 		0,
 		{
 			"material": "gl24c",
 			"pattern": PURLIN_DRAWING_PATTERN,
 			"color": PURLIN_RIGHT_DRAWING_COLOR,
 			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Pozednice – příčná, zeď 4",
+		(transverse_wall_plate,),
+		0,
+		{
+			"material": "C16",
+			"pattern": WALL_PLATE_DRAWING_PATTERN,
+			"color": SHORT_WALL_PLATE_DRAWING_COLOR,
+			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
+		},
+	),
+	(
+		"Krokve – příčné",
+		transverse_rafters,
+		RAFTER_EXTRA_LENGTH,
+		{
+			"pattern": RAFTER_DRAWING_PATTERN,
+			"color": MAIN_RAFTER_DRAWING_COLOR,
+			"drawing_order": MAIN_RAFTER_DRAWING_ORDER,
 		},
 	),
 	(
@@ -4702,7 +4890,7 @@ timber_schedule_rows = [
 	),
 	(
 		"Pozednice – zahrada",
-		(beam4_b, beam4_lower),
+		(beam4_b,),
 		0,
 		{
 			"material": "C16",
@@ -4778,8 +4966,8 @@ if purlin_packing_blocks:
 			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER - 1,
 		},
 	))
-# Tables require identical finished lengths in a row. Lower rafters and split
-# plates need their own measured rows, with the original material/appearance.
+# Tables require identical finished lengths in a row; preserve each member's
+# measured geometry and original material/appearance.
 measured_timber_schedule_rows = []
 for name, members, extra_length, settings in timber_schedule_rows:
 	groups = {}
@@ -4820,7 +5008,7 @@ def roof_elevation_cut(*, rafter_index, offset=0.15, identifier="X"):
 
 
 def add_roof_angles(drawing1):
-	angles = [("AA lower roof angle" if plane is lower_street_roof else "AA main roof angle",
+	angles = [("AA main roof angle",
 		plane, 2.2, -1) for plane in exterior_roof_planes_at(drawing1.x, side="street")]
 	if dormer_roof in exterior_roof_planes_at(drawing1.x, side="garden"):
 		angles.append(("AA dormer roof angle", dormer_roof, 6.5, 1))
@@ -4905,7 +5093,7 @@ def assembly_wall_plates(rafter_x):
 	for beam in rafter_assemblies[rafter_x]:
 		if beam.kind != "RAFTER" or beam in dormer_short_rafters:
 			continue
-		if beam.roof_plane in (street_roof, lower_street_roof):
+		if beam.roof_plane is street_roof:
 			plate = wall_plate_at(beam.start[0], side="street")
 		else:
 			plate = wall_plate_at(beam.start[0], side="garden", dormer=beam.roof_plane is dormer_rafter_roof)
@@ -4961,7 +5149,6 @@ def add_roof_elevation(name, *, rafter_index, offset=0.15, radius=6, identifier=
 roof_elevation_definitions = {
 	"roof_xx": {"rafter_index": 1, "offset": 0.15, "identifier": "X"},
 	"roof_yy": {"rafter_index": 5, "offset": 0.20, "identifier": "Y"},
-	"roof_zz": {"rafter_index": 14, "offset": 0.15, "identifier": "Z"},
 }
 roof_elevation_cuts = {
 	name: roof_elevation_cut(**definition)
@@ -5051,7 +5238,6 @@ if "roof" in sys.argv:
 		start=(CHIMNEY_Y_END, PURLIN_TOP_Z+0.03),
 		end=(rafters[5][2]["min_y"], PURLIN_TOP_Z+0.03),
 	)
-	roof_zz = add_roof_elevation("roof_zz", **roof_elevation_definitions["roof_zz"])
 
 	# Drawing centres as fractions of the whole page (left/top = 0, right/bottom = 1).
 	# The top half keeps the previous A4 landscape layout at its original scale.
@@ -5059,7 +5245,6 @@ if "roof" in sys.argv:
 	roof_sheet.add(roof_plan, x=0.5, y=0.25, title=Path(PDF_KROV).stem, crop=False)
 	roof_sheet.add(roof_xx, x=0.25, y=0.64, title="Řez XX", tables=False)
 	roof_sheet.add(roof_yy, x=0.74, y=0.75, title="Řez YY", tables=False)
-	roof_sheet.add(roof_zz, x=0.25, y=0.87, title="Řez ZZ", tables=False)
 	roof_sheet.render("roof.svg", pdf=PDF_KROV)
 
 if "ceiling" in sys.argv:
@@ -5097,7 +5282,7 @@ if "ceiling" in sys.argv:
 
 	common_wall_insulation(
 		drawing1,
-		(wall_front1_u, wall_front2_u), wall_1_u, wall_dormer, wall_4_u
+		wall_front1_u, wall_1_u, wall_dormer, None
 	)
 
 	drawing1.render("ceiling.svg", pdf=PDF_CEILING)
@@ -5239,7 +5424,7 @@ if "aa" in sys.argv:
 				roof_composition_target[2] - roof_composition_normal_z * composition_marker_clearance,
 			),
 			"SK3", rotation=-roof_composition_angle,
-			name="AA lower roof composition SK3" if plane is lower_street_roof else "AA roof composition SK3",
+			name="AA roof composition SK3",
 			line_length=1.3,
 		)
 	drawing1.add_hexagon_marker(
@@ -5313,134 +5498,136 @@ if "aa" in sys.argv:
 		aa_ridge_tiles.append(drawing1.add_ridge_tile(
 			ridge_tile_center, width=RIDGE_TILE_WIDTH, rise=RIDGE_TILE_RISE,
 			thickness=RIDGE_TILE_THICKNESS,
-			name="AA lower ridge tile" if street_plane is lower_street_roof else "AA ridge tile",
+			name="AA ridge tile",
 		))
-	aa_frame_street, aa_frame_garden = framing_roof_planes_at(aa_x)
-	aa_frame_has_dormer = not framing_is_lower(aa_x) and dormer_x_min <= aa_x <= dormer_x_max
-	ridge_batting = roof_batting_intersection(
-		aa_frame_street,
-		aa_frame_garden,
-		x=aa_x,
-	)
-	street_wall_batting = roof_batting_point(
-		aa_frame_street,
-		x=aa_x,
-		y=0,
-	)
-	garden_wall_batting = roof_batting_point(
-		dormer_roof if aa_frame_has_dormer else aa_frame_garden,
-		x=aa_x,
-		y=HOUSE_DEPTH,
-	)
-	frame_batting_segments = [("AA street roof batting", street_wall_batting, ridge_batting)]
-	if aa_frame_has_dormer:
-		garden_joint_batting = roof_batting_intersection(aa_frame_garden, dormer_roof, x=aa_x)
-		frame_batting_segments.extend((
-			("AA garden roof batting", ridge_batting, garden_joint_batting),
-			("AA dormer roof batting", garden_joint_batting, garden_wall_batting),
-		))
-	else:
-		frame_batting_segments.append(("AA garden roof batting", ridge_batting, garden_wall_batting))
-	for batting_name, batting_start, batting_end in frame_batting_segments:
-		drawing1.add_batting(
-			*inset_roof_batting_segment(batting_start, batting_end),
-			thickness=ROOF_BATTING_THICKNESS,
-			name=batting_name,
-			classes="roof-batting",
-		)
-
-	aa_inner_segment, aa_inner_profile_name, aa_inner_profile = inner_roof_section_at(aa_x)
-	aa_inner_street_plane = aa_inner_profile["street_plane"]
-	aa_inner_garden_plane = aa_inner_profile["garden_plane"]
-	aa_inner_garden_label = "Dormer" if aa_inner_profile_name == "dormer" else "Garden"
-	if THERMAL_INSULATION_UNDER_RAFTERS > 0:
-		under_rafter_street_top = roof_batting_point(
-			aa_inner_street_plane,
+	if exterior_roof_sections_at(aa_x):
+		aa_frame_street, aa_frame_garden = framing_roof_planes_at(aa_x)
+		aa_frame_has_dormer = not framing_is_lower(aa_x) and dormer_x_min <= aa_x <= dormer_x_max
+		ridge_batting = roof_batting_intersection(
+			aa_frame_street,
+			aa_frame_garden,
 			x=aa_x,
-			y=aa_inner_street_plane.origin[1],
-			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
 		)
-		under_rafter_dormer_top = roof_batting_point(
-			aa_inner_garden_plane,
+		street_wall_batting = roof_batting_point(
+			aa_frame_street,
 			x=aa_x,
-			y=aa_inner_garden_plane.origin[1],
-			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			y=0,
 		)
-		under_rafter_street_eave = roof_batting_point(
-			aa_inner_street_plane,
+		garden_wall_batting = roof_batting_point(
+			dormer_roof if aa_frame_has_dormer else aa_frame_garden,
 			x=aa_x,
-			y=0.25,
-			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			y=HOUSE_DEPTH,
 		)
-		under_rafter_dormer_eave = roof_batting_point(
-			aa_inner_garden_plane,
-			x=aa_x,
-			y=7.75,
-			center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
-		)
-		under_rafter_batting_segments = (
-			(
-				"AA street under-rafter batting",
-				under_rafter_street_eave,
-				under_rafter_street_top,
-				roof_under_rafter_insulations[f"Street segment {aa_inner_segment}"],
-			),
-			(
-				f"AA {aa_inner_garden_label.lower()} under-rafter batting",
-				under_rafter_dormer_top,
-				under_rafter_dormer_eave,
-				roof_under_rafter_insulations[f"{aa_inner_garden_label} segment {aa_inner_segment}"],
-			),
-		)
-		for batting_name, batting_start, batting_end, insulation in (
-			under_rafter_batting_segments
-		):
+		frame_batting_segments = [("AA street roof batting", street_wall_batting, ridge_batting)]
+		if aa_frame_has_dormer:
+			garden_joint_batting = roof_batting_intersection(aa_frame_garden, dormer_roof, x=aa_x)
+			frame_batting_segments.extend((
+				("AA garden roof batting", ridge_batting, garden_joint_batting),
+				("AA dormer roof batting", garden_joint_batting, garden_wall_batting),
+			))
+		else:
+			frame_batting_segments.append(("AA garden roof batting", ridge_batting, garden_wall_batting))
+		for batting_name, batting_start, batting_end in frame_batting_segments:
 			drawing1.add_batting(
-				*inset_roof_batting_segment(
-					batting_start,
-					batting_end,
-					end_inset=UNDER_RAFTER_BATTING_END_INSET,
-				),
-				thickness=UNDER_RAFTER_BATTING_THICKNESS,
+				*inset_roof_batting_segment(batting_start, batting_end),
+				thickness=ROOF_BATTING_THICKNESS,
 				name=batting_name,
-				classes=(
-					"roof-batting under-rafter-batting "
-					f"under-rafter-owner-{insulation.element.GlobalId} "
-					"under-rafter-target-projection"
-				),
+				classes="roof-batting",
 			)
 
-		# The horizontal symbol spans purlin centre to purlin centre above their
-		# tops, retaining the same thickness clearance as the sloped symbols.
-		horizontal_batting_center_z = (
-			aa_inner_profile["purlin_top_z"] + THERMAL_INSULATION_UNDER_RAFTERS / 2
-		)
-		aa_purlin_distance = aa_inner_profile["purlin_distance"]
-		horizontal_batting_start = (
-			aa_x, HALF_DEPTH - aa_purlin_distance, horizontal_batting_center_z,
-		)
-		horizontal_batting_end = (
-			aa_x, HALF_DEPTH + aa_purlin_distance, horizontal_batting_center_z,
-		)
-		drawing1.add_batting(
-			horizontal_batting_start,
-			horizontal_batting_end,
-			thickness=UNDER_RAFTER_BATTING_THICKNESS,
-			name="AA horizontal ceiling insulation batting",
-			classes="roof-batting horizontal-ceiling-insulation-batting",
-		)
+	aa_inner_segment, aa_inner_profile_name, aa_inner_profile = inner_roof_section_at(aa_x)
+	if not aa_inner_profile.get("ceiling_only"):
+		aa_inner_street_plane = aa_inner_profile["street_plane"]
+		aa_inner_garden_plane = aa_inner_profile["garden_plane"]
+		aa_inner_garden_label = "Dormer" if aa_inner_profile_name == "dormer" else "Garden"
+		if THERMAL_INSULATION_UNDER_RAFTERS > 0:
+			under_rafter_street_top = roof_batting_point(
+				aa_inner_street_plane,
+				x=aa_x,
+				y=aa_inner_street_plane.origin[1],
+				center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			)
+			under_rafter_dormer_top = roof_batting_point(
+				aa_inner_garden_plane,
+				x=aa_x,
+				y=aa_inner_garden_plane.origin[1],
+				center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			)
+			under_rafter_street_eave = roof_batting_point(
+				aa_inner_street_plane,
+				x=aa_x,
+				y=0.25,
+				center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			)
+			under_rafter_dormer_eave = roof_batting_point(
+				aa_inner_garden_plane,
+				x=aa_x,
+				y=7.75,
+				center_offset=UNDER_RAFTER_BATTING_CENTER_OFFSET,
+			)
+			under_rafter_batting_segments = (
+				(
+					"AA street under-rafter batting",
+					under_rafter_street_eave,
+					under_rafter_street_top,
+					roof_under_rafter_insulations[f"Street segment {aa_inner_segment}"],
+				),
+				(
+					f"AA {aa_inner_garden_label.lower()} under-rafter batting",
+					under_rafter_dormer_top,
+					under_rafter_dormer_eave,
+					roof_under_rafter_insulations[f"{aa_inner_garden_label} segment {aa_inner_segment}"],
+				),
+			)
+			for batting_name, batting_start, batting_end, insulation in (
+				under_rafter_batting_segments
+			):
+				drawing1.add_batting(
+					*inset_roof_batting_segment(
+						batting_start,
+						batting_end,
+						end_inset=UNDER_RAFTER_BATTING_END_INSET,
+					),
+					thickness=UNDER_RAFTER_BATTING_THICKNESS,
+					name=batting_name,
+					classes=(
+						"roof-batting under-rafter-batting "
+						f"under-rafter-owner-{insulation.element.GlobalId} "
+						"under-rafter-target-projection"
+					),
+				)
 
-	# Nadezdivka
-	drawing1.add_dimension(
-		start=(BWT, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
-		end=(BWT, roof_layer_height_at_y(aa_inner_street_plane, GYPSUM_PLASTERBOARD_BOTTOM, BWT, 0)),
-		offset=-1)
+			# The horizontal symbol spans purlin centre to purlin centre above their
+			# tops, retaining the same thickness clearance as the sloped symbols.
+			horizontal_batting_center_z = (
+				aa_inner_profile["purlin_top_z"] + THERMAL_INSULATION_UNDER_RAFTERS / 2
+			)
+			aa_purlin_distance = aa_inner_profile["purlin_distance"]
+			horizontal_batting_start = (
+				aa_x, HALF_DEPTH - aa_purlin_distance, horizontal_batting_center_z,
+			)
+			horizontal_batting_end = (
+				aa_x, HALF_DEPTH + aa_purlin_distance, horizontal_batting_center_z,
+			)
+			drawing1.add_batting(
+				horizontal_batting_start,
+				horizontal_batting_end,
+				thickness=UNDER_RAFTER_BATTING_THICKNESS,
+				name="AA horizontal ceiling insulation batting",
+				classes="roof-batting horizontal-ceiling-insulation-batting",
+			)
 
-	# Nadezdivka dormer
-	drawing1.add_dimension(
-		start=(HOUSE_DEPTH-BWT, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
-		end=(HOUSE_DEPTH-BWT, roof_layer_height_at_y(aa_inner_garden_plane, GYPSUM_PLASTERBOARD_BOTTOM, HOUSE_DEPTH-BWT, 0)),
-		offset=1)
+		# Nadezdivka
+		drawing1.add_dimension(
+			start=(BWT, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+			end=(BWT, roof_layer_height_at_y(aa_inner_street_plane, GYPSUM_PLASTERBOARD_BOTTOM, BWT, 0)),
+			offset=-1)
+
+		# Nadezdivka dormer
+		drawing1.add_dimension(
+			start=(HOUSE_DEPTH-BWT, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
+			end=(HOUSE_DEPTH-BWT, roof_layer_height_at_y(aa_inner_garden_plane, GYPSUM_PLASTERBOARD_BOTTOM, HOUSE_DEPTH-BWT, 0)),
+			offset=1)
 
 	# Vyska stropu - podkrovi
 	drawing1.add_dimension(
@@ -5480,14 +5667,15 @@ if "bb" in sys.argv:
 	)
 	for wall, thickness, material in (
 		(wall_1_g, FACADE_INSULATION_THICKNESS, "rockwool"),
-		(wall_4_u, FACADE_INSULATION_THICKNESS, "polystyrene"),
+		(wall_4_g, FACADE_INSULATION_THICKNESS, "polystyrene"),
 	):
 		drawing1.add_wall_insulation(
 			wall,
 			thickness=thickness,
 			material=material,
 			start_z=PERIMETER_TOP_HEIGHT,
-			end_z=UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT+1.2,
+			end_z=(ground_floor_height if wall is wall_4_g
+			       else UPPER_FLOOR_START+OUTER_SUPPORT_WALL_HEIGHT+1.2),
 		)
 		drawing1.add_wall_insulation(
 			wall,
@@ -5496,13 +5684,6 @@ if "bb" in sys.argv:
 			start_z=-1,
 			end_z=PERIMETER_TOP_HEIGHT,
 		)
-
-	# vyska nadezdivky
-	bb_wall_inner_profile = inner_roof_section_at(HOUSE_WIDTH-1)[2]
-	drawing1.add_dimension(
-		start=(HOUSE_WIDTH-1, UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS),
-		end=(HOUSE_WIDTH-1, roof_layer_height_at_y(
-			bb_wall_inner_profile["garden_plane"], GYPSUM_PLASTERBOARD_BOTTOM, HOUSE_DEPTH-BWT, 0)))
 
 	# vyska stropu nahore
 	drawing1.add_dimension(
@@ -5563,11 +5744,12 @@ if "bb" in sys.argv:
 
 	drawing1.render("bb.svg", pdf=PDF_BB)
 
-# Exterior elevation from the lower-roof end (+X), looking back at the house.
+# Exterior west elevation (+X), outside the entire house including the open bay.
 if "pohledy" in sys.argv or "pohled_zapad" in sys.argv:
 	drawing1 = house.add_drawing(
 		"pohled_zapad",
-		x=max(end for _, end, _ in roof_over_rafter_x_ranges) + 1.0,
+		x=max(HOUSE_WIDTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS,
+		      max(end for _, end, _ in roof_over_rafter_x_ranges)) + 1.0,
 		y=HALF_DEPTH,
 		z=ground_floor_top + total_house_height / 2,
 		radius=6,

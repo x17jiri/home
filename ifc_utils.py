@@ -2442,7 +2442,7 @@ def _postprocess_pavatex_batting(
         path_data = attributes.get("d")
         if (
             path_data is not None
-            and "material-Woodfiberboard" in classes
+            and bool({"material-MDF", "material-Woodfiberboard", "material-mdfsolid"} & classes)
             and "surface" in classes
         ):
             clip_paths.append(path_data)
@@ -2451,7 +2451,7 @@ def _postprocess_pavatex_batting(
             re.findall(r'([\w:-]+)="([^"]*)"', group["attrs"])
         )
         classes = set(attributes.get("class", "").split())
-        if not {"material-Woodfiberboard", "cut"} <= classes:
+        if "cut" not in classes or not {"material-MDF", "material-Woodfiberboard", "material-mdfsolid"} & classes:
             continue
         for path in path_element.finditer(group["body"]):
             path_attributes = dict(

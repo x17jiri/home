@@ -117,12 +117,14 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: white !important;
 }
 
-/* Legacy roof-board material and the explicit MDF legend/material name. */
+/* MDF boards, including material names in older IFC files. */
+.material-MDF,
 .material-Woodfiberboard,
 .material-mdfsolid {
     fill: white !important;
 }
 
+.material-MDF.cut,
 .material-Woodfiberboard.cut,
 .material-mdfsolid.cut {
     fill: #f2b6d0 !important;
@@ -247,6 +249,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 /* Reveal structure behind insulation in elevation and section drawings. */
 .target-view-ELEVATIONVIEW .material-Thermalinsulation {
     fill: none !important;
+}
+
+/* Insulated wall cores stay unhatched until section batting is added. */
+.IfcWall.material-Westclosureinsulatedtimberwall.cut,
+.IfcWall.cut.layer-material-Thermalinsulation {
+    fill: white !important;
 }
 
 .target-view-ELEVATIONVIEW .material-Gypsumplasterboard {

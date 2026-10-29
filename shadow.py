@@ -12,13 +12,13 @@ Y_MIN, Y_MAX = -3, 20
 DX_PER_DY = 0.12#0.125
 DISTANCE_ALONG_LINE = 7.75
 SECOND_LINE_ANGLE = 70
-CENTER_HEIGHT = 7.6-1.375+0.5 - 0.85
+CENTER_HEIGHT = 7.6 - 0.4
 MAX_HEIGHT = CENTER_HEIGHT
 SLOPE = 0.72
 WINDOW_HEIGHT = 0
 
 # Move the entire polygon by changing only this point.
-POLYGON_ORIGIN = (-3.726, 4.5+8.4/2)
+POLYGON_ORIGIN = (-3.80-1.625, 4.5+8.4/2)
 
 # Polygon vertices are measured from POLYGON_ORIGIN, in metres.
 if 1:
