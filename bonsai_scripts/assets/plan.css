@@ -146,6 +146,24 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.06 !important;
 }
 
+/* Plain roof-edge siding has its own color, independent of patterned siding. */
+.material-Woodsidingsolid.surface {
+    fill: #fcf2df !important;
+    stroke: none !important;
+}
+
+.material-Woodsidingsolid.projection {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+.material-Woodsidingsolid.cut {
+    fill: #f4d35e !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
 /* Bonsai emits projected plan beams as separate open edge paths. */
 .target-view-PLANVIEW .projected-wood-fill {
     fill: white !important;

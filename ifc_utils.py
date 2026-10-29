@@ -41,6 +41,7 @@ import ifcopenshell.api.spatial
 import ifcopenshell.api.style
 import ifcopenshell.api.type
 import ifcopenshell.api.unit
+from ifcopenshell.api.geometry.add_window_representation import create_ifc_window_frame_simple
 import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
@@ -2054,8 +2055,9 @@ def _postprocess_wood_siding_pattern(svg_path: Path, properties: Mapping[str, ob
         f'    <path d="M 0 {pitch/2:g} H {width:g}" style="fill:none;stroke:black;stroke-width:{stroke:g}" />\n'
         '</pattern>'
     )
-    if pattern[0] != replacement:
-        svg_path.write_text(svg[:pattern.start()] + replacement + svg[pattern.end():], encoding="utf-8")
+    updated = svg[:pattern.start()] + replacement + svg[pattern.end():]
+    if updated != svg:
+        svg_path.write_text(updated, encoding="utf-8")
 
 
 def _postprocess_model_line_width(
@@ -5406,18 +5408,30 @@ def _rotate_door_framing(
             f'door "{door.Name or door.GlobalId}" has no 3D framing geometry'
         )
 
+    glass_items = [
+        item
+        for aspect in door.Representation.HasShapeAspects
+        if aspect.Name == "Glazing"
+        for representation in aspect.ShapeRepresentations
+        if representation.ContextOfItems.ContextType == "Model"
+        and representation.ContextOfItems.ContextIdentifier == "Body"
+        and representation.ContextOfItems.TargetView == "MODEL_VIEW"
+        for item in representation.Items
+    ]
+
     swing_sign = -1 if reverse_swing else 1
     if operation.startswith("DOUBLE_DOOR"):
         half = len(items) // 2
+        glass_half = len(glass_items) // 2
         _rotate_items_about_z(
             model,
-            items[:half],
+            [*items[:half], *glass_items[:glass_half]],
             angle=swing_sign * angle,
             pivot=(panel_offset_x, pivot_y),
         )
         _rotate_items_about_z(
             model,
-            items[half:],
+            [*items[half:], *glass_items[glass_half:]],
             angle=-swing_sign * angle,
             pivot=(width - panel_offset_x, pivot_y),
         )
@@ -5425,7 +5439,7 @@ def _rotate_door_framing(
         is_left_hinged = operation.endswith("LEFT")
         _rotate_items_about_z(
             model,
-            items,
+            [*items, *glass_items],
             angle=(
                 swing_sign * angle
                 if is_left_hinged
@@ -7637,6 +7651,7 @@ class House:
         side: WallSide = "right",
         start_height: Number | None = None,
         height: Number | None = None,
+        outline: Sequence[Point] | None = None,
         start_extension: Number = 0,
         end_extension: Number = 0,
         material: str = "Cementovlaknita deska",
@@ -7662,6 +7677,11 @@ class House:
         ``offset`` is measured from the selected finished wall face to the
         covering's inner face.  The four opening-space parameters expand each
         void in wall-relative and vertical directions.
+
+        ``outline`` optionally defines one continuous, possibly stepped face
+        as (along, height) points relative to the covering's start and bottom.
+        Points must lie inside its length/height bounds. Omitting it retains
+        the rectangular covering. Openings and host-wall cuts work in either case.
         """
         if not isinstance(wall, Wall):
             raise TypeError("wall must be a Wall created by Storey.wall")
@@ -7695,6 +7715,26 @@ class House:
         )
         if resolved_height <= 0:
             raise ValueError("height must be greater than zero")
+        layer_length = wall.length + start_extension + end_extension
+        if layer_length <= 0:
+            raise ValueError("facade length must be greater than zero")
+        resolved_outline = None
+        outline_polygon = None
+        if outline is not None:
+            if isinstance(outline, (str, bytes)):
+                raise TypeError("outline must be a sequence of (along, height) points")
+            resolved_outline = tuple(_point(point, "outline point") for point in outline)
+            if len(resolved_outline) > 1 and resolved_outline[-1] == resolved_outline[0]:
+                resolved_outline = resolved_outline[:-1]
+            if len(resolved_outline) < 3:
+                raise ValueError("outline must contain at least three points")
+            outline_polygon = Polygon(resolved_outline)
+            if not outline_polygon.is_valid or outline_polygon.area <= 1e-12:
+                raise ValueError("outline must be a valid, non-zero-area polygon")
+            if any(not (-1e-9 <= along <= layer_length + 1e-9
+                        and -1e-9 <= z <= resolved_height + 1e-9)
+                   for along, z in resolved_outline):
+                raise ValueError("outline must fit within the facade length and height")
 
         space_before_openings = _number(
             space_before_openings, "space_before_openings"
@@ -7847,7 +7887,6 @@ class House:
         )
 
         layer_start = -start_extension
-        layer_length = wall.length + start_extension + end_extension
         placement = wall._placement(layer_start, resolved_start_height)
         ifcopenshell.api.geometry.edit_object_placement(
             model,
@@ -7859,18 +7898,31 @@ class House:
             body_offset = wall.body_offset + wall.thickness + offset
         else:
             body_offset = wall.body_offset - offset - thickness
-        body = ifcopenshell.api.geometry.add_wall_representation(
-            model,
-            context=self._body_context,
-            length=layer_length,
-            height=resolved_height,
-            thickness=thickness,
-            offset=body_offset,
-        )
+        retained = (layer_length / 2, body_offset + thickness / 2, resolved_height / 2)
+        if resolved_outline is None:
+            body = ifcopenshell.api.geometry.add_wall_representation(
+                model,
+                context=self._body_context,
+                length=layer_length,
+                height=resolved_height,
+                thickness=thickness,
+                offset=body_offset,
+            )
+        else:
+            builder = ShapeBuilder(model)
+            solid = builder.extrude(
+                builder.polyline(resolved_outline, closed=True),
+                magnitude=thickness,
+                **builder.extrude_kwargs("Y"),
+            )
+            builder.translate(solid, (0, body_offset, 0))
+            body = builder.get_representation(self._body_context, solid)
+            inside = outline_polygon.representative_point()
+            retained = (inside.x, body_offset + thickness / 2, inside.y)
         clippings = _local_clippings(
             wall.cuts,
             placement,
-            (layer_length / 2, body_offset + thickness / 2, resolved_height / 2),
+            retained,
         )
         _clip_body_representation(model, element, body, clippings)
         ifcopenshell.api.geometry.assign_representation(
@@ -7968,6 +8020,7 @@ class House:
                 "Thickness": thickness,
                 "StartHeight": resolved_start_height,
                 "Height": resolved_height,
+                "Outline": json.dumps(resolved_outline) if resolved_outline is not None else None,
                 "Length": layer_length,
                 "StartExtension": start_extension,
                 "EndExtension": end_extension,
@@ -7990,6 +8043,7 @@ class House:
             thickness=thickness,
             start_height=resolved_start_height,
             height=resolved_height,
+            outline=resolved_outline,
             length=layer_length,
             start_extension=start_extension,
             end_extension=end_extension,
@@ -8100,6 +8154,78 @@ class House:
             model, pset=visibility, properties={"ShowInDrawings": show_in_drawings},
         )
         return box
+
+    def add_panel(
+        self,
+        name: str,
+        *,
+        outline: Sequence[Point3D],
+        thickness: Number,
+        material: str = "Generic",
+        color: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Extrude one planar world-space polygon along its winding normal.
+
+        Coordinates are absolute and unmirrored, as for ``add_box``. The
+        polygon may be concave; its winding determines which side receives
+        the thickness. This creates one non-structural, drawing-visible panel.
+        """
+        panel_name = _name(name, "name")
+        material_name = _name(material, "material")
+        thickness = _number(thickness, "thickness")
+        if thickness <= 0:
+            raise ValueError("thickness must be greater than zero")
+        if isinstance(outline, (str, bytes)):
+            raise TypeError("outline must contain planar 3D points")
+        points = tuple(_point_3d(point, "outline point") for point in outline)
+        if len(points) > 1 and points[0] == points[-1]:
+            points = points[:-1]
+        if len(points) < 3:
+            raise ValueError("outline must contain at least three points")
+        vertices = np.asarray(points)
+        origin = vertices[0]
+        edges = vertices[1:] - origin
+        if np.linalg.norm(edges[0]) <= 1e-9:
+            raise ValueError("outline must start with two distinct points")
+        axis_x = edges[0] / np.linalg.norm(edges[0])
+        normals = np.cross(axis_x, edges)
+        normal = normals[np.argmax(np.linalg.norm(normals, axis=1))]
+        if np.linalg.norm(normal) <= 1e-9:
+            raise ValueError("outline must not be collinear")
+        # Preserve winding even when the farthest vertex is in a concavity.
+        area_normal = np.sum(np.cross(vertices - origin, np.roll(vertices - origin, -1, axis=0)), axis=0)
+        if np.dot(normal, area_normal) < 0:
+            normal = -normal
+        normal /= np.linalg.norm(normal)
+        if np.max(np.abs((vertices - origin) @ normal)) > 1e-8:
+            raise ValueError("outline must be planar")
+        axis_y = np.cross(normal, axis_x)
+        local = tuple(map(tuple, np.column_stack(((vertices - origin) @ axis_x, (vertices - origin) @ axis_y))))
+        polygon = Polygon(local)
+        if not polygon.is_valid or polygon.area <= 1e-12:
+            raise ValueError("outline must be a valid, non-zero-area polygon")
+        surface_style = self._surface_style("box", color=color, transparency=0)
+        placement = np.eye(4)
+        placement[:3, :3] = np.column_stack((axis_x, axis_y, normal))
+        placement[:3, 3] = origin
+        model = self.model
+        panel = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcBuildingElementProxy", name=panel_name, predefined_type="USERDEFINED")
+        panel.ObjectType = "PANEL"
+        ifcopenshell.api.spatial.assign_container(model, products=[panel], relating_structure=self.building)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=panel, matrix=placement, is_si=True)
+        builder = ShapeBuilder(model)
+        solid = builder.extrude(builder.polyline(local, closed=True), magnitude=thickness)
+        body = builder.get_representation(self._body_context, solid)
+        ifcopenshell.api.geometry.assign_representation(model, product=panel, representation=body)
+        if surface_style is not None:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=body, styles=[surface_style])
+        if material_name not in self._materials:
+            self._materials[material_name] = ifcopenshell.api.material.add_material(model, name=material_name)
+        ifcopenshell.api.material.assign_material(model, products=[panel], type="IfcMaterial", material=self._materials[material_name])
+        pset = ifcopenshell.api.pset.add_pset(model, product=panel, name="BBIM_Panel")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={"Outline": json.dumps(points), "Thickness": thickness})
+        return panel
 
     def storey(self, name: str, *, elevation: Number) -> Storey:
         """Create and return a building storey at ``elevation`` metres."""
@@ -8843,6 +8969,29 @@ class Drawing:
                     group=self.group,
                     products=annotations,
                 )
+        return self
+
+    def exclude_element(
+        self,
+        element: ifcopenshell.entity_instance,
+    ) -> Drawing:
+        """Omit one model element from this drawing, without changing the IFC.
+
+        Exclusion takes precedence over storey scope and explicit inclusions.
+        Other drawings, geometry and spatial/decomposition relationships are
+        unchanged. Parts and annotations are not implicitly excluded.
+        """
+        if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a("IfcElement"):
+            raise TypeError("element must be an IfcElement")
+        if element.file is not self.house.model:
+            raise ValueError("element must belong to this house")
+        exclude = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Exclude") or ""
+        if element.GlobalId not in {selector.strip() for selector in exclude.split("+")}:
+            ifcopenshell.api.pset.edit_pset(
+                self.house.model,
+                pset=self._drawing_pset,
+                properties={"Exclude": f"{exclude} + {element.GlobalId}" if exclude else element.GlobalId},
+            )
         return self
 
     def add_furniture_label(
@@ -14810,6 +14959,7 @@ class FacadeLayer(ifcopenshell.entity_instance):
         thickness: float,
         start_height: float,
         height: float,
+        outline: tuple[tuple[float, float], ...] | None = None,
         length: float,
         start_extension: float,
         end_extension: float,
@@ -14830,6 +14980,7 @@ class FacadeLayer(ifcopenshell.entity_instance):
         object.__setattr__(self, "thickness", thickness)
         object.__setattr__(self, "start_height", start_height)
         object.__setattr__(self, "height", height)
+        object.__setattr__(self, "outline", outline)
         object.__setattr__(self, "length", length)
         object.__setattr__(self, "start_extension", start_extension)
         object.__setattr__(self, "end_extension", end_extension)
@@ -17139,6 +17290,55 @@ class Wall(ifcopenshell.entity_instance):
         )
         return opening
 
+    def _glaze_door_leaf(
+        self,
+        door: ifcopenshell.entity_instance,
+        body: ifcopenshell.entity_instance,
+    ) -> list[ifcopenshell.entity_instance]:
+        """Replace generated solid leaves with window-style frames and glass.
+
+        IfcOpenShell groups each leaf and its two handles in the Framing
+        aspect. Keep the handles and exact closed-leaf bounds, including
+        mirrored second leaves and the different offsets of sliding doors.
+        """
+        model = self.storey.house.model
+        builder = ShapeBuilder(model)
+        framing = next(aspect for aspect in door.Representation.HasShapeAspects if aspect.Name == "Framing")
+        representation = next(rep for rep in framing.ShapeRepresentations
+                              if rep.ContextOfItems == self.storey.house._body_context)
+        leaf_count = 2 if door.OperationType.startswith("DOUBLE_DOOR") else 1
+        if len(representation.Items) != leaf_count * 3:
+            raise RuntimeError("unexpected generated door leaf/handle geometry")
+        replacements = {}
+        glass_items = []
+        for panel in representation.Items[::3]:
+            coordinates = builder.get_polyline_coords(panel.SweptArea.OuterCurve)
+            base = np.column_stack((coordinates, np.zeros(len(coordinates))))
+            top = base + np.asarray(panel.ExtrudedDirection.DirectionRatios) * float(panel.Depth)
+            placement = ifcopenshell.util.placement.get_axis2placement(panel.Position)
+            points = np.vstack((base, top)) @ placement[:3, :3].T + placement[:3, 3]
+            minimum, maximum = points.min(axis=0), points.max(axis=0)
+            size = maximum - minimum
+            frame_thickness = min(.08, size[0] / 4, size[2] / 4)
+            frame, = create_ifc_window_frame_simple(builder, size, frame_thickness, minimum)
+            glass_thickness = min(.01, size[1])
+            glass_position = minimum + (0, (size[1] - glass_thickness) / 2, 0)
+            glass = builder.extrude(
+                builder.deep_copy(frame.SweptArea.InnerCurves[0]),
+                glass_thickness, position=glass_position, **builder.extrude_kwargs("Y"),
+            )
+            replacements[panel] = frame
+            glass_items.append(glass)
+        representation.Items = [replacements.get(item, item) for item in representation.Items]
+        body.Items = [replacements.get(item, item) for item in body.Items] + glass_items
+        ifcopenshell.api.geometry.add_shape_aspect(
+            model, "Glazing", items=glass_items, representation=body,
+            part_of_product=door.Representation,
+        )
+        for panel in replacements:
+            ifcopenshell.util.element.remove_deep2(model, panel)
+        return glass_items
+
     def add_door(
         self,
         *,
@@ -17157,6 +17357,8 @@ class Wall(ifcopenshell.entity_instance):
         casing_depth: Number = 0.005,
         color: str | None = None,
         transparency: Number = 0,
+        glazed: bool = False,
+        glass_transparency: Number = 0.75,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Cut and fill a door opening in this wall.
@@ -17180,7 +17382,11 @@ class Wall(ifcopenshell.entity_instance):
         opening; ``casing_overlap`` is how far they continue over the wall
         beyond the rough opening and ``casing_depth`` is their projection from
         each wall face.  Set ``casing_depth`` to zero to omit them.  ``color``
-        and ``transparency`` affect only the 3D body.
+        and ``transparency`` affect only the 3D body. ``glazed=True`` replaces
+        the solid leaf with an 80 mm frame (scaled down for small leaves) and
+        a centred 10 mm pane, retaining handles and the plan swing. Glazed
+        doors use the window color by default; ``color`` overrides it.
+        ``glass_transparency`` controls only the pane, as for windows.
         """
         operation = _enum(operation, "operation", _DOOR_OPERATIONS)
         open_angle = _number(open_angle, "open_angle")
@@ -17192,6 +17398,11 @@ class Wall(ifcopenshell.entity_instance):
             raise ValueError("reverse_swing is not supported for sliding doors")
         if not isinstance(show_overhead, bool):
             raise TypeError("show_overhead must be a boolean")
+        if not isinstance(glazed, bool):
+            raise TypeError("glazed must be a boolean")
+        glass_transparency = _number(glass_transparency, "glass_transparency")
+        if not 0 <= glass_transparency <= 1:
+            raise ValueError("glass_transparency must be between zero and one")
         casing_overlap = _number(casing_overlap, "casing_overlap")
         casing_depth = _number(casing_depth, "casing_depth")
         if casing_overlap < 0:
@@ -17199,7 +17410,7 @@ class Wall(ifcopenshell.entity_instance):
         if casing_depth < 0:
             raise ValueError("casing_depth must not be negative")
         surface_style = self.storey.house._surface_style(
-            "door",
+            "window" if glazed else "door",
             color=color,
             transparency=transparency,
         )
@@ -17294,6 +17505,8 @@ class Wall(ifcopenshell.entity_instance):
                 "BodyPivotY": self.body_offset + panel_offset_y,
                 "CasingOverlap": casing_overlap,
                 "CasingDepth": casing_depth,
+                "Glazed": glazed,
+                "GlassTransparency": glass_transparency if glazed else None,
             },
         )
         lining_properties = {
@@ -17323,6 +17536,7 @@ class Wall(ifcopenshell.entity_instance):
             product=door,
             representation=body_representation,
         )
+        glass_items = self._glaze_door_leaf(door, body_representation) if glazed else []
         self._add_door_casings(
             door,
             body_representation,
@@ -17340,6 +17554,15 @@ class Wall(ifcopenshell.entity_instance):
                 shape_representation=body_representation,
                 styles=[surface_style],
             )
+        if glass_items:
+            glass_color = color
+            if glass_color is None and "window" not in self.storey.house._default_colors:
+                glass_color = "#B7D9E8"
+            glass_style = self.storey.house._surface_style(
+                "window", color=glass_color, transparency=glass_transparency,
+            )
+            for item in glass_items:
+                ifcopenshell.api.style.assign_item_style(model, item=item, style=glass_style)
         self._set_door_open_angle(
             door,
             operation=operation,

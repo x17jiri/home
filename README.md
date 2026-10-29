@@ -125,6 +125,11 @@ are mirrored, so existing coordinate calculations need no special handling.
 
 ## 3D-only reference boxes
 
+`House.add_panel(name, outline=[(x, y, z), ...], thickness=..., material=..., color=...)`
+extrudes one planar polygon, including a concave outline, into a non-structural
+panel. Coordinates are absolute and unmirrored; point winding determines the
+extrusion side. Export mirroring is applied once, as with boxes.
+
 `House.add_box()` creates an axis-aligned box in absolute, unmirrored metre
 coordinates. `origin` is its minimum X/Y/Z corner; `size` is its X/Y/Z extent:
 
@@ -621,28 +626,53 @@ horizontal insulation remains a drawing-only batting symbol above the purlins.
 The outer profiles are normal, dormer, normal and lower. The high right
 piece ends at `LOWER_NADEZDIVKA_X + ROOF_X_OVERHANG`; the lower piece starts
 at `LOWER_NADEZDIVKA_X`, keeping the full explicit overlap (initially 250 mm).
-The MDF board, underlay, counter-battens, tile battens and tiles follow these
-exterior profiles, independently of the inner ranges. Source outlines use
+Only roof tiles use the full `roof_over_rafter_x_ranges` extents. MDF,
+underlay and tile battens use `[x_min + ROOF_EAVE_SETBACK, x_max - ROOF_EAVE_SETBACK]`
+for each range, leaving 20 mm at each X end for slope-following siding.
+Counter-battens follow these inset build-up footprints; structural rafter/tie
+positions and under-rafter ranges are unchanged. `roof_under_tile_x_range()`
+centralizes the shared inset, rejects ranges consumed by it, and restores the
+full width if the setback is zero. This reuses the existing 20 mm eave-siding
+allowance, rather than adding another parameter. Tile ranges and overlaps
+remain untouched. Source outlines use
 small thickness-aware ridge/eave overshoots to keep the correct clipping side.
-All roofs retain vertical eave cuts at `ROOF_EAVE_OVERHANG = 0.75` metres
-beyond the outside walls. Main roofs (both high and low, street and garden)
+Main roofs retain vertical eave cuts at `ROOF_EAVE_OVERHANG = 0.75` metres
+beyond the outside walls; the dormer independently uses
+`DORMER_ROOF_EAVE_OVERHANG = 0.5` (`DORMER_ROOF_EAVE_Y`). Main roofs (both high and low, street and garden)
 also have a horizontal cut `ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.30` metres
-below their own wall-plate underside. The dormer has no horizontal eave cut.
+below their own wall-plate underside. The dormer has its own horizontal cut,
+`DORMER_ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.0`, at the dormer wall-plate underside.
+Both cuts apply to the roof layers, battens and rafters (including the extended
+dormer rafters); neither changes the roof pitch or ridge-side connection.
 `ROOF_EAVE_SETBACK = 0.02` trims rafters, MDF, underlay, counter-battens and
 tile battens 20 mm back from the vertical tile edge. Source limits intersect
 all cut half-spaces, so batten rows stop at whichever eave cut is reached
-first at their height. Set the setback to zero to restore matching vertical edges.
-Ridge cuts, X/gable overhangs and interior finishes are unchanged.
+first at their height. Set the setback to zero to restore matching vertical edges
+and X ends. Ridge cuts, tile overhangs and interior finishes are unchanged.
 `add_roof_siding()` fills the setbacks with vertical, non-structural fascia
-boards using the same `Wood siding` material as the roof-step cladding.
+boards using the plain `Wood siding solid` material, unlike the patterned roof-step cladding.
 Their top follows the roof tiles' underside. Main fascia bottoms use the
 horizontal eave-cut height (wall-plate underside minus 300 mm); the dormer
-bottom still follows the rafter underside. Thickness equals
+bottom uses its own horizontal cut. Thickness equals
 `ROOF_EAVE_SETBACK`; zero disables them.
-X extents follow `roof_over_rafter_x_ranges`, merging touching or overlapping
+X extents follow the inset `roof_over_rafter_x_ranges`, merging touching or overlapping
 ranges on each roof plane. The current layout creates six boards: two street
 (high/low) and four garden (high/dormer/high/low). They are returned as `roof_siding`
 and live in the `Roof - Eave siding` visibility container.
+`add_sloped_roof_siding()` adds three main gable-end caps: both X ends
+of the high main roof and only the outer X end of the low roof. Each is one
+continuous panel following both pitches, in the 20 mm X-end allowance, from
+the rafter underside to the tile underside, respecting both eave cuts.
+It also adds a side cap at both X ends of each dormer exterior range, along
+the dormer's single pitch. These stop at the roof layers' ridge-side boundary
+(local Y=0), not the extended structural rafters, and at the full tile eave,
+also clipped by the dormer horizontal eave plane.
+The current layout has five caps in total; the low roof's inner end stays open.
+Results are `roof_sloped_siding`
+in the `Roof - Sloped siding` container. `Wood siding solid` has a plain view
+fill `#f9e5bf` set in `.material-Woodsidingsolid.surface` in
+`bonsai_scripts/assets/plan.css`; there are no board-joint lines or sloped pattern
+yet. Section cuts remain timber-yellow, independently of that view color.
 Counter-battens use the existing main/dormer rafter positions but are generated
 outside the structural-rafter loop. Main positions are filtered by their explicit
 high/lower framing level, so overlapping exterior ranges do not create a second
@@ -701,10 +731,14 @@ material share a pink (`#f2b6d0`) cut fill and outline, with white projections. 
 pattern uses the same pink. Material names and legend pattern IDs are separate:
 Bonsai strips punctuation from material classes (`mdf-solid` becomes
 `material-mdfsolid`), so both material classes have explicit stylesheet rules.
-The reusable `Wood siding` material uses white closed projected faces with thin
+The reusable `Wood siding` material for facades and the gable between roof levels uses closed projected faces with thin
 horizontal board joints (`wood-siding` pattern), and yellow wood fill in cuts.
 Open projected edges stay unfilled; no grain texture or individual-board solids
-are generated. Both closure layers remain white in 3D. Joint pitch is 150 mm by
+are generated. Roof-edge siding (eave boards and sloped caps)
+uses `Wood siding solid`: `#f9e5bf` without joints. Patterned siding uses the
+lighter `#fcf2df` background set in `drawings/assets/patterns.svg`.
+The two colors are independent and also applied in 3D by `wood_siding_color()`.
+The MDF closure remains white in 3D. Joint pitch is 150 mm by
 default: edit `data-board-height-mm` on `wood-siding` in
 `drawings/assets/patterns.svg` to change it. Rendering adjusts the pitch to the
 drawing scale while keeping the joint stroke at 0.06 mm on paper. AA/BB share
@@ -835,6 +869,16 @@ back in. Facade-insulation opening boundaries are independent of this switch.
 Unfilled openings retain an invisible mask source so projected wall/lintel
 edges are covered even when no continuation line is drawn. The cover is only
 used when the plan cut intersects the opening.
+
+Use `wall.add_door(..., glazed=True)` for a balcony-style glazed door. It
+remains an `IfcDoor` with the same construction opening, handles, casing,
+plan swing and dimensions. The leaf becomes a frame around a centred glass
+pane; frame width is 80 mm (scaled for small leaves), glass is 10 mm thick.
+The default frame/glass color follows the house's window color, or can be
+overridden with `color`. `transparency` controls the frame and
+`glass_transparency=0.75` independently controls the glass. Single, double
+and sliding doors are supported; opening/closing and X mirroring also move
+the glass. Without `glazed=True`, solid doors are unchanged.
 
 Plan drawings automatically label every included door with its width and
 height in millimetres, separated by a line. The label sits inside the door
@@ -1204,6 +1248,10 @@ Generate the west exterior elevation from the lower-roof end with
 `python3 house_ifc.py pohled_zapad`. It looks from +X towards -X, includes both
 storeys and all roof layers (without foundations or plan annotations), and
 saves `pohled_zapad.svg` and the PDF configured by `PDF_POHLED_ZAPAD`.
+For the opposite, east elevation from the high-roof end, use
+`python3 house_ifc.py pohled_vychod`. It looks from -X towards +X with the
+same storeys and annotation settings, saving `pohled_vychod.svg` and
+`PDF_POHLED_VYCHOD` ("Pohled - Východ").
 For the street elevation, use `python3 house_ifc.py pohled_ulice`.
 The camera looks from negative Y towards positive Y, with both storeys and all
 roof layers (including eave siding), without foundations or plan annotations.
@@ -1211,19 +1259,45 @@ It saves `pohled_ulice.svg` and `PDF_POHLED_ULICE` ("Pohled - Ulice").
 For the opposite, garden-side elevation, use `python3 house_ifc.py pohled_zahrada`.
 It looks from positive Y towards negative Y with the same storey and annotation
 settings, saving `pohled_zahrada.svg` and `PDF_POHLED_ZAHRADA` ("Pohled - Zahrada").
+The garden elevation excludes only the concealed upper ring beam hosted on
+`wall_back1_u` and its reinforcing bars. This avoids an OpenCascade projected
+edge leaking between the dormer-window sills; it is a per-drawing visibility
+workaround, not a general hidden-line repair or a geometry change. The beam
+remains in the IFC, sections and other drawings. Use
+`drawing.exclude_element(element)` for explicit per-drawing exclusions;
+existing 3D-only exclusions are preserved, and parts are excluded separately.
 
-`add_facade()` currently creates only the street finish: two continuous,
-full-height IFC coverings meeting at `LOWER_NADEZDIVKA_X`, white on the high
-part and `Wood siding` on the low part. Their thickness is `FACADE_THICKNESS`,
-immediately outside `POLYSTYRENE_INSULATION_THICKNESS`; tops meet the respective
-rafter undersides. Wall openings are cut through the coverings automatically.
-The outer X limits are `-ROCKWOOL_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001`
-and `HOUSE_WIDTH + POLYSTYRENE_INSULATION_THICKNESS + FACADE_THICKNESS + 0.001`,
-staggering the future perpendicular corner joints by 1 mm. Panels span the
+`add_facade()` creates the street finish; `add_facade("garden")` creates the
+garden finish. Both use two full-height IFC coverings, white on the high
+part and `Wood siding` on the low part, meeting at `LOWER_NADEZDIVKA_X + 0.1`.
+The garden's white covering is one stepped polygon raised at the dormer,
+not separate touching panels, so there is no horizontal joint to mask.
+Thickness is `FACADE_THICKNESS`, immediately outside the respective street
+polystyrene/garden rockwool insulation. Tops meet the respective rafter
+undersides. Ground and dormer openings are cut automatically, including the
+door crossing the material change. Results are `street_facade` and `garden_facade`.
+All facade insulation uses one `FACADE_INSULATION_THICKNESS = 0.20` setting,
+for both EPS and mineral wool. Insulation materials remain unchanged.
+The outer X limits are `-FACADE_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001`
+and `HOUSE_WIDTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001`,
+staggering the perpendicular corner joints by 1 mm. Panels span the
 storey/construction joints rather than introducing horizontal finish seams.
+`add_facade("east")` and `add_facade("west")` create one white gabled covering
+each, returned as `east_facade` and `west_facade`. Both extend from
+`-FACADE_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001` to
+`HOUSE_DEPTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001` along Y,
+directly outside the end-wall insulation. Their top profiles follow both
+rafter undersides (high roof in the east, low roof in the west); there is no
+horizontal seam at the storey boundary. Door/window openings from both
+storeys are cut automatically.
+`House.add_facade_layer(..., outline=[(along, height), ...])` supports such
+continuous profiles in general. Outline coordinates are relative to the
+covering's start and bottom and must fit inside its length/height bounds;
+omitting `outline` preserves the existing rectangular behavior. IFC voids,
+host-wall clipping and X mirroring apply to either shape.
 
 Projected roof tiles use the `roof-tiles` SVG pattern: terracotta red
-background, thin black side joints and curved course edges. Projected siding
+background, thin black side joints and curved course edges. Projected facade siding
 uses the `wood-siding` pattern with a warm timber-brown background. Change the
 background `<rect fill="...">` in either pattern in `drawings/assets/patterns.svg`
 to tune its view color; the render passes preserve it while scaling/projecting

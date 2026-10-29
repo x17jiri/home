@@ -91,13 +91,13 @@ from ifc_utils import (
 
 
 class WoodSidingMaterialTests(unittest.TestCase):
-    def test_siding_has_horizontal_joints_on_timber_brown_and_yellow_section_cuts(self):
+    def test_siding_has_horizontal_joints_on_light_background_and_yellow_section_cuts(self):
         root = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg").getroot()
         pattern = next(p for p in root.iter() if p.get("id") == "wood-siding")
         self.assertEqual(pattern.get("data-board-height-mm"), "150")
         self.assertEqual(len(pattern), 2)
         self.assertTrue(pattern[0].tag.endswith("}rect"))
-        self.assertEqual(pattern[0].get("fill"), "#c99a64")
+        self.assertRegex(pattern[0].get("fill"), r"^#[0-9a-fA-F]{6}$")
         self.assertEqual(pattern[1].get("d"), "M 0 0.75 H 10")
         self.assertIn("stroke-width:0.06", pattern[1].get("style"))
         stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
@@ -146,15 +146,264 @@ class WoodSidingMaterialTests(unittest.TestCase):
     def test_siding_background_color_survives_pattern_rescaling(self):
         assets = (Path(__file__).parent / "drawings/assets/patterns.svg").read_text(encoding="utf-8")
         template = re.search(r'<pattern id="wood-siding".*?</pattern>', assets, re.DOTALL)[0]
+        original_color = ET.fromstring(template).find("rect").get("fill")
         for color in ("#c99a64", "#ddeeff", "white"):
             with self.subTest(color=color), TemporaryDirectory() as directory:
                 path = Path(directory) / "siding.svg"
                 path.write_text('<svg width="100mm" height="100mm" viewBox="0 0 100 100"><defs>'
-                                + template.replace("#c99a64", color) + '</defs></svg>', encoding="utf-8")
+                                + template.replace(original_color, color) + '</defs></svg>', encoding="utf-8")
                 _postprocess_wood_siding_pattern(path, {"Scale": "1/50"})
                 root = ET.parse(path).getroot()
                 self.assertEqual(root.find("defs/pattern/rect").get("fill"), color)
                 self.assertAlmostEqual(float(root.find("defs/pattern").get("height")), 3)
+
+    def test_solid_siding_fill_is_independent_of_the_pattern_background(self):
+        assets = (Path(__file__).parent / "drawings/assets/patterns.svg").read_text(encoding="utf-8")
+        template = re.search(r'<pattern id="wood-siding".*?</pattern>', assets, re.DOTALL)[0]
+        original_color = ET.fromstring(template).find("rect").get("fill")
+        stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
+        original_rule = stylesheet.split('.material-Woodsidingsolid.surface {', 1)[1].split('}', 1)[0]
+        for color in ("#c99a64", "#fcf2df", "white"):
+            with self.subTest(color=color), TemporaryDirectory() as directory:
+                path = Path(directory) / "solid.svg"
+                path.write_text('<svg width="100mm" height="100mm" viewBox="0 0 100 100"><defs><style>'
+                                + stylesheet + '</style>' + template.replace(original_color, color)
+                                + '</defs></svg>', encoding="utf-8")
+                _postprocess_wood_siding_pattern(path, {"Scale": "1/100"})
+                text = path.read_text(encoding="utf-8")
+                rule = text.split('.material-Woodsidingsolid.surface {', 1)[1].split('}', 1)[0]
+                self.assertEqual(rule, original_rule)
+                self.assertNotIn('url(', rule)
+                self.assertEqual(ET.parse(path).find("defs/pattern/rect").get("fill"), color)
+                self.assertIn('fill: #f4d35e !important;', text.split('.material-Woodsidingsolid.cut {', 1)[1].split('}', 1)[0])
+                _postprocess_wood_siding_pattern(path, {"Scale": "1/100"})
+                self.assertEqual(path.read_text(encoding="utf-8"), text)
+
+
+class GlazedDoorTests(unittest.TestCase):
+    @staticmethod
+    def aspect_items(door, name):
+        return [item for aspect in door.Representation.HasShapeAspects if aspect.Name == name
+                for rep in aspect.ShapeRepresentations if rep.ContextOfItems.ContextType == "Model"
+                for item in rep.Items]
+
+    @staticmethod
+    def vertices(element):
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), element)
+        geometry = shape.geometry if hasattr(shape, "geometry") else shape
+        return np.asarray(geometry.verts).reshape(-1, 3)
+
+    def test_glazed_leaf_has_a_real_frame_and_centred_pane_but_keeps_the_door_and_plan(self):
+        house = House("Balcony doors", colors={"window": "#ffffff", "door": "#8B5A2B"})
+        wall = house.storey("Ground", elevation=0).wall((0, 0), (7, 0), thickness=.25, height=3)
+        kwargs = dict(width=.9, height=2.4, sill_height=.2, opening_width=1.1,
+                      opening_height=2.5, clear_height=2, operation="SINGLE_SWING_RIGHT")
+        solid = wall.add_door(at=.5, **kwargs)
+        glazed = wall.add_door(at=3, glazed=True, glass_transparency=.6, **kwargs)
+        self.assertTrue(glazed.is_a("IfcDoor"))
+        self.assertEqual(glazed.OperationType, solid.OperationType)
+        self.assertAlmostEqual(glazed.OverallHeight, 2.2)
+        self.assertEqual(glazed.OverallWidth, .9)
+        props = ifcopenshell.util.element.get_pset(glazed, "EPset_Door")
+        self.assertEqual(props["ClearHeight"], 2)
+        self.assertTrue(props["Glazed"])
+        self.assertEqual(props["GlassTransparency"], .6)
+        framing = self.aspect_items(glazed, "Framing")
+        self.assertEqual(len(framing), 3)  # One frame and the two original handles.
+        glass, = self.aspect_items(glazed, "Glazing")
+        frame = framing[0]
+        self.assertTrue(frame.SweptArea.is_a("IfcArbitraryProfileDefWithVoids"))
+        expected = self.vertices(self.aspect_items(solid, "Framing")[0])
+        actual = self.vertices(frame)
+        np.testing.assert_allclose(actual.min(axis=0), expected.min(axis=0))
+        np.testing.assert_allclose(actual.max(axis=0), expected.max(axis=0))
+        pane = self.vertices(glass)
+        low, high = actual.min(axis=0), actual.max(axis=0)
+        np.testing.assert_allclose(pane.min(axis=0)[[0, 2]], low[[0, 2]] + .08)
+        np.testing.assert_allclose(pane.max(axis=0)[[0, 2]], high[[0, 2]] - .08)
+        self.assertAlmostEqual(np.ptp(pane[:, 1]), .01)
+        self.assertAlmostEqual((pane[:, 1].min()+pane[:, 1].max())/2, (low[1]+high[1])/2)
+        for item, transparency in ((frame, 0), (glass, .6)):
+            style = item.StyledByItem[0].Styles[0].Styles[0]
+            self.assertEqual(style.Transparency, transparency)
+            self.assertEqual((style.SurfaceColour.Red, style.SurfaceColour.Green, style.SurfaceColour.Blue), (1, 1, 1))
+        opening = glazed.FillsVoids[0].RelatingOpeningElement
+        opening_vertices = self.vertices(opening)
+        self.assertAlmostEqual(np.ptp(opening_vertices[:, 0]), 1.1)
+        self.assertAlmostEqual(np.ptp(opening_vertices[:, 2]), 2.3)
+        def plan_coordinates(door):
+            rep = ifcopenshell.util.representation.get_representation(door, "Plan", "Body", "PLAN_VIEW")
+            return [entity.CoordList for entity in house.model.traverse(rep)
+                    if entity.is_a("IfcCartesianPointList2D")]
+        self.assertEqual(plan_coordinates(glazed), plan_coordinates(solid))
+        self.assertTrue(plan_coordinates(glazed))
+        self.assertFalse(self.aspect_items(solid, "Glazing"))
+
+    def test_glass_follows_all_supported_leaf_swings_and_elevation_closing(self):
+        operations = ("SINGLE_SWING_LEFT", "SINGLE_SWING_RIGHT", "DOUBLE_SWING_LEFT",
+                      "DOUBLE_SWING_RIGHT", "DOUBLE_DOOR_SINGLE_SWING", "DOUBLE_DOOR_DOUBLE_SWING",
+                      "SLIDING_TO_LEFT", "SLIDING_TO_RIGHT", "DOUBLE_DOOR_SLIDING")
+        for operation in operations:
+            for reverse in ((False,) if "SLIDING" in operation else (False, True)):
+                with self.subTest(operation=operation, reverse=reverse):
+                    house = House("Door swings")
+                    wall = house.storey("Ground", elevation=0).wall((0, 0), (6, 0), thickness=.25, height=3)
+                    kwargs = dict(width=1, height=2.1, glazed=True, operation=operation, reverse_swing=reverse)
+                    closed = wall.add_door(at=.5, **kwargs)
+                    opened = wall.add_door(at=3, open_angle=40, **kwargs)
+                    count = 2 if operation.startswith("DOUBLE_DOOR") else 1
+                    self.assertEqual(len(self.aspect_items(opened, "Glazing")), count)
+                    self.vertices(opened)  # OCC can mesh every supported operation.
+                    if "SLIDING" not in operation:
+                        glass = self.aspect_items(opened, "Glazing")[0]
+                        closed_glass = self.aspect_items(closed, "Glazing")[0]
+                        self.assertFalse(np.allclose(
+                            ifcopenshell.util.placement.get_axis2placement(glass.Position),
+                            ifcopenshell.util.placement.get_axis2placement(closed_glass.Position)))
+                    self.assertEqual(_close_door_bodies(house.model), 0 if "SLIDING" in operation else 1)
+                    for aspect in ("Framing", "Glazing", "Lining", "Casing"):
+                        for actual, expected in zip(self.aspect_items(opened, aspect), self.aspect_items(closed, aspect)):
+                            np.testing.assert_allclose(
+                                ifcopenshell.util.placement.get_axis2placement(actual.Position),
+                                ifcopenshell.util.placement.get_axis2placement(expected.Position), atol=1e-9)
+
+    def test_glazed_doors_mirror_once_without_changing_live_glass_or_leaf_geometry(self):
+        house = House("Mirrored balcony doors", mirror_x=True)
+        wall = house.storey("Ground", elevation=1).wall((1, 2), (1, 9), thickness=.25, height=3)
+        doors = [wall.add_door(at=at, width=1, height=2.1, glazed=True, operation=operation,
+                               open_angle=35, reverse_swing="SLIDING" not in operation)
+                 for at, operation in ((.5, "SINGLE_SWING_RIGHT"), (2.5, "DOUBLE_DOOR_SINGLE_SWING"), (4.5, "SLIDING_TO_LEFT"))]
+        exported = house._export_model()
+        settings = ifcopenshell.geom.settings(); settings.set(settings.USE_WORLD_COORDS, True)
+        for door in doors:
+            shape = ifcopenshell.geom.create_shape(settings, door)
+            original = np.asarray(shape.geometry.verts).reshape(-1, 3)
+            shape = ifcopenshell.geom.create_shape(settings, exported.by_guid(door.GlobalId))
+            mirrored = np.asarray(shape.geometry.verts).reshape(-1, 3)
+            self.assertEqual({tuple(p) for p in np.round(mirrored, 7)},
+                             {tuple(p) for p in np.round(original * (-1, 1, 1), 7)})
+            shape = ifcopenshell.geom.create_shape(settings, door)
+            np.testing.assert_allclose(np.asarray(shape.geometry.verts).reshape(-1, 3), original)
+
+    def test_explicit_frame_color_keeps_glass_transparency_separate(self):
+        house = House("Colors")
+        wall = house.storey("Ground", elevation=0).wall((0, 0), (3, 0), thickness=.25, height=3)
+        door = wall.add_door(at=1, width=.9, height=2.1, glazed=True, color="#336699",
+                             transparency=.2, glass_transparency=.85)
+        for name, transparency in (("Framing", .2), ("Glazing", .85)):
+            style = self.aspect_items(door, name)[0].StyledByItem[0].Styles[0].Styles[0]
+            self.assertEqual(style.Transparency, transparency)
+            np.testing.assert_allclose((style.SurfaceColour.Red, style.SurfaceColour.Green, style.SurfaceColour.Blue), (.2, .4, .6))
+
+    def test_invalid_glazing_arguments_do_not_create_openings(self):
+        house = House("Validation")
+        wall = house.storey("Ground", elevation=0).wall((0, 0), (3, 0), thickness=.25, height=3)
+        for kwargs, exception in (({"glazed": "yes"}, TypeError), ({"glass_transparency": -1}, ValueError),
+                                  ({"glass_transparency": 1.1}, ValueError), ({"glass_transparency": float("nan")}, ValueError)):
+            with self.subTest(kwargs=kwargs), self.assertRaises(exception):
+                wall.add_door(at=1, width=.9, height=2.1, **kwargs)
+        self.assertFalse(house.model.by_type("IfcDoor"))
+        self.assertFalse(house.model.by_type("IfcOpeningElement"))
+
+
+class PanelTests(unittest.TestCase):
+    def test_concave_world_polygon_is_one_panel_with_correct_volume_and_normal(self):
+        house = House("Panel")
+        outline = ((2, 0, 1), (2, 4, 1), (2, 4, 4), (2, 2, 3), (2, 0, 4))
+        panel = house.add_panel("Concave", outline=outline, thickness=.02, material="Wood siding solid", color="#f9e5bf")
+        body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
+        self.assertEqual(len(body.Items), 1)
+        self.assertTrue(body.Items[0].is_a("IfcExtrudedAreaSolid"))
+        settings = ifcopenshell.geom.settings(); settings.set(settings.USE_WORLD_COORDS, True)
+        shape = ifcopenshell.geom.create_shape(settings, panel)
+        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+        np.testing.assert_allclose(vertices.min(axis=0), (2, 0, 1), atol=1e-8)
+        np.testing.assert_allclose(vertices.max(axis=0), (2.02, 4, 4), atol=1e-8)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), 10 * .02)
+        self.assertEqual(ifcopenshell.util.element.get_material(panel).Name, "Wood siding solid")
+        with patch.object(house, "mirror_x", True):
+            exported = house._export_model().by_guid(panel.GlobalId)
+        reflected = ifcopenshell.geom.create_shape(settings, exported)
+        points = np.asarray(reflected.geometry.verts).reshape(-1, 3)
+        np.testing.assert_allclose((points[:, 0].min(), points[:, 0].max()), (-2.02, -2), atol=1e-8)
+
+    def test_invalid_panel_profiles_are_rejected_before_creating_products(self):
+        house = House("Panel")
+        for outline in (((0, 0, 0), (1, 0, 0)),
+                        ((0, 0, 0), (1, 0, 0), (2, 0, 0)),
+                        ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, .1)),
+                        ((0, 0, 0), (1, 1, 0), (0, 1, 0), (1, 0, 0))):
+            with self.subTest(outline=outline):
+                count = len(list(house.model))
+                with self.assertRaisesRegex(ValueError, "outline"):
+                    house.add_panel("Invalid", outline=outline, thickness=.02)
+                self.assertEqual(len(list(house.model)), count)
+
+
+class FacadeOutlineTests(unittest.TestCase):
+    outline = ((0, 0), (6, 0), (6, 3), (4, 3), (4, 5), (2, 5), (2, 3), (0, 3))
+
+    def make_panel(self, *, reversed=False, mirror=False, trim=True, cut=False):
+        house = House("Stepped facade", mirror_x=mirror)
+        ground = house.storey("Ground", elevation=.5)
+        upper = house.storey("Upper", elevation=3.5)
+        ends = ((6, 0), (0, 0)) if reversed else ((0, 0), (6, 0))
+        wall = ground.wall(*ends, thickness=.24, height=5,
+                          cuts=[((0, 0, 4.5), (10, 0, 4.5), (0, 10, 4.5))] if cut else None)
+        wall.add_opening(at=.5, width=1, sill_height=.5, height=1.5)
+        upper_wall = upper.wall(*ends[::-1], thickness=.24, height=2)
+        upper_wall.add_window(at=2.5, width=1, sill_height=.5, height=1.5)
+        panel = house.add_facade_layer(wall, offset=.2, thickness=.005, height=5,
+                                       outline=self.outline, opening_walls=[upper_wall], trim_openings=trim)
+        return house, panel
+
+    def test_one_stepped_extrusion_preserves_openings_and_material_metadata(self):
+        house, panel = self.make_panel()
+        self.assertEqual(panel.outline, self.outline)
+        self.assertEqual(json.loads(ifcopenshell.util.element.get_pset(panel, "BBIM_FacadeLayer", "Outline")),
+                         [list(p) for p in self.outline])
+        body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
+        self.assertEqual(len(body.Items), 1)
+        self.assertTrue(body.Items[0].is_a("IfcExtrudedAreaSolid"))
+        self.assertEqual(len(panel.openings), 2)
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), panel)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), (22 - 2) * .005)
+
+    def test_profile_respects_reverse_host_orientation_and_export_mirroring(self):
+        for reversed in (False, True):
+            for mirror in (False, True):
+                with self.subTest(reversed=reversed, mirror=mirror):
+                    house, panel = self.make_panel(reversed=reversed, mirror=mirror)
+                    settings = ifcopenshell.geom.settings()
+                    settings.set(settings.USE_WORLD_COORDS, True)
+                    exported = house._export_model().by_guid(panel.GlobalId)
+                    shape = ifcopenshell.geom.create_shape(settings, exported)
+                    verts = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                    np.testing.assert_allclose((verts[:, 0].min(), verts[:, 0].max()), (-6, 0) if mirror else (0, 6), atol=1e-8)
+                    np.testing.assert_allclose((verts[:, 2].min(), verts[:, 2].max()), (.5, 5.5), atol=1e-8)
+                    self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), .1)
+
+    def test_profile_inherits_wall_cuts_and_can_disable_opening_trimming(self):
+        _, panel = self.make_panel(cut=True)
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), panel)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), (20 - 1.5) * .005)
+        _, panel = self.make_panel(trim=False)
+        self.assertEqual(panel.openings, ())
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), panel)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), 22 * .005)
+
+    def test_invalid_profiles_are_rejected_before_creating_elements(self):
+        house = House("Invalid facade")
+        wall = house.storey("Ground", elevation=0).wall((0, 0), (6, 0), thickness=.24, height=5)
+        for outline in (((0, 0), (6, 0)), ((0, 0), (1, 0), (2, 0)),
+                        ((0, 0), (6, 5), (0, 5), (6, 0)),
+                        ((-.1, 0), (6, 0), (6, 5)), ((0, 0), (6.1, 0), (6, 5)),
+                        ((0, 0), (6, 0), (6, 5.1))):
+            with self.subTest(outline=outline):
+                count = len(list(house.model))
+                with self.assertRaisesRegex(ValueError, "outline"):
+                    house.add_facade_layer(wall, offset=.2, thickness=.005, outline=outline)
+                self.assertEqual(len(list(house.model)), count)
 
 
 class ReferenceBoxTests(unittest.TestCase):
@@ -12707,6 +12956,48 @@ class HouseTests(unittest.TestCase):
             drawing.group.IsGroupedBy[0].RelatedObjects,
         )
         self.assertEqual(len(house.model.by_type("IfcFurniture")), 1)
+
+    def test_excludes_one_element_from_only_its_drawing_and_persists_the_rule(self) -> None:
+        house = House("Visibility")
+        storey = house.storey("Ground", elevation=0)
+        hidden = storey.wall((0, 0), (4, 0), thickness=.24, height=3)
+        visible = storey.wall((0, 2), (4, 2), thickness=.24, height=3)
+        reference_only = house.add_box("3D only", origin=(8, 8, 0), size=(1, 1, 1), show_in_drawings=False)
+        drawing = house.add_drawing("Filtered", 2, 5, 2, 5, view="elevation", direction=(0, -1, 0), storeys=[storey])
+        other = house.add_drawing("Unfiltered", 2, 5, 2, 5, view="elevation", direction=(0, -1, 0), storeys=[storey])
+        original = hidden.Representation.to_string()
+        self.assertIs(drawing.exclude_element(hidden), drawing)
+        drawing.exclude_element(hidden)  # Idempotent; no duplicated union term.
+        drawing.include_element(hidden)  # Exclusion still takes precedence.
+        rule = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Exclude")
+        self.assertEqual(rule.count(hidden.GlobalId), 1)
+        excluded = ifcopenshell.util.selector.filter_elements(house.model, rule)
+        self.assertIn(hidden, excluded)
+        self.assertIn(reference_only, excluded)  # Preserve the existing 3D-only rule.
+        self.assertNotIn(visible, excluded)
+        other_rule = ifcopenshell.util.element.get_pset(other.element, "EPset_Drawing", "Exclude")
+        self.assertNotIn(hidden, ifcopenshell.util.selector.filter_elements(house.model, other_rule))
+        self.assertEqual(hidden.Representation.to_string(), original)
+        self.assertEqual(ifcopenshell.util.element.get_container(hidden), storey.element)
+        with TemporaryDirectory() as directory:
+            path = house.write(Path(directory) / "visibility.ifc")
+            model = ifcopenshell.open(path)
+            reopened = model.by_guid(drawing.element.GlobalId)
+            persisted = ifcopenshell.util.element.get_pset(reopened, "EPset_Drawing", "Exclude")
+            self.assertEqual(persisted, rule)
+            self.assertIsNotNone(model.by_guid(hidden.GlobalId).Representation)
+
+    def test_drawing_exclusion_rejects_invalid_or_foreign_elements(self) -> None:
+        house = House("Visibility")
+        drawing = house.add_drawing("Plan", 2, 2, 1.6, 5)
+        other = House("Other").add_box("Foreign", origin=(0, 0, 0), size=(1, 1, 1))
+        original = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Exclude")
+        for invalid in (None, "beam", drawing.element):
+            with self.subTest(element=invalid), self.assertRaisesRegex(TypeError, "IfcElement"):
+                drawing.exclude_element(invalid)
+        with self.assertRaisesRegex(ValueError, "belong to this house"):
+            drawing.exclude_element(other)
+        self.assertEqual(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Exclude"), original)
 
     def test_rejects_invalid_drawing_storeys(self) -> None:
         house = House("My house")

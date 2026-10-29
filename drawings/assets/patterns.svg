@@ -210,13 +210,13 @@
 <!-- Horizontal 150 mm siding boards: 1.5 mm pitch at the default 1:100.
      The drawing helper scales the pitch, not the printed line weight. -->
 <pattern id="wood-siding" width="10" height="1.5" patternUnits="userSpaceOnUse" data-board-height-mm="150">
-    <rect width="10" height="1.5" fill="#f3cb80" />
+    <rect width="10" height="1.5" fill="#fdf8ef" />
     <path d="M 0 0.75 H 10" style="fill:none;stroke:black;stroke-width:0.06" />
 </pattern>
 <!-- One roof-local tile repeat. The render pass projects each roof separately
      and bakes a fixed paper-width outline for matching SVG/PNG/PDF output. -->
 <pattern id="roof-tiles" width="1" height="1" patternUnits="userSpaceOnUse" data-tile-width-mm="300" data-course-mm="320" data-line-width-mm="0.06">
-    <rect width="1" height="1" fill="#f17130" />
+    <rect width="1" height="1" fill="#eed1c7" />
     <path d="M 0 0.2 C 0.12 0.2 0.12 0.05 0.25 0.05 L 0.75 0.05 C 0.88 0.05 0.88 0.2 1 0.2 M 0.25 -0.95 C 0.24 -0.65 0.23 -0.35 0.25 0.05 M 0.25 0.05 C 0.24 0.35 0.23 0.65 0.25 1.05" fill="none" stroke="black" stroke-width="0.06" vector-effect="non-scaling-stroke" />
 </pattern>
 <pattern id="vapour-barrier-solid" width="1" height="1" patternUnits="userSpaceOnUse">

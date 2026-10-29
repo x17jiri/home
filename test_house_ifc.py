@@ -15,6 +15,7 @@ import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.representation
 import ifcopenshell.util.selector
+import ifcopenshell.util.shape
 import numpy as np
 
 from ifc_utils import CutDefinition, Drawing, DrawingSheet, ElektroLineDrawer, House, _remove_3d_only_elements, _timber_schedule_member_styles
@@ -241,9 +242,9 @@ class FacadeCornerTests(unittest.TestCase):
                         start = np.array(wall.start) - tangent * properties["StartExtension"]
                         end = np.array(wall.end) + tangent * properties["EndExtension"]
                         if material == "polystyrene":
-                            minimum = (-v["ROCKWOOL_INSULATION_THICKNESS"] if wall == fronts[0]
+                            minimum = (-v["FACADE_INSULATION_THICKNESS"] if wall == fronts[0]
                                        else v["LOWER_NADEZDIVKA_X"])
-                            maximum = (v["HOUSE_WIDTH"] + v["POLYSTYRENE_INSULATION_THICKNESS"] if wall == fronts[-1]
+                            maximum = (v["HOUSE_WIDTH"] + v["FACADE_INSULATION_THICKNESS"] if wall == fronts[-1]
                                        else v["LOWER_NADEZDIVKA_X"])
                             self.assertAlmostEqual(min(start[0], end[0]), minimum)
                             self.assertAlmostEqual(max(start[0], end[0]), maximum)
@@ -299,7 +300,7 @@ class ExteriorElevationTests(unittest.TestCase):
     def setUpClass(cls):
         source = Path(__file__).with_name("house_ifc.py")
         with (
-            patch.object(sys, "argv", [str(source), "pohled_zapad", "pohled_ulice", "pohled_zahrada"]),
+            patch.object(sys, "argv", [str(source), "pohled_zapad", "pohled_ulice", "pohled_zahrada", "pohled_vychod"]),
             patch.object(House, "write", return_value=Path("house.ifc")),
             patch.object(Drawing, "render", return_value=Path("pohled_zapad.svg")) as render,
             redirect_stdout(StringIO()),
@@ -326,6 +327,35 @@ class ExteriorElevationTests(unittest.TestCase):
         self.assertEqual(drawing.x, v["HOUSE_WIDTH"] / 2)
         self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
 
+    def test_east_elevation_looks_from_outside_the_high_roof_end(self):
+        v = self.values
+        drawing = next(d for d in v["house"]._drawings if d.name == "Pohled - Východ")
+        self.assertEqual(drawing.view, "elevation")
+        self.assertEqual(drawing.direction, (1, 0, 0))
+        self.assertLess(drawing.x, min(start for start, _, _ in v["roof_over_rafter_x_ranges"]))
+        self.assertEqual(drawing.y, v["HALF_DEPTH"])
+        self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
+        self.assertEqual(drawing.radius, 6)
+        self.assertTrue(v["PDF_POHLED_VYCHOD"].endswith("D1.1.15. Pohled - Východ.pdf"))
+
+    def test_window_kk_is_a_glazed_balcony_door_with_its_existing_opening(self):
+        v = self.values
+        door = v["window_kk"]
+        self.assertTrue(door.is_a("IfcDoor"))
+        self.assertEqual(door.OperationType, "SINGLE_SWING_RIGHT")
+        self.assertTrue(ifcopenshell.util.element.get_pset(door, "EPset_Door", "Glazed"))
+        self.assertEqual(ifcopenshell.util.element.get_pset(door, "EPset_Door", "ClearHeight"), 2)
+        self.assertAlmostEqual(door.OverallWidth, .8)
+        self.assertAlmostEqual(door.OverallHeight, 2.125)
+        self.assertEqual(len([aspect for aspect in door.Representation.HasShapeAspects if aspect.Name == "Glazing"]), 1)
+        self.assertIsNotNone(ifcopenshell.util.representation.get_representation(door, "Plan", "Body", "PLAN_VIEW"))
+        settings = ifcopenshell.geom.settings()
+        opening = door.FillsVoids[0].RelatingOpeningElement
+        shape = ifcopenshell.geom.create_shape(settings, opening)
+        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+        self.assertAlmostEqual(np.ptp(vertices[:, 0]), 1)
+        self.assertAlmostEqual(np.ptp(vertices[:, 2]), 2.125)
+
     def test_garden_elevation_looks_from_outside_the_garden_eave_towards_the_street(self):
         v = self.values
         drawing = next(d for d in v["house"]._drawings if d.name == "Pohled - Zahrada")
@@ -335,9 +365,29 @@ class ExteriorElevationTests(unittest.TestCase):
         self.assertEqual(drawing.x, v["HOUSE_WIDTH"] / 2)
         self.assertAlmostEqual(drawing.z, v["ground_floor_top"] + v["total_house_height"] / 2)
 
+    def test_only_garden_elevation_excludes_the_concealed_sill_level_ring_beam(self):
+        v = self.values
+        concealed = [beam for beam in v["upper_ring_beams"] if beam.source_wall == v["wall_back1_u"]]
+        self.assertEqual(len(concealed), 1)
+        beam, = concealed
+        expected = {beam, *beam.reinforcement}
+        for drawing in v["house"]._drawings:
+            rule = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Exclude")
+            excluded = ifcopenshell.util.selector.filter_elements(v["house"].model, rule)
+            with self.subTest(drawing=drawing.name):
+                if drawing.name == "Pohled - Zahrada":
+                    self.assertTrue(expected.issubset(excluded))
+                    self.assertEqual(set(v["upper_ring_beams"]) & excluded, {beam})
+                    self.assertNotIn(v["window_dormer_1"], excluded)
+                    self.assertNotIn(v["window_dormer_2"], excluded)
+                    self.assertFalse(set(v["garden_facade"]) & excluded)
+                else:
+                    self.assertFalse(expected & excluded)
+        self.assertIsNotNone(v["house"].model.by_guid(beam.GlobalId).Representation)
+
     def test_elevation_includes_both_storeys_and_all_roof_layers_without_plan_symbols(self):
         v = self.values
-        self.assertEqual(len(v["house"]._drawings), 3)
+        self.assertEqual(len(v["house"]._drawings), 4)
         for drawing in v["house"]._drawings:
             with self.subTest(drawing=drawing.name):
                 self.assertEqual(set(drawing.storeys), {v["ground"], v["upper"], *v["roof_layer_storeys"].values()})
@@ -352,11 +402,166 @@ class ExteriorElevationTests(unittest.TestCase):
                 self.assertTrue(set(v["roof_siding"]).issubset(selected))
 
     def test_elevation_renders_to_the_configured_pdf(self):
-        self.assertEqual(len(self.render_calls), 3)
-        for call, stem, pdf in zip(self.render_calls, ("pohled_zapad", "pohled_ulice", "pohled_zahrada"),
-                                  ("PDF_POHLED_ZAPAD", "PDF_POHLED_ULICE", "PDF_POHLED_ZAHRADA")):
+        self.assertEqual(len(self.render_calls), 4)
+        for call, stem, pdf in zip(self.render_calls, ("pohled_zapad", "pohled_ulice", "pohled_zahrada", "pohled_vychod"),
+                                  ("PDF_POHLED_ZAPAD", "PDF_POHLED_ULICE", "PDF_POHLED_ZAHRADA", "PDF_POHLED_VYCHOD")):
             self.assertEqual(call.args, (f"{stem}.svg",))
             self.assertEqual(call.kwargs, {"pdf": self.values[pdf]})
+
+    def test_sloped_siding_has_three_main_caps_and_two_dormer_caps_in_the_x_end_slots(self):
+        v = self.values
+        caps = v["roof_sloped_siding"]
+        self.assertEqual(len(caps), 5)
+        normal = [r for r in v["roof_over_rafter_x_ranges"] if r[2] == "normal"]
+        lower = [r for r in v["roof_over_rafter_x_ranges"] if r[2] == "lower"]
+        dormer, = [r for r in v["roof_over_rafter_x_ranges"] if r[2] == "dormer"]
+        width = v["ROOF_EAVE_SETBACK"]
+        expected = (min(r[0] for r in normal), max(r[1] for r in normal) - width,
+                    max(r[1] for r in lower) - width, dormer[0], dormer[1] - width)
+        settings = ifcopenshell.geom.settings(); settings.set(settings.USE_WORLD_COORDS, True)
+        for cap, x0 in zip(caps, expected):
+            with self.subTest(panel=cap.Name):
+                self.assertEqual(cap.ObjectType, "ROOF_SLOPE_SIDING")
+                self.assertEqual(ifcopenshell.util.element.get_material(cap).Name, "Wood siding solid")
+                self.assertEqual(ifcopenshell.util.element.get_container(cap), v["roof_layer_storeys"]["Sloped siding"].element)
+                body = ifcopenshell.util.representation.get_representation(cap, "Model", "Body", "MODEL_VIEW")
+                self.assertEqual(len(body.Items), 1)
+                self.assertTrue(body.Items[0].is_a("IfcExtrudedAreaSolid"))
+                shape = ifcopenshell.geom.create_shape(settings, cap)
+                vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                np.testing.assert_allclose((vertices[:, 0].min(), vertices[:, 0].max()), (x0, x0 + width), atol=1e-8)
+                if cap in caps[:3]:
+                    np.testing.assert_allclose((vertices[:, 1].min(), vertices[:, 1].max()),
+                                               (v["STREET_ROOF_EAVE_Y"], v["GARDEN_ROOF_EAVE_Y"]), atol=1e-8)
+        self.assertFalse(set(caps) & set(v["roof_structural_beams"]))
+        for drawing in v["house"]._drawings:
+            selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
+                ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+            self.assertTrue(set(caps).issubset(selected))
+
+    def test_sloped_siding_follows_both_rafter_and_tile_undersides_with_the_plain_color(self):
+        from shapely.geometry import Point, Polygon
+        v = self.values
+        color = v["wood_siding_color"]().lstrip("#")
+        expected_rgb = tuple(int(color[i:i+2], 16)/255 for i in (0, 2, 4))
+        for index, cap in enumerate(v["roof_sloped_siding"][:3]):
+            outline = json.loads(ifcopenshell.util.element.get_pset(cap, "BBIM_Panel", "Outline"))
+            profile = Polygon([(y, z) for x, y, z in outline])
+            planes = (v["street_roof"], v["garden_roof"]) if index < 2 else (v["lower_street_roof"], v["lower_garden_roof"])
+            for plane, y in zip(planes, (v["HOUSE_DEPTH"]/4, 3*v["HOUSE_DEPTH"]/4)):
+                for offset in (v["RAFTER_Z_OFFSET"], v["ROOF_TILE_BOTTOM"]):
+                    z = v["roof_layer_height_at_y"](plane, offset, y, 0)
+                    self.assertLess(profile.boundary.distance(Point(y, z)), 1e-8)
+            body = ifcopenshell.util.representation.get_representation(cap, "Model", "Body", "MODEL_VIEW")
+            shading = body.Items[0].StyledByItem[0].Styles[0].Styles[0]
+            actual = shading.SurfaceColour
+            np.testing.assert_allclose((actual.Red, actual.Green, actual.Blue), expected_rgb)
+
+    def test_dormer_side_caps_follow_the_roof_skin_not_the_extended_rafter(self):
+        from shapely.geometry import Point, Polygon
+        v = self.values
+        plane = v["dormer_roof"]
+        piece, = [p for p in v["roof_exterior_pieces"] if p["plane"] is plane]
+        self.assertEqual(piece["source_y_min"], 0)
+        bottom, top = v["RAFTER_Z_OFFSET"], v["ROOF_TILE_BOTTOM"]
+        for cap in v["roof_sloped_siding"][3:]:
+            outline = json.loads(ifcopenshell.util.element.get_pset(cap, "BBIM_Panel", "Outline"))
+            self.assertGreaterEqual(len(outline), 4)
+            profile = Polygon([(y, z) for x, y, z in outline])
+            expected_y_min = min(plane.to_world((0, 0, offset))[1] for offset in (bottom, top))
+            self.assertAlmostEqual(profile.bounds[0], expected_y_min)
+            self.assertAlmostEqual(profile.bounds[2], v["DORMER_ROOF_EAVE_Y"])
+            cut_z = plane.cuts[1][0][2]
+            self.assertAlmostEqual(profile.bounds[1], cut_z)
+            for offset in (bottom, top):
+                start = plane.to_world((0, 0, offset))
+                self.assertLess(profile.boundary.distance(Point(start[1:])), 1e-8)
+                for y in ((expected_y_min + v["HOUSE_DEPTH"])/2, v["DORMER_ROOF_EAVE_Y"]):
+                    z = max(cut_z, v["roof_layer_height_at_y"](plane, offset, y, 0))
+                    self.assertLess(profile.boundary.distance(Point(y, z)), 1e-8)
+
+    def test_sloped_siding_is_mirrored_once_and_zero_setback_creates_nothing(self):
+        v = self.values
+        with patch.object(v["house"], "mirror_x", True):
+            exported = v["house"]._export_model()
+        settings = ifcopenshell.geom.settings(); settings.set(settings.USE_WORLD_COORDS, True)
+        for cap in v["roof_sloped_siding"]:
+            original_shape = ifcopenshell.geom.create_shape(settings, cap)
+            mirrored_shape = ifcopenshell.geom.create_shape(settings, exported.by_guid(cap.GlobalId))
+            original = np.asarray(original_shape.geometry.verts).reshape(-1, 3)
+            mirrored = np.asarray(mirrored_shape.geometry.verts).reshape(-1, 3)
+            expected = original * (-1, 1, 1)
+            self.assertEqual({tuple(np.round(p, 7)) for p in mirrored}, {tuple(np.round(p, 7)) for p in expected})
+        helper = v["add_sloped_roof_siding"]
+        with patch.dict(helper.__globals__, {"ROOF_EAVE_SETBACK": 0}), patch.object(v["house"], "add_panel") as create:
+            self.assertEqual(helper(), ())
+            create.assert_not_called()
+
+    def test_roof_edges_are_plain_but_facades_and_roof_step_gable_keep_the_board_pattern(self):
+        v = self.values
+        roof_siding = (*v["roof_siding"], *v["roof_sloped_siding"])
+        self.assertEqual(len(roof_siding), 11)
+        color = v["wood_siding_color"]().lstrip("#")
+        expected_rgb = tuple(int(color[i:i+2], 16)/255 for i in (0, 2, 4))
+        for panel in roof_siding:
+            with self.subTest(panel=panel.Name):
+                self.assertEqual(ifcopenshell.util.element.get_material(panel).Name, "Wood siding solid")
+                body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
+                rgb = body.Items[0].StyledByItem[0].Styles[0].Styles[0].SurfaceColour
+                np.testing.assert_allclose((rgb.Red, rgb.Green, rgb.Blue), expected_rgb)
+        patterned = {element for element in v["house"].model.by_type("IfcElement")
+                     if (material := ifcopenshell.util.element.get_material(element))
+                     and material.is_a("IfcMaterial") and material.Name == "Wood siding"}
+        self.assertEqual(patterned, {v["street_facade"][1], v["garden_facade"][1], *v["roof_step_closure"][2:]})
+        patterned_color = v["wood_siding_color"](patterned=True).lstrip("#")
+        expected_patterned_rgb = tuple(int(patterned_color[i:i+2], 16)/255 for i in (0, 2, 4))
+        for panel in patterned:
+            body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
+            rgb = body.Items[0].StyledByItem[0].Styles[0].Styles[0].SurfaceColour
+            np.testing.assert_allclose((rgb.Red, rgb.Green, rgb.Blue), expected_patterned_rgb)
+
+    def test_dormer_overhang_and_horizontal_drop_are_independent_of_main_roof(self):
+        v = self.values
+        source = Path(__file__).with_name("house_ifc.py")
+        self.assertEqual(v["DORMER_ROOF_EAVE_OVERHANG"], .5)
+        self.assertEqual(v["DORMER_ROOF_EAVE_DROP_BELOW_WALL_PLATE"], 0)
+        for overhang, drop in ((.5, 0), (.95, 0), (.5, .15), (.95, .15)):
+            with self.subTest(overhang=overhang, drop=drop):
+                tree = ast.parse(source.read_text(encoding="utf-8"))
+                def assignment(node, name):
+                    return isinstance(node, ast.Assign) and any(
+                        isinstance(target, ast.Name) and target.id == name for target in node.targets)
+                start = next(i for i, node in enumerate(tree.body) if assignment(node, "ROOF_EAVE_OVERHANG"))
+                stop = next(i for i, node in enumerate(tree.body) if assignment(node, "flat_ceiling_roof"))
+                block = tree.body[start:stop]
+                for node in block:
+                    for name, value in (("DORMER_ROOF_EAVE_OVERHANG", overhang),
+                                        ("DORMER_ROOF_EAVE_DROP_BELOW_WALL_PLATE", drop)):
+                        if assignment(node, name):
+                            node.value = ast.Constant(value=value)
+                block += [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                          and node.name == "local_y_limits_from_cuts"]
+                code = ast.fix_missing_locations(ast.Module(body=block, type_ignores=[]))
+                house = House("Independent dormer eaves")
+                ns = dict(v, roof=house.storey("Roof", elevation=0).roof("Roof"))
+                exec(compile(code, str(source), "exec"), ns)
+                for name in ("street_roof", "garden_roof"):
+                    self.assertEqual(ns[name].cuts, v[name].cuts)
+                plane = ns["dormer_roof"]
+                eave_y = v["HOUSE_DEPTH"] + overhang
+                cut_z = v["DORMER_WALL_PLATE_Z"] - v["WALL_PLATE_SIZE"][1]/2 - drop
+                self.assertEqual(plane.cuts[0], v["dormer_roof"].cuts[0])
+                self.assertTrue(all(p[2] == cut_z for p in plane.cuts[1]))
+                self.assertTrue(all(p[1] == eave_y for p in plane.cuts[2]))
+                self.assertEqual(ns["dormer_rafter_roof"].cuts[1:], plane.cuts[1:])
+                inset_cut, = ns["roof_eave_setback_cuts"](plane)
+                self.assertTrue(all(p[1] == eave_y - v["ROOF_EAVE_SETBACK"] for p in inset_cut))
+                for offset in (v["RAFTER_Z_OFFSET"], v["WOOD_FIBERBOARD_BOTTOM"], v["ROOF_TILE_BOTTOM"]):
+                    lo, hi = ns["local_y_limits_from_cuts"](plane, offset, eave_setback=True)
+                    self.assertAlmostEqual(lo, v["local_y_at_global_y"](plane, v["HALF_DEPTH"], local_z=offset))
+                    vertical = v["local_y_at_global_y"](plane, eave_y-v["ROOF_EAVE_SETBACK"], local_z=offset)
+                    horizontal = v["local_y_at_global_z"](plane, cut_z, local_z=offset)
+                    self.assertAlmostEqual(hi, min(vertical, horizontal))
 
     def test_chimney_penetration_uses_the_exact_vertical_footprint_without_trimmers(self):
         v = self.values
@@ -389,7 +594,7 @@ class ExteriorElevationTests(unittest.TestCase):
                 self.assertEqual(panel.wall, v["wall_front_g"])
                 self.assertEqual(panel.start_height, 0)
                 self.assertEqual(panel.thickness, v["FACADE_THICKNESS"])
-                self.assertEqual(panel.offset, v["POLYSTYRENE_INSULATION_THICKNESS"])
+                self.assertEqual(panel.offset, v["FACADE_INSULATION_THICKNESS"])
                 self.assertEqual(panel.ContainedInStructure[0].RelatingStructure, v["ground"].element)
 
     def test_street_facade_bounds_meet_at_the_roof_step_and_touch_the_insulation(self):
@@ -397,12 +602,12 @@ class ExteriorElevationTests(unittest.TestCase):
         settings = ifcopenshell.geom.settings()
         settings.set(settings.USE_WORLD_COORDS, True)
         expected_x = (
-            (-v["ROCKWOOL_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"] + 0.001,
-             v["LOWER_NADEZDIVKA_X"]),
-            (v["LOWER_NADEZDIVKA_X"],
-             v["HOUSE_WIDTH"] + v["POLYSTYRENE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"] + 0.001),
+            (-v["FACADE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"] + 0.001,
+             v["LOWER_NADEZDIVKA_X"] + .1),
+            (v["LOWER_NADEZDIVKA_X"] + .1,
+             v["HOUSE_WIDTH"] + v["FACADE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"] - 0.001),
         )
-        outer_y = -v["POLYSTYRENE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"]
+        outer_y = -v["FACADE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"]
         for panel, (x0, x1), plane in zip(v["street_facade"], expected_x,
                                         (v["street_roof"], v["lower_street_roof"])):
             with self.subTest(panel=panel.Name):
@@ -410,7 +615,7 @@ class ExteriorElevationTests(unittest.TestCase):
                 vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
                 np.testing.assert_allclose(vertices.min(axis=0), (x0, outer_y, 0), atol=1e-8)
                 np.testing.assert_allclose(vertices.max(axis=0), (
-                    x1, -v["POLYSTYRENE_INSULATION_THICKNESS"],
+                    x1, -v["FACADE_INSULATION_THICKNESS"],
                     v["roof_layer_height_at_y"](plane, v["RAFTER_Z_OFFSET"], outer_y, 0),
                 ), atol=1e-8)
 
@@ -426,6 +631,143 @@ class ExteriorElevationTests(unittest.TestCase):
             selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
                 ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
             self.assertTrue(set(v["street_facade"]).issubset(selected))
+
+    def test_garden_facade_matches_street_x_ranges_materials_and_thickness(self):
+        v = self.values
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        self.assertEqual(len(v["garden_facade"]), 2)
+        for street, garden in zip(v["street_facade"], v["garden_facade"]):
+            with self.subTest(panel=garden.Name):
+                self.assertEqual(garden.wall, v["wall_back_g"])
+                self.assertEqual(garden.material_name, street.material_name)
+                self.assertEqual(garden.thickness, v["FACADE_THICKNESS"])
+                self.assertEqual(garden.offset, v["FACADE_INSULATION_THICKNESS"])
+                shape = ifcopenshell.geom.create_shape(settings, garden)
+                vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                front_shape = ifcopenshell.geom.create_shape(settings, street)
+                front_vertices = np.asarray(front_shape.geometry.verts).reshape(-1, 3)
+                np.testing.assert_allclose((vertices[:, 0].min(), vertices[:, 0].max()),
+                                           (front_vertices[:, 0].min(), front_vertices[:, 0].max()), atol=1e-8)
+                np.testing.assert_allclose((vertices[:, 1].min(), vertices[:, 1].max()), (
+                    v["HOUSE_DEPTH"] + v["FACADE_INSULATION_THICKNESS"],
+                    v["HOUSE_DEPTH"] + v["FACADE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"],
+                ), atol=1e-8)
+
+    def test_end_facades_are_single_white_gables_using_the_shared_insulation_thickness(self):
+        v = self.values
+        self.assertNotIn("POLYSTYRENE_INSULATION_THICKNESS", v)
+        self.assertNotIn("ROCKWOOL_INSULATION_THICKNESS", v)
+        thickness = v["FACADE_INSULATION_THICKNESS"]
+        self.assertAlmostEqual(thickness, .2)
+        for side, host, upper in (("east", v["wall_1_g"], v["wall_1_u"]),
+                                  ("west", v["wall_4_g"], v["wall_4_u"])):
+            panel, = v[f"{side}_facade"]
+            with self.subTest(side=side):
+                self.assertTrue(panel.is_a("IfcCovering"))
+                self.assertEqual(panel.PredefinedType, "CLADDING")
+                self.assertEqual(panel.material_name, "Facade finish")
+                self.assertEqual(panel.wall, host)
+                self.assertEqual(panel.opening_walls, (host, upper))
+                self.assertEqual(panel.start_height, 0)
+                self.assertEqual(panel.offset, thickness)
+                self.assertEqual(panel.thickness, v["FACADE_THICKNESS"])
+                self.assertEqual(len(panel.outline), 5)
+                self.assertEqual(ifcopenshell.util.element.get_container(panel), v["ground"].element)
+                body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
+                self.assertEqual(len(body.Items), 1)
+                self.assertTrue(body.Items[0].is_a("IfcExtrudedAreaSolid"))
+                color = body.Items[0].StyledByItem[0].Styles[0].Styles[0].SurfaceColour
+                self.assertEqual((color.Red, color.Green, color.Blue), (1, 1, 1))
+                for drawing in v["house"]._drawings:
+                    included = ifcopenshell.util.selector.filter_elements(v["house"].model,
+                        ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+                    self.assertIn(panel, included)
+
+    def test_end_facades_use_the_requested_y_limits_and_both_rafter_undersides(self):
+        from shapely.geometry import Point, Polygon
+        v = self.values
+        y0 = -v["FACADE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"] + .001
+        y1 = v["HOUSE_DEPTH"] + v["FACADE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"] - .001
+        settings = ifcopenshell.geom.settings(); settings.set(settings.USE_WORLD_COORDS, True)
+        for side, street, garden in (("east", v["street_roof"], v["garden_roof"]),
+                                     ("west", v["lower_street_roof"], v["lower_garden_roof"])):
+            panel, = v[f"{side}_facade"]
+            shape = ifcopenshell.geom.create_shape(settings, panel)
+            vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+            if side == "east":
+                x0, x1 = -v["FACADE_INSULATION_THICKNESS"]-v["FACADE_THICKNESS"], -v["FACADE_INSULATION_THICKNESS"]
+                profile = Polygon([(y1-along, z) for along, z in panel.outline])
+            else:
+                x0 = v["HOUSE_WIDTH"]+v["FACADE_INSULATION_THICKNESS"]
+                x1 = x0+v["FACADE_THICKNESS"]
+                profile = Polygon([(y0+along, z) for along, z in panel.outline])
+            with self.subTest(side=side):
+                np.testing.assert_allclose(vertices.min(axis=0), (x0, y0, 0), atol=1e-8)
+                ridge = v["roof_layer_height_at_y"](street, v["RAFTER_Z_OFFSET"], v["HALF_DEPTH"], 0)
+                np.testing.assert_allclose(vertices.max(axis=0), (x1, y1, ridge), atol=1e-8)
+                for plane, ys in ((street, (y0, v["HOUSE_DEPTH"]/4, v["HALF_DEPTH"])),
+                                   (garden, (v["HALF_DEPTH"], 3*v["HOUSE_DEPTH"]/4, y1))):
+                    for y in ys:
+                        z = v["roof_layer_height_at_y"](plane, v["RAFTER_Z_OFFSET"], y, 0)
+                        self.assertLess(profile.boundary.distance(Point(y, z)), 1e-8)
+                for y, z in vertices[:, 1:]:
+                    roof_top = min(v["roof_layer_height_at_y"](plane, v["RAFTER_Z_OFFSET"], y, 0)
+                                   for plane in (street, garden))
+                    self.assertLessEqual(z, roof_top + 1e-7)
+
+    def test_end_facades_keep_real_openings_and_mirror_once(self):
+        from shapely.geometry import Polygon
+        v = self.values
+        with patch.object(v["house"], "mirror_x", True):
+            exported = v["house"]._export_model()
+        settings = ifcopenshell.geom.settings(); settings.set(settings.USE_WORLD_COORDS, True)
+        for side in ("east", "west"):
+            panel, = v[f"{side}_facade"]
+            area = Polygon(panel.outline).area
+            self.assertEqual(len(panel.openings), sum(len(wall._openings) for wall in panel.opening_walls))
+            self.assertTrue(panel.openings)
+            for opening in panel.openings:
+                self.assertEqual(opening.VoidsElements[0].RelatingBuildingElement, panel)
+                shape = ifcopenshell.geom.create_shape(settings, opening)
+                vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                area -= np.ptp(vertices[:, 1]) * np.ptp(vertices[:, 2])
+            shape = ifcopenshell.geom.create_shape(settings, panel)
+            original = np.asarray(shape.geometry.verts).reshape(-1, 3)
+            self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), area * panel.thickness)
+            shape = ifcopenshell.geom.create_shape(settings, exported.by_guid(panel.GlobalId))
+            mirrored = np.asarray(shape.geometry.verts).reshape(-1, 3)
+            self.assertEqual({tuple(p) for p in np.round(mirrored, 7)},
+                             {tuple(p) for p in np.round(original * (-1, 1, 1), 7)})
+
+    def test_white_garden_facade_is_one_stepped_profile_raised_only_at_the_dormer(self):
+        v = self.values
+        high, low = v["garden_facade"]
+        self.assertEqual(len(high.outline), 8)
+        self.assertIsNone(low.outline)
+        body = ifcopenshell.util.representation.get_representation(high, "Model", "Body", "MODEL_VIEW")
+        self.assertEqual(len(body.Items), 1)
+        self.assertTrue(body.Items[0].is_a("IfcExtrudedAreaSolid"))
+        outer_y = v["HOUSE_DEPTH"] + v["FACADE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"]
+        top = v["roof_layer_height_at_y"](v["dormer_roof"], v["RAFTER_Z_OFFSET"], outer_y, 0)
+        self.assertAlmostEqual(high.height, top)
+        self.assertGreater(top, v["roof_layer_height_at_y"](v["garden_roof"], v["RAFTER_Z_OFFSET"], outer_y, 0))
+        # Host runs right-to-left, so along increases towards smaller world X.
+        start_x = v["HOUSE_WIDTH"] + high.start_extension
+        raised = sorted(start_x - along for along, z in high.outline if abs(z - top) < 1e-8)
+        np.testing.assert_allclose(raised, sorted((v["wall_dormer"].start[0], v["wall_dormer"].end[0])), atol=1e-8)
+
+    def test_garden_windows_and_split_door_remain_open_in_both_finishes(self):
+        v = self.values
+        high, low = v["garden_facade"]
+        self.assertEqual(len(high.openings), 5)  # Two ground windows, two dormer windows, door.
+        self.assertEqual(len(low.openings), 1)   # Same door straddles the material change.
+        self.assertEqual(high.opening_walls,
+                         (v["wall_back_g"], v["wall_back1_u"], v["wall_back2_u"], v["wall_dormer"]))
+        for drawing in v["house"]._drawings:
+            selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
+                ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+            self.assertTrue(set(v["garden_facade"]).issubset(selected))
 
     def test_chimney_shaft_is_open_through_all_layers_but_not_beside_the_chimney(self):
         v = self.values
@@ -847,8 +1189,8 @@ class CutDrawingTests(unittest.TestCase):
         ]
         self.assertEqual(len(insulation), 4)
         expected = {
-            (values["wall_1a_g"].GlobalId, "rockwool"): values["ROCKWOOL_INSULATION_THICKNESS"],
-            (values["wall_4_u"].GlobalId, "polystyrene"): values["POLYSTYRENE_INSULATION_THICKNESS"],
+            (values["wall_1a_g"].GlobalId, "rockwool"): values["FACADE_INSULATION_THICKNESS"],
+            (values["wall_4_u"].GlobalId, "polystyrene"): values["FACADE_INSULATION_THICKNESS"],
             (values["wall_1a_g"].GlobalId, "xps"): values["EXTERIOR_XPS_INSULATION_THICKNESS"],
             (values["wall_4_u"].GlobalId, "xps"): values["EXTERIOR_XPS_INSULATION_THICKNESS"],
         }
@@ -2045,8 +2387,11 @@ class RoofFramingTests(unittest.TestCase):
             v["garden_roof"]: v["GARDEN_WALL_PLATE_Z"],
             v["lower_street_roof"]: v["LOWER_STREET_WALL_PLATE_Z"],
             v["lower_garden_roof"]: v["LOWER_GARDEN_WALL_PLATE_Z"],
+            v["dormer_roof"]: v["DORMER_WALL_PLATE_Z"],
+            v["dormer_rafter_roof"]: v["DORMER_WALL_PLATE_Z"],
         }[plane]
-        return plate_z - v["WALL_PLATE_SIZE"][1]/2 - v["ROOF_EAVE_DROP_BELOW_WALL_PLATE"]
+        drop = v["DORMER_ROOF_EAVE_DROP_BELOW_WALL_PLATE"] if plane in (v["dormer_roof"], v["dormer_rafter_roof"]) else v["ROOF_EAVE_DROP_BELOW_WALL_PLATE"]
+        return plate_z - v["WALL_PLATE_SIZE"][1]/2 - drop
 
     def test_short_dormer_rafters_are_cut_at_actual_purlin_bottom(self):
         values = self.values
@@ -2084,7 +2429,8 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertGreaterEqual(len(face), 4)
                 self.assertGreater(np.ptp(face[:, 1]), 0.01)
                 self.assertLess(vertices[:, 1].min(), values["HALF_DEPTH"])
-                self.assertAlmostEqual(vertices[:, 1].max(), values["GARDEN_ROOF_EAVE_Y"] - values["ROOF_EAVE_SETBACK"])
+                self.assertLessEqual(vertices[:, 1].max(), values["DORMER_ROOF_EAVE_Y"] - values["ROOF_EAVE_SETBACK"] + 1e-7)
+                self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(plane))
                 # Both faces of the raw prism extend past the trimming plane.
                 for local_z in (beam.z_offset, beam.z_offset + beam.height):
                     x, y, z = plane.to_world((*beam.local_start, local_z))
@@ -2451,9 +2797,9 @@ class RoofFramingTests(unittest.TestCase):
     def test_exterior_high_and_low_ranges_keep_the_full_explicit_overlap(self):
         v = self.values
         high, low = v["roof_over_rafter_x_ranges"][2:]
-        self.assertEqual(high, (v["wall3_x"], v["LOWER_NADEZDIVKA_X"] + v["ROOF_X_OVERHANG"], "normal"))
-        self.assertEqual(low, (v["LOWER_NADEZDIVKA_X"], v["HOUSE_WIDTH"] + v["ROOF_X_OVERHANG"], "lower"))
-        self.assertAlmostEqual(high[1] - low[0], v["ROOF_X_OVERHANG"])
+        self.assertEqual(high[2], "normal")
+        self.assertEqual(low[2], "lower")
+        self.assertGreater(high[1], low[0])
         for plane, prefix, bounds in (
             (v["street_roof"], "Street segment 2", high),
             (v["garden_roof"], "Garden segment 2", high),
@@ -2464,8 +2810,9 @@ class RoofFramingTests(unittest.TestCase):
             self.assertEqual(len(layers), 3)
             for layer in layers:
                 vertices = self.finished_vertices(layer)
-                self.assertAlmostEqual(vertices[:, 0].min(), bounds[0])
-                self.assertAlmostEqual(vertices[:, 0].max(), bounds[1])
+                inset = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
+                self.assertAlmostEqual(vertices[:, 0].min(), bounds[0] + inset)
+                self.assertAlmostEqual(vertices[:, 0].max(), bounds[1] - inset)
                 local = np.array([plane.to_local(vertex) for vertex in vertices])
                 self.assertAlmostEqual(local[:, 2].min(), layer.z_offset)
                 self.assertAlmostEqual(np.ptp(local[:, 2]), layer.thickness)
@@ -2473,7 +2820,9 @@ class RoofFramingTests(unittest.TestCase):
                     self.assertAlmostEqual(vertices[:, 1].max(), v["HALF_DEPTH"])
                 else:
                     self.assertAlmostEqual(vertices[:, 1].min(), v["HALF_DEPTH"])
-                self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(plane))
+                eave_y = v["STREET_ROOF_EAVE_Y"] + inset if plane in (v["street_roof"], v["lower_street_roof"]) else v["GARDEN_ROOF_EAVE_Y"] - inset
+                expected_z = max(self.main_eave_z(plane), v["roof_layer_height_at_y"](plane, layer.z_offset, eave_y, 0))
+                self.assertAlmostEqual(vertices[:, 2].min(), expected_z)
         for side in ("street", "garden"):
             high_plane, low_plane = v[side + "_roof"], v["lower_" + side + "_roof"]
             self.assertGreater(v["roof_batting_point"](high_plane, x=high[1], y=2 if side == "street" else 6)[2],
@@ -2496,7 +2845,8 @@ class RoofFramingTests(unittest.TestCase):
             self.assertAlmostEqual(batten.z_offset, v["COUNTER_BATTEN_BOTTOM"])
             vertices = self.finished_vertices(batten)
             if plane is v["dormer_roof"]:
-                self.assertLessEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"] + 1e-7)
+                self.assertLessEqual(vertices[:, 1].max(), v["DORMER_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"] + 1e-7)
+                self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(plane) - 1e-7)
             else:
                 self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(plane) - 1e-7)
             intervals.setdefault((plane.GlobalId, x), []).append((batten.local_start[1], batten.local_end[1]))
@@ -2599,6 +2949,9 @@ class RoofFramingTests(unittest.TestCase):
                     ranges = values["roof_over_rafter_x_ranges"] if layer.material_name in outer_materials \
                         else values["roof_under_rafter_x_ranges"]
                     expected_min, expected_max = ranges[index][:2]
+                    if layer.material_name in {"Wood fiberboard", "Roofing underlay"}:
+                        expected_min += values["ROOF_EAVE_SETBACK"]
+                        expected_max -= values["ROOF_EAVE_SETBACK"]
                     xs = [p[0] for p in layer.outline]
                     self.assertAlmostEqual(min(xs), expected_min)
                     self.assertAlmostEqual(max(xs), expected_max)
@@ -2620,9 +2973,46 @@ class RoofFramingTests(unittest.TestCase):
                 battens = [b for b in plane.elements if (b.Name or "").startswith(prefix + " tile batten ")]
                 self.assertTrue(battens)
                 self.assertEqual({(b.local_start[0], b.local_end[0]) for b in battens},
-                                 {v["roof_over_rafter_x_ranges"][i][:2] for i in indices})
+                                 {(v["roof_over_rafter_x_ranges"][i][0] + v["ROOF_EAVE_SETBACK"],
+                                   v["roof_over_rafter_x_ranges"][i][1] - v["ROOF_EAVE_SETBACK"]) for i in indices})
 
-    def test_main_layers_respect_both_eave_cuts_and_dormer_keeps_vertical_setback(self):
+    def test_all_exterior_pieces_keep_tiles_full_length_and_inset_boards_and_membrane(self):
+        v = self.values
+        for piece in v["roof_exterior_pieces"]:
+            lo, hi = piece["tile_x_min"], piece["tile_x_max"]
+            self.assertEqual((piece["x_min"], piece["x_max"]),
+                             (lo + v["ROOF_EAVE_SETBACK"], hi - v["ROOF_EAVE_SETBACK"]))
+            layers = [layer for layer in piece["plane"].elements
+                      if hasattr(layer, "outline") and layer.Name.startswith(piece["name"] + " ")
+                      and layer.material_name in {"Wood fiberboard", "Roofing underlay", "Roof tiles"}]
+            self.assertEqual(len(layers), 3)
+            for layer in layers:
+                with self.subTest(layer=layer.Name):
+                    vertices = self.finished_vertices(layer)
+                    expected = ((lo, hi) if layer.material_name == "Roof tiles" else
+                                (lo + v["ROOF_EAVE_SETBACK"], hi - v["ROOF_EAVE_SETBACK"]))
+                    np.testing.assert_allclose((vertices[:, 0].min(), vertices[:, 0].max()), expected, atol=1e-8)
+        # No counter-batten cross-section intrudes into the new X-end slots.
+        for batten in v["exterior_counter_battens"]:
+            vertices = self.finished_vertices(batten)
+            self.assertTrue(any(piece["plane"] is batten.roof_plane
+                                and piece["x_min"] <= vertices[:, 0].min() + 1e-8
+                                and piece["x_max"] >= vertices[:, 0].max() - 1e-8
+                                for piece in v["roof_exterior_pieces"]))
+
+    def test_x_setback_uses_shared_parameter_and_can_be_disabled_or_tuned(self):
+        v = self.values
+        helper = v["roof_under_tile_x_range"]
+        self.assertEqual(helper(1, 3), (1.02, 2.98))
+        with patch.dict(helper.__globals__, {"ROOF_EAVE_SETBACK": 0}):
+            self.assertEqual(helper(1, 3), (1, 3))
+        with patch.dict(helper.__globals__, {"ROOF_EAVE_SETBACK": .04}):
+            self.assertEqual(helper(1, 3), (1.04, 2.96))
+        for lo, hi in ((1, 1), (2, 1), (0, .03), (float("nan"), 2)):
+            with self.subTest(lo=lo, hi=hi), self.assertRaises(ValueError):
+                helper(lo, hi)
+
+    def test_all_layers_respect_both_eave_cuts_with_independent_dormer_setback(self):
         v = self.values
         self.assertEqual(v["ROOF_EAVE_SETBACK"], .02)
         for plane in (v["street_roof"], v["garden_roof"], v["dormer_roof"],
@@ -2637,16 +3027,16 @@ class RoofFramingTests(unittest.TestCase):
                     inset = 0 if layer.material_name == "Roof tiles" else v["ROOF_EAVE_SETBACK"]
                     self.assertGreaterEqual(vertices[:, 1].min(), v["STREET_ROOF_EAVE_Y"] + inset - 1e-7)
                     self.assertLessEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - inset + 1e-7)
-                    if plane is v["dormer_roof"]:
-                        self.assertAlmostEqual(vertices[:, 1].max(), v["GARDEN_ROOF_EAVE_Y"] - inset)
-                    else:
-                        self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(plane) - 1e-7)
-                        if "above dormer" not in layer.Name:
-                            eave_y = v["STREET_ROOF_EAVE_Y"] + inset if street else v["GARDEN_ROOF_EAVE_Y"] - inset
-                            expected_z = max(self.main_eave_z(plane),
-                                v["roof_layer_height_at_y"](plane, layer.z_offset, eave_y, 0))
-                            self.assertAlmostEqual(vertices[:, 2].min(), expected_z)
-                    # No X/gable setback and no change to the layer thickness.
+                    self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(plane) - 1e-7)
+                    if "above dormer" not in layer.Name:
+                        garden_eave = v["DORMER_ROOF_EAVE_Y"] if plane is v["dormer_roof"] else v["GARDEN_ROOF_EAVE_Y"]
+                        eave_y = v["STREET_ROOF_EAVE_Y"] + inset if street else garden_eave - inset
+                        expected_z = max(self.main_eave_z(plane),
+                            v["roof_layer_height_at_y"](plane, layer.z_offset, eave_y, 0))
+                        self.assertAlmostEqual(vertices[:, 2].min(), expected_z)
+                        if plane is v["dormer_roof"]:
+                            self.assertLessEqual(vertices[:, 1].max(), eave_y + 1e-7)
+                    # Finished geometry follows its inset outline; thickness is unchanged.
                     self.assertAlmostEqual(vertices[:, 0].min(), min(x for x, y in layer.outline))
                     self.assertAlmostEqual(vertices[:, 0].max(), max(x for x, y in layer.outline))
                     local = np.array([plane.to_local(p) for p in vertices])
@@ -2654,7 +3044,7 @@ class RoofFramingTests(unittest.TestCase):
                     if plane is not v["dormer_roof"]:
                         self.assertAlmostEqual(vertices[:, 1].max() if street else vertices[:, 1].min(), v["HALF_DEPTH"])
 
-    def test_all_eave_timber_respects_vertical_setback_and_main_horizontal_cut(self):
+    def test_all_eave_timber_respects_vertical_setback_and_its_own_horizontal_cut(self):
         v = self.values
         lo = v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"]
         hi = v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"]
@@ -2670,13 +3060,12 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertGreaterEqual(vertices[:, 1].min(), lo - 1e-7)
                 self.assertLessEqual(vertices[:, 1].max(), hi + 1e-7)
                 if beam.roof_plane in (v["dormer_roof"], v["dormer_rafter_roof"]):
-                    self.assertLessEqual(vertices[:, 1].max(), hi + 1e-7)
-                else:
-                    self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(beam.roof_plane) - 1e-7)
+                    self.assertLessEqual(vertices[:, 1].max(), v["DORMER_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"] + 1e-7)
+                self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(beam.roof_plane) - 1e-7)
         for beam in (*v["main_roof_rafters"], *v["stronger_main_roof_rafters"], *v["dormer_roof_rafters"]):
             vertices = self.finished_vertices(beam)
             if beam.roof_plane is v["dormer_rafter_roof"]:
-                self.assertAlmostEqual(vertices[:, 1].max(), hi)
+                self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(beam.roof_plane))
             else:
                 self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(beam.roof_plane) - 1e-7)
                 on_horizontal = np.isclose(vertices[:, 2], self.main_eave_z(beam.roof_plane))
@@ -2717,11 +3106,12 @@ class RoofFramingTests(unittest.TestCase):
             with patch.dict(helper.__globals__, {"ROOF_EAVE_SETBACK": .08}):
                 cut, = helper(plane)
                 street = plane in (v["street_roof"], v["lower_street_roof"])
-                expected = v["STREET_ROOF_EAVE_Y"] + .08 if street else v["GARDEN_ROOF_EAVE_Y"] - .08
+                garden_eave = v["DORMER_ROOF_EAVE_Y"] if plane in (v["dormer_roof"], v["dormer_rafter_roof"]) else v["GARDEN_ROOF_EAVE_Y"]
+                expected = v["STREET_ROOF_EAVE_Y"] + .08 if street else garden_eave - .08
                 self.assertTrue(all(p[1] == expected for p in cut))
                 self.assertEqual(plane.cuts, original)
 
-    def test_roof_siding_has_six_boards_with_level_main_bottoms_and_sloped_dormer_bottom(self):
+    def test_roof_siding_has_six_boards_with_each_roofs_level_bottom(self):
         v = self.values
         boards = v["roof_siding"]
         self.assertEqual(len(boards), 6)
@@ -2739,28 +3129,32 @@ class RoofFramingTests(unittest.TestCase):
             (v["lower_garden_roof"], "garden", *low[:2]),
         )
         for board, (plane, side, x0, x1) in zip(boards, expected):
+            x0 += v["ROOF_EAVE_SETBACK"]
+            x1 -= v["ROOF_EAVE_SETBACK"]
             with self.subTest(board=board.Name):
                 self.assertIn(plane.Name, board.Name)
                 vertices = self.finished_vertices(board)
                 self.assertAlmostEqual(vertices[:, 0].min(), x0)
                 self.assertAlmostEqual(vertices[:, 0].max(), x1)
+                garden_eave = v["DORMER_ROOF_EAVE_Y"] if plane is v["dormer_roof"] else v["GARDEN_ROOF_EAVE_Y"]
                 y0, y1 = ((v["STREET_ROOF_EAVE_Y"], v["STREET_ROOF_EAVE_Y"] + v["ROOF_EAVE_SETBACK"])
                           if side == "street" else
-                          (v["GARDEN_ROOF_EAVE_Y"] - v["ROOF_EAVE_SETBACK"], v["GARDEN_ROOF_EAVE_Y"]))
+                          (garden_eave - v["ROOF_EAVE_SETBACK"], garden_eave))
                 top = v["offset_plane"](*plane.points, offset=v["ROOF_TILE_BOTTOM"])
-                bottom = (v["offset_plane"](*plane.points, offset=v["RAFTER_Z_OFFSET"])
-                          if plane is v["dormer_roof"] else plane.cuts[1])
+                bottom = plane.cuts[1]
                 corners = [(x, y, v["plane_height_at"](*cut, x=x, y=y))
                            for x in (x0, x1) for y in (y0, y1) for cut in (bottom, top)]
                 self.assertEqual({tuple(np.round(p, 7)) for p in vertices},
                                  {tuple(np.round(p, 7)) for p in corners})
-                if plane is not v["dormer_roof"]:
-                    self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(plane))
-                    self.assertEqual(len(vertices[np.isclose(vertices[:, 2], self.main_eave_z(plane))]), 4)
+                self.assertAlmostEqual(vertices[:, 2].min(), self.main_eave_z(plane))
+                self.assertEqual(len(vertices[np.isclose(vertices[:, 2], self.main_eave_z(plane))]), 4)
 
-    def test_roof_siding_is_white_non_structural_wood_siding_in_its_own_container(self):
+    def test_roof_siding_is_plain_non_structural_wood_siding_in_its_own_container(self):
         v = self.values
-        material = ifcopenshell.util.element.get_material(v["roof_step_closure"][-1])
+        material = ifcopenshell.util.element.get_material(v["roof_sloped_siding"][0])
+        self.assertEqual(material.Name, "Wood siding solid")
+        color = v["wood_siding_color"]().lstrip("#")
+        expected_rgb = tuple(int(color[i:i+2], 16)/255 for i in (0, 2, 4))
         for board in v["roof_siding"]:
             self.assertTrue(board.is_a("IfcBuildingElementProxy"))
             self.assertEqual(ifcopenshell.util.element.get_material(board), material)
@@ -2769,8 +3163,8 @@ class RoofFramingTests(unittest.TestCase):
             self.assertTrue(ifcopenshell.util.element.get_pset(board, "BBIM_DrawingVisibility", "ShowInDrawings"))
             body = ifcopenshell.util.representation.get_representation(board, "Model", "Body", "MODEL_VIEW")
             shading = body.Items[0].StyledByItem[0].Styles[0].Styles[0]
-            self.assertEqual((shading.SurfaceColour.Red, shading.SurfaceColour.Green, shading.SurfaceColour.Blue),
-                             (1, 1, 1))
+            np.testing.assert_allclose((shading.SurfaceColour.Red, shading.SurfaceColour.Green, shading.SurfaceColour.Blue),
+                                       expected_rgb)
             self.assertEqual(shading.Transparency, 0)
         self.assertTrue(v["roof_layer_storeys"]["Eave siding"].element.ObjectType == "ROOF_LAYER")
         self.assertFalse(set(v["roof_siding"]) & set(v["roof_structural_beams"]))
@@ -2855,6 +3249,8 @@ class RoofFramingTests(unittest.TestCase):
             expected = outer_range if call.kwargs["material"] in {
                 "Wood fiberboard", "Roofing underlay", "Roof tiles",
             } else (x_min, x_max)
+            if call.kwargs["material"] in {"Wood fiberboard", "Roofing underlay"}:
+                expected = (expected[0] + values["ROOF_EAVE_SETBACK"], expected[1] - values["ROOF_EAVE_SETBACK"])
             self.assertEqual((min(xs), max(xs)), expected)
 
 
@@ -2940,18 +3336,21 @@ class RoofStepClosureTests(unittest.TestCase):
                     self.assertAlmostEqual(inner_z.max(), outer_z.max())
                     self.assertGreater(outer_z.min(), inner_z.min())
 
-    def test_cladding_is_white_non_structural_and_in_its_own_roof_container(self):
+    def test_cladding_has_facade_siding_non_structural_and_in_its_own_roof_container(self):
         for v in self.runs:
             for panel in v["roof_step_closure"]:
                 self.assertTrue(panel.is_a("IfcBuildingElementProxy"))
                 self.assertEqual(ifcopenshell.util.element.get_container(panel),
                                  v["roof_layer_storeys"]["Gable closure"].element)
-                material = "mdf-solid" if panel in v["roof_step_closure"][:2] else "Wood siding"
+                is_mdf = panel in v["roof_step_closure"][:2]
+                material = "mdf-solid" if is_mdf else "Wood siding"
                 self.assertEqual(ifcopenshell.util.element.get_material(panel).Name, material)
                 body = ifcopenshell.util.representation.get_representation(panel, "Model", "Body", "MODEL_VIEW")
                 shading = body.Items[0].StyledByItem[0].Styles[0].Styles[0]
                 rgb = shading.SurfaceColour
-                self.assertEqual((rgb.Red, rgb.Green, rgb.Blue), (1, 1, 1))
+                color = v["wood_siding_color"](patterned=True).lstrip("#")
+                expected = (1, 1, 1) if is_mdf else tuple(int(color[i:i+2], 16)/255 for i in (0, 2, 4))
+                np.testing.assert_allclose((rgb.Red, rgb.Green, rgb.Blue), expected)
                 self.assertEqual(shading.Transparency, 0)
                 self.assertTrue(ifcopenshell.util.element.get_pset(panel, "BBIM_DrawingVisibility", "ShowInDrawings"))
 
