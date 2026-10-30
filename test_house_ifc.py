@@ -536,25 +536,40 @@ class ExteriorElevationTests(unittest.TestCase):
             "west": ((v["HOUSE_WIDTH"]+inner, -extension, bottom),
                      (v["HOUSE_WIDTH"]+outer, v["HOUSE_DEPTH"]+extension, v["PERIMETER_TOP_HEIGHT"])),
         }
-        for side, panel in v["perimeter_facades"].items():
-            with self.subTest(side=side):
-                self.assertEqual(panel.material_name, "Perimeter facade finish")
-                self.assertEqual(panel.offset, inner)
-                self.assertEqual(panel.thickness, v["FACADE_THICKNESS"])
-                self.assertEqual(ifcopenshell.util.element.get_container(panel), v["basement"].element)
-                self.assertIn(v[f"{side}_facade"][0].wall, panel.opening_walls)
-                shape = ifcopenshell.geom.create_shape(settings, panel)
-                points = np.asarray(shape.geometry.verts).reshape(-1, 3)
-                np.testing.assert_allclose(points.min(axis=0), expected[side][0], atol=1e-8)
-                np.testing.assert_allclose(points.max(axis=0), expected[side][1], atol=1e-8)
-                for upper in v[f"{side}_facade"]:
-                    shape = ifcopenshell.geom.create_shape(settings, upper)
-                    upper_points = np.asarray(shape.geometry.verts).reshape(-1, 3)
-                    self.assertAlmostEqual(upper_points[:, 2].min(), points[:, 2].max())
+        all_panels = set()
+        for side, panels in v["perimeter_facades"].items():
+            split = side in {"street", "garden"}
+            self.assertEqual(len(panels), 2 if split else 1)
+            for index, panel in enumerate(panels):
+                with self.subTest(side=side, part=index):
+                    all_panels.add(panel)
+                    upper = v[f"{side}_facade"][index]
+                    white = upper.material_name == "Wood siding"
+                    self.assertEqual(panel.material_name, "Facade finish" if white else "Perimeter facade finish")
+                    self.assertEqual(panel.offset, inner)
+                    self.assertEqual(panel.thickness, v["FACADE_THICKNESS"])
+                    self.assertEqual(ifcopenshell.util.element.get_container(panel), v["basement"].element)
+                    self.assertIn(upper.wall, panel.opening_walls)
+                    shape = ifcopenshell.geom.create_shape(settings, panel)
+                    points = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                    lower, higher = np.array(expected[side], dtype=float)
+                    if split:
+                        if index == 0:
+                            higher[0] = v["FACADE_MATERIAL_SPLIT_X"]
+                        else:
+                            lower[0] = v["FACADE_MATERIAL_SPLIT_X"]
+                        upper_shape = ifcopenshell.geom.create_shape(settings, upper)
+                        upper_points = np.asarray(upper_shape.geometry.verts).reshape(-1, 3)
+                        boundary = points[:, 0].max() if index == 0 else points[:, 0].min()
+                        upper_boundary = upper_points[:, 0].max() if index == 0 else upper_points[:, 0].min()
+                        self.assertAlmostEqual(boundary, upper_boundary)
+                    np.testing.assert_allclose(points.min(axis=0), lower, atol=1e-8)
+                    np.testing.assert_allclose(points.max(axis=0), higher, atol=1e-8)
+                    self.assertAlmostEqual(upper.start_height+upper.storey.elevation, points[:, 2].max())
         for drawing in v["house"]._drawings:
             selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
                 ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
-            self.assertTrue(set(v["perimeter_facades"].values()).issubset(selected))
+            self.assertTrue(all_panels.issubset(selected))
 
     def test_street_facade_preserves_the_bathroom_window_and_is_included_in_elevations(self):
         v = self.values

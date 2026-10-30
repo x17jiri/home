@@ -1876,9 +1876,11 @@ def _postprocess_projected_wood_surface_styles(
         return
     rules = []
     view_class = "PLANVIEW" if view == "plan" else "ELEVATIONVIEW"
-    selectors = [f".target-view-{view_class} .IfcBeam.material-Wood.surface"]
+    selectors = [f".target-view-{view_class} .IfcBeam.material-{material}.surface"
+                 for material in ("Wood", "Exteriorwood")]
     if include_cuts:
-        selectors.append(f".target-view-{view_class} .IfcBeam.material-Wood.cut")
+        selectors.extend(f".target-view-{view_class} .IfcBeam.material-{material}.cut"
+                         for material in ("Wood", "Exteriorwood"))
     if color is not None:
         rules.extend(f"{selector} {{ fill: {color} !important; }}" for selector in selectors)
     for global_id, style in styles.items():

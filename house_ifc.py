@@ -268,7 +268,7 @@ VAZNICE_SIDE_HEIGHT = 0.24
 VAZNICE_SIDE_BASE = 0.16
 # New perpendicular roof: purlin TOP above the finished upper-floor surface.
 TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR = 0.91
-TRANSVERSE_OUTER_SUPPORT_X_OFFSET = 1.75
+TRANSVERSE_OUTER_SUPPORT_X_OFFSET = 2.0
 TRANSVERSE_OUTER_SUPPORT_SIZE = (VAZNICE_SIDE_BASE, VAZNICE_SIDE_HEIGHT)
 TRANSVERSE_SUPPORT_POST_SIZE = (0.16, 0.16)
 TRANSVERSE_SUPPORT_POST_COUNT = 4
@@ -445,6 +445,7 @@ HOUSE_WIDTH = wall3_x + KK_WIDTH + BWT
 LOWER_NADEZDIVKA_X = wall3_x + 1.375
 if not wall3_x < LOWER_NADEZDIVKA_X < HOUSE_WIDTH:
 	raise ValueError("LOWER_NADEZDIVKA_X must be between wall3 and wall4")
+FACADE_MATERIAL_SPLIT_X = LOWER_NADEZDIVKA_X - 0.05
 
 
 WEST_CLOSURE_WALL_THICKNESS = 0.30
@@ -513,8 +514,8 @@ oblouk_at = HOUSE_DEPTH-BWT-1.5-OBLOUK_WIDTH
 # a roof opening; the opening then cuts the two parts back to its exact edges.
 # StrongerRafter uses the stronger thickness on both sides of the main roof.
 # A tuple also creates a touching dormer rafter on the requested side.  "before"
-# and "after" shorten the main rafter on the garden side; "+before" and
-# "+after" leave it full-length.
+# and "after" shorten the main rafter on the garden side to the purlin;
+# "+before" and "+after" trim its garden end at Y=HOUSE_DEPTH instead.
 # An optional third tuple item {"min_y": y} trims both collar boards to Y >= y,
 # in absolute house coordinates, without changing either rafter.
 
@@ -694,7 +695,7 @@ window_bathroom = wall_front_g.add_window(
 	height=GROUND_WINDOW_HEIGHT)
 # chodba
 window_chodba = wall_front_g.add_window(
-	at=wall2_x + 0.5, width=1.0,
+	at=BWT + 1.0, width=1.0,
 	sill_height=GROUND_WINDOW_HEIGHT-0.75,
 	height=GROUND_WINDOW_HEIGHT)
 
@@ -759,14 +760,14 @@ foundation_walls = basement.add_walls_from(
 	start_height=0,
 )
 # West wall runs from the street corner (Y=0) towards the garden.
-basement_street_wall = next(w for w in foundation_walls
-	if w.start == wall_front_g.start and w.end == wall_front_g.end)
-basement_door = basement_street_wall.add_door(
-	name="Basement entrance",
-	at=HOUSE_WIDTH-2.0, opening_width=1.0, width=0.9,
-	sill_height=0.125, height=2.125, clear_height=2.0,
-	operation="SINGLE_SWING_LEFT",
-)
+#basement_street_wall = next(w for w in foundation_walls
+#	if w.start == wall_front_g.start and w.end == wall_front_g.end)
+#basement_door = basement_street_wall.add_door(
+#	name="Basement entrance",
+#	at=HOUSE_WIDTH-2.0, opening_width=1.0, width=0.9,
+#	sill_height=0.125, height=2.125, clear_height=2.0,
+#	operation="SINGLE_SWING_LEFT",
+#)
 
 foundation_footers = foundation.add_strip_footings_from(
 	ground,
@@ -919,7 +920,7 @@ heat_pump = ground.furniture(
     kind="USERDEFINED",
     size=(1.2, 0.5, 1.5),
     color="#ffffff",
-    center=(1.5, 0.0-FACADE_INSULATION_THICKNESS-FACADE_THICKNESS-0.05-0.25),
+    center=(BWT + 1.5, 0.0-FACADE_INSULATION_THICKNESS-FACADE_THICKNESS-0.05-0.25),
 	start_height = earth_to_z(y_to_earth(0)) + 0.2,
 #	rotation=-90,
 )
@@ -1995,6 +1996,16 @@ def add_transverse_roof_plane():
 transverse_roof = add_transverse_roof_plane()
 
 
+def wood_siding_color(*, patterned=False):
+	"""Match the independent plain/patterned drawing colors in the IFC."""
+	if not patterned:
+		stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
+		return re.search(r"\.material-Woodsidingsolid\.surface\s*\{[^}]*?\bfill:\s*([^;\s]+)", stylesheet)[1]
+	patterns = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg").getroot()
+	siding = next(p for p in patterns if p.get("id") == "wood-siding")
+	return siding.find("{http://www.w3.org/2000/svg}rect").get("fill")
+
+
 def add_transverse_outer_support():
 	"""One Y-aligned beam, with evenly spaced posts standing on terrain."""
 	width, height = TRANSVERSE_OUTER_SUPPORT_SIZE
@@ -2013,13 +2024,13 @@ def add_transverse_outer_support():
 		"Transverse outer support beam",
 		start=(TRANSVERSE_OUTER_SUPPORT_X, y0, beam_top-height/2),
 		end=(TRANSVERSE_OUTER_SUPPORT_X, y1, beam_top-height/2),
-		size=(width, height), material="Wood", kind="BEAM",
+		size=(width, height), material="Exterior wood", kind="BEAM", color=wood_siding_color(),
 	)
 	posts = tuple(ground.beam(
 		f"Transverse outer support post {i}",
 		start=(TRANSVERSE_OUTER_SUPPORT_X, y, bottom),
 		end=(TRANSVERSE_OUTER_SUPPORT_X, y, beam_bottom),
-		size=(post_width, post_depth), material="Wood", kind="BEAM",
+		size=(post_width, post_depth), material="Exterior wood", kind="BEAM", color=wood_siding_color(),
 	) for i, (y, bottom) in enumerate(zip(post_ys, post_bottoms), 1))
 	return beam, posts
 
@@ -2264,16 +2275,6 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 	layer_storey.element.Description = f"Visibility container for {layer_name}"
 
 
-def wood_siding_color(*, patterned=False):
-	"""Match the independent plain/patterned drawing colors in the IFC."""
-	if not patterned:
-		stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
-		return re.search(r"\.material-Woodsidingsolid\.surface\s*\{[^}]*?\bfill:\s*([^;\s]+)", stylesheet)[1]
-	patterns = ET.parse(Path(__file__).parent / "drawings/assets/patterns.svg").getroot()
-	siding = next(p for p in patterns if p.get("id") == "wood-siding")
-	return siding.find("{http://www.w3.org/2000/svg}rect").get("fill")
-
-
 # The under-rafter insulation follows each occupied roof slope only as far as
 # the outer vertical face of the purlin. The vapour barrier and plasterboard transition
 # onto the horizontal ceiling, whose exceptional heights are described
@@ -2347,6 +2348,7 @@ rafter_layout = []
 # The collar board on the dormer side must sit outside the touching pair,
 # rather than in the space occupied by the adjacent dormer rafter.
 paired_rafter_dormer_offsets = {}
+garden_rafter_wall_cut_xs = set()
 collar_tie_min_y = {}
 for rafter in rafters:
 	if isinstance(rafter, SplitRafter):
@@ -2377,11 +2379,13 @@ for rafter in rafters:
 			"'+before', or '+after'"
 		)
 	shorten_garden_side = not dormer_side.startswith("+")
+	if not shorten_garden_side:
+		garden_rafter_wall_cut_xs.add(rafter_x)
 	dormer_side = dormer_side.removeprefix("+")
 	dormer_offset = (
 		-RAFTER_THICKNESS if dormer_side == "before" else RAFTER_THICKNESS
 	)
-	# Collar clearance is needed for both shortened and full-length (+) pairs.
+	# Collar clearance is needed for both shortened and wall-trimmed (+) pairs.
 	paired_rafter_dormer_offsets[rafter_x] = dormer_offset
 	rafter_layout.extend(
 		(
@@ -3298,7 +3302,8 @@ def add_west_roof_closure():
 		wall, name="West roof closure - Siding", side="right", offset=0, thickness=FACADE_THICKNESS,
 		start_height=0, height=profile.bounds[3]-z0,
 		outline=tuple((y-y0, z-z0) for y, z in points),
-		material="Wood siding", color=wood_siding_color(patterned=True),
+#		material="Wood siding", color=wood_siding_color(patterned=True),
+		material="Facade finish", color="#ffffff",
 	)
 	return wall, window, {"Siding": siding}, ranges
 
@@ -3425,6 +3430,15 @@ for i, (
 					(1, 0, short_rafter_cut_z),
 					(0, 1, short_rafter_cut_z),
 				),
+			)
+		elif rafter_x in garden_rafter_wall_cut_xs:
+			# Overshoot both section faces so the vertical plane defines the end.
+			rafter_y_max = max(rafter_full_y_max, *(
+				local_y_at_global_y(garden_rafter_plane, HOUSE_DEPTH, local_z=z)
+				for z in (RAFTER_Z_OFFSET, RAFTER_Z_OFFSET + rafter_size[1])
+			)) + SHORT_RAFTER_CUT_OVERLENGTH
+			rafter_extra_cuts = (
+				((0, HOUSE_DEPTH, 0), (1, HOUSE_DEPTH, 0), (0, HOUSE_DEPTH, 1)),
 			)
 		else:
 			rafter_y_max = rafter_full_y_max
@@ -3687,9 +3701,9 @@ def add_facade(side="street"):
 		opening_walls = [wall_back1_u, wall_dormer]
 	panels = []
 	for name, start_x, end_x, plane, material, color in (
-		(f"{side.title()} facade - high", x0, LOWER_NADEZDIVKA_X - 0.05,
+		(f"{side.title()} facade - high", x0, FACADE_MATERIAL_SPLIT_X,
 		 high_roof, "Facade finish", "#ffffff"),
-		(f"{side.title()} facade - low", LOWER_NADEZDIVKA_X - 0.05, x1,
+		(f"{side.title()} facade - low", FACADE_MATERIAL_SPLIT_X, x1,
 		 transverse_roof, "Wood siding", wood_siding_color(patterned=True)),
 	):
 		outline = None
@@ -3741,7 +3755,7 @@ west_facade = add_facade("west")
 
 
 def add_perimeter_facade(side):
-	"""Light gray finish from the basement floor to PERIMETER_TOP_HEIGHT."""
+	"""Basement finishes: gray under white facades, white under wooden facades."""
 	walls = {"street": wall_front_g, "garden": wall_back_g,
 	         "east": wall_1_g, "west": wall_4_g}
 	wall = walls[side]
@@ -3750,15 +3764,27 @@ def add_perimeter_facade(side):
 	host = next(w for w in foundation_walls if w.start == wall.start and w.end == wall.end)
 	# Use the lower insulation thickness for both the offset and corner returns.
 	extension = EXTERIOR_XPS_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
-	return house.add_facade_layer(
-		host, name=f"{side.title()} perimeter facade",
-		material="Perimeter facade finish", color="#d9d9d9",
+	sections = []
+	if side in {"street", "garden"}:
+		for label, start_x, end_x, white in (
+			("high", -extension, FACADE_MATERIAL_SPLIT_X, False),
+			("low", FACADE_MATERIAL_SPLIT_X, HOUSE_WIDTH+extension, True),
+		):
+			start_extension = -start_x if side == "street" else end_x-HOUSE_WIDTH
+			end_extension = end_x-HOUSE_WIDTH if side == "street" else -start_x
+			sections.append((f" - {label}", start_extension, end_extension, white))
+	else:
+		sections.append(("", extension, extension, side == "west"))
+	return tuple(house.add_facade_layer(
+		host, name=f"{side.title()} perimeter facade{label}",
+		material="Facade finish" if white else "Perimeter facade finish",
+		color="#ffffff" if white else "#d9d9d9",
 		offset=EXTERIOR_XPS_INSULATION_THICKNESS,
 		thickness=FACADE_THICKNESS, side="right",
 		start_height=0, height=PERIMETER_TOP_HEIGHT-basement.elevation,
-		start_extension=extension, end_extension=extension,
+		start_extension=start_extension, end_extension=end_extension,
 		opening_walls=[wall],
-	)
+	) for label, start_extension, end_extension, white in sections)
 
 
 perimeter_facades = {side: add_perimeter_facade(side)
