@@ -1369,6 +1369,49 @@ drawing.add_ridge_tile(
 The curved, terracotta-filled annotation is scoped to that drawing and stays
 attached to the model when its camera or scale changes.
 
+## Survey points
+
+`python3 house_ifc.py points` reads `points.txt` and creates a top-down point
+drawing: `points.svg`, `points.png`, and `projekt/Zaměření pozemku.pdf`.
+The standalone command `python3 survey_points.py` creates the same outputs
+without building the house model or running Bonsai.
+
+Input rows use **point ID, Y, X, Z, optional note**, in S-JTSK/Bpv metres.
+The original geodet header is optional. Blank lines separate groups; start a
+group with a color such as `#ff0000` to join its points in file order:
+
+```text
+#ff0000
+10 588808.00 1144310.00 418.00 B
+1 588802.23 1144303.39 415.73 other
+
+2 588802.24 1144303.40 415.74 B
+```
+
+Here points 10 and 1 are connected in red, while point 2 is unconnected.
+Each blank line resets the color. Colors may be hex values or names such as
+`#red`. Groups with no color (or only one point) have no connecting line.
+Add `, closed` to a color header (e.g. `#ff0000, closed`) to connect the last
+point back to the first. Without it the polyline stays open. Blank lines also
+reset this option.
+Notes are preserved for reference and do not affect connections or ordering.
+The drawing preserves each measured position, using small crosses and height
+labels directly below the crosses, in light blue and without leader lines.
+Hovering over a cross in the SVG reveals its ID, original coordinates and note,
+and hovering over a polyline shows its color and ordered point IDs. Add `--point-ids` to either
+command to print IDs too. All points are retained, including points describing
+structures; no terrain surface or property boundary is inferred from them.
+
+The plot uses local grid-east/grid-north axes, `east = Y0-Y`, `north = X0-X`,
+with a printed origin and scale bar. `SurveyFrame` provides the inverse mapping
+for later placement work. Grid north follows S-JTSK, not geographic north.
+Original coordinates and notes are also embedded in the SVG's `survey-data`
+metadata. House coordinates and X mirroring do not affect this drawing.
+
+PDF defaults to A4 landscape and chooses a scale that fits (currently 1:500).
+For a larger copy, run
+`python3 survey_points.py --paper A3 --scale 250`.
+
 ## IFC basement and foundations
 
 The ground-floor storey stays at Z = 0. `BASEMENT_FLOOR_START` is the top of

@@ -120,6 +120,7 @@ PDF_POHLED_ZAPAD = DIR.add_pdf("Pohled - Západ")
 PDF_POHLED_ULICE = DIR.add_pdf("Pohled - Ulice")
 PDF_POHLED_ZAHRADA = DIR.add_pdf("Pohled - Zahrada")
 PDF_POHLED_VYCHOD = DIR.add_pdf("Pohled - Východ")
+PDF_POINTS = Path("projekt/Zaměření pozemku.pdf")
 
 DIR_ZDRAVOTECHNICKE_INSTALACE = PDFFolder(
 	"D1.5.", "projekt/D1.5. Zdravotechnické Instalace/",
@@ -267,7 +268,7 @@ VAZNICE_DIST = 1.167 - VAZNICE_HALF_BASE
 VAZNICE_SIDE_HEIGHT = 0.24
 VAZNICE_SIDE_BASE = 0.16
 # New perpendicular roof: purlin TOP above the finished upper-floor surface.
-TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR = 0.91
+TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR = 0.92
 TRANSVERSE_OUTER_SUPPORT_X_OFFSET = 2.0
 TRANSVERSE_OUTER_SUPPORT_SIZE = (VAZNICE_SIDE_BASE, VAZNICE_SIDE_HEIGHT)
 TRANSVERSE_SUPPORT_POST_SIZE = (0.16, 0.16)
@@ -384,7 +385,7 @@ def earth_to_z(m_above_sea):
 	return m_above_sea - (417.2 - GROUND_FLOOR_THICKNESS)
 
 def y_to_earth(y):
-	return 415.6 + y / HOUSE_DEPTH * (416.6 - 415.6)
+	return 416 + y / HOUSE_DEPTH * (416.6 - 416)
 
 house = House(
     "My house",
@@ -678,9 +679,11 @@ BOTTOM_STAIR_TREADS = 9
 GROUND_DOOR_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.125
 GROUND_WINDOW_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 2.25
 GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT + 0.875
+ENTRANCE_OPENING_AT = HOUSE_DEPTH-BWT-GYM_DEPTH+0.125
+ENTRANCE_OPENING_WIDTH = 1.125
 front_door = wall_1_g.add_door(
-	at=HOUSE_DEPTH-BWT-GYM_DEPTH+0.125,
-	opening_width=1.125, width=0.9,
+	at=ENTRANCE_OPENING_AT,
+	opening_width=ENTRANCE_OPENING_WIDTH, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	clear_height=door_clear_height,
 	sill_height=GROUND_FLOOR_THICKNESS,
@@ -2965,6 +2968,15 @@ print(f"  Normal roof: {normal_plasterboard_wall_height-UPPER_FLOOR_THICKNESS:.3
 print(f"  Dormer roof: {dormer_plasterboard_wall_height-UPPER_FLOOR_THICKNESS:.3f} m")
 
 roof_outer_face_offset = ROOF_TILE_BOTTOM + ROOF_TILE_THICKNESS
+transverse_roof_highest_z = plane_height_at(
+	*offset_plane(*transverse_roof.points,
+		offset=roof_outer_face_offset + roof_outer_layer_offset(transverse_roof)),
+	x=LOWER_NADEZDIVKA_X, y=0,
+)
+print(
+	f"Transverse roof highest point (top of tiles): "
+	f"{transverse_roof_highest_z - earth_to_z(0):.3f} m above sea level"
+)
 ground_floor_top = ground.elevation + GROUND_FLOOR_THICKNESS
 active_exterior_ridge_planes = {
 	plane for lo, hi, _ in roof_over_rafter_x_ranges
@@ -3824,6 +3836,43 @@ def add_dormer_side_facades():
 
 dormer_side_facades = add_dormer_side_facades()
 
+ENTRANCE_STAIR_RISERS = 6
+ENTRANCE_STAIR_TREAD_LENGTH = 0.30
+ENTRANCE_STAIR_WIDTH = ENTRANCE_OPENING_WIDTH
+ENTRANCE_LANDING_DEPTH = 1.125  # Clear projection beyond the facade.
+ENTRANCE_LANDING_THICKNESS = 0.20
+
+
+def add_entrance_stairs():
+	"""Ground-storey entrance landing and stair descending towards the garden."""
+	landing_garden_y = HOUSE_DEPTH-ENTRANCE_OPENING_AT
+	landing_street_y = landing_garden_y-ENTRANCE_OPENING_WIDTH
+	foot_y = landing_garden_y+(ENTRANCE_STAIR_RISERS-1)*ENTRANCE_STAIR_TREAD_LENGTH
+	foot_z = earth_to_z(y_to_earth(foot_y))
+	landing_z = ground.elevation+GROUND_FLOOR_THICKNESS
+	if foot_z >= landing_z:
+		raise ValueError("entrance stair foot must be below the door threshold")
+	facade_x = -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS
+	outer_x = facade_x-ENTRANCE_LANDING_DEPTH
+	center_x = outer_x+ENTRANCE_STAIR_WIDTH/2
+	stairs = ground.stair(
+		(center_x, foot_y), (center_x, landing_garden_y),
+		name="Entrance stair", width=ENTRANCE_STAIR_WIDTH,
+		start_height=foot_z-ground.elevation, height=landing_z-foot_z,
+		risers=ENTRANCE_STAIR_RISERS, construction="monolithic",
+		underside="sloped", waist_thickness=0.15, color="#bfc3c5",
+	)
+	# Extend through the facade reveal to meet the door threshold at X=0.
+	landing = ground.stair_landing(
+		(outer_x, landing_street_y), (wall_1_g.start[0], landing_garden_y),
+		name="Entrance landing", height=stairs.end_height,
+		thickness=ENTRANCE_LANDING_THICKNESS, color="#bfc3c5",
+	)
+	return stairs, landing
+
+
+entrance_stairs, entrance_landing = add_entrance_stairs()
+
 GARAGE_POST_SIZE = 0.15
 GARAGE_ROOF_THICKNESS = 0.20
 
@@ -3878,6 +3927,14 @@ def draw_garage(x1, y1, x2, y2, height):
 #garage = draw_garage(HOUSE_WIDTH-8, -4, HOUSE_WIDTH-2, -1, 3.0)
 
 house.write("house.ifc")
+
+if "points" in sys.argv:
+	from survey_points import render_survey_points
+	render_survey_points(
+		Path(__file__).with_name("points.txt"), "points.svg",
+		pdf=PDF_POINTS, png="points.png", title="Zaměření pozemku – výškové body",
+		show_ids="--point-ids" in sys.argv,
+	)
 
 def outside_dims(drawing1):
 	# Vnejsi rozmery
@@ -4704,6 +4761,7 @@ if "ground" in sys.argv:
 	drawing1.add_lintel(pokoj0_door, 2, direction="in")
 	drawing1.add_lintel(window_kk, 3, direction="in")
 	drawing1.add_lintel(bathroom_door, 3)
+	drawing1.add_lintel(window_chodba, 3, position="after")
 	drawing1.add_lintel(window_bathroom, 4, position="after")
 	drawing1.add_lintel(window_pokoj_dole, 5, direction="in")
 	drawing1.add_lintel(window_obyvak, 7, position="after", direction="in")
@@ -4712,7 +4770,8 @@ if "ground" in sys.argv:
 
 	drawing1.add_opening_dimension(kitchen_door, offset=-0.5)
 	drawing1.add_opening_dimension(oblouk, offset=BWT/2)
-	drawing1.add_opening_dimension(window_bathroom, offset=-0.75)
+	drawing1.add_opening_dimension(window_bathroom, offset=-1.1)
+	drawing1.add_opening_dimension(window_chodba, offset=-1.1)
 	drawing1.add_opening_dimension(window_obyvak, offset=-0.6)
 	drawing1.add_opening_dimension(window_pokoj_dole, offset=-0.6)
 	drawing1.add_opening_dimension(window_kk, offset=-0.6)
@@ -5887,6 +5946,7 @@ TERRAIN_PROFILES = {
 		(HOUSE_WIDTH + 4.0, y_to_earth(0.0)),
 		(HOUSE_WIDTH + 4.1, 417.6),
 		(HOUSE_WIDTH + 4.2, 417.6),
+		(HOUSE_WIDTH + 4.25, 418),
 	],
 	"pohled_zahrada": [(-2.0, y_to_earth(HOUSE_DEPTH)), (HOUSE_WIDTH + 2.0, y_to_earth(HOUSE_DEPTH))],
 	"pohled_vychod": [(-2.0, y_to_earth(-2.0)), (HOUSE_DEPTH + 2.0, y_to_earth(HOUSE_DEPTH + 2.0))],
@@ -5966,7 +6026,8 @@ if "pohledy" in sys.argv or "pohled_zahrada" in sys.argv:
 if "pohledy" in sys.argv or "pohled_vychod" in sys.argv:
 	drawing1 = house.add_drawing(
 		"Pohled - Východ",
-		x=min(start for start, _, _ in roof_over_rafter_x_ranges) - 1.0,
+		x=min(min(start for start, _, _ in roof_over_rafter_x_ranges),
+		      -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS-ENTRANCE_LANDING_DEPTH) - 1.0,
 		y=HALF_DEPTH,
 		z=ground_floor_top + total_house_height / 2,
 		radius=6,
