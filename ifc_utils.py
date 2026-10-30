@@ -8,7 +8,7 @@ relative to that axis.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
 from fractions import Fraction
@@ -55,6 +55,7 @@ from pdf_utils import markdown_to_pdf
 from drawing_sheet import DrawingSheet
 from section_outlines import add_section_outlines
 from roof_tile_patterns import add_roof_tile_patterns
+from drawing_terrain import add_terrain_overlay
 
 
 __all__ = [
@@ -5988,6 +5989,8 @@ def _render_existing_drawing(
         )
         print(f"[drawing render] Added {count} exposed section outlines ({section_outline_width:g} mm)", flush=True)
     if target_view != "PLAN_VIEW":
+        _, width_mm, _, view_box = _drawing_svg_frame(absolute_output.read_text(encoding="utf-8"))
+        add_terrain_overlay(absolute_output, drawing, width_mm=width_mm, view_box=view_box)
         _postprocess_elevation_furniture_labels(absolute_output)
         _postprocess_hexagon_marker_overlays(absolute_output)
     _postprocess_angle_labels(absolute_output, drawing_properties or {})
@@ -8604,6 +8607,7 @@ class Drawing:
         self._line_count = 0
         self._poly_line_count = 0
         self._circle_count = 0
+        self._terrain_count = 0
         self._drainage_stack_count = 0
         self._sanitary_symbol_count = 0
         self._rectangle_count = 0
@@ -10418,6 +10422,59 @@ class Drawing:
         ifcopenshell.api.group.assign_group(model, group=self.group, products=[annotation])
         ifcopenshell.api.pset.edit_pset(model, pset=self._drawing_pset, properties={"HasAnnotation": True})
         return annotation
+
+    def add_terrain(
+        self, profile: Sequence[Point], *,
+        earth_to_z: Callable[[float], Number] | None = None,
+        hatch: str = "earth", hatch_depth: Number = 0.4,
+        line_width: Number = 0.35,
+    ) -> ifcopenshell.entity_instance:
+        """Draw terrain in an axis-aligned exterior elevation, without a 3D solid.
+
+        Profile points are (horizontal position, height), in model metres.
+        Horizontal positions are global Y when looking along X, otherwise X.
+        With earth_to_z, heights may instead be metres above sea level; the
+        callable converts them to model Z once, when adding the annotation.
+        Points must be ordered horizontally, with no duplicate positions.
+        The SVG/PDF masks the model below the profile and adds a hatch band
+        hatch_depth metres deep. Annotations stay above it. line_width is in
+        printed millimetres. Section drawings are unaffected unless opted in.
+        """
+        if self.view != "elevation":
+            raise ValueError("add_terrain requires an elevation drawing")
+        if earth_to_z is not None and not callable(earth_to_z):
+            raise TypeError("earth_to_z must be callable or None")
+        if isinstance(profile, (str, bytes)):
+            raise TypeError("profile must be a sequence of 2D points")
+        supplied = tuple(_point(p, "profile point") for p in profile)
+        if len(supplied) < 2:
+            raise ValueError("profile must contain at least two points")
+        differences = [b[0] - a[0] for a, b in zip(supplied, supplied[1:])]
+        if not (all(d > 0 for d in differences) or all(d < 0 for d in differences)):
+            raise ValueError("profile positions must be strictly increasing or decreasing")
+        points = tuple((x, _number(earth_to_z(z), "converted height") if earth_to_z else z)
+                       for x, z in supplied)
+        if hatch not in _drawing_pattern_ids():
+            raise ValueError(f"unknown terrain hatch: {hatch!r}")
+        hatch_depth = _number(hatch_depth, "hatch_depth")
+        if hatch_depth < 0:
+            raise ValueError("hatch_depth must be non-negative")
+        line_width, _ = _drawing_line_width(line_width)
+        placement = self._annotation_frame(points[0], "add_terrain")
+        local_points = []
+        for point in points:
+            delta = self._annotation_frame(point, "add_terrain")[:3, 3] - placement[:3, 3]
+            local_points.append((float(np.dot(delta, placement[:3, 0])),
+                                 float(np.dot(delta, placement[:3, 1]))))
+        model = self.house.model
+        curve = model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(local_points), None, False)
+        self._terrain_count += 1
+        return self._add_primitive_annotation(
+            f"{self.name} Terrain {self._terrain_count}", "LINEWORK", placement,
+            [model.createIfcGeometricCurveSet([curve])], "drawing-terrain-source", "BBIM_DrawingTerrain",
+            {"Profile": json.dumps(supplied), "ModelProfile": json.dumps(points),
+             "Hatch": hatch, "HatchDepth": hatch_depth, "LineWidth": line_width},
+        )
 
     def add_circle(
         self, center: Point, radius: Number, *,
@@ -19561,8 +19618,8 @@ class Storey:
         center_x, center_y = _point(center, "center")
         rotation = _number(rotation, "rotation")
         start_height = _number(start_height, "start_height")
-        if start_height < 0:
-            raise ValueError("start_height must be zero or greater")
+        #if start_height < 0:
+        #    raise ValueError("start_height must be zero or greater")
         label_text = furniture_name if label is None else _name(label, "label")
         surface_style = self.house._surface_style(
             "furniture",

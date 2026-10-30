@@ -117,6 +117,16 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     fill: white !important;
 }
 
+/* Recessed perimeter finish over the thinner XPS insulation. */
+.material-Perimeterfacadefinish.surface {
+    fill: #d9d9d9 !important;
+    stroke: none !important;
+}
+
+.material-Perimeterfacadefinish.projection {
+    fill: none !important;
+}
+
 /* MDF boards, including material names in older IFC files. */
 .material-MDF,
 .material-Woodfiberboard,
@@ -252,9 +262,25 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 /* Insulated wall cores stay unhatched until section batting is added. */
-.IfcWall.material-Westclosureinsulatedtimberwall.cut,
 .IfcWall.cut.layer-material-Thermalinsulation {
     fill: white !important;
+}
+
+/* Simplified west gable: cross hatch in cuts, opaque white in views. */
+.IfcWall.material-Westclosurewall.cut,
+.IfcWall.cut.layer-material-Westclosurewall {
+    fill: url(#crosshatch2) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.material-Westclosurewall.surface {
+    fill: white !important;
+    stroke: none !important;
+}
+
+.material-Westclosurewall.projection {
+    fill: none !important;
 }
 
 .target-view-ELEVATIONVIEW .material-Gypsumplasterboard {

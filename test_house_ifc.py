@@ -273,7 +273,7 @@ class ExteriorElevationTests(unittest.TestCase):
         self.assertEqual(len(v["house"]._drawings), 4)
         for drawing in v["house"]._drawings:
             with self.subTest(drawing=drawing.name):
-                self.assertEqual(set(drawing.storeys), {v["ground"], v["upper"], *v["roof_layer_storeys"].values()})
+                self.assertEqual(set(drawing.storeys), {v["basement"], v["ground"], v["upper"], *v["roof_layer_storeys"].values()})
                 self.assertNotIn(v["foundation"], drawing.storeys)
                 self.assertFalse(drawing._automatic_plan_annotations)
                 self.assertFalse(drawing._automatic_door_annotations)
@@ -283,6 +283,22 @@ class ExteriorElevationTests(unittest.TestCase):
                 selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
                     ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
                 self.assertTrue(set(v["roof_siding"]).issubset(selected))
+
+    def test_exterior_terrain_uses_sea_level_converter_and_drawing_scoped_profiles(self):
+        v = self.values
+        self.assertAlmostEqual(v["earth_to_z"](417.2), v["GROUND_FLOOR_THICKNESS"])
+        self.assertAlmostEqual(v["earth_to_z"](417.0), v["GROUND_FLOOR_THICKNESS"] - .2)
+        profile_keys = {(-1, 0, 0): "pohled_zapad", (1, 0, 0): "pohled_vychod",
+                        (0, 1, 0): "pohled_ulice", (0, -1, 0): "pohled_zahrada"}
+        for drawing in v["house"]._drawings:
+            members = drawing.group.IsGroupedBy[0].RelatedObjects
+            terrains = [ifcopenshell.util.element.get_pset(item, "BBIM_DrawingTerrain") for item in members]
+            terrain, = [p for p in terrains if p]
+            profile = json.loads(terrain["Profile"])
+            expected = v["TERRAIN_PROFILES"][profile_keys[drawing.direction]]
+            self.assertEqual(profile, [list(point) for point in expected])
+            self.assertEqual(json.loads(terrain["ModelProfile"]),
+                             [[x, v["earth_to_z"](height)] for x, height in expected])
 
     def test_elevation_renders_to_the_configured_pdf(self):
         self.assertEqual(len(self.render_calls), 4)
@@ -394,7 +410,8 @@ class ExteriorElevationTests(unittest.TestCase):
         patterned = {element for element in v["house"].model.by_type("IfcElement")
                      if (material := ifcopenshell.util.element.get_material(element))
                      and material.is_a("IfcMaterial") and material.Name == "Wood siding"}
-        self.assertEqual(patterned, {v["street_facade"][1], v["garden_facade"][1]})
+        self.assertEqual(patterned, {v["street_facade"][1], v["garden_facade"][1],
+                                     v["west_facade"][0], v["west_roof_closure"]["Siding"]})
         patterned_color = v["wood_siding_color"](patterned=True).lstrip("#")
         expected_patterned_rgb = tuple(int(patterned_color[i:i+2], 16)/255 for i in (0, 2, 4))
         for panel in patterned:
@@ -464,7 +481,7 @@ class ExteriorElevationTests(unittest.TestCase):
                               *v["dormer_roof_rafters"], *v["dormer_short_rafters"])) & hosts)
         self.assertFalse(v["roof_window_opening"].vertical)
 
-    def test_street_facade_has_two_full_height_panels_with_the_requested_materials(self):
+    def test_street_facade_starts_above_perimeter_with_the_requested_materials(self):
         v = self.values
         panels = v["street_facade"]
         self.assertEqual(len(panels), 2)
@@ -474,7 +491,7 @@ class ExteriorElevationTests(unittest.TestCase):
                 self.assertEqual(panel.PredefinedType, "CLADDING")
                 self.assertEqual(panel.material_name, material)
                 self.assertEqual(panel.wall, v["wall_front_g"])
-                self.assertEqual(panel.start_height, 0)
+                self.assertEqual(panel.start_height + v["ground"].elevation, v["PERIMETER_TOP_HEIGHT"])
                 self.assertEqual(panel.thickness, v["FACADE_THICKNESS"])
                 self.assertEqual(panel.offset, v["FACADE_INSULATION_THICKNESS"])
                 self.assertEqual(panel.ContainedInStructure[0].RelatingStructure, v["ground"].element)
@@ -485,8 +502,8 @@ class ExteriorElevationTests(unittest.TestCase):
         settings.set(settings.USE_WORLD_COORDS, True)
         expected_x = (
             (-v["FACADE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"] + 0.001,
-             v["LOWER_NADEZDIVKA_X"] + .1),
-            (v["LOWER_NADEZDIVKA_X"] + .1,
+             v["LOWER_NADEZDIVKA_X"] - .05),
+            (v["LOWER_NADEZDIVKA_X"] - .05,
              v["HOUSE_WIDTH"] + v["FACADE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"] - 0.001),
         )
         outer_y = -v["FACADE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"]
@@ -495,13 +512,49 @@ class ExteriorElevationTests(unittest.TestCase):
             with self.subTest(panel=panel.Name):
                 shape = ifcopenshell.geom.create_shape(settings, panel)
                 vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
-                np.testing.assert_allclose(vertices.min(axis=0), (x0, outer_y, 0), atol=1e-8)
+                np.testing.assert_allclose(vertices.min(axis=0), (x0, outer_y, v["PERIMETER_TOP_HEIGHT"]), atol=1e-8)
                 np.testing.assert_allclose(vertices.max(axis=0), (
                     x1, -v["FACADE_INSULATION_THICKNESS"],
                     v["plane_height_at"](*v["offset_plane"](*plane.points, offset=v["RAFTER_Z_OFFSET"]), x=x0, y=outer_y)
                     if plane is v["transverse_roof"]
                     else v["roof_layer_height_at_y"](plane, v["RAFTER_Z_OFFSET"], outer_y, 0),
                 ), atol=1e-8)
+
+    def test_perimeter_facades_match_xps_offsets_and_join_the_upper_facades(self):
+        v = self.values
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        extension = v["EXTERIOR_XPS_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"] - .001
+        inner = v["EXTERIOR_XPS_INSULATION_THICKNESS"]
+        outer = inner + v["FACADE_THICKNESS"]
+        bottom = v["basement"].elevation
+        expected = {
+            "street": ((-extension, -outer, bottom), (v["HOUSE_WIDTH"]+extension, -inner, v["PERIMETER_TOP_HEIGHT"])),
+            "garden": ((-extension, v["HOUSE_DEPTH"]+inner, bottom),
+                       (v["HOUSE_WIDTH"]+extension, v["HOUSE_DEPTH"]+outer, v["PERIMETER_TOP_HEIGHT"])),
+            "east": ((-outer, -extension, bottom), (-inner, v["HOUSE_DEPTH"]+extension, v["PERIMETER_TOP_HEIGHT"])),
+            "west": ((v["HOUSE_WIDTH"]+inner, -extension, bottom),
+                     (v["HOUSE_WIDTH"]+outer, v["HOUSE_DEPTH"]+extension, v["PERIMETER_TOP_HEIGHT"])),
+        }
+        for side, panel in v["perimeter_facades"].items():
+            with self.subTest(side=side):
+                self.assertEqual(panel.material_name, "Perimeter facade finish")
+                self.assertEqual(panel.offset, inner)
+                self.assertEqual(panel.thickness, v["FACADE_THICKNESS"])
+                self.assertEqual(ifcopenshell.util.element.get_container(panel), v["basement"].element)
+                self.assertIn(v[f"{side}_facade"][0].wall, panel.opening_walls)
+                shape = ifcopenshell.geom.create_shape(settings, panel)
+                points = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                np.testing.assert_allclose(points.min(axis=0), expected[side][0], atol=1e-8)
+                np.testing.assert_allclose(points.max(axis=0), expected[side][1], atol=1e-8)
+                for upper in v[f"{side}_facade"]:
+                    shape = ifcopenshell.geom.create_shape(settings, upper)
+                    upper_points = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                    self.assertAlmostEqual(upper_points[:, 2].min(), points[:, 2].max())
+        for drawing in v["house"]._drawings:
+            selected = ifcopenshell.util.selector.filter_elements(v["house"].model,
+                ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+            self.assertTrue(set(v["perimeter_facades"].values()).issubset(selected))
 
     def test_street_facade_preserves_the_bathroom_window_and_is_included_in_elevations(self):
         v = self.values
@@ -577,11 +630,11 @@ class ExteriorElevationTests(unittest.TestCase):
         self.assertTrue(body.Items[0].is_a("IfcExtrudedAreaSolid"))
         outer_y = v["HOUSE_DEPTH"] + v["FACADE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"]
         top = v["roof_layer_height_at_y"](v["dormer_roof"], v["RAFTER_Z_OFFSET"], outer_y, 0)
-        self.assertAlmostEqual(high.height, top)
+        self.assertAlmostEqual(high.start_height + high.height, top)
         self.assertGreater(top, v["roof_layer_height_at_y"](v["garden_roof"], v["RAFTER_Z_OFFSET"], outer_y, 0))
         # Host runs right-to-left, so along increases towards smaller world X.
         start_x = v["HOUSE_WIDTH"] + high.start_extension
-        raised = sorted(start_x - along for along, z in high.outline if abs(z - top) < 1e-8)
+        raised = sorted(start_x - along for along, z in high.outline if abs(z + high.start_height - top) < 1e-8)
         ends = sorted((v["wall_dormer"].start[0], v["wall_dormer"].end[0]))
         allowance = v["FACADE_INSULATION_THICKNESS"]+v["FACADE_THICKNESS"]-.001
         np.testing.assert_allclose(raised, (ends[0]-allowance, ends[1]+allowance), atol=1e-8)

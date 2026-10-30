@@ -1330,6 +1330,26 @@ stove = ground.furniture("Kamna", ...)
 elevation.add_furniture_label(stove)
 ```
 
+Axis-aligned exterior elevations can have a drawing-only terrain overlay:
+
+```python
+elevation.add_terrain(
+    profile=[(-2, 417.0), (5, 417.0), (HOUSE_WIDTH + 2, 416.8)],
+    earth_to_z=earth_to_z,
+    hatch="earth", hatch_depth=0.4, line_width=0.35,
+)
+```
+
+Profile positions are global X for views looking along Y, or global Y for
+views looking along X. Heights use model Z unless `earth_to_z` is supplied;
+that callable converts above-sea-level heights once when adding the profile.
+Points must be ordered horizontally. Hatch depth is in model metres and line
+width in printed millimetres. Terrain masks building geometry below the
+profile while dimensions and annotations remain visible. It adds no 3D earth
+solid and affects only the drawing receiving the call. Include the basement
+storey to show exposed walls when lowering the profile. In `house_ifc.py`, edit
+`TERRAIN_PROFILES` to tune each of the four exterior views independently.
+
 Each selected label faces the elevation camera, is centred on the projected
 object, and is omitted when that object has no visible SVG geometry.
 
