@@ -33,6 +33,58 @@ class UpperRingBeamTests(unittest.TestCase):
         ):
             cls.values = runpy.run_path(str(source))
 
+    def test_wall_bodies_follow_independent_x_and_y_thicknesses(self):
+        v = self.values
+        self.assertNotEqual(v["BWTx"], v["BWTy"])
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        for name, axis, low, high in (
+            ("wall_1_g", 0, v["wall1_start"], v["wall1_end"]),
+            ("wall_2", 0, v["wall2_start"], v["wall2_end"]),
+            ("wall_3", 0, v["wall3_start"], v["wall3_end"]),
+            ("wall_4_g", 0, v["wall4_start"], v["wall4_end"]),
+            ("wall_front_g", 1, 0, v["BWTy"]),
+            ("wall_back_g", 1, v["HOUSE_DEPTH"]-v["BWTy"], v["HOUSE_DEPTH"]),
+        ):
+            with self.subTest(wall=name):
+                shape = ifcopenshell.geom.create_shape(settings, v[name])
+                points = np.array(shape.geometry.verts).reshape(-1, 3)
+                used = np.unique(shape.geometry.faces)
+                np.testing.assert_allclose((points[used, axis].min(), points[used, axis].max()),
+                                           (low, high), atol=1e-7)
+        self.assertEqual(v["load_bearing_wall_y"].Name, "VPC cihla 175mm")
+        for name in ("wall_front1_u", "wall_back1_u", "wall_dormer"):
+            self.assertEqual(ifcopenshell.util.element.get_type(v[name]), v["load_bearing_wall_y"])
+
+    def test_both_wall_types_keep_their_ring_beams_foundations_and_liapor_course(self):
+        v = self.values
+        walls = v["ground_load_bearing_walls"]
+        self.assertEqual(len(walls), 6)
+        self.assertEqual({beam.source_wall for beam in v["ring_beams"]}, set(walls))
+        self.assertEqual({(wall.start, wall.end) for wall in v["foundation_walls"]},
+                         {(wall.start, wall.end) for wall in walls})
+        self.assertEqual(len(v["foundation_footers"]), len(walls))
+        for beam in v["ring_beams"]:
+            self.assertAlmostEqual(beam.width, beam.source_wall.thickness)
+        for wall in v["foundation_walls"]:
+            self.assertAlmostEqual(wall.thickness, v["FOUNDATION_WALL_THICKNESS"])
+        for wall in walls:
+            layers = ifcopenshell.util.element.get_material(wall).ForLayerSet.MaterialLayers
+            self.assertEqual(layers[0].Material.Name, v["GROUND_WALL_BASE_COURSE_MATERIAL"])
+
+    def test_room_and_roof_extents_use_faces_while_packing_uses_the_support_half_width(self):
+        v = self.values
+        outline = np.array(v["upper_pokoj_1"].outline)
+        np.testing.assert_allclose(outline.min(axis=0), (v["wall1_end"], v["BWTy"]))
+        np.testing.assert_allclose(outline.max(axis=0), (v["wall2_start"], v["HOUSE_DEPTH"]-v["BWTy"]))
+        self.assertAlmostEqual(v["upper_pokoj_1"].area,
+                               (v["wall2_start"]-v["wall1_end"])*(v["HOUSE_DEPTH"]-2*v["BWTy"]))
+        self.assertEqual(v["roof_under_rafter_x_ranges"][0][:2], (v["wall1_end"], v["wall2_start"]))
+        self.assertEqual(v["roof_under_rafter_x_ranges"][1][:2], (v["wall2_end"], v["wall3_start"]))
+        for block in v["purlin_packing_blocks"]:
+            np.testing.assert_allclose(sorted((block.start[0], block.end[0])),
+                                       (v["wall2_start"], v["wall2_mid"]))
+
     def test_level_band_follows_only_high_load_bearing_walls(self):
         v = self.values
         beams = v["upper_ring_beams"]
@@ -46,7 +98,7 @@ class UpperRingBeamTests(unittest.TestCase):
                 self.assertAlmostEqual(beam.height, v["UPPER_RING_BEAM_HEIGHT"])
                 self.assertAlmostEqual(beam.start[2] + beam.height / 2,
                                        v["UPPER_FLOOR_START"] + v["NADEZDIVKA"])
-                self.assertAlmostEqual(beam.width, v["BWT"])
+                self.assertAlmostEqual(beam.width, beam.source_wall.thickness)
                 self.assertEqual(beam.ContainedInStructure[0].RelatingStructure, v["upper"].element)
                 for bar in beam.reinforcement:
                     self.assertAlmostEqual(bar.BarLength, beam.length)
@@ -810,7 +862,7 @@ class UpperElectricalDrawingTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in rendered], ["elektro_ground.svg", "elektro_upper.svg"])
         self.assertEqual(rendered[1].kwargs["pdf"], values["PDF_ELEKTRO_UPPER"])
         self.assertEqual(list(drawing.storeys), [values["upper"]])
-        self.assertEqual(drawing.z, values["BWT"] + 2.75 + 2)
+        self.assertEqual(drawing.z, values["UPPER_PLAN_CUT_Z"])
         self.assertFalse(drawing._automatic_door_annotations)
         floors = values["upper"].floor_layers
         self.assertEqual({f.room_id for f in floors}, {"P.01", "P.02", "P.03", "P.04", "P.05"})
@@ -1802,7 +1854,7 @@ class RoofFramingTests(unittest.TestCase):
                     values["VAZNICE_SIDE_BASE"],
                     values["VAZNICE_HEIGHT"] - values["VAZNICE_SIDE_HEIGHT"],
                 ))
-                self.assertAlmostEqual(block.length, values["BWT"] / 2)
+                self.assertAlmostEqual(block.length, values["wall2_mid"] - values["wall2_start"])
                 low, high = self.finished_vertices(block).min(axis=0), self.finished_vertices(block).max(axis=0)
                 self.assertAlmostEqual(low[2], values["PURLIN_BOTTOM_Z"])
                 self.assertAlmostEqual(high[2], values["PURLIN_TOP_Z"] - values["VAZNICE_SIDE_HEIGHT"])

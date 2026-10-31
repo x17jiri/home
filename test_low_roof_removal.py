@@ -227,7 +227,7 @@ class LowRoofRemovalTests(unittest.TestCase):
             y0, y1, z0, z1 = expected[layer.material_name]
             points = self.vertices(layer)
             np.testing.assert_allclose(points.min(axis=0), (v["wall3_x"], y0, z0), atol=1e-8)
-            np.testing.assert_allclose(points.max(axis=0), (v["HOUSE_WIDTH"]-v["BWT"], y1, z1), atol=1e-8)
+            np.testing.assert_allclose(points.max(axis=0), (v["wall4_start"], y1, z1), atol=1e-8)
         self.assertAlmostEqual(v["interior_ceiling_bottom_z_at"](v["HOUSE_WIDTH"]-1), 5.545)
 
     def test_miako_slabs_floors_internal_walls_and_fixtures_are_retained(self):
@@ -263,7 +263,7 @@ class LowRoofRemovalTests(unittest.TestCase):
         second = self.vertices(v["wall_za_umyvadlem"])
         for room, y0, y1, fixture_name in (
             (v["upper_sklad"], first[:, 1].max(), second[:, 1].min(), "Umyv"),
-            (v["zachod_nahore"], v["BWT"], first[:, 1].min(), "WC"),
+            (v["zachod_nahore"], v["BWTy"], first[:, 1].min(), "WC"),
         ):
             with self.subTest(room=room.room_id):
                 points = self.vertices(room)
