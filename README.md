@@ -123,6 +123,47 @@ The Python-side coordinates remain unchanged, including values returned by
 walls, stairs, and roof planes. Only written IFC files and rendered drawings
 are mirrored, so existing coordinate calculations need no special handling.
 
+## Railings
+
+Create physical railings along a world-XYZ polyline, or derive the open edge
+of a stair with `stair.railing_path()`:
+
+```python
+ground.railing(
+    "Zábradlí schodiště",
+    path=main_stairs.railing_path(side="left"),
+    height=1.0, post_spacing=0.9,
+    infill="vertical", material="Wood", color="#C8B090",
+)
+upper.railing(
+    "Zábradlí galerie",
+    path=[(4, 3, 3.24), (6, 3, 3.24), (6, 4, 3.24)],
+)
+```
+
+Left/right means looking **upstairs**, before export mirroring. The stair
+helper follows the tread nosings and retains actual tread heights for the
+bottoms of posts and balusters. Its `inset` defaults to 30 mm. Use
+`path.extended([(x, y, z), ...])` to continue onto the upper landing.
+Raw paths use their Z coordinates as the support surface.
+
+Height is vertical from the path to the handrail top; it defaults to 1 m.
+`post_spacing` and `baluster_spacing` are maximum horizontal centre distances.
+Defaults are 60 × 60 mm posts, 60 × 40 mm handrail, and 25 × 25 mm balusters
+at no more than 120 mm centres. Override these with `post_size`,
+`handrail_size`, `baluster_size` and `baluster_spacing`. `infill="none"`
+leaves only the handrail and posts. Corners share a post and a mitered
+handrail; repeat the first point to close a path. The returned element is a
+single `IfcRailing`, with geometry, material and a `BBIM_Railing` property set.
+
+`add_house_railings()` adds the open-side guards for both indoor flights,
+the entrance flight and landing, and the gallery on either side of the
+chimney. The upper flight continues into the gallery guard after the chimney;
+the entrance guard similarly continues around the landing. Their dimensions
+and color use `RAILING_*` constants; the gallery gap also uses
+`GALLERY_RAILING_CHIMNEY_CLEARANCE`. Stair and doorway access remains clear.
+Ground-storey indoor railings are explicitly included in the upper plan.
+
 ## 3D-only reference boxes
 
 `House.add_panel(name, outline=[(x, y, z), ...], thickness=..., material=..., color=...)`
@@ -1451,19 +1492,30 @@ from that ring beam so it sits directly on the concrete. Both are created by
 (GL24c purlin, C16 plate), without changing existing rafter-support lookups.
 
 `transverse_roof` slopes through the outer top edges of these two supports.
-`transverse_rafters` uses the normal `RAFTER_SIZE` and `RAFTER_Z_OFFSET`, with
-centres returned by `transverse_rafter_y_positions()`: `RAFTER_THICKNESS/2`,
+`transverse_rafters` uses `TRANSVERSE_RAFTER_SIZE` (80 × 140 mm) and `RAFTER_Z_OFFSET`, with
+centres returned by `transverse_rafter_y_positions()`: `TRANSVERSE_RAFTER_SIZE[0]/2`,
 each integer metre strictly between the edge centres, then
-`HOUSE_DEPTH - RAFTER_THICKNESS/2`. The current house has nine rafters.
+`HOUSE_DEPTH - TRANSVERSE_RAFTER_SIZE[0]/2`. The current house has nine rafters.
 Their high ends are cut vertically at `LOWER_NADEZDIVKA_X`. Outside wall 4,
 both main-roof eave rules apply: the vertical limit is
-`HOUSE_WIDTH + ROOF_EAVE_OVERHANG - ROOF_EAVE_SETBACK`; the horizontal limit
-is `ROOF_EAVE_DROP_BELOW_WALL_PLATE` below the wall-plate underside.
+`HOUSE_WIDTH + TRANSVERSE_ROOF_EAVE_OVERHANG - ROOF_EAVE_SETBACK`; the horizontal limit
+is controlled by `TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET` and
+`TRANSVERSE_ROOF_EAVE_REFERENCE_DROP`, retaining the previous roof outline
+independently of its supports.
 The finished beam follows whichever cut is reached first. The common
 `local_y_limits_from_cuts()` now handles global-X, Y and Z boundaries, so
 the complete rafter section reaches all cuts without guessed source lengths.
 These rafters share the Rafters visibility container and have their own
 measured C22 schedule row, without changing the high/dormer rafter arrays.
+
+`add_transverse_rafter_braces()` adds one outward-rising 45° brace beneath
+each transverse rafter. The former outer beam and four posts are removed.
+The brace centreline starts at the structural wall's outer face, 0.50 m below
+the wall-plate underside (`TRANSVERSE_RAFTER_BRACE_DROP`), and meets the
+rafter underside. Vertical wall-face and sloped rafter cuts trim the full
+section. `TRANSVERSE_RAFTER_BRACE_SIZE` defaults to the transverse rafter
+section. Braces use the exposed-wood finish and appear in the shared roof
+schedule as `Vzpěry – příčné krokve` with material C22.
 
 `add_transverse_roof_layers()` reuses the main-roof MDF board, underlay,
 counter-battens, tile battens and tiles on this slope. Set

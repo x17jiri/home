@@ -10192,6 +10192,42 @@ class HouseTests(unittest.TestCase):
                 [{"location": "Left", "slab": left, "length": 0}]
             )
 
+    def test_groups_miako_schedule_slabs_by_length_and_sums_their_counts(self) -> None:
+        house = House("Split MIAKO schedule")
+        upper = house.storey("Upper floor", elevation=3)
+        slabs = [upper.miako_slab(
+            f"Slab {index}", start=(0, index*2), end=(length, index*2),
+            top=0, direction=(0, 1), structure=structure,
+        ) for index, (length, structure) in enumerate((
+            (3, ["beam", "wide", "beam"]),
+            (4, ["beam", "wide", "beam"]),
+            (3, ["beam", "wide", "beam", "narrow", "beam"]),
+        ))]
+        drawing = house.add_drawing("Ceiling", 3, 3, 3.1, 6, right_panel_width=50)
+        drawing.add_miako_beam_schedule([{"location": "Split", "slab": slabs}])
+        tables = json.loads(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "RightPanelTables"))
+        self.assertEqual(tables[0]["items"], [
+            {"location": "Split", "length": 3000, "count": 5,
+             "slab_guids": [slabs[0].GlobalId, slabs[2].GlobalId]},
+            {"location": "Split", "length": 4000, "count": 2, "slab_guid": slabs[1].GlobalId},
+        ])
+        drawing.add_miako_beam_schedule([{"location": "Split", "slab": slabs, "length": 5.25}])
+        tables = json.loads(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "RightPanelTables"))
+        self.assertEqual(tables[1]["items"], [
+            {"location": "Split", "length": 5250, "count": 7,
+             "slab_guids": [slab.GlobalId for slab in slabs]},
+        ])
+        other_house = House("Other house")
+        other = other_house.storey("Floor", elevation=3).miako_slab(
+            "Other slab", start=(0, 0), end=(3, 0), top=0,
+            direction=(0, 1), structure=["beam", "narrow", "beam"],
+        )
+        for value, error in (([], ValueError), ([slabs[0], upper.element], TypeError),
+                             ([slabs[0], other], ValueError), ("slabs", TypeError)):
+            with self.subTest(value=value), self.assertRaises(error):
+                drawing.add_miako_beam_schedule([{"location": "Split", "slab": value}])
+        self.assertEqual(len(drawing._right_panel_tables), 2)
+
     def test_stores_drawing_camera_and_scoped_batting_in_ifc(self) -> None:
         house = House("My house")
         house.storey("Ground floor", elevation=0)
@@ -11815,6 +11851,29 @@ class HouseTests(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_adds_insulation_to_explicitly_included_projected_wall(self) -> None:
+        house = House("Projected insulation")
+        ground = house.storey("Ground", elevation=0)
+        upper = house.storey("Upper", elevation=3)
+        wall = ground.wall((0, 0), (4, 0), thickness=.24, height=3)
+        unrelated = ground.wall((0, 2), (4, 2), thickness=.24, height=3)
+        wall.add_opening(at=1, width=1, height=2)
+        drawing = house.add_drawing("Upper", 2, 2, 4, 6, storeys=[upper])
+        with self.assertRaisesRegex(ValueError, "not included"):
+            drawing.add_wall_insulation(wall, thickness=.2, material="polystyrene")
+        drawing.include_element(wall)
+        for material in ("polystyrene", "rockwool"):
+            annotations = drawing.add_wall_insulation(wall, thickness=.2, material=material)
+            self.assertTrue(annotations)
+            for annotation in annotations:
+                self.assertEqual(ifcopenshell.util.element.get_pset(
+                    annotation, "BBIM_WallInsulation", "HostWall"), wall.GlobalId)
+        self.assertEqual(drawing.storeys, (upper,))
+        included = ifcopenshell.util.selector.filter_elements(house.model,
+            ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+        self.assertIn(wall, included)
+        self.assertNotIn(unrelated, included)
 
     def test_validates_wall_insulation_arguments(self) -> None:
         house = House("My house")
@@ -14198,12 +14257,15 @@ class HouseTests(unittest.TestCase):
         self.assertIn("fill: url(#ztracene-bedneni) !important", rule)
         self.assertIn("stroke-width: 0.05 !important", rule)
 
-    def test_load_bearing_brick_is_white_but_partitions_keep_their_hatch(self) -> None:
+    def test_240mm_brick_is_hatched_while_175mm_brick_is_white(self) -> None:
         project_dir = Path(__file__).parent
         stylesheet = (project_dir / "bonsai_scripts/assets/plan.css").read_text()
         rule = stylesheet.split(".cut.layer-material-Brick", 1)[1].split("}", 1)[0]
         self.assertIn("fill: white !important", rule)
         self.assertNotIn("url(", rule)
+        thick_wall = stylesheet.split(".cut.material-LoadbearingwallVPC240mm", 1)[1].split("}", 1)[0]
+        self.assertIn("fill: url(#brick) !important", thick_wall)
+        self.assertNotIn(".cut.material-VPCcihla175mm", stylesheet)
         partition = stylesheet.split(".cut.material-PartitionwallVPC115mm", 1)[1].split("}", 1)[0]
         self.assertIn("fill: url(#diagonal1) !important", partition)
         patterns = ET.parse(project_dir / "drawings/assets/patterns.svg")

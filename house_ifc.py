@@ -269,10 +269,8 @@ VAZNICE_SIDE_HEIGHT = 0.24
 VAZNICE_SIDE_BASE = 0.16
 # New perpendicular roof: purlin TOP above the finished upper-floor surface.
 TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR = 0.92
-TRANSVERSE_OUTER_SUPPORT_X_OFFSET = 2.0
-TRANSVERSE_OUTER_SUPPORT_SIZE = (VAZNICE_SIDE_BASE, VAZNICE_SIDE_HEIGHT)
-TRANSVERSE_SUPPORT_POST_SIZE = (0.16, 0.16)
-TRANSVERSE_SUPPORT_POST_COUNT = 4
+TRANSVERSE_RAFTER_BRACE_SIZE = TRANSVERSE_RAFTER_SIZE
+TRANSVERSE_RAFTER_BRACE_DROP = 1.3  # Below the transverse wall plate's underside.
 PURLIN_SIDE_PACKING_HEIGHT = VAZNICE_HEIGHT - VAZNICE_SIDE_HEIGHT
 SEDLO_LENGTH = 1.5  # Retained for the force simulator's sedlo variant, not IFC geometry.
 PURLIN_SPACER_SIZE = (0.08, 0.20)
@@ -448,16 +446,16 @@ dry_wall = house.wall_type(
 	color="#dfefcf"
 )
 
-HOUSE_DEPTH = 7.99
+HOUSE_DEPTH = 8.00
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.5 + 0.01
-KK_WIDTH = 2.50 + 0.01
+KITCHEN_WIDTH = 4.47
+KK_WIDTH = 2.55
 
 wall1_start = 0
 wall1_end = wall1_start + BWTx
 wall1_mid = (wall1_start + wall1_end) / 2.0
 wall1_x = wall1_end
-wall2_start = wall1_end + 3.25 + 0.01
+wall2_start = wall1_end + 3.75-0.48
 wall2_end = wall2_start + BWTx
 wall2_mid = (wall2_start + wall2_end) / 2.0
 wall2_x = wall2_end
@@ -470,7 +468,7 @@ wall4_end = wall4_start + BWTx
 wall4_mid = (wall4_start + wall4_end) / 2.0
 wall4_x = wall4_end
 HOUSE_WIDTH = wall4_end
-LOWER_NADEZDIVKA_X = wall3_x + 1.375
+LOWER_NADEZDIVKA_X = wall3_x + 1.4
 if not wall3_x < LOWER_NADEZDIVKA_X < HOUSE_WIDTH:
 	raise ValueError("LOWER_NADEZDIVKA_X must be between wall3 and wall4")
 FACADE_MATERIAL_SPLIT_X = LOWER_NADEZDIVKA_X - 0.05
@@ -513,13 +511,13 @@ STAIR_TREAD_THICKNESS = 0.04
 STAIR_STRINGER_THICKNESS = 0.05
 STAIR_STRINGER_HEIGHT = 0.30
 
-GYM_DEPTH = 2.01
+GYM_DEPTH = 2.575
 pokoj_dole = ground.floor_layer(
 	"Pokoj",
 	room_id="0.02",
 	outline=(
-		(wall1_end, BWTy+GYM_DEPTH+0.115),
-		(wall2_start, BWTy+GYM_DEPTH+0.115),
+		(wall1_end, BWTy+GYM_DEPTH+BWTy),
+		(wall2_start, BWTy+GYM_DEPTH+BWTy),
 		(wall2_start, HOUSE_DEPTH-BWTy),
 		(wall1_end, HOUSE_DEPTH-BWTy),
 	),
@@ -529,8 +527,8 @@ pokoj_dole = ground.floor_layer(
 	buildup_material=FLOOR_BUILDUP_MATERIAL,
 	color="#ffff80",
 )
-CHODBA_DEPTH = 2.635
-GALERY_START = BWTy+2.4
+CHODBA_DEPTH = 2.575
+GALERY_START = BWTy+2.575
 
 wall_zachod_nahore_y = math.ceil((GALERY_START)/0.125)*0.125
 wall_za_umyvadlem_y = wall_zachod_nahore_y + 1.9
@@ -550,23 +548,21 @@ oblouk_at = HOUSE_DEPTH-BWTy-1.5-OBLOUK_WIDTH
 vk_from = wall2_start-0.1
 vk_to = wall3_x+0.1
 
-a = math.floor((vk_to - vk_from - 3*0.67 - 0.75 - 0.86) / 2 * 1000.0) / 1000.0
-a = 0.91
-
 # Remaining high/dormer assemblies, independent of the interior-layer ranges.
 high_rafters = [
 	-0.10,
 	(-0.10+1.65)/2,
 	1.65,
-	1.65+0.91,
+	1.65+0.86,
 	(vk_from, "+before"),
-	(vk_from+0.91, "before", {"min_y": GALERY_START+0.05}),
-	(vk_from+0.91+0.67, "before"),
-	(vk_from+0.91+0.67+0.75, "after"),
-	(vk_from+0.91+0.67+0.75+0.67, "after"),
-	(vk_from+0.91+0.67+0.75+0.67+0.67, "after"),
-	(vk_from+0.91+0.67+0.75+0.67+0.67+0.67, "after"),
+	(vk_from+0.81, "before", {"min_y": GALERY_START}),
+	(vk_from+0.81+0.70, "before", {"min_y": GALERY_START}),
+	(vk_from+0.81+0.70+0.75, "after"),
+	(vk_from+0.81+0.70+0.75+0.67, "after"),
+	(vk_from+0.81+0.70+0.75+0.67+0.67, "after"),
+	(vk_from+0.81+0.70+0.75+0.67+0.67+0.67, "after"),
 	(vk_to, "+after"),
+	LOWER_NADEZDIVKA_X - 0.15 - 0.67,
 	LOWER_NADEZDIVKA_X - 0.15,
 	]
 # Shared drawing indices and assembly generation keep the original order.
@@ -581,11 +577,11 @@ CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
 CHIMNEY_Y_START = GALERY_START - 0.5 # override
 
-CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2
+CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2 + RAFTER_THICKNESS/2.0
 
 ############## overrides
-CHIMNEY_Y_START = GALERY_START - 0.45
-CHIMNEY_X_START = wall2_x + 0.02
+#CHIMNEY_Y_START = GALERY_START - 0.45
+#CHIMNEY_X_START = wall2_x + 0.02
 
 CHIMNEY_Y_MID = CHIMNEY_Y_START + 0.2
 CHIMNEY_Y_END = CHIMNEY_Y_START + 0.4
@@ -596,27 +592,25 @@ print("CHIMNEY_Y_START = ", CHIMNEY_Y_START)
 print("CHIMNEY_Y_MID = ", CHIMNEY_Y_MID)
 print("CHIMNEY_Y_END = ", CHIMNEY_Y_END)
 
-BATHROOM_DEPTH = 2.635
+BATHROOM_DEPTH = 2.575
 DRAINAGE_STACK_X = wall3_x + 0.1 + 0.12
 DRAINAGE_STACK_Y = wall_zachod_nahore_y - 0.1 - 0.1
 kuchyn = ground.floor_layer(
 	"Kuchyn",
 	room_id="0.01",
 	outline=(
-		(wall2_x, GALERY_START+0.115),
-		(wall2_x+1.125, GALERY_START+0.115),
-		(wall2_x+1.125, BWTy+CHODBA_DEPTH+0.115),
-		(wall3_start, BWTy+CHODBA_DEPTH+0.115),
+		(wall2_end, BWTy+CHODBA_DEPTH+BWTy),
+		(wall3_start, BWTy+CHODBA_DEPTH+BWTy),
 		(wall3_start, oblouk_at),
-		(wall3_x, oblouk_at),
-		(wall3_x, BWTy+BATHROOM_DEPTH+0.115),
-		(wall4_start, BWTy+BATHROOM_DEPTH+0.115),
+		(wall3_end, oblouk_at),
+		(wall3_end, BWTy+BATHROOM_DEPTH+BWTy),
+		(wall4_start, BWTy+BATHROOM_DEPTH+BWTy),
 		(wall4_start, HOUSE_DEPTH-BWTy),
-		(wall3_x, HOUSE_DEPTH-BWTy),
-		(wall3_x, oblouk_at+OBLOUK_WIDTH),
+		(wall3_end, HOUSE_DEPTH-BWTy),
+		(wall3_end, oblouk_at+OBLOUK_WIDTH),
 		(wall3_start, oblouk_at+OBLOUK_WIDTH),
 		(wall3_start, HOUSE_DEPTH-BWTy),
-		(wall2_x, HOUSE_DEPTH-BWTy),
+		(wall2_end, HOUSE_DEPTH-BWTy),
 	),
 	thickness=GROUND_FLOOR_THICKNESS,
 	insulation_thickness=GROUND_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
@@ -740,25 +734,7 @@ window_kk1 = wall_4_g.add_window(
 # Posilovna, Gym
 wall_gym_g = ground.wall(
 	(wall1_end, BWTy+GYM_DEPTH), (wall2_start, BWTy+GYM_DEPTH),
-	wall_type=partition_wall, height=ground_floor_height)
-
-# The ring beam caps the ground-floor walls, but belongs to the upper storey.
-# Its negative local offset keeps it directly below the upper-floor elevation.
-ring_beams = tuple(
-	beam
-	for source_type in load_bearing_wall_types
-	for beam in upper.add_ring_beams_from(
-		ground,
-		source_wall_type=source_type,
-		height=CEILING_THICKNESS,
-		start_height=-CEILING_THICKNESS,
-		concrete_material="Concrete topping",
-		reinforcement_material="Ring beam reinforcement",
-		bar_diameter=RING_BEAM_BAR_DIAMETER,
-		stirrup_diameter=RING_BEAM_STIRRUP_DIAMETER,
-		concrete_cover=RING_BEAM_CONCRETE_COVER,
-	)
-)
+	wall_type=load_bearing_wall_y, height=ground_floor_height)
 
 foundation_base_plate = basement.floor_layer(
 	"Foundation base plate",
@@ -945,7 +921,7 @@ def add_foundation_insulation(outline, *, thickness, height):
 # Bathroom, Koupelna
 wall_bathroom = ground.wall(
 	(wall3_x, BWTy+BATHROOM_DEPTH), (wall4_start, BWTy+BATHROOM_DEPTH),
-	wall_type=partition_wall, height=ground_floor_height)
+	wall_type=load_bearing_wall_y, height=ground_floor_height)
 heat_pump = ground.furniture(
     "Tepelné\nČerpadlo",
     kind="USERDEFINED",
@@ -1034,20 +1010,16 @@ ground.asset(
 )
 
 # Kitchen, Kuchyn
-wall_kitchen_1 = ground.wall(
-	(wall2_x, GALERY_START),
-	(wall2_x+1.01, GALERY_START),
-	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen_2 = ground.wall(
-	(wall2_x+1.01, GALERY_START+0.75),
-	(wall2_x+1.01, GALERY_START),
+	(wall2_end+1.0, BWTy+CHODBA_DEPTH+BWTy+0.625),
+	(wall2_end+1.0, BWTy+CHODBA_DEPTH+BWTy),
 	wall_type=partition_wall, height=ground_floor_height)
 wall_kitchen_3 = ground.wall(
-	(wall2_x+1.125, BWTy+CHODBA_DEPTH),
-	(wall2_x+KITCHEN_WIDTH, BWTy+CHODBA_DEPTH),
-	wall_type=partition_wall, height=ground_floor_height)
+	(wall2_end, BWTy+CHODBA_DEPTH),
+	(wall3_start, BWTy+CHODBA_DEPTH),
+	wall_type=load_bearing_wall_y, height=ground_floor_height)
 kitchen_door = wall_kitchen_3.add_door(
-	at=0.05,
+	at=1.25,
 	opening_width=1.0, width=0.9,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=0,
@@ -1093,6 +1065,24 @@ bathroom_door = wall_3.add_door(
 	clear_height=door_clear_height,
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True,
+)
+
+# The ring beam caps the ground-floor walls, but belongs to the upper storey.
+# Its negative local offset keeps it directly below the upper-floor elevation.
+ring_beams = tuple(
+	beam
+	for source_type in load_bearing_wall_types
+	for beam in upper.add_ring_beams_from(
+		ground,
+		source_wall_type=source_type,
+		height=CEILING_THICKNESS,
+		start_height=-CEILING_THICKNESS,
+		concrete_material="Concrete topping",
+		reinforcement_material="Ring beam reinforcement",
+		bar_diameter=RING_BEAM_BAR_DIAMETER,
+		stirrup_diameter=RING_BEAM_STIRRUP_DIAMETER,
+		concrete_cover=RING_BEAM_CONCRETE_COVER,
+	)
 )
 
 ground_load_bearing_walls = (
@@ -1199,7 +1189,7 @@ kamna = ground.furniture(
     kind="USERDEFINED",
     size=(0.6, 0.5, 1.5),
     color="#ffff2B",
-    center=(wall2_x + 0.5, GALERY_START+0.115+0.2+0.25),
+    center=(wall2_x + 0.5, BWTy+CHODBA_DEPTH+BWTy+0.2+0.25),
 	start_height=GROUND_FLOOR_THICKNESS+0.05,
 #    rotation=-45,
 )
@@ -1211,14 +1201,14 @@ ground.furniture(
     kind="USERDEFINED",
     size=(0.64, 0.64, 0.75),
 	start_height=GROUND_FLOOR_THICKNESS+0.03,
-    center=(wall4_start-0.35, BWTy+BATHROOM_DEPTH+0.115+0.35),
+    center=(wall4_start-0.35, BWTy+BATHROOM_DEPTH+BWTy+0.35),
 )
 ground.furniture(
 	"Myčka",
     kind="USERDEFINED",
     size=(0.64, 0.64, 0.75),
 	start_height=GROUND_FLOOR_THICKNESS+0.03,
-    center=(wall4_start-0.35-0.64, BWTy+BATHROOM_DEPTH+0.115+0.35),
+    center=(wall4_start-0.35-0.64, BWTy+BATHROOM_DEPTH+BWTy+0.35),
 )
 ground.furniture(
 	"Lednice",
@@ -1231,10 +1221,10 @@ ground.furniture(
 	"Sporák",
     kind="USERDEFINED",
     size=(0.64, 0.64, 0.75),
-    center=(wall4_start-0.35, BWTy+BATHROOM_DEPTH+0.115+0.35+0.7),
+    center=(wall4_start-0.35, BWTy+BATHROOM_DEPTH+BWTy+0.35+0.7),
 	start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
-KUCH_LINKA_LEN = HOUSE_DEPTH-2*BWTy-0.115-BATHROOM_DEPTH-0.1-0.64-0.7-1.0
+KUCH_LINKA_LEN = HOUSE_DEPTH-3*BWTy-BATHROOM_DEPTH-0.1-0.64-0.7-1.0
 ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
@@ -1247,7 +1237,7 @@ ground.furniture(
 	"Kuch.\nLinka",
     kind="USERDEFINED",
     size=(KUCH_LINKA_LEN, 0.64, 0.75),
-    center=(wall4_start-1.35-KUCH_LINKA_LEN/2, BWTy+BATHROOM_DEPTH+0.115+0.35),
+    center=(wall4_start-1.35-KUCH_LINKA_LEN/2, BWTy+BATHROOM_DEPTH+BWTy+0.35),
 	start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 ground.asset(
@@ -1259,18 +1249,19 @@ ground.asset(
 )
 
 # MIAKO
-ceiling1 = upper.miako_slab(
-    "Ceiling 1",
-    start=(wall1_end-0.135, HOUSE_DEPTH-BWTy+0.04),
-    end=(wall2_start+0.135, HOUSE_DEPTH-BWTy+0.04),
+ceiling1a = upper.miako_slab(
+    "Ceiling 1 a",
+    start=(wall1_start, HOUSE_DEPTH-BWTy+0.01),
+    end=(wall2_end, HOUSE_DEPTH-BWTy+0.01),
     top=0,
-	topping=0.06,
+	topping=0.01,#0.06,
 	beam_height=0.06,
-	block_height=CEILING_THICKNESS-0.06,
+	block_height=CEILING_THICKNESS,#-0.06,
     direction=(0, -1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
 	structure=[
+		"beam",
 		"narrow", "beam",
 		"wide", "beam",
 		"wide", "beam",
@@ -1279,45 +1270,68 @@ ceiling1 = upper.miako_slab(
 		"wide", "beam",
 		"wide", "beam",
 		"narrow", "beam",
-		"wide", "beam",
 		],
 )
-ceiling2 = upper.miako_slab(
-    "Ceiling 2",
-    start=(wall2_x-0.135, GALERY_START),
-    end=(wall3_start+0.135, GALERY_START),
+ceiling1b = upper.miako_slab(
+    "Ceiling 1 b",
+    start=(wall1_start, BWTy-0.01),
+    end=(wall2_end, BWTy-0.01),
     top=0,
-	topping=0.06,
+	topping=0.01,#0.06,
 	beam_height=0.06,
-	block_height=CEILING_THICKNESS-0.06,
+	block_height=CEILING_THICKNESS,#-0.06,
     direction=(0, 1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
+	structure=[
+		"beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		"wide", "beam",
+		],
+)
+MIDDLE_CEILING_BEAM_LENGTH = 5.25
+MIDDLE_CEILING_WIDTH = 4.34
+middle_ceiling_x = (wall2_end + wall3_start - MIDDLE_CEILING_WIDTH) / 2
+ceiling2 = upper.miako_slab(
+    "Ceiling 2",
+    start=(middle_ceiling_x, HOUSE_DEPTH),
+    end=(middle_ceiling_x, HOUSE_DEPTH-MIDDLE_CEILING_BEAM_LENGTH),
+    top=0,
+	topping=0.01,#0.06,
+	beam_height=0.06,
+	block_height=CEILING_THICKNESS,#-0.06,
+    direction=(1, 0),
+    expected_width=MIDDLE_CEILING_WIDTH,
+	block_start_offset=wall_back_g.thickness,
+    block_end_offset=wall_kitchen_3.thickness,
     structure=[
 		"beam", "narrow",
 		"beam", "narrow",
-		"beam", "beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam", "wide",
-		"beam"
+		"beam", "narrow",
+		"beam", "narrow",
+		"beam", "beam",
+		"narrow", "beam",
+		"narrow", "beam",
+		"narrow", "beam",
+		"narrow", "beam",
 		],
 )
 
-ceiling3 = upper.miako_slab(
-    "Ceiling 3",
-    start=(wall3_x-0.135, HOUSE_DEPTH-BWTy+0.04),
-    end=(wall4_start+0.135, HOUSE_DEPTH-BWTy+0.04),
+ceiling3a = upper.miako_slab(
+    "Ceiling 3 a",
+    start=(wall3_x-0.225, HOUSE_DEPTH-BWTy+0.01),
+    end=(wall4_start+0.225, HOUSE_DEPTH-BWTy+0.01),
     top=0,
-	topping=0.06,
+	topping=0.01,#0.06,
 	beam_height=0.06,
-	block_height=CEILING_THICKNESS-0.06,
+	block_height=CEILING_THICKNESS,#-0.06,
     direction=(0, -1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
     structure=[
+		"beam",
 		"narrow", "beam",
 		"wide", "beam",
 		"wide", "beam",
@@ -1326,11 +1340,25 @@ ceiling3 = upper.miako_slab(
 		"wide", "beam",
 		"wide", "beam",
 		"narrow", "beam",
+		],
+)
+ceiling3b = upper.miako_slab(
+    "Ceiling 3 b",
+    start=(wall3_x-0.225, BWTy-0.01),
+    end=(wall4_start+0.225, BWTy-0.01),
+    top=0,
+	topping=0.01,#0.06,
+	beam_height=0.06,
+	block_height=CEILING_THICKNESS,#-0.06,
+    direction=(0, 1),
+	block_start_offset=0.125,
+    block_end_offset=0.125,
+    structure=[
+		"beam",
 		"wide", "beam",
-		"narrow", "beam",
 		"wide", "beam",
 		"wide", "beam",
-		"wide",
+		"wide", "beam",
 		],
 )
 
@@ -1370,14 +1398,23 @@ galerie = upper.floor_layer(
 		outline=(
 			(wall2_x, GALERY_START),
 			(wall3_start, GALERY_START),
-			(wall3_start, wall_zachod_nahore_y),
-			(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y),
-			(WEST_CLOSURE_INNER_X, wall_za_umyvadlem_y-0.1),
-			(wall3_x, wall_za_umyvadlem_y-0.1),
-			(wall3_x, wall_zachod_nahore_y+1.0),
-			(wall3_start, wall_zachod_nahore_y+1.0),
 			(wall3_start, GALERY_END),
 			(wall2_x, GALERY_END),
+		),
+		thickness=UPPER_FLOOR_THICKNESS,
+		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
+		insulation_material=FLOOR_INSULATION_MATERIAL,
+		buildup_material=FLOOR_BUILDUP_MATERIAL,
+		color="#ffff80",
+	)
+technika_nahore = upper.floor_layer(
+		f"Technika nahore",
+		room_id="P.05",
+		outline=(
+			(wall3_end, wall_zachod_nahore_y),
+			(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y),
+			(WEST_CLOSURE_INNER_X, HOUSE_DEPTH-BWTy),
+			(wall3_end, HOUSE_DEPTH-BWTy),
 		),
 		thickness=UPPER_FLOOR_THICKNESS,
 		insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
@@ -1882,6 +1919,9 @@ roof_inner_cuts = [
 
 ROOF_EAVE_OVERHANG = 0.75
 TRANSVERSE_ROOF_EAVE_OVERHANG = 2.25
+# Retain the existing eave finish independently of the removed outer beam.
+TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET = 2.08
+TRANSVERSE_ROOF_EAVE_REFERENCE_DROP = 0.54
 DORMER_ROOF_EAVE_OVERHANG = 0.5
 ROOF_EAVE_SETBACK = 0.02  # Shared eave and X-end allowance for roof siding.
 ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.30
@@ -1898,7 +1938,6 @@ STREET_ROOF_EAVE_Y = -ROOF_EAVE_OVERHANG
 GARDEN_ROOF_EAVE_Y = HOUSE_DEPTH + ROOF_EAVE_OVERHANG
 DORMER_ROOF_EAVE_Y = HOUSE_DEPTH + DORMER_ROOF_EAVE_OVERHANG
 TRANSVERSE_ROOF_EAVE_X = HOUSE_WIDTH + TRANSVERSE_ROOF_EAVE_OVERHANG
-TRANSVERSE_OUTER_SUPPORT_X = HOUSE_WIDTH + TRANSVERSE_OUTER_SUPPORT_X_OFFSET
 
 
 def horizontal_roof_eave_cut(wall_plate_center_z, *, drop=None, support_height=None):
@@ -1988,33 +2027,36 @@ lower_flat_ceiling_roof = roof.plane(
 )
 
 
-def transverse_outer_support_top(points):
-	"""Continue the existing pitch through the outer beam's top bearing edge."""
-	return plane_height_at(*points,
-		x=TRANSVERSE_OUTER_SUPPORT_X + TRANSVERSE_OUTER_SUPPORT_SIZE[0] / 2, y=0)
+def transverse_roof_eave_cut(points):
+    """Keep the horizontal eave trim independent of the support arrangement."""
+    z = plane_height_at(*points,
+        x=HOUSE_WIDTH + TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET, y=0
+    ) - TRANSVERSE_ROOF_EAVE_REFERENCE_DROP
+    return ((0, 0, z), (10, 0, z), (0, 10, z))
 
 
 def add_transverse_roof_plane():
-	"""Pitch through the outer top bearing edges, with the shared eave cuts."""
-	purlin_x = transverse_purlin.start[0] + transverse_purlin.width / 2
-	purlin_top = transverse_purlin.start[2] + transverse_purlin.height / 2
-	plate_x = transverse_wall_plate.start[0] + transverse_wall_plate.width / 2
-	plate_top = transverse_wall_plate.start[2] + transverse_wall_plate.height / 2
-	if plate_x <= purlin_x or purlin_top <= plate_top:
-		raise ValueError("transverse purlin must be higher than and inward of the wall plate")
-	if not HOUSE_WIDTH < TRANSVERSE_OUTER_SUPPORT_X < TRANSVERSE_ROOF_EAVE_X - ROOF_EAVE_SETBACK:
-		raise ValueError("outer transverse support must be between wall 4 and the roof eave")
-	points = ((purlin_x, 0, purlin_top), (purlin_x, 10, purlin_top), (plate_x, 0, plate_top))
-	outer_center_z = transverse_outer_support_top(points) - TRANSVERSE_OUTER_SUPPORT_SIZE[1] / 2
-	return roof.plane(
-		"Transverse slope",
-		points=points,
-		cuts=(
-			((LOWER_NADEZDIVKA_X, 0, 0), (LOWER_NADEZDIVKA_X, 10, 0), (LOWER_NADEZDIVKA_X, 0, 10)),
-			horizontal_roof_eave_cut(outer_center_z, support_height=TRANSVERSE_OUTER_SUPPORT_SIZE[1]),
-			((TRANSVERSE_ROOF_EAVE_X, 0, 0), (TRANSVERSE_ROOF_EAVE_X, 10, 0), (TRANSVERSE_ROOF_EAVE_X, 0, 10)),
-		),
-	)
+    """Pitch through the top bearing edges, retaining the independent eave trim."""
+    purlin_x = transverse_purlin.start[0] + transverse_purlin.width / 2
+    purlin_top = transverse_purlin.start[2] + transverse_purlin.height / 2
+    plate_x = transverse_wall_plate.start[0] + transverse_wall_plate.width / 2
+    plate_top = transverse_wall_plate.start[2] + transverse_wall_plate.height / 2
+    if plate_x <= purlin_x or purlin_top <= plate_top:
+        raise ValueError("transverse purlin must be higher than and inward of the wall plate")
+    if not 0 <= TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET < TRANSVERSE_ROOF_EAVE_OVERHANG - ROOF_EAVE_SETBACK:
+        raise ValueError("transverse eave reference must be between wall 4 and the roof eave")
+    if not math.isfinite(TRANSVERSE_ROOF_EAVE_REFERENCE_DROP) or TRANSVERSE_ROOF_EAVE_REFERENCE_DROP < 0:
+        raise ValueError("transverse eave reference drop must be non-negative and finite")
+    points = ((purlin_x, 0, purlin_top), (purlin_x, 10, purlin_top), (plate_x, 0, plate_top))
+    return roof.plane(
+        "Transverse slope",
+        points=points,
+        cuts=(
+            ((LOWER_NADEZDIVKA_X, 0, 0), (LOWER_NADEZDIVKA_X, 10, 0), (LOWER_NADEZDIVKA_X, 0, 10)),
+            transverse_roof_eave_cut(points),
+            ((TRANSVERSE_ROOF_EAVE_X, 0, 0), (TRANSVERSE_ROOF_EAVE_X, 10, 0), (TRANSVERSE_ROOF_EAVE_X, 0, 10)),
+        ),
+    )
 
 
 transverse_roof = add_transverse_roof_plane()
@@ -2030,36 +2072,6 @@ def wood_siding_color(*, patterned=False):
 	return siding.find("{http://www.w3.org/2000/svg}rect").get("fill")
 
 
-def add_transverse_outer_support():
-	"""One Y-aligned beam, with evenly spaced posts standing on terrain."""
-	width, height = TRANSVERSE_OUTER_SUPPORT_SIZE
-	post_width, post_depth = TRANSVERSE_SUPPORT_POST_SIZE
-	y0, y1 = sorted((transverse_wall_plate.start[1], transverse_wall_plate.end[1]))
-	if TRANSVERSE_SUPPORT_POST_COUNT < 2 or post_depth >= y1-y0:
-		raise ValueError("transverse support needs at least two posts fitting within the beam length")
-	beam_top = transverse_outer_support_top(transverse_roof.points)
-	beam_bottom = beam_top-height
-	post_ys = tuple(y0+post_depth/2 + i*(y1-y0-post_depth)/(TRANSVERSE_SUPPORT_POST_COUNT-1)
-		for i in range(TRANSVERSE_SUPPORT_POST_COUNT))
-	post_bottoms = tuple(earth_to_z(y_to_earth(y)) for y in post_ys)
-	if any(bottom >= beam_bottom for bottom in post_bottoms):
-		raise ValueError("transverse support posts must start below the support beam")
-	beam = upper.beam(
-		"Transverse outer support beam",
-		start=(TRANSVERSE_OUTER_SUPPORT_X, y0, beam_top-height/2),
-		end=(TRANSVERSE_OUTER_SUPPORT_X, y1, beam_top-height/2),
-		size=(width, height), material="Exterior wood", kind="BEAM", color=wood_siding_color(),
-	)
-	posts = tuple(ground.beam(
-		f"Transverse outer support post {i}",
-		start=(TRANSVERSE_OUTER_SUPPORT_X, y, bottom),
-		end=(TRANSVERSE_OUTER_SUPPORT_X, y, beam_bottom),
-		size=(post_width, post_depth), material="Exterior wood", kind="BEAM", color=wood_siding_color(),
-	) for i, (y, bottom) in enumerate(zip(post_ys, post_bottoms), 1))
-	return beam, posts
-
-
-transverse_outer_support, transverse_support_posts = add_transverse_outer_support()
 
 
 def framing_roof_planes_at(x):
@@ -3545,6 +3557,47 @@ def add_transverse_rafters():
 transverse_rafters = add_transverse_rafters()
 
 
+def add_transverse_rafter_braces():
+    """One 45-degree brace per rafter, cut against the wall and rafter bottom."""
+    width, height = TRANSVERSE_RAFTER_BRACE_SIZE
+    if not all(math.isfinite(value) and value > 0
+               for value in (width, height, TRANSVERSE_RAFTER_BRACE_DROP)):
+        raise ValueError("transverse brace dimensions and drop must be positive and finite")
+    bottom_plane = offset_plane(*transverse_roof.points, offset=RAFTER_Z_OFFSET)
+    wall_x = HOUSE_WIDTH
+    start_z = transverse_wall_plate.start[2] - transverse_wall_plate.height / 2 - TRANSVERSE_RAFTER_BRACE_DROP
+    roof_at_wall = plane_height_at(*bottom_plane, x=wall_x, y=0)
+    roof_slope = plane_height_at(*bottom_plane, x=wall_x+1, y=0) - roof_at_wall
+    if roof_slope >= 1 or roof_at_wall <= start_z:
+        raise ValueError("45-degree transverse braces must start below the rafters and meet them outward")
+    run = (roof_at_wall-start_z) / (1-roof_slope)
+    if wall_x + run >= TRANSVERSE_ROOF_EAVE_X - ROOF_EAVE_SETBACK:
+        raise ValueError("transverse braces must meet the rafters before the eave")
+    # Extend each end through its cutting plane so the whole section is trimmed.
+    overlength = 2 * max(width, height)
+    wall_cut = ((wall_x, 0, 0), (wall_x, 1, 0), (wall_x, 0, 1))
+    braces = []
+    for index, rafter in enumerate(transverse_rafters, 1):
+        y = rafter.start[1]
+        anchor = (wall_x, y, start_z)
+        contact = (wall_x+run, y, start_z+run)
+        brace = upper.beam(
+            f"Transverse rafter brace {index}",
+            start=(wall_x-overlength, y, start_z-overlength),
+            end=(contact[0]+overlength, y, contact[2]+overlength),
+            size=(width, height), material="Exterior wood", kind="BEAM",
+            color=wood_siding_color(), cuts=(wall_cut, bottom_plane),
+        )
+        object.__setattr__(brace, "wall_anchor", anchor)
+        object.__setattr__(brace, "rafter_contact", contact)
+        object.__setattr__(brace, "supported_rafter", rafter)
+        braces.append(brace)
+    return tuple(braces)
+
+
+transverse_rafter_braces = add_transverse_rafter_braces()
+
+
 def add_exterior_counter_battens(pieces):
 	"""Follow each rafter's level and union exterior intervals on its plane."""
 	lines = {}
@@ -3882,7 +3935,7 @@ def add_entrance_stairs():
 		(center_x, foot_y), (center_x, landing_garden_y),
 		name="Entrance stair", width=ENTRANCE_STAIR_WIDTH,
 		start_height=foot_z-ground.elevation, height=landing_z-foot_z,
-		risers=ENTRANCE_STAIR_RISERS, construction="monolithic",
+		risers=ENTRANCE_STAIR_RISERS, construction="timber",
 		underside="sloped", waist_thickness=0.15, color="#bfc3c5",
 	)
 	# Extend through the facade reveal to meet the door threshold at X=0.
@@ -3895,6 +3948,52 @@ def add_entrance_stairs():
 
 
 entrance_stairs, entrance_landing = add_entrance_stairs()
+
+RAILING_HEIGHT = 1.0
+RAILING_POST_SPACING = 0.90
+RAILING_POST_SIZE = (0.06, 0.06)
+RAILING_HANDRAIL_SIZE = (0.06, 0.04)
+RAILING_BALUSTER_SIZE = (0.025, 0.025)
+RAILING_BALUSTER_SPACING = 0.12
+RAILING_COLOR = "#C8B090"
+GALLERY_RAILING_CHIMNEY_CLEARANCE = 0.03
+
+
+def add_house_railings():
+	"""Open stair edges and gallery guards, with clear chimney and stair access."""
+	options = dict(height=RAILING_HEIGHT, post_spacing=RAILING_POST_SPACING,
+		post_size=RAILING_POST_SIZE, handrail_size=RAILING_HANDRAIL_SIZE,
+		baluster_size=RAILING_BALUSTER_SIZE, baluster_spacing=RAILING_BALUSTER_SPACING,
+		infill="vertical", material="Wood", color=RAILING_COLOR)
+	inset = RAILING_POST_SIZE[0]/2
+	lower = ground.railing("Main stair railing", path=main_stairs.railing_path("left", inset=inset), **options)
+	gallery_z = upper.elevation + galerie.start_height + galerie.thickness
+	gallery_y = GALERY_START + inset
+	upper_path = gallery_stairs.railing_path("left", inset=inset)
+	stair_edge_x = upper_path[-1][0]
+	chimney_clearance = GALLERY_RAILING_CHIMNEY_CLEARANCE + RAILING_POST_SIZE[1]/2
+	before_start, before_end = wall2_end+inset, CHIMNEY_X_START-chimney_clearance
+	after_start, after_end = CHIMNEY_X_END+chimney_clearance, stair_edge_x
+	if not before_start < before_end < after_start < after_end:
+		raise ValueError("gallery chimney must leave room for railing before it and before the stair opening")
+	before = upper.railing("Gallery railing before chimney",
+		path=((before_start, gallery_y, gallery_z), (before_end, gallery_y, gallery_z)), **options)
+	# Continue the upper flight around the landing edge, leaving the stair opening clear.
+	upper_path = upper_path.extended(((after_end, gallery_y, gallery_z), (after_start, gallery_y, gallery_z)))
+	after = ground.railing("Gallery stair and railing after chimney", path=upper_path, **options)
+	entrance_path = entrance_stairs.railing_path("right", inset=inset)
+	landing_street_y = entrance_stairs.end[1]-ENTRANCE_OPENING_WIDTH
+	facade_x = -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS
+	entrance_path = entrance_path.extended((
+		(entrance_path[-1][0], landing_street_y+inset, ground.elevation+entrance_stairs.end_height),
+		(facade_x-inset, landing_street_y+inset, ground.elevation+entrance_stairs.end_height),
+	))
+	exterior = ground.railing("Entrance stair and landing railing", path=entrance_path, **options)
+	return lower, after, (before, after), exterior
+
+
+main_stair_railing, gallery_stair_railing, gallery_railings, entrance_railing = add_house_railings()
+house_railings = (main_stair_railing, *gallery_railings, entrance_railing)
 
 GARAGE_POST_SIZE = 0.15
 GARAGE_ROOF_THICKNESS = 0.20
@@ -3981,6 +4080,8 @@ def common_dims(drawing1):
 
 	# vzdalenost komina od obvodove zdi
 	drawing1.add_dimension(start=(CHIMNEY_X_MID, BWTy), end=(CHIMNEY_X_MID, CHIMNEY_Y_START))
+	# vzdalenost komina od wall_2
+	drawing1.add_dimension(start=(wall2_end, CHIMNEY_Y_MID), end=(CHIMNEY_X_START, CHIMNEY_Y_MID))
 
 def common_wall_insulation(
 	drawing1, wall_front, wall_1, wall_back, wall_4
@@ -4023,8 +4124,8 @@ if "kanal" in sys.argv:
 	# Schematic coordinates: horizontal distance is diagram layout, vertical
 	# distance is the actual height above the finished ground-floor surface.
 	datum = ground_floor_top
-	miako_bottom = ceiling3.storey.elevation + ceiling3.bottom - datum
-	miako_top = ceiling3.storey.elevation + ceiling3.top - datum
+	miako_bottom = ceiling3a.storey.elevation + ceiling3a.bottom - datum
+	miako_top = ceiling3a.storey.elevation + ceiling3a.top - datum
 	upper_floor_top = upper.elevation + upper_pokoj_1.start_height + upper_pokoj_1.thickness - datum
 	if inner_roof_section_at(DRAINAGE_STACK_X)[2].get("ceiling_only"):
 		# The sloped lining was removed with the roof; retain the independent
@@ -4702,8 +4803,8 @@ if "ground" in sys.argv:
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
 	drawing1.add_material_legend([
-		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
-		("brick", "Nosná zeď - VPC cihla 175mm"),
+		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď - VPC cihla 175mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
 		(
 			"polystyrene-transparent",
@@ -4723,16 +4824,16 @@ if "ground" in sys.argv:
 	common_dims(drawing1)
 
 	# Risankuv pokoj hloubka
-	drawing1.add_dimension(start=(wall2_x-1.6, BWTy+GYM_DEPTH+0.115), end=(wall2_x-1.6, HOUSE_DEPTH-BWTy))
+	drawing1.add_dimension(start=(wall2_x-1.6, BWTy+GYM_DEPTH+BWTy), end=(wall2_x-1.6, HOUSE_DEPTH-BWTy))
 	# gym hloubka
 	drawing1.add_dimension(start=(wall2_x-1.6, BWTy), end=(wall2_x-1.6, BWTy+GYM_DEPTH))
 
 	# chodba hloubka
 	drawing1.add_dimension(start=(CHIMNEY_X_END+1, BWTy), end=(CHIMNEY_X_END+1, BWTy+CHODBA_DEPTH), offset=0)
 	# KK hloubka
-	drawing1.add_dimension(start=(wall4_start, BWTy+BATHROOM_DEPTH+0.115), end=(wall4_start, HOUSE_DEPTH-BWTy), offset=-1)
+	drawing1.add_dimension(start=(wall4_start, BWTy+BATHROOM_DEPTH+BWTy), end=(wall4_start, HOUSE_DEPTH-BWTy), offset=-1)
 	# kuchyn hloubka
-	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWTy+CHODBA_DEPTH+0.115), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWTy), offset=0)
+	drawing1.add_dimension(start=(HOUSE_WIDTH-4, BWTy+CHODBA_DEPTH+BWTy), end=(HOUSE_WIDTH-4, HOUSE_DEPTH-BWTy), offset=0)
 	# koupelna hloubka
 	drawing1.add_dimension(start=(wall4_start, BWTy), end=(wall4_start, BWTy+BATHROOM_DEPTH), offset=-1)
 
@@ -4842,9 +4943,11 @@ if "upper" in sys.argv:
 	bb_cut.add_symbol(drawing1)
 	drawing1.include_element(heat_pump)
 	drawing1.include_element(rozvadec)
+	drawing1.include_element(main_stair_railing)
+	drawing1.include_element(gallery_stair_railing)
 	drawing1.add_material_legend([
-		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
-		("brick", "Nosná zeď - VPC cihla 175mm"),
+		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď - VPC cihla 175mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"polystyrene-transparent",
@@ -4882,15 +4985,24 @@ if "upper" in sys.argv:
 		area=zachod_nahore.area
 	)
 	drawing1.add_room_annotation(
-		(7, 3),
+		(7, 3.3),
 		description="Galerie",
 		identifier=galerie.room_id,
 		area=galerie.area
+	)
+	drawing1.add_room_annotation(
+		(wall3_start + 0.5, 3.3),
+		description="Umyvadlo + technika",
+		identifier=technika_nahore.room_id,
+		area=technika_nahore.area
 	)
 	drawing1.add_room_legend()
 
 	# zachod nahore hloubka
 	drawing1.add_dimension(start=(WEST_CLOSURE_INNER_X, BWTy), end=(WEST_CLOSURE_INNER_X, wall_zachod_nahore_y-wall_zachod_nahore.thickness), offset=-1)
+	# zachod nahore sirka
+	drawing1.add_dimension(start=(wall3_end, HOUSE_DEPTH-1.0), end=(WEST_CLOSURE_INNER_X, HOUSE_DEPTH-1.0))
+	drawing1.add_dimension(start=(LOWER_NADEZDIVKA_X, HOUSE_DEPTH-1.0), end=(HOUSE_WIDTH+0.25, HOUSE_DEPTH-1.0))
 	# Pokoj 2, hloubka
 	drawing1.add_dimension(start=(5.5, GALERY_END+0.1), end=(5.5, HOUSE_DEPTH-BWTy), offset=0)
 	# galerie hloubka
@@ -4899,9 +5011,20 @@ if "upper" in sys.argv:
 	drawing1.add_dimension(start=(CHIMNEY_X_END+0.1, BWTy), end=(CHIMNEY_X_END+0.1, GALERY_START), offset=0)
 
 	common_dims(drawing1)
+	# The low bay has no upper knee walls; its ground walls remain projected.
+	drawing1.include_element(wall_front_g)
+	drawing1.include_element(wall_4_g)
 	common_wall_insulation(
 		drawing1,
-		wall_front1_u, wall_1_u, wall_dormer, None
+		wall_front1_u, wall_1_u, wall_dormer, wall_4_g
+	)
+	drawing1.add_wall_insulation(
+		wall_front_g,
+		thickness=FACADE_INSULATION_THICKNESS,
+		material="polystyrene",
+		start_x=LOWER_NADEZDIVKA_X,
+		end_x=HOUSE_WIDTH+FACADE_INSULATION_THICKNESS,
+		name="Upper projected front facade insulation",
 	)
 
 	# sipka schody
@@ -4942,8 +5065,7 @@ roof_structural_beams = (
 	*street_purlins,
 	*garden_purlins,
 	transverse_purlin,
-	transverse_outer_support,
-	*transverse_support_posts,
+	*transverse_rafter_braces,
 	*purlin_packing_blocks,
 	*purlin_spacers,
 	*roof_wall_plates,
@@ -4999,18 +5121,8 @@ timber_schedule_rows = [
 		},
 	),
 	(
-		"Průvlak – příčný, vnější",
-		(transverse_outer_support,),
-		0,
-		{
-			"material": "gl24c", "pattern": PURLIN_DRAWING_PATTERN,
-			"color": PURLIN_RIGHT_DRAWING_COLOR,
-			"drawing_order": PURLIN_AND_WALL_PLATE_DRAWING_ORDER,
-		},
-	),
-	(
-		"Sloupky – příčné střechy",
-		transverse_support_posts,
+		"Vzpěry – příčné krokve",
+		transverse_rafter_braces,
 		0,
 		{
 			"material": "C22", "pattern": RAFTER_DRAWING_PATTERN,
@@ -5473,19 +5585,20 @@ if "ceiling" in sys.argv:
 	drawing1.add_stair_landing_annotation(middle_stair_landing)
 	drawing1.add_stair_annotation(gallery_stairs)
 	drawing1.add_chimney_annotation(chimney)
-	drawing1.add_miako_beam_dimensions(ceiling1, side="start", offset=0.8)
+	drawing1.add_miako_beam_dimensions(ceiling1a, side="start", offset=0.8)
+	drawing1.add_miako_beam_dimensions(ceiling1b, side="start", offset=0.8)
 	drawing1.add_miako_beam_dimensions(ceiling2, side="start", offset=-0.8)
-	drawing1.add_miako_beam_dimensions(ceiling3, side="end", offset=0.8)
+	drawing1.add_miako_beam_dimensions(ceiling3a, side="end", offset=0.8)
 
 	outside_dims(drawing1)
-	drawing1.add_dimension(start=(wall1_end-0.135, HOUSE_DEPTH-BWTy), end=(wall2_start+0.135, HOUSE_DEPTH-BWTy), offset=0.8)
-	drawing1.add_dimension(start=(wall2_x-0.135, HOUSE_DEPTH-BWTy), end=(wall3_start+0.135, HOUSE_DEPTH-BWTy), offset=0.8)
-	drawing1.add_dimension(start=(wall3_x-0.135, HOUSE_DEPTH-BWTy), end=(wall4_start+0.135, HOUSE_DEPTH-BWTy), offset=0.8)
+	drawing1.add_dimension(start=(wall1_end-0.24, HOUSE_DEPTH-BWTy), end=(wall2_start+0.24, HOUSE_DEPTH-BWTy), offset=0.8)
+	drawing1.add_dimension(start=ceiling2.start, end=ceiling2.end, offset=0.95)
+	drawing1.add_dimension(start=(wall3_x-0.225, HOUSE_DEPTH-BWTy), end=(wall4_start+0.225, HOUSE_DEPTH-BWTy), offset=0.8)
 	drawing1.add_miako_beam_schedule(
 		[
-			{"location": "Levá část", "slab": ceiling3},
+			{"location": "Levá část", "slab": [ceiling1a, ceiling1b]},
 			{"location": "Střed", "slab": ceiling2},
-			{"location": "Pravá část", "slab": ceiling1},
+			{"location": "Pravá část", "slab": [ceiling3a, ceiling3b]},
 		]
 	)
 
@@ -5514,8 +5627,8 @@ if "cut1" in sys.argv:
 def add_section_material_legend(drawing):
 	"""Add the shared material legend used by the house sections."""
 	return drawing.add_material_legend([
-		("solid-white", "Nosná zeď\nVPC Cihla 240 mm"),
-		("brick", "Nosná zeď\nVPC cihla 175mm"),
+		("brick", "Nosná zeď\nVPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď\nVPC cihla 175mm"),
 		(
 			"liapor-brick",
 			f"První řada cihel nosných stěn\nLiapor M AKU, 12 MPa",

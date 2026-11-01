@@ -232,7 +232,7 @@ class LowRoofRemovalTests(unittest.TestCase):
 
     def test_miako_slabs_floors_internal_walls_and_fixtures_are_retained(self):
         v = self.v
-        for name in ("ceiling1", "ceiling2", "ceiling3", "upper_sklad", "zachod_nahore",
+        for name in ("ceiling1a", "ceiling1b", "ceiling2", "ceiling3a", "ceiling3b", "upper_sklad", "zachod_nahore",
                      "upper_pokoj_1", "upper_pokoj_2", "galerie", "wall_zachod_nahore",
                      "wall_pokoj2", "wall_2", "wall_3", "wall_4_g", "window_kk1"):
             self.assertIsNotNone(v[name].Representation, name)
@@ -357,14 +357,14 @@ class LowRoofRemovalTests(unittest.TestCase):
     def test_transverse_supports_are_in_the_roof_plan_elevations_and_schedule_once(self):
         v = self.v
         members = (v["transverse_purlin"], v["transverse_wall_plate"],
-                   v["transverse_outer_support"], *v["transverse_support_posts"])
+                   *v["transverse_rafter_braces"])
         for member in members:
             self.assertEqual(v["roof_structural_beams"].count(member), 1)
             rows = [row for row in v["timber_schedule_rows"] if member in row[1]]
             self.assertEqual(len(rows), 1)
-            expected_material = ("GL24c" if member in (v["transverse_purlin"], v["transverse_outer_support"])
+            expected_material = ("GL24c" if member == v["transverse_purlin"]
                                  else "C16" if member == v["transverse_wall_plate"] else "C22")
-            self.assertEqual(rows[0][3]["material"], expected_material)
+            self.assertEqual(rows[0][3]["material"].casefold(), expected_material.casefold())
         drawings = [d for d in v["house"]._drawings if d.name == "Roof plan" or d.name.lower().startswith("pohled")]
         self.assertEqual(len(drawings), 5)
         for drawing in drawings:
@@ -377,35 +377,44 @@ class LowRoofRemovalTests(unittest.TestCase):
         with patch.object(v["house"], "mirror_x", True):
             exported = v["house"]._export_model()
         for member in (v["transverse_purlin"], v["transverse_wall_plate"],
-                       v["transverse_outer_support"], *v["transverse_support_posts"]):
+                       *v["transverse_rafter_braces"]):
             original = self.vertices(member)
             mirrored = self.vertices(exported.by_guid(member.GlobalId))
             self.assertEqual({tuple(p) for p in np.round(mirrored, 7)},
                              {tuple(p) for p in np.round(original * (-1, 1, 1), 7)})
             np.testing.assert_allclose(self.vertices(member), original)
 
-    def test_transverse_canopy_reaches_eave_and_four_posts_meet_terrain_and_beam(self):
+    def test_transverse_canopy_uses_one_45_degree_brace_per_rafter_without_outer_posts(self):
         v = self.v
-        beam = v["transverse_outer_support"]
-        posts = v["transverse_support_posts"]
-        self.assertEqual(len(posts), 4)
-        self.assertAlmostEqual(beam.start[0], v["HOUSE_WIDTH"]+1.75)
-        self.assertEqual(beam.start[0], beam.end[0])
-        self.assertEqual(beam.start[2], beam.end[2])
-        np.testing.assert_allclose((beam.width, beam.height), (.16, .24))
-        spacing = np.diff([post.start[1] for post in posts])
-        np.testing.assert_allclose(spacing, [spacing[0]]*3)
-        beam_points = self.vertices(beam)
-        for post in posts:
-            points = self.vertices(post)
-            self.assertEqual(post.start[:2], post.end[:2])
-            self.assertEqual(post.start[0], beam.start[0])
-            self.assertAlmostEqual(points[:, 2].max(), beam_points[:, 2].min())
-            self.assertAlmostEqual(points[:, 2].min(), v["earth_to_z"](v["y_to_earth"](post.start[1])))
-            np.testing.assert_allclose(np.ptp(points[:, :2], axis=0), (.16, .16))
+        braces = v["transverse_rafter_braces"]
+        self.assertEqual(len(braces), len(v["transverse_rafters"]))
+        self.assertNotIn("transverse_outer_support", v)
+        self.assertNotIn("transverse_support_posts", v)
+        self.assertFalse(any((e.Name or "").startswith("Transverse outer support")
+                             for e in v["house"].model.by_type("IfcElement")))
+        plate_bottom = v["transverse_wall_plate"].start[2] - v["transverse_wall_plate"].height/2
+        bottom_plane = v["offset_plane"](*v["transverse_roof"].points, offset=v["RAFTER_Z_OFFSET"])
+        for brace, rafter in zip(braces, v["transverse_rafters"]):
+            with self.subTest(brace=brace.Name):
+                self.assertIs(brace.supported_rafter, rafter)
+                np.testing.assert_allclose(brace.wall_anchor,
+                                           (v["HOUSE_WIDTH"], rafter.start[1], plate_bottom-.5))
+                delta = np.subtract(brace.end, brace.start)
+                self.assertGreater(delta[0], 0)
+                self.assertAlmostEqual(delta[0], delta[2])
+                self.assertAlmostEqual(delta[1], 0)
+                points = self.vertices(brace)
+                self.assertAlmostEqual(points[:, 0].min(), v["HOUSE_WIDTH"])
+                roof_heights = np.array([v["plane_height_at"](*bottom_plane, x=x, y=y) for x,y,_ in points])
+                self.assertTrue(np.all(points[:, 2] <= roof_heights+1e-8))
+                self.assertEqual(np.count_nonzero(np.isclose(points[:, 2], roof_heights, atol=1e-8)), 4)
+                self.assertGreater(brace.rafter_contact[0], v["HOUSE_WIDTH"])
+                self.assertLess(brace.rafter_contact[0], self.vertices(rafter)[:, 0].max())
+                self.assertAlmostEqual(brace.rafter_contact[2], v["plane_height_at"](
+                    *bottom_plane, x=brace.rafter_contact[0], y=brace.rafter_contact[1]))
         for rafter in v["transverse_rafters"]:
             points = self.vertices(rafter)
-            self.assertLess(points[:, 0].min(), beam.start[0]-beam.width/2)
+            self.assertLess(points[:, 0].min(), v["HOUSE_WIDTH"])
             self.assertAlmostEqual(points[:, 0].max(), v["HOUSE_WIDTH"]+2.25-v["ROOF_EAVE_SETBACK"])
         tiles, = [layer for layer in v["transverse_roof"].elements
                   if getattr(layer, "material_name", None) == "Roof tiles"]
@@ -446,7 +455,7 @@ class LowRoofRemovalTests(unittest.TestCase):
     def test_transverse_roof_plane_passes_through_outer_top_support_edges(self):
         v = self.v
         plane = v["transverse_roof"]
-        for support in (v["transverse_purlin"], v["transverse_wall_plate"], v["transverse_outer_support"]):
+        for support in (v["transverse_purlin"], v["transverse_wall_plate"]):
             x = support.start[0] + support.width/2
             z = support.start[2] + support.height/2
             self.assertAlmostEqual(v["plane_height_at"](*plane.points, x=x, y=v["HALF_DEPTH"]), z)
@@ -460,8 +469,9 @@ class LowRoofRemovalTests(unittest.TestCase):
         plane = v["transverse_roof"]
         high_x = v["LOWER_NADEZDIVKA_X"]
         eave_x = v["TRANSVERSE_ROOF_EAVE_X"] - v["ROOF_EAVE_SETBACK"]
-        support = v["transverse_outer_support"]
-        cut_z = support.start[2] - support.height/2 - v["ROOF_EAVE_DROP_BELOW_WALL_PLATE"]
+        cut_z = v["plane_height_at"](*plane.points,
+            x=v["HOUSE_WIDTH"]+v["TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET"], y=0
+        ) - v["TRANSVERSE_ROOF_EAVE_REFERENCE_DROP"]
         self.assertTrue(all(p[0] == high_x for p in plane.cuts[0]))
         self.assertTrue(all(p[2] == cut_z for p in plane.cuts[1]))
         self.assertTrue(all(p[0] == v["HOUSE_WIDTH"]+v["TRANSVERSE_ROOF_EAVE_OVERHANG"] for p in plane.cuts[2]))

@@ -22,6 +22,100 @@ from ifc_utils import CutDefinition, Drawing, DrawingSheet, ElektroLineDrawer, H
 from materials import resolve_timber_grade
 
 
+class MiddleCeilingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).with_name("house_ifc.py")
+        with (
+            patch.object(sys, "argv", [str(source), "ceiling"]),
+            patch.object(House, "write", return_value=Path("house.ifc")),
+            patch.object(Drawing, "render", return_value=Path("ceiling.svg")),
+            redirect_stdout(StringIO()),
+        ):
+            cls.values = runpy.run_path(str(source))
+
+    @staticmethod
+    def bounds(element):
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        shape = ifcopenshell.geom.create_shape(settings, element)
+        points = np.array(shape.geometry.verts).reshape(-1, 3)
+        return points.min(axis=0), points.max(axis=0)
+
+    def test_middle_slab_has_perpendicular_5250mm_beams_and_symmetric_narrow_bays(self):
+        v, slab = self.values, self.values["ceiling2"]
+        self.assertEqual(len(slab.beams), 11)
+        self.assertEqual(slab.structure.count("narrow"), 8)
+        self.assertNotIn("wide", slab.structure)
+        self.assertEqual(slab.structure, tuple(reversed(slab.structure)))
+        self.assertEqual(slab.structure[8:11], ("beam", "beam", "beam"))
+        self.assertEqual((slab.structure[0], slab.structure[-1]), ("beam", "beam"))
+        self.assertAlmostEqual(slab.width, 4.51)
+        self.assertAlmostEqual(slab.length, 5.25)
+        span = np.subtract(slab.end, slab.start)
+        for other in (v["ceiling1a"], v["ceiling1b"], v["ceiling3a"], v["ceiling3b"]):
+            self.assertAlmostEqual(np.dot(span, np.subtract(other.end, other.start)), 0)
+        # The ceramic beam shells are 170 mm wide; their concrete cores are narrower.
+        bounds = [self.bounds(shell) for shell in slab.beam_shells]
+        for low, high in bounds:
+            np.testing.assert_allclose(high[:2]-low[:2], (.17, 5.25), atol=1e-8)
+        low_x = min(low[0] for low, _ in bounds)
+        high_x = max(high[0] for _, high in bounds)
+        self.assertAlmostEqual((low_x+high_x)/2, (v["wall2_end"]+v["wall3_start"])/2)
+        self.assertAlmostEqual(v["wall2_end"]-low_x, high_x-v["wall3_start"])
+
+    def test_beams_bear_on_kitchen_and_back_walls_and_schedule_uses_new_span(self):
+        v, slab = self.values, self.values["ceiling2"]
+        kitchen_y = v["wall_kitchen_3"].start[1]
+        back_y = v["wall_back_g"].start[1]
+        for beam in slab.beams:
+            low, high = self.bounds(beam)
+            self.assertAlmostEqual(low[1], kitchen_y)
+            self.assertAlmostEqual(high[1], back_y)
+        blocks = [self.bounds(block) for block in slab.blocks]
+        self.assertAlmostEqual(min(low[1] for low, _ in blocks), kitchen_y+v["wall_kitchen_3"].thickness)
+        self.assertAlmostEqual(max(high[1] for _, high in blocks), back_y-v["wall_back_g"].thickness)
+        drawing, = v["house"]._drawings
+        tables = json.loads(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "RightPanelTables"))
+        schedule, = [table for table in tables if table["kind"] == "miako_beam_schedule"]
+        middle, = [item for item in schedule["items"] if item.get("slab_guid") == slab.GlobalId]
+        self.assertEqual((middle["length"], middle["count"]), (5250, 11))
+        for prefix in ("ceiling1", "ceiling3"):
+            a, b = v[prefix+"a"], v[prefix+"b"]
+            split, = [item for item in schedule["items"]
+                      if item.get("slab_guids") == [a.GlobalId, b.GlobalId]]
+            self.assertEqual(split["count"], len(a.beams)+len(b.beams))
+
+    def test_ceiling1_split_matches_ceiling3_layout_and_keeps_its_own_span(self):
+        v = self.values
+        for suffix in ("a", "b"):
+            first, third = v["ceiling1"+suffix], v["ceiling3"+suffix]
+            self.assertEqual(first.structure, third.structure)
+            self.assertEqual(first.direction, third.direction)
+            self.assertEqual((first.start[1], first.end[1]), (third.start[1], third.end[1]))
+            self.assertEqual(len(first.beams), len(third.beams))
+            self.assertAlmostEqual(first.start[0], v["wall1_end"]-.135)
+            self.assertAlmostEqual(first.end[0], v["wall2_start"]+.135)
+            self.assertAlmostEqual(first.length, 3.5)
+
+    def test_ceiling_includes_ring_beams_above_all_three_new_support_walls(self):
+        v = self.values
+        drawing, = v["house"]._drawings
+        included = ifcopenshell.util.selector.filter_elements(v["house"].model,
+            ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+        for name in ("wall_gym_g", "wall_kitchen_3", "wall_bathroom"):
+            wall = v[name]
+            with self.subTest(wall=name):
+                beam, = [beam for beam in v["ring_beams"] if beam.source_wall == wall]
+                self.assertIn(beam, included)
+                low, high = self.bounds(beam)
+                self.assertAlmostEqual(high[2], v["UPPER_FLOOR_START"])
+                self.assertAlmostEqual(low[2], v["ground_floor_height"])
+                self.assertAlmostEqual(high[1]-low[1], wall.thickness)
+                self.assertAlmostEqual(low[0], min(wall.start[0], wall.end[0]))
+                self.assertAlmostEqual(high[0], max(wall.start[0], wall.end[0]))
+
+
 class UpperRingBeamTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -60,10 +154,12 @@ class UpperRingBeamTests(unittest.TestCase):
         v = self.values
         walls = v["ground_load_bearing_walls"]
         self.assertEqual(len(walls), 6)
-        self.assertEqual({beam.source_wall for beam in v["ring_beams"]}, set(walls))
+        support_walls = {*walls, v["wall_gym_g"], v["wall_kitchen_3"], v["wall_bathroom"]}
+        self.assertEqual({beam.source_wall for beam in v["ring_beams"]}, support_walls)
+        foundation_sources = (*walls, v["wall_gym_g"])
         self.assertEqual({(wall.start, wall.end) for wall in v["foundation_walls"]},
-                         {(wall.start, wall.end) for wall in walls})
-        self.assertEqual(len(v["foundation_footers"]), len(walls))
+                         {(wall.start, wall.end) for wall in foundation_sources})
+        self.assertEqual(len(v["foundation_footers"]), len(foundation_sources))
         for beam in v["ring_beams"]:
             self.assertAlmostEqual(beam.width, beam.source_wall.thickness)
         for wall in v["foundation_walls"]:
@@ -955,6 +1051,22 @@ class CutDrawingTests(unittest.TestCase):
             cls.rendered = [call.args[0] for call in render.call_args_list]
             cls.sheet_rendered = [call.args[0] for call in sheet_render.call_args_list]
 
+    def test_upper_plan_insulates_projected_west_wall_and_the_remaining_front(self):
+        v = self.values
+        drawing, = [d for d in v["house"]._drawings if d.name == "Drawing 2"]
+        self.assertEqual(drawing.storeys, (v["upper"],))
+        records = [record for relation in drawing.group.IsGroupedBy for element in relation.RelatedObjects
+                   if (record := ifcopenshell.util.element.get_pset(element, "BBIM_WallInsulation"))]
+        front, = [record for record in records if record.get("HostWall") == v["wall_front_g"].GlobalId]
+        west, = [record for record in records if record.get("HostWall") == v["wall_4_g"].GlobalId]
+        self.assertEqual(front["Material"], "polystyrene")
+        self.assertEqual(west["Material"], "polystyrene")
+        np.testing.assert_allclose(json.loads(front["Segments"]),
+                                   ((v["LOWER_NADEZDIVKA_X"], v["HOUSE_WIDTH"]+v["FACADE_INSULATION_THICKNESS"]),))
+        west_segments = np.array(json.loads(west["Segments"])) + v["wall_4_g"].start[1]
+        np.testing.assert_allclose(west_segments,
+                                   ((-v["FACADE_INSULATION_THICKNESS"], v["HOUSE_DEPTH"]+v["FACADE_INSULATION_THICKNESS"]),))
+
     def test_exposed_section_outlines_are_enabled_only_for_plans_and_building_sections(self):
         for drawing in self.values["house"]._drawings:
             width = ifcopenshell.util.element.get_pset(
@@ -1023,7 +1135,7 @@ class CutDrawingTests(unittest.TestCase):
                       legends[0][0]["items"])
         self.assertEqual(legends[0], legends[1])
 
-    def test_load_bearing_wall_legends_are_plain_white(self):
+    def test_load_bearing_wall_legends_match_wall_thickness_hatches(self):
         count = 0
         for drawing in self.values["house"]._drawings:
             tables = json.loads(ifcopenshell.util.element.get_pset(
@@ -1033,9 +1145,12 @@ class CutDrawingTests(unittest.TestCase):
                     continue
                 for item in table["items"]:
                     if "VPC Cihla 240 mm" in item["description"]:
+                        self.assertEqual(item["pattern"], "brick")
+                        count += 1
+                    if "VPC cihla 175mm" in item["description"]:
                         self.assertEqual(item["pattern"], "solid-white")
                         count += 1
-        self.assertEqual(count, 4)  # Ground, upper, AA, BB.
+        self.assertEqual(count, 8)  # Both wall types in ground, upper, AA, BB.
 
     def test_all_plan_symbols_use_shared_cut_definitions(self):
         cuts = (self.values["aa_cut"], self.values["bb_cut"])

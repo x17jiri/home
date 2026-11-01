@@ -15,6 +15,7 @@ from fractions import Fraction
 from html import escape
 import json
 from math import atan2, ceil, cos, degrees, hypot, isclose, isfinite, pi, radians, sin
+from math import floor as math_floor
 from os import PathLike, environ
 from pathlib import Path
 import re
@@ -56,6 +57,7 @@ from drawing_sheet import DrawingSheet
 from section_outlines import add_section_outlines
 from roof_tile_patterns import add_roof_tile_patterns
 from drawing_terrain import add_terrain_overlay
+from railings import Railing, RailingPath, create_railing
 
 
 __all__ = [
@@ -75,6 +77,8 @@ __all__ = [
     "markdown_to_pdf",
     "HEXAGON_MARKER_LEADER_REACH",
     "MiakoSlab",
+    "Railing",
+    "RailingPath",
     "Roof",
     "RoofLayer",
     "RoofOpening",
@@ -8912,6 +8916,13 @@ class Drawing:
             selected.element == storey for selected in self._storeys
         )
 
+    def _includes_model_element(self, element: ifcopenshell.entity_instance) -> bool:
+        """Recognise selected-storey elements and explicit cross-storey inclusions."""
+        if self._includes_storey_element(ifcopenshell.util.element.get_container(element)):
+            return True
+        include = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Include") or ""
+        return element.GlobalId in {selector.strip() for selector in include.split("+")}
+
     def _require_plan_view(self, operation: str) -> None:
         if self.view != "plan":
             raise ValueError(f"{operation} is only supported for plan drawings")
@@ -10051,10 +10062,12 @@ class Drawing:
     ) -> Drawing:
         """Add a MIAKO beam schedule to this drawing's right-side panel.
 
-        Each row is a mapping containing ``location`` and ``slab``.  An
-        optional ``length`` in metres overrides the slab's full beam length;
-        the displayed value is rounded to millimetres.  The beam count is
-        derived from the supplied :class:`MiakoSlab`.
+        Each row contains ``location`` and ``slab``; ``slab`` may be one
+        :class:`MiakoSlab` or a nonempty sequence, e.g. ``[ceiling3a, ceiling3b]``.
+        Counts are combined for equal displayed lengths within each input
+        row; different lengths produce separate rows in first-seen order.
+        An optional ``length`` in metres overrides all supplied slab lengths.
+        Displayed lengths are rounded to millimetres.
         """
         self._require_plan_view("add_miako_beam_schedule")
         if self.right_panel_width <= 0:
@@ -10095,31 +10108,36 @@ class Drawing:
                 supplied_row["location"],
                 f"row {row_index} location",
             )
-            slab = supplied_row["slab"]
-            if not isinstance(slab, MiakoSlab):
-                raise TypeError(f"row {row_index} slab must be a MiakoSlab")
-            if slab.file is not self.house.model:
-                raise ValueError(
-                    f"row {row_index} slab must belong to this house"
-                )
-            length = _number(
-                supplied_row["length"]
-                if "length" in supplied_row
-                else slab.length,
-                f"row {row_index} length",
-            )
-            if length <= 0:
-                raise ValueError(
-                    f"row {row_index} length must be greater than zero"
-                )
-            items.append(
-                {
+            supplied_slabs = supplied_row["slab"]
+            if isinstance(supplied_slabs, MiakoSlab):
+                slabs = (supplied_slabs,)
+            elif isinstance(supplied_slabs, Sequence) and not isinstance(supplied_slabs, (str, bytes)):
+                slabs = tuple(supplied_slabs)
+                if not slabs:
+                    raise ValueError(f"row {row_index} slab sequence must not be empty")
+            else:
+                raise TypeError(f"row {row_index} slab must be a MiakoSlab or a sequence of MiakoSlab")
+            by_length: dict[int, list[MiakoSlab]] = {}
+            for slab in slabs:
+                if not isinstance(slab, MiakoSlab):
+                    raise TypeError(f"row {row_index} slab must be a MiakoSlab or a sequence of MiakoSlab")
+                if slab.file is not self.house.model:
+                    raise ValueError(f"row {row_index} slab must belong to this house")
+                length = _number(supplied_row.get("length", slab.length), f"row {row_index} length")
+                if length <= 0:
+                    raise ValueError(f"row {row_index} length must be greater than zero")
+                by_length.setdefault(round(length * 1000), []).append(slab)
+            for length_mm, group in by_length.items():
+                item = {
                     "location": location,
-                    "length": round(length * 1000),
-                    "count": len(slab.beams),
-                    "slab_guid": slab.GlobalId,
+                    "length": length_mm,
+                    "count": sum(len(slab.beams) for slab in group),
                 }
-            )
+                if len(group) == 1:
+                    item["slab_guid"] = group[0].GlobalId
+                else:
+                    item["slab_guids"] = [slab.GlobalId for slab in group]
+                items.append(item)
 
         self._right_panel_tables.append(
             {
@@ -13475,13 +13493,15 @@ class Drawing:
         positive and trim it before those ends when negative.
         ``segment_inset`` shortens the batting at both ends of every resulting
         visible segment.
+        The wall must belong to a selected storey or be explicitly included
+        with :meth:`include_element`.
         """
         self._require_plan_view("add_wall_batting")
         if not isinstance(wall, Wall):
             raise TypeError("wall must be a Wall")
         if wall.file is not self.house.model or wall.storey.house is not self.house:
             raise ValueError("wall must belong to this house")
-        if not self._includes_storey(wall.storey):
+        if not self._includes_model_element(wall):
             raise ValueError("wall storey is not included in this drawing")
         side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
         thickness = _number(thickness, "thickness")
@@ -14203,12 +14223,14 @@ class Drawing:
         pink tint; ``material="rockwool"`` draws direction-aware batting.
         All materials leave gaps for doors and windows intersected by this
         drawing's cut plane.
+        Walls from another storey are supported when explicitly included
+        with :meth:`include_element`, including projected walls below the cut.
         """
         if not isinstance(wall, Wall):
             raise TypeError("wall must be a Wall")
         if wall.file is not self.house.model or wall.storey.house is not self.house:
             raise ValueError("wall must belong to this house")
-        if not self._includes_storey(wall.storey):
+        if not self._includes_model_element(wall):
             raise ValueError("wall storey is not included in this drawing")
         thickness = _number(thickness, "thickness")
         if thickness <= 0:
@@ -16536,6 +16558,33 @@ class Stair(ifcopenshell.entity_instance):
     def element(self) -> ifcopenshell.entity_instance:
         """Return this stair as its underlying IFC entity."""
         return self
+
+    def railing_path(self, side: WallSide = "left", *, inset: Number = .03) -> RailingPath:
+        """Return an edge's world-XYZ nosing line, looking up the stairs.
+
+        ``inset`` moves the railing centreline inward from the stair edge.
+        The returned path retains actual tread heights for posts/balusters.
+        Mirroring is applied only when the house is exported.
+        """
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
+        inset = _number(inset, "inset")
+        if not 0 <= inset < self.width/2:
+            raise ValueError("inset must be non-negative and less than half the stair width")
+        dx, dy = (self.end[0]-self.start[0])/self.length, (self.end[1]-self.start[1])/self.length
+        offset = (1 if side == "left" else -1)*(self.width/2-inset)
+        start_xy = (self.start[0]-dy*offset, self.start[1]+dx*offset)
+        end_xy = (self.end[0]-dy*offset, self.end[1]+dx*offset)
+        floor_z = self.storey.elevation+self.start_height
+
+        def support_height(point):
+            run = (point[0]-self.start[0])*dx+(point[1]-self.start[1])*dy
+            if run < -1e-9:
+                return floor_z
+            step = min(self.risers, max(1, int(math_floor(run/self.tread_length+1e-9))+1))
+            return floor_z+step*self.riser_height
+
+        return RailingPath(((*start_xy, floor_z+self.riser_height),
+                            (*end_xy, self.storey.elevation+self.end_height)), support_height)
 
 
 class CustomStair(ifcopenshell.entity_instance):
@@ -20887,6 +20936,26 @@ class Storey:
             properties={"NumberOfDrafts": 1},
         )
         return chimney
+
+    def railing(
+        self, name: str, *, path: Sequence[Point3D], height: Number = 1.0,
+        post_spacing: Number = .9, infill: Literal["vertical", "none"] = "vertical",
+        material: str = "Wood", color: str | None = None,
+        post_size: Sequence[Number] = (.06, .06), handrail_size: Sequence[Number] = (.06, .04),
+        baluster_size: Sequence[Number] = (.025, .025), baluster_spacing: Number = .12,
+    ) -> Railing:
+        """Add a continuous railing along a world-XYZ base or stair pitch line.
+
+        Use ``stair.railing_path(side='left')`` to derive a stair edge and
+        actual tread supports, or pass XYZ points for landings and galleries.
+        Height is vertical to the handrail top. Spacings are maximum horizontal
+        centre distances. Shared corners have a single post. Repeat the first
+        point to close the path. The result is one ordinary IFC model element.
+        """
+        return create_railing(self, name, path=path, height=height, post_spacing=post_spacing,
+                              infill=infill, material=material, color=color, post_size=post_size,
+                              handrail_size=handrail_size, baluster_size=baluster_size,
+                              baluster_spacing=baluster_spacing)
 
     def stair_landing(
         self,
