@@ -88,6 +88,7 @@ from math import acos, degrees, isclose
 import sys, math
 import re
 import xml.etree.ElementTree as ET
+import ifcopenshell.util.placement
 from ifc_utils import *
 from shapely.geometry import Polygon, box as geometry_box
 from shapely.ops import unary_union
@@ -575,7 +576,7 @@ CHIMNEY_Y_START = HALF_DEPTH - VAZNICE_DIST - VAZNICE_HALF_BASE - 0.05 - 0.4
 CHIMNEY_Y_START = 0.125*math.floor((CHIMNEY_Y_START - 0.04 - 0.17) / 0.125) + 0.04 + 0.17
 CHIMNEY_Y_START = CHIMNEY_Y_START + 0.025 - 0.125
 
-CHIMNEY_Y_START = GALERY_START - 0.5 # override
+CHIMNEY_Y_START = GALERY_START - 0.45 # override
 
 CHIMNEY_X_START = (rafters[5][0]+0.05 + rafters[6][0]-0.05-0.08)/2 - 0.2 + RAFTER_THICKNESS/2.0
 
@@ -1040,8 +1041,8 @@ pokoj0_door = wall_gym_g.add_door(
 )
 
 # pruchod vchod
-wall_2.add_opening(
-	at=0.625,
+chodba_pruchod = wall_2.add_opening(
+	at=math.floor((CHODBA_DEPTH-1.45)/0.125)*0.125,
 	width=1.0,
 	height=GROUND_DOOR_HEIGHT,
 	sill_height=0,
@@ -4884,7 +4885,9 @@ if "ground" in sys.argv:
 	drawing1.add_lintel(front_door, 1, position="after")
 	drawing1.add_lintel(kitchen_door, 2, position="after", direction="in")
 	drawing1.add_lintel(pokoj0_door, 2, direction="in")
+	drawing1.add_lintel(chodba_pruchod, 3, direction="in")
 	drawing1.add_lintel(window_kk, 3, direction="in")
+	drawing1.add_lintel(window_kk1, 9, direction="in")
 	drawing1.add_lintel(bathroom_door, 3)
 	drawing1.add_lintel(window_chodba, 3, position="after")
 	drawing1.add_lintel(window_bathroom, 4, position="after")
@@ -4900,7 +4903,19 @@ if "ground" in sys.argv:
 	drawing1.add_opening_dimension(window_obyvak, offset=-0.6)
 	drawing1.add_opening_dimension(window_pokoj_dole, offset=-0.6)
 	drawing1.add_opening_dimension(window_kk, offset=-0.6)
+	drawing1.add_opening_dimension(window_kk1, offset=+0.6)
+	window_kk1_placement = ifcopenshell.util.placement.get_local_placement(window_kk1.ObjectPlacement)
+	window_kk1_center = (
+		window_kk1_placement[:2, 3]
+		+ window_kk1_placement[:2, 0] * window_kk1.OverallWidth / 2
+	)
+	drawing1.add_note(
+		point=tuple(window_kk1_center), angle=200, distance=1.0,
+		text="Okno s bílým\nsklem, o něco níž\nnež aktuální řez",
+		text_alignment="bottom-right",
+	)
 	drawing1.add_opening_dimension(pokoj0_door, offset=-0.5)
+	drawing1.add_opening_dimension(chodba_pruchod, offset=BWTx/2)
 	drawing1.add_opening_dimension(front_door, offset=1.5)
 	drawing1.add_opening_dimension(bathroom_door, offset=-1.25)
 
