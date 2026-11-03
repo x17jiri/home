@@ -92,7 +92,8 @@ class LowRoofRemovalTests(unittest.TestCase):
         self.assertTrue(v["wall3_x"] < v["LOWER_NADEZDIVKA_X"] < v["HOUSE_WIDTH"])
         for beam in (v["street_purlins"][1], v["garden_purlins"][1], v["beam3"], v["beam4_b"]):
             end_x = max(beam.start[0], beam.end[0])
-            inner, outer = v["west_roof_closure_x_ranges"]["Wall"]
+            inner = v["west_roof_closure_x_ranges"]["Wall"][0]
+            outer = v["west_roof_closure_x_ranges"]["Siding"][0]
             self.assertGreater(end_x, inner)
             self.assertLess(end_x, outer)
         x = v["HOUSE_WIDTH"] - .5
@@ -602,11 +603,11 @@ class LowRoofRemovalTests(unittest.TestCase):
             self.assertEqual(helper(), ())
             create.assert_not_called()
 
-    def test_west_roof_closure_has_only_siding_and_a_300mm_wall(self):
+    def test_west_roof_closure_has_siding_100mm_gap_and_175mm_vpc_wall(self):
         v = self.v
         ranges = v["west_roof_closure_x_ranges"]
         expected_widths = {
-            "Siding": v["FACADE_THICKNESS"], "Wall": .30,
+            "Siding": v["FACADE_THICKNESS"], "Air gap": .10, "Wall": .175,
         }
         self.assertEqual(set(ranges), set(expected_widths))
         np.testing.assert_allclose(ranges["Siding"],
@@ -617,22 +618,32 @@ class LowRoofRemovalTests(unittest.TestCase):
             self.assertAlmostEqual(hi, edge)
             self.assertAlmostEqual(hi-lo, thickness)
             edge = lo
+            if name == "Air gap":
+                continue  # The cavity is an empty range, not a solid covering.
             panel = v["west_closure_wall"] if name == "Wall" else v["west_roof_closure"][name]
             points = self.vertices(panel)
             np.testing.assert_allclose((points[:, 0].min(), points[:, 0].max()), (lo, hi), atol=1e-8)
             if name == "Wall":
                 self.assertTrue(panel.is_a("IfcWall"))
                 material = ifcopenshell.util.element.get_material(panel, should_skip_usage=True)
-                self.assertEqual(material.MaterialLayers[0].Material.Name, "West closure wall")
+                self.assertEqual(material.MaterialLayers[0].Material.Name, "Brick")
+                self.assertEqual(ifcopenshell.util.element.get_type(panel), v["load_bearing_wall_y"])
             else:
                 self.assertTrue(panel.is_a("IfcCovering"))
                 self.assertEqual(ifcopenshell.util.element.get_material(panel).Name,
-                                 "Wood siding" if name == "Siding" else name)
+                                 "Facade finish")
             self.assertEqual(ifcopenshell.util.element.get_container(panel),
                              v["upper"].element)
         self.assertEqual(set(v["west_roof_closure"]), {"Siding"})
         self.assertAlmostEqual(v["WEST_CLOSURE_INNER_X"], ranges["Wall"][0])
         self.assertFalse(any(material.Name == "Wood fiberboard" for material in v["house"].model.by_type("IfcMaterial")))
+
+    def test_closure_stiffening_ribs_follow_new_wall_centre(self):
+        v = self.v
+        centre_x = sum(v["west_roof_closure_x_ranges"]["Wall"])/2
+        for slab in (v["ceiling3a"], v["ceiling3b"]):
+            rib, = slab.stiffening_ribs
+            self.assertAlmostEqual(slab.start[0]+rib.at, centre_x)
 
     def test_west_roof_closure_wall_and_siding_meet_roof_profile(self):
         v = self.v

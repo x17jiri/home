@@ -77,6 +77,7 @@ __all__ = [
     "markdown_to_pdf",
     "HEXAGON_MARKER_LEADER_REACH",
     "MiakoSlab",
+    "MiakoStiffeningRib",
     "Railing",
     "RailingPath",
     "Roof",
@@ -4741,7 +4742,7 @@ SlabKind: TypeAlias = Literal[
     "USERDEFINED",
     "NOTDEFINED",
 ]
-MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow", "axis"]
+MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow", "heb180+", "heb180-", "axis"]
 
 _COLOR_NAMES = {
     "black": "#000000",
@@ -4816,7 +4817,16 @@ _MIAKO_WIDTHS = {
     "wide": 0.455,
     "narrow": 0.33,
     "axis": 0.0,
+    "heb180+": 0.18 - 2 * 0.03,
+    "heb180-": 0.18,
 }
+_MIAKO_HEB_ITEMS = {"heb180+", "heb180-"}
+# HE 180 B, ArcelorMittal Orange Book: https://orangebook.arcelormittal.com/node/16
+_HEB180_HEIGHT = 0.18
+_HEB180_WIDTH = 0.18
+_HEB180_WEB = 0.0085
+_HEB180_FLANGE = 0.014
+_HEB180_ROOT_RADIUS = 0.015
 
 
 def _name(value: str, argument: str) -> str:
@@ -16396,6 +16406,15 @@ class Chimney(ifcopenshell.entity_instance):
         return self
 
 
+@dataclass(frozen=True)
+class MiakoStiffeningRib:
+    """A transverse rib's centre, width and retained insert height, in metres."""
+
+    at: float
+    width: float
+    block_height: float
+
+
 class MiakoSlab(ifcopenshell.entity_instance):
     """A decomposed ``IfcSlab`` made from MIAKO beams, blocks, and topping."""
 
@@ -16426,6 +16445,7 @@ class MiakoSlab(ifcopenshell.entity_instance):
         blocks: tuple[ifcopenshell.entity_instance, ...],
         topping_element: ifcopenshell.entity_instance,
         expected_width: float | None = None,
+        steel_beams: tuple[ifcopenshell.entity_instance, ...] = (),
     ) -> None:
         super().__init__(element.wrapped_data, element.file)
         object.__setattr__(self, "storey", storey)
@@ -16449,14 +16469,16 @@ class MiakoSlab(ifcopenshell.entity_instance):
         object.__setattr__(self, "bottom", top - (block_height + topping))
         object.__setattr__(self, "placement", placement)
         object.__setattr__(self, "beams", beams)
+        object.__setattr__(self, "steel_beams", steel_beams)
         object.__setattr__(self, "beam_shells", beam_shells)
         object.__setattr__(self, "reinforcements", reinforcements)
         object.__setattr__(self, "blocks", blocks)
         object.__setattr__(self, "topping_element", topping_element)
+        object.__setattr__(self, "stiffening_ribs", ())
         object.__setattr__(
             self,
             "components",
-            (*beams, *beam_shells, *reinforcements, *blocks, topping_element),
+            (*beams, *steel_beams, *beam_shells, *reinforcements, *blocks, topping_element),
         )
 
     @property
@@ -16501,6 +16523,131 @@ class MiakoSlab(ifcopenshell.entity_instance):
                 )
             offset += item_width
         return tuple(centreline_endpoints)
+
+    def _subtract_steel_from_cover(self) -> None:
+        """Keep concrete and embedded steel disjoint, including after rib unions."""
+        if not self.steel_beams:
+            return
+        model = self.storey.house.model
+        builder = ShapeBuilder(model)
+        cover = ifcopenshell.util.representation.get_representation(
+            self.topping_element, "Model", "Body", "MODEL_VIEW")
+        inverse = np.linalg.inv(ifcopenshell.util.placement.get_local_placement(self.topping_element.ObjectPlacement))
+        styles = ifcopenshell.util.element.get_styles(self.topping_element)
+        boolean_ids = json.loads(ifcopenshell.util.element.get_pset(self.topping_element, "BBIM_Boolean", "Data") or "[]")
+        for steel in self.steel_beams:
+            relative = inverse @ ifcopenshell.util.placement.get_local_placement(steel.ObjectPlacement)
+            source = ifcopenshell.util.representation.resolve_representation(
+                ifcopenshell.util.representation.get_representation(steel, "Model", "Body", "MODEL_VIEW"))
+            for solid in source.Items:
+                cutter = ifcopenshell.util.element.copy_deep(model, solid)
+                position = relative @ ifcopenshell.util.placement.get_axis2placement(cutter.Position)
+                cutter.Position = builder.create_axis2_placement_3d(
+                    position=position[:3, 3], z_axis=position[:3, 2], x_axis=position[:3, 0])
+                booleans = ifcopenshell.api.geometry.add_boolean(
+                    model, first_item=cover.Items[0], second_items=[cutter], operator="DIFFERENCE")
+                boolean_ids.extend(b.id() for b in booleans)
+        cover.RepresentationType = "CSG"
+        if styles:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=cover, styles=styles)
+        pset = ifcopenshell.api.pset.add_pset(model, product=self.topping_element, name="BBIM_Boolean")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={"Data": json.dumps(boolean_ids)})
+
+    def add_stiffening_rib(
+        self, *, at: Number, width: Number = 0.25, block_height: Number = 0.08,
+    ) -> MiakoSlab:
+        """Add a transverse concrete rib over lower inserts; return this slab.
+
+        ``at`` is the rib centre measured along the beams from ``start``.
+        ``width`` is its extent along the beams. It crosses the entire slab
+        width, including both sides of an optional layout axis. ``block_height``
+        is the retained ceramic height above the slab bottom. It must be at
+        least the beam-shell height and below the normal insert height.
+
+        A rib cuts only this slab's block occurrences and extends its existing
+        concrete cover down to the lower inserts. Shared block types, beam
+        bodies, shells and beam reinforcement remain unchanged. No transverse
+        reinforcement is generated by this geometry helper. Repeated calls
+        may add distinct, non-overlapping ribs.
+        """
+        at = _number(at, "at")
+        width = _number(width, "width")
+        block_height = _number(block_height, "block_height")
+        if width <= 0:
+            raise ValueError("width must be greater than zero")
+        start, end = at-width/2, at+width/2
+        if start < -1e-9 or end > self.length+1e-9:
+            raise ValueError("stiffening rib must fit within the slab span")
+        if not self.beam_height <= block_height < self.block_height:
+            raise ValueError("block_height must be at least beam_height and less than the slab block_height")
+        if any(min(end, rib.at+rib.width/2)-max(start, rib.at-rib.width/2) > 1e-9
+               for rib in self.stiffening_ribs):
+            raise ValueError("stiffening ribs must not overlap")
+        # Clamp only roundoff at the ends, preserving the declared dimensions.
+        start, end = max(0., start), min(self.length, end)
+        model, house = self.storey.house.model, self.storey.house
+        builder = ShapeBuilder(model)
+        layout_sign = float(np.dot(self.direction, self.placement[:2, 1]))
+        y0, y1 = sorted((-layout_sign*self.width_before_axis, layout_sign*self.width_after_axis))
+        cover_height = self.block_height+self.topping-block_height
+
+        # Leave mapped type geometry intact: hosted voids trim only individual
+        # block occurrences. One shared cutter representation is in slab-local
+        # coordinates; every opening receives the slab's world placement.
+        inverse = np.linalg.inv(self.placement)
+        affected = []
+        for block in self.blocks:
+            block_placement = inverse @ ifcopenshell.util.placement.get_local_placement(block.ObjectPlacement)
+            block_start = float(block_placement[0, 3])
+            body = ifcopenshell.util.representation.get_representation(block, "Model", "Body", "MODEL_VIEW")
+            source = ifcopenshell.util.representation.resolve_representation(body)
+            block_end = block_start+source.Items[0].Depth
+            if min(end, block_end)-max(start, block_start) > 1e-9:
+                affected.append(block)
+
+        if affected:
+            cutter = builder.extrude(
+                builder.rectangle(size=(end-start, y1-y0+.1)),
+                magnitude=cover_height+.01, position=(start, y0-.05, block_height),
+            )
+            cutter_body = builder.get_representation(house._body_context, cutter)
+            for block in affected:
+                opening = ifcopenshell.api.root.create_entity(
+                    model, ifc_class="IfcOpeningElement",
+                    name=f"{self.Name} Stiffening rib {len(self.stiffening_ribs)+1} insert cut",
+                    predefined_type="OPENING",
+                )
+                ifcopenshell.api.geometry.assign_representation(model, product=opening, representation=cutter_body)
+                ifcopenshell.api.feature.add_feature(model, feature=opening, element=block)
+                ifcopenshell.api.geometry.edit_object_placement(model, product=opening, matrix=self.placement.copy(), is_si=True)
+
+        # A union keeps the rib and cover monolithic, without overlapping
+        # concrete bodies or an artificial horizontal seam in section drawings.
+        concrete = builder.extrude(
+            builder.rectangle(size=(end-start, y1-y0)),
+            magnitude=cover_height, position=(start, y0, block_height),
+        )
+        cover = ifcopenshell.util.representation.get_representation(
+            self.topping_element, "Model", "Body", "MODEL_VIEW")
+        styles = ifcopenshell.util.element.get_styles(self.topping_element)
+        booleans = ifcopenshell.api.geometry.add_boolean(
+            model, first_item=cover.Items[0], second_items=[concrete], operator="UNION")
+        cover.RepresentationType = "CSG"
+        if styles:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=cover, styles=styles)
+        previous = json.loads(ifcopenshell.util.element.get_pset(self.topping_element, "BBIM_Boolean", "Data") or "[]")
+        boolean_pset = ifcopenshell.api.pset.add_pset(model, product=self.topping_element, name="BBIM_Boolean")
+        ifcopenshell.api.pset.edit_pset(model, pset=boolean_pset,
+                                      properties={"Data": json.dumps(previous+[b.id() for b in booleans])})
+        self._subtract_steel_from_cover()
+        ribs = (*self.stiffening_ribs, MiakoStiffeningRib(at, width, block_height))
+        object.__setattr__(self, "stiffening_ribs", ribs)
+        pset = ifcopenshell.api.pset.add_pset(model, product=self, name="BBIM_MiakoSlab")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+            "StiffeningRibs": json.dumps([{"at": rib.at, "width": rib.width, "block_height": rib.block_height}
+                                         for rib in ribs]),
+        })
+        return self
 
 
 class Stair(ifcopenshell.entity_instance):
@@ -19902,6 +20049,7 @@ class Storey:
         wide_color: str | None = "blue",
         narrow_color: str | None = "green",
         concrete_color: str | None = None,
+        steel_color: str | None = "#666666",
         transparency: Number = 0,
     ) -> MiakoSlab:
         """Create a detailed MIAKO floor slab from a crosswise strip layout.
@@ -19922,9 +20070,24 @@ class Storey:
         is supplied, a warning is printed if the total width on both sides
         does not match it.
 
+        ``"heb180+"`` inserts a full-span HE 180 B steel section between two
+        ``"beam"`` items (case-insensitive, ignoring an intervening ``"axis"``).
+        Its bottom flange sits at ``beam_height``, overlapping each beam by
+        30 mm, so the item adds a 120 mm gap to the layout width.
+        ``"heb180-"`` aligns the steel bottom with the slab/beam bottoms,
+        without overlap, and adds its full 180 mm width to the layout.
+        Consecutive ``"heb180-"`` items may share a gap between flanking beams.
+        Concrete fills the HEB bays down to the slab bottom. Both profiles
+        are cut out of that concrete and must fit below
+        the slab top. Bare ``"heb180"`` is no longer accepted. Steel members
+        are exposed as ``slab.steel_beams``; ``slab.beams`` and the MIAKO
+        schedule count only the prefabricated concrete beams.
+
         ``block_start_offset`` and ``block_end_offset`` leave the respective
         ends of every block row empty while the beams continue for the full
         start-end span.  Both offsets are measured along the beams in metres.
+        Add transverse concrete ribs over lower inserts afterwards with
+        :meth:`MiakoSlab.add_stiffening_rib`.
 
         ``top`` is measured from this storey's elevation.  The whole assembly
         extends downward by ``block_height + topping``.  ``beam_height`` is
@@ -20027,6 +20190,8 @@ class Storey:
         axis_count = 0
         for index, supplied_item in enumerate(supplied_structure, start=1):
             item = _name(supplied_item, f"structure item {index}").lower()
+            if item == "heb180":
+                raise ValueError("use 'heb180+' or 'heb180-' instead of 'heb180'")
             if item not in _MIAKO_WIDTHS:
                 choices = ", ".join(_MIAKO_WIDTHS)
                 raise ValueError(
@@ -20046,9 +20211,26 @@ class Storey:
             previous_was_block = is_block
         if "beam" not in normalised_structure:
             raise ValueError("structure must contain at least one beam")
-        if not any(item in {"wide", "narrow"} for item in normalised_structure):
-            raise ValueError("structure must contain at least one block bay")
+        if not any(item in {"wide", "narrow"} | _MIAKO_HEB_ITEMS for item in normalised_structure):
+            raise ValueError("structure must contain at least one block bay or HEB180")
         structure_tuple = tuple(normalised_structure)
+        has_steel = any(item in _MIAKO_HEB_ITEMS for item in structure_tuple)
+        physical_structure = tuple(item for item in structure_tuple if item != "axis")
+        for index, item in enumerate(physical_structure):
+            if item == "heb180+" and (index == 0 or index == len(physical_structure)-1
+                or physical_structure[index-1] != "beam" or physical_structure[index+1] != "beam"):
+                raise ValueError("HEB180+ must be between two beam items")
+            if item == "heb180-" and (index == 0 or physical_structure[index-1] != "heb180-"):
+                after = index+1
+                while after < len(physical_structure) and physical_structure[after] == "heb180-":
+                    after += 1
+                if (index == 0 or after == len(physical_structure)
+                    or physical_structure[index-1] != "beam" or physical_structure[after] != "beam"):
+                    raise ValueError("HEB180- run must be between two beam items")
+            if item in _MIAKO_HEB_ITEMS:
+                steel_bottom = beam_height if item == "heb180+" else 0.
+                if steel_bottom+_HEB180_HEIGHT > block_height+topping+1e-9:
+                    raise ValueError(f"{item} must fit within block_height + topping")
         if "axis" in structure_tuple:
             axis_index = structure_tuple.index("axis")
             before_axis_structure = structure_tuple[:axis_index]
@@ -20092,6 +20274,8 @@ class Storey:
         concrete_style = self.house._surface_style(
             "slab", color=concrete_color, transparency=transparency
         )
+        steel_style = (self.house._surface_style("beam", color=steel_color, transparency=transparency)
+                       if has_steel else None)
 
         # Keep +Z upward and the placement right-handed.  The requested
         # direction is represented as a sign along the placement's local Y.
@@ -20210,6 +20394,7 @@ class Storey:
             "MIAKO reinforcement", "steel"
         )
         concrete_material = get_material("Concrete topping", "concrete")
+        steel_material = get_material("Structural steel", "steel") if has_steel else None
 
         beam_module_width = _MIAKO_WIDTHS["beam"]
         beam_bearing = 0.035
@@ -20231,6 +20416,8 @@ class Storey:
                 "beam_reinforcement",
                 "wide",
                 "narrow",
+                "heb180+",
+                "heb180-",
             ],
             component_length: float,
             component_width: float,
@@ -20252,7 +20439,11 @@ class Storey:
             if component_type is not None:
                 return component_type
 
-            if component == "beam":
+            if component in _MIAKO_HEB_ITEMS:
+                type_class = "IfcBeamType"
+                predefined_type = "BEAM"
+                type_name = f"{component.upper()}, L={component_length:.3f} m"
+            elif component == "beam":
                 type_class = "IfcBeamType"
                 predefined_type = "JOIST"
                 type_name = (
@@ -20288,7 +20479,9 @@ class Storey:
                 name=type_name,
                 predefined_type=predefined_type,
             )
-            if component in {"wide", "narrow"}:
+            if component in _MIAKO_HEB_ITEMS:
+                component_type.ElementType = "HEB180"
+            elif component in {"wide", "narrow"}:
                 component_type.ElementType = f"MIAKO {component} block"
             elif component == "beam_shell":
                 component_type.ElementType = "MIAKO beam ceramic U-shell"
@@ -20360,7 +20553,18 @@ class Storey:
                 ),
             ]
 
-            if component == "beam":
+            if component in _MIAKO_HEB_ITEMS:
+                steel_bottom = beam_height if component == "heb180+" else 0.
+                profile = model.create_entity(
+                    "IfcIShapeProfileDef", ProfileType="AREA", ProfileName="HEB180",
+                    OverallWidth=_HEB180_WIDTH, OverallDepth=_HEB180_HEIGHT,
+                    WebThickness=_HEB180_WEB, FlangeThickness=_HEB180_FLANGE,
+                    FilletRadius=_HEB180_ROOT_RADIUS,
+                )
+                solids = [builder.extrude(profile, magnitude=component_length,
+                    position=(0., signed_component_width/2, steel_bottom+_HEB180_HEIGHT/2),
+                    position_z_axis=(1., 0., 0.), position_x_axis=(0., 1., 0.))]
+            elif component == "beam":
                 # The precast concrete beam body only fills the ceramic
                 # U-shell.  The cast-in-place cover supplies the narrower rib
                 # above it, leaving a real material boundary at shell height.
@@ -20504,6 +20708,7 @@ class Storey:
         components: list[ifcopenshell.entity_instance] = []
         component_placements: list[np.ndarray] = []
         beams: list[ifcopenshell.entity_instance] = []
+        steel_beams: list[ifcopenshell.entity_instance] = []
         beam_shells: list[ifcopenshell.entity_instance] = []
         reinforcements: list[ifcopenshell.entity_instance] = []
         blocks: list[ifcopenshell.entity_instance] = []
@@ -20603,6 +20808,17 @@ class Storey:
                         beam_placement.copy(),
                     )
                 )
+            elif item in _MIAKO_HEB_ITEMS:
+                steel = ifcopenshell.api.root.create_entity(model, ifc_class="IfcBeam",
+                    name=f"{slab_name} {item.upper()} {len(steel_beams)+1}", predefined_type="BEAM")
+                steel.ObjectType = item.upper()
+                steel_type = get_component_type(component=item, component_length=length,
+                    component_width=item_width, component_height=_HEB180_HEIGHT,
+                    style=steel_style, material=steel_material)
+                ifcopenshell.api.type.assign_type(model, related_objects=[steel], relating_type=steel_type)
+                steel_beams.append(steel)
+                components.append(steel)
+                component_placements.append(component_placement(0., signed_offset, 0.))
             else:
                 bay_number += 1
                 block_lengths = [block_length] * full_block_count
@@ -20655,13 +20871,13 @@ class Storey:
         # Create the cover as one continuous comb-shaped section.  Its lower
         # face is at block height over every ceramic bay, but drops to the top
         # of each 60 mm beam body through the concrete stem.  Consecutive
-        # beams share one stem, and stems reach the slab boundary at exposed
+        # beams and HEB bays share one stem. HEB gaps drop to the slab bottom,
+        # while beam strips stop at the precast bodies; steel is subtracted
+        # afterwards.
+        # Stems reach the slab boundary at exposed
         # first/last beams; the 35 mm inset exists only beside a block bearing.
         # A single profile avoids an artificial horizontal joint at block
         # height.
-        physical_structure = tuple(
-            item for item in structure_tuple if item != "axis"
-        )
         cover_bottom_points: list[tuple[float, float]] = [
             (signed_before_axis, block_height)
         ]
@@ -20669,18 +20885,28 @@ class Storey:
         item_index = 0
         while item_index < len(physical_structure):
             item = physical_structure[item_index]
-            if item != "beam":
+            if item not in {"beam"} | _MIAKO_HEB_ITEMS:
                 cover_offset += _MIAKO_WIDTHS[item]
                 item_index += 1
                 continue
 
             run_start = cover_offset
             run_starts_at_slab_edge = item_index == 0
+            steel_gaps: list[tuple[float, float]] = []
             while (
                 item_index < len(physical_structure)
-                and physical_structure[item_index] == "beam"
+                and physical_structure[item_index] in {"beam"} | _MIAKO_HEB_ITEMS
             ):
-                cover_offset += _MIAKO_WIDTHS["beam"]
+                current_item = physical_structure[item_index]
+                item_start = cover_offset
+                cover_offset += _MIAKO_WIDTHS[current_item]
+                if current_item in _MIAKO_HEB_ITEMS:
+                    # Consecutive HEBs share a bottom face. Do not trace up
+                    # and down again at their common edge (an invalid wire).
+                    if steel_gaps and isclose(steel_gaps[-1][1], item_start, rel_tol=0, abs_tol=1e-9):
+                        steel_gaps[-1] = (steel_gaps[-1][0], cover_offset)
+                    else:
+                        steel_gaps.append((item_start, cover_offset))
                 item_index += 1
             run_end = cover_offset
             run_ends_at_slab_edge = item_index == len(physical_structure)
@@ -20690,16 +20916,26 @@ class Storey:
             stem_end = run_end - (
                 0.0 if run_ends_at_slab_edge else beam_bearing
             )
-            for point in (
+            stem_points = [
                 (layout_sign * stem_start, block_height),
                 (layout_sign * stem_start, beam_height),
+            ]
+            for gap_start, gap_end in steel_gaps:
+                stem_points.extend((
+                    (layout_sign * gap_start, beam_height),
+                    (layout_sign * gap_start, 0.),
+                    (layout_sign * gap_end, 0.),
+                    (layout_sign * gap_end, beam_height),
+                ))
+            stem_points.extend((
                 (layout_sign * stem_end, beam_height),
                 (layout_sign * stem_end, block_height),
-            ):
-                if point != cover_bottom_points[-1]:
+            ))
+            for point in stem_points:
+                if not np.allclose(point, cover_bottom_points[-1], rtol=0, atol=1e-9):
                     cover_bottom_points.append(point)
         final_bottom_point = (signed_after_axis, block_height)
-        if final_bottom_point != cover_bottom_points[-1]:
+        if not np.allclose(final_bottom_point, cover_bottom_points[-1], rtol=0, atol=1e-9):
             cover_bottom_points.append(final_bottom_point)
         cover_profile_points = [
             *cover_bottom_points,
@@ -20759,7 +20995,7 @@ class Storey:
                 is_si=True,
             )
 
-        return MiakoSlab(
+        slab = MiakoSlab(
             slab_element,
             self,
             start=(start_x, start_y),
@@ -20780,11 +21016,14 @@ class Storey:
             topping=topping,
             placement=placement,
             beams=tuple(beams),
+            steel_beams=tuple(steel_beams),
             beam_shells=tuple(beam_shells),
             reinforcements=tuple(reinforcements),
             blocks=tuple(blocks),
             topping_element=topping_element,
         )
+        slab._subtract_steel_from_cover()
+        return slab
 
     def chimney(
         self,

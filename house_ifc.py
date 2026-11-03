@@ -449,14 +449,14 @@ dry_wall = house.wall_type(
 
 HOUSE_DEPTH = 8.00
 HALF_DEPTH = HOUSE_DEPTH / 2.0
-KITCHEN_WIDTH = 4.47
-KK_WIDTH = 2.55
+KITCHEN_WIDTH = 4.49
+KK_WIDTH = 2.49
 
 wall1_start = 0
 wall1_end = wall1_start + BWTx
 wall1_mid = (wall1_start + wall1_end) / 2.0
 wall1_x = wall1_end
-wall2_start = wall1_end + 3.75-0.48
+wall2_start = wall1_end + 3.24
 wall2_end = wall2_start + BWTx
 wall2_mid = (wall2_start + wall2_end) / 2.0
 wall2_x = wall2_end
@@ -475,15 +475,18 @@ if not wall3_x < LOWER_NADEZDIVKA_X < HOUSE_WIDTH:
 FACADE_MATERIAL_SPLIT_X = LOWER_NADEZDIVKA_X - 0.05
 
 
-WEST_CLOSURE_WALL_THICKNESS = 0.30
+WEST_CLOSURE_WALL_THICKNESS = BWTy  # VPC 175 mm, matching load_bearing_wall_y.
+WEST_CLOSURE_AIR_GAP = 0.12
 
 
 def west_roof_closure_layout():
 	"""Shared siding/wall positions, including the finished inner room boundary."""
 	siding_outer_x = LOWER_NADEZDIVKA_X - 0.03
-	wall_outer_x = siding_outer_x - FACADE_THICKNESS
+	siding_inner_x = siding_outer_x - FACADE_THICKNESS
+	wall_outer_x = siding_inner_x - WEST_CLOSURE_AIR_GAP
 	return {
-		"Siding": (wall_outer_x, siding_outer_x),
+		"Siding": (siding_inner_x, siding_outer_x),
+		"Air gap": (wall_outer_x, siding_inner_x),
 		"Wall": (wall_outer_x-WEST_CLOSURE_WALL_THICKNESS, wall_outer_x),
 	}
 
@@ -1250,69 +1253,63 @@ ground.asset(
 )
 
 # MIAKO
+ceiling1a_y = BWTy+GYM_DEPTH+0.175+(HOUSE_DEPTH-(BWTy+GYM_DEPTH+0.175+BWTy))/2.0
 ceiling1a = upper.miako_slab(
     "Ceiling 1 a",
-    start=(wall1_start, HOUSE_DEPTH-BWTy+0.01),
-    end=(wall2_end, HOUSE_DEPTH-BWTy+0.01),
+    start=(wall1_end-0.13, ceiling1a_y - 0.17/2.0),
+    end=(wall2_start+0.13, ceiling1a_y - 0.17/2.0),
     top=0,
-	topping=0.01,#0.06,
+	topping=0.06,
 	beam_height=0.06,
-	block_height=CEILING_THICKNESS,#-0.06,
-    direction=(0, -1),
-	block_start_offset=0.125,
-    block_end_offset=0.125,
-	structure=[
-		"beam",
-		"narrow", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"narrow", "beam",
-		],
-)
-ceiling1b = upper.miako_slab(
-    "Ceiling 1 b",
-    start=(wall1_start, BWTy-0.01),
-    end=(wall2_end, BWTy-0.01),
-    top=0,
-	topping=0.01,#0.06,
-	beam_height=0.06,
-	block_height=CEILING_THICKNESS,#-0.06,
+	block_height=CEILING_THICKNESS-0.06,
     direction=(0, 1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
 	structure=[
-		"beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
+		"beam", "narrow", "beam",
+		"wide", "beam", "wide", "beam", "wide",
+		"axis", "beam",
+		"wide", "beam", "wide", "beam", "wide",
+		"beam", "narrow", "beam",
 		],
 )
-MIDDLE_CEILING_BEAM_LENGTH = 5.25
-MIDDLE_CEILING_WIDTH = 4.34
-middle_ceiling_x = (wall2_end + wall3_start - MIDDLE_CEILING_WIDTH) / 2
+ceiling1b_y = BWTy+GYM_DEPTH/2.0
+ceiling1b = upper.miako_slab(
+    "Ceiling 1 b",
+    start=(wall1_end-0.13, ceiling1b_y - 0.17/2.0),
+    end=(wall2_start+0.13, ceiling1b_y - 0.17/2.0),
+    top=0,
+	topping=0.06,
+	beam_height=0.06,
+	block_height=CEILING_THICKNESS-0.06,
+    direction=(0, 1),
+	block_start_offset=0.125,
+    block_end_offset=0.125,
+	structure=[
+		"beam", "wide", "beam",
+		"wide",
+		"axis", "beam",
+		"wide",
+		"beam", "wide", "beam",
+		],
+)
+ceiling2_y = GALERY_END+0.05
 ceiling2 = upper.miako_slab(
     "Ceiling 2",
-    start=(middle_ceiling_x, HOUSE_DEPTH),
-    end=(middle_ceiling_x, HOUSE_DEPTH-MIDDLE_CEILING_BEAM_LENGTH),
+    start=(wall2_end-0.13, ceiling2_y - 0.17/2.0),
+    end=(wall3_start+0.13, ceiling2_y - 0.17/2.0),
     top=0,
-	topping=0.01,#0.06,
+	topping=0.06,
 	beam_height=0.06,
-	block_height=CEILING_THICKNESS,#-0.06,
-    direction=(1, 0),
-    expected_width=MIDDLE_CEILING_WIDTH,
-	block_start_offset=wall_back_g.thickness,
-    block_end_offset=wall_kitchen_3.thickness,
+	block_height=CEILING_THICKNESS-0.06,
+    direction=(0, 1),
+	block_start_offset=0.13,
+    block_end_offset=0.13,
     structure=[
-		"beam", "narrow",
-		"beam", "narrow",
-		"beam", "narrow",
-		"beam", "narrow",
-		"beam", "beam",
+		"beam", "narrow", "beam", "axis", "beam", "beam",
+		"narrow", "beam",
+		"narrow", "beam",
+		"narrow", "beam",
 		"narrow", "beam",
 		"narrow", "beam",
 		"narrow", "beam",
@@ -1322,45 +1319,80 @@ ceiling2 = upper.miako_slab(
 
 ceiling3a = upper.miako_slab(
     "Ceiling 3 a",
-    start=(wall3_x-0.225, HOUSE_DEPTH-BWTy+0.01),
-    end=(wall4_start+0.225, HOUSE_DEPTH-BWTy+0.01),
+    start=(wall3_end-0.13, HOUSE_DEPTH-BWTy-BATHROOM_DEPTH-0.175/2.0),
+    end=(wall4_start+0.13, HOUSE_DEPTH-BWTy-BATHROOM_DEPTH-0.175/2.0),
     top=0,
-	topping=0.01,#0.06,
+	topping=0.06,
 	beam_height=0.06,
-	block_height=CEILING_THICKNESS,#-0.06,
+	block_height=CEILING_THICKNESS-0.06,
     direction=(0, -1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
     structure=[
 		"beam",
-		"narrow", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"narrow", "beam",
+		"narrow",
+		"beam",
+		"beam",
+		"beam",
+		"narrow",
+		"beam",
+		"beam",
+		"beam",
+		"narrow",
+		"beam",
+		"heb180-",
+		"axis",
+		"heb180-",
+		"beam",
+		"narrow",
+		"beam",
+		"beam",
+		"narrow",
+		"beam",
+		"beam",
+		"narrow",
+		"beam",
 		],
 )
 ceiling3b = upper.miako_slab(
     "Ceiling 3 b",
-    start=(wall3_x-0.225, BWTy-0.01),
-    end=(wall4_start+0.225, BWTy-0.01),
+    start=(wall3_end-0.13, BWTy+BATHROOM_DEPTH/2.0),
+    end=(wall4_start+0.13, BWTy+BATHROOM_DEPTH/2.0),
     top=0,
-	topping=0.01,#0.06,
+	topping=0.06,
 	beam_height=0.06,
-	block_height=CEILING_THICKNESS,#-0.06,
+	block_height=CEILING_THICKNESS-0.06,
     direction=(0, 1),
 	block_start_offset=0.125,
     block_end_offset=0.125,
     structure=[
 		"beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
-		"wide", "beam",
+		"narrow",
+		"beam",
+		"beam",
+		"narrow",
+		"beam",
+		"axis",
+		"beam",
+		"narrow",
+		"beam",
+		"beam",
+		"narrow",
+		"beam",
 		],
+)
+
+stiffening_rib_x = WEST_CLOSURE_INNER_X
+print("stiffening_rib_x = ", stiffening_rib_x  - wall3_end)
+ceiling3a.add_stiffening_rib(
+    at=stiffening_rib_x+(0.175/2.0)-(wall3_end-0.13),
+    width=0.25,
+    block_height=0.08,
+)
+ceiling3b.add_stiffening_rib(
+    at=stiffening_rib_x+(0.175/2.0)-(wall3_end-0.13),
+    width=0.25,
+    block_height=0.08,
 )
 
 upper_pokoj_1 = upper.floor_layer(
@@ -3301,7 +3333,7 @@ WEST_CLOSURE_WINDOW_SILL_HEIGHT = 1.5  # Above the finished upper floor.
 
 
 def add_west_roof_closure():
-	"""One 300 mm window-bearing gable wall with white exterior siding."""
+	"""A VPC 175 mm gable wall, 100 mm air gap and white exterior siding."""
 	y0 = -FACADE_INSULATION_THICKNESS - FACADE_THICKNESS + 0.001
 	y1 = HOUSE_DEPTH + FACADE_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
 	z0 = UPPER_FLOOR_START
@@ -3317,18 +3349,13 @@ def add_west_roof_closure():
 	if not profile.is_valid or profile.area <= 0:
 		raise ValueError("west closure must have one continuous profile above the upper slab")
 	_, wall_outer_x = ranges["Wall"]
-	wall_type = house.wall_type(
-		"West closure wall",
-		layers=[("West closure wall", WEST_CLOSURE_WALL_THICKNESS), "axis"],
-		color="#ffffff",
-	)
 	wall = upper.wall(
-		(wall_outer_x, y0), (wall_outer_x, y1), wall_type=wall_type,
+		(wall_outer_x, y0), (wall_outer_x, y1), wall_type=load_bearing_wall_y,
 		height=profile.bounds[3]-z0,
 		cuts=(street_top, garden_top),
 	)
 	wall.Name = "West roof closure - wall"
-	wall.Description = "Single 300 mm upper-floor gable wall with exterior siding"
+	wall.Description = "VPC 175 mm upper-floor gable wall with 100 mm air gap behind exterior siding"
 	sill = UPPER_FLOOR_THICKNESS + WEST_CLOSURE_WINDOW_SILL_HEIGHT
 	window_y0 = WEST_CLOSURE_WINDOW_CENTER_Y - WEST_CLOSURE_WINDOW_WIDTH / 2
 	window_rectangle = geometry_box(
@@ -3345,7 +3372,7 @@ def add_west_roof_closure():
 	if not profile.exterior.is_ccw:
 		points.reverse()
 	siding = house.add_facade_layer(
-		wall, name="West roof closure - Siding", side="right", offset=0, thickness=FACADE_THICKNESS,
+		wall, name="West roof closure - Siding", side="right", offset=WEST_CLOSURE_AIR_GAP, thickness=FACADE_THICKNESS,
 		start_height=0, height=profile.bounds[3]-z0,
 		outline=tuple((y-y0, z-z0) for y, z in points),
 #		material="Wood siding", color=wood_siding_color(patterned=True),
@@ -5588,7 +5615,7 @@ if "ceiling" in sys.argv:
 		"Drawing 2",
 		x=HOUSE_WIDTH/2,
 		y=HOUSE_DEPTH/2,
-		z=ground_floor_height+0.04,
+		z=ground_floor_height+0.1,
 		radius=8.5,
 		storeys=[upper],
 		door_annotations=False,
