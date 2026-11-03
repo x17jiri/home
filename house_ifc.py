@@ -472,13 +472,13 @@ wall4_x = wall4_end
 HOUSE_WIDTH = wall4_end
 # Outer face of the closure masonry, also the end of the upper knee walls.
 # Previously the parameter marked a roof boundary 155 mm farther out.
-LOWER_NADEZDIVKA_X = wall3_x + 1.28
+LOWER_NADEZDIVKA_X = wall3_x + 1.34
 if not wall3_x < LOWER_NADEZDIVKA_X < HOUSE_WIDTH:
 	raise ValueError("LOWER_NADEZDIVKA_X must be between wall3 and wall4")
 
 
 WEST_CLOSURE_WALL_THICKNESS = BWTy  # VPC 175 mm, matching load_bearing_wall_y.
-WEST_CLOSURE_AIR_GAP = 0.12
+WEST_CLOSURE_AIR_GAP = 0.14
 FACADE_MATERIAL_SPLIT_X = LOWER_NADEZDIVKA_X + WEST_CLOSURE_AIR_GAP
 WEST_CLOSURE_OVERHANG = (
 	ROOF_X_OVERHANG
@@ -715,7 +715,7 @@ front_door = wall_1_g.add_door(
 # Front windows
 #koupelna
 window_bathroom = wall_front_g.add_window(
-	at=wall4_start-1.0, width=0.5,
+	at=wall4_end-1.0, width=0.5,
 	sill_height=GROUND_WINDOW_HEIGHT-0.75,
 	height=GROUND_WINDOW_HEIGHT)
 # chodba
