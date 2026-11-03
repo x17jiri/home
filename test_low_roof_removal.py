@@ -85,7 +85,7 @@ class LowRoofRemovalTests(unittest.TestCase):
                        *v["collar_ties"], *v["purlin_spacers"], *v["exterior_counter_battens"]):
             if getattr(member, "roof_plane", None) is v["transverse_roof"]:
                 continue
-            self.assertLess(self.vertices(member)[:, 0].max(), v["LOWER_NADEZDIVKA_X"] + .3)
+            self.assertLess(self.vertices(member)[:, 0].max(), v["LOWER_NADEZDIVKA_X"] + .455)
 
     def test_high_roof_boundary_and_support_endpoints_meet_the_closure(self):
         v = self.v
@@ -295,7 +295,7 @@ class LowRoofRemovalTests(unittest.TestCase):
         v = self.v
         beam = v["transverse_purlin"]
         top = v["UPPER_FLOOR_START"] + v["TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR"]
-        x = v["LOWER_NADEZDIVKA_X"] + .125
+        x = v["LOWER_NADEZDIVKA_X"] + .280
         self.assertEqual((beam.width, beam.height), (v["VAZNICE_SIDE_BASE"], v["VAZNICE_SIDE_HEIGHT"]))
         self.assertEqual(beam.kind, "BEAM")
         self.assertAlmostEqual(beam.start[0], x)
@@ -336,11 +336,11 @@ class LowRoofRemovalTests(unittest.TestCase):
         }):
             purlin, plate = helper()
         self.assertEqual((purlin.width, purlin.height), (.18, .3))
-        self.assertAlmostEqual(purlin.start[0], v["LOWER_NADEZDIVKA_X"]+.2+.125)
+        self.assertAlmostEqual(purlin.start[0], v["LOWER_NADEZDIVKA_X"]+.2+.280)
         self.assertAlmostEqual(self.vertices(purlin)[:, 2].max(), v["UPPER_FLOOR_START"]+1.8)
         np.testing.assert_allclose(plate.start, v["transverse_wall_plate"].start)
         np.testing.assert_allclose(plate.end, v["transverse_wall_plate"].end)
-        self.assertAlmostEqual(v["transverse_purlin"].start[0], v["LOWER_NADEZDIVKA_X"]+.125)
+        self.assertAlmostEqual(v["transverse_purlin"].start[0], v["LOWER_NADEZDIVKA_X"]+.280)
 
     def test_transverse_support_validation_happens_before_creating_beams(self):
         v = self.v
@@ -468,7 +468,7 @@ class LowRoofRemovalTests(unittest.TestCase):
     def test_transverse_rafters_have_exact_high_cut_and_both_shared_eave_cuts(self):
         v = self.v
         plane = v["transverse_roof"]
-        high_x = v["LOWER_NADEZDIVKA_X"]
+        high_x = v["LOWER_NADEZDIVKA_X"] + .155
         eave_x = v["TRANSVERSE_ROOF_EAVE_X"] - v["ROOF_EAVE_SETBACK"]
         cut_z = v["plane_height_at"](*plane.points,
             x=v["HOUSE_WIDTH"]+v["TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET"], y=0
@@ -505,7 +505,7 @@ class LowRoofRemovalTests(unittest.TestCase):
                     lo, hi = helper(plane, offset, eave_setback=True)
                     first = plane.to_world((0, lo, offset))
                     last = plane.to_world((0, hi, offset))
-                    self.assertAlmostEqual(first[0], v["LOWER_NADEZDIVKA_X"])
+                    self.assertAlmostEqual(first[0], v["LOWER_NADEZDIVKA_X"] + .155)
                     self.assertLessEqual(last[0], v["TRANSVERSE_ROOF_EAVE_X"]-inset+1e-7)
                     self.assertGreaterEqual(last[2], plane.cuts[1][0][2]-1e-7)
                     self.assertTrue(abs(last[0]-(v["TRANSVERSE_ROOF_EAVE_X"]-inset)) < 1e-7
@@ -533,7 +533,7 @@ class LowRoofRemovalTests(unittest.TestCase):
                 np.testing.assert_allclose((points[:, 1].min(), points[:, 1].max()),
                     (-v["TRANSVERSE_ROOF_Y_OVERHANG"] + inset,
                      v["HOUSE_DEPTH"] + v["TRANSVERSE_ROOF_Y_OVERHANG"] - inset), atol=1e-8)
-                self.assertAlmostEqual(points[:, 0].min(), v["LOWER_NADEZDIVKA_X"])
+                self.assertAlmostEqual(points[:, 0].min(), v["LOWER_NADEZDIVKA_X"] + .155)
                 self.assertLessEqual(points[:, 0].max(), v["TRANSVERSE_ROOF_EAVE_X"]-inset+1e-7)
                 self.assertGreaterEqual(points[:, 2].min(), plane.cuts[1][0][2]-1e-7)
                 local = np.asarray([plane.to_local(point) for point in points])
@@ -560,7 +560,7 @@ class LowRoofRemovalTests(unittest.TestCase):
         for beam in (*counters, *tiles):
             with self.subTest(beam=beam.Name):
                 points = self.vertices(beam)
-                self.assertGreaterEqual(points[:, 0].min(), v["LOWER_NADEZDIVKA_X"]-1e-7)
+                self.assertGreaterEqual(points[:, 0].min(), v["LOWER_NADEZDIVKA_X"]+.155-1e-7)
                 self.assertLessEqual(points[:, 0].max(), v["TRANSVERSE_ROOF_EAVE_X"]-v["ROOF_EAVE_SETBACK"]+1e-7)
                 self.assertGreaterEqual(points[:, 2].min(), plane.cuts[1][0][2]-1e-7)
         for batten in tiles:
@@ -575,7 +575,7 @@ class LowRoofRemovalTests(unittest.TestCase):
         plane = v["transverse_roof"]
         inset = v["ROOF_EAVE_SETBACK"]
         y0, y1 = -v["TRANSVERSE_ROOF_Y_OVERHANG"], v["HOUSE_DEPTH"]+v["TRANSVERSE_ROOF_Y_OVERHANG"]
-        x0, x1 = v["LOWER_NADEZDIVKA_X"], v["TRANSVERSE_ROOF_EAVE_X"]
+        x0, x1 = v["LOWER_NADEZDIVKA_X"] + .155, v["TRANSVERSE_ROOF_EAVE_X"]
         tiles, = [layer for layer in plane.elements
                   if hasattr(layer, "material_name") and layer.material_name == "Roof tiles"]
         top = v["offset_plane"](*plane.points, offset=tiles.z_offset)
@@ -603,15 +603,15 @@ class LowRoofRemovalTests(unittest.TestCase):
             self.assertEqual(helper(), ())
             create.assert_not_called()
 
-    def test_west_roof_closure_has_siding_100mm_gap_and_175mm_vpc_wall(self):
+    def test_west_roof_closure_has_siding_gap_and_175mm_vpc_wall(self):
         v = self.v
         ranges = v["west_roof_closure_x_ranges"]
         expected_widths = {
-            "Siding": v["FACADE_THICKNESS"], "Air gap": .10, "Wall": .175,
+            "Siding": v["FACADE_THICKNESS"], "Air gap": v["WEST_CLOSURE_AIR_GAP"], "Wall": .175,
         }
         self.assertEqual(set(ranges), set(expected_widths))
         np.testing.assert_allclose(ranges["Siding"],
-                                   (v["LOWER_NADEZDIVKA_X"]-.03-v["FACADE_THICKNESS"], v["LOWER_NADEZDIVKA_X"]-.03))
+                                   (v["LOWER_NADEZDIVKA_X"]+v["WEST_CLOSURE_AIR_GAP"], v["LOWER_NADEZDIVKA_X"]+v["WEST_CLOSURE_AIR_GAP"]+v["FACADE_THICKNESS"]))
         edge = ranges["Siding"][1]
         for name, thickness in expected_widths.items():
             lo, hi = ranges[name]
@@ -625,15 +625,20 @@ class LowRoofRemovalTests(unittest.TestCase):
             np.testing.assert_allclose((points[:, 0].min(), points[:, 0].max()), (lo, hi), atol=1e-8)
             if name == "Wall":
                 self.assertTrue(panel.is_a("IfcWall"))
+                np.testing.assert_allclose((points[:, 1].min(), points[:, 1].max()),
+                                           (v["BWTy"], v["HOUSE_DEPTH"]-v["BWTy"]))
                 material = ifcopenshell.util.element.get_material(panel, should_skip_usage=True)
                 self.assertEqual(material.MaterialLayers[0].Material.Name, "Brick")
                 self.assertEqual(ifcopenshell.util.element.get_type(panel), v["load_bearing_wall_y"])
             else:
                 self.assertTrue(panel.is_a("IfcCovering"))
+                np.testing.assert_allclose((points[:, 1].min(), points[:, 1].max()),
+                    (-v["FACADE_INSULATION_THICKNESS"]-v["FACADE_THICKNESS"]+.001,
+                     v["HOUSE_DEPTH"]+v["FACADE_INSULATION_THICKNESS"]+v["FACADE_THICKNESS"]-.001))
                 self.assertEqual(ifcopenshell.util.element.get_material(panel).Name,
                                  "Facade finish")
             self.assertEqual(ifcopenshell.util.element.get_container(panel),
-                             v["upper"].element)
+                             (v["upper"] if name == "Wall" else v["facade_storey"]).element)
         self.assertEqual(set(v["west_roof_closure"]), {"Siding"})
         self.assertAlmostEqual(v["WEST_CLOSURE_INNER_X"], ranges["Wall"][0])
         self.assertFalse(any(material.Name == "Wood fiberboard" for material in v["house"].model.by_type("IfcMaterial")))
@@ -647,23 +652,44 @@ class LowRoofRemovalTests(unittest.TestCase):
 
     def test_west_roof_closure_wall_and_siding_meet_roof_profile(self):
         v = self.v
+        self.assertEqual(v["west_closure_wall"].cuts, v["wall_1_u"].cuts)
+        self.assertAlmostEqual(self.vertices(v["west_closure_wall"])[:, 2].max(),
+                               self.vertices(v["wall_1_u"])[:, 2].max())
+        self.assertAlmostEqual(self.vertices(v["west_roof_closure"]["Siding"])[:, 2].max(),
+                               self.vertices(v["east_facade"][0])[:, 2].max())
         for name, panel in (
             ("Siding", v["west_roof_closure"]["Siding"]),
             ("Wall", v["west_closure_wall"]),
         ):
             with self.subTest(layer=name):
                 points = self.vertices(panel)
-                self.assertAlmostEqual(points[:, 2].min(), v["UPPER_FLOOR_START"])
+                expected_bottom = (v["UPPER_FLOOR_START"] if name == "Siding"
+                    else max(self.vertices(g)[:, 2].max() for g in v["WEST_CLOSURE_SUPPORT_GIRDERS"]))
+                self.assertAlmostEqual(points[:, 2].min(), expected_bottom)
                 for x, y, z in points:
                     plane = v["street_roof"] if y <= v["HALF_DEPTH"] else v["garden_roof"]
-                    top = v["offset_plane"](*plane.points, offset=v["MDF_BOTTOM"])
+                    top = v["offset_plane"](*plane.points, offset=v["RAFTER_Z_OFFSET"])
                     self.assertLessEqual(z, v["plane_height_at"](*top, x=x, y=y)+1e-7)
                 for y in (points[:, 1].min(), points[:, 1].max()):
                     edge = points[np.isclose(points[:, 1], y)]
                     plane = v["street_roof"] if y < v["HALF_DEPTH"] else v["garden_roof"]
-                    top = v["offset_plane"](*plane.points, offset=v["MDF_BOTTOM"])
+                    top = v["offset_plane"](*plane.points, offset=v["RAFTER_Z_OFFSET"])
                     self.assertAlmostEqual(edge[:, 2].max(),
                         v["plane_height_at"](*top, x=edge[0, 0], y=y))
+
+    def test_west_closure_wall_bottom_meets_all_three_girder_tops(self):
+        v = self.v
+        wall = v["west_closure_wall"]
+        wall_bottom = self.vertices(wall)[:, 2].min()
+        supports = (v["pruvlak31x"], v["pruvlak32x"], v["pruvlak33x"])
+        self.assertEqual(v["WEST_CLOSURE_SUPPORT_GIRDERS"], supports)
+        for support in supports:
+            self.assertAlmostEqual(wall_bottom, self.vertices(support)[:, 2].max())
+        self.assertAlmostEqual(wall.start_height, .30)
+        self.assertAlmostEqual(wall_bottom, v["UPPER_FLOOR_START"]+.30)
+        # The outer covering continues down in front of the supporting concrete.
+        self.assertAlmostEqual(self.vertices(v["west_roof_closure"]["Siding"])[:, 2].min(),
+                               v["UPPER_FLOOR_START"])
 
     def test_west_roof_closure_is_visible_and_mirrors_once(self):
         v = self.v

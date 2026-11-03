@@ -58,6 +58,7 @@ from section_outlines import add_section_outlines
 from roof_tile_patterns import add_roof_tile_patterns
 from drawing_terrain import add_terrain_overlay
 from railings import Railing, RailingPath, create_railing
+from steel_profiles import HEBSection, heb_section, heb_profile
 
 
 __all__ = [
@@ -72,6 +73,7 @@ __all__ = [
     "ElektroLineDrawer",
     "FacadeLayer",
     "FloorLayer",
+    "Girder",
     "HorizontalFrame",
     "House",
     "markdown_to_pdf",
@@ -4821,12 +4823,7 @@ _MIAKO_WIDTHS = {
     "heb180-": 0.18,
 }
 _MIAKO_HEB_ITEMS = {"heb180+", "heb180-"}
-# HE 180 B, ArcelorMittal Orange Book: https://orangebook.arcelormittal.com/node/16
-_HEB180_HEIGHT = 0.18
-_HEB180_WIDTH = 0.18
-_HEB180_WEB = 0.0085
-_HEB180_FLANGE = 0.014
-_HEB180_ROOT_RADIUS = 0.015
+_HEB180_HEIGHT = heb_section(180).height
 
 
 def _name(value: str, argument: str) -> str:
@@ -7671,6 +7668,7 @@ class House:
         start_height: Number | None = None,
         height: Number | None = None,
         outline: Sequence[Point] | None = None,
+        cuts: Sequence[PlaneCut] | None = None,
         start_extension: Number = 0,
         end_extension: Number = 0,
         material: str = "Cementovlaknita deska",
@@ -7700,7 +7698,9 @@ class House:
         ``outline`` optionally defines one continuous, possibly stepped face
         as (along, height) points relative to the covering's start and bottom.
         Points must lie inside its length/height bounds. Omitting it retains
-        the rectangular covering. Openings and host-wall cuts work in either case.
+        the rectangular covering. Openings and cuts work in either case.
+        ``cuts=None`` inherits the host-wall cuts; an explicit sequence replaces
+        them, and an empty sequence disables them for this covering.
         """
         if not isinstance(wall, Wall):
             raise TypeError("wall must be a Wall created by Storey.wall")
@@ -7715,6 +7715,7 @@ class House:
             raise ValueError("offset must not be negative")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
+        resolved_cuts = wall.cuts if cuts is None else _plane_cuts(cuts)
         #if start_extension < 0:
         #    raise ValueError("start_extension must not be negative")
         #if end_extension < 0:
@@ -7939,7 +7940,7 @@ class House:
             inside = outline_polygon.representative_point()
             retained = (inside.x, body_offset + thickness / 2, inside.y)
         clippings = _local_clippings(
-            wall.cuts,
+            resolved_cuts,
             placement,
             retained,
         )
@@ -8868,6 +8869,21 @@ class Drawing:
             properties=drawing_properties,
         )
 
+        # Facade visibility storeys organise the 3D model. In drawings the
+        # finishes still follow the physical storey of their host wall.
+        if not self._includes_all_storeys:
+            for layer in model.by_type("IfcCovering"):
+                if layer.ObjectType != "FACADE_CLADDING":
+                    continue
+                container = ifcopenshell.util.element.get_container(layer)
+                if container is None or container.ObjectType != "FACADE_LAYER":
+                    continue
+                host_guid = ifcopenshell.util.element.get_pset(layer, "BBIM_FacadeLayer", "HostWall")
+                if host_guid and self._includes_storey_element(
+                    ifcopenshell.util.element.get_container(model.by_guid(host_guid))
+                ):
+                    self._include_model_element(layer)
+
         self.information = ifcopenshell.api.document.add_information(model)
         ifcopenshell.api.document.edit_information(
             model,
@@ -8972,7 +8988,7 @@ class Drawing:
         The element retains its original spatial container and geometry, so
         this only affects the current drawing.  Linked plan labels are
         included in plan views.  Elevation labels remain opt-in through
-        :meth:`add_furniture_label`.
+        :meth:`add_furniture_label`. A composite girder includes its steel part.
         """
         if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a(
             "IfcElement"
@@ -8982,6 +8998,9 @@ class Drawing:
             raise ValueError("element must belong to this house")
 
         self._include_model_element(element)
+        girder_steel = ifcopenshell.util.element.get_pset(element, "BBIM_Girder", "Steel")
+        if girder_steel:
+            self._include_model_element(self.house.model.by_guid(girder_steel))
         if self._automatic_plan_annotations:
             annotations = [
                 related_object
@@ -9006,7 +9025,8 @@ class Drawing:
 
         Exclusion takes precedence over storey scope and explicit inclusions.
         Other drawings, geometry and spatial/decomposition relationships are
-        unchanged. Parts and annotations are not implicitly excluded.
+        unchanged. Parts and annotations are not implicitly excluded, except
+        a composite girder's embedded steel, which follows its concrete body.
         """
         if not isinstance(element, ifcopenshell.entity_instance) or not element.is_a("IfcElement"):
             raise TypeError("element must be an IfcElement")
@@ -9019,6 +9039,9 @@ class Drawing:
                 pset=self._drawing_pset,
                 properties={"Exclude": f"{exclude} + {element.GlobalId}" if exclude else element.GlobalId},
             )
+        girder_steel = ifcopenshell.util.element.get_pset(element, "BBIM_Girder", "Steel")
+        if girder_steel:
+            self.exclude_element(self.house.model.by_guid(girder_steel))
         return self
 
     def add_furniture_label(
@@ -15034,6 +15057,22 @@ class Beam(ifcopenshell.entity_instance):
         return float(np.ptp(axial_positions))
 
 
+class Girder(Beam):
+    """A concrete IfcBeam with an embedded steel building-element part."""
+
+    def __init__(self, concrete: Beam, steel: ifcopenshell.entity_instance, section: HEBSection):
+        super().__init__(concrete, concrete.storey, start=concrete.start, end=concrete.end,
+            size=concrete.size, length=concrete.length, kind=concrete.kind,
+            material_name=concrete.material_name, rotation=concrete.rotation,
+            height_axis=concrete.height_axis, cuts=concrete.cuts, placement=concrete.placement)
+        object.__setattr__(self, "steel", steel)
+        object.__setattr__(self, "heb_section", section)
+
+    @property
+    def concrete(self):
+        return self
+
+
 class FacadeLayer(ifcopenshell.entity_instance):
     """One opening-aware ``IfcCovering`` used as exterior cladding."""
 
@@ -19504,6 +19543,86 @@ class Storey:
             placement=placement,
         )
 
+    def girder(
+        self, name: str, *, start: Point3D, end: Point3D,
+        width: Number, height: Number, heb: int | str,
+        concrete_color: str | None = "#bfc3c5", steel_color: str | None = "#666666",
+        transparency: Number = 0,
+    ) -> Girder:
+        """Create a concrete průvlak enclosing a centred, full-length HEB.
+
+        ``start`` and ``end`` are world-XYZ centreline endpoints, as for
+        :meth:`beam`. Width and height are metres perpendicular to the span;
+        the section remains as upright as the beam direction permits.
+        ``heb`` is a nominal size in millimetres, e.g. 180 or ``"HEB180"``.
+        The steel must fit inside the concrete envelope. Its ends are flush
+        with the concrete ends; its cross-section is centred both ways.
+
+        The returned girder is one concrete IfcBeam with the steel volume
+        subtracted and a steel IfcBuildingElementPart in its decomposition.
+        Access the two solids as ``girder.concrete`` and ``girder.steel``.
+        """
+        name = _name(name, "name")
+        start, end = _point_3d(start, "start"), _point_3d(end, "end")
+        width, height = _number(width, "width"), _number(height, "height")
+        transparency = _number(transparency, "transparency")
+        section = heb_section(heb)
+        if width <= 0 or height <= 0:
+            raise ValueError("girder width and height must be greater than zero")
+        if width < section.width or height < section.height:
+            raise ValueError(f"{section.name} does not fit inside girder width and height")
+        if np.linalg.norm(np.asarray(end)-np.asarray(start)) == 0:
+            raise ValueError("girder start and end must be different points")
+        if not 0 <= transparency <= 1:
+            raise ValueError("transparency must be between zero and one")
+        for color, argument in ((concrete_color, "concrete_color"), (steel_color, "steel_color")):
+            if color is not None:
+                _color(color, argument)
+
+        concrete = self.beam(name, start=start, end=end, size=(width, height),
+            material="Girder concrete", color=concrete_color, transparency=transparency)
+        concrete.ObjectType = "Concrete girder with embedded HEB"
+        model, house = self.house.model, self.house
+        builder = ShapeBuilder(model)
+        profile = heb_profile(model, section)
+        steel_solid = builder.extrude(profile, magnitude=concrete.length,
+            position_z_axis=(1., 0., 0.), position_x_axis=(0., 1., 0.))
+        steel = ifcopenshell.api.root.create_entity(model, ifc_class="IfcBuildingElementPart",
+            name=f"{name} {section.name}", predefined_type="USERDEFINED")
+        steel.ObjectType = f"Embedded {section.name}"
+        steel_body = builder.get_representation(house._body_context, steel_solid)
+        ifcopenshell.api.geometry.assign_representation(model, product=steel, representation=steel_body)
+        style = house._surface_style("beam", color=steel_color, transparency=transparency)
+        if style is not None:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=steel_body, styles=[style])
+        if "Structural steel" not in house._materials:
+            house._materials["Structural steel"] = ifcopenshell.api.material.add_material(
+                model, name="Structural steel", category="steel")
+        ifcopenshell.api.material.assign_material(model, products=[steel], type="IfcMaterial",
+            material=house._materials["Structural steel"])
+        ifcopenshell.api.aggregate.assign_object(model, products=[steel], relating_object=concrete)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=steel,
+            matrix=concrete.placement.copy(), is_si=True)
+
+        body = ifcopenshell.util.representation.get_representation(concrete, "Model", "Body", "MODEL_VIEW")
+        styles = ifcopenshell.util.element.get_styles(concrete)
+        cutter = ifcopenshell.util.element.copy_deep(model, steel_solid)
+        booleans = ifcopenshell.api.geometry.add_boolean(model, first_item=body.Items[0],
+            second_items=[cutter], operator="DIFFERENCE")
+        body.RepresentationType = "CSG"
+        if styles:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=body, styles=styles)
+        boolean_pset = ifcopenshell.api.pset.add_pset(model, product=concrete, name="BBIM_Boolean")
+        ifcopenshell.api.pset.edit_pset(model, pset=boolean_pset,
+            properties={"Data": json.dumps([b.id() for b in booleans])})
+        pset = ifcopenshell.api.pset.add_pset(model, product=concrete, name="BBIM_Girder")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+            "Width": width, "Height": height, "Length": concrete.length,
+            "HEB": section.name, "Steel": steel.GlobalId,
+            "Start": json.dumps(start), "End": json.dumps(end),
+        })
+        return Girder(concrete, steel, section)
+
     def asset(
         self,
         name: str,
@@ -20555,12 +20674,7 @@ class Storey:
 
             if component in _MIAKO_HEB_ITEMS:
                 steel_bottom = beam_height if component == "heb180+" else 0.
-                profile = model.create_entity(
-                    "IfcIShapeProfileDef", ProfileType="AREA", ProfileName="HEB180",
-                    OverallWidth=_HEB180_WIDTH, OverallDepth=_HEB180_HEIGHT,
-                    WebThickness=_HEB180_WEB, FlangeThickness=_HEB180_FLANGE,
-                    FilletRadius=_HEB180_ROOT_RADIUS,
-                )
+                profile = heb_profile(model, heb_section(180))
                 solids = [builder.extrude(profile, magnitude=component_length,
                     position=(0., signed_component_width/2, steel_bottom+_HEB180_HEIGHT/2),
                     position_z_axis=(1., 0., 0.), position_x_axis=(0., 1., 0.))]

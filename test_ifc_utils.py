@@ -369,6 +369,37 @@ class FacadeOutlineTests(unittest.TestCase):
         shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), panel)
         self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), (22 - 2) * .005)
 
+    def test_facade_visibility_storey_preserves_geometry_openings_and_drawing_scope(self):
+        house, panel = self.make_panel()
+        ground, upper = house._storeys
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+
+        def vertices(element):
+            shape = ifcopenshell.geom.create_shape(settings, element)
+            return sorted(set(tuple(p) for p in np.round(np.asarray(shape.geometry.verts).reshape(-1, 3), 8)))
+
+        before = [vertices(element) for element in (panel, *panel.openings)]
+        facades = house.storey("Facades", elevation=0)
+        facades.element.ObjectType = "FACADE_LAYER"
+        facades.add(panel)
+        self.assertEqual(ifcopenshell.util.element.get_container(panel), facades.element)
+        self.assertEqual(before, [vertices(element) for element in (panel, *panel.openings)])
+        self.assertEqual(ifcopenshell.util.element.get_container(panel.wall), ground.element)
+        for name, storeys, expected in (("Ground", [ground], True), ("Upper", [upper], False),
+                                        ("Facade only", [facades], True), ("Empty", [], False),
+                                        ("Section", None, True)):
+            with self.subTest(drawing=name):
+                drawing = house.add_drawing(name, x=3, y=0, z=2, radius=5, storeys=storeys)
+                rule = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include")
+                selected = (ifcopenshell.util.selector.filter_elements(house.model, rule)
+                            if rule else set(house.model.by_type("IfcElement")))
+                self.assertEqual(panel in selected, expected)
+                if expected:
+                    drawing.exclude_element(panel)
+                    exclude = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Exclude")
+                    self.assertIn(panel, ifcopenshell.util.selector.filter_elements(house.model, exclude))
+
     def test_profile_respects_reverse_host_orientation_and_export_mirroring(self):
         for reversed in (False, True):
             for mirror in (False, True):
@@ -391,6 +422,22 @@ class FacadeOutlineTests(unittest.TestCase):
         self.assertEqual(panel.openings, ())
         shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), panel)
         self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), 22 * .005)
+
+    def test_facade_can_override_or_disable_host_cut_planes(self):
+        house, panel = self.make_panel(cut=True)
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        replacement = (((0, 0, 5), (10, 0, 5), (0, 10, 5)),)
+        for cuts, expected_top in ((None, 4.5), (replacement, 5.0), ((), 5.5)):
+            with self.subTest(cuts=cuts):
+                covering = house.add_facade_layer(
+                    panel.wall, offset=.2, thickness=.005, height=5,
+                    outline=self.outline, opening_walls=panel.opening_walls[1:], cuts=cuts,
+                )
+                shape = ifcopenshell.geom.create_shape(settings, covering)
+                vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                self.assertAlmostEqual(vertices[:, 2].max(), expected_top)
+                self.assertEqual(len(covering.openings), 2)
 
     def test_invalid_profiles_are_rejected_before_creating_elements(self):
         house = House("Invalid facade")

@@ -115,6 +115,22 @@ class MiddleCeilingTests(unittest.TestCase):
                 self.assertAlmostEqual(low[0], min(wall.start[0], wall.end[0]))
                 self.assertAlmostEqual(high[0], max(wall.start[0], wall.end[0]))
 
+    def test_ceiling_insulates_explicitly_included_ground_floor_west_wall(self):
+        v = self.values
+        drawing, = v["house"]._drawings
+        self.assertEqual(drawing.storeys, (v["upper"],))
+        included = ifcopenshell.util.selector.filter_elements(v["house"].model,
+            ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"))
+        self.assertIn(v["wall_4_g"], included)
+        self.assertNotIn(v["wall_front_g"], included)
+        records = [record for relation in drawing.group.IsGroupedBy for element in relation.RelatedObjects
+                   if (record := ifcopenshell.util.element.get_pset(element, "BBIM_WallInsulation"))]
+        west, = [record for record in records if record.get("HostWall") == v["wall_4_g"].GlobalId]
+        self.assertEqual(west["Material"], "polystyrene")
+        np.testing.assert_allclose(np.array(json.loads(west["Segments"])) + v["wall_4_g"].start[1],
+                                   ((-v["FACADE_INSULATION_THICKNESS"],
+                                     v["HOUSE_DEPTH"]+v["FACADE_INSULATION_THICKNESS"]),))
+
 
 class UpperRingBeamTests(unittest.TestCase):
     @classmethod
@@ -126,6 +142,31 @@ class UpperRingBeamTests(unittest.TestCase):
             redirect_stdout(StringIO()),
         ):
             cls.values = runpy.run_path(str(source))
+
+    def test_wall_plates_are_centred_on_walls_and_roof_contacts_keep_their_bearing_height(self):
+        v = self.values
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        for name, wall, y, height, plane, direction in (
+            ("beam3", "wall_front1_u", v["BWTy"]/2, v["NADEZDIVKA"], "STREET_ROOF_PLANE_POINTS", -1),
+            ("beam4_a", "wall_back1_u", v["HOUSE_DEPTH"]-v["BWTy"]/2, v["NADEZDIVKA"], "GARDEN_ROOF_PLANE_POINTS", 1),
+            ("beam4_b", "wall_back1_u", v["HOUSE_DEPTH"]-v["BWTy"]/2, v["NADEZDIVKA"], "GARDEN_ROOF_PLANE_POINTS", 1),
+            ("beam_dormer", "wall_dormer", v["HOUSE_DEPTH"]-v["BWTy"]/2, v["DORMER_WALL_HEIGHT"], "DORMER_ROOF_PLANE_POINTS", 1),
+        ):
+            with self.subTest(plate=name):
+                plate = v[name]
+                self.assertAlmostEqual(plate.start[1], y)
+                self.assertAlmostEqual(plate.end[1], y)
+                shape = ifcopenshell.geom.create_shape(settings, v[wall])
+                wall_points = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                self.assertAlmostEqual(y, (wall_points[:, 1].min()+wall_points[:, 1].max())/2)
+                self.assertAlmostEqual(plate.start[2]-plate.height/2, v["UPPER_FLOOR_START"]+height)
+                contact_y = y+direction*plate.width/2
+                self.assertAlmostEqual(v["plane_height_at"](*v[plane], x=0, y=contact_y),
+                                       plate.start[2]+plate.height/2)
+        transverse = v["transverse_wall_plate"]
+        self.assertAlmostEqual(transverse.start[0], v["HOUSE_WIDTH"]-v["BWTx"]/2)
+        self.assertAlmostEqual(transverse.end[0], transverse.start[0])
 
     def test_wall_bodies_follow_independent_x_and_y_thicknesses(self):
         v = self.values
@@ -650,8 +691,8 @@ class ExteriorElevationTests(unittest.TestCase):
         settings.set(settings.USE_WORLD_COORDS, True)
         expected_x = (
             (-v["FACADE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"] + 0.001,
-             v["LOWER_NADEZDIVKA_X"] - .05),
-            (v["LOWER_NADEZDIVKA_X"] - .05,
+             v["LOWER_NADEZDIVKA_X"] + .105),
+            (v["LOWER_NADEZDIVKA_X"] + .105,
              v["HOUSE_WIDTH"] + v["FACADE_INSULATION_THICKNESS"] + v["FACADE_THICKNESS"] - 0.001),
         )
         outer_y = -v["FACADE_INSULATION_THICKNESS"] - v["FACADE_THICKNESS"]
@@ -1062,7 +1103,7 @@ class CutDrawingTests(unittest.TestCase):
         self.assertEqual(front["Material"], "polystyrene")
         self.assertEqual(west["Material"], "polystyrene")
         np.testing.assert_allclose(json.loads(front["Segments"]),
-                                   ((v["LOWER_NADEZDIVKA_X"], v["HOUSE_WIDTH"]+v["FACADE_INSULATION_THICKNESS"]),))
+                                   ((v["LOWER_NADEZDIVKA_X"]+.155, v["HOUSE_WIDTH"]+v["FACADE_INSULATION_THICKNESS"]),))
         west_segments = np.array(json.loads(west["Segments"])) + v["wall_4_g"].start[1]
         np.testing.assert_allclose(west_segments,
                                    ((-v["FACADE_INSULATION_THICKNESS"], v["HOUSE_DEPTH"]+v["FACADE_INSULATION_THICKNESS"]),))
@@ -2419,6 +2460,10 @@ class RoofFramingTests(unittest.TestCase):
                 self.assertGreaterEqual(vertices[:, 2].min(), self.main_eave_z(beam.roof_plane) - 1e-7)
                 on_horizontal = np.isclose(vertices[:, 2], self.main_eave_z(beam.roof_plane))
                 eave_y = lo if beam.roof_plane in (v["street_roof"],) else hi
+                if beam.roof_plane is v["garden_roof"] and beam.start[0] in v["garden_rafter_wall_cut_xs"]:
+                    # The +before/+after pairs deliberately stop at the wall.
+                    eave_y = v["HOUSE_DEPTH"]
+                    self.assertAlmostEqual(vertices[:, 1].max(), eave_y)
                 self.assertTrue(np.any(on_horizontal) or np.any(np.isclose(vertices[:, 1], eave_y)))
 
     def test_main_eaves_use_each_wall_plate_bottom_minus_300mm(self):

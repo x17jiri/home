@@ -123,6 +123,36 @@ The Python-side coordinates remain unchanged, including values returned by
 walls, stairs, and roof planes. Only written IFC files and rendered drawings
 are mirrored, so existing coordinate calculations need no special handling.
 
+## Concrete girders with an embedded HEB
+
+```python
+girder = upper.girder(
+    "Průvlak", start=(1, 2, 3.1), end=(5, 2, 3.1),
+    width=0.30, height=0.35, heb=180,
+)
+```
+
+The two points are **world XYZ centreline endpoints**, just like `beam()`;
+the storey's elevation is not added to them. Width and height are in metres,
+perpendicular to the span, with the height axis kept as upright as possible.
+The HEB runs the full span, centred horizontally and vertically inside the
+concrete block. Both ends are flush. A profile too large for the concrete
+envelope is rejected.
+
+`heb` takes the nominal size in millimetres (`180`) or its name (`"HEB180"`,
+`"HE 180 B"`, case-insensitive). `steel_profiles.py` holds the standard HEB
+sizes from 100 through 1000, using the [ArcelorMittal Orange Book dimensions](https://orangebook.arcelormittal.com/node/16),
+including root fillets. The MIAKO HEB180 profile uses the same library.
+
+The returned `Girder` is a `Beam`/`IfcBeam` whose concrete body excludes the
+steel volume. Its embedded `IfcBuildingElementPart` has its own steel
+material and geometry. Use `girder.concrete` and `girder.steel` to access
+the two solids, and `girder.heb_section` for section dimensions in metres.
+`concrete_color`, `steel_color` and `transparency` control their 3D styles;
+the defaults are gray concrete and dark gray steel. Sections distinguish
+the two materials. Drawing inclusion/exclusion of the girder also handles
+its embedded steel, including in drawings scoped to another storey.
+
 ## MIAKO layout axis
 
 Insert one zero-width `"axis"` marker in `miako_slab(structure=...)` to put
@@ -425,8 +455,17 @@ the original wall heights and roof clipping planes are preserved. Without
 In `house_ifc.py`, `UPPER_RING_BEAM_HEIGHT` controls the additional concrete band,
 whose top is at `UPPER_FLOOR_START + NADEZDIVKA` on the higher perimeter parts
 and internal load-bearing walls, interrupted at existing openings.
-`LOWER_NADEZDIVKA_X` ends the high upper front/back walls between wall3 and
-wall4. The former low knee walls and west upper gable have been removed;
+`LOWER_NADEZDIVKA_X` is the outer X face of the closure masonry and ends the
+high upper front/back knee walls and their ring beams between wall3 and wall4.
+Its definition moved 155 mm inward from the former roof-step coordinate;
+the other offsets were increased by 155 mm to retain existing positions.
+They still follow this same parameter: purlin/wall-plate ends and the facade
+split are at `LOWER_NADEZDIVKA_X + 0.105`, roof overlap trims at
+`LOWER_NADEZDIVKA_X + 0.155`, and the transverse purlin centre at
+`LOWER_NADEZDIVKA_X + 0.280`. Changing the parameter moves all these dependent
+coordinates together. Facade insulation retains its architectural extent
+to the roof boundary rather than stopping at the shortened masonry.
+The former low knee walls and west upper gable have been removed;
 there is no `LOWER_NADEZDIVKA` setting or low-level ring beam.
 
 ## Library objects and plan symbols
@@ -813,8 +852,8 @@ Structural framing now uses only `high_rafters`; `rafters` keeps the same
 high-roof assembly order for shared drawing indices. Entries still accept
 numbers, paired dormer tuples, `StrongerRafter` and `SplitRafter`. The last
 high rafter, its collar ties and spacer stay in place. The middle purlins and
-high wall plates end at the closure MDF's inner face,
-`LOWER_NADEZDIVKA_X - 0.05`.
+high wall plates end at the facade material transition,
+`LOWER_NADEZDIVKA_X + 0.105`.
 Timber schedules contain only the remaining members, grouped by measured
 section and finished length. The former low-rafter ZZ cut is removed from
 the roof sheet; XX and YY remain.
@@ -840,6 +879,10 @@ the same projected-siding legend swatch.
 Flashing, attachment details and remaining wall details are not modelled.
 The 3D force simulator has not yet been updated for the low-roof removal.
 There is no shortened house-cut slope or raised street-side wall plate.
+The street, garden and dormer wall plates are centred at `BWTy / 2` and
+`HOUSE_DEPTH - BWTy / 2`. Roof-plane contact points use their actual outer top
+corners, preserving the bearing heights as wall thickness changes. The transverse
+plate follows the wall-4 ring-beam centre (`HOUSE_WIDTH - BWTx / 2`).
 
 Run `python3 house_ifc.py roof` for one A3 portrait sheet containing the roof
 plan above the XX and YY framing sections, with a single timber schedule.
@@ -1363,7 +1406,13 @@ existing 3D-only exclusions are preserved, and parts are excluded separately.
 
 `add_facade()` creates the street finish; `add_facade("garden")` creates the
 garden finish. Both use two full-height IFC coverings, white on the high
-part and `Wood siding` on the low part, meeting at `LOWER_NADEZDIVKA_X + 0.1`.
+part and `Wood siding` on the low part, meeting at `FACADE_MATERIAL_SPLIT_X`.
+All exterior wall finishes are contained in the artificial `Facades` storey
+(`facade_storey`) so they can be toggled together in a 3D viewer. This includes
+the basement finishes, dormer sides and west closure finish. Their geometry
+and openings remain anchored to the original walls. Drawings continue to
+include each finish with its host wall's physical storey; explicit per-element
+exclusions still apply. Roof-edge siding keeps its separate roof-layer storeys.
 Each wooden covering is one four-point profile whose top follows
 `transverse_roof` at `RAFTER_Z_OFFSET`, from its higher inner end to its
 lower west end. Its height updates with the transverse support positions.
@@ -1574,7 +1623,7 @@ The replacement perpendicular roof has its two support members, rafters and
 above-rafter layers. No simulator connections have been added yet.
 `TRANSVERSE_PURLIN_TOP_ABOVE_FLOOR` sets the new purlin's top relative
 to the upper structural slab/storey datum (`UPPER_FLOOR_START`).
-Its centreline is X = `LOWER_NADEZDIVKA_X + 0.125`, its section reuses
+Its centreline is X = `LOWER_NADEZDIVKA_X + 0.280`, its section reuses
 `VAZNICE_SIDE_BASE` / `VAZNICE_SIDE_HEIGHT`, and it remains one continuous
 piece for now. It runs along Y over wall 4's ring-beam span. The new transverse
 wall plate uses `WALL_PLATE_SIZE`, with its centreline and underside derived
@@ -1588,7 +1637,7 @@ from that ring beam so it sits directly on the concrete. Both are created by
 centres returned by `transverse_rafter_y_positions()`: `TRANSVERSE_RAFTER_SIZE[0]/2`,
 each integer metre strictly between the edge centres, then
 `HOUSE_DEPTH - TRANSVERSE_RAFTER_SIZE[0]/2`. The current house has nine rafters.
-Their high ends are cut vertically at `LOWER_NADEZDIVKA_X`. Outside wall 4,
+Their high ends are cut vertically at `LOWER_NADEZDIVKA_X + 0.155`. Outside wall 4,
 both main-roof eave rules apply: the vertical limit is
 `HOUSE_WIDTH + TRANSVERSE_ROOF_EAVE_OVERHANG - ROOF_EAVE_SETBACK`; the horizontal limit
 is controlled by `TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET` and
@@ -1621,13 +1670,15 @@ and the west eave using plain `Wood siding solid` in the shared
 `ROOF_EAVE_SETBACK` slots. The side caps run from rafter underside to tile
 underside, clipped by the horizontal eave cut; the west fascia runs from
 that horizontal cut to tile underside. The facade's board pattern is not used.
-The high ends remain cut at `LOWER_NADEZDIVKA_X`; the retained interior
+The high ends remain cut at `LOWER_NADEZDIVKA_X + 0.155`; the retained interior
 ceilings and their independent ranges are unchanged.
 
-`add_west_roof_closure()` closes the high roof from the upper-floor slab up.
-The white `Facade finish` occupies X = `LOWER_NADEZDIVKA_X - 0.035` to
-`LOWER_NADEZDIVKA_X - 0.03` with the current 5 mm `FACADE_THICKNESS`.
-Towards decreasing X, it is followed by a 100 mm empty cavity
+`add_west_roof_closure()` closes the high roof above the upper floor.
+The white `Facade finish` occupies X = `LOWER_NADEZDIVKA_X + WEST_CLOSURE_AIR_GAP`
+to `LOWER_NADEZDIVKA_X + WEST_CLOSURE_AIR_GAP + FACADE_THICKNESS`.
+The outer wall face is exactly `LOWER_NADEZDIVKA_X`; its inner face is
+`LOWER_NADEZDIVKA_X - WEST_CLOSURE_WALL_THICKNESS`.
+Towards decreasing X, it is followed by an empty cavity
 (`WEST_CLOSURE_AIR_GAP`) and a 175 mm VPC wall
 (`WEST_CLOSURE_WALL_THICKNESS = BWTy`). The wall reuses the project's
 `VPC cihla 175mm` type and its Brick material. The siding's outer position
@@ -1636,8 +1687,18 @@ stays fixed; its offset from the wall is the cavity width.
 `west_closure_wall` is an upper-floor `IfcWall`; `west_roof_closure` contains
 just its opening-aware siding `IfcCovering`. The cavity has no solid IFC
 element. `west_roof_closure_x_ranges` records `Siding`, `Air gap` and `Wall`.
-Both solid parts follow the main-roof planes at the MDF underside, and their
-Y extents follow the street/garden facade faces.
+The closure masonry reuses all cut planes from the east upper gable (`wall_1_u`):
+the two rafter-underside slopes and the horizontal masonry cap. Its facade uses
+those same two slopes up to the ridge, matching the east facade. The masonry
+runs only between `BWTy` and `HOUSE_DEPTH - BWTy`; the siding extends beyond its
+host ends to meet the street/garden facade faces. `add_facade_layer(cuts=...)`
+can override the host cuts; the default inherits them.
+
+The masonry bottom follows the common top of `pruvlak31x`, `pruvlak32x` and
+`pruvlak33x` (`WEST_CLOSURE_SUPPORT_GIRDERS`), currently 300 mm above
+`UPPER_FLOOR_START`. The supports must be horizontal and have matching top
+levels. The siding extends down to the upper-floor slab, covering the girders.
+The window's sill remains referenced to the finished upper floor.
 
 `west_closure_window` is defined before the siding so its opening is copied
 through that covering across the gap. Tune `WEST_CLOSURE_WINDOW_CENTER_Y`,
@@ -1653,7 +1714,7 @@ position from it, so they remain centred under the 175 mm wall.
 
 Each street/garden purlin consists of two independent pieces. The left and
 middle pieces meet at the wall2 centre line and share the top `PURLIN_TOP_Z`.
-The middle piece extends to `LOWER_NADEZDIVKA_X - 0.05`. Only the left and middle purlin pieces remain;
+The middle piece extends to `LOWER_NADEZDIVKA_X + 0.105`. Only the left and middle purlin pieces remain;
 the low right pieces and their independent roof settings have been removed.
 The middle pieces bear on the unchanged inner-wall level
 `PURLIN_WALL_TOP_HEIGHT`. `VAZNICE_BASE`, `VAZNICE_HEIGHT` and `VAZNICE_DIST`

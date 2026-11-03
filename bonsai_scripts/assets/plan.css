@@ -253,8 +253,15 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.025 !important;
 }
 
-.IfcBeam.material-Structuralsteel.cut {
+.IfcBeam.material-Structuralsteel.cut,
+.IfcBuildingElementPart.material-Structuralsteel.cut {
     fill: #666 !important;
+    stroke: black !important;
+    stroke-width: 0.04 !important;
+}
+
+.IfcBeam.material-Girderconcrete.cut {
+    fill: #c5c7c8 !important;
     stroke: black !important;
     stroke-width: 0.04 !important;
 }
