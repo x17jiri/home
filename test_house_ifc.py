@@ -197,7 +197,7 @@ class UpperRingBeamTests(unittest.TestCase):
         self.assertEqual(len(walls), 6)
         support_walls = {*walls, v["wall_gym_g"], v["wall_kitchen_3"], v["wall_bathroom"]}
         self.assertEqual({beam.source_wall for beam in v["ring_beams"]}, support_walls)
-        foundation_sources = (*walls, v["wall_gym_g"])
+        foundation_sources = (*walls, v["wall_gym_g"], v["wall_kitchen_3"], v["wall_bathroom"])
         self.assertEqual({(wall.start, wall.end) for wall in v["foundation_walls"]},
                          {(wall.start, wall.end) for wall in foundation_sources})
         self.assertEqual(len(v["foundation_footers"]), len(foundation_sources))

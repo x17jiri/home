@@ -59,6 +59,28 @@ class BasementTests(unittest.TestCase):
         for footer in v["foundation_footers"]:
             self.assertEqual(ifcopenshell.util.element.get_container(footer), v["foundation"].element)
         self.assertEqual(v["basement"].floor_layers, (v["foundation_base_plate"],))
+
+    def test_front_door_is_before_wall3_and_spans_basement_ground_and_floor(self):
+        v = self.v
+        door = v["basement_door"]
+        self.assertEqual(ifcopenshell.util.element.get_container(door), v["basement"].element)
+        self.assertAlmostEqual(door.OverallWidth, .9)
+        self.assertAlmostEqual(door.OverallHeight, 2)
+        primary = door.FillsVoids[0].RelatingOpeningElement
+        bottom, top = self.bounds(primary)
+        self.assertAlmostEqual(bottom[0], v["wall3_start"]-1)
+        self.assertAlmostEqual(top[0], v["wall3_start"])
+        self.assertAlmostEqual(bottom[2], v["basement"].elevation+1.25)
+        self.assertAlmostEqual(top[2], bottom[2]+2)
+        self.assertEqual(primary.VoidsElements[0].RelatingBuildingElement, v["basement_street_wall"])
+        for host in (v["wall_front_g"], v["chodba"]):
+            cuts = [r.RelatedOpeningElement for r in host.HasOpenings
+                    if ifcopenshell.util.element.get_pset(r.RelatedOpeningElement, "BBIM_DoorOpening", "Door") == door.GlobalId]
+            self.assertEqual(len(cuts), 1)
+        for side in ("street_facade",):
+            self.assertTrue(any(self.bounds(r.RelatedOpeningElement)[0][0] < v["wall3_start"]
+                                and self.bounds(r.RelatedOpeningElement)[1][0] > v["wall3_start"]-1
+                                for panel in v[side] for r in panel.HasOpenings))
         self.assertEqual(v["foundation_base_plate"].PredefinedType, "BASESLAB")
         self.assertEqual(v["foundation"].elevation, v["FOUNDATION_FOOTER_BOTTOM_Z"])
 

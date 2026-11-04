@@ -1073,6 +1073,28 @@ wall.add_door(
 
 Set `casing_depth=0` when a door should have no casing.
 
+To span storeys, supply the additional aligned walls with `through_walls`:
+
+```python
+basement_door = basement_street_wall.add_door(
+    at=wall3_start - 1.0, width=0.9, opening_width=1.0,
+    sill_height=1.25, height=3.25, clear_height=2.0,
+    through_walls=[wall_front_g],
+    through_elements=[chodba],  # optional floor/ceiling layers to cut
+)
+```
+
+Heights remain relative to the host storey's elevation: this example runs
+from Z = -1.25 to +0.75 m. One full-height door and its opening belong to the
+basement; extra wall openings are clipped to the corresponding walls. Wall
+directions can be reversed and thicknesses can differ. All wall cuts are
+validated before creating the door, including alignment, length and clashes
+with existing openings. `through_elements` cuts the listed floor/ceiling
+layers over the rough-opening width and host-wall depth. Facades copy the
+wall openings, and drawings scoped to either storey include the same door
+automatically. Its plan symbol is raised above intersected-storey floor
+finishes. Ordinary single-wall doors retain their height-fit validation.
+
 A common offset can move all labels farther into the room:
 
 ```python
@@ -1595,6 +1617,54 @@ For a larger copy, run
 `python3 survey_points.py --paper A3 --scale 250`.
 
 ## IFC basement and foundations
+
+`foundation_specs` in `house_ifc.py` explicitly lists every supported
+ground-floor load-bearing wall, including `wall_kitchen_3` and `wall_bathroom`.
+It is evaluated after those walls are created, and missing load-bearing walls
+are reported instead of silently omitted. Each entry can override the defaults:
+
+```python
+FoundationSpec(
+    wall_kitchen_3,
+    wall_thickness=0.30,
+    footer_width=0.80,
+    footer_height=0.50,
+)
+```
+
+Omitted dimensions use `FOUNDATION_WALL_THICKNESS`, `FOUNDATION_FOOTER_WIDTH`
+and `FOUNDATION_FOOTER_HEIGHT`. Footers are centred under the configured
+foundation wall and retain corner returns at real wall ends.
+
+`FOUNDATION_HEIGHT_MAP` holds ordered `(global_y, nominal_footer_bottom_z)` breakpoints:
+
+```python
+FOUNDATION_HEIGHT_MAP = FoundationHeightMap((
+    (0.0, FOUNDATION_FOOTER_BOTTOM_Z),  # one entry gives a uniform level
+    # (3.0, FOUNDATION_FOOTER_BOTTOM_Z + 0.25),
+    # (6.0, FOUNDATION_FOOTER_BOTTOM_Z + 0.50),
+))
+```
+
+Each level applies until the next Y breakpoint; the first/last levels extend
+outside the range. Values are absolute model Z, so `earth_to_z(...)` can also
+be used. Footer tops change immediately at each breakpoint, at nominal bottom
+plus `footer_height`. The actual underside follows 45-degree ramps on the
+shallower side, adding concrete while preserving the configured minimum height.
+A 0.4 m upward change at Y = 3.3 starts its underside ramp there and reaches the
+new bottom at Y = 3.7. Downward changes ramp before the breakpoint. Closely
+spaced ramps combine continuously without becoming steeper than 45 degrees.
+`foundations.py` clips both wall bodies and complete footer footprints at the
+Y boundaries, including transverse strips crossing a step. No corner return is
+added at an artificial step. Wall tops remain at `-BASEMENT_CEILING_SPACE`;
+bottoms follow footer top plus `FOUNDATION_BASE_PLATE_THICKNESS`. The foundation
+plan camera follows the highest footer and section legends mark ramped-footer
+heights as minima. `BBIM_StripFooting.BottomZ` retains the nominal level;
+`MinimumBottomZ` and `BottomProfile` describe the actual underside.
+
+The basement slab footprint and exterior finishes are separate from this
+depth profile. Changing it does not change the slab footprint; defining the
+partial basement is a separate layout change.
 
 The ground-floor storey stays at Z = 0. `BASEMENT_FLOOR_START` is the top of
 the basement slab, derived from `FOUNDATION_WALL_HEIGHT = 2.25` and

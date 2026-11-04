@@ -8910,10 +8910,11 @@ class Drawing:
             document=self.document,
         )
 
-        if self._automatic_door_annotations:
-            for door in model.by_type("IfcDoor"):
-                storey = ifcopenshell.util.element.get_container(door)
-                if self._includes_storey_element(storey):
+        for door in model.by_type("IfcDoor"):
+            if self._includes_door(door):
+                if not self._includes_model_element(door):
+                    self._include_model_element(door)
+                if self._automatic_door_annotations:
                     self.add_door_annotation(
                         door,
                         offset=self._door_annotation_offset,
@@ -8948,6 +8949,15 @@ class Drawing:
             return True
         include = ifcopenshell.util.element.get_pset(self.element, "EPset_Drawing", "Include") or ""
         return element.GlobalId in {selector.strip() for selector in include.split("+")}
+
+    def _includes_door(self, door: ifcopenshell.entity_instance) -> bool:
+        """Include a continuous door with any of the walls it cuts."""
+        if self._includes_model_element(door):
+            return True
+        walls = ifcopenshell.util.element.get_pset(door, "EPset_Door", "OpeningWalls")
+        return bool(walls) and any(
+            self._includes_model_element(self.house.model.by_guid(guid)) for guid in json.loads(walls)
+        )
 
     def _require_plan_view(self, operation: str) -> None:
         if self.view != "plan":
@@ -12596,7 +12606,7 @@ class Drawing:
         storey = ifcopenshell.util.element.get_container(door)
         if storey is None or not storey.is_a("IfcBuildingStorey"):
             raise ValueError("door must belong to a building storey")
-        if not self._includes_storey_element(storey):
+        if not self._includes_model_element(door):
             raise ValueError("door storey is not included in this drawing")
         if door.OverallWidth is None or door.OverallHeight is None:
             raise ValueError("door must define OverallWidth and OverallHeight")
@@ -17051,6 +17061,7 @@ class Wall(ifcopenshell.entity_instance):
         height: Number,
         sill_height: Number,
         check_recesses: bool = True,
+        allow_height_overflow: bool = False,
     ) -> tuple[float, float, float, float]:
         opening_start = _number(opening_start, "opening start")
         width = _number(width, "width")
@@ -17060,9 +17071,9 @@ class Wall(ifcopenshell.entity_instance):
             raise ValueError("width must be greater than zero")
         if height <= 0:
             raise ValueError("height must be greater than zero")
-        if sill_height < 0:
+        if sill_height < 0 and not allow_height_overflow:
             raise ValueError("sill_height must not be negative")
-        if sill_height < self.start_height:
+        if sill_height < self.start_height and not allow_height_overflow:
             raise ValueError("opening must not start below the wall")
 
         opening_end = opening_start + width
@@ -17070,7 +17081,7 @@ class Wall(ifcopenshell.entity_instance):
         tolerance = 1e-9
         if opening_start < -tolerance or opening_end > self.length + tolerance:
             raise ValueError("opening must fit within the wall length")
-        if opening_top > self.end_height + tolerance:
+        if opening_top > self.end_height + tolerance and not allow_height_overflow:
             raise ValueError("opening must fit within the wall height")
 
         for existing_start, existing_end, existing_bottom, existing_top in self._openings:
@@ -17630,6 +17641,61 @@ class Wall(ifcopenshell.entity_instance):
             ifcopenshell.util.element.remove_deep2(model, panel)
         return glass_items
 
+    def _door_through_wall_spans(
+        self,
+        walls: Sequence[Wall] | None,
+        *,
+        at: float,
+        width: float,
+        bottom: float,
+        top: float,
+    ) -> tuple[tuple[Wall, float, float, float, float], ...]:
+        """Validate all extra wall cuts in world coordinates before changing IFC."""
+        if walls is None:
+            return ()
+        if isinstance(walls, (str, bytes)):
+            raise TypeError("through_walls must be a sequence of Wall objects")
+        walls = tuple(walls)
+        tangent = (np.asarray(self.end)-self.start)/self.length
+        opening_start = np.asarray(self.start)+at*tangent
+        opening_end = opening_start+width*tangent
+        world_bottom = self.storey.elevation+bottom
+        world_top = self.storey.elevation+top
+        spans = []
+        seen = {self.id()}
+        for wall in walls:
+            if not isinstance(wall, Wall):
+                raise TypeError("through_walls must contain Wall objects")
+            if wall.file is not self.file or wall.storey.house is not self.storey.house:
+                raise ValueError("through_walls must belong to this house")
+            if wall.id() in seen:
+                raise ValueError("through_walls must contain distinct walls other than the host")
+            seen.add(wall.id())
+            wall_tangent = (np.asarray(wall.end)-wall.start)/wall.length
+            if not isclose(abs(float(tangent @ wall_tangent)), 1.0, abs_tol=1e-9):
+                raise ValueError("through_walls must be parallel to the host wall")
+            normal = np.array((-tangent[1], tangent[0]))
+            if abs(float((np.asarray(wall.start)-self.start) @ normal)) > 1e-8:
+                raise ValueError("through_walls must be aligned with the host wall")
+            along = sorted(float((point-wall.start) @ wall_tangent)
+                           for point in (opening_start, opening_end))
+            lo = max(world_bottom, wall.storey.elevation+wall.start_height)-wall.storey.elevation
+            hi = min(world_top, wall.storey.elevation+wall.end_height)-wall.storey.elevation
+            if hi <= lo+1e-9:
+                raise ValueError("each through_wall must intersect the door opening vertically")
+            wall._validate_opening(opening_start=along[0], width=along[1]-along[0],
+                                   height=hi-lo, sill_height=lo)
+            spans.append((wall, along[0], along[1]-along[0], lo, hi))
+        if spans:
+            all_walls = (self, *walls)
+            if (world_bottom < min(w.storey.elevation+w.start_height for w in all_walls)-1e-9
+                    or world_top > max(w.storey.elevation+w.end_height for w in all_walls)+1e-9):
+                raise ValueError("door opening must fit within the combined wall height")
+            if (world_top <= self.storey.elevation+self.start_height+1e-9
+                    or world_bottom >= self.storey.elevation+self.end_height-1e-9):
+                raise ValueError("door opening must intersect its host wall")
+        return tuple(spans)
+
     def add_door(
         self,
         *,
@@ -17640,6 +17706,8 @@ class Wall(ifcopenshell.entity_instance):
         sill_height: Number = 0,
         opening_width: Number | None = None,
         opening_height: Number | None = None,
+        through_walls: Sequence[Wall] | None = None,
+        through_elements: Sequence[FloorLayer | CeilingLayer] | None = None,
         operation: DoorOperation = "SINGLE_SWING_LEFT",
         open_angle: Number = 0,
         reverse_swing: bool = False,
@@ -17678,6 +17746,14 @@ class Wall(ifcopenshell.entity_instance):
         a centred 10 mm pane, retaining handles and the plan swing. Glazed
         doors use the window color by default; ``color`` overrides it.
         ``glass_transparency`` controls only the pane, as for windows.
+
+        ``through_walls`` cuts aligned walls on other storeys for one continuous
+        door. Heights still use this host's storey datum. The full-height opening
+        and the single door belong to this host; additional wall openings are
+        clipped to their walls' vertical extents. Reversed wall directions and
+        different wall thicknesses are supported. The door is also included in
+        drawings scoped to any affected wall. ``through_elements`` optionally
+        cuts floor/ceiling layers across the rough opening and host-wall depth.
         """
         operation = _enum(operation, "operation", _DOOR_OPERATIONS)
         open_angle = _number(open_angle, "open_angle")
@@ -17743,12 +17819,27 @@ class Wall(ifcopenshell.entity_instance):
         if opening_top_height < top_height - tolerance:
             raise ValueError("opening_height must not be smaller than height")
         rough_opening_height = opening_top_height - sill_height
+        extra_wall_spans = self._door_through_wall_spans(
+            through_walls, at=at, width=opening_width,
+            bottom=sill_height, top=opening_top_height,
+        )
+        if isinstance(through_elements, (str, bytes)):
+            raise TypeError("through_elements must be a sequence of floor/ceiling layers")
+        extra_elements = () if through_elements is None else tuple(through_elements)
+        for element in extra_elements:
+            if not isinstance(element, (FloorLayer, CeilingLayer)):
+                raise TypeError("through_elements must contain floor/ceiling layers")
+            if element.file is not self.file or element.storey.house is not self.storey.house:
+                raise ValueError("through_elements must belong to this house")
+        if len({element.id() for element in extra_elements}) != len(extra_elements):
+            raise ValueError("through_elements must contain distinct layers")
         opening_start, opening_width, opening_height, sill_height = (
             self._validate_opening(
                 opening_start=at,
                 width=opening_width,
                 height=rough_opening_height,
                 sill_height=sill_height,
+                allow_height_overflow=bool(extra_wall_spans),
             )
         )
         door_start = opening_start + (opening_width - width) / 2
@@ -17798,6 +17889,8 @@ class Wall(ifcopenshell.entity_instance):
                 "CasingDepth": casing_depth,
                 "Glazed": glazed,
                 "GlassTransparency": glass_transparency if glazed else None,
+                "OpeningWalls": json.dumps([self.GlobalId, *(wall.GlobalId for wall, *_ in extra_wall_spans)])
+                    if extra_wall_spans else None,
             },
         )
         lining_properties = {
@@ -17881,8 +17974,20 @@ class Wall(ifcopenshell.entity_instance):
             plan_representation = ifcopenshell.api.geometry.map_representation(
                 model, representation=plan_representation,
             )
+            plan_symbol_height = door_height / 2
+            if extra_wall_spans:
+                # A door starting on a lower storey still needs its swing
+                # visible above the floor finishes on the upper storey.
+                for wall in (self, *(wall for wall, *_ in extra_wall_spans)):
+                    for floor in wall.storey.floor_layers:
+                        floor_top = floor.storey.elevation+floor.start_height+floor.thickness
+                        if floor_top < self.storey.elevation+top_height:
+                            plan_symbol_height = max(
+                                plan_symbol_height, floor_top-self.storey.elevation-sill_height+.001,
+                            )
+                plan_symbol_height = min(plan_symbol_height, door_height-.001)
             plan_representation.Items[0].MappingTarget.LocalOrigin.Coordinates = (
-                0.0, 0.0, door_height / 2,
+                0.0, 0.0, plan_symbol_height,
             )
             ifcopenshell.api.geometry.assign_representation(
                 model,
@@ -17898,6 +18003,37 @@ class Wall(ifcopenshell.entity_instance):
                 sill_height + opening_height,
             )
         )
+        for wall, part_at, part_width, part_bottom, part_top in extra_wall_spans:
+            part = wall._create_opening(
+                name=f"{door_name} Opening - {wall.storey.name}",
+                opening_start=part_at, width=part_width,
+                sill_height=part_bottom, height=part_top-part_bottom,
+            )
+            wall._openings.append((part_at, part_at+part_width, part_bottom, part_top))
+            pset = ifcopenshell.api.pset.add_pset(model, product=part, name="BBIM_DoorOpening")
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={"Door": door.GlobalId})
+            wall._add_overhead_line(
+                name=door_name, opening_start=part_at, opening_width=part_width,
+                opening_bottom=part_bottom, opening_top=part_top,
+                wall_faces=True, show_line=show_overhead,
+            )
+        for element in extra_elements:
+            part = ifcopenshell.api.root.create_entity(
+                model, ifc_class="IfcOpeningElement", name=f"{door_name} Opening - {element.Name}",
+                predefined_type="OPENING",
+            )
+            representation = ifcopenshell.api.geometry.add_wall_representation(
+                model, context=self.storey.house._body_context,
+                length=opening_width, height=opening_height,
+                thickness=self.thickness, offset=self.body_offset,
+            )
+            ifcopenshell.api.geometry.assign_representation(model, product=part, representation=representation)
+            ifcopenshell.api.feature.add_feature(model, feature=part, element=element)
+            ifcopenshell.api.geometry.edit_object_placement(
+                model, product=part, matrix=self._placement(opening_start, sill_height), is_si=True,
+            )
+            pset = ifcopenshell.api.pset.add_pset(model, product=part, name="BBIM_DoorOpening")
+            ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={"Door": door.GlobalId})
         if show_overhead:
             self._add_overhead_line(
                 name=door_name,
@@ -17908,14 +18044,11 @@ class Wall(ifcopenshell.entity_instance):
                 wall_faces=True,
             )
         for drawing in self.storey.house._drawings:
-            if (
-                drawing._automatic_door_annotations
-                and drawing._includes_storey(self.storey)
-            ):
-                drawing.add_door_annotation(
-                    door,
-                    offset=drawing._door_annotation_offset,
-                )
+            if drawing._includes_door(door):
+                if not drawing._includes_model_element(door):
+                    drawing._include_model_element(door)
+                if drawing._automatic_door_annotations:
+                    drawing.add_door_annotation(door, offset=drawing._door_annotation_offset)
         return door
 
     def _align_window_panel_to_axis(

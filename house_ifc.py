@@ -90,6 +90,7 @@ import re
 import xml.etree.ElementTree as ET
 import ifcopenshell.util.placement
 from ifc_utils import *
+from foundations import FoundationSpec, FoundationHeightMap, build_foundations
 from shapely.geometry import Polygon, box as geometry_box
 from shapely.ops import unary_union
 
@@ -386,7 +387,7 @@ PURLIN_WALL_TOP_HEIGHT = 3.5 - 1.375 + NADEZDIVKA - VAZNICE_HEIGHT
 LOWER_VAPOUR_BARRIER_TOP_HEIGHT = 2.5
 
 def earth_to_z(m_above_sea):
-	return m_above_sea - (417.1 - GROUND_FLOOR_THICKNESS)
+	return m_above_sea - (417.0 - GROUND_FLOOR_THICKNESS)
 
 def y_to_earth(y):
 	return 416 + y / HOUSE_DEPTH * (416.6 - 416)
@@ -763,40 +764,6 @@ foundation_base_plate = basement.floor_layer(
 	buildup_material="Base plate concrete",
 	color="#B8B8B8",
 )
-foundation_walls = tuple(
-	wall
-	for source_type in load_bearing_wall_types
-	for wall in basement.add_walls_from(
-		ground,
-		source_wall_type=source_type,
-		wall_type=foundation_wall,
-		height=FOUNDATION_WALL_HEIGHT,
-		start_height=0,
-	)
-)
-# West wall runs from the street corner (Y=0) towards the garden.
-#basement_street_wall = next(w for w in foundation_walls
-#	if w.start == wall_front_g.start and w.end == wall_front_g.end)
-#basement_door = basement_street_wall.add_door(
-#	name="Basement entrance",
-#	at=HOUSE_WIDTH-2.0, opening_width=1.0, width=0.9,
-#	sill_height=0.125, height=2.125, clear_height=2.0,
-#	operation="SINGLE_SWING_LEFT",
-#)
-
-foundation_footers = tuple(
-	footing
-	for source_type in load_bearing_wall_types
-	for footing in foundation.add_strip_footings_from(
-		ground,
-		source_wall_type=source_type,
-		width=FOUNDATION_FOOTER_WIDTH,
-		height=FOUNDATION_FOOTER_HEIGHT,
-		start_height=0,
-		material="Concrete",
-		color="#969696",
-	)
-)
 
 _foundation_insulation_sets = []
 _foundation_insulation_wall_types = {}
@@ -1078,6 +1045,66 @@ bathroom_door = wall_3.add_door(
 	operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True,
 )
+
+# Every supported ground-floor wall is explicit; per-wall values override defaults.
+# Example: FoundationSpec(wall_front_g, wall_thickness=0.30, footer_width=0.80).
+foundation_specs = (
+	FoundationSpec(wall_front_g, wall_thickness=0.30, footer_width=0.6),
+	FoundationSpec(wall_4_g, wall_thickness=0.30, footer_width=0.6),
+	FoundationSpec(wall_back_g, wall_thickness=0.30, footer_width=0.6),
+	FoundationSpec(wall_1_g, wall_thickness=0.30, footer_width=0.6),
+	FoundationSpec(wall_2, wall_thickness=0.40, footer_width=0.9),
+	FoundationSpec(wall_3, wall_thickness=0.40, footer_width=0.9),
+	FoundationSpec(wall_gym_g, wall_thickness=0.40, footer_width=0.6),
+	FoundationSpec(wall_kitchen_3, wall_thickness=0.40, footer_width=0.6),
+	FoundationSpec(wall_bathroom, wall_thickness=0.40, footer_width=0.6),
+)
+missing_foundations = {wall for wall in ground.walls
+	if ifcopenshell.util.element.get_type(wall) in load_bearing_wall_types
+} - {spec.wall for spec in foundation_specs}
+if missing_foundations:
+	raise ValueError("load-bearing walls missing foundation_specs: "
+		+ ", ".join(sorted(wall.Name for wall in missing_foundations)))
+# Nominal footer-bottom Z. Tops step immediately; undersides transition 1:1.
+# earth_to_z(...) can be used here for elevations supplied above sea level.
+FOUNDATION_HEIGHT_MAP = FoundationHeightMap((
+	(0.0, FOUNDATION_FOOTER_BOTTOM_Z),
+	(3.3, FOUNDATION_FOOTER_BOTTOM_Z + 0.4),
+	(4.1, FOUNDATION_FOOTER_BOTTOM_Z + 0.8),
+	(4.9, FOUNDATION_FOOTER_BOTTOM_Z + 1.2),
+	(5.7, FOUNDATION_FOOTER_BOTTOM_Z + 1.6),
+))
+foundation_walls, foundation_footers = build_foundations(
+	foundation_specs,
+	wall_storey=basement, footer_storey=foundation,
+	height_map=FOUNDATION_HEIGHT_MAP,
+	wall_top_z=-BASEMENT_CEILING_SPACE,
+	wall_type=foundation_wall,
+	default_wall_thickness=FOUNDATION_WALL_THICKNESS,
+	default_footer_width=FOUNDATION_FOOTER_WIDTH,
+	default_footer_height=FOUNDATION_FOOTER_HEIGHT,
+	slab_thickness=FOUNDATION_BASE_PLATE_THICKNESS,
+	wall_color=LIAPOR_COLOR,
+)
+
+basement_street_wall = next(w for w in foundation_walls
+	if w.start == wall_front_g.start and w.end == wall_front_g.end)
+BASEMENT_DOOR_SILL_HEIGHT = 1.25
+BASEMENT_DOOR_CLEAR_HEIGHT = 2.0
+BASEMENT_DOOR_OPENING_WIDTH = 1.0
+basement_door = basement_street_wall.add_door(
+	name="Basement entrance",
+	at=wall3_start-BASEMENT_DOOR_OPENING_WIDTH,
+	opening_width=BASEMENT_DOOR_OPENING_WIDTH, width=0.9,
+	sill_height=BASEMENT_DOOR_SILL_HEIGHT,
+	height=BASEMENT_DOOR_SILL_HEIGHT+BASEMENT_DOOR_CLEAR_HEIGHT,
+	clear_height=BASEMENT_DOOR_CLEAR_HEIGHT,
+	through_walls=[wall_front_g, *(wall for wall in foundation_walls
+		if wall.source_wall == wall_front_g and wall != basement_street_wall)],
+	through_elements=[chodba],
+	operation="SINGLE_SWING_LEFT",
+)
+
 
 # The ring beam caps the ground-floor walls, but belongs to the upper storey.
 # Its negative local offset keeps it directly below the upper-floor elevation.
@@ -1965,7 +1992,7 @@ roof_inner_cuts = [
 ]
 
 ROOF_EAVE_OVERHANG = 0.75
-TRANSVERSE_ROOF_EAVE_OVERHANG = 1.8
+TRANSVERSE_ROOF_EAVE_OVERHANG = 2.0
 # Retain the existing eave finish independently of the removed outer beam.
 TRANSVERSE_ROOF_EAVE_REFERENCE_X_OFFSET = TRANSVERSE_ROOF_EAVE_OVERHANG - 0.9
 TRANSVERSE_ROOF_EAVE_REFERENCE_DROP = 0.54
@@ -3903,6 +3930,7 @@ def add_perimeter_facade(side):
 	# The basement walls copy these paths; hosting the continuous finish there
 	# also covers exposed basement without a seam at the ground-floor datum.
 	host = next(w for w in foundation_walls if w.start == wall.start and w.end == wall.end)
+	other_foundations = [w for w in foundation_walls if w.source_wall == wall and w != host]
 	# Use the lower insulation thickness for both the offset and corner returns.
 	extension = EXTERIOR_XPS_INSULATION_THICKNESS + FACADE_THICKNESS - 0.001
 	sections = []
@@ -3926,7 +3954,7 @@ def add_perimeter_facade(side):
 		thickness=FACADE_THICKNESS, side="right",
 		start_height=0, height=PERIMETER_TOP_HEIGHT-basement.elevation,
 		start_extension=start_extension, end_extension=end_extension,
-		opening_walls=[wall],
+		opening_walls=[wall, *other_foundations], cuts=(),
 	) for label, start_extension, end_extension, white in sections)
 
 
@@ -4332,7 +4360,9 @@ if "found" in sys.argv:
 		"Foundation",
 		x=5,
 		y=3,
-		z=foundation.elevation + FOUNDATION_FOOTER_HEIGHT / 2,
+		z=max(ifcopenshell.util.element.get_pset(f, "BBIM_StripFooting", "BottomZ")
+		      +ifcopenshell.util.element.get_pset(f, "BBIM_StripFooting", "Height")/2
+		      for f in foundation_footers),
 		radius=8,
 		storeys=[foundation],
 		right_panel_width=40,
@@ -4369,9 +4399,14 @@ if "found" in sys.argv:
 	drawing1.add_circle(center=(3, -3), radius=1.1, color="orange")
 	drawing1.add_text(point=(3, -3), text="DČOV", font_size=3, color="orange")
 
+	wall4_footer = next(f for f in foundation_footers
+		if ifcopenshell.util.element.get_pset(f, "BBIM_StripFooting", "SourceWall") == wall_4_g.GlobalId)
+	wall4_footer_width = ifcopenshell.util.element.get_pset(wall4_footer, "BBIM_StripFooting", "Width")
+	wall4_footer_x = HOUSE_WIDTH-ifcopenshell.util.element.get_pset(
+		wall4_footer, "BBIM_StripFooting", "StructuralCenterOffset")
 	drawing1.add_dimension(
-		(wall4_mid-FOUNDATION_FOOTER_WIDTH/2.0, HOUSE_DEPTH-2),
-		(wall4_mid+FOUNDATION_FOOTER_WIDTH/2.0, HOUSE_DEPTH-2),
+		(wall4_footer_x-wall4_footer_width/2.0, HOUSE_DEPTH-2),
+		(wall4_footer_x+wall4_footer_width/2.0, HOUSE_DEPTH-2),
 		offset=3
 	)
 
@@ -5697,6 +5732,17 @@ if "cut1" in sys.argv:
 
 def add_section_material_legend(drawing):
 	"""Add the shared material legend used by the house sections."""
+	footer_sizes = sorted({(
+		ifcopenshell.util.element.get_pset(f, "BBIM_StripFooting", "Width"),
+		ifcopenshell.util.element.get_pset(f, "BBIM_StripFooting", "Height"),
+	) for f in foundation_footers})
+	ramped_footers = any(
+		ifcopenshell.util.element.get_pset(f, "BBIM_StripFooting", "MinimumBottomZ")
+		< ifcopenshell.util.element.get_pset(f, "BBIM_StripFooting", "BottomZ")-1e-8
+		for f in foundation_footers)
+	footer_dimensions = ", ".join(
+		f"{width*1000:.0f} × {'min. ' if ramped_footers else ''}{height*1000:.0f}"
+		for width, height in footer_sizes)
 	return drawing.add_material_legend([
 		("brick", "Nosná zeď\nVPC Cihla 240 mm"),
 		("solid-white", "Nosná zeď\nVPC cihla 175mm"),
@@ -5715,9 +5761,7 @@ def add_section_material_legend(drawing):
 		),
 		(
 			"footing-cross",
-			f"Základový pas\nbeton "
-			f"{FOUNDATION_FOOTER_WIDTH * 1000:.0f} × "
-			f"{FOUNDATION_FOOTER_HEIGHT * 1000:.0f} mm",
+			f"Základový pas\nbeton {footer_dimensions} mm",
 		),
 		("wood-solid", "Dřevo"),
 		("wood-siding", "Dřevěný obklad (pohled)"),
