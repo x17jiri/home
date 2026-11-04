@@ -61,7 +61,7 @@ class SurveyPointsTests(unittest.TestCase):
         u, v = frame.to_local(*a), frame.to_local(*b)
         self.assertAlmostEqual(hypot(a[0]-b[0], a[1]-b[1]), hypot(u[0]-v[0], u[1]-v[1]))
 
-    def test_rejects_swapped_columns_duplicate_ids_and_bad_rows(self):
+    def test_rejects_swapped_columns_conflicting_ids_and_bad_rows(self):
         with TemporaryDirectory() as directory:
             source = Path(directory)/"points.txt"
             for contents in (
@@ -79,6 +79,52 @@ class SurveyPointsTests(unittest.TestCase):
                     source.write_text(contents, encoding="utf-8")
                     with self.assertRaises(ValueError):
                         read_survey_points(source)
+
+    def test_repeated_point_can_be_shared_by_groups_and_drawn_once(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory)/"points.txt"
+            contents = ("#red\n1 588805 1144300 417 A\n26 588800 1144300 418 shared\n"
+                        "\n#blue\n26 588800 1144300 418 other note\n"
+                        "2 588800 1144305 419 B\n26 588800 1144300 418 other note\n")
+            source.write_text(contents, encoding="utf-8")
+            groups = read_survey_groups(source)
+            self.assertEqual([[p.number for p in group.points] for group in groups],
+                             [["1", "26"], ["26", "2", "26"]])
+            unique = read_survey_points(source)
+            self.assertEqual([p.number for p in unique], ["1", "26", "2"])
+            self.assertEqual(unique[1].note, "shared")
+            self.assertEqual(source.read_text(), contents)
+
+    def test_repeated_id_with_different_coordinates_identifies_both_lines(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory)/"points.txt"
+            for values in ((588801, 1144300, 418), (588800, 1144301, 418), (588800, 1144300, 419)):
+                with self.subTest(values=values):
+                    source.write_text("#red\n26 588800 1144300 418\n\n#blue\n"
+                                      +"26 "+" ".join(str(v) for v in values)+"\n")
+                    with self.assertRaisesRegex(ValueError, "conflicting coordinates.*'26'.*line 5.*line 2"):
+                        read_survey_groups(source)
+
+    def test_export_keeps_both_polylines_and_one_marker_label_and_record_for_shared_point(self):
+        with TemporaryDirectory() as directory:
+            source, output = Path(directory)/"points.txt", Path(directory)/"points.svg"
+            source.write_text("#red\n26 588800 1144300 418 shared\n1 588805 1144300 417 A\n"
+                              "\n#blue\n2 588800 1144305 419 B\n26 588800 1144300 418 shared\n")
+            with redirect_stdout(StringIO()):
+                render_survey_points(source, output, show_ids=True)
+            root = ET.parse(output).getroot()
+            ns = {"s": "http://www.w3.org/2000/svg"}
+            data = json.loads(root.find('s:metadata[@id="survey-data"]', ns).text)
+            self.assertEqual([p["number"] for p in data["points"]], ["26", "1", "2"])
+            self.assertEqual([g["point_ids"] for g in data["groups"]], [["26", "1"], ["2", "26"]])
+            for kind in ("point", "label"):
+                self.assertEqual(len(root.findall(f'.//s:g[@id="survey-{kind}-26"]', ns)), 1)
+            ids = [e.get("id") for e in root.iter() if e.get("id")]
+            self.assertEqual(len(ids), len(set(ids)))
+            paths = [root.find(f'.//s:g[@id="survey-group-{i}"]/s:path', ns) for i in range(2)]
+            coordinates = [[float(v) for v in re.findall(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?", p.get("d"))]
+                           for p in paths]
+            self.assertEqual(coordinates[0][:2], coordinates[1][-2:])
 
     def test_svg_has_exact_points_heights_tooltips_and_original_coordinates(self):
         with TemporaryDirectory() as directory:

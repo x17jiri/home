@@ -3,7 +3,7 @@
 Input order is point number, Y (westing), X (southing), Z (Bpv), optional note.
 Blank lines separate groups; an optional #color header connects a group's
 points in file order. Add ", closed" to connect the last point to the first.
-Notes are descriptive only.
+Point IDs may repeat in groups when their coordinates match. Notes are descriptive only.
 Local plan axes are east = Y0-Y and grid north = X0-X. No geographic transform
 or house placement is inferred; the original coordinates remain available.
 """
@@ -63,6 +63,7 @@ def read_survey_groups(source: str | Path) -> tuple[SurveyGroup, ...]:
 
     Rows use ID/Y/X/Z/note order, with or without the original geodet header.
     A blank line resets the color and closure; notes never determine connections.
+    Repeated IDs retain every polyline occurrence but must agree in Y/X/Z.
     """
     lines = Path(source).read_text(encoding="utf-8-sig").splitlines()
     start = 0
@@ -72,7 +73,7 @@ def read_survey_groups(source: str | Path) -> tuple[SurveyGroup, ...]:
         if len(lines) < 2 or lines[1].split()[1:4] != ["Y", "X", "Z"]:
             raise ValueError("expected survey columns: point number, Y, X, Z, optional note")
         start = 2
-    groups, points, seen = [], [], set()
+    groups, points, seen = [], [], {}
     color = None
     closed = False
     for line_number, raw_line in enumerate(lines[start:], start+1):
@@ -106,9 +107,10 @@ def read_survey_groups(source: str | Path) -> tuple[SurveyGroup, ...]:
         if not all(isfinite(v) for v in (y, x, z)) or min(y, x) <= 0:
             raise ValueError(f"expected finite coordinates and positive S-JTSK Y/X on line {line_number}")
         number = fields[0]
-        if number in seen:
-            raise ValueError(f"duplicate survey point number {number!r} on line {line_number}")
-        seen.add(number)
+        coordinates, first_line = seen.setdefault(number, ((y, x, z), line_number))
+        if coordinates != (y, x, z):
+            raise ValueError(f"conflicting coordinates for survey point number {number!r} "
+                             f"on line {line_number}; first defined on line {first_line}")
         points.append(SurveyPoint(number, y, x, z, fields[4] if len(fields) == 5 else ""))
     if points:
         groups.append(SurveyGroup(color, tuple(points), closed))
@@ -118,8 +120,16 @@ def read_survey_groups(source: str | Path) -> tuple[SurveyGroup, ...]:
 
 
 def read_survey_points(source: str | Path) -> tuple[SurveyPoint, ...]:
-    """Read all points in file order, preserving IDs, heights and survey notes."""
-    return tuple(point for group in read_survey_groups(source) for point in group.points)
+    """Read unique points in first-occurrence order, retaining their first note."""
+    return _unique_points(read_survey_groups(source))
+
+
+def _unique_points(groups):
+    points = {}
+    for group in groups:
+        for point in group.points:
+            points.setdefault(point.number, point)
+    return tuple(points.values())
 
 
 def _place_labels(ax, points, positions, font_size, show_ids):
@@ -158,7 +168,7 @@ def render_survey_points(
     import numpy as np
 
     groups = read_survey_groups(source)
-    points = tuple(point for group in groups for point in group.points)
+    points = _unique_points(groups)
     if not isinstance(show_ids, bool):
         raise TypeError("show_ids must be a boolean")
     frame = SurveyFrame.for_points(points)

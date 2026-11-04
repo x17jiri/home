@@ -1599,6 +1599,11 @@ Add `, closed` to a color header (e.g. `#ff0000, closed`) to connect the last
 point back to the first. Without it the polyline stays open. Blank lines also
 reset this option.
 Notes are preserved for reference and do not affect connections or ordering.
+Repeat a point's complete row in another group to use it in multiple polylines.
+Every occurrence stays in its group's path, while its cross, height label and
+SVG point record are drawn only once. Repeated IDs must have the same Y/X/Z
+coordinates; conflicting rows report both line numbers. Unique points keep
+their first-occurrence order and the first row's note for their label/tooltip.
 The drawing preserves each measured position, using small crosses and height
 labels directly below the crosses, in light blue and without leader lines.
 Hovering over a cross in the SVG reveals its ID, original coordinates and note,
