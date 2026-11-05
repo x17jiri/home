@@ -85,6 +85,119 @@ python example_house.py
 
 It creates both `house_plan.svg` and `house_plan.png`.
 
+## Alternative house
+
+`house2.py` is an independent model using the shared `ifc_utils` helpers.
+It starts with a single ground-floor storey at Z = 0 and four 240 mm VPC
+outer walls enclosing a 9.0 × 8.75 m outside footprint. A 175 mm VPC
+load-bearing wall along X separates the garden rooms, with clear depth
+`GARDEN_ROOMS_DEPTH = 3.54 m`; the street-side area uses the remaining space.
+A stepped 175 mm VPC load-bearing wall splits the street-side area.
+Pokoj 3 keeps `THIRD_ROOM_WIDTH = 3.47 m` clear below its garden-side end;
+the top `THIRD_ROOM_NARROW_DEPTH = 1.25 m` is only
+`THIRD_ROOM_NARROW_WIDTH = 2.75 m` wide, clearing the Pokoj 1 doorway.
+The floor polygons and dimensions follow the step. Its street window stays
+centred on the wider street-side part.
+The hallway-side 175 mm load-bearing wall is split into separate stairway
+and bathroom segments. The stairway keeps `STAIRWAY_WIDTH = 3.0 m` clear,
+and its horizontal dividing wall gives it `STAIRWAY_DEPTH = 2.25 m` clear
+depth. The bathroom segment uses `BATHROOM_WIDTH = 2.75 m`, widening the
+hallway by 250 mm beside the Pokoj 2 door. The hallway floor follows this
+step, and the bathroom size and widened hallway are dimensioned above the
+stairs.
+The front entrance has a 900 mm leaf; `ENTRANCE_OPENING_WIDTH` controls its
+construction opening. It is centred on the hallway before rounding the
+opening's start down to the next 0.125 m along the front wall
+(`ENTRANCE_OPENING_AT`). A construction-opening dimension sits below the
+overall house dimension, and an entrance arrow points inward at the opening
+centre. Its threshold and opening dimension use the finished-floor level,
+`GROUND_FLOOR_THICKNESS`, preserving the door's 2.125 m overall height and
+2.1 m clear height.
+A centred 115 mm VPC partition along Y splits the garden section into equal
+rooms, each with 4.2025 m clear width. The common finishing pass gives every
+ground-floor masonry wall a Liapor base course; the stair drywall divider is
+the exception. Partitions remain non-load-bearing.
+Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
+openings through the garden-room dividing wall. Each opening's nearest edge
+is 125 mm from its side of the centre partition, controlled by
+`GARDEN_DOOR_PARTITION_CLEARANCE`; the hinges face that partition.
+The bathroom wall is set back to clear the Pokoj 2 opening.
+Pokoj 3 and the bathroom also have 900 mm inward-opening doors in 1000 mm
+construction openings. Their nearest opening edges are respectively
+`THIRD_ROOM_DOOR_FRONT_CLEARANCE = 1.25 m` from the inside front-wall face
+and `BATHROOM_DOOR_STAIRWAY_CLEARANCE = 0.125 m` from the bathroom face of
+the stairway dividing wall. Opening dimensions are placed inside each room.
+Basement support walls will be added in a later step.
+Five room floors (`0.01–0.05`: Pokoj 1, Pokoj 2, Pokoj 3, Chodba, Koupelna)
+use 120 mm insulation and 65 mm screed/finish,
+starting at Z = 0. The stairway room has no floor build-up. Floor polygons
+follow the clear room boundaries, and their measured areas supply the plan
+labels and room legend from the same `ground_room_floors` collection.
+Wall height is
+`GROUND_WALL_BASE_COURSE_HEIGHT + 2.625 m` (currently 2.825 m), including the
+200 mm Liapor base course.
+
+The stairway has two 1.05 m wide flights with **eight risers and seven
+270 mm treads per flight**. The lower flight follows the bathroom wall
+toward the west (+X); the upper flight returns east (−X) along the front wall.
+The middle landing projects 1.05 m from the west wall's inner face and spans
+the stairway depth. A hallway opening and a small floor-level approach
+platform lead to the first tread. Both flights are concrete with 150 mm
+sloped waists; there is no general floor build-up in the stairway room.
+
+The first MIAKO ceiling covers Pokoj 1 and 2, with its geometric centreline
+above their separating partition and beams running along Y. The beam length
+is the clear room depth rounded up to 250 mm (`GARDEN_CEILING_BEAM_LENGTH`,
+currently 3.50 m). The beams are centred along the room depth, giving 15 mm
+bearing at each end with the current dimensions; the inserts stop at the
+inside wall faces. `GARDEN_CEILING_STRUCTURE` starts and ends with a beam,
+with a beam between every infill row: four wide rows, five narrow rows,
+then five wide rows. Its 15 beams and 14 infill rows span 8.295 m across X,
+centred over the two rooms. This is the initial layout; the side gaps and
+ring beams are not filled yet. The assembly runs from the ground wall top
+to `UPPER_FLOOR_START`, using 150 mm blocks and 60 mm topping.
+The entire assembly belongs to its own `Ceiling` storey, starting at the
+ground-wall top, so it can be hidden separately in the 3D viewer.
+
+`CEILING_THICKNESS = 0.21` and
+`UPPER_FLOOR_THICKNESS = 0.03 + CEMFLOW_AND_FINISH_THICKNESS` define the
+levels; no upper-floor slab is created. The total stair
+rise is `ground_floor_height + CEILING_THICKNESS + UPPER_FLOOR_THICKNESS -
+GROUND_FLOOR_THICKNESS`, shared equally between 16 risers. With the current
+parameters the rise is 2.945 m (184.0625 mm per riser), the middle landing
+is at Z = 1.6575 m and the upper finished level at Z = 3.130 m. The drawing
+shows both flights, one continuous ascent arrow, and a stair configuration note.
+Between the flights, a 100 mm drywall partition extends from the hallway
+wall's stair-side face to the middle landing edge. It is centred in the 150 mm flight gap,
+leaving 25 mm on each side, and uses the standard ground-floor wall height.
+It is SDK throughout, with no Liapor base course; the shared finishing pass
+preserves this exception and each wall's original material. The
+partition is non-load-bearing and has its own material-legend entry.
+
+Pokoj 1 and 2 have 1.75 m windows centred on their back-wall segments, with
+the opening starts rounded to the nearest 0.125 m along the wall. Pokoj 3 has
+an exactly centred 1.75 m front-wall window. Koupelna has a centred
+0.75 × 0.75 m west-wall window. All window tops are at
+`GROUND_WALL_BASE_COURSE_HEIGHT + 2.25 m`; bedroom sills use
+`GROUND_WALL_BASE_COURSE_HEIGHT + 0.875 m`. The bathroom sill follows from
+its 0.75 m height. All window frames use white in 3D.
+All four windows have construction-opening dimensions outside their host
+walls: width above the line and height/sill below, relative to the finished
+floor. The room legend includes summed nominal window area (modelled width
+times height) and its percentage of each room's floor area. The hallway
+shows zero window area. `ground_room_windows` assigns windows to room IDs;
+the right panel is 60 mm wide to keep the extra column readable.
+
+Run `python3 house2.py` to export `house2.ifc`. Run
+`python3 house2.py ground` to also render `projekt2/ground.svg` and
+`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.1. Půdorys 1.NP.pdf`
+(A4 landscape, 1:100), matching the original project's PDF directory structure.
+Run `python3 house2.py ceiling` for `projekt2/ceiling.svg` and
+`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.2. Strop nad 1.NP.pdf`.
+The ceiling plan shows the wall context, beam spacing, overall and slab
+dimensions, and a MIAKO beam schedule. Pass both `ground ceiling` to generate
+both plans in one run.
+
 ## IFC wall types and material layers
 
 `ifc_utils.py` can define a reusable wall construction as an `IfcWallType`.

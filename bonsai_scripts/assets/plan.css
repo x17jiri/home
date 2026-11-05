@@ -474,7 +474,8 @@ marker[id^="batting-"] path {
 }
 
 /* Only "Partition wall - VPC 115 mm" */
-.cut.material-PartitionwallVPC115mm {
+.cut.material-PartitionwallVPC115mm,
+.cut.material-GroundpartitionwallVPC115mmLiaporbasecourse.layer-material-Brick {
     fill: url(#diagonal1) !important;
     stroke: black;
     stroke-width: 0.05 !important;
