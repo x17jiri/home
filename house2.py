@@ -1,4 +1,4 @@
-"""Alternative house: export with `python3 house2.py`; draw with `ground` or `ceiling`."""
+"""Alternative house: export with `python3 house2.py`; draw with `ground`, `ceiling`, or `upper`."""
 
 from pathlib import Path
 from math import floor
@@ -17,6 +17,7 @@ HOUSE_DEPTH = 8.75
 BWT = 0.24
 INNER_BWT = 0.175
 PARTITION_THICKNESS = 0.115
+FACADE_INSULATION_THICKNESS = 0.20
 GARDEN_ROOMS_DEPTH = 3.47  # Clear depth between the divider and inside garden wall.
 GARDEN_ROOMS_WALL_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT
 THIRD_ROOM_WIDTH = 3.47  # Clear width of the left street-side room.
@@ -50,28 +51,43 @@ GARDEN_CEILING_WIDTH = sum(
     {"beam": 0.17, "wide": 0.455, "narrow": 0.33}[item]
     for item in GARDEN_CEILING_STRUCTURE
 )
+THIRD_ROOM_CEILING_BEAM_LENGTH = math.ceil(THIRD_ROOM_WIDTH/0.25)*0.25
+THIRD_ROOM_CEILING_STRUCTURE = [
+    "beam",
+    "wide", "beam", "wide", "beam", "wide", "beam", "wide", "beam",
+    "wide", "beam", "wide", "beam", "wide", "beam",
+]
+THIRD_ROOM_CEILING_WIDTH = sum(
+    {"beam": 0.17, "wide": 0.455}[item]
+    for item in THIRD_ROOM_CEILING_STRUCTURE
+)
 UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
 UPPER_FINISHED_FLOOR_HEIGHT = UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS
+UPPER_RING_BEAM_HEIGHT = 0.24
+NADEZDIVKA = 1.125+UPPER_RING_BEAM_HEIGHT
 STAIR_FLIGHT_WIDTH = 1.05
 STAIR_LANDING_LENGTH = 1.05
 STAIR_TREAD_LENGTH = 0.27
-STAIR_RISERS_PER_FLIGHT = 8
-STAIR_RUN_LENGTH = (STAIR_RISERS_PER_FLIGHT-1)*STAIR_TREAD_LENGTH
-STAIR_RISER_HEIGHT = (UPPER_FINISHED_FLOOR_HEIGHT-GROUND_FLOOR_THICKNESS)/(2*STAIR_RISERS_PER_FLIGHT)
+STAIR_LOWER_RISERS = 9
+STAIR_UPPER_RISERS = 7
+STAIR_LOWER_RUN_LENGTH = (STAIR_LOWER_RISERS-1)*STAIR_TREAD_LENGTH
+STAIR_UPPER_RUN_LENGTH = (STAIR_UPPER_RISERS-1)*STAIR_TREAD_LENGTH
+STAIR_RISER_HEIGHT = (UPPER_FINISHED_FLOOR_HEIGHT-GROUND_FLOOR_THICKNESS)/(STAIR_LOWER_RISERS+STAIR_UPPER_RISERS)
 STAIR_LANDING_START_X = HOUSE_WIDTH-BWT-STAIR_LANDING_LENGTH
-STAIR_RUN_START_X = STAIR_LANDING_START_X-STAIR_RUN_LENGTH
+STAIR_LOWER_START_X = STAIR_LANDING_START_X-STAIR_LOWER_RUN_LENGTH
+STAIR_UPPER_END_X = STAIR_LANDING_START_X-STAIR_UPPER_RUN_LENGTH
 STAIR_LOWER_CENTER_Y = STAIRWAY_WALL_Y-STAIR_FLIGHT_WIDTH/2
 STAIR_UPPER_CENTER_Y = BWT+STAIR_FLIGHT_WIDTH/2
 STAIR_WAIST_THICKNESS = 0.15
-STAIR_DIVIDER_THICKNESS = 0.10
-STAIR_DIVIDER_Y = (STAIR_LOWER_CENTER_Y+STAIR_UPPER_CENTER_Y)/2
-if STAIR_RUN_LENGTH+STAIR_LANDING_LENGTH > STAIRWAY_WIDTH+1e-9:
-    raise ValueError("stair flights and landing do not fit STAIRWAY_WIDTH")
+STAIR_RAILING_HEIGHT = 1.0
+if STAIR_UPPER_RUN_LENGTH+STAIR_LANDING_LENGTH > STAIRWAY_WIDTH+1e-9:
+    raise ValueError("upper stair flight and landing do not fit STAIRWAY_WIDTH")
+# The lower flight may extend into the open hallway.
+if STAIR_LOWER_START_X < THIRD_ROOM_WALL_X-1e-9:
+    raise ValueError("lower stair flight reaches beyond the hallway into Pokoj 3")
 if 2*STAIR_FLIGHT_WIDTH > STAIRWAY_DEPTH+1e-9:
     raise ValueError("the two stair flights do not fit STAIRWAY_DEPTH")
-if 2*STAIR_FLIGHT_WIDTH+STAIR_DIVIDER_THICKNESS > STAIRWAY_DEPTH+1e-9:
-    raise ValueError("the stair flights and drywall divider do not fit STAIRWAY_DEPTH")
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
 ENTRANCE_OPENING_WIDTH = 1.125
@@ -85,7 +101,7 @@ ROOM_DOOR_CLEAR_HEIGHT = 2.1
 GARDEN_DOOR_PARTITION_CLEARANCE = 0.125
 THIRD_ROOM_DOOR_FRONT_CLEARANCE = 1.25
 BATHROOM_DOOR_STAIRWAY_CLEARANCE = 0.125
-HALLWAY_CENTER_X = (THIRD_ROOM_WALL_X+STAIRWAY_WALL_X-INNER_BWT)/2
+HALLWAY_CENTER_X = (THIRD_ROOM_WALL_X+STAIRWAY_WALL_X)/2
 ENTRANCE_OPENING_AT = math.ceil(THIRD_ROOM_WIDTH/0.125)*0.125 + 0.5
 ROOM_WINDOW_WIDTH = 1.75
 GROUND_WINDOW_TOP_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+2.25
@@ -98,11 +114,13 @@ PROJECT_DIR = Path("projekt2")
 DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = PROJECT_DIR / "D1.1. Architektonicko Stavební Řešení"
 PDF_GROUND = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.1. Půdorys 1.NP.pdf"
 PDF_CEILING = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.2. Strop nad 1.NP.pdf"
+PDF_UPPER = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.3. Půdorys 2.NP.pdf"
 SECTION_OUTLINE_WIDTH = 0.3
 
 house = House("House 2", mirror_x=False, colors={"wall": "#ffffff", "window": "#ffffff"})
 ground = house.storey("Ground floor", elevation=0)
 ceiling_storey = house.storey("Ceiling", elevation=ground_floor_height)
+upper = house.storey("Upper floor", elevation=UPPER_FLOOR_START)
 
 load_bearing_wall = house.wall_type(
     "Load bearing wall - VPC 240 mm",
@@ -115,11 +133,6 @@ load_bearing_wall_inner = house.wall_type(
 partition_wall = house.wall_type(
     "Partition wall - VPC 115 mm",
     layers=[("Brick", PARTITION_THICKNESS)],  # Centred on its reference line.
-)
-dry_wall = house.wall_type(
-    "drywall - 100 mm",
-    layers=[("SDK", STAIR_DIVIDER_THICKNESS)],
-    color="#dfefcf",
 )
 
 # Outer-face reference lines, with all material toward the interior.
@@ -165,11 +178,6 @@ wall_third_room_top_g = ground.wall(
     wall_type=load_bearing_wall_inner, height=ground_floor_height,
 )
 wall_third_room_top_g.Name = "Hallway - Pokoj 3 upper wall"
-wall_stairway_side_g = ground.wall(
-    (STAIRWAY_WALL_X, BWT), (STAIRWAY_WALL_X, STAIRWAY_WALL_Y+INNER_BWT),
-    wall_type=load_bearing_wall_inner, height=ground_floor_height,
-)
-wall_stairway_side_g.Name = "Hallway - stairway wall"
 wall_bathroom_side_g = ground.wall(
     (BATHROOM_WALL_X, STAIRWAY_WALL_Y+INNER_BWT), (BATHROOM_WALL_X, GARDEN_ROOMS_WALL_Y),
     wall_type=load_bearing_wall_inner, height=ground_floor_height,
@@ -179,11 +187,6 @@ wall_stairway_back_g = ground.wall(
     (STAIRWAY_WALL_X, STAIRWAY_WALL_Y), (HOUSE_WIDTH-BWT, STAIRWAY_WALL_Y),
     wall_type=load_bearing_wall_inner, height=ground_floor_height,
 )
-wall_stair_divider_g = ground.wall(
-    (STAIRWAY_WALL_X, STAIR_DIVIDER_Y), (STAIR_LANDING_START_X, STAIR_DIVIDER_Y),
-    wall_type=dry_wall, height=ground_floor_height,
-)
-wall_stair_divider_g.Name = "Stair flight divider"
 front_door = wall_front_g.add_door(
     name="Entrance door",
     at=ENTRANCE_OPENING_AT,
@@ -238,20 +241,12 @@ bathroom_door = wall_bathroom_side_g.add_door(
     operation="SINGLE_SWING_LEFT",
     reverse_swing=True,
 )
-stairway_entrance = wall_stairway_side_g.add_opening(
-    name="Hallway to stairway",
-    at=0,
-    width=STAIRWAY_DEPTH,
-    sill_height=GROUND_FLOOR_THICKNESS,
-    height=ENTRANCE_DOOR_HEIGHT,
-)
-
 ground_load_bearing_walls = (
     wall_front_g, wall_west_g, wall_back_g, wall_east_g, wall_garden_rooms_g, wall_third_room_g,
     wall_third_room_return_g, wall_third_room_top_g,
-    wall_stairway_side_g, wall_bathroom_side_g, wall_stairway_back_g,
+    wall_bathroom_side_g, wall_stairway_back_g,
 )
-# Apply the base course to ground-floor walls except the all-drywall stair divider.
+# Apply the base course to all ground-floor masonry walls.
 # Add subsequent ground-floor walls above this common finishing pass.
 for wall in ground.walls:
     load_bearing = wall in ground_load_bearing_walls
@@ -259,18 +254,13 @@ for wall in ground.walls:
     material_set = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
     wall_material = material_set.MaterialLayers[0].Material.Name
     construction = "VPC" if wall_material == "Brick" else wall_material
-    has_base_course = wall != wall_stair_divider_g
-    layers = (
-        [
-            (GROUND_WALL_BASE_COURSE_MATERIAL, GROUND_WALL_BASE_COURSE_HEIGHT),
-            (wall_material, wall.height-GROUND_WALL_BASE_COURSE_HEIGHT),
-        ]
-        if has_base_course else [(wall_material, wall.height)]
-    )
+    layers = [
+        (GROUND_WALL_BASE_COURSE_MATERIAL, GROUND_WALL_BASE_COURSE_HEIGHT),
+        (wall_material, wall.height-GROUND_WALL_BASE_COURSE_HEIGHT),
+    ]
     wall.set_vertical_material_layers(
         layers,
-        type_name=(f"Ground {role} wall - {construction} {wall.thickness*1000:g} mm"
-                   + (" - Liapor base course" if has_base_course else "")),
+        type_name=f"Ground {role} wall - {construction} {wall.thickness*1000:g} mm - Liapor base course",
     )
     common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
     ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": load_bearing})
@@ -315,8 +305,8 @@ pokoj3 = ground.floor_layer(
 chodba = ground.floor_layer(
     "Chodba", room_id="0.04",
     outline=(
-        (THIRD_ROOM_WALL_X, BWT), (STAIRWAY_WALL_X-INNER_BWT, BWT),
-        (STAIRWAY_WALL_X-INNER_BWT, STAIRWAY_WALL_Y+INNER_BWT),
+        (THIRD_ROOM_WALL_X, BWT), (STAIRWAY_WALL_X, BWT),
+        (STAIRWAY_WALL_X, STAIRWAY_WALL_Y+INNER_BWT),
         (BATHROOM_WALL_X-INNER_BWT, STAIRWAY_WALL_Y+INNER_BWT),
         (BATHROOM_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y),
         (THIRD_ROOM_NARROW_WALL_X, GARDEN_ROOMS_WALL_Y),
@@ -377,13 +367,13 @@ ground_room_windows = {
 
 # Stairs use the ceiling and future upper-floor levels.
 lower_stairs = ground.stair(
-    (STAIR_RUN_START_X, STAIR_LOWER_CENTER_Y),
+    (STAIR_LOWER_START_X, STAIR_LOWER_CENTER_Y),
     (STAIR_LANDING_START_X, STAIR_LOWER_CENTER_Y),
     name="Lower stair flight",
     width=STAIR_FLIGHT_WIDTH,
     start_height=GROUND_FLOOR_THICKNESS,
-    height=STAIR_RISER_HEIGHT*STAIR_RISERS_PER_FLIGHT,
-    risers=STAIR_RISERS_PER_FLIGHT,
+    height=STAIR_RISER_HEIGHT*STAIR_LOWER_RISERS,
+    risers=STAIR_LOWER_RISERS,
     underside="sloped",
     waist_thickness=STAIR_WAIST_THICKNESS,
 )
@@ -395,27 +385,34 @@ middle_stair_landing = ground.stair_landing(
 )
 upper_stairs = ground.stair(
     (STAIR_LANDING_START_X, STAIR_UPPER_CENTER_Y),
-    (STAIR_RUN_START_X, STAIR_UPPER_CENTER_Y),
+    (STAIR_UPPER_END_X, STAIR_UPPER_CENTER_Y),
     name="Upper stair flight",
     width=STAIR_FLIGHT_WIDTH,
     start_height=lower_stairs.end_height,
-    height=STAIR_RISER_HEIGHT*STAIR_RISERS_PER_FLIGHT,
-    risers=STAIR_RISERS_PER_FLIGHT,
+    height=STAIR_RISER_HEIGHT*STAIR_UPPER_RISERS,
+    risers=STAIR_UPPER_RISERS,
     underside="sloped",
     waist_thickness=STAIR_WAIST_THICKNESS,
 )
-stairway_approach = ground.stair_landing(
-    (STAIRWAY_WALL_X-INNER_BWT, STAIRWAY_WALL_Y-STAIR_FLIGHT_WIDTH),
-    (STAIR_RUN_START_X, STAIRWAY_WALL_Y),
-    name="Stairway entrance approach",
-    height=GROUND_FLOOR_THICKNESS,
-    thickness=GROUND_FLOOR_THICKNESS,
+stair_railing = ground.railing(
+    "Stair flight railing",
+    path=upper_stairs.railing_path("right"),
+    height=STAIR_RAILING_HEIGHT,
+    color="#C8B090",
 )
+if STAIR_LOWER_START_X > STAIRWAY_WALL_X+1e-9:
+    ground.stair_landing(
+        (STAIRWAY_WALL_X, STAIRWAY_WALL_Y-STAIR_FLIGHT_WIDTH),
+        (STAIR_LOWER_START_X, STAIRWAY_WALL_Y),
+        name="Stairway entrance approach",
+        height=GROUND_FLOOR_THICKNESS,
+        thickness=GROUND_FLOOR_THICKNESS,
+    )
 stairway_notes = [
     f"Šířka ramene: {STAIR_FLIGHT_WIDTH*1000:.0f} mm",
     f"Nášlap: {lower_stairs.tread_length*1000:.0f} mm",
     f"Výška stupně: {lower_stairs.riser_height*1000:.1f} mm".replace(".", ","),
-    f"Počet výšek: 2 × {STAIR_RISERS_PER_FLIGHT} = {2*STAIR_RISERS_PER_FLIGHT}",
+    f"Počet výšek: {STAIR_LOWER_RISERS} + {STAIR_UPPER_RISERS} = {STAIR_LOWER_RISERS+STAIR_UPPER_RISERS}",
 ]
 
 # Centre the complete ceiling on the partition between rooms 1 and 2.
@@ -440,6 +437,66 @@ ceiling_garden_rooms = ceiling_storey.miako_slab(
     block_end_offset=garden_ceiling_bearing,
 )
 
+# Use the full rectangular room envelope, ignoring the narrowed garden-side corner.
+third_room_ceiling_center_x = BWT+THIRD_ROOM_WIDTH/2
+third_room_ceiling_center_y = (BWT+GARDEN_ROOMS_WALL_Y)/2
+third_room_ceiling_bearing = (THIRD_ROOM_CEILING_BEAM_LENGTH-THIRD_ROOM_WIDTH)/2
+ceiling_third_room = ceiling_storey.miako_slab(
+    "Ceiling - Pokoj 3",
+    start=(third_room_ceiling_center_x-THIRD_ROOM_CEILING_BEAM_LENGTH/2,
+           third_room_ceiling_center_y-THIRD_ROOM_CEILING_WIDTH/2),
+    end=(third_room_ceiling_center_x+THIRD_ROOM_CEILING_BEAM_LENGTH/2,
+         third_room_ceiling_center_y-THIRD_ROOM_CEILING_WIDTH/2),
+    top=CEILING_THICKNESS,
+    direction=(0, 1),
+    structure=THIRD_ROOM_CEILING_STRUCTURE,
+    topping=0.06,
+    beam_height=0.06,
+    block_height=CEILING_THICKNESS-0.06,
+    block_start_offset=third_room_ceiling_bearing,
+    block_end_offset=third_room_ceiling_bearing,
+)
+
+# The upper-floor walls align with the ground-floor exterior faces.
+wall_front_u = upper.wall(
+    (0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA,
+)
+wall_west_u = upper.wall(
+    (HOUSE_WIDTH, BWT), (HOUSE_WIDTH, HOUSE_DEPTH-BWT),
+    wall_type=load_bearing_wall, height=NADEZDIVKA,
+)
+wall_back_u = upper.wall(
+    (HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
+    wall_type=load_bearing_wall, height=NADEZDIVKA,
+)
+wall_east_u = upper.wall(
+    (0, HOUSE_DEPTH-BWT), (0, BWT), wall_type=load_bearing_wall, height=NADEZDIVKA,
+)
+upper_exterior_walls = (wall_front_u, wall_west_u, wall_back_u, wall_east_u)
+for wall, name in zip(upper_exterior_walls, ("front", "west", "back", "east")):
+    wall.Name = f"Upper {name} wall"
+    common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
+    ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": True})
+
+
+def add_facade_insulation(drawing, walls=None):
+    """Add drawing-only Rockwool around the exterior walls, including the corners."""
+    if walls is None:
+        walls = (wall_front_g, wall_west_g, wall_back_g, wall_east_g)
+    for wall in walls:
+        if math.isclose(wall.start[1], wall.end[1], abs_tol=1e-9):
+            endpoints = dict(start_x=-FACADE_INSULATION_THICKNESS,
+                             end_x=HOUSE_WIDTH+FACADE_INSULATION_THICKNESS)
+        else:
+            endpoints = dict(start_y=0, end_y=HOUSE_DEPTH)
+        drawing.add_wall_insulation(
+            wall,
+            thickness=FACADE_INSULATION_THICKNESS,
+            material="rockwool",
+            **endpoints,
+        )
+
+
 house.write("house2.ifc")
 
 if "ground" in sys.argv:
@@ -457,8 +514,9 @@ if "ground" in sys.argv:
         ("brick", "Nosná zeď - VPC Cihla 240 mm"),
         ("solid-white", "Nosná zeď - VPC Cihla 175 mm"),
         ("diagonal1", "Příčka - VPC Cihla 115 mm"),
-        ("drywall-diagonal1", "Sádrokartonová příčka 100 mm"),
+        ("rockwool-wave", f"Rockwool - fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
+    add_facade_insulation(drawing1)
     for room in ground_room_floors:
         position = Polygon(room.outline).representative_point().coords[0]
         drawing1.add_room_annotation(
@@ -560,7 +618,7 @@ if "ground" in sys.argv:
     )
     drawing1.add_dimension(
         start=(THIRD_ROOM_WALL_X, STAIRWAY_WALL_Y+INNER_BWT-0.1),
-        end=(STAIRWAY_WALL_X-INNER_BWT, STAIRWAY_WALL_Y+INNER_BWT-0.1),
+        end=(wall_stairway_back_g.start[0], STAIRWAY_WALL_Y+INNER_BWT-0.1),
         name="Hallway clearance to bathroom-stairway wall",
     )
     drawing1.add_dimension(
@@ -587,18 +645,67 @@ if "ceiling" in sys.argv:
     # Show wall context without including the ground-floor finishes or stairs.
     for wall in ground.walls:
         drawing1.include_element(wall)
+    add_facade_insulation(drawing1)
+    drawing1.add_material_legend([
+        ("rockwool-wave", f"Rockwool - fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
+    ])
     drawing1.add_miako_beam_dimensions(ceiling_garden_rooms, side="end", offset=0.7)
+    drawing1.add_miako_beam_dimensions(ceiling_third_room, side="start", offset=0.7)
     drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-0.7)
     drawing1.add_dimension(start=(0, 0), end=(0, HOUSE_DEPTH), offset=1.2)
     drawing1.add_dimension(
         start=ceiling_garden_rooms.start, end=ceiling_garden_rooms.end, offset=0.65,
     )
     drawing1.add_dimension(
-        start=ceiling_garden_rooms.start,
-        end=(ceiling_garden_rooms.start[0]+ceiling_garden_rooms.width, ceiling_garden_rooms.start[1]),
-        offset=-0.6,
+        start=ceiling_garden_rooms.end,
+        end=(ceiling_garden_rooms.end[0]+ceiling_garden_rooms.width, ceiling_garden_rooms.end[1]),
+        offset=1.15,
+    )
+    drawing1.add_dimension(
+        start=ceiling_third_room.start, end=ceiling_third_room.end, offset=-0.55,
     )
     drawing1.add_miako_beam_schedule([
         {"location": "Pokoj 1 a 2", "slab": ceiling_garden_rooms},
+        {"location": "Pokoj 3", "slab": ceiling_third_room},
     ])
     drawing1.render(PROJECT_DIR / "ceiling.svg", pdf=PDF_CEILING)
+
+if "upper" in sys.argv:
+    drawing1 = house.add_drawing(
+        "upper",
+        x=HOUSE_WIDTH/2,
+        y=HOUSE_DEPTH/2,
+        z=UPPER_FLOOR_START+1.0,
+        radius=6.5,
+        storeys=[upper],
+        right_panel_width=60,
+        section_outline_width=SECTION_OUTLINE_WIDTH,
+    )
+    drawing1.add_material_legend([
+        ("brick", "Nosná zeď - VPC Cihla 240 mm"),
+        ("rockwool-wave", f"Rockwool - fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
+    ])
+    add_facade_insulation(drawing1, upper_exterior_walls)
+    drawing1.include_element(stair_railing)
+    drawing1.add_stair_annotation(lower_stairs)
+    drawing1.add_stair_annotation(upper_stairs)
+    drawing1.add_stair_landing_annotation(middle_stair_landing)
+    route_x = HOUSE_WIDTH-BWT-STAIR_LANDING_LENGTH/2
+    drawing1.add_poly_line(
+        [
+            lower_stairs.start, (route_x, STAIR_LOWER_CENTER_Y),
+            (route_x, STAIR_UPPER_CENTER_Y), upper_stairs.end,
+        ],
+        arrow_end=True, circle_start=True,
+    )
+    drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-0.7)
+    drawing1.add_dimension(start=(0, 0), end=(0, HOUSE_DEPTH), offset=0.7)
+    drawing1.add_dimension(
+        start=(BWT, HOUSE_DEPTH-BWT-0.5),
+        end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT-0.5),
+    )
+    drawing1.add_dimension(
+        start=(HOUSE_WIDTH-BWT-0.5, BWT),
+        end=(HOUSE_WIDTH-BWT-0.5, HOUSE_DEPTH-BWT),
+    )
+    drawing1.render(PROJECT_DIR / "upper.svg", pdf=PDF_UPPER)
