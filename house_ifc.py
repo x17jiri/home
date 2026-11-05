@@ -4142,11 +4142,14 @@ def draw_garage(x1, y1, x2, y2, height):
 house.write("house.ifc")
 
 if "points" in sys.argv:
-	from survey_points import render_survey_points
+	from survey_points import HOUSE_PLACEMENT, HOUSE_ROOF_ENABLED, ROOF_SLOPES, ROOF_SLOPE_OVERHANG, render_survey_points
 	render_survey_points(
 		Path(__file__).with_name("points.txt"), "points.svg",
 		pdf=PDF_POINTS, png="points.png", title="Zaměření pozemku – výškové body",
 		show_ids="--point-ids" in sys.argv,
+		house=HOUSE_PLACEMENT,
+		roof_slopes=ROOF_SLOPES, roof_overhang=ROOF_SLOPE_OVERHANG,
+		house_roof=HOUSE_ROOF_ENABLED, total_house_height=total_house_height, main_roof_angle=street_roof_angle,
 	)
 
 def outside_dims(drawing1):

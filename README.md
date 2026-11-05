@@ -1598,6 +1598,10 @@ Each blank line resets the color. Colors may be hex values or names such as
 Add `, closed` to a color header (e.g. `#ff0000, closed`) to connect the last
 point back to the first. Without it the polyline stays open. Blank lines also
 reset this option.
+Name a polyline by appending `: name`, e.g. `#0000ff: street` or
+`#ff0000, closed: boundary`. Names are case-sensitive and must be unique.
+`named_survey_groups(read_survey_groups(path))` returns a map from names to
+their groups. Blank lines reset the name as well as the style.
 Notes are preserved for reference and do not affect connections or ordering.
 Repeat a point's complete row in another group to use it in multiple polylines.
 Every occurrence stays in its group's path, while its cross, height label and
@@ -1611,15 +1615,125 @@ and hovering over a polyline shows its color and ordered point IDs. Add `--point
 command to print IDs too. All points are retained, including points describing
 structures; no terrain surface or property boundary is inferred from them.
 
-The plot uses local grid-east/grid-north axes, `east = Y0-Y`, `north = X0-X`,
-with a printed origin and scale bar. `SurveyFrame` provides the inverse mapping
-for later placement work. Grid north follows S-JTSK, not geographic north.
+When a `street` polyline exists, its unique points define a best-fit straight
+line by orthogonal least squares (minimum sum of squared perpendicular
+distances). The drawing rotates to put that line on the x axis, with the
+origin at the street points' centroid. The view is reversed by 180° to place
+the street below the land, matching the house plans. Positive x points toward
+grid west (grid south for a vertical line), regardless of vertex order. All groups,
+crosses and the grid-north arrow rotate together; heights and plan distances
+stay unchanged. A street needs at least two distinct plan positions and a
+unique fitted direction. The rotation and RMS distance from the line are
+printed in the terminal.
+
+Without `street`, the plot uses local grid-east/grid-north axes,
+`east = Y0-Y`, `north = X0-X`, as before. The origin and scale bar are printed.
+`SurveyFrame` stores the origin and x-axis angle (`rotation_radians`), and
+provides an inverse mapping for later placement work. Grid north follows
+S-JTSK, not geographic north.
 Original coordinates and notes are also embedded in the SVG's `survey-data`
 metadata. House coordinates and X mirroring do not affect this drawing.
 
 PDF defaults to A4 landscape and chooses a scale that fits (currently 1:500).
 For a larger copy, run
 `python3 survey_points.py --paper A3 --scale 250`.
+
+The two drawing commands also place an **11.6 × 8.4 m rectangular house**.
+Edit `HOUSE_PLACEMENT` in `survey_points.py` to move or rotate it:
+
+```python
+HOUSE_PLACEMENT = SurveyHouse(center=(-8.0, 7.0), angle_degrees=0.0)
+```
+
+Placement origin `(0, 0)` is the intersection of the best-fit `street` and
+`neighbour` lines. Positive x runs right along the street; positive y follows
+the neighbour line upward. Both are measured in metres along their respective
+lines. They form an oblique basis: a center `(x, y)` is the origin plus
+`x * unit_street + y * unit_neighbour`. It is **not** a perpendicular offset
+from either line. The house stays a true rectangle, with its 11.6 m side along
+the street at zero rotation. Positive angles rotate it counterclockwise about
+its center. The drawing grid remains Cartesian, with its origin moved to the
+intersection; short x/y arrows show the oblique placement axes.
+
+For a one-off placement without editing the configuration, use:
+
+```bash
+python3 survey_points.py --house-center -8 7 --house-angle 10
+```
+
+Use `--no-house` to omit the rectangle. Python callers can pass
+`house=SurveyHouse(...)` to `render_survey_points`; its default `None` omits the
+overlay. Placement requires both named lines and rejects parallel fitted
+lines. SVG metadata includes the oblique directions, center, rotation, and
+rectangle corners in drawing and original survey coordinates.
+The terminal also prints the shortest perpendicular distance from the rotated
+house rectangle to each infinite fitted line, in metres. A line that crosses
+or touches the rectangle has distance zero. These are actual perpendicular
+gaps, rather than distances measured along the oblique placement axes.
+
+When both fitted lines are available, a derived **neighbour window** point is
+drawn at placement coordinates `(0, 7.75)`, with elevation **417.60 m Bpv**.
+It follows the fitted neighbour line automatically, even with `--no-house`.
+Tune `NEIGHBOUR_WINDOW_DISTANCE` and `NEIGHBOUR_WINDOW_ELEVATION` in
+`survey_points.py`. It is labelled by name and elevation and included in SVG
+metadata, but never added to `points.txt` or used to fit the measured lines.
+
+The first default roof profile follows the **two right-hand corners of the
+placed house**, including its current rotation. Its midpoint elevation is
+`417.0 + total_house_height - 0.875` metres Bpv. A second parallel profile is
+2.25 m away, perpendicular to the first and on the side farther from the
+neighbour line. It retains the original midpoint elevation
+`417.0 + total_house_height`. Both use the main roof angle.
+`HOUSE_ROOF_EDGE_DROP` and `HOUSE_ROOF_PROFILE_SPACING` control these distances.
+`house_ifc.py points` supplies the live calculated values. The standalone
+command reads the current arithmetic geometry definitions without executing
+the model or solver, using the same normal-offset roof-plane geometry.
+`HOUSE_ROOF_ENABLED` turns these profiles on/off; `HOUSE_ROOF_GROUND_ELEVATION`
+sets the explicit 417.0 m datum. Python callers enable it with
+`house_roof=True` and can supply `total_house_height` and `main_roof_angle`.
+
+Define additional roof profiles in the shared `ROOF_SLOPES` tuple in `survey_points.py`:
+
+```python
+ROOF_SLOPES = (
+    RoofSlope(start=(-10, 5), end=(-10, 14), elevation=423.0, angle_degrees=35),
+)
+```
+
+The example values are illustrative. Both points use the same oblique
+street/neighbour coordinates. The highest elevation (metres Bpv) is at their
+midpoint, and the roof descends toward either point at the specified angle
+to horizontal. Heights use actual plan distances, rather than distances in
+the oblique coordinate pair. At any plan position, the height is
+`elevation - abs(projected_distance_from_midpoint) * tan(angle)`; it is
+constant in the direction perpendicular to the specified line. Query it with
+`roof.elevation_at((x, y), axes)` using `SurveyAxes.from_polylines(...)`.
+The calculation extends indefinitely past both points, without clipping.
+
+Both drawing commands show each profile as a line that fades from red at the
+highest point to pale red at the sides, labelled with its midpoint elevation
+and slope. `ROOF_SLOPE_OVERHANG` adds 2 m beyond each endpoint for the preview;
+this affects only the drawing. The page fits the preview as well as the points
+and house. Python callers can pass `roof_slopes=(...)` and `roof_overhang=2.0`
+to `render_survey_points`. Roof profiles require both named reference lines
+and can be drawn with the house overlay disabled.
+
+For every drawing with roof profiles, the terminal reports the first
+**clockwise rotation from neighbour window → origin** at which any profile
+is seen at least 45° above horizontal. At each ray/profile intersection,
+the test is `plan_distance <= roof_elevation - window_elevation`. Distances
+are true Cartesian plan distances. The calculation uses infinite profile
+lines, including their continuing downhill heights; drawing overhangs and
+endpoints do not limit it.
+
+`first_roof_45_degree_hit(roof_slopes, axes, observer)` returns the first hit
+(or `None` if there is none in a full turn). It solves the quadratic
+intersection of each two-sided height profile with the observer's 45° cone,
+and also tests the initial bearing. Tangencies and roofs already above the
+threshold at the starting direction are included without angular stepping.
+Output includes clockwise angle, roof profile number, intersection in
+street/neighbour coordinates, roof elevation, plan distance, elevation rise,
+and vertical angle.
 
 ## IFC basement and foundations
 
