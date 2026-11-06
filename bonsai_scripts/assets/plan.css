@@ -374,9 +374,18 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
-/* Paired diagonals for 240 mm VPC, including the ground wall's brick course. */
+/* Keep the common 240 mm VPC walls plain, including their brick course. */
 .cut.material-LoadbearingwallVPC240mm,
 .cut.material-GroundloadbearingwallVPC240mmLiaporbasecourse.layer-material-Brick {
+    fill: white !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Paired diagonals distinguish 175 mm VPC from the common 240 mm walls. */
+.cut.material-LoadbearingwallVPC175mm,
+.cut.material-VPCcihla175mm,
+.cut.material-GroundloadbearingwallVPC175mmLiaporbasecourse.layer-material-Brick {
     fill: url(#brick) !important;
     stroke: black;
     stroke-width: 0.05 !important;

@@ -131,7 +131,7 @@ class SurveyHouse:
     center: tuple[float, float] = (-8.0, 7.0)
     angle_degrees: float = 0.0
     width: float = 9.25
-    depth: float = 9.5
+    depth: float = 9.25
 
     def __post_init__(self):
         if len(self.center) != 2 or not all(isfinite(v) for v in (*self.center, self.angle_degrees, self.width, self.depth)):

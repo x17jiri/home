@@ -4896,8 +4896,8 @@ if "ground" in sys.argv:
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
 	drawing1.add_material_legend([
-		("brick", "Nosná zeď - VPC Cihla 240 mm"),
-		("solid-white", "Nosná zeď - VPC cihla 175mm"),
+		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
+		("brick", "Nosná zeď - VPC cihla 175mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
 		(
 			"polystyrene-transparent",
@@ -5053,8 +5053,8 @@ if "upper" in sys.argv:
 	drawing1.include_element(main_stair_railing)
 	drawing1.include_element(gallery_stair_railing)
 	drawing1.add_material_legend([
-		("brick", "Nosná zeď - VPC Cihla 240 mm"),
-		("solid-white", "Nosná zeď - VPC cihla 175mm"),
+		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
+		("brick", "Nosná zeď - VPC cihla 175mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"polystyrene-transparent",
@@ -5747,8 +5747,8 @@ def add_section_material_legend(drawing):
 		f"{width*1000:.0f} × {'min. ' if ramped_footers else ''}{height*1000:.0f}"
 		for width, height in footer_sizes)
 	return drawing.add_material_legend([
-		("brick", "Nosná zeď\nVPC Cihla 240 mm"),
-		("solid-white", "Nosná zeď\nVPC cihla 175mm"),
+		("solid-white", "Nosná zeď\nVPC Cihla 240 mm"),
+		("brick", "Nosná zeď\nVPC cihla 175mm"),
 		(
 			"liapor-brick",
 			f"První řada cihel nosných stěn\nLiapor M AKU, 12 MPa",

@@ -1,4 +1,4 @@
-"""Alternative house: export with `python3 house2.py`; draw with `ground`, `ceiling`, or `upper`."""
+"""Alternative house: export with `python3 house2.py`; draw with `ground`, `ceiling`, `upper`, or `roof`."""
 
 from pathlib import Path
 from math import floor
@@ -11,7 +11,7 @@ import ifcopenshell.api.geometry
 import ifcopenshell.api.root
 import ifcopenshell.util.element
 import numpy as np
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, box
 
 from ifc_utils import House, offset_plane, plane_height_at, window_area
 
@@ -21,27 +21,27 @@ HOUSE_DEPTH = 8.75
 BWT = 0.24
 INNER_BWT = 0.175
 PARTITION_THICKNESS = 0.115
-FACADE_INSULATION_THICKNESS = 0.20
-LIVING_ROOM_WIDTH = HOUSE_WIDTH - 4.7
-LIVING_ROOM_DEPTH = 3.5 + 0.037
 DRY_WALL_WIDTH = 0.10
-UPPER_HALLWAY_WIDTH = 1.1  # Clear width; initially preserves the bathroom wall position.
-if UPPER_HALLWAY_WIDTH <= 0:
-    raise ValueError("UPPER_HALLWAY_WIDTH must be positive")
+FACADE_INSULATION_THICKNESS = 0.20
 GARDEN_ROOMS_DEPTH = 3.47  # Clear depth between the divider and inside garden wall.
 GARDEN_ROOMS_WALL_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT
-STAIRWAY_WIDTH = 3.0  # Clear width of the right street-side section.
-STAIRWAY_DEPTH = 2.25  # Clear depth of its bottom/street-side part.
-STAIRWAY_WALL_X = HOUSE_WIDTH-BWT-STAIRWAY_WIDTH
-STAIRWAY_WALL_Y = BWT+STAIRWAY_DEPTH
-BATHROOM_WIDTH = HOUSE_WIDTH/2.0 - BWT - 0.125-1.0-0.1-0.2
-BATHROOM_WALL_X = HOUSE_WIDTH-BWT-BATHROOM_WIDTH
-THIRD_ROOM_NARROW_WIDTH = BATHROOM_WIDTH
-THIRD_ROOM_NARROW_DEPTH = 1.25  # Clear depth of the narrowed garden-side end.
+THIRD_ROOM_NARROW_WIDTH = HOUSE_WIDTH/2.0 - BWT - 0.125-1.0-0.1-0.2
+THIRD_ROOM_NARROW_DEPTH = 1.375  # Clear depth of the narrowed garden-side end.
 THIRD_ROOM_NARROW_WALL_X = BWT+THIRD_ROOM_NARROW_WIDTH+INNER_BWT
 THIRD_ROOM_WIDTH = 3.47  # Clear width of the left street-side room.
 THIRD_ROOM_WALL_X = BWT+THIRD_ROOM_WIDTH+INNER_BWT
 THIRD_ROOM_STEP_Y = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_NARROW_DEPTH
+STAIRWAY_WIDTH = 2.25  # Clear distance from the straight room 3 wall.
+STAIRWAY_WALL_X = THIRD_ROOM_WALL_X+STAIRWAY_WIDTH+INNER_BWT
+BATHROOM_DEPTH = 2.8  # Clear depth from the inside front wall.
+BATHROOM_PARTITION_Y = BWT+BATHROOM_DEPTH
+STAIRWAY_OPENING_START_Y = BATHROOM_PARTITION_Y+PARTITION_THICKNESS
+
+LIVING_ROOM_WIDTH = THIRD_ROOM_WIDTH + INNER_BWT - DRY_WALL_WIDTH
+LIVING_ROOM_STAIR_CLEARANCE = 1.10  # Clear distance to the stair-facing wall surface.
+KITCHEN_UNIT_SIZE = (0.64, 0.64, 0.75)
+KITCHEN_WALL_GAP = 0.03  # Same 350 mm centre offset as the old house's 640 mm units.
+KITCHEN_COOKER_SINK_GAP = 0.06  # Old house: 700 mm centre spacing between 640 mm units.
 
 GROUND_WALL_BASE_COURSE_HEIGHT = 0.20
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
@@ -75,12 +75,12 @@ UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
 UPPER_FINISHED_FLOOR_HEIGHT = UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS
 UPPER_RING_BEAM_HEIGHT = 0.24
-NADEZDIVKA = 1.125+UPPER_RING_BEAM_HEIGHT
+NADEZDIVKA = 1.125+0.05+UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.30
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
 PURLIN_SIZE = (0.16, 0.28)
-PURLIN_X_POSITIONS = (BWT+3.00-PURLIN_SIZE[0]/2.0, HOUSE_WIDTH-BWT-3.00+PURLIN_SIZE[0]/2.0)
+PURLIN_X_POSITIONS = (BWT+2.8-PURLIN_SIZE[0]/2.0, HOUSE_WIDTH-BWT-2.8+PURLIN_SIZE[0]/2.0)
 PURLIN_CENTER_HEIGHT = 3.5  # Above the upper-floor storey datum / ceiling top.
 PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT
 RAFTER_THICKNESS = 0.08
@@ -90,10 +90,12 @@ RAFTER_Z_OFFSET = -0.05  # Perpendicular to the support-contact roof plane.
 RAFTER_SPACING = 0.67
 RAFTER_FIRST_Y = -0.125
 RAFTER_LAST_Y = HOUSE_DEPTH+0.125
-ROOF_EAVE_OVERHANG = 0.30
+ROOF_EAVE_OVERHANG = .6
+ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
+ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
 ROOF_GABLE_OVERHANG = 0.25
-CHIMNEY_CENTER = (HOUSE_WIDTH/2.0, 4.5)
 CHIMNEY_SIZE = 0.40
+CHIMNEY_STAIR_CLEARANCE = 1.0  # Clear plan distance from the upper stair arrival.
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 0.65
 ROOF_EAVE_SETBACK = 0.02
@@ -128,25 +130,30 @@ RAFTER_Y_POSITIONS = tuple(
 STAIR_FLIGHT_WIDTH = 1.05
 STAIR_LANDING_LENGTH = 1.05
 STAIR_TREAD_LENGTH = 0.27
-STAIR_LOWER_RISERS = 9
-STAIR_UPPER_RISERS = 7
+STAIR_LOWER_RISERS = 8
+STAIR_UPPER_RISERS = 8
 STAIR_LOWER_RUN_LENGTH = (STAIR_LOWER_RISERS-1)*STAIR_TREAD_LENGTH
 STAIR_UPPER_RUN_LENGTH = (STAIR_UPPER_RISERS-1)*STAIR_TREAD_LENGTH
 STAIR_RISER_HEIGHT = (UPPER_FINISHED_FLOOR_HEIGHT-GROUND_FLOOR_THICKNESS)/(STAIR_LOWER_RISERS+STAIR_UPPER_RISERS)
-STAIR_LANDING_START_X = HOUSE_WIDTH-BWT-STAIR_LANDING_LENGTH
-STAIR_LOWER_START_X = STAIR_LANDING_START_X-STAIR_LOWER_RUN_LENGTH
-STAIR_UPPER_END_X = STAIR_LANDING_START_X-STAIR_UPPER_RUN_LENGTH
-STAIR_LOWER_CENTER_Y = STAIRWAY_WALL_Y-STAIR_FLIGHT_WIDTH/2
-STAIR_UPPER_CENTER_Y = BWT+STAIR_FLIGHT_WIDTH/2
+STAIR_FLIGHT_GAP = 0.15
+STAIR_LEFT_X = THIRD_ROOM_WALL_X
+STAIR_UPPER_CENTER_X = STAIR_LEFT_X+STAIR_FLIGHT_WIDTH/2
+STAIR_LOWER_CENTER_X = STAIR_UPPER_CENTER_X+STAIR_FLIGHT_WIDTH+STAIR_FLIGHT_GAP
+STAIR_RIGHT_X = STAIR_LOWER_CENTER_X+STAIR_FLIGHT_WIDTH/2
+STAIR_LANDING_START_Y = BWT
+STAIR_LANDING_END_Y = STAIR_LANDING_START_Y+STAIR_LANDING_LENGTH
+STAIR_LOWER_START_Y = STAIR_LANDING_END_Y+STAIR_LOWER_RUN_LENGTH
+STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
+LIVING_ROOM_DEPTH = HOUSE_DEPTH-BWT-STAIR_UPPER_END_Y-LIVING_ROOM_STAIR_CLEARANCE-DRY_WALL_WIDTH
+CHIMNEY_CENTER = (HOUSE_WIDTH/2.0-0.5, STAIR_UPPER_END_Y+CHIMNEY_STAIR_CLEARANCE+CHIMNEY_SIZE/2)
 STAIR_WAIST_THICKNESS = 0.15
 STAIR_RAILING_HEIGHT = 1.0
-if STAIR_UPPER_RUN_LENGTH+STAIR_LANDING_LENGTH > STAIRWAY_WIDTH+1e-9:
-    raise ValueError("upper stair flight and landing do not fit STAIRWAY_WIDTH")
-# The lower flight may extend into the open hallway.
-if STAIR_LOWER_START_X < THIRD_ROOM_WALL_X-1e-9:
-    raise ValueError("lower stair flight reaches beyond the hallway into Pokoj 3")
-if 2*STAIR_FLIGHT_WIDTH > STAIRWAY_DEPTH+1e-9:
-    raise ValueError("the two stair flights do not fit STAIRWAY_DEPTH")
+if STAIR_RIGHT_X > HOUSE_WIDTH-BWT+1e-9:
+    raise ValueError("rotated stairs do not fit between room 3 and the west wall")
+if max(STAIR_LOWER_START_Y, STAIR_UPPER_END_Y) > GARDEN_ROOMS_WALL_Y+1e-9:
+    raise ValueError("rotated stairs reach the garden-room dividing wall")
+if STAIR_UPPER_END_Y > THIRD_ROOM_STEP_Y+INNER_BWT+1e-9:
+    raise ValueError("upper stair flight must fit alongside the straight room 3 wall")
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
 ENTRANCE_OPENING_WIDTH = 1.125
@@ -158,21 +165,20 @@ ROOM_DOOR_OPENING_WIDTH = 1.0
 ROOM_DOOR_HEIGHT = GROUND_FLOOR_THICKNESS+2.125
 ROOM_DOOR_CLEAR_HEIGHT = 2.1
 GARDEN_DOOR_CENTER_CLEARANCE = 0.125
-THIRD_ROOM_DOOR_FRONT_CLEARANCE = 1.25
-BATHROOM_DOOR_STAIRWAY_CLEARANCE = 0.125
-HALLWAY_CENTER_X = (THIRD_ROOM_WALL_X+STAIRWAY_WALL_X)/2
-ENTRANCE_OPENING_AT = math.ceil(THIRD_ROOM_WIDTH/0.125)*0.125 + 0.5
+BATHROOM_DOOR_SIDE_CLEARANCE = 0.125
+ENTRANCE_OPENING_AT = 3.375  # Along the west wall, measured from its start.
 ROOM_WINDOW_WIDTH = 1.75
 GROUND_WINDOW_TOP_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+2.25
 GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+0.875
-UPPER_WINDOW_WIDTH = 1.5
+UPPER_WINDOW_WIDTH = 1.25
 UPPER_BACK_WINDOW_WIDTH = 3.0
-UPPER_FRONT_WINDOW_EAST_CLEARANCE = 2.0
+UPPER_FRONT_WINDOW_EAST_CLEARANCE = 1.625
 UPPER_WINDOW_HEIGHT = GROUND_WINDOW_TOP_HEIGHT-GROUND_WINDOW_SILL_HEIGHT
 UPPER_WINDOW_SILL_HEIGHT = UPPER_FLOOR_THICKNESS+GROUND_WINDOW_SILL_HEIGHT-GROUND_FLOOR_THICKNESS
 UPPER_WINDOW_TOP_HEIGHT = UPPER_WINDOW_SILL_HEIGHT+UPPER_WINDOW_HEIGHT
 BATHROOM_WINDOW_WIDTH = 0.75
 BATHROOM_WINDOW_HEIGHT = 0.75
+BATHROOM_WINDOW_CENTER_X = (STAIRWAY_WALL_X+HOUSE_WIDTH-BWT)/2
 WINDOW_POSITION_STEP = 0.125
 
 PROJECT_DIR = Path("projekt2")
@@ -180,6 +186,7 @@ DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = PROJECT_DIR / "D1.1. Architektonicko Stave
 PDF_GROUND = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.1. Půdorys 1.NP.pdf"
 PDF_CEILING = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.2. Strop nad 1.NP.pdf"
 PDF_UPPER = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.3. Půdorys 2.NP.pdf"
+PDF_ROOF = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.4. Krov.pdf"
 SECTION_OUTLINE_WIDTH = 0.3
 
 house = House("House 2", mirror_x=False, colors={"wall": "#ffffff", "window": "#ffffff"})
@@ -246,16 +253,24 @@ wall_third_room_top_g = ground.wall(
     wall_type=load_bearing_wall_inner, height=ground_floor_height,
 )
 wall_third_room_top_g.Name = "Hallway - Pokoj 3 upper wall"
-wall_bathroom_side_g = ground.wall(
-    (BATHROOM_WALL_X, STAIRWAY_WALL_Y+INNER_BWT), (BATHROOM_WALL_X, GARDEN_ROOMS_WALL_Y),
+wall_stairway_g = ground.wall(
+    (STAIRWAY_WALL_X, BWT), (STAIRWAY_WALL_X, GARDEN_ROOMS_WALL_Y),
     wall_type=load_bearing_wall_inner, height=ground_floor_height,
 )
-wall_bathroom_side_g.Name = "Hallway - bathroom wall"
-wall_stairway_back_g = ground.wall(
-    (STAIRWAY_WALL_X, STAIRWAY_WALL_Y), (HOUSE_WIDTH-BWT, STAIRWAY_WALL_Y),
-    wall_type=load_bearing_wall_inner, height=ground_floor_height,
+wall_stairway_g.Name = "Stairway - hallway and bathroom wall"
+wall_bathroom_partition_g = ground.wall(
+    (STAIRWAY_WALL_X, BATHROOM_PARTITION_Y+PARTITION_THICKNESS/2),
+    (HOUSE_WIDTH-BWT, BATHROOM_PARTITION_Y+PARTITION_THICKNESS/2),
+    wall_type=partition_wall, height=ground_floor_height,
 )
-front_door = wall_front_g.add_door(
+wall_bathroom_partition_g.Name = "Hallway - bathroom partition"
+stairway_opening = wall_stairway_g.add_opening(
+    name="Hallway - stairway opening",
+    at=STAIRWAY_OPENING_START_Y-wall_stairway_g.start[1],
+    width=GARDEN_ROOMS_WALL_Y-STAIRWAY_OPENING_START_Y,
+    height=ROOM_DOOR_HEIGHT,
+)
+entrance_door = wall_west_g.add_door(
     name="Entrance door",
     at=ENTRANCE_OPENING_AT,
     opening_width=ENTRANCE_OPENING_WIDTH,
@@ -263,7 +278,7 @@ front_door = wall_front_g.add_door(
     height=ENTRANCE_DOOR_HEIGHT,
     clear_height=ENTRANCE_CLEAR_HEIGHT,
     sill_height=GROUND_FLOOR_THICKNESS,
-    operation="SINGLE_SWING_LEFT",
+    operation="SINGLE_SWING_RIGHT",
 )
 pokoj1_door = wall_garden_rooms_g.add_door(
     name="Pokoj 1 door",
@@ -286,20 +301,19 @@ pokoj2_door = wall_garden_rooms_g.add_door(
     sill_height=0,
     operation="SINGLE_SWING_LEFT",
 )
-pokoj3_door = wall_third_room_g.add_door(
+pokoj3_door = wall_third_room_top_g.add_door(
     name="Pokoj 3 door",
-    at=BWT+THIRD_ROOM_DOOR_FRONT_CLEARANCE-wall_third_room_g.start[1],
+    at=(wall_third_room_top_g.end[1]-wall_third_room_top_g.start[1]-ROOM_DOOR_OPENING_WIDTH)/2,
     opening_width=ROOM_DOOR_OPENING_WIDTH,
     width=ROOM_DOOR_WIDTH,
     height=ROOM_DOOR_HEIGHT,
     clear_height=ROOM_DOOR_CLEAR_HEIGHT,
     sill_height=0,
-    operation="SINGLE_SWING_LEFT",
+    operation="SINGLE_SWING_RIGHT",
 )
-bathroom_door = wall_bathroom_side_g.add_door(
+bathroom_door = wall_bathroom_partition_g.add_door(
     name="Koupelna door",
-    at=(STAIRWAY_WALL_Y+INNER_BWT+BATHROOM_DOOR_STAIRWAY_CLEARANCE
-        -wall_bathroom_side_g.start[1]),
+    at=BATHROOM_DOOR_SIDE_CLEARANCE,
     opening_width=ROOM_DOOR_OPENING_WIDTH,
     width=ROOM_DOOR_WIDTH,
     height=ROOM_DOOR_HEIGHT,
@@ -310,8 +324,7 @@ bathroom_door = wall_bathroom_side_g.add_door(
 )
 ground_load_bearing_walls = (
     wall_front_g, wall_west_g, wall_back_g, wall_east_g, wall_garden_rooms_g, wall_third_room_g,
-    wall_third_room_return_g, wall_third_room_top_g,
-    wall_bathroom_side_g, wall_stairway_back_g,
+    wall_third_room_return_g, wall_third_room_top_g, wall_stairway_g,
 )
 # Apply the base course to all ground-floor masonry walls.
 # Add subsequent ground-floor walls above this common finishing pass.
@@ -369,25 +382,34 @@ pokoj3 = ground.floor_layer(
     ),
     **floor_layer_settings,
 )
+# Extend the same room through the opening, following room 3's stepped wall.
+hallway_outline = Polygon((
+    (THIRD_ROOM_WALL_X, BWT), (HOUSE_WIDTH-BWT, BWT),
+    (HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y),
+    (THIRD_ROOM_NARROW_WALL_X, GARDEN_ROOMS_WALL_Y),
+    (THIRD_ROOM_NARROW_WALL_X, THIRD_ROOM_STEP_Y+INNER_BWT),
+    (THIRD_ROOM_WALL_X, THIRD_ROOM_STEP_Y+INNER_BWT),
+)).intersection(box(0, STAIRWAY_OPENING_START_Y, HOUSE_WIDTH, GARDEN_ROOMS_WALL_Y))
+# Stop at each flight's footprint; the upper flight's underside stays outside
+# the hallway, even though there is headroom beneath its upper treads.
+for center_x, end_y in (
+    (STAIR_LOWER_CENTER_X, STAIR_LOWER_START_Y),
+    (STAIR_UPPER_CENTER_X, STAIR_UPPER_END_Y),
+):
+    hallway_outline = hallway_outline.difference(box(
+        center_x-STAIR_FLIGHT_WIDTH/2, STAIR_LANDING_END_Y,
+        center_x+STAIR_FLIGHT_WIDTH/2, end_y,
+    ))
 chodba = ground.floor_layer(
     "Chodba", room_id="0.04",
-    outline=(
-        (THIRD_ROOM_WALL_X, BWT), (STAIRWAY_WALL_X, BWT),
-        (STAIRWAY_WALL_X, STAIRWAY_WALL_Y+INNER_BWT),
-        (BATHROOM_WALL_X-INNER_BWT, STAIRWAY_WALL_Y+INNER_BWT),
-        (BATHROOM_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y),
-        (THIRD_ROOM_NARROW_WALL_X, GARDEN_ROOMS_WALL_Y),
-        (THIRD_ROOM_NARROW_WALL_X, THIRD_ROOM_STEP_Y+INNER_BWT),
-        (THIRD_ROOM_WALL_X, THIRD_ROOM_STEP_Y+INNER_BWT),
-    ),
+    outline=tuple(hallway_outline.exterior.coords)[:-1],
     **floor_layer_settings,
 )
 koupelna = ground.floor_layer(
     "Koupelna", room_id="0.05",
     outline=(
-        (BATHROOM_WALL_X, STAIRWAY_WALL_Y+INNER_BWT),
-        (HOUSE_WIDTH-BWT, STAIRWAY_WALL_Y+INNER_BWT),
-        (HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y), (BATHROOM_WALL_X, GARDEN_ROOMS_WALL_Y),
+        (STAIRWAY_WALL_X, BWT), (HOUSE_WIDTH-BWT, BWT),
+        (HOUSE_WIDTH-BWT, BATHROOM_PARTITION_Y), (STAIRWAY_WALL_X, BATHROOM_PARTITION_Y),
     ),
     **floor_layer_settings,
 )
@@ -417,9 +439,9 @@ window_pokoj3 = wall_front_g.add_window(
     sill_height=GROUND_WINDOW_SILL_HEIGHT,
     height=GROUND_WINDOW_TOP_HEIGHT,
 )
-window_koupelna = wall_west_g.add_window(
+window_koupelna = wall_front_g.add_window(
     name="Koupelna window",
-    at=Polygon(koupelna.outline).centroid.y-wall_west_g.start[1]-BATHROOM_WINDOW_WIDTH/2,
+    at=HOUSE_WIDTH-BWT-0.25-BATHROOM_WINDOW_WIDTH,
     width=BATHROOM_WINDOW_WIDTH,
     sill_height=GROUND_WINDOW_TOP_HEIGHT-BATHROOM_WINDOW_HEIGHT,
     height=GROUND_WINDOW_TOP_HEIGHT,
@@ -432,10 +454,46 @@ ground_room_windows = {
     koupelna.room_id: (window_koupelna,),
 }
 
+# Bathroom grid, garden to street: door/WC, clear space/basin, shower/services.
+bathroom_right_x = HOUSE_WIDTH-BWT
+bathroom_row_depth = BATHROOM_DEPTH/3
+bathroom_toilet = ground.asset(
+    "WC", asset="toilet_without_cistern",
+    center=(bathroom_right_x-0.53/2-0.2, BWT+2.5*bathroom_row_depth),
+    start_height=GROUND_FLOOR_THICKNESS,
+    rotation=-90,
+)
+bathroom_basin = ground.asset(
+    "Umyvadlo", asset="basin_large",
+    center=(bathroom_right_x-0.55/2-0.1, BWT+1.5*bathroom_row_depth),
+    start_height=GROUND_FLOOR_THICKNESS+0.85-0.25,
+    rotation=-90,
+)
+bathroom_shower = ground.asset(
+    "Sprcha", asset="shower_90x90",
+    center=(STAIRWAY_WALL_X+0.55, BWT+0.55),
+    start_height=GROUND_FLOOR_THICKNESS,
+)
+bathroom_services_center_x = bathroom_right_x-(bathroom_right_x-STAIRWAY_WALL_X)/4
+bathroom_hydrobox = ground.furniture(
+    "Hydro-\nbox", kind="USERDEFINED",
+    size=(0.8, 0.5, 0.9),
+    center=(bathroom_services_center_x, BWT+0.3),
+    start_height=GROUND_FLOOR_THICKNESS,
+    color="#ffffff",
+)
+bathroom_water_meter = ground.furniture(
+    "Vodo-\nměr", kind="USERDEFINED",
+    size=(0.6, 0.55, 0.9),
+    center=(bathroom_services_center_x, BWT+0.7),
+    start_height=GROUND_FLOOR_THICKNESS,
+    color="#ffffff",
+)
+
 # Stairs use the ceiling and future upper-floor levels.
 lower_stairs = ground.stair(
-    (STAIR_LOWER_START_X, STAIR_LOWER_CENTER_Y),
-    (STAIR_LANDING_START_X, STAIR_LOWER_CENTER_Y),
+    (STAIR_LOWER_CENTER_X, STAIR_LOWER_START_Y),
+    (STAIR_LOWER_CENTER_X, STAIR_LANDING_END_Y),
     name="Lower stair flight",
     width=STAIR_FLIGHT_WIDTH,
     start_height=GROUND_FLOOR_THICKNESS,
@@ -445,14 +503,14 @@ lower_stairs = ground.stair(
     waist_thickness=STAIR_WAIST_THICKNESS,
 )
 middle_stair_landing = ground.stair_landing(
-    (STAIR_LANDING_START_X, BWT), (HOUSE_WIDTH-BWT, STAIRWAY_WALL_Y),
+    (STAIR_LEFT_X, STAIR_LANDING_START_Y), (STAIR_RIGHT_X, STAIR_LANDING_END_Y),
     name="Middle stair landing",
     height=lower_stairs.end_height,
     thickness=STAIR_WAIST_THICKNESS,
 )
 upper_stairs = ground.stair(
-    (STAIR_LANDING_START_X, STAIR_UPPER_CENTER_Y),
-    (STAIR_UPPER_END_X, STAIR_UPPER_CENTER_Y),
+    (STAIR_UPPER_CENTER_X, STAIR_LANDING_END_Y),
+    (STAIR_UPPER_CENTER_X, STAIR_UPPER_END_Y),
     name="Upper stair flight",
     width=STAIR_FLIGHT_WIDTH,
     start_height=lower_stairs.end_height,
@@ -467,14 +525,11 @@ stair_railing = ground.railing(
     height=STAIR_RAILING_HEIGHT,
     color="#C8B090",
 )
-if STAIR_LOWER_START_X > STAIRWAY_WALL_X+1e-9:
-    ground.stair_landing(
-        (STAIRWAY_WALL_X, STAIRWAY_WALL_Y-STAIR_FLIGHT_WIDTH),
-        (STAIR_LOWER_START_X, STAIRWAY_WALL_Y),
-        name="Stairway entrance approach",
-        height=GROUND_FLOOR_THICKNESS,
-        thickness=GROUND_FLOOR_THICKNESS,
-    )
+stair_route_landing_y = (STAIR_LANDING_START_Y+STAIR_LANDING_END_Y)/2
+stair_walking_route = (
+    lower_stairs.start, (STAIR_LOWER_CENTER_X, stair_route_landing_y),
+    (STAIR_UPPER_CENTER_X, stair_route_landing_y), upper_stairs.end,
+)
 stairway_notes = [
     f"Šířka ramene: {STAIR_FLIGHT_WIDTH*1000:.0f} mm",
     f"Nášlap: {lower_stairs.tread_length*1000:.0f} mm",
@@ -557,6 +612,7 @@ purlin_top_z = PURLIN_Z+PURLIN_SIZE[1]/2
 east_contact_x = BWT/2-WALL_PLATE_SIZE[0]/2
 west_contact_x = HOUSE_WIDTH-BWT/2+WALL_PLATE_SIZE[0]/2
 ridge_cut = ((roof_ridge_x, 0, 0), (roof_ridge_x, 1, 0), (roof_ridge_x, 0, 1))
+horizontal_eave_cut = ((0, 0, ROOF_EAVE_CUT_Z), (1, 0, ROOF_EAVE_CUT_Z), (0, 1, ROOF_EAVE_CUT_Z))
 east_eave_x = -ROOF_EAVE_OVERHANG
 west_eave_x = HOUSE_WIDTH+ROOF_EAVE_OVERHANG
 roof_east = roof.plane(
@@ -564,7 +620,7 @@ roof_east = roof.plane(
     points=((east_contact_x, 0, wall_plate_top_z),
             (east_contact_x, -1, wall_plate_top_z),
             (PURLIN_X_POSITIONS[0]-PURLIN_SIZE[0]/2, 0, purlin_top_z)),
-    cuts=[ridge_cut,
+    cuts=[ridge_cut, horizontal_eave_cut,
           ((east_eave_x, 0, 0), (east_eave_x, 1, 0), (east_eave_x, 0, 1))],
 )
 roof_west = roof.plane(
@@ -572,7 +628,7 @@ roof_west = roof.plane(
     points=((west_contact_x, 0, wall_plate_top_z),
             (west_contact_x, 1, wall_plate_top_z),
             (PURLIN_X_POSITIONS[1]+PURLIN_SIZE[0]/2, 0, purlin_top_z)),
-    cuts=[ridge_cut,
+    cuts=[ridge_cut, horizontal_eave_cut,
           ((west_eave_x, 0, 0), (west_eave_x, 1, 0), (west_eave_x, 0, 1))],
 )
 roof_angle_degrees = math.degrees(math.atan2(
@@ -643,33 +699,9 @@ wall_living_room_back_u = upper.wall(
     (HOUSE_WIDTH-BWT, living_room_wall_y),
     wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
 )
-# The hallway width positions the bathroom wall; only its stair-side face follows downstairs.
-upper_hallway_left_x = wall_living_room_side_u.start[0]-wall_living_room_side_u.body_offset
-upper_bathroom_outer_x = upper_hallway_left_x+UPPER_HALLWAY_WIDTH
-if upper_bathroom_outer_x+DRY_WALL_WIDTH >= HOUSE_WIDTH-BWT:
-    raise ValueError("UPPER_HALLWAY_WIDTH leaves no clear width for the upper bathroom")
-upper_bathroom_outer_y = wall_stairway_back_g.start[1]+wall_stairway_back_g.body_offset
-upper_bathroom_back_y = wall_living_room_back_u.start[1]+wall_living_room_back_u.body_offset
-# Keep the source-wall centre below both ceiling cuts, even near the low eave.
-upper_bathroom_wall_height = min(
-    plane_height_at(*cut, x=upper_bathroom_outer_x, y=upper_bathroom_outer_y)
-    for cut in upper_partition_cuts
-)-UPPER_FLOOR_START+0.1
-wall_bathroom_side_u = upper.wall(
-    (upper_bathroom_outer_x+DRY_WALL_WIDTH/2, upper_bathroom_outer_y+DRY_WALL_WIDTH),
-    (upper_bathroom_outer_x+DRY_WALL_WIDTH/2, upper_bathroom_back_y),
-    wall_type=dry_wall, height=upper_bathroom_wall_height, cuts=upper_partition_cuts,
-)
-wall_bathroom_stairway_u = upper.wall(
-    (upper_bathroom_outer_x, upper_bathroom_outer_y+DRY_WALL_WIDTH/2),
-    (HOUSE_WIDTH-BWT, upper_bathroom_outer_y+DRY_WALL_WIDTH/2),
-    wall_type=dry_wall, height=upper_bathroom_wall_height, cuts=upper_partition_cuts,
-)
 for wall, name in (
     (wall_living_room_side_u, "Living room - side partition"),
     (wall_living_room_back_u, "Living room - back partition"),
-    (wall_bathroom_side_u, "Upper bathroom - hallway partition"),
-    (wall_bathroom_stairway_u, "Upper bathroom - stairway partition"),
 ):
     wall.Name = name
     common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
@@ -691,40 +723,40 @@ living_room = upper.floor_layer(
     buildup_material=FLOOR_BUILDUP_MATERIAL,
     color="#ffff80",
 )
-upper_bathroom = upper.floor_layer(
-    "Koupelna", room_id="1.02",
-    outline=(
-        (upper_bathroom_outer_x+DRY_WALL_WIDTH, upper_bathroom_outer_y+DRY_WALL_WIDTH),
-        (HOUSE_WIDTH-BWT, upper_bathroom_outer_y+DRY_WALL_WIDTH),
-        (HOUSE_WIDTH-BWT, upper_bathroom_back_y),
-        (upper_bathroom_outer_x+DRY_WALL_WIDTH, upper_bathroom_back_y),
-    ),
-    thickness=UPPER_FLOOR_THICKNESS,
-    insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
-    insulation_material=FLOOR_INSULATION_MATERIAL,
-    buildup_material=FLOOR_BUILDUP_MATERIAL,
-    color="#ffff80",
-)
-upper_hallway = upper.floor_layer(
-    "Chodba", room_id="1.03",
-    outline=(
-        (upper_hallway_left_x, BWT),
-        (upper_bathroom_outer_x, BWT),
-        (upper_bathroom_outer_x, upper_bathroom_back_y),
-        (upper_hallway_left_x, upper_bathroom_back_y),
-    ),
-    thickness=UPPER_FLOOR_THICKNESS,
-    insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
-    insulation_material=FLOOR_INSULATION_MATERIAL,
-    buildup_material=FLOOR_BUILDUP_MATERIAL,
-    color="#ffff80",
-)
-upper_room_floors = (living_room, upper_bathroom, upper_hallway)
+upper_room_floors = (living_room,)
 upper_room_windows = {
     living_room.room_id: (window_living_room_front, window_living_room_back),
-    upper_bathroom.room_id: (),
-    upper_hallway.room_id: (),
 }
+
+# Kitchen on the living-room side of the vertical SDK wall, toward the front.
+kitchen_wall_face_x = wall_living_room_side_u.start[0]-(
+    wall_living_room_side_u.body_offset+wall_living_room_side_u.thickness
+)
+kitchen_center_x = kitchen_wall_face_x-KITCHEN_WALL_GAP-KITCHEN_UNIT_SIZE[0]/2
+kitchen_cooker_y = wall_living_room_side_u.end[1]-KITCHEN_WALL_GAP-KITCHEN_UNIT_SIZE[1]/2
+kitchen_sink_y = kitchen_cooker_y-KITCHEN_UNIT_SIZE[1]-KITCHEN_COOKER_SINK_GAP
+kitchen_dishwasher_y = kitchen_sink_y-KITCHEN_UNIT_SIZE[1]
+kitchen_start_height = UPPER_FLOOR_THICKNESS+0.03
+kitchen_cooker, kitchen_sink, kitchen_dishwasher = (
+    upper.furniture(
+        name, kind="USERDEFINED", size=KITCHEN_UNIT_SIZE,
+        center=(kitchen_center_x, center_y), start_height=kitchen_start_height,
+    )
+    for name, center_y in (
+        ("Sporák", kitchen_cooker_y), ("Dřez", kitchen_sink_y), ("Myčka", kitchen_dishwasher_y),
+    )
+)
+kitchen_counter_start_y = BWT+KITCHEN_WALL_GAP
+kitchen_counter_end_y = kitchen_dishwasher_y-KITCHEN_UNIT_SIZE[1]/2
+kitchen_counter_length = kitchen_counter_end_y-kitchen_counter_start_y
+if kitchen_counter_length <= 0:
+    raise ValueError("the kitchen appliances leave no room for a worktop before the front wall")
+kitchen_counter = upper.furniture(
+    "Kuch.\nLinka", kind="USERDEFINED",
+    size=(KITCHEN_UNIT_SIZE[0], kitchen_counter_length, KITCHEN_UNIT_SIZE[2]),
+    center=(kitchen_center_x, (kitchen_counter_start_y+kitchen_counter_end_y)/2),
+    start_height=kitchen_start_height,
+)
 
 rafter_pairs = tuple(
     tuple(
@@ -757,11 +789,18 @@ for layer_name, layer_storey in roof_layer_storeys.items():
 
 
 def roof_slope_limits(plane, x_limits, offsets, *, cover=False):
-    """Local slope coordinates reaching both vertical ends at each layer face."""
-    intervals = [
-        sorted((x-plane.origin[0]-z*plane.z_axis[0])/plane.y_axis[0] for x in x_limits)
-        for z in offsets
-    ]
+    """Intersect the vertical and horizontal eave limits at each layer face."""
+    intervals = []
+    for z in offsets:
+        lo, hi = sorted((x-plane.origin[0]-z*plane.z_axis[0])/plane.y_axis[0] for x in x_limits)
+        cut_y = (ROOF_EAVE_CUT_Z-plane.origin[2]-z*plane.z_axis[2])/plane.y_axis[2]
+        if plane.y_axis[2]>0:
+            lo = max(lo, cut_y)
+        else:
+            hi = min(hi, cut_y)
+        if lo>=hi:
+            raise ValueError(f"{plane.Name}: roof eave cut leaves no layer span")
+        intervals.append((lo, hi))
     if cover:
         return min(lo for lo, hi in intervals), max(hi for lo, hi in intervals)
     return max(lo for lo, hi in intervals), min(hi for lo, hi in intervals)
@@ -875,8 +914,6 @@ roof_layers = (
 )
 # The transverse SDK partition also meets the exposed west purlin.
 cut_roof_layer_at_purlin(wall_living_room_back_u, 1)
-for bathroom_wall in (wall_bathroom_side_u, wall_bathroom_stairway_u):
-    cut_roof_layer_at_purlin(bathroom_wall, 1)
 roof_tiles_top_z = max(
     plane_height_at(
         *offset_plane(*layer.plane.points, offset=layer.z_offset+layer.thickness),
@@ -903,7 +940,7 @@ chimney_roof_opening = roof.add_opening(
     trimmers=False,
     vertical=True,
 )
-# The requested position crosses the living-room side partition.
+# Cut the side partition if the configured chimney position crosses it.
 partition_x_min = wall_living_room_side_u.start[0]-(wall_living_room_side_u.body_offset+wall_living_room_side_u.thickness)
 partition_x_max = wall_living_room_side_u.start[0]-wall_living_room_side_u.body_offset
 chimney_y_start = max(wall_living_room_side_u.start[1], chimney.center[1]-chimney.size/2)
@@ -916,6 +953,20 @@ if (chimney.center[0]-chimney.size/2 < partition_x_max
         at=chimney_y_start-wall_living_room_side_u.start[1],
         width=chimney_y_end-chimney_y_start,
         height=wall_living_room_side_u.height,
+        sill_height=0,
+    )
+partition_y_min = wall_living_room_back_u.start[1]+wall_living_room_back_u.body_offset
+partition_y_max = partition_y_min+wall_living_room_back_u.thickness
+chimney_x_start = max(wall_living_room_back_u.start[0], chimney.center[0]-chimney.size/2)
+chimney_x_end = min(wall_living_room_back_u.end[0], chimney.center[0]+chimney.size/2)
+if (chimney.center[1]-chimney.size/2 < partition_y_max
+        and chimney.center[1]+chimney.size/2 > partition_y_min
+        and chimney_x_start < chimney_x_end):
+    wall_living_room_back_u.add_opening(
+        name="Chimney passage through living-room back partition",
+        at=chimney_x_start-wall_living_room_back_u.start[0],
+        width=chimney_x_end-chimney_x_start,
+        height=wall_living_room_back_u.height,
         sill_height=0,
     )
 total_house_height = roof_tiles_top_z-(ground.elevation+GROUND_FLOOR_THICKNESS)
@@ -960,8 +1011,8 @@ if "ground" in sys.argv:
         section_outline_width=SECTION_OUTLINE_WIDTH,
     )
     drawing1.add_material_legend([
-        ("brick", "Nosná zeď - VPC Cihla 240 mm"),
-        ("solid-white", "Nosná zeď - VPC Cihla 175 mm"),
+        ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
+        ("brick", "Nosná zeď - VPC Cihla 175 mm"),
         ("diagonal1", "Příčka - VPC Cihla 115 mm"),
         ("rockwool-wave", f"Rockwool - fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
@@ -976,34 +1027,32 @@ if "ground" in sys.argv:
     drawing1.add_stair_annotation(lower_stairs)
     drawing1.add_stair_annotation(upper_stairs)
     drawing1.add_stair_landing_annotation(middle_stair_landing)
-    route_x = HOUSE_WIDTH-BWT-STAIR_LANDING_LENGTH/2
     drawing1.add_poly_line(
-        [
-            lower_stairs.start, (route_x, STAIR_LOWER_CENTER_Y),
-            (route_x, STAIR_UPPER_CENTER_Y), upper_stairs.end,
-        ],
+        stair_walking_route,
         arrow_end=True, circle_start=True,
     )
     drawing1.add_notes(stairway_notes, title="SCHODIŠTĚ")
-    drawing1.add_opening_dimension(front_door, offset=-1.0, finished_floor_height=GROUND_FLOOR_THICKNESS)
+    drawing1.add_opening_dimension(entrance_door, offset=1.6, finished_floor_height=GROUND_FLOOR_THICKNESS)
     for door in (pokoj1_door, pokoj2_door):
         drawing1.add_opening_dimension(
             door, offset=1.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
         )
-    for door, offset in ((pokoj3_door, 1.2), (bathroom_door, 0.7)):
-        drawing1.add_opening_dimension(
-            door, offset=offset, finished_floor_height=GROUND_FLOOR_THICKNESS,
-        )
+    drawing1.add_opening_dimension(
+        pokoj3_door, offset=-0.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
+    )
+    drawing1.add_opening_dimension(
+        bathroom_door, offset=0.4, finished_floor_height=GROUND_FLOOR_THICKNESS,
+    )
     for window, offset in (
         (window_pokoj1, -0.65), (window_pokoj2, -0.65),
-        (window_pokoj3, -1.0), (window_koupelna, -0.7),
+        (window_pokoj3, -1.0), (window_koupelna, -1.0),
     ):
         drawing1.add_opening_dimension(
             window, offset=offset, finished_floor_height=GROUND_FLOOR_THICKNESS,
         )
     drawing1.add_entrance_arrow(
-        (ENTRANCE_OPENING_AT+ENTRANCE_OPENING_WIDTH/2, -0.5),
-        rotation=90,
+        (HOUSE_WIDTH+0.5, wall_west_g.start[1]+ENTRANCE_OPENING_AT+ENTRANCE_OPENING_WIDTH/2),
+        rotation=180,
         size=0.35,
     )
 
@@ -1032,48 +1081,38 @@ if "ground" in sys.argv:
     )
     # Clear width and depth of Pokoj 3's narrowed garden-side end.
     drawing1.add_dimension(
-        start=(BWT, GARDEN_ROOMS_WALL_Y-0.5),
-        end=(THIRD_ROOM_NARROW_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y-0.5),
+        start=(BWT, GARDEN_ROOMS_WALL_Y-1.25),
+        end=(THIRD_ROOM_NARROW_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y-1.25),
     )
     drawing1.add_dimension(
         start=(THIRD_ROOM_NARROW_WALL_X-INNER_BWT, THIRD_ROOM_STEP_Y),
         end=(THIRD_ROOM_NARROW_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y),
-		offset=0.5
+		offset=1.5
     )
     # hloubka tretiho pokoje
     drawing1.add_dimension(
         start=(BWT+0.5, BWT), end=(BWT+0.5, GARDEN_ROOMS_WALL_Y),
     )
-    # delka koupelny
     drawing1.add_dimension(
-        start=(BATHROOM_WALL_X, GARDEN_ROOMS_WALL_Y-0.5),
-        end=(HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y-0.5),
-    )
-	# hloubka koupelny
-    drawing1.add_dimension(
-        start=(HOUSE_WIDTH-BWT-0.5, STAIRWAY_WALL_Y+INNER_BWT),
-        end=(HOUSE_WIDTH-BWT-0.5, GARDEN_ROOMS_WALL_Y),
-    )
-    # sirka vstupni chodby
-    drawing1.add_dimension(
-        start=(THIRD_ROOM_NARROW_WALL_X, GARDEN_ROOMS_WALL_Y-0.5),
-        end=(BATHROOM_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y-0.5),
-    )
-    # Hallway clearances at the room step, stair enclosure, and first tread.
-    drawing1.add_dimension(
-        start=(THIRD_ROOM_WALL_X, THIRD_ROOM_STEP_Y),
-        end=(BATHROOM_WALL_X-INNER_BWT, THIRD_ROOM_STEP_Y),
-        name="Hallway width at Pokoj 3 step",
+        start=(THIRD_ROOM_WALL_X, 2.0),
+        end=(STAIRWAY_WALL_X-INNER_BWT, 2.0),
+        name="Stairway clear width",
+		offset=1.5
     )
     drawing1.add_dimension(
-        start=(THIRD_ROOM_WALL_X, STAIRWAY_WALL_Y+INNER_BWT-0.1),
-        end=(wall_stairway_back_g.start[0], STAIRWAY_WALL_Y+INNER_BWT-0.1),
-        name="Hallway clearance to bathroom-stairway wall",
+        start=(STAIRWAY_WALL_X+0.3, BWT),
+        end=(STAIRWAY_WALL_X+0.3, BATHROOM_PARTITION_Y),
+        name="Bathroom clear depth",
     )
     drawing1.add_dimension(
-        start=(THIRD_ROOM_WALL_X, lower_stairs.start[1]+0.25),
-        end=(lower_stairs.start[0], lower_stairs.start[1]+0.25),
-        name="Hallway clearance to first stair tread",
+        start=(STAIRWAY_WALL_X+0.3, GARDEN_ROOMS_WALL_Y),
+        end=(STAIRWAY_WALL_X+0.3, BATHROOM_PARTITION_Y+PARTITION_THICKNESS),
+        name="Bathroom clear depth",
+    )
+    drawing1.add_dimension(
+        start=(STAIRWAY_WALL_X, BWT+0.5),
+        end=(HOUSE_WIDTH-BWT, BWT+0.5),
+        name="Bathroom clear width",
     )
 
     drawing1.render(PROJECT_DIR / "ground.svg", pdf=PDF_GROUND)
@@ -1131,16 +1170,25 @@ if "upper" in sys.argv:
         section_outline_width=SECTION_OUTLINE_WIDTH,
     )
     drawing1.add_material_legend([
-        ("brick", "Nosná zeď - VPC Cihla 240 mm"),
+        ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("drywall-diagonal1", f"Sádrokartonová příčka {DRY_WALL_WIDTH*1000:.0f} mm"),
         ("rockwool-wave", f"Rockwool - fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
     add_facade_insulation(drawing1, upper_exterior_walls)
     drawing1.add_chimney_annotation(chimney)
+    drawing1.add_dimension(
+        start=(chimney.center[0], upper_stairs.end[1]),
+        end=(chimney.center[0], chimney.center[1]-chimney.size/2),
+		offset=-0.5,
+        name="Chimney clearance from upper stairs",
+    )
+    drawing1.add_dimension(
+        start=(STAIR_RIGHT_X-1.4, upper_stairs.end[1]),
+        end=(STAIR_RIGHT_X-1.4, wall_living_room_back_u.start[1]+wall_living_room_back_u.body_offset),
+        name="Living room wall clearance from stairs",
+    )
     for room in upper_room_floors:
         position = Polygon(room.outline).representative_point().coords[0]
-        if room==upper_hallway:
-            position = (position[0], (upper_bathroom_outer_y+DRY_WALL_WIDTH+upper_bathroom_back_y)/2-0.3)
         drawing1.add_room_annotation(
             position, identifier=room.room_id, description=room.Name, area=room.area,
             window_area=window_area(*upper_room_windows[room.room_id]),
@@ -1157,12 +1205,8 @@ if "upper" in sys.argv:
     drawing1.add_stair_annotation(lower_stairs)
     drawing1.add_stair_annotation(upper_stairs)
     drawing1.add_stair_landing_annotation(middle_stair_landing)
-    route_x = HOUSE_WIDTH-BWT-STAIR_LANDING_LENGTH/2
     drawing1.add_poly_line(
-        [
-            lower_stairs.start, (route_x, STAIR_LOWER_CENTER_Y),
-            (route_x, STAIR_UPPER_CENTER_Y), upper_stairs.end,
-        ],
+        stair_walking_route,
         arrow_end=True, circle_start=True,
     )
     drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-0.7)
@@ -1176,32 +1220,56 @@ if "upper" in sys.argv:
         end=(BWT+0.5, HOUSE_DEPTH-BWT),
     )
     drawing1.add_dimension(
-        start=(BWT, upper_bathroom_back_y-0.9),
-        end=(living_room_wall_x-DRY_WALL_WIDTH/2, upper_bathroom_back_y-0.9),
+        start=(BWT, living_room_wall_y-DRY_WALL_WIDTH/2-0.9),
+        end=(living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y-DRY_WALL_WIDTH/2-0.9),
     )
     drawing1.add_dimension(
         start=(HOUSE_WIDTH-BWT-1.0, living_room_wall_y+DRY_WALL_WIDTH/2),
         end=(HOUSE_WIDTH-BWT-1.0, HOUSE_DEPTH-BWT),
     )
-    drawing1.add_dimension(
-        start=(living_room_wall_x+DRY_WALL_WIDTH/2, upper_stairs.end[1]),
-        end=upper_stairs.end,
-        offset=0.35,
-        name="Upper stair arrival clearance to drywall",
-    )
-    drawing1.add_dimension(
-        start=(upper_bathroom_outer_x+DRY_WALL_WIDTH, upper_bathroom_back_y-0.5),
-        end=(HOUSE_WIDTH-BWT, upper_bathroom_back_y-0.5),
-        name="Upper bathroom clear width",
-    )
-    drawing1.add_dimension(
-        start=(HOUSE_WIDTH-BWT-0.5, upper_bathroom_outer_y+DRY_WALL_WIDTH),
-        end=(HOUSE_WIDTH-BWT-0.5, upper_bathroom_back_y),
-        name="Upper bathroom clear depth",
-    )
-    drawing1.add_dimension(
-        start=(upper_hallway_left_x, upper_bathroom_back_y-0.9),
-        end=(upper_bathroom_outer_x, upper_bathroom_back_y-0.9),
-        name="Upper hallway clear width",
-    )
     drawing1.render(PROJECT_DIR / "upper.svg", pdf=PDF_UPPER)
+
+if "roof" in sys.argv:
+    drawing1 = house.add_drawing(
+        "roof",
+        x=HOUSE_WIDTH/2,
+        y=HOUSE_DEPTH/2,
+        z=max(roof_tiles_top_z, upper.elevation+chimney.end_height)+0.5,
+        radius=6.5,
+        storeys=[],
+        door_annotations=False,
+        automatic_plan_annotations=False,
+        projected_wood_color="#f4d35e",
+        surface_fills=True,
+        model_line_width=0.06,
+        right_panel_width=65,
+        section_outline_width=SECTION_OUTLINE_WIDTH,
+        section_outline_projected_walls=True,
+    )
+    roof_rafters = tuple(member for pair in rafter_pairs for member in pair)
+    for element in (*upper_exterior_walls, wall_plate_east, wall_plate_west, *purlins, *roof_rafters):
+        drawing1.include_element(element)
+    drawing1.add_chimney_annotation(chimney)
+    for index, (start_y, end_y) in enumerate(zip(RAFTER_Y_POSITIONS, RAFTER_Y_POSITIONS[1:]), 1):
+        drawing1.add_dimension(
+            start=(east_eave_x, start_y), end=(east_eave_x, end_y), offset=0.65,
+            name=f"Rafter spacing {index}",
+        )
+    support_x_positions = (BWT/2, *PURLIN_X_POSITIONS, HOUSE_WIDTH-BWT/2)
+    for index, (start_x, end_x) in enumerate(zip(support_x_positions, support_x_positions[1:]), 1):
+        drawing1.add_dimension(
+            start=(start_x, -WALL_PLATE_OVERHANG), end=(end_x, -WALL_PLATE_OVERHANG), offset=-0.2,
+            name=f"Roof support centre distance {index}",
+        )
+    drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-1.0)
+    drawing1.add_dimension(
+        start=(HOUSE_WIDTH+ROOF_EAVE_OVERHANG+0.7, 0),
+        end=(HOUSE_WIDTH+ROOF_EAVE_OVERHANG+0.7, HOUSE_DEPTH),
+    )
+    drawing1.add_timber_schedule([
+        ("Pozednice", (wall_plate_east, wall_plate_west), 0,
+         {"color": "#f4d35e", "pattern": "brick-opposite"}),
+        ("Vaznice", purlins, 0, {"color": "#f4a261", "pattern": "brick"}),
+        ("Krokve", roof_rafters, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
+    ])
+    drawing1.render(PROJECT_DIR / "roof.svg", pdf=PDF_ROOF)
