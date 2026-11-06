@@ -118,8 +118,8 @@ rooms, each with 4.2025 m clear width. The common finishing pass gives every
 ground-floor masonry wall a Liapor base course. Partitions remain non-load-bearing.
 Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
 openings through the garden-room dividing wall. Each opening's nearest edge
-is 125 mm from its side of the centre partition, controlled by
-`GARDEN_DOOR_PARTITION_CLEARANCE`; the hinges face that partition.
+is 125 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
+`GARDEN_DOOR_CENTER_CLEARANCE`; the hinges face the centre partition.
 The bathroom wall is set back to clear the Pokoj 2 opening.
 Pokoj 3 and the bathroom also have 900 mm inward-opening doors in 1000 mm
 construction openings. Their nearest opening edges are respectively
@@ -250,6 +250,21 @@ above the finished floor match the ground-floor room windows; dedicated
 `UPPER_WINDOW_SILL_HEIGHT` and `UPPER_WINDOW_TOP_HEIGHT` hold storey-relative
 coordinates. Both have opening dimensions in the upper plan, and
 `upper_room_windows` supplies their combined area to the room legend.
+The upstairs bathroom (`upper_bathroom`, room `1.02`, "Koupelna") is
+enclosed by two new 100 mm SDK walls, the west exterior wall and the
+existing living-room back partition. The stair-facing outer surface aligns
+with the corresponding downstairs wall. The hallway-facing surface is
+positioned by `UPPER_HALLWAY_WIDTH`, measured clear from the living-room
+partition. Its initial 0.995 m value preserves the bathroom's position.
+The current bathroom floor is 2.825 × 2.283 m (6.45 m²), with the
+same 30 + 65 mm build-up as the living room. The shared upper-room collection
+adds its identifier, area and room-legend row to the upper drawing.
+The hallway (`upper_hallway`, room `1.03`, "Chodba") has a strictly
+rectangular floor from the inside front wall to the living-room back
+partition, without widening toward the stairs. It uses the same 30 + 65 mm
+floor layers. The current area is 4.61 m². The upper plan dimensions the
+bathroom's clear width and depth and the hallway's clear width; all three
+rooms share the room-annotation and legend collection.
 Two wooden wall plates (`wall_plate_east`, `wall_plate_west`) sit directly
 on the east and west upper walls, centred across their 240 mm thickness.
 `WALL_PLATE_SIZE = (0.16, 0.12)` sets their width and height, matching the
@@ -286,6 +301,13 @@ planes cut both sides at the ridge. `ROOF_GABLE_OVERHANG = 0.25` sets the
 front/back tile extents; `ROOF_EAVE_SETBACK = 0.02` leaves the same 20 mm
 setback beneath the tiles for boards and battens. Each new layer type has
 its own `Roof - …` visibility storey, including both roof slopes.
+The chimney starts at the upper-floor storey datum, centred at
+`CHIMNEY_CENTER = (HOUSE_WIDTH/2, 4.5)`. It reuses the original model's
+400 mm square body, 200 mm circular flue and material/colour. Its top is
+`CHIMNEY_ABOVE_ROOF = 0.65 m` above the roof-tile ridge. The roof receives
+an exact vertical shaft opening; the living-room side partition is also
+cut where the stack crosses it. The upper plan includes the chimney/flue
+symbol, while the ground and ceiling plans omit it.
 Run `python3 house2.py upper` to create `projekt2/upper.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.3. Půdorys 2.NP.pdf`.
 Use `python3 house2.py ground ceiling upper` to generate all three plans.
