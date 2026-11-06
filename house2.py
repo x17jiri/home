@@ -6,10 +6,14 @@ import math
 import sys
 
 import ifcopenshell.api.pset
+import ifcopenshell.api.feature
+import ifcopenshell.api.geometry
+import ifcopenshell.api.root
 import ifcopenshell.util.element
+import numpy as np
 from shapely.geometry import Polygon
 
-from ifc_utils import House, window_area
+from ifc_utils import House, offset_plane, plane_height_at, window_area
 
 
 HOUSE_WIDTH = 9.0
@@ -18,6 +22,9 @@ BWT = 0.24
 INNER_BWT = 0.175
 PARTITION_THICKNESS = 0.115
 FACADE_INSULATION_THICKNESS = 0.20
+LIVING_ROOM_WIDTH = 4.2
+LIVING_ROOM_DEPTH = 3.5 + 0.037
+DRY_WALL_WIDTH = 0.10
 GARDEN_ROOMS_DEPTH = 3.47  # Clear depth between the divider and inside garden wall.
 GARDEN_ROOMS_WALL_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT
 THIRD_ROOM_WIDTH = 3.47  # Clear width of the left street-side room.
@@ -66,6 +73,51 @@ UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
 UPPER_FINISHED_FLOOR_HEIGHT = UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS
 UPPER_RING_BEAM_HEIGHT = 0.24
 NADEZDIVKA = 1.125+UPPER_RING_BEAM_HEIGHT
+WALL_PLATE_SIZE = (0.16, 0.12)
+WALL_PLATE_OVERHANG = 0.30
+WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
+PURLIN_SIZE = (0.16, 0.28)
+PURLIN_X_POSITIONS = (BWT+3.00-PURLIN_SIZE[0]/2.0, HOUSE_WIDTH-BWT-3.00+PURLIN_SIZE[0]/2.0)
+PURLIN_CENTER_HEIGHT = 3.5  # Above the upper-floor storey datum / ceiling top.
+PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT
+RAFTER_THICKNESS = 0.08
+RAFTER_HEIGHT = 0.20
+RAFTER_SIZE = (RAFTER_THICKNESS, RAFTER_HEIGHT)
+RAFTER_Z_OFFSET = -0.05  # Perpendicular to the support-contact roof plane.
+RAFTER_SPACING = 0.67
+RAFTER_FIRST_Y = -0.125
+RAFTER_LAST_Y = HOUSE_DEPTH+0.125
+ROOF_EAVE_OVERHANG = 0.30
+ROOF_GABLE_OVERHANG = 0.25
+ROOF_EAVE_SETBACK = 0.02
+# Same roof build-up as house_ifc.py; offsets are normal to each slope.
+THERMAL_INSULATION_UNDER_RAFTERS = 0.14
+VAPOUR_BARRIER_THICKNESS = 0.015
+INSTALLATION_SPACE_THICKNESS = 0.040
+GYPSUM_PLASTERBOARD_THICKNESS = 0.025
+MDF_THICKNESS = 0.015
+UNDERLAY_THICKNESS = 0.001
+COUNTER_BATTEN_SIZE = (0.06, 0.06)
+TILE_BATTEN_SIZE = (0.06, 0.04)
+TILE_BATTEN_SPACING = 0.32
+ROOF_TILE_THICKNESS = 0.03
+ROOF_TILE_PATTERN_WIDTH = 0.30
+THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = RAFTER_Z_OFFSET-THERMAL_INSULATION_UNDER_RAFTERS
+VAPOUR_BARRIER_BOTTOM = THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM-VAPOUR_BARRIER_THICKNESS
+GYPSUM_PLASTERBOARD_BOTTOM = VAPOUR_BARRIER_BOTTOM-INSTALLATION_SPACE_THICKNESS-GYPSUM_PLASTERBOARD_THICKNESS
+MDF_BOTTOM = RAFTER_Z_OFFSET+RAFTER_HEIGHT
+UNDERLAY_BOTTOM = MDF_BOTTOM+MDF_THICKNESS
+COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM+UNDERLAY_THICKNESS
+TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM+COUNTER_BATTEN_SIZE[1]
+ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM+TILE_BATTEN_SIZE[1]
+# Put the remainder into one central gap, retaining the regular spacing elsewhere.
+rafter_interval_count = max(1, math.floor((RAFTER_LAST_Y-RAFTER_FIRST_Y+1e-9)/RAFTER_SPACING))
+rafter_middle_interval = rafter_interval_count//2
+rafter_extra_spacing = RAFTER_LAST_Y-RAFTER_FIRST_Y-rafter_interval_count*RAFTER_SPACING
+RAFTER_Y_POSITIONS = tuple(
+    RAFTER_FIRST_Y+index*RAFTER_SPACING+(rafter_extra_spacing if index>rafter_middle_interval else 0)
+    for index in range(rafter_interval_count+1)
+)
 STAIR_FLIGHT_WIDTH = 1.05
 STAIR_LANDING_LENGTH = 1.05
 STAIR_TREAD_LENGTH = 0.27
@@ -106,6 +158,12 @@ ENTRANCE_OPENING_AT = math.ceil(THIRD_ROOM_WIDTH/0.125)*0.125 + 0.5
 ROOM_WINDOW_WIDTH = 1.75
 GROUND_WINDOW_TOP_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+2.25
 GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+0.875
+UPPER_WINDOW_WIDTH = 1.5
+UPPER_BACK_WINDOW_WIDTH = 3.0
+UPPER_FRONT_WINDOW_EAST_CLEARANCE = 2.0
+UPPER_WINDOW_HEIGHT = GROUND_WINDOW_TOP_HEIGHT-GROUND_WINDOW_SILL_HEIGHT
+UPPER_WINDOW_SILL_HEIGHT = UPPER_FLOOR_THICKNESS+GROUND_WINDOW_SILL_HEIGHT-GROUND_FLOOR_THICKNESS
+UPPER_WINDOW_TOP_HEIGHT = UPPER_WINDOW_SILL_HEIGHT+UPPER_WINDOW_HEIGHT
 BATHROOM_WINDOW_WIDTH = 0.75
 BATHROOM_WINDOW_HEIGHT = 0.75
 WINDOW_POSITION_STEP = 0.125
@@ -133,6 +191,9 @@ load_bearing_wall_inner = house.wall_type(
 partition_wall = house.wall_type(
     "Partition wall - VPC 115 mm",
     layers=[("Brick", PARTITION_THICKNESS)],  # Centred on its reference line.
+)
+dry_wall = house.wall_type(
+    f"drywall - {DRY_WALL_WIDTH*1000:g} mm", layers=[("SDK", DRY_WALL_WIDTH)], color="#dfefcf",
 )
 
 # Outer-face reference lines, with all material toward the interior.
@@ -457,20 +518,87 @@ ceiling_third_room = ceiling_storey.miako_slab(
     block_end_offset=third_room_ceiling_bearing,
 )
 
-# The upper-floor walls align with the ground-floor exterior faces.
+wall_plate_east = upper.beam(
+    "Pozednice - východ",
+    start=(BWT/2, -WALL_PLATE_OVERHANG, WALL_PLATE_Z),
+    end=(BWT/2, HOUSE_DEPTH+WALL_PLATE_OVERHANG, WALL_PLATE_Z),
+    size=WALL_PLATE_SIZE,
+    kind="WALL_PLATE",
+)
+wall_plate_west = upper.beam(
+    "Pozednice - západ",
+    start=(HOUSE_WIDTH-BWT/2, -WALL_PLATE_OVERHANG, WALL_PLATE_Z),
+    end=(HOUSE_WIDTH-BWT/2, HOUSE_DEPTH+WALL_PLATE_OVERHANG, WALL_PLATE_Z),
+    size=WALL_PLATE_SIZE,
+    kind="WALL_PLATE",
+)
+purlins = tuple(
+    upper.beam(
+        f"Vaznice {index}",
+        start=(x, -WALL_PLATE_OVERHANG, PURLIN_Z),
+        end=(x, HOUSE_DEPTH+WALL_PLATE_OVERHANG, PURLIN_Z),
+        size=PURLIN_SIZE,
+        kind="PURLIN",
+    )
+    for index, x in enumerate(PURLIN_X_POSITIONS, 1)
+)
+
+# Each reference plane passes through the outer top corners of its supports.
+roof = upper.roof("Roof")
+roof_ridge_x = HOUSE_WIDTH/2
+wall_plate_top_z = WALL_PLATE_Z+WALL_PLATE_SIZE[1]/2
+purlin_top_z = PURLIN_Z+PURLIN_SIZE[1]/2
+east_contact_x = BWT/2-WALL_PLATE_SIZE[0]/2
+west_contact_x = HOUSE_WIDTH-BWT/2+WALL_PLATE_SIZE[0]/2
+ridge_cut = ((roof_ridge_x, 0, 0), (roof_ridge_x, 1, 0), (roof_ridge_x, 0, 1))
+east_eave_x = -ROOF_EAVE_OVERHANG
+west_eave_x = HOUSE_WIDTH+ROOF_EAVE_OVERHANG
+roof_east = roof.plane(
+    "East slope",
+    points=((east_contact_x, 0, wall_plate_top_z),
+            (east_contact_x, -1, wall_plate_top_z),
+            (PURLIN_X_POSITIONS[0]-PURLIN_SIZE[0]/2, 0, purlin_top_z)),
+    cuts=[ridge_cut,
+          ((east_eave_x, 0, 0), (east_eave_x, 1, 0), (east_eave_x, 0, 1))],
+)
+roof_west = roof.plane(
+    "West slope",
+    points=((west_contact_x, 0, wall_plate_top_z),
+            (west_contact_x, 1, wall_plate_top_z),
+            (PURLIN_X_POSITIONS[1]+PURLIN_SIZE[0]/2, 0, purlin_top_z)),
+    cuts=[ridge_cut,
+          ((west_eave_x, 0, 0), (west_eave_x, 1, 0), (west_eave_x, 0, 1))],
+)
+roof_angle_degrees = math.degrees(math.atan2(
+    math.hypot(roof_east.z_axis[0], roof_east.z_axis[1]), roof_east.z_axis[2],
+))
+print(f"Roof angle: {roof_angle_degrees:.2f}°")
+rafter_support_span = math.dist(roof_east.points[0], roof_east.points[2])
+roof_ridge_point = roof_east.to_world((*roof_east.to_local_xy((roof_ridge_x, 0)), 0))
+rafter_upper_span = math.dist(roof_east.points[2], roof_ridge_point)
+print(f"Rafter span (wall plate to purlin): {rafter_support_span:.3f} m")
+print(f"Rafter upper span (purlin to ridge): {rafter_upper_span:.3f} m")
+
+# Front/back gables reach the rafter undersides; the side walls remain low.
+gable_wall_cuts = tuple(
+    offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
+    for plane in (roof_east, roof_west)
+)
+gable_wall_height = roof_ridge_point[2]-UPPER_FLOOR_START+RAFTER_HEIGHT
 wall_front_u = upper.wall(
-    (0, 0), (HOUSE_WIDTH, 0), wall_type=load_bearing_wall, height=NADEZDIVKA,
+    (BWT, 0), (HOUSE_WIDTH-BWT, 0), wall_type=load_bearing_wall,
+    height=gable_wall_height, cuts=gable_wall_cuts,
 )
 wall_west_u = upper.wall(
-    (HOUSE_WIDTH, BWT), (HOUSE_WIDTH, HOUSE_DEPTH-BWT),
+    (HOUSE_WIDTH, 0), (HOUSE_WIDTH, HOUSE_DEPTH),
     wall_type=load_bearing_wall, height=NADEZDIVKA,
 )
 wall_back_u = upper.wall(
-    (HOUSE_WIDTH, HOUSE_DEPTH), (0, HOUSE_DEPTH),
-    wall_type=load_bearing_wall, height=NADEZDIVKA,
+    (HOUSE_WIDTH-BWT, HOUSE_DEPTH), (BWT, HOUSE_DEPTH),
+    wall_type=load_bearing_wall, height=gable_wall_height, cuts=gable_wall_cuts,
 )
 wall_east_u = upper.wall(
-    (0, HOUSE_DEPTH-BWT), (0, BWT), wall_type=load_bearing_wall, height=NADEZDIVKA,
+    (0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=NADEZDIVKA,
 )
 upper_exterior_walls = (wall_front_u, wall_west_u, wall_back_u, wall_east_u)
 for wall, name in zip(upper_exterior_walls, ("front", "west", "back", "east")):
@@ -478,6 +606,231 @@ for wall, name in zip(upper_exterior_walls, ("front", "west", "back", "east")):
     common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
     ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": True})
 
+window_living_room_back = wall_back_u.add_window(
+    name="Living room back window",
+    at=(wall_back_u.length-UPPER_BACK_WINDOW_WIDTH)/2,
+    width=UPPER_BACK_WINDOW_WIDTH,
+    sill_height=UPPER_WINDOW_SILL_HEIGHT,
+    height=UPPER_WINDOW_TOP_HEIGHT,
+)
+window_living_room_front = wall_front_u.add_window(
+    name="Living room front window",
+    at=BWT+UPPER_FRONT_WINDOW_EAST_CLEARANCE-wall_front_u.start[0],
+    width=UPPER_WINDOW_WIDTH,
+    sill_height=UPPER_WINDOW_SILL_HEIGHT,
+    height=UPPER_WINDOW_TOP_HEIGHT,
+)
+
+# Keep clear living-room strips along the east and back sides of the house.
+living_room_wall_x = BWT+LIVING_ROOM_WIDTH+DRY_WALL_WIDTH/2
+living_room_wall_y = HOUSE_DEPTH-BWT-LIVING_ROOM_DEPTH-DRY_WALL_WIDTH/2
+upper_partition_cuts = tuple(
+    offset_plane(*plane.points, offset=GYPSUM_PLASTERBOARD_BOTTOM)
+    for plane in (roof_east, roof_west)
+)
+wall_living_room_side_u = upper.wall(
+    (living_room_wall_x, BWT), (living_room_wall_x, living_room_wall_y-DRY_WALL_WIDTH/2),
+    wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
+)
+wall_living_room_back_u = upper.wall(
+    (living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y),
+    (HOUSE_WIDTH-BWT, living_room_wall_y),
+    wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
+)
+for wall, name in (
+    (wall_living_room_side_u, "Living room - side partition"),
+    (wall_living_room_back_u, "Living room - back partition"),
+):
+    wall.Name = name
+    common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
+    ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": False})
+
+living_room = upper.floor_layer(
+    "Obývací pokoj", room_id="1.01",
+    outline=(
+        (BWT, BWT),
+        (living_room_wall_x-DRY_WALL_WIDTH/2, BWT),
+        (living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y+DRY_WALL_WIDTH/2),
+        (HOUSE_WIDTH-BWT, living_room_wall_y+DRY_WALL_WIDTH/2),
+        (HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
+        (BWT, HOUSE_DEPTH-BWT),
+    ),
+    thickness=UPPER_FLOOR_THICKNESS,
+    insulation_thickness=UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS,
+    insulation_material=FLOOR_INSULATION_MATERIAL,
+    buildup_material=FLOOR_BUILDUP_MATERIAL,
+    color="#ffff80",
+)
+upper_room_floors = (living_room,)
+upper_room_windows = {
+    living_room.room_id: (window_living_room_front, window_living_room_back),
+}
+
+rafter_pairs = tuple(
+    tuple(
+        plane.beam(
+            f"Krokev {index} - {side}",
+            start=plane.to_local_xy((eave_x+overshoot, y)),
+            end=plane.to_local_xy((roof_ridge_x-overshoot, y)),
+            size=RAFTER_SIZE,
+            z_offset=RAFTER_Z_OFFSET,
+            kind="RAFTER",
+        )
+        for plane, side, eave_x, overshoot in (
+            (roof_east, "východ", east_eave_x, -1.0),
+            (roof_west, "západ", west_eave_x, 1.0),
+        )
+    )
+    for index, y in enumerate(RAFTER_Y_POSITIONS, 1)
+)
+
+roof_layer_storeys = {
+    name: house.storey(f"Roof - {name}", elevation=UPPER_FLOOR_START)
+    for name in (
+        "Thermal insulation under rafters", "Vapour barrier", "Gypsum plasterboard",
+        "MDF", "Roofing underlay", "Counter-battens", "Tile battens", "Roof tiles",
+    )
+}
+for layer_name, layer_storey in roof_layer_storeys.items():
+    layer_storey.element.ObjectType = "ROOF_LAYER"
+    layer_storey.element.Description = f"Visibility container for {layer_name}"
+
+
+def roof_slope_limits(plane, x_limits, offsets, *, cover=False):
+    """Local slope coordinates reaching both vertical ends at each layer face."""
+    intervals = [
+        sorted((x-plane.origin[0]-z*plane.z_axis[0])/plane.y_axis[0] for x in x_limits)
+        for z in offsets
+    ]
+    if cover:
+        return min(lo for lo, hi in intervals), max(hi for lo, hi in intervals)
+    return max(lo for lo, hi in intervals), min(hi for lo, hi in intervals)
+
+
+def roof_layer_outline(plane, x_limits, y_limits, offset, thickness):
+    """Overshoot only the clipped slope ends; retain exact gable endpoints."""
+    lo, hi = roof_slope_limits(plane, x_limits, (offset, offset+thickness), cover=True)
+    first, last = sorted(plane.to_local_xy((plane.origin[0], y))[0] for y in y_limits)
+    return ((first, lo-0.1), (last, lo-0.1), (last, hi+0.1), (first, hi+0.1))
+
+
+def roof_vertical_cut(x):
+    return ((x, 0, 0), (x, 1, 0), (x, 0, 1))
+
+
+def cut_roof_layer_at_purlin(layer, index):
+    """Leave exposed supporting timber where it crosses the sloped inner finish."""
+    opening = ifcopenshell.api.root.create_entity(
+        house.model, ifc_class="IfcOpeningElement", predefined_type="OPENING",
+        name=f"{layer.Name} - purlin clearance",
+    )
+    opening.ObjectType = "ROOF_SUPPORT_CLEARANCE"
+    half_width = PURLIN_SIZE[0]/2
+    x = PURLIN_X_POSITIONS[index]
+    # The opening matches the timber volume, extending beyond the finish along Y.
+    representation = ifcopenshell.api.geometry.add_slab_representation(
+        house.model, context=house._body_context, depth=PURLIN_SIZE[1],
+        polyline=((x-half_width, -WALL_PLATE_OVERHANG),
+                  (x+half_width, -WALL_PLATE_OVERHANG),
+                  (x+half_width, HOUSE_DEPTH+WALL_PLATE_OVERHANG),
+                  (x-half_width, HOUSE_DEPTH+WALL_PLATE_OVERHANG)),
+    )
+    ifcopenshell.api.geometry.assign_representation(house.model, product=opening, representation=representation)
+    ifcopenshell.api.feature.add_feature(house.model, feature=opening, element=layer)
+    placement = np.eye(4)
+    placement[2, 3] = PURLIN_Z-PURLIN_SIZE[1]/2
+    ifcopenshell.api.geometry.edit_object_placement(house.model, product=opening, matrix=placement, is_si=True)
+
+
+def add_roof_build_up(plane, side, purlin_index, eave_x, inner_wall_x):
+    """Build the original house's roof stack on one of the new roof planes."""
+    inner_x = (inner_wall_x, roof_ridge_x)
+    inner_y = (BWT, HOUSE_DEPTH-BWT)
+    outer_x = (eave_x, roof_ridge_x)
+    inset_eave_x = eave_x+(ROOF_EAVE_SETBACK if eave_x<roof_ridge_x else -ROOF_EAVE_SETBACK)
+    board_x = (inset_eave_x, roof_ridge_x)
+    tile_y = (-ROOF_GABLE_OVERHANG, HOUSE_DEPTH+ROOF_GABLE_OVERHANG)
+    board_y = (tile_y[0]+ROOF_EAVE_SETBACK, tile_y[1]-ROOF_EAVE_SETBACK)
+    definitions = (
+        ("Thermal insulation under rafters", THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM,
+         THERMAL_INSULATION_UNDER_RAFTERS, "Thermal insulation", "#E8D36D", 0),
+        ("Vapour barrier", VAPOUR_BARRIER_BOTTOM, VAPOUR_BARRIER_THICKNESS, "Vapour barrier", "#4A90E2", 0.35),
+        ("Gypsum plasterboard", GYPSUM_PLASTERBOARD_BOTTOM, GYPSUM_PLASTERBOARD_THICKNESS,
+         "Gypsum plasterboard", "#E8E5DE", 0),
+        ("MDF", MDF_BOTTOM, MDF_THICKNESS, "MDF", "#f2b6d0", 0),
+        ("Roofing underlay", UNDERLAY_BOTTOM, UNDERLAY_THICKNESS, "Roofing underlay", "#3B4148", 0),
+        ("Roof tiles", ROOF_TILE_BOTTOM, ROOF_TILE_THICKNESS, "Roof tiles", "#A64B35", 0),
+    )
+    layers = []
+    for key, offset, thickness, material, color, transparency in definitions:
+        is_inner = key in {"Thermal insulation under rafters", "Vapour barrier", "Gypsum plasterboard"}
+        is_tile = key=="Roof tiles"
+        x_limits = inner_x if is_inner else outer_x if is_tile else board_x
+        y_limits = inner_y if is_inner else tile_y if is_tile else board_y
+        extra_cuts = () if is_tile else (roof_vertical_cut(inner_wall_x if is_inner else inset_eave_x),)
+        layer = plane.layer(
+            f"{side} {key}", outline=roof_layer_outline(plane, x_limits, y_limits, offset, thickness),
+            z_offset=offset, thickness=thickness, material=material, color=color,
+            transparency=transparency, extra_cuts=extra_cuts,
+        )
+        if is_inner:
+            cut_roof_layer_at_purlin(layer, purlin_index)
+        if is_tile:
+            layer.set_tile_pattern(width=ROOF_TILE_PATTERN_WIDTH, course_length=TILE_BATTEN_SPACING)
+        roof_layer_storeys[key].add(layer)
+        layers.append(layer)
+
+    # Counter-battens follow the actual, nonuniformly spaced rafter stations.
+    lo, hi = roof_slope_limits(
+        plane, board_x, (COUNTER_BATTEN_BOTTOM, COUNTER_BATTEN_BOTTOM+COUNTER_BATTEN_SIZE[1]), cover=True,
+    )
+    for index, y in enumerate(RAFTER_Y_POSITIONS, 1):
+        local_x = plane.to_local_xy((plane.origin[0], y))[0]
+        batten = plane.beam(
+            f"{side} counter-batten {index}", start=(local_x, lo-0.1), end=(local_x, hi+0.1),
+            z_offset=COUNTER_BATTEN_BOTTOM, size=COUNTER_BATTEN_SIZE,
+            extra_cuts=(roof_vertical_cut(inset_eave_x),),
+        )
+        roof_layer_storeys["Counter-battens"].add(batten)
+
+    # Tile battens run along the ridge, 320 mm apart measured on the slope.
+    lo, hi = roof_slope_limits(plane, board_x, (TILE_BATTEN_BOTTOM, TILE_BATTEN_BOTTOM+TILE_BATTEN_SIZE[1]))
+    first, last = sorted(plane.to_local_xy((plane.origin[0], y))[0] for y in board_y)
+    row, local_y = 1, lo+TILE_BATTEN_SPACING/2
+    while local_y+TILE_BATTEN_SIZE[0]/2 <= hi:
+        batten = plane.beam(
+            f"{side} tile batten {row}", start=(first, local_y), end=(last, local_y),
+            z_offset=TILE_BATTEN_BOTTOM, size=TILE_BATTEN_SIZE,
+            extra_cuts=(roof_vertical_cut(inset_eave_x),),
+        )
+        roof_layer_storeys["Tile battens"].add(batten)
+        row += 1
+        local_y += TILE_BATTEN_SPACING
+    return tuple(layers)
+
+
+roof_layers = (
+    *add_roof_build_up(roof_east, "East", 0, east_eave_x, BWT),
+    *add_roof_build_up(roof_west, "West", 1, west_eave_x, HOUSE_WIDTH-BWT),
+)
+# The transverse SDK partition also meets the exposed west purlin.
+cut_roof_layer_at_purlin(wall_living_room_back_u, 1)
+roof_tiles_top_z = max(
+    plane_height_at(
+        *offset_plane(*layer.plane.points, offset=layer.z_offset+layer.thickness),
+        x=roof_ridge_x, y=HOUSE_DEPTH/2,
+    )
+    for layer in roof_layers if layer.material_name=="Roof tiles"
+)
+total_house_height = roof_tiles_top_z-(ground.elevation+GROUND_FLOOR_THICKNESS)
+print(f"Total house height from ground-floor finished floor to top of roof tiles: {total_house_height:.3f} m")
+plasterboard_wall_heights = {}
+
+plasterboard_height_at_wall = plane_height_at(
+        *offset_plane(*roof_east.points, offset=GYPSUM_PLASTERBOARD_BOTTOM),
+        x=BWT, y=HOUSE_DEPTH/2,
+    )-UPPER_FINISHED_FLOOR_HEIGHT
+print(f"Plasterboard inner-face height at wall, above finished upper floor: {plasterboard_height_at_wall:.3f} m")
 
 def add_facade_insulation(drawing, walls=None):
     """Add drawing-only Rockwool around the exterior walls, including the corners."""
@@ -683,9 +1036,24 @@ if "upper" in sys.argv:
     )
     drawing1.add_material_legend([
         ("brick", "Nosná zeď - VPC Cihla 240 mm"),
+        ("drywall-diagonal1", f"Sádrokartonová příčka {DRY_WALL_WIDTH*1000:.0f} mm"),
         ("rockwool-wave", f"Rockwool - fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
     add_facade_insulation(drawing1, upper_exterior_walls)
+    for room in upper_room_floors:
+        position = Polygon(room.outline).representative_point().coords[0]
+        drawing1.add_room_annotation(
+            position, identifier=room.room_id, description=room.Name, area=room.area,
+            window_area=window_area(*upper_room_windows[room.room_id]),
+        )
+    drawing1.add_room_legend()
+    for window, offset in (
+        (window_living_room_front, -1.3),
+        (window_living_room_back, -0.65),
+    ):
+        drawing1.add_opening_dimension(
+            window, offset=offset, finished_floor_height=UPPER_FLOOR_THICKNESS,
+        )
     drawing1.include_element(stair_railing)
     drawing1.add_stair_annotation(lower_stairs)
     drawing1.add_stair_annotation(upper_stairs)
@@ -705,7 +1073,21 @@ if "upper" in sys.argv:
         end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT-0.5),
     )
     drawing1.add_dimension(
-        start=(HOUSE_WIDTH-BWT-0.5, BWT),
-        end=(HOUSE_WIDTH-BWT-0.5, HOUSE_DEPTH-BWT),
+        start=(BWT+0.5, BWT),
+        end=(BWT+0.5, HOUSE_DEPTH-BWT),
+    )
+    drawing1.add_dimension(
+        start=(BWT, living_room_wall_y-0.5),
+        end=(living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y-0.5),
+    )
+    drawing1.add_dimension(
+        start=(HOUSE_WIDTH-BWT-1.0, living_room_wall_y+DRY_WALL_WIDTH/2),
+        end=(HOUSE_WIDTH-BWT-1.0, HOUSE_DEPTH-BWT),
+    )
+    drawing1.add_dimension(
+        start=(living_room_wall_x+DRY_WALL_WIDTH/2, upper_stairs.end[1]),
+        end=upper_stairs.end,
+        offset=0.35,
+        name="Upper stair arrival clearance to drywall",
     )
     drawing1.render(PROJECT_DIR / "upper.svg", pdf=PDF_UPPER)

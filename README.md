@@ -212,14 +212,80 @@ dimensions, and a MIAKO beam schedule. Pass both `ground ceiling` to generate
 both plans in one run.
 
 The `Upper floor` storey starts at `UPPER_FLOOR_START` (Z = 3.035 m), with
-four 240 mm VPC exterior walls aligned above the ground-floor walls. Their
-height is `NADEZDIVKA = 1.125 + UPPER_RING_BEAM_HEIGHT`; with the initial
-240 mm ring-beam-height parameter this is 1.365 m, reaching Z = 4.400 m.
-This step adds the walls only; the ring beam and upper floor build-up are
-not yet modelled. The upper plan includes the same drawing-only Rockwool,
+four 240 mm VPC exterior walls aligned above the ground-floor walls. The
+east/west wall height is `NADEZDIVKA = 1.125 + UPPER_RING_BEAM_HEIGHT`;
+with the initial 240 mm ring-beam-height parameter this is 1.365 m,
+reaching Z = 4.400 m. The front/back walls form gables, clipped by both
+roof planes at `RAFTER_Z_OFFSET`, so their tops follow the rafter undersides
+all the way to the ridge. Their existing X ranges and wall thicknesses are
+preserved. The ring beam and upper floor build-up are not yet modelled.
+The upper plan includes the same drawing-only Rockwool,
 material legend, and overall and inside dimensions. Both existing stair
 flights and the middle landing are explicitly included with their plan
 symbols and one continuous ascent arrow, retaining their ground-floor storey.
+Two upper-floor SDK partitions enclose a rectangle in the front-west
+corner; the remaining L-shaped area is the living room.
+`LIVING_ROOM_WIDTH = 4.0` is the clear width of its east-side strip and
+`LIVING_ROOM_DEPTH = 3.5` is the clear depth of its back/garden-side strip.
+With `DRY_WALL_WIDTH = 0.10`, the excluded rectangle has clear dimensions
+`HOUSE_WIDTH - 2*BWT - DRY_WALL_WIDTH - LIVING_ROOM_WIDTH` by
+`HOUSE_DEPTH - 2*BWT - DRY_WALL_WIDTH - LIVING_ROOM_DEPTH` (4.42 × 4.67 m).
+The non-load-bearing walls start at the upper-storey datum, meet without
+overlap, and are clipped to the underside of the sloped plasterboard.
+The back partition has a clearance where the west purlin passes through it.
+The upper plan dimensions the two living-room strips and includes the SDK
+material legend.
+The living room has an L-shaped floor build-up (`living_room`, room `1.01`,
+"Obývací pokoj") following the clear inside faces of the partitions and
+exterior walls. It uses 30 mm impact insulation and 65 mm screed/finish,
+from Z = 3.035 to 3.130 m. Its 48.90 m² area supplies the room label and
+room legend via `upper_room_floors`. The upper plan also dimensions the
+clearance from the partition's stair-side face to the end of the upper
+stair flight (currently 1.750 m).
+The living room has a single centred 3.00 m back window
+(`UPPER_BACK_WINDOW_WIDTH`) and a 1.50 m front window. The front opening
+starts 2.00 m from the east wall's inside face
+(`UPPER_FRONT_WINDOW_EAST_CLEARANCE`). Their 1.375 m height and 0.890 m sill
+above the finished floor match the ground-floor room windows; dedicated
+`UPPER_WINDOW_SILL_HEIGHT` and `UPPER_WINDOW_TOP_HEIGHT` hold storey-relative
+coordinates. Both have opening dimensions in the upper plan, and
+`upper_room_windows` supplies their combined area to the room legend.
+Two wooden wall plates (`wall_plate_east`, `wall_plate_west`) sit directly
+on the east and west upper walls, centred across their 240 mm thickness.
+`WALL_PLATE_SIZE = (0.16, 0.12)` sets their width and height, matching the
+original house. `WALL_PLATE_OVERHANG = 0.30` extends them beyond both outside
+front/back wall faces: Y = −0.30 to 9.05 m, length 9.35 m. Their bottoms
+are at Z = 4.400 m and tops at Z = 4.520 m.
+Two wooden purlins (`purlins`) run parallel to the wall plates at
+`PURLIN_X_POSITIONS = (3.0, HOUSE_WIDTH-3.0)`. Their section is
+`PURLIN_SIZE = (0.16, 0.24)` and their centreline is
+`PURLIN_CENTER_HEIGHT = 3.5 m` above the upper-storey datum, which is the
+ceiling top. This gives world Z = 6.535 m (bottom 6.415 m, top 6.655 m).
+They share `WALL_PLATE_OVERHANG`, so their Y range is also −0.30 to 9.05 m.
+The roof has 14 pairs of `RAFTER_SIZE = (0.08, 0.20)` rafters, with their
+centres at `RAFTER_FIRST_Y = -0.125` through
+`RAFTER_LAST_Y = HOUSE_DEPTH + 0.125`. There are six 670 mm gaps, one
+central 960 mm gap, and six more 670 mm gaps. Both slopes are defined by
+the outer top corners of their wall plate and purlin, meeting at
+`X = HOUSE_WIDTH/2`. `RAFTER_Z_OFFSET = -0.05` sets the rafter bottom
+50 mm below that reference plane, measured perpendicular to the slope.
+`ROOF_EAVE_OVERHANG = 0.30` controls the initial X overhang independently
+of the Y spacing. Each rafter is cut vertically at its eave and the ridge;
+the members are grouped under the roof in the upper-floor storey.
+Both slopes now use the previous house's build-up, with all interior
+layers continuing to the ridge (no horizontal attic ceiling): 140 mm
+under-rafter wool, 15 mm OSB/vapour barrier, a 40 mm empty service space,
+and 25 mm plasterboard. Above the rafters are 15 mm MDF, 1 mm underlay,
+60 × 60 mm counter-battens at every rafter, 60 × 40 mm tile battens at
+320 mm slope spacing, and 30 mm roof tiles with the shared tile pattern.
+The materials and IFC colours match `house_ifc.py`. As in that model,
+the between-rafter wool space has no additional solid overlapping the rafters.
+The sloped inner sheets and wool stop at the inside wall faces and have
+host-specific clearance openings where the purlins cross them. The roof
+planes cut both sides at the ridge. `ROOF_GABLE_OVERHANG = 0.25` sets the
+front/back tile extents; `ROOF_EAVE_SETBACK = 0.02` leaves the same 20 mm
+setback beneath the tiles for boards and battens. Each new layer type has
+its own `Roof - …` visibility storey, including both roof slopes.
 Run `python3 house2.py upper` to create `projekt2/upper.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.3. Půdorys 2.NP.pdf`.
 Use `python3 house2.py ground ceiling upper` to generate all three plans.

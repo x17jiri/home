@@ -232,7 +232,7 @@ class RoofSlope:
 
 # Tune these for both the standalone command and `house_ifc.py points`.
 # Center coordinates are metres along street/neighbour; rotation is CCW from street.
-HOUSE_PLACEMENT = SurveyHouse(center=(-10.38, 10.34), angle_degrees=-6.5)
+HOUSE_PLACEMENT = SurveyHouse(center=(-10.38, 10.34), angle_degrees=-10)
 NEIGHBOUR_WINDOW_DISTANCE = 7.75  # Metres from the fitted intersection along +y.
 NEIGHBOUR_WINDOW_ELEVATION = 417.60  # Metres above sea level (Bpv).
 ROOF_SLOPES: tuple[RoofSlope, ...] = (
