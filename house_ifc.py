@@ -4896,8 +4896,8 @@ if "ground" in sys.argv:
 	aa_cut.add_symbol(drawing1)
 	bb_cut.add_symbol(drawing1)
 	drawing1.add_material_legend([
-		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
-		("brick", "Nosná zeď - VPC cihla 175mm"),
+		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď - VPC cihla 175mm"),
 		("diagonal1", "Příčka - VPC Cihla 115 mm"),
 		(
 			"polystyrene-transparent",
@@ -5053,8 +5053,8 @@ if "upper" in sys.argv:
 	drawing1.include_element(main_stair_railing)
 	drawing1.include_element(gallery_stair_railing)
 	drawing1.add_material_legend([
-		("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
-		("brick", "Nosná zeď - VPC cihla 175mm"),
+		("brick", "Nosná zeď - VPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď - VPC cihla 175mm"),
 		("drywall-diagonal1", "Příčka - Sádrokarton 100 mm"),
 		(
 			"polystyrene-transparent",
@@ -5747,8 +5747,8 @@ def add_section_material_legend(drawing):
 		f"{width*1000:.0f} × {'min. ' if ramped_footers else ''}{height*1000:.0f}"
 		for width, height in footer_sizes)
 	return drawing.add_material_legend([
-		("solid-white", "Nosná zeď\nVPC Cihla 240 mm"),
-		("brick", "Nosná zeď\nVPC cihla 175mm"),
+		("brick", "Nosná zeď\nVPC Cihla 240 mm"),
+		("solid-white", "Nosná zeď\nVPC cihla 175mm"),
 		(
 			"liapor-brick",
 			f"První řada cihel nosných stěn\nLiapor M AKU, 12 MPa",
@@ -6196,7 +6196,12 @@ if "bb" in sys.argv:
 # Each exterior view has its own terrain profile in metres above sea level.
 # Horizontal coordinates are global Y for west/east, global X for street/garden.
 TERRAIN_PROFILES = {
-	"pohled_zapad": [(-2.0, y_to_earth(-2.0)), (HOUSE_DEPTH + 2.0, y_to_earth(HOUSE_DEPTH + 2.0))],
+	"pohled_zapad": [
+		(-2.0, 415.5),
+		(0.0, 415.5),
+		(HOUSE_DEPTH, 416.7),
+		(HOUSE_DEPTH + 2.0, 416.7),
+	],
 	"pohled_ulice": [
 		(-2.0, y_to_earth(0.0)),
 		(HOUSE_WIDTH + 2.0, y_to_earth(0.0)),

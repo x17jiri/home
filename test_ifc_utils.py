@@ -11020,6 +11020,8 @@ class HouseTests(unittest.TestCase):
             style="dashed",
         )
 
+        outline_placement = ifcopenshell.util.placement.get_local_placement(outline.ObjectPlacement)
+        self.assertAlmostEqual(outline_placement[2, 3], drawing.z-0.01)
         self.assertEqual(outline.ObjectType, "LINEWORK")
         self.assertEqual(
             ifcopenshell.util.element.get_pset(
@@ -11056,6 +11058,22 @@ class HouseTests(unittest.TestCase):
             outline,
             other_drawing.group.IsGroupedBy[0].RelatedObjects,
         )
+
+    def test_wall_outlines_remove_numerical_zero_length_edges(self) -> None:
+        house = House("Offset wall junctions")
+        basement = house.storey("Basement", elevation=-2.46)
+        walls = tuple(basement.wall(start, end, thickness=.3, height=2.25) for start, end in (
+            ((-.03, .12), (8.78, .12)),
+            ((8.63, .21), (8.63, 8.54)),
+            ((8.78, 8.63), (-.03, 8.63)),
+            ((.12, 8.54), (.12, .21)),
+        ))
+        drawing = house.add_drawing("Footing cut", 4, 4, -2.91, 6.5)
+        outline = drawing.add_wall_outlines(walls)
+        for curve in outline.Representation.Representations[0].Items[0].Elements:
+            points = list(curve.Points.CoordList)
+            for first, last in zip(points, points[1:]):
+                self.assertGreater(hypot(last[0]-first[0], last[1]-first[1]), 1e-8)
 
     def test_styles_wall_outlines_and_roof_openings_dashed_but_doors_solid(self) -> None:
         stylesheet = (

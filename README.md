@@ -88,6 +88,82 @@ It creates both `house_plan.svg` and `house_plan.png`.
 ## Alternative house
 
 `house2.py` is an independent model using the shared `ifc_utils` helpers.
+Its `Basement` storey duplicates every ground-floor wall, including partitions,
+as solid 300 mm `ztracene bedneni` walls. The new walls are centred beneath
+the physical ground-floor wall bodies, accounting for face-based reference
+lines. Their ends extend by half the increase in thickness to fill junctions.
+Ground-floor doors, windows and the Liapor base course are not copied.
+
+`BASEMENT_WALL_HEIGHT = 2.25 m` leaves `CEILING_THICKNESS = 0.21 m` above
+the basement walls, immediately below the ground-floor layers at Z = 0;
+the basement ceiling itself remains to be added. With the current settings:
+
+| Element | Bottom Z | Top Z |
+| --- | ---: | ---: |
+| Basement walls | −2.460 m | −0.210 m |
+| Foundation slab, 150 mm | −2.610 m | −2.460 m |
+| Strip footings, 600 × 600 mm | −3.210 m | −2.610 m |
+
+The single `Base plate concrete` slab covers the outer footprint of the
+thicker basement walls. Every basement wall has a centred concrete strip
+footing, with returns at its ends. Footings belong to the separate
+`Foundation` storey. Configure these elements with `BASEMENT_WALL_THICKNESS`,
+`BASEMENT_SLAB_THICKNESS`, `FOUNDATION_FOOTING_WIDTH` and
+`FOUNDATION_FOOTING_HEIGHT`; all lower elevations follow automatically.
+
+Run `python3 house2.py basement found` to generate the basement and foundation
+plans. Their PDFs are `D1.1.9. Půdorys suterénu.pdf` (`PDF_BASEMENT`) and
+`D1.1.10. Základy.pdf` (`PDF_FOUND`) in the architectural folder; SVGs are
+`projekt2/basement.svg` and `projekt2/found.svg`. The basement cut passes
+through the middle of the basement walls; the foundation cut passes through
+the middle of the strip footings, at
+`FOUNDATION_FOOTING_BOTTOM_Z + FOUNDATION_FOOTING_HEIGHT/2` (currently
+Z = −2.910 m). The foundation plan includes black dashed outlines of the
+basement walls and blue dashed outlines of the ground-floor walls above,
+with matching line-legend entries. Both plans show overall dimensions and wall/footing thickness.
+`foundation` is also accepted as an alias for `found`.
+The foundation plan includes a red dashed `Zemnící pásovina FeZn 30/35`
+ring through the four exterior wall centrelines. Each corner has a diagonal
+lead extending `GROUNDING_LEAD_LENGTH = 1.0 m` beyond the masonry corner;
+a perpendicular lead also exits below the entrance-opening centre. The
+entrance lead follows the actual door host and position. These are drawing
+annotations, rather than 3D grounding hardware.
+
+All exterior finishes belong to the separate `Facades` visibility storey.
+`add_house_facades()` adds a grey perimeter band from the basement floor
+to `PERIMETER_TOP_HEIGHT = 0`, and white finishes above it through both
+storeys, including the gables and low upper walls. Each white side is one
+continuous 5 mm covering, with openings projected from the ground and upper
+walls and its top cut at the roof's rafter undersides. The panels sit outside
+the 200 mm facade-insulation allowance; the basement offset accounts for its
+thicker walls so the finishes align. Front/back panels cover the side-panel
+ends at the corners. `FACADE_THICKNESS` controls the finish thickness.
+
+`add_roof_edge_facades()` adds wood only around the roof edges: four sloped
+front/back boards and two eave boards. Their solid `Wood siding solid` colour
+is `#f9e5bf`, without a board-joint pattern. The 20 mm boards fill
+`ROOF_EAVE_SETBACK`, running from the rafter underside to the tile underside
+and respecting the horizontal eave cut. Rafters stop at the inside of the
+eave boards. The upper plan explicitly includes the continuous white panels
+despite their ground-floor host, while their separate storey allows all
+facades and roof-edge boards to be toggled together in 3D.
+
+Run `python3 house2.py pohledy` for all four exterior views, or pass any of
+`pohled_zapad`, `pohled_ulice`, `pohled_zahrada`, and `pohled_vychod`
+individually. SVGs are written under `projekt2`; A4 landscape PDFs at 1:100
+are numbered D1.1.5–D1.1.8 in its architectural folder. The shared
+`add_exterior_view()` helper includes the basement, ceilings, roof and
+facades, closes doors for rendering, and suppresses plan annotations.
+
+`TERRAIN_PROFILES` holds an independently editable profile for each view:
+global X with height above sea level for street/garden, and global Y with
+height above sea level for east/west. `earth_to_z()` uses
+`GROUND_FINISHED_FLOOR_ELEVATION = 417.0 m`; the initial terrain follows the
+old house, at `TERRAIN_STREET_ELEVATION = 416.0 m` and
+`TERRAIN_GARDEN_ELEVATION = 416.6 m`. `y_to_earth()` interpolates between
+these values for the side-view slopes. Terrain is a drawing overlay with
+earth hatching and a mask below the profile, rather than a 3D earth solid.
+
 It starts with a ground-floor storey at Z = 0 and four 240 mm VPC
 outer walls enclosing the `HOUSE_WIDTH × HOUSE_DEPTH` footprint. A 175 mm VPC
 load-bearing wall along X separates the garden rooms, with clear depth
@@ -280,13 +356,18 @@ door in a 900 mm opening swings inward from the hallway. The opening starts
 50 mm from the living-room wall's bathroom-side face, controlled by
 `UPPER_BATHROOM_DOOR_SIDE_CLEARANCE`. The horizontal
 partition is cut around the west purlin. The hallway is 1.10 m deep on the
-left, over the bathroom, and 1.40 m on the right, above the stairs.
-`UPPER_HALLWAY_RIGHT_EXTRA_WIDTH = 0.30 m` controls the additional depth.
+left, over the bathroom. On the right, above the stairs, the SDK wall is
+centred directly above the ground-floor garden-room load-bearing wall,
+including its material offset and thickness. This determines the wider
+hallway depth automatically (currently about 1.72 m).
 `UPPER_HALLWAY_WIDE_PART_START_X` controls the X coordinate where the wider
 part starts; it defaults to the bathroom's right face. The horizontal
 living-room wall steps back there, with a short SDK return. Both room outlines follow
 this step; the hallway excludes the chimney footprint. The upper plan also
 dimensions the clear gap from the rear west post to the living-room wall.
+A 900 mm living-room door in a 1000 mm opening is centred on the upper
+stairway exit. It swings into the living room and has an opening dimension
+on that side of the wall.
 Both new floors share the living room's 30 mm impact
 insulation and 65 mm screed/finish, and supply labels and room-legend rows
 from their measured outlines.
@@ -294,7 +375,7 @@ The upper hallway has the old house's 700 × 700 × 800 mm washing machine
 beside the west exterior wall, centred in the half nearest the stair arrival.
 A 600 × 550 mm basin occupies the other half, facing into the hallway,
 with its top 850 mm above the finished floor. Both positions follow the
-configured depth of the wider hallway. The bathroom's front end contains the
+derived depth of the wider hallway. The bathroom's front end contains the
 1000 × 500 × 1500 mm recuperation unit against the front wall, and a toilet
 facing the doorway. A 700 × 700 × 2000 mm TUV tank stands beside the
 living-room wall, centred in the free space between the recuperation unit
@@ -2253,7 +2334,25 @@ preliminary normal-section model, not a dormer or complete roof safety verificat
 [roof_frame.md](roof_frame.md) for the interfaces, support assumptions,
 load conventions and remaining checks.
 
-## 3D roof-frame model (PyNite)
+## House 2 roof simulator (PyNite)
+
+`roof_frame_3d_house2.py` reads the current `house2.py` geometry without
+executing the IFC generator. It models the rafters, continuous purlins,
+two cross beams, four shortened posts and twelve pin-ended braces.
+The default includes gable-wall bearings and compression-only braces.
+Loads come from `rafter_load.py`; material properties use `materials.py`.
+
+```bash
+.venv-roof3d/bin/python roof_frame_3d_house2.py
+.venv-roof3d/bin/python -m unittest test_roof_frame_3d_house2 -v
+```
+
+Outputs include 3D/plan PNGs, force and support CSVs, instantaneous L/300
+and L/500 chord checks, and a JSON calculation basis. Red circles mark
+support uplift forces. See [roof_frame_3d_house2.md](roof_frame_3d_house2.md)
+for assumptions, material/load overrides and connection comparisons.
+
+## Original house 3D roof-frame model (PyNite)
 
 The simulator has not yet been updated for the lowered roof section and split
 wall plates. The description below refers to its previous, single-level framing;

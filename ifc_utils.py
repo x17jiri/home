@@ -2191,7 +2191,9 @@ def _postprocess_drawing_line_colors(svg_path: Path) -> None:
     widths = sorted(set(re.findall(r"\bdrawing-line-width-(\d+(?:p\d+)?(?:e-?\d+)?)\b", svg)))
     if not colors and not text_colors and not sizes and not widths:
         return
-    rules = "\n".join(f".drawing-line-color-{color} {{ stroke: #{color} !important; }}"
+    rules = "\n".join(f".drawing-line-color-{color}, "
+                      f".PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-{color} "
+                      f"{{ stroke: #{color} !important; }}"
                       for color in colors)
     rules += "\n" + "\n".join(
         f".drawing-text-color-{color}, .drawing-text-color-{color} tspan "
@@ -13271,6 +13273,7 @@ class Drawing:
         walls: Sequence[Wall],
         *,
         style: Literal["dashed", "solid"] = "dashed",
+        color: str | None = None,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add one merged plan outline of the supplied wall footprints.
@@ -13279,7 +13282,8 @@ class Drawing:
         the resulting linework belongs exclusively to this drawing.  Wall
         rectangles are unioned before their boundary is drawn, preventing
         internal end lines at corners and T-junctions. Source walls may belong
-        to any storey of this house.
+        to any storey of this house. ``color`` optionally overrides the default
+        black outline and is also used by an associated line-legend sample.
         """
         self._require_plan_view("add_wall_outlines")
         if isinstance(walls, (str, bytes)):
@@ -13301,6 +13305,10 @@ class Drawing:
             ):
                 raise ValueError(f"wall {index} must belong to this house")
         style_name = _enum(style, "style", {"DASHED", "SOLID"}).lower()
+        color_class = ""
+        if color is not None:
+            _, normalized_color, _ = _drawing_line_appearance(style_name, color)
+            color_class = f" drawing-line-color-{normalized_color[1:]}"
         annotation_name = (
             _name(name, "name")
             if name is not None
@@ -13333,7 +13341,9 @@ class Drawing:
                 )
             )
 
-        merged = unary_union(footprints)
+        # Differently offset wall paths can leave sub-nanometre segments at
+        # shared corners. OpenCascade's SVG serializer rejects those edges.
+        merged = unary_union(footprints).simplify(1e-9, preserve_topology=True)
         polygons = (
             (merged,)
             if isinstance(merged, Polygon)
@@ -13366,7 +13376,10 @@ class Drawing:
             predefined_type="LINEWORK",
         )
         placement = np.eye(4)
-        placement[2, 3] = supplied_walls[0].storey.elevation
+        # The source walls may be above this plan's cut (e.g. basement
+        # walls outlined on a footing section). Keep 2D linework in front
+        # of the camera, beyond its near clipping plane.
+        placement[2, 3] = min(supplied_walls[0].storey.elevation, self.z-0.01)
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=annotation,
@@ -13392,6 +13405,7 @@ class Drawing:
         classes = "load-bearing-wall-outline"
         if style_name == "dashed":
             classes += " dashed"
+        classes += color_class
         ifcopenshell.api.pset.edit_pset(
             model,
             pset=annotation_pset,
