@@ -418,10 +418,16 @@ Each purlin has two vertical timber posts (`purlin_supports`) in the upper
 storey. `PURLIN_SUPPORT_Y_POSITIONS` contains one independently editable
 pair of absolute Y coordinates per purlin, initially `(3.0, 6.0)` for each.
 `PURLIN_SUPPORT_SIZE = (0.16, 0.16)` sets their cross-section. They run from
-the ceiling top (`UPPER_FLOOR_START`, before the floor build-up) to the
-underside of two X-aligned connecting beams (`purlin_connection_beams`).
-`PURLIN_CONNECTION_BEAM_SIZE = (0.16, 0.28)` controls these beams; their tops
-touch the purlin undersides, with full bearing on the four posts. East/west
+the ceiling top (`UPPER_FLOOR_START`, before the floor build-up) directly
+to the purlin undersides. Four X-aligned connecting beams
+(`purlin_connection_beams`) span between the purlin inner faces, with their
+centrelines at `PURLIN_Z`, level with the purlin centrelines.
+`PURLIN_CONNECTION_BEAM_SIZE = (0.12, 0.20)` controls their section.
+`PURLIN_CONNECTION_Y_POSITIONS` is shared with the simulator: two beams
+align with the post rows, and two sit inside the front/back gable walls.
+`PURLIN_CONNECTION_WALL_CLEARANCE = 0.10` measures the clear wall-to-beam
+gap; each end beam's centre includes half its 120 mm width.
+The purlin bears directly on its post; the connector is attached at its side. East/west
 post pairs must have matching Y coordinates. Each post has three 45-degree
 timber braces: two along Y beneath its purlin and one along X toward the
 opposite post, beneath the connecting beam. `PURLIN_BRACE_SIZE = (0.10, 0.12)`
@@ -477,6 +483,12 @@ without intersecting it. The upper plan includes the chimney/flue
 symbol, while the ground and ceiling plans omit it.
 Run `python3 house2.py roof` for the roof framing plan (`projekt2/roof.svg`)
 and `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.4. Krov.pdf`.
+`COLLAR_TIE_SIZE = (0.05, 0.15)` sets paired collar ties, one on each side
+of every rafter pair. Their bottom is at the purlin top; their ends are cut
+by the upper rafter-face planes. They belong to the upper-floor storey and
+appear in the roof drawing and timber schedule. All 28 ties are retained
+for layout review, including the garden-side tie at rafter pair 7 that
+currently crosses the chimney.
 It includes only the structural timber, exterior wall context and chimney,
 with real material fills, rafter spacings, support centre distances and an
 automatically measured timber schedule. Roof covering and interior finishes
@@ -2347,8 +2359,16 @@ load conventions and remaining checks.
 
 `roof_frame_3d_house2.py` reads the current `house2.py` geometry without
 executing the IFC generator. It models the rafters, continuous purlins,
-two cross beams, four shortened posts and twelve pin-ended braces.
+four side cross beams, four posts, twelve pin-ended braces and paired
+collar ties above the purlins. Each collar pair is one bilateral axial spring
+with the combined stiffness and self-weight of its two IFC boards.
 The default includes gable-wall bearings and compression-only braces.
+Rafter-to-wall-plate seats are vertically supported and completely free
+to slide in X by default, with zero X reaction; Y stays fixed to prevent
+sideways tipping. The console
+prints the maximum movement, including separate SLS/ULS maxima. Use
+`--horizontal-stiffness rigid` to compare with the previous restrained seats,
+or supply a positive kN/mm stiffness for elastic X connections (Y fixed).
 Loads come from `rafter_load.py`; material properties use `materials.py`.
 
 ```bash
@@ -2360,6 +2380,14 @@ Outputs include 3D/plan PNGs, force and support CSVs, instantaneous L/300
 and L/500 chord checks, and a JSON calculation basis. Red circles mark
 support uplift forces. See [roof_frame_3d_house2.md](roof_frame_3d_house2.md)
 for assumptions, material/load overrides and connection comparisons.
+The default plan image is `roof_frame_3d_house2_plan.png`, the counterpart
+of the old `roof_frame_3d_restrained_plan.png`. It shows wall-plate reaction
+arrows over undeformed timber footprints: green when all SLS chord checks
+pass L/500, orange when L/500 fails but L/300 passes, red when L/300 fails,
+and grey for unassessed members and rigid wall plates. Colours use the worst
+support span and SLS combination. It also shows magenta collar forces (positive tension, negative compression,
+total per board pair). `--plot-combination ULS_symmetric` selects ULS forces;
+the default is `SLS_symmetric`.
 
 ## Original house 3D roof-frame model (PyNite)
 

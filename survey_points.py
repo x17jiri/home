@@ -130,8 +130,8 @@ class SurveyAxes:
 class SurveyHouse:
     center: tuple[float, float] = (-8.0, 7.0)
     angle_degrees: float = 0.0
-    width: float = 9.25
-    depth: float = 9.25
+    width: float = 9.17
+    depth: float = 9.17
 
     def __post_init__(self):
         if len(self.center) != 2 or not all(isfinite(v) for v in (*self.center, self.angle_degrees, self.width, self.depth)):
@@ -232,7 +232,7 @@ class RoofSlope:
 
 # Tune these for both the standalone command and `house_ifc.py points`.
 # Center coordinates are metres along street/neighbour; rotation is CCW from street.
-HOUSE_PLACEMENT = SurveyHouse(center=(-10.38, 10.34), angle_degrees=-10)
+HOUSE_PLACEMENT = SurveyHouse(center=(-10.4, 10.5), angle_degrees=-10)
 NEIGHBOUR_WINDOW_DISTANCE = 7.75  # Metres from the fitted intersection along +y.
 NEIGHBOUR_WINDOW_ELEVATION = 417.60  # Metres above sea level (Bpv).
 ROOF_SLOPES: tuple[RoofSlope, ...] = (

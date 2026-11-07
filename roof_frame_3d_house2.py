@@ -21,7 +21,8 @@ import numpy as np
 from materials import resolve_timber_grade
 from roof_frame_3d import (
     HouseInputs, Timber, check_equilibrium, deformed_member_point,
-    maximum_chord_departure, orient_section, positive, spring_axial_gap,
+    maximum_chord_departure, orient_section, plan_collar_force_arrows,
+    plan_deflection_status, plan_member_polygon, positive, spring_axial_gap,
 )
 
 
@@ -83,6 +84,8 @@ class Beam:
     start: tuple[float, float, float]
     end: tuple[float, float, float]
     timber: Timber
+    pieces: int = 1
+    weight_length: float | None = None  # Physical cut-board length when the axial span is shorter.
 
     @property
     def length(self):
@@ -113,7 +116,7 @@ class Layout:
     rafter_y: tuple = ()
 
     @classmethod
-    def from_house(cls, path, rafter_material="C18", beam_material="C18"):
+    def from_house(cls, path, rafter_material="C16", beam_material="C16"):
         data = House2Inputs(path)
         g = data.get
         result = cls(Path(path).resolve())
@@ -130,9 +133,10 @@ class Layout:
         post_x, post_y = g("PURLIN_SUPPORT_SIZE")
         brace_size, drop = g("PURLIN_BRACE_SIZE"), positive(g("PURLIN_BRACE_DROP"), "brace drop")
         z, base = g("PURLIN_Z"), g("UPPER_FLOOR_START")
-        post_top = z-pheight/2-cheight
+        post_top = z-pheight/2
         anchor = post_top-drop
-        if anchor <= base or 2*drop >= px[1]-px[0]-post_x:
+        cross_brace_rise = z-cheight/2-anchor
+        if anchor <= base or cross_brace_rise <= 0 or 2*cross_brace_rise >= px[1]-px[0]-post_x:
             raise ValueError("braces do not fit between the posts or above the floor")
         overhang = g("WALL_PLATE_OVERHANG")
         if not wall/2 < rows[0][0] < rows[0][1] < depth-wall/2:
@@ -152,11 +156,7 @@ class Layout:
                 name = f"POST{i+1}.{j+1}"
                 beam(name, "post", (x, y, base), (x, y, post_top), (post_x, post_y))
                 result.bases.append((name, (x, y, base)))
-                cross_z = post_top+cheight/2
-                result.pins.extend((
-                    Pin(f"purlin_cross_{i}_{j}", ((x, y, z), (x, y, cross_z)), (x, y, z-pheight/2)),
-                    Pin(f"cross_post_{i}_{j}", ((x, y, cross_z), (x, y, post_top)), (x, y, post_top)),
-                ))
+                result.pins.append(Pin(f"purlin_post_{i}_{j}", ((x, y, z), (x, y, post_top)), (x, y, post_top)))
                 for sign, label in ((-1, "front"), (1, "back")):
                     first = (x, y+sign*post_y/2, anchor)
                     last = (x, first[1]+sign*(z-pheight/2-anchor), z-pheight/2)
@@ -168,15 +168,20 @@ class Layout:
                                         Pin(name+"_upper", ((x, last[1], z),), last)))
                 sign = 1 if i == 0 else -1
                 first = (x+sign*post_x/2, y, anchor)
-                last = (first[0]+sign*drop, y, post_top)
+                last = (first[0]+sign*cross_brace_rise, y, z-cheight/2)
                 name = f"BRACE{i+1}.{j+1}.cross"
                 beam(name, "brace", first, last, brace_size)
                 result.pins.extend((Pin(name+"_lower", ((x, y, anchor),), first),
-                                    Pin(name+"_upper", ((last[0], y, cross_z),), last)))
-        for j, y in enumerate(rows[0]):
-            cross = beam(f"CROSS{j+1}", "cross_beam", (px[0]-post_x/2, y, post_top+cheight/2),
-                         (px[1]+post_x/2, y, post_top+cheight/2), (cwidth, cheight))
-            result.chords[cross.name] = (px[0], px[1])
+                                    Pin(name+"_upper", ((last[0], y, z),), last)))
+        cross_rows = tuple(g("PURLIN_CONNECTION_Y_POSITIONS"))
+        if len(set(cross_rows)) != len(cross_rows):
+            raise ValueError("purlin connector Y positions must be distinct")
+        for j, y in enumerate(cross_rows):
+            cross = beam(f"CROSS{j+1}", "cross_beam", (px[0]+pwidth/2, y, z),
+                         (px[1]-pwidth/2, y, z), (cwidth, cheight))
+            result.chords[cross.name] = (cross.start[0], cross.end[0])
+            for i, endpoint in enumerate((cross.start, cross.end)):
+                result.pins.append(Pin(f"purlin_cross_{i}_{j}", ((px[i], y, z), endpoint), endpoint))
 
         plate_width, plate_height = g("WALL_PLATE_SIZE")
         top = g("WALL_PLATE_Z")+plate_height/2
@@ -216,18 +221,39 @@ class Layout:
                                        (purlin_x, y, z+pheight/2)))
         if not math.isclose(*ridge_heights, abs_tol=1e-8):
             raise ValueError("east and west rafter axes do not meet at the ridge")
+        tie_size = tuple(positive(value, "collar tie dimension") for value in g("COLLAR_TIE_SIZE"))
+        tie_z = z+pheight/2+tie_size[1]/2
+        rafters = {b.name: b for b in result.beams if b.category == "rafter"}
+        for j, y in enumerate(result.rafter_y, 1):
+            ends, cut_ends = [], []
+            for side in ("E", "W"):
+                rafter = rafters[f"R{j:02d}{side}"]
+                first, delta = np.array(rafter.start), np.array(rafter.end)-rafter.start
+                fraction = (tie_z-first[2])/delta[2]
+                if not 0 < fraction < 1:
+                    raise ValueError(f"collar height must intersect {rafter.name} below the ridge")
+                ends.append(tuple(first+fraction*delta))
+                # Physical boards extend past the bolts to the upper rafter
+                # faces. Integrating the sloped end cuts gives this mean length.
+                cosine = abs(delta[0])/rafter.length
+                cut_fraction = (tie_z-first[2]-rafter_size[1]/(2*cosine))/delta[2]
+                cut_ends.append(first+cut_fraction*delta)
+            result.beams.append(Beam(
+                f"CT{j:02d}", "collar", *ends, Timber(*tie_size, beam_material),
+                pieces=2, weight_length=float(cut_ends[1][0]-cut_ends[0][0]),
+            ))
         return result
 
 
 @dataclass(frozen=True)
 class Settings:
-    roof_mass: float = 130.0  # Full sloped build-up, including interior finish, excluding modelled timber.
-    snow_load: float = 1.7   # Vertical kN/m² horizontal roof area, not ground snow.
+    roof_mass: float = 150.0  # Full sloped build-up, including interior finish, excluding modelled timber.
+    snow_load: float = 2.0   # Vertical kN/m² horizontal roof area, not ground snow.
     timber_density: float = 450.0
     gravity: float = 10.0
     gable_bearings: bool = True
     brace_action: str = "compression"
-    horizontal_stiffness_kn_mm: float | None = None
+    horizontal_stiffness_kn_mm: float | None = 0.0  # X only: 0 free; None rigid; positive spring stiffness. Y fixed.
     joint_stiffness_factor: float = 1000.0  # Numerical rigid-arm multiplier, not joint slip stiffness.
 
     def __post_init__(self):
@@ -237,7 +263,8 @@ class Settings:
         for name in ("timber_density", "gravity", "joint_stiffness_factor"):
             positive(getattr(self, name), name)
         if self.horizontal_stiffness_kn_mm is not None:
-            positive(self.horizontal_stiffness_kn_mm, "horizontal stiffness")
+            if not math.isfinite(self.horizontal_stiffness_kn_mm) or self.horizontal_stiffness_kn_mm < 0:
+                raise ValueError("horizontal stiffness must be finite and non-negative, or None for rigid")
         if self.brace_action not in {"compression", "both"}:
             raise ValueError("brace_action must be compression or both")
 
@@ -252,6 +279,7 @@ class RoofModel:
     loads: list = field(default_factory=list)
     nodal_loads: list = field(default_factory=list)
     brace_springs: dict = field(default_factory=dict)
+    collar_springs: dict = field(default_factory=dict)
     seat_nodes: dict = field(default_factory=dict)
     joint_members: list = field(default_factory=list)
     tributary_widths: dict = field(default_factory=dict)
@@ -289,14 +317,16 @@ def build_roof_model(layout, settings=Settings()):
     model.add_material("JOINT", 10e9*settings.joint_stiffness_factor, .63e9*settings.joint_stiffness_factor, .3, 0)
     model.add_section("JOINT", .02, .0001, .0001, .0001)
     for beam in layout.beams:
-        if beam.category == "brace":
-            first, last = node(beam.start), node(beam.end)
+        if beam.category in {"brace", "collar"}:
+            is_collar = beam.category == "collar"
+            first, last = node(beam.start, is_collar), node(beam.end, is_collar)
             model.add_spring(beam.name, first, last,
                              resolve_timber_grade(beam.timber.material).elastic_modulus_pa
-                             *beam.timber.width*beam.timber.height/beam.length,
-                             comp_only=settings.brace_action == "compression")
-            result.brace_springs[beam.name] = beam.name
-            weight = settings.gravity*settings.timber_density*beam.timber.width*beam.timber.height*beam.length
+                             *beam.timber.width*beam.timber.height*beam.pieces/beam.length,
+                             comp_only=not is_collar and settings.brace_action == "compression")
+            (result.collar_springs if is_collar else result.brace_springs)[beam.name] = beam.name
+            weight = (settings.gravity*settings.timber_density*beam.timber.width*beam.timber.height
+                      *beam.pieces*(beam.length if beam.weight_length is None else beam.weight_length))
             for end in (first, last):
                 model.add_node_load(end, "FZ", -weight/2, case="G")
                 result.nodal_loads.append((end, "G", (0, 0, -weight/2)))
@@ -304,6 +334,11 @@ def build_roof_model(layout, settings=Settings()):
         model.add_section(beam.name, *beam.timber.properties)
         model.add_member(beam.name, node(beam.start, True), node(beam.end, True), beam.timber.material, beam.name)
         member = model.members[beam.name]
+        if beam.category == "cross_beam":
+            # An X-aligned connector with ideal pin ends can spin rigidly
+            # about X. Choose its section orientation without adding a
+            # translational support or restraining its bending rotations.
+            model.def_support(member.i_node.name, False, False, False, True, False, False)
         if math.hypot(member.j_node.X-member.i_node.X, member.j_node.Y-member.i_node.Y) > 1e-8:
             orient_section(member)
         q = -settings.timber_density*settings.gravity*beam.timber.width*beam.timber.height
@@ -335,10 +370,9 @@ def build_roof_model(layout, settings=Settings()):
     for name, (seat, _, side, _) in layout.seats.items():
         n = node(seat, True)
         rigid = settings.horizontal_stiffness_kn_mm is None
-        model.def_support(n, rigid, rigid, True, False, False, True)
-        if not rigid:
-            for dof in ("DX", "DY"):
-                model.def_support_spring(n, dof, settings.horizontal_stiffness_kn_mm*1e6)
+        model.def_support(n, rigid, True, True, False, False, True)
+        if not rigid and settings.horizontal_stiffness_kn_mm > 0:
+            model.def_support_spring(n, "DX", settings.horizontal_stiffness_kn_mm*1e6)
         result.supports[n], result.support_kinds[n] = f"{name}/PLATE_{side}", "wall_plate_seat"
         result.seat_nodes[name] = n
         model.def_releases(name, Rxj=True, Ryj=True, Rzj=True)
@@ -417,13 +451,18 @@ def member_rows(roof):
         for combo in roof.model.load_combos:
             row = dict(member=beam.name, category=beam.category, material=beam.timber.material,
                        combination=combo, width_mm=beam.timber.width*1000, height_mm=beam.timber.height*1000,
-                       length_m=beam.length)
-            if beam.category == "brace":
+                       length_m=beam.length, pieces=beam.pieces,
+                       weight_length_m=beam.length if beam.weight_length is None else beam.weight_length)
+            if beam.category in {"brace", "collar"}:
                 spring = roof.model.springs[beam.name]
                 compression = -spring.ks*spring_axial_gap(spring, combo) if spring.active[combo] else 0.0
-                row.update(compression_kN=compression/1000, active=spring.active[combo])
-                if roof.settings.brace_action == "compression" and compression < -1e-5:
-                    raise ValueError("a compression-only brace carries tension")
+                if beam.category == "collar":
+                    row.update(axial_min_kN=compression/1000, axial_max_kN=compression/1000,
+                               axial_stiffness_kN_per_m=spring.ks/1000)
+                else:
+                    row.update(compression_kN=compression/1000, active=spring.active[combo])
+                    if roof.settings.brace_action == "compression" and compression < -1e-5:
+                        raise ValueError("a compression-only brace carries tension")
             else:
                 member = roof.model.members[beam.name]
                 row.update(axial_min_kN=member.min_axial(combo)/1000, axial_max_kN=member.max_axial(combo)/1000,
@@ -459,22 +498,155 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-COLORS = {"rafter": "#98652f", "purlin": "#2477a8", "cross_beam": "#af4f8b", "post": "#307a48", "brace": "#dc9a22"}
+COLORS = {"rafter": "#98652f", "purlin": "#2477a8", "cross_beam": "#af4f8b", "post": "#307a48", "brace": "#dc9a22", "collar": "#d000d0"}
+PLAN_CHECK_COLORS = {"L500": "#39a852", "L300": "#f4a340", "fail": "#d9534f", "not_assessed": "#c8ccd0"}
 
 
-def draw_results(roof, path, *, plan=False, combination="SLS_symmetric", scale=30):
+def horizontal_restraint_description(stiffness):
+    if stiffness is None:
+        return "X fixed; Y fixed"
+    if stiffness == 0:
+        return "X free (zero X restraint force); Y fixed"
+    return f"X spring {stiffness:g} kN/mm; Y fixed"
+
+
+def plan_check_statuses(beams, chords):
+    """Use the old plan's worst-SLS classification with House 2's chord rows."""
+    grouped = {}
+    for row in chords:
+        grouped.setdefault(row["member"], []).append(dict(
+            combination=row["combination"],
+            chord_L300_status=row["L300_status"], chord_L500_status=row["L500_status"],
+        ))
+    return {beam.name: plan_deflection_status(grouped.get(beam.name, [])) for beam in beams}
+
+
+def plot_plan_report(roof, chords, path, *, combination="SLS_symmetric"):
+    """Undeformed member footprints coloured by chord checks over all SLS cases."""
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch, Polygon
+
+    if combination not in roof.model.load_combos:
+        raise ValueError(f"unknown force combination: {combination}")
+    figure = Figure(figsize=(14, 12))
+    ax = figure.add_subplot()
+    figure.subplots_adjust(left=.08, right=.96, bottom=.22, top=.88)
+    beams = (*roof.layout.beams, *roof.layout.plates)
+    statuses = plan_check_statuses(beams, chords)
+    order = {"wall_plate": 0, "brace": 1, "purlin": 2, "cross_beam": 3,
+             "rafter": 4, "post": 5, "collar": 6}
+    for beam in sorted(beams, key=lambda b: order[b.category]):
+        start, end = np.asarray(beam.start[:2]), np.asarray(beam.end[:2])
+        if np.linalg.norm(end-start) < 1e-9:
+            x, y = start
+            w, h = beam.timber.width/2, beam.timber.height/2
+            footprint = np.array(((x-w,y-h), (x+w,y-h), (x+w,y+h), (x-w,y+h)))
+        else:
+            footprint = plan_member_polygon(beam)
+        is_collar = beam.category == "collar"
+        patch = Polygon(
+            footprint, closed=True,
+            facecolor="none" if is_collar else PLAN_CHECK_COLORS[statuses[beam.name]],
+            edgecolor=COLORS["collar"] if is_collar else "#333333",
+            linewidth=1.2 if is_collar else .6,
+            zorder=order[beam.category]+2,
+        )
+        patch.set_gid(beam.name)
+        ax.add_patch(patch)
+        middle = (start+end)/2
+        if beam.category == "rafter":
+            ax.text(*middle, beam.name, ha="center", va="center", fontsize=6.5, zorder=12,
+                    bbox=dict(facecolor="white", alpha=.8, edgecolor="none", pad=.5))
+        elif beam.category == "collar":
+            spring = roof.model.springs[beam.name]
+            tension = spring.ks*spring_axial_gap(spring, combination)/1000
+            centre, arrows = plan_collar_force_arrows(beam, tension, offset=.16, length=.35, gap=1.1)
+            for tail, head in arrows:
+                ax.annotate("", xy=head, xytext=tail, zorder=14,
+                            arrowprops=dict(arrowstyle="-|>", color=COLORS["collar"], lw=1))
+            ax.text(*centre, f"{beam.name} {tension:+.2f} kN", fontsize=6,
+                    color=COLORS["collar"], ha="center", va="center", zorder=15,
+                    bbox=dict(facecolor="white", alpha=.9, edgecolor="none", pad=.5))
+        elif beam.category in {"purlin", "cross_beam", "wall_plate"}:
+            ax.annotate(beam.name, middle, xytext=(4, 5), textcoords="offset points",
+                        fontsize=7, zorder=12,
+                        bbox=dict(facecolor="white", alpha=.85, edgecolor="none", pad=.5))
+
+    reactions = support_rows(roof)
+    worst_uplift = {}
+    for row in reactions:
+        if row["support"] not in worst_uplift or row["Fz_kN"] > worst_uplift[row["support"]]["Fz_kN"]:
+            worst_uplift[row["support"]] = row
+        if row["combination"] != combination or row["kind"] != "wall_plate_seat":
+            continue
+        force = np.array((row["Fx_kN"], row["Fy_kN"]))
+        magnitude = np.linalg.norm(force)
+        origin = np.array((row["x_m"], row["y_m"]))
+        if magnitude > 1e-5:
+            ax.annotate("", xy=origin+.45*force/magnitude, xytext=origin, zorder=16,
+                        arrowprops=dict(arrowstyle="-|>", color="#182d55", lw=1))
+        side = -1 if row["x_m"] < roof.layout.width/2 else 1
+        ax.text(row["x_m"]+side*.6, row["y_m"], f"{side*row['Fx_kN']:+.2f}",
+                fontsize=6.5, ha="right" if side < 0 else "left", va="center",
+                color="#182d55", zorder=17,
+                bbox=dict(facecolor="white", alpha=.95, edgecolor="none", pad=.5))
+    for row in worst_uplift.values():
+        ax.scatter(row["x_m"], row["y_m"], facecolors="white", edgecolors="#333333",
+                   s=14, linewidths=.5, zorder=13)
+        if row["Fz_kN"] > 1e-5:
+            ax.scatter(row["x_m"], row["y_m"], s=200, facecolors="none", edgecolors="red",
+                       linewidths=1.6, zorder=18)
+            ax.annotate(f"{row['Fz_kN']:.2f} kN uplift", (row["x_m"], row["y_m"]),
+                        xytext=(10, 12), textcoords="offset points", color="red", fontsize=7, zorder=18)
+    ax.set(xlabel="X — east to west [m]", ylabel="Y — street to garden [m]")
+    ax.set_aspect("equal")
+    ax.margins(x=.15, y=.05)
+    ax.grid(alpha=.15, linewidth=.5)
+    figure.suptitle("House 2 roof deflection checks — top view", fontsize=15, y=.97)
+    figure.text(.5, .935, "Worst instantaneous chord checks over ALL SLS combinations; undeformed member positions\n"
+                f"Force arrows: {combination}; red circles: uplift envelope over all combinations\n"
+                f"Wall-plate X/Y restraint: {horizontal_restraint_description(roof.settings.horizontal_stiffness_kn_mm)}",
+                ha="center", va="top", fontsize=9)
+    descriptions = {
+        "L500": "Green: L/300 and L/500 pass",
+        "L300": "Orange: L/500 fails, L/300 passes",
+        "fail": "Red: L/300 fails",
+        "not_assessed": "Grey: no chord check / rigid support",
+    }
+    handles = [Patch(facecolor=PLAN_CHECK_COLORS[key], edgecolor="#333333", label=description)
+               for key, description in descriptions.items()]
+    handles.append(Patch(facecolor="none", edgecolor=COLORS["collar"],
+                         label="Magenta: axial collar ties, unassessed"))
+    handles.append(Line2D([], [], color="#182d55", label="Blue: force delivered to wall plate"))
+    figure.legend(handles=handles, loc="lower center", bbox_to_anchor=(.5, .09), ncol=2,
+                  fontsize=9, frameon=False)
+    figure.text(.5, .065,
+                "Wall-plate labels: + outward / − inward [kN]. Collar labels: + tension / − compression [kN per board pair].",
+                ha="center", fontsize=8)
+    figure.text(.5, .04,
+                "Colours show deflection checks only; strength, buckling, creep and connections are not checked.",
+                ha="center", fontsize=8)
+    figure.savefig(path, dpi=180)
+    return figure
+
+
+def draw_results(roof, path, *, plan=False, combination="SLS_symmetric", scale=30, chords=None):
+    if plan:
+        return plot_plan_report(roof, member_rows(roof)[1] if chords is None else chords,
+                                path, combination=combination)
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     figure = plt.figure(figsize=(13, 9))
-    ax = figure.add_subplot() if plan else figure.add_subplot(projection="3d")
+    ax = figure.add_subplot(projection="3d")
     labelled = set()
     for beam in (*roof.layout.beams, *roof.layout.plates):
         original = np.linspace(beam.start, beam.end, 25)
         category = beam.category
         if category == "wall_plate":
             moved = original
-        elif category == "brace":
+        elif category in {"brace", "collar"}:
             spring = roof.model.springs[beam.name]
             d = np.array([[getattr(n, dof)[combination] for dof in ("DX", "DY", "DZ")]
                           for n in (spring.i_node, spring.j_node)])
@@ -484,7 +656,7 @@ def draw_results(roof, path, *, plan=False, combination="SLS_symmetric", scale=3
             moved = np.array([deformed_member_point(member, x, combination) for x in np.linspace(0, member.L(), 25)])
             moved = original+scale*(moved-original)
         color = COLORS.get(category, "#555555")
-        coordinates = (lambda p: (p[:, 0], p[:, 1])) if plan else (lambda p: tuple(p.T))
+        coordinates = lambda p: tuple(p.T)
         ax.plot(*coordinates(original), color=color, alpha=.25, lw=1)
         inactive = category == "brace" and not roof.model.springs[beam.name].active[combination]
         ax.plot(*coordinates(moved), color=color, lw=1.3, ls="--" if inactive else "-",
@@ -496,47 +668,32 @@ def draw_results(roof, path, *, plan=False, combination="SLS_symmetric", scale=3
         if row["support"] not in worst or row["Fz_kN"] > worst[row["support"]]["Fz_kN"]:
             worst[row["support"]] = row
     for row in worst.values():
-        coordinates = (row["x_m"], row["y_m"]) if plan else (row["x_m"], row["y_m"], row["z_m"])
+        coordinates = (row["x_m"], row["y_m"], row["z_m"])
         ax.scatter(*coordinates, color="black", s=9)
         if row["Fz_kN"] > 1e-5:
             ax.scatter(*coordinates, s=180, facecolors="none", edgecolors="red", linewidths=1.6)
             ax.text(*coordinates, f"  {row['Fz_kN']:.2f} kN uplift", color="red", fontsize=7)
     ax.set(xlabel="X — east to west [m]", ylabel="Y — street to garden [m]")
     figure.suptitle(f"House 2 roof: {combination}; deformation ×{scale:g}\n"
-                   "red circles: support uplift envelope over all combinations", fontsize=12)
-    if plan:
-        ax.set_aspect("equal")
-        for beam in roof.layout.beams:
-            if beam.category in {"post", "purlin", "cross_beam"}:
-                mid = (np.array(beam.start)+beam.end)/2
-                ax.annotate(beam.name, mid[:2], fontsize=7, xytext=(4, 4), textcoords="offset points")
-        for row in reactions:
-            if row["combination"] != combination or row["kind"] != "wall_plate_seat":
-                continue
-            fx, fy = row["Fx_kN"], row["Fy_kN"]
-            magnitude = math.hypot(fx, fy)
-            if magnitude > 1e-5:
-                ax.arrow(row["x_m"], row["y_m"], .4*fx/magnitude, .4*fy/magnitude,
-                         color="#a12722", width=.008, head_width=.07, length_includes_head=True)
-            side = -1 if row["x_m"] < roof.layout.width/2 else 1
-            ax.text(row["x_m"]+side*.5, row["y_m"],
-                    f"{row['member'].split('/')[0]}\n{magnitude:.2f} kN", fontsize=5.5,
-                    ha="right" if side < 0 else "left", va="center", color="#a12722")
-    else:
-        ax.set_zlabel("Z [m]")
-        ax.set_box_aspect((roof.layout.width, roof.layout.depth, 4))
-        ax.view_init(elev=23, azim=-55)
-    if plan:
-        ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=8)
-    else:
-        ax.legend(loc="upper left", fontsize=8)
+                   "red circles: support uplift envelope over all combinations\n"
+                   f"Wall-plate X/Y restraint: {horizontal_restraint_description(roof.settings.horizontal_stiffness_kn_mm)}",
+                   fontsize=12)
+    ax.set_zlabel("Z [m]")
+    ax.set_box_aspect((roof.layout.width, roof.layout.depth, 4))
+    ax.view_init(elev=23, azim=-55)
+    ax.legend(loc="upper left", fontsize=8)
     figure.tight_layout(rect=(0, 0, 1, .92))
     figure.savefig(path, dpi=170)
     plt.close(figure)
 
 
 def horizontal_stiffness(value):
-    return None if value.lower() == "rigid" else positive(float(value), "horizontal stiffness")
+    if value.lower() == "rigid":
+        return None
+    stiffness = 0.0 if value.lower() == "free" else float(value)
+    if not math.isfinite(stiffness) or stiffness < 0:
+        raise argparse.ArgumentTypeError("use free, rigid, or a non-negative stiffness in kN/mm")
+    return stiffness
 
 
 def project_loads():
@@ -550,13 +707,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--house", type=Path, default=Path(__file__).with_name("house2.py"))
     parser.add_argument("--output", type=Path, default=Path("roof_frame_3d_house2"))
-    parser.add_argument("--rafter-material", default="C18", type=lambda x: resolve_timber_grade(x).name)
-    parser.add_argument("--beam-material", default="C18", type=lambda x: resolve_timber_grade(x).name)
+    parser.add_argument("--rafter-material", default="C16", type=lambda x: resolve_timber_grade(x).name)
+    parser.add_argument("--beam-material", default="C16", type=lambda x: resolve_timber_grade(x).name)
     parser.add_argument("--roof-mass", type=float, help="kg/m² actual sloped area; defaults to all rafter_load.py layers")
     parser.add_argument("--snow", type=float, help="kN/m² horizontal area; defaults to rafter_load.py roof snow")
     parser.add_argument("--gable-bearings", choices=("on", "off"), default="on")
     parser.add_argument("--brace-action", choices=("compression", "both"), default="compression")
-    parser.add_argument("--horizontal-stiffness", type=horizontal_stiffness, default=None, help="rigid (default) or kN/mm at each wall-plate seat")
+    parser.add_argument("--horizontal-stiffness", type=horizontal_stiffness, default=0.0,
+                        help="X restraint at each wall-plate seat: free (default), rigid, or kN/mm; Y always fixed")
     parser.add_argument("--joint-stiffness-factor", type=float, default=1000)
     parser.add_argument("--plot-combination", default="SLS_symmetric")
     parser.add_argument("--deformation-scale", type=float, default=30)
@@ -574,7 +732,11 @@ def main(argv=None):
     print(f"Roof angle: {math.degrees(math.atan(layout.slope)):.2f}° ({layout.slope*100:.2f}%)")
     print(f"Loads: roof layers {settings.roof_mass:g} kg/m² slope; snow {settings.snow_load:g} kN/m² plan; timber {settings.timber_density:g} kg/m³; g={settings.gravity:g}")
     print(f"Members: {len(layout.beams)}; gable bearings {'on' if settings.gable_bearings else 'off'}; braces {settings.brace_action}")
+    print(f"Collar ties: {sum(b.category == 'collar' for b in layout.beams)} axial pairs, "
+          f"{sum(b.pieces for b in layout.beams if b.category == 'collar')} boards; ideal pinned connections")
     print(f"Materials: rafters {args.rafter_material}, other timber {args.beam_material}")
+    restraint = horizontal_restraint_description(settings.horizontal_stiffness_kn_mm)
+    print(f"Rafter-to-wall-plate horizontal restraint: {restraint}")
     roof = build_roof_model(layout, settings)
     if args.plot_combination not in roof.model.load_combos:
         parser.error(f"unknown plot combination; choose {', '.join(roof.model.load_combos)}")
@@ -598,11 +760,29 @@ def main(argv=None):
                                  "Wall plates/ring beams and supporting slab immovable; slab and walls not designed here.",
                                  "Prismatic rafter axes end at vertical eaves; local horizontal end cuts/notches omitted.",
                                  "No roof diaphragm, wind, chimney load, or wall-plate self-weight in roof-frame reactions."])
+    metadata["assumptions"].extend([
+        "Purlins bear directly on posts; connector ends are pinned to the purlin inner faces at purlin centre height.",
+        "One connector X rotation is fixed only to remove unloaded axial spin; no translational support or bending fixity is added.",
+        f"Rafter-to-wall-plate translation restraint: {restraint}; vertical support and yaw restraint retained.",
+        "Each collar spring represents two boards, axial stiffness 2EA/L, connected to the rafter axes at tie-centre height.",
+        "Collar self-weight includes sloped board ends and is shared between its two rafter joints; no direct roof/snow load.",
+        "Collar joints have no slip; no collar bending, buckling, fastener or chimney-clearance verification.",
+    ])
     Path(f"{stem}_basis.json").write_text(json.dumps(metadata, indent=2)+"\n", encoding="utf-8")
     for plan, suffix in ((False, "model"), (True, "plan")):
-        draw_results(roof, f"{stem}_{suffix}.png", plan=plan, combination=args.plot_combination, scale=args.deformation_scale)
+        draw_results(roof, f"{stem}_{suffix}.png", plan=plan, combination=args.plot_combination,
+                     scale=args.deformation_scale, chords=chords)
     movement = max((r for r in supports if r["kind"] == "wall_plate_seat"), key=lambda r: r["horizontal_mm"])
     print(f"Maximum wall-plate seat horizontal movement: {movement['horizontal_mm']:.4f} mm ({movement['member']}, {movement['combination']})")
+    for limit in ("SLS", "ULS"):
+        worst_move = max((r for r in supports if r["kind"] == "wall_plate_seat"
+                          and r["combination"].startswith(limit+"_")), key=lambda r: r["horizontal_mm"])
+        print(f"  {limit} maximum: {worst_move['horizontal_mm']:.4f} mm "
+              f"(Dx={worst_move['Dx_mm']:+.4f}, Dy={worst_move['Dy_mm']:+.4f} mm; "
+              f"{worst_move['member']}, {worst_move['combination']})")
+    for axis in ("x", "y"):
+        maximum_force = max(abs(r[f"F{axis}_kN"]) for r in supports if r["kind"] == "wall_plate_seat")
+        print(f"Maximum wall-plate {axis.upper()} restraint force: {maximum_force:.6f} kN")
     uplift = [r for r in supports if r["Fz_kN"] > 1e-5]
     print(f"Maximum support uplift: {max((r['Fz_kN'] for r in uplift), default=0):.3f} kN; {len({r['support'] for r in uplift})} marked locations")
     print(f"Instantaneous chord checks: {sum(r['L300_status']=='FAIL' for r in chords)} L/300 failures; {sum(r['L500_status']=='FAIL' for r in chords)} L/500 failures")
