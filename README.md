@@ -263,8 +263,9 @@ exterior walls. It uses 30 mm impact insulation and 65 mm screed/finish,
 from Z = 3.035 to 3.130 m. Its 48.90 m² area supplies the room label and
 room legend via `upper_room_floors`. The stair arrival currently crosses this
 layout; the upstairs layout will be revised separately.
-The living room has a single centred 3.00 m back window
-(`UPPER_BACK_WINDOW_WIDTH`) and a 1.50 m front window. The front opening
+The living room has two 1.50 m back windows (`UPPER_BACK_WINDOW_WIDTH`),
+centred as a pair with a 1.00 m gap (`UPPER_BACK_WINDOW_GAP`),
+and a 1.50 m front window. The front opening
 starts 2.00 m from the east wall's inside face
 (`UPPER_FRONT_WINDOW_EAST_CLEARANCE`). Their 1.375 m height and 0.890 m sill
 above the finished floor match the ground-floor room windows; dedicated
@@ -328,8 +329,18 @@ storey. `PURLIN_SUPPORT_Y_POSITIONS` contains one independently editable
 pair of absolute Y coordinates per purlin, initially `(3.0, 6.0)` for each.
 `PURLIN_SUPPORT_SIZE = (0.16, 0.16)` sets their cross-section. They run from
 the ceiling top (`UPPER_FLOOR_START`, before the floor build-up) to the
-purlin underside (`PURLIN_Z - PURLIN_SIZE[1]/2`). The upper plan shows their
-cut footprints, and the roof timber schedule includes all four posts.
+underside of two X-aligned connecting beams (`purlin_connection_beams`).
+`PURLIN_CONNECTION_BEAM_SIZE = (0.16, 0.28)` controls these beams; their tops
+touch the purlin undersides, with full bearing on the four posts. East/west
+post pairs must have matching Y coordinates. Each post has three 45-degree
+timber braces: two along Y beneath its purlin and one along X toward the
+opposite post, beneath the connecting beam. `PURLIN_BRACE_SIZE = (0.10, 0.12)`
+sets the brace section, and `PURLIN_BRACE_DROP = 0.80` sets the anchor's drop
+below the post top. Brace ends are cut flush to the post face and beam
+underside. The upper plan shows the post cut footprints; the roof drawing
+and timber schedule include the posts, connecting beams and all 12 braces.
+Intersecting SDK partitions and inner roof finishes have clearance openings
+matching the new timber solids, so the frame remains exposed at penetrations.
 The upper plan dimensions only the east support row: inside front-wall face
 to front-post centre, between post centres, and rear-post centre to inside
 back-wall face. One horizontal dimension shows the clear distance from the
