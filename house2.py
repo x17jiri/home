@@ -16,7 +16,7 @@ import numpy as np
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
-from ifc_utils import House, offset_plane, plane_height_at, window_area
+from ifc_utils import CutDefinition, House, offset_plane, plane_height_at, window_area
 
 
 HOUSE_WIDTH = 8.75
@@ -227,7 +227,27 @@ PDF_POHLED_ZAHRADA = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.7. Pohled - Zah
 PDF_POHLED_VYCHOD = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.8. Pohled - Východ.pdf"
 PDF_BASEMENT = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.9. Půdorys suterénu.pdf"
 PDF_FOUND = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.10. Základy.pdf"
+PDF_AA = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.11. Řez AA.pdf"
+PDF_BB = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.12. Řez BB.pdf"
 SECTION_OUTLINE_WIDTH = 0.3
+
+aa_cut = CutDefinition(
+    start=(HOUSE_WIDTH/2+0.1, -1.5),
+    end=(HOUSE_WIDTH/2+0.1, HOUSE_DEPTH+1.5),
+    identifier="A", direction=-1,  # Look towards +X.
+)
+bb_cut = CutDefinition(
+    start=(-1.5, HOUSE_DEPTH/2),
+    end=(HOUSE_WIDTH+1.5, HOUSE_DEPTH/2),
+    identifier="B", direction=-1,  # Look towards -Y.
+)
+
+
+def add_house_cut_symbols(drawing):
+    """Keep the AA/BB markers identical across the house plans."""
+    aa_cut.add_symbol(drawing)
+    bb_cut.add_symbol(drawing)
+
 
 house = House("House 2", mirror_x=False, colors={"wall": "#ffffff", "window": "#ffffff"})
 foundation = house.storey("Foundation", elevation=FOUNDATION_FOOTING_BOTTOM_Z)
@@ -1503,6 +1523,7 @@ if "basement" in sys.argv:
         start=(float(basement_plan_max[0])+.6, float(basement_plan_min[1])),
         end=(float(basement_plan_max[0])+.6, float(basement_plan_min[1])+BASEMENT_WALL_THICKNESS),
     )
+    add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "basement.svg", pdf=PDF_BASEMENT)
 
 if "found" in sys.argv or "foundation" in sys.argv:
@@ -1590,6 +1611,7 @@ if "found" in sys.argv or "foundation" in sys.argv:
         start=(float(footing_plan_max[0])+.6, float(footing_plan_min[1])),
         end=(float(footing_plan_max[0])+.6, float(footing_plan_min[1])+FOUNDATION_FOOTING_WIDTH),
     )
+    add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "found.svg", pdf=PDF_FOUND)
 
 if "ground" in sys.argv:
@@ -1717,6 +1739,7 @@ if "ground" in sys.argv:
         name="Bathroom clear width",
     )
 
+    add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "ground.svg", pdf=PDF_GROUND)
 
 if "ceiling" in sys.argv:
@@ -1758,6 +1781,7 @@ if "ceiling" in sys.argv:
         {"location": "Pokoj 1 a 2", "slab": ceiling_garden_rooms},
         {"location": "Pokoj 3", "slab": ceiling_third_room},
     ])
+    add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "ceiling.svg", pdf=PDF_CEILING)
 
 if "upper" in sys.argv:
@@ -1879,6 +1903,7 @@ if "upper" in sys.argv:
         end=(west_support_x, west_back_y-PURLIN_SUPPORT_SIZE[1]/2), offset=0.35,
         name="Rear west purlin support clearance to living room wall",
     )
+    add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "upper.svg", pdf=PDF_UPPER)
 
 if "roof" in sys.argv:
@@ -1929,7 +1954,62 @@ if "roof" in sys.argv:
         ("Pásky pod spojovací trámy", purlin_x_braces, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
         ("Krokve", roof_rafters, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
     ])
+    add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "roof.svg", pdf=PDF_ROOF)
+
+
+def add_house_section(cut, name, pdf):
+    """Create a complete vertical section using the same cut as its plan markers."""
+    section_top = max(roof_tiles_top_z, upper.elevation+chimney.end_height)
+    section_bottom = FOUNDATION_FOOTING_BOTTOM_Z
+    drawing = cut.add_drawing(
+        house, name, z=(section_bottom+section_top)/2,
+        radius=max(6.5, (section_top-section_bottom)/2+.5),
+        storeys=None, doors_closed=True,
+        door_annotations=False, automatic_plan_annotations=False,
+        right_panel_width=60, section_outline_width=SECTION_OUTLINE_WIDTH,
+    )
+    # Batting is drawing-only. Add it only where this section crosses an
+    # exterior wall, and let the wall helper leave gaps at openings.
+    view_x, view_y, _ = cut.view_direction
+    for wall in (wall_front_g, wall_west_g, wall_back_g, wall_east_g, *upper_exterior_walls):
+        dx, dy = wall.end[0]-wall.start[0], wall.end[1]-wall.start[1]
+        if abs((dx*view_x+dy*view_y)/wall.length) < 1-1e-9:
+            continue
+        options = {}
+        if wall in upper_exterior_walls:
+            fraction = -((wall.start[0]-cut.center[0])*view_x
+                         +(wall.start[1]-cut.center[1])*view_y)/(dx*view_x+dy*view_y)
+            section_x = wall.start[0]+fraction*dx
+            roof_plane = roof_east if section_x <= roof_ridge_x else roof_west
+            roof_bottom_z = plane_height_at(
+                *offset_plane(*roof_plane.points, offset=RAFTER_Z_OFFSET),
+                x=section_x, y=cut.center[1],
+            )
+            options["end_z"] = min(wall.storey.elevation+wall.end_height, roof_bottom_z)
+        drawing.add_wall_insulation(
+            wall, thickness=FACADE_INSULATION_THICKNESS, material="rockwool", **options,
+        )
+    drawing.add_material_legend([
+        ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
+        ("brick", "Nosná zeď - VPC Cihla 175 mm"),
+        ("liapor-brick", "Zakládací řada - Liapor"),
+        ("ztracene-bedneni", "Ztracené bednění"),
+        ("base-plate", "Základová deska"),
+        ("wood-solid", "Dřevo"),
+        ("drywall-diagonal1", "Sádrokarton"),
+        ("thermal-impact-insulation", "Podlahová izolace"),
+        ("rockwool-wave", "Minerální vata"),
+        ("mdf-solid", "MDF záklop"),
+        ("vapour-barrier-solid", "OSB záklop + parobrzda"),
+    ])
+    drawing.render(PROJECT_DIR / f"{name}.svg", pdf=pdf)
+    return drawing
+
+
+for name, cut, pdf in (("aa", aa_cut, PDF_AA), ("bb", bb_cut, PDF_BB)):
+    if name in sys.argv:
+        add_house_section(cut, name, pdf)
 
 
 def earth_to_z(m_above_sea):

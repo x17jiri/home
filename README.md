@@ -129,6 +129,15 @@ a perpendicular lead also exits below the entrance-opening centre. The
 entrance lead follows the actual door host and position. These are drawing
 annotations, rather than 3D grounding hardware.
 
+Run `python3 house2.py aa bb` for the two full-height sections, from the
+footings through the roof. AA cuts at `X = HOUSE_WIDTH/2 + 0.1` and looks
+towards +X; BB cuts at `Y = HOUSE_DEPTH/2` and looks towards -Y. Their shared
+`CutDefinition` instances also place matching symbols on the ground, upper,
+ceiling, roof, basement and foundation plans. PDFs are
+`D1.1.11. Řez AA.pdf` (`PDF_AA`) and `D1.1.12. Řez BB.pdf` (`PDF_BB`)
+in the architectural folder, with SVGs in `projekt2/aa.svg` and
+`projekt2/bb.svg`. Regenerate the corresponding plans to update their symbols.
+
 All exterior finishes belong to the separate `Facades` visibility storey.
 `add_house_facades()` adds a grey perimeter band from the basement floor
 to `PERIMETER_TOP_HEIGHT = 0`, and white finishes above it through both
