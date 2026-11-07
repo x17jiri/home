@@ -125,6 +125,50 @@ class SolverTests(unittest.TestCase):
         cls.roof = build_roof_model(cls.layout)
         cls.residuals = solve_roof_model(cls.roof)
 
+    def test_braces_are_omitted_by_default_with_their_weight_and_connections(self):
+        self.assertFalse(Settings().braces)
+        self.assertEqual(sum(b.category == "brace" for b in self.layout.beams), 12)
+        self.assertFalse(any(b.category == "brace" for b in self.roof.layout.beams))
+        self.assertFalse(any(pin.name.startswith("BRACE") for pin in self.roof.layout.pins))
+        self.assertFalse(self.roof.brace_springs)
+        self.assertFalse(any(name.startswith("BRACE") for name in self.roof.model.springs))
+        self.assertEqual(len(self.roof.nodal_loads), 2*len(self.roof.collar_springs))
+
+    def test_purlins_have_three_pieces_with_bending_releases_at_both_posts(self):
+        self.assertFalse(Settings().continuous_purlins)
+        original = [b for b in self.layout.beams if b.category == "purlin"]
+        pieces = [b for b in self.roof.layout.beams if b.category == "purlin"]
+        self.assertEqual(len(original), 2)
+        self.assertEqual(len(pieces), 6)
+        self.assertAlmostEqual(sum(b.length for b in pieces), sum(b.length for b in original))
+        self.assertEqual(len(self.roof.layout.purlin_joints), 4)
+        for left, right, point in self.roof.layout.purlin_joints:
+            first, second = self.roof.model.members[left], self.roof.model.members[right]
+            self.assertEqual(first.j_node.name, second.i_node.name)
+            np.testing.assert_allclose((first.j_node.X, first.j_node.Y, first.j_node.Z), point)
+            self.assertTrue(any(math.isclose(point[0], p[0]) and math.isclose(point[1], p[1])
+                                for _, p in self.layout.bases))
+            for combo in self.roof.model.load_combos:
+                for direction in ("My", "Mz"):
+                    self.assertLess(abs(first.moment(direction, first.L(), combo)), 1e-4)
+
+    def test_continuous_purlin_option_restores_bending_continuity_without_changing_weight(self):
+        roof = build_roof_model(self.layout, Settings(continuous_purlins=True))
+        self.assertLess(max(solve_roof_model(roof).values()), 1e-6)
+        self.assertEqual(sum(b.category == "purlin" for b in roof.layout.beams), 2)
+        self.assertFalse(roof.layout.purlin_joints)
+        def weight(model):
+            return -sum(q*(b-a) for _, case, q, a, b in model.loads if case == "G") \
+                   -sum(force[2] for _, case, force in model.nodal_loads if case == "G")
+        self.assertAlmostEqual(weight(roof), weight(self.roof), places=6)
+        moments = []
+        for beam in (b for b in self.layout.beams if b.category == "purlin"):
+            member = roof.model.members[beam.name]
+            for _, point in self.layout.bases:
+                if math.isclose(point[0], beam.start[0]):
+                    moments.append(abs(member.moment("Mz", point[1]-beam.start[1], "SLS_symmetric")))
+        self.assertGreater(max(moments), 1)
+
     def test_roof_area_and_snow_are_conserved(self):
         widths = tributary_widths(self.layout.rafter_y, *self.layout.roof_y)
         self.assertAlmostEqual(sum(widths), self.layout.roof_y[1]-self.layout.roof_y[0])
@@ -190,10 +234,24 @@ class SolverTests(unittest.TestCase):
             for combo in self.roof.model.load_combos:
                 self.assertLess(abs(node.RxnMX[combo]), 1e-4)
 
+    def test_post_orientation_constraints_add_no_force_or_moment_support(self):
+        for beam in (b for b in self.layout.beams if b.category == "post"):
+            node = self.roof.model.members[beam.name].j_node
+            self.assertTrue(node.support_RZ)
+            self.assertFalse(node.support_DX or node.support_DY or node.support_DZ)
+            self.assertFalse(node.support_RX or node.support_RY)
+            for combo in self.roof.model.load_combos:
+                self.assertLess(abs(node.RxnMZ[combo]), 1e-4)
+
     def test_compression_braces_open_and_reclose_without_tension(self):
-        for combo in self.roof.model.load_combos:
-            for name in self.roof.brace_springs:
-                spring = self.roof.model.springs[name]
+        roof = build_roof_model(self.layout, Settings(braces=True))
+        self.assertLess(max(solve_roof_model(roof).values()), 1e-6)
+        self.assertEqual(len(roof.brace_springs), 12)
+        self.assertEqual(sum(b.category == "brace" for b in roof.layout.beams), 12)
+        self.assertEqual(len(roof.nodal_loads), 2*(len(roof.collar_springs)+12))
+        for combo in roof.model.load_combos:
+            for name in roof.brace_springs:
+                spring = roof.model.springs[name]
                 trial = -spring.ks*spring_axial_gap(spring, combo)
                 if spring.active[combo]:
                     self.assertGreaterEqual(trial, -1e-5)
@@ -253,7 +311,7 @@ class SolverTests(unittest.TestCase):
             self.assertLess(abs(row["Dy_mm"]-reference[row["support"], row["combination"]]["Dy_mm"]), .01)
 
     def test_post_only_and_bilateral_brace_options_solve(self):
-        for settings in (Settings(gable_bearings=False), Settings(brace_action="both")):
+        for settings in (Settings(gable_bearings=False, braces=True), Settings(braces=True, brace_action="both")):
             with self.subTest(settings=settings):
                 roof = build_roof_model(self.layout, settings)
                 self.assertLess(max(solve_roof_model(roof).values()), 1e-6)

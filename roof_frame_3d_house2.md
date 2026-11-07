@@ -21,7 +21,13 @@ Global X runs east to west, Y street to garden, and Z upward, matching
 numeric assignments and the restricted rafter-spacing comprehension.
 The model follows the current dimensions and positions when rerun:
 
-- The two continuous purlins along Y, including their end overhangs.
+- Two purlins along Y, including their end overhangs. By default each is
+  split at its two post centrelines into three members: `P1.1`–`P1.3` and
+  `P2.1`–`P2.3`. Both bending moments are released at each splice, with
+  common axial/shear translations and retained torsional roll compatibility.
+  No extra ground restraint is added. `--continuous-purlins` restores the
+  original two continuous members (`Settings(continuous_purlins=True)` in
+  Python). Only the simulator is split; the IFC geometry is unchanged.
 - Each rafter pair at every `RAFTER_Y_POSITIONS` station. Roof slopes pass
   through the outer top corners of the wall plates and purlins; rafter axes
   use `RAFTER_Z_OFFSET + RAFTER_HEIGHT/2` normal to those planes.
@@ -39,9 +45,13 @@ The model follows the current dimensions and positions when rerun:
   faces, controlled by `PURLIN_CONNECTION_WALL_CLEARANCE`. The extra
   connectors do not introduce additional posts or braces.
 - Four posts from the ceiling top directly to the purlin undersides.
-- Twelve 45-degree braces: two under the purlin and one under the
+- Optional twelve 45-degree braces: two under the purlin and one under the
   connecting beam at each post. The section and anchor drop follow
   `PURLIN_BRACE_SIZE` and `PURLIN_BRACE_DROP`.
+  They are excluded by default; `--braces` includes them. Exclusion removes
+  their stiffness, self-weight and attachment arms from the calculation,
+  images, member CSV and active geometry in the calculation basis.
+  The IFC model keeps its braces.
 
 Both gable walls and the timber posts support the purlins. The gable
 bearings are at the front/back wall centrelines. There is no direct rigid
@@ -78,12 +88,15 @@ Each connector has one X-axis rotation fixed solely to remove its unloaded
 rigid spin about the line through its pin ends. Its translations and bending
 rotations remain free at that point; tests verify no support force or moment
 is introduced by this orientation constraint.
+The same convention fixes only the unloaded Z-axis spin at each post top;
+post bending remains pinned and the tests check for zero artificial moment.
 `--joint-stiffness-factor` sets only the numerical arm stiffness. It is
 not a claimed carpentry-joint stiffness; the tests compare factors 1,000
 and 10,000 to check convergence of the rigid-arm approximation.
 
-Braces are axial springs with stiffness E×A/L, pin-ended and initially
-snug. By default they carry compression only, with an iterative active-set
+When enabled with `--braces` (or `Settings(braces=True)`), braces are axial
+springs with stiffness E×A/L, pin-ended and initially snug. The enabled
+default is compression only, with an iterative active-set
 solution that permits opening and reclosing separately in every load
 combination. Inactive braces are dashed in the pictures. The stiffness
 assumes no connection slip; the model does not credit moment resistance
@@ -155,6 +168,9 @@ The default prefix is `roof_frame_3d_house2`. A run creates:
   chord checks are grey; axial collar ties have magenta outlines and no
   deflection classification. These colours are independent of the chosen
   force-arrow combination and deformation scale.
+  Blue diamonds mark the purlin cuts above the posts. Each of the six pieces
+  gets its own member ID, check colour and CSV rows. Self-weight is unchanged
+  by splitting, and deflection chords still use the actual wall/post supports.
   Blue arrows show horizontal forces delivered to the wall plates for the
   selected plot combination. The signed labels show their outward X
   component: positive outward, negative inward, in kN. Arrow directions
@@ -202,6 +218,10 @@ joint/anchor capacity, bearing compression or slab adequacy.
 ## Comparisons
 
 ```bash
+# Restore bending continuity over the two posts of each purlin.
+.venv-roof3d/bin/python roof_frame_3d_house2.py \
+    --continuous-purlins --output /tmp/house2_continuous
+
 # Select actual purchased timber grades; these are example choices.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
     --rafter-material C24 --beam-material GL24c --output /tmp/house2_grades
@@ -214,13 +234,17 @@ joint/anchor capacity, bearing compression or slab adequacy.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
     --horizontal-stiffness rigid --output /tmp/house2_rigid
 
-# Attached braces capable of both axial tension and compression.
+# Enable the IFC's tesařské pásky as compression-only axial springs.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
-    --brace-action both --output /tmp/house2_bilateral_braces
+    --braces --output /tmp/house2_with_braces
+
+# Enabled braces capable of both axial tension and compression.
+.venv-roof3d/bin/python roof_frame_3d_house2.py \
+    --braces --brace-action both --output /tmp/house2_bilateral_braces
 
 # Compare against posts alone, without gable-wall purlin bearings.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
-    --gable-bearings off --output /tmp/house2_posts_only
+    --gable-bearings off --braces --output /tmp/house2_posts_only
 
 # Override the load basis and show the west-heavy ULS case.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \

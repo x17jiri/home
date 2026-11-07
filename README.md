@@ -2358,11 +2358,18 @@ load conventions and remaining checks.
 ## House 2 roof simulator (PyNite)
 
 `roof_frame_3d_house2.py` reads the current `house2.py` geometry without
-executing the IFC generator. It models the rafters, continuous purlins,
-four side cross beams, four posts, twelve pin-ended braces and paired
+executing the IFC generator. It models the rafters, purlins,
+four side cross beams, four posts, optional pin-ended braces and paired
 collar ties above the purlins. Each collar pair is one bilateral axial spring
 with the combined stiffness and self-weight of its two IFC boards.
-The default includes gable-wall bearings and compression-only braces.
+By default each purlin is split into three members at the two post centres,
+with bending hinges shown as blue diamonds on the plan. Use
+`--continuous-purlins` to restore continuous purlins. The cuts do not add
+ground supports or change timber weight; the IFC purlins remain unchanged.
+The default includes gable-wall bearings and omits the tesařské pásky,
+including their self-weight and attachment arms. Use `--braces` to include
+all twelve as compression-only axial springs, or `--braces --brace-action both`
+to allow tension too. The IFC braces remain in the house model.
 Rafter-to-wall-plate seats are vertically supported and completely free
 to slide in X by default, with zero X reaction; Y stays fixed to prevent
 sideways tipping. The console

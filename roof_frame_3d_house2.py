@@ -12,7 +12,7 @@ import ast
 import csv
 import json
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from importlib.metadata import version
 from pathlib import Path
 
@@ -114,6 +114,7 @@ class Layout:
     depth: float = 0.0
     roof_y: tuple = ()
     rafter_y: tuple = ()
+    purlin_joints: list = field(default_factory=list)
 
     @classmethod
     def from_house(cls, path, rafter_material="C16", beam_material="C16"):
@@ -247,11 +248,13 @@ class Layout:
 
 @dataclass(frozen=True)
 class Settings:
-    roof_mass: float = 150.0  # Full sloped build-up, including interior finish, excluding modelled timber.
-    snow_load: float = 2.0   # Vertical kN/m² horizontal roof area, not ground snow.
+    roof_mass: float = 130.0*1.35  # Full sloped build-up, including interior finish, excluding modelled timber.
+    snow_load: float = 1.5*1.5   # Vertical kN/m² horizontal roof area, not ground snow.
     timber_density: float = 450.0
     gravity: float = 10.0
     gable_bearings: bool = True
+    braces: bool = False
+    continuous_purlins: bool = False
     brace_action: str = "compression"
     horizontal_stiffness_kn_mm: float | None = 0.0  # X only: 0 free; None rigid; positive spring stiffness. Y fixed.
     joint_stiffness_factor: float = 1000.0  # Numerical rigid-arm multiplier, not joint slip stiffness.
@@ -292,8 +295,47 @@ def tributary_widths(stations, low, high):
     return tuple(b-a for a, b in zip(edges, edges[1:]))
 
 
+def split_purlins_at_posts(layout):
+    """Three pieces per purlin, with shared translations at each post axis."""
+    if layout.purlin_joints:
+        return layout
+    beams, joints = [], []
+    chords, gables = dict(layout.chords), []
+    for beam in layout.beams:
+        if beam.category != "purlin":
+            beams.append(beam)
+            continue
+        cuts = sorted(point[1] for _, point in layout.bases
+                      if math.isclose(point[0], beam.start[0], abs_tol=1e-8))
+        if len(cuts) != 2 or not beam.start[1] < cuts[0] < cuts[1] < beam.end[1]:
+            raise ValueError(f"{beam.name} requires two distinct post cuts inside its length")
+        x, _, z = beam.start
+        points = (beam.start, *((x, y, z) for y in cuts), beam.end)
+        references = chords.pop(beam.name)
+        pieces = []
+        for index, (start, end) in enumerate(zip(points, points[1:]), 1):
+            piece = replace(beam, name=f"{beam.name}.{index}", start=start, end=end)
+            beams.append(piece)
+            pieces.append(piece)
+            chords[piece.name] = tuple(y for y in references if start[1]-1e-8 <= y <= end[1]+1e-8)
+        joints.extend((left.name, right.name, left.end) for left, right in zip(pieces, pieces[1:]))
+        for label, point in layout.gables:
+            if label == beam.name:
+                owner = next(piece for piece in pieces if piece.start[1] <= point[1] <= piece.end[1])
+                gables.append((owner.name, point))
+    return replace(layout, beams=beams, chords=chords, gables=gables, purlin_joints=joints)
+
+
 def build_roof_model(layout, settings=Settings()):
     from Pynite import FEModel3D
+    if not settings.continuous_purlins:
+        layout = split_purlins_at_posts(layout)
+    if not settings.braces:
+        excluded = {b.name for b in layout.beams if b.category == "brace"}
+        excluded_pins = {name+suffix for name in excluded for suffix in ("_lower", "_upper")}
+        layout = replace(layout,
+                         beams=[b for b in layout.beams if b.name not in excluded],
+                         pins=[pin for pin in layout.pins if pin.name not in excluded_pins])
     model = FEModel3D()
     result = RoofModel(model, layout, settings)
     nodes, structural = {}, set()
@@ -339,11 +381,19 @@ def build_roof_model(layout, settings=Settings()):
             # about X. Choose its section orientation without adding a
             # translational support or restraining its bending rotations.
             model.def_support(member.i_node.name, False, False, False, True, False, False)
+        elif beam.category == "post":
+            # The pinned vertical post has an unloaded spin about its Z
+            # axis. Set only that orientation, leaving both bending axes free.
+            model.def_support(member.j_node.name, False, False, False, False, False, True)
         if math.hypot(member.j_node.X-member.i_node.X, member.j_node.Y-member.i_node.Y) > 1e-8:
             orient_section(member)
         q = -settings.timber_density*settings.gravity*beam.timber.width*beam.timber.height
         model.add_member_dist_load(beam.name, "FZ", q, q, case="G")
         result.loads.append((beam.name, "G", q, 0, beam.length))
+    for left, right, point in layout.purlin_joints:
+        # Release both bending rotations on one side of the common node.
+        # Axial/shear translations and roll compatibility remain connected.
+        model.def_releases(left, Ryj=True, Rzj=True)
     for pin in layout.pins:
         contact = node(pin.contact)
         for point in pin.axes:
@@ -396,7 +446,7 @@ def build_roof_model(layout, settings=Settings()):
 
 
 def solve_roof_model(roof):
-    if roof.settings.brace_action == "both":
+    if not roof.brace_springs or roof.settings.brace_action == "both":
         roof.model.analyze_linear(check_stability=True)
     else:
         # First-order opening/reclosing active set, using the pinned solver version.
@@ -476,10 +526,12 @@ def member_rows(roof):
                 row["max_sampled_vertical_mm"] = max(abs(d) for d in displacement)*1000
                 if combo.startswith("SLS") and beam.name in roof.layout.chords:
                     references = roof.layout.chords[beam.name]
+                    if beam.category == "purlin" and not roof.settings.gable_bearings:
+                        gable_y = [point[1] for label, point in roof.layout.gables if label == beam.name]
+                        references = tuple(y for y in references
+                                           if not any(math.isclose(y, wall_y, abs_tol=1e-8) for wall_y in gable_y))
                     if beam.category in {"purlin", "cross_beam"}:
                         references = tuple(x-(beam.start[1] if beam.category == "purlin" else beam.start[0]) for x in references)
-                        if beam.category == "purlin" and not roof.settings.gable_bearings:
-                            references = references[1:-1]
                     for a, b in zip(references, references[1:]):
                         delta, station = maximum_chord_departure(member, combo, a, b)
                         span = b-a
@@ -599,6 +651,9 @@ def plot_plan_report(roof, chords, path, *, combination="SLS_symmetric"):
                        linewidths=1.6, zorder=18)
             ax.annotate(f"{row['Fz_kN']:.2f} kN uplift", (row["x_m"], row["y_m"]),
                         xytext=(10, 12), textcoords="offset points", color="red", fontsize=7, zorder=18)
+    for left, right, point in roof.layout.purlin_joints:
+        ax.plot(*point[:2], marker="D", markerfacecolor="white", markeredgecolor="#1565c0",
+                markersize=5, linestyle="none", zorder=19)
     ax.set(xlabel="X — east to west [m]", ylabel="Y — street to garden [m]")
     ax.set_aspect("equal")
     ax.margins(x=.15, y=.05)
@@ -606,7 +661,9 @@ def plot_plan_report(roof, chords, path, *, combination="SLS_symmetric"):
     figure.suptitle("House 2 roof deflection checks — top view", fontsize=15, y=.97)
     figure.text(.5, .935, "Worst instantaneous chord checks over ALL SLS combinations; undeformed member positions\n"
                 f"Force arrows: {combination}; red circles: uplift envelope over all combinations\n"
-                f"Wall-plate X/Y restraint: {horizontal_restraint_description(roof.settings.horizontal_stiffness_kn_mm)}",
+                f"Wall-plate X/Y restraint: {horizontal_restraint_description(roof.settings.horizontal_stiffness_kn_mm)}; "
+                f"braces: {roof.settings.brace_action if roof.settings.braces else 'off'}; "
+                f"purlins: {'continuous' if roof.settings.continuous_purlins else '3 pieces each'}",
                 ha="center", va="top", fontsize=9)
     descriptions = {
         "L500": "Green: L/300 and L/500 pass",
@@ -619,6 +676,9 @@ def plot_plan_report(roof, chords, path, *, combination="SLS_symmetric"):
     handles.append(Patch(facecolor="none", edgecolor=COLORS["collar"],
                          label="Magenta: axial collar ties, unassessed"))
     handles.append(Line2D([], [], color="#182d55", label="Blue: force delivered to wall plate"))
+    if roof.layout.purlin_joints:
+        handles.append(Line2D([], [], marker="D", markerfacecolor="white", markeredgecolor="#1565c0",
+                              linestyle="none", label="Blue diamonds: purlin bending hinges above posts"))
     figure.legend(handles=handles, loc="lower center", bbox_to_anchor=(.5, .09), ncol=2,
                   fontsize=9, frameon=False)
     figure.text(.5, .065,
@@ -673,10 +733,14 @@ def draw_results(roof, path, *, plan=False, combination="SLS_symmetric", scale=3
         if row["Fz_kN"] > 1e-5:
             ax.scatter(*coordinates, s=180, facecolors="none", edgecolors="red", linewidths=1.6)
             ax.text(*coordinates, f"  {row['Fz_kN']:.2f} kN uplift", color="red", fontsize=7)
+    for left, right, point in roof.layout.purlin_joints:
+        ax.scatter(*point, marker="D", s=28, facecolors="white", edgecolors="#1565c0")
     ax.set(xlabel="X — east to west [m]", ylabel="Y — street to garden [m]")
     figure.suptitle(f"House 2 roof: {combination}; deformation ×{scale:g}\n"
                    "red circles: support uplift envelope over all combinations\n"
-                   f"Wall-plate X/Y restraint: {horizontal_restraint_description(roof.settings.horizontal_stiffness_kn_mm)}",
+                   f"Wall-plate X/Y restraint: {horizontal_restraint_description(roof.settings.horizontal_stiffness_kn_mm)}; "
+                   f"braces: {roof.settings.brace_action if roof.settings.braces else 'off'}; "
+                   f"purlins: {'continuous' if roof.settings.continuous_purlins else '3 pieces each'}",
                    fontsize=12)
     ax.set_zlabel("Z [m]")
     ax.set_box_aspect((roof.layout.width, roof.layout.depth, 4))
@@ -708,11 +772,15 @@ def main(argv=None):
     parser.add_argument("--house", type=Path, default=Path(__file__).with_name("house2.py"))
     parser.add_argument("--output", type=Path, default=Path("roof_frame_3d_house2"))
     parser.add_argument("--rafter-material", default="C16", type=lambda x: resolve_timber_grade(x).name)
-    parser.add_argument("--beam-material", default="C16", type=lambda x: resolve_timber_grade(x).name)
+    parser.add_argument("--beam-material", default="C20", type=lambda x: resolve_timber_grade(x).name)
     parser.add_argument("--roof-mass", type=float, help="kg/m² actual sloped area; defaults to all rafter_load.py layers")
     parser.add_argument("--snow", type=float, help="kN/m² horizontal area; defaults to rafter_load.py roof snow")
     parser.add_argument("--gable-bearings", choices=("on", "off"), default="on")
-    parser.add_argument("--brace-action", choices=("compression", "both"), default="compression")
+    parser.add_argument("--braces", action="store_true", help="include the tesařské pásky (omitted by default)")
+    parser.add_argument("--continuous-purlins", action="store_true",
+                        help="use continuous purlins instead of three pieces with bending hinges above the posts")
+    parser.add_argument("--brace-action", choices=("compression", "both"), default="compression",
+                        help="when --braces is used: compression only (default) or tension/compression")
     parser.add_argument("--horizontal-stiffness", type=horizontal_stiffness, default=0.0,
                         help="X restraint at each wall-plate seat: free (default), rigid, or kN/mm; Y always fixed")
     parser.add_argument("--joint-stiffness-factor", type=float, default=1000)
@@ -725,19 +793,23 @@ def main(argv=None):
     positive(args.deformation_scale, "deformation scale")
     settings = Settings(roof_mass=mass if args.roof_mass is None else args.roof_mass,
                         snow_load=snow if args.snow is None else args.snow,
-                        gable_bearings=args.gable_bearings == "on", brace_action=args.brace_action,
+                        gable_bearings=args.gable_bearings == "on", braces=args.braces, brace_action=args.brace_action,
+                        continuous_purlins=args.continuous_purlins,
                         horizontal_stiffness_kn_mm=args.horizontal_stiffness,
                         joint_stiffness_factor=args.joint_stiffness_factor)
     layout = Layout.from_house(args.house, args.rafter_material, args.beam_material)
+    roof = build_roof_model(layout, settings)
+    layout = roof.layout
     print(f"Roof angle: {math.degrees(math.atan(layout.slope)):.2f}° ({layout.slope*100:.2f}%)")
     print(f"Loads: roof layers {settings.roof_mass:g} kg/m² slope; snow {settings.snow_load:g} kN/m² plan; timber {settings.timber_density:g} kg/m³; g={settings.gravity:g}")
-    print(f"Members: {len(layout.beams)}; gable bearings {'on' if settings.gable_bearings else 'off'}; braces {settings.brace_action}")
+    print(f"Members: {len(layout.beams)}; gable bearings {'on' if settings.gable_bearings else 'off'}; "
+          f"braces {settings.brace_action if settings.braces else 'off'}")
+    print(f"Purlins: {'continuous' if settings.continuous_purlins else 'three pieces each, bending hinges above the two posts'}")
     print(f"Collar ties: {sum(b.category == 'collar' for b in layout.beams)} axial pairs, "
           f"{sum(b.pieces for b in layout.beams if b.category == 'collar')} boards; ideal pinned connections")
     print(f"Materials: rafters {args.rafter_material}, other timber {args.beam_material}")
     restraint = horizontal_restraint_description(settings.horizontal_stiffness_kn_mm)
     print(f"Rafter-to-wall-plate horizontal restraint: {restraint}")
-    roof = build_roof_model(layout, settings)
     if args.plot_combination not in roof.model.load_combos:
         parser.error(f"unknown plot combination; choose {', '.join(roof.model.load_combos)}")
     equilibrium = solve_roof_model(roof)
@@ -749,20 +821,25 @@ def main(argv=None):
     write_csv(f"{stem}_supports.csv", supports)
     write_csv(f"{stem}_deflections.csv", chords)
     metadata = dict(source=str(layout.source), settings=asdict(settings),
+                    purlin_joints=[dict(left=left, right=right, point=point) for left, right, point in layout.purlin_joints],
                     members=[asdict(member) for member in layout.beams],
                     materials=dict(rafter=args.rafter_material, other=args.beam_material),
                     versions={name: version(name) for name in ("PyniteFEA", "numpy", "matplotlib")},
                     equilibrium_residuals=equilibrium, combinations={k: v.factors for k, v in roof.model.load_combos.items()},
                     tributary_widths_m=roof.tributary_widths,
                     assumptions=["First-order elastic; no buckling, strength, creep or fastener-capacity verification.",
-                                 "Ideal pins with massless stiff eccentric arms; braces axial, without connection slip.",
+                                 "Ideal pins with massless stiff eccentric arms; enabled braces are axial, without connection slip.",
                                  "Post bases and wall/gable bearings anchored; uplift is force delivered upward to the support.",
                                  "Wall plates/ring beams and supporting slab immovable; slab and walls not designed here.",
                                  "Prismatic rafter axes end at vertical eaves; local horizontal end cuts/notches omitted.",
                                  "No roof diaphragm, wind, chimney load, or wall-plate self-weight in roof-frame reactions."])
     metadata["assumptions"].extend([
+        f"Tesařské pásky {'included as '+settings.brace_action+' axial springs' if settings.braces else 'excluded, including their self-weight and attachment arms'}.",
+        "Purlins continuous." if settings.continuous_purlins else
+        "Purlins split into three pieces above the posts; both bending rotations released at each cut, with axial/shear and roll compatibility retained.",
         "Purlins bear directly on posts; connector ends are pinned to the purlin inner faces at purlin centre height.",
         "One connector X rotation is fixed only to remove unloaded axial spin; no translational support or bending fixity is added.",
+        "One post Z rotation is fixed only to remove unloaded axial spin; no translational support or bending fixity is added.",
         f"Rafter-to-wall-plate translation restraint: {restraint}; vertical support and yaw restraint retained.",
         "Each collar spring represents two boards, axial stiffness 2EA/L, connected to the rafter axes at tie-centre height.",
         "Collar self-weight includes sloped board ends and is shared between its two rafter joints; no direct roof/snow load.",
