@@ -98,9 +98,10 @@ the top `THIRD_ROOM_NARROW_DEPTH = 1.25 m` is only
 `THIRD_ROOM_NARROW_WIDTH` wide, clearing the Pokoj 1 doorway.
 The floor polygons and dimensions follow the step. Its street window stays
 centred on the wider street-side part.
-The stairs are enclosed by a 175 mm VPC wall from the front wall to the
-garden-room wall, with `STAIRWAY_WIDTH = 2.25 m` clear from room 3's straight
-wall. A 115 mm VPC partition splits the area to its right into hallway at
+The stairs occupy the west/right side, enclosed by a 175 mm VPC wall from
+the front wall to the garden-room wall, with `STAIRWAY_WIDTH = 2.25 m`
+clear beside the west exterior wall. The 2.20 m wide bathroom sits to their
+left, next to room 3. A 115 mm VPC partition splits that area into hallway at
 the garden end and bathroom at the front. `BATHROOM_DEPTH` is the
 clear bathroom depth. Both new walls have the common Liapor base course;
 the stairway wall is load-bearing and the bathroom partition is not.
@@ -111,8 +112,8 @@ continuous floor extends through it into the stair approach, follows room
 and legend update from that same outline.
 The bathroom uses a two-column layout read from garden to street:
 door/toilet, clear space/basin, shower/hydrobox and water meter. The 900 mm door leaf
-has a 1000 mm opening 125 mm from the stairway wall and swings into the
-bathroom. The WC and basin face inward from the west wall. The shower is
+has a 1000 mm opening 125 mm from room 3's wall and swings into the
+bathroom. The WC and basin face inward from the stairway wall. The shower is
 900 × 900 mm. The bottom-right cell contains the old house's 800 × 500 ×
 900 mm hydrobox and 600 × 550 × 900 mm water-meter box, on a common X
 centreline at 300 and 700 mm from the inside front wall. Fixtures start at the
@@ -146,11 +147,19 @@ Wall height is
 The stairway has two 1.05 m wide flights, each with **eight risers and seven
 treads**, all with 270 mm treads.
 The lower flight runs toward the front wall (−Y); the upper returns toward
-the garden (+Y), with its left edge touching the straight room 3 wall.
+the garden (+Y), with its left edge touching the stairway/bathroom wall.
 The landing is against the front wall and measures 2.25 × 1.05 m.
 Both runs are 1.89 m; the flights are separated by
 `STAIR_FLIGHT_GAP = 0.15 m`. Both flights are concrete with 150 mm
 sloped waists; there is no general floor build-up in the stairway room.
+Both floor plans show a dashed entrance-clearance curve beyond the flights:
+two quarter circles of radius `STAIR_FLIGHT_WIDTH`, centred on the inner
+flight corners, joined by a straight segment across `STAIR_FLIGHT_GAP`.
+This is a drawing annotation only.
+Both floor plans dimension any clear gap from the stairway's west edge to
+the inside west wall. The terminal prints the plasterboard inner-face
+height above the finished upper floor at the west corner of the upper
+stair arrival, including that point's X/Y coordinates.
 
 The first MIAKO ceiling covers Pokoj 1 and 2, with its geometric centreline
 above their separating partition and beams running along Y. The beam length
@@ -191,14 +200,15 @@ sets the slope and seats posts and balusters on the actual treads.
 `STAIR_RAILING_HEIGHT = 1.0` controls the vertical handrail height.
 The railing belongs to the ground floor and is explicitly included in the
 upper-floor plan; it is visible in both floor drawings and the 3D model.
-The living-room layout is retained, including its current overlap with the
-relocated upper stair arrival. The former upper bathroom and hallway are
-removed for a later redesign.
+The living-room layout is retained. The relocated stairs are to its right
+and no longer overlap its floor. The upper bathroom occupies the space
+between the stairs and the living-room wall, with the hallway beyond the
+stair arrival.
 
 Pokoj 1 and 2 have 1.75 m windows centred on their back-wall segments, with
 the opening starts rounded to the nearest 0.125 m along the wall. Pokoj 3 has
 an exactly centred 1.75 m front-wall window. The bathroom has a
-0.75 × 0.75 m front-wall window centred on its clear width. All window tops are at
+0.75 × 0.75 m front-wall window with a 250 mm gap to its right wall. All window tops are at
 `GROUND_WALL_BASE_COURSE_HEIGHT + 2.25 m`; bedroom sills use
 `GROUND_WALL_BASE_COURSE_HEIGHT + 0.875 m`. The west-window sill follows from
 its 0.75 m height. All window frames use white in 3D.
@@ -261,10 +271,38 @@ above the finished floor match the ground-floor room windows; dedicated
 `UPPER_WINDOW_SILL_HEIGHT` and `UPPER_WINDOW_TOP_HEIGHT` hold storey-relative
 coordinates. Both have opening dimensions in the upper plan, and
 `upper_room_windows` supplies their combined area to the room legend.
-Only the living room remains in `upper_room_floors`. The former upper
-bathroom and hallway floor layers, room labels, dimensions and legend rows
-are removed, together with the two bathroom SDK partitions. The living-room
-partitions, exterior walls and stairs remain in place.
+`upper_room_floors` contains the living room (`1.01`), bathroom (`1.02`) and
+hallway (`1.03`). The bathroom has two 100 mm SDK partitions: one beside the
+stairs and a horizontal wall whose hallway face aligns with the stair
+arrival. Its clear dimensions are currently 1.20 × 2.84 m. An 800 mm
+door in a 900 mm opening swings inward from the hallway. The opening starts
+50 mm from the living-room wall's bathroom-side face, controlled by
+`UPPER_BATHROOM_DOOR_SIDE_CLEARANCE`. The horizontal
+partition is cut around the west purlin. The hallway is 1.10 m deep on the
+left, over the bathroom, and 1.40 m on the right, above the stairs.
+`UPPER_HALLWAY_RIGHT_EXTRA_WIDTH = 0.30 m` controls the additional depth.
+`UPPER_HALLWAY_WIDE_PART_START_X` controls the X coordinate where the wider
+part starts; it defaults to the bathroom's right face. The horizontal
+living-room wall steps back there, with a short SDK return. Both room outlines follow
+this step; the hallway excludes the chimney footprint. The upper plan also
+dimensions the clear gap from the rear west post to the living-room wall.
+Both new floors share the living room's 30 mm impact
+insulation and 65 mm screed/finish, and supply labels and room-legend rows
+from their measured outlines.
+The upper hallway has the old house's 700 × 700 × 800 mm washing machine
+beside the west exterior wall, centred in the half nearest the stair arrival.
+A 600 × 550 mm basin occupies the other half, facing into the hallway,
+with its top 850 mm above the finished floor. Both positions follow the
+configured depth of the wider hallway. The bathroom's front end contains the
+1000 × 500 × 1500 mm recuperation unit against the front wall, and a toilet
+facing the doorway. A 700 × 700 × 2000 mm TUV tank stands beside the
+living-room wall, centred in the free space between the recuperation unit
+and toilet. Equipment starts at the finished upper floor;
+`upper_fixture_wall_gap` controls its wall spacing (currently 50 mm).
+The bathroom label sits beside the tank.
+When a plan cuts below a door's raised swing symbol, export lowers only
+the 2D symbol just beneath the cut. This keeps low upper-floor cuts from
+hiding the bathroom door, without changing its 3D position or floor levels.
 The kitchen follows the living-room side of the vertical SDK partition,
 from garden to street: cooker, sink, dishwasher, then worktop to the front
 wall. The three appliances use the old house's 640 × 640 × 750 mm boxes;
@@ -285,6 +323,18 @@ Two wooden purlins (`purlins`) run parallel to the wall plates at
 `PURLIN_CENTER_HEIGHT = 3.5 m` above the upper-storey datum, which is the
 ceiling top. This gives world Z = 6.535 m (bottom 6.415 m, top 6.655 m).
 They share `WALL_PLATE_OVERHANG`, so their Y range is also −0.30 to 9.05 m.
+Each purlin has two vertical timber posts (`purlin_supports`) in the upper
+storey. `PURLIN_SUPPORT_Y_POSITIONS` contains one independently editable
+pair of absolute Y coordinates per purlin, initially `(3.0, 6.0)` for each.
+`PURLIN_SUPPORT_SIZE = (0.16, 0.16)` sets their cross-section. They run from
+the ceiling top (`UPPER_FLOOR_START`, before the floor build-up) to the
+purlin underside (`PURLIN_Z - PURLIN_SIZE[1]/2`). The upper plan shows their
+cut footprints, and the roof timber schedule includes all four posts.
+The upper plan dimensions only the east support row: inside front-wall face
+to front-post centre, between post centres, and rear-post centre to inside
+back-wall face. One horizontal dimension shows the clear distance from the
+front east post's face to the common front edge of the kitchen run.
+All endpoints follow the configured post and kitchen positions.
 The roof has 14 pairs of `RAFTER_SIZE = (0.08, 0.20)` rafters, with their
 centres at `RAFTER_FIRST_Y = -0.125` through
 `RAFTER_LAST_Y = HOUSE_DEPTH + 0.125`. There are six 670 mm gaps, one
@@ -314,13 +364,15 @@ front/back tile extents; `ROOF_EAVE_SETBACK = 0.02` leaves the same 20 mm
 setback beneath the tiles for boards and battens. Each new layer type has
 its own `Roof - …` visibility storey, including both roof slopes.
 The chimney starts at the upper-floor storey datum, centred at
-`CHIMNEY_CENTER`, with its near face
-`CHIMNEY_STAIR_CLEARANCE = 1.0 m` beyond the upper stair arrival along Y.
-The upper plan dimensions this clear face-to-stair distance. It reuses the original model's
+`CHIMNEY_CENTER`. Its back face touches the stair-facing surface of the
+horizontal living-room wall, at `LIVING_ROOM_WALL_FRONT_Y`; its body is on
+the stairs side. The vertical SDK wall stops at the chimney's front face,
+and the kitchen follows the shortened wall. There is no chimney-to-stair
+clearance parameter or dimension. It reuses the original model's
 400 mm square body, 200 mm circular flue and material/colour. Its top is
 `CHIMNEY_ABOVE_ROOF = 0.65 m` above the roof-tile ridge. The roof receives
-an exact vertical shaft opening; both living-room partitions are also
-cut wherever the stack crosses them. The upper plan includes the chimney/flue
+an exact vertical shaft opening; the SDK partitions meet the chimney
+without intersecting it. The upper plan includes the chimney/flue
 symbol, while the ground and ceiling plans omit it.
 Run `python3 house2.py roof` for the roof framing plan (`projekt2/roof.svg`)
 and `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.4. Krov.pdf`.

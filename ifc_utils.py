@@ -2136,11 +2136,55 @@ def _postprocess_drawing_circles(svg_path: Path, model: ifcopenshell.file, drawi
         svg_path.write_text(updated, encoding="utf-8")
 
 
+def _join_dashed_drawing_lines(svg: str) -> str:
+    """Keep one dash phase when Bonsai splits a drawing polyline into SVG lines."""
+    paths = {}
+    classes_by_id = {}
+    last_points = {}
+
+    def line_attributes(tag):
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', tag))
+        classes = attributes.get("class", "").split()
+        if "drawing-line" not in classes or "dashed" not in classes:
+            return attributes, None
+        return attributes, next((token for token in classes if token.startswith("GlobalId-")), None)
+
+    for match in re.finditer(r'<line\b[^>]*/>', svg):
+        attributes, key = line_attributes(match[0])
+        if key is None:
+            continue
+        start = (float(attributes["x1"]), float(attributes["y1"]))
+        end = (float(attributes["x2"]), float(attributes["y2"]))
+        commands = paths.setdefault(key, [])
+        classes_by_id[key] = attributes["class"]
+        previous = last_points.get(key)
+        if previous is not None and hypot(previous[0]-end[0], previous[1]-end[1]) < 1e-5:
+            start, end = end, start
+        if previous is None or hypot(previous[0]-start[0], previous[1]-start[1]) >= 1e-5:
+            commands.append(f"M {start[0]:.9g},{start[1]:.9g}")
+        commands.append(f"L {end[0]:.9g},{end[1]:.9g}")
+        last_points[key] = end
+    emitted = set()
+
+    def replace_line(match):
+        _, key = line_attributes(match[0])
+        if key not in paths:
+            return match[0]
+        if key in emitted:
+            return ""
+        emitted.add(key)
+        return (f'<path class="{escape(classes_by_id[key], quote=True)}" '
+                f'd="{" ".join(paths[key])}"/>')
+
+    return re.sub(r'<line\b[^>]*/>', replace_line, svg)
+
+
 def _postprocess_drawing_line_colors(svg_path: Path) -> None:
     """Style native lines, text and legend samples using persisted appearance classes."""
     original = svg_path.read_text(encoding="utf-8")
     svg = re.sub(r'<style\b[^>]*class="drawing-line-colors"[^>]*>.*?</style>',
                  "", original, flags=re.DOTALL)
+    svg = _join_dashed_drawing_lines(svg)
     colors = sorted(set(re.findall(r"\bdrawing-line-color-([0-9a-f]{6})\b", svg)))
     text_colors = sorted(set(re.findall(r"\bdrawing-text-color-([0-9a-f]{6})\b", svg)))
     sizes = sorted(set(re.findall(r"\bdrawing-text-size-(\d+(?:p\d+)?(?:e-?\d+)?)\b", svg)))
@@ -14928,6 +14972,28 @@ class Drawing:
         self._annotated_stair_landings.add(landing.id())
         return annotation
 
+    def _fit_door_plan_symbols_below_cut(self) -> None:
+        """Keep raised 2D door symbols visible in low plan cuts without moving the doors."""
+        if self.view != "plan":
+            return
+        for door in self.house.model.by_type("IfcDoor"):
+            if not self._includes_door(door) or not door.OverallHeight:
+                continue
+            bottom = float(ifcopenshell.util.placement.get_local_placement(door.ObjectPlacement)[2, 3])
+            if not bottom+.012 < self.z < bottom+float(door.OverallHeight):
+                continue
+            plan = ifcopenshell.util.representation.get_representation(door, "Plan", "Body", "PLAN_VIEW")
+            if plan is None:
+                continue
+            for item in plan.Items:
+                if not item.is_a("IfcMappedItem"):
+                    continue
+                origin = item.MappingTarget.LocalOrigin.Coordinates
+                # Bonsai's camera also clips the first 2 mm below the cut.
+                maximum_height = self.z-bottom-.01
+                if len(origin) == 3 and origin[2] > maximum_height:
+                    item.MappingTarget.LocalOrigin.Coordinates = (origin[0], origin[1], maximum_height)
+
     def render(
         self,
         output: str | PathLike[str],
@@ -14984,6 +15050,7 @@ class Drawing:
             pset=self._drawing_pset,
             properties={"Stylesheet": str(stylesheet_path)},
         )
+        self._fit_door_plan_symbols_below_cut()
         self.house._write_model(self.house._ifc_path)
         return _render_existing_drawing(
             self.house._ifc_path,
@@ -17734,6 +17801,8 @@ class Wall(ifcopenshell.entity_instance):
         and defaults to zero, so the door is closed in 3D while retaining its
         normal plan swing symbol. The plan symbol is drawn halfway up the
         door so finished-floor layers do not hide doors starting at slab level.
+        Plan exports lower that 2D symbol just below the cut when necessary;
+        the physical door and its opening keep their original placement.
         ``reverse_swing`` opens the leaf on the opposite side of the wall
         without changing its hinge end, in both 3D and plan.  ``show_overhead``
         adds thin solid plan-only wall linework across the rough opening. Casings
