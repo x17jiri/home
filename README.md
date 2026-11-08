@@ -497,17 +497,27 @@ the members are grouped under the roof in the upper-floor storey.
 horizontal cut, measured below the wall-plate bottom. It applies to the
 rafters and roof build-up alongside the retained vertical overhang limit.
 Layer source extents and tile-batten rows respect both limits.
-Both slopes now use the previous house's build-up, with all interior
-layers continuing to the ridge (no horizontal attic ceiling): 140 mm
+Both slopes use the previous house's build-up, with interior
+layers ending at vertical planes on the outer purlin faces: 140 mm
 under-rafter wool, 15 mm OSB/vapour barrier, a 40 mm empty service space,
 and 25 mm plasterboard. Above the rafters are 15 mm MDF, 1 mm underlay,
 60 × 60 mm counter-battens at every rafter, 60 × 40 mm tile battens at
 320 mm slope spacing, and 30 mm roof tiles with the shared tile pattern.
 The materials and IFC colours match `house_ifc.py`. As in that model,
 the between-rafter wool space has no additional solid overlapping the rafters.
-The sloped inner sheets and wool stop at the inside wall faces and have
-host-specific clearance openings where the purlins cross them. The roof
-planes cut both sides at the ridge. `ROOF_GABLE_OVERHANG = 0.25` sets the
+The sloped inner sheets and wool run from the inside wall faces to the
+purlins. Between the purlins' inner faces, a horizontal roof plane carries
+the 15 mm vapour barrier with its top at `FLAT_VAPOUR_BARRIER_TOP_Z`, the
+purlin-top/collar-tie-bottom level. A 40 mm service void separates it from
+25 mm plasterboard, whose underside is
+`FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z`. There is no horizontal under-rafter
+insulation solid: that insulation belongs between the collar ties. Both
+horizontal layers share their corresponding `Roof - …` visibility storeys
+with the slopes, receive timber-clearance openings, and are penetrated by
+the same chimney opening. Outer roof layers still continue to the ridge.
+The upper plasterboard partitions are clipped to the underside of this
+horizontal ceiling as well as to the sloped finishes.
+`ROOF_GABLE_OVERHANG = 0.25` sets the
 front/back tile extents; `ROOF_EAVE_SETBACK = 0.02` leaves the same 20 mm
 setback beneath the tiles for boards and battens. Each new layer type has
 its own `Roof - …` visibility storey, including both roof slopes.

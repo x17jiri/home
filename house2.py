@@ -137,6 +137,11 @@ ROOF_TILE_PATTERN_WIDTH = 0.30
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = RAFTER_Z_OFFSET-THERMAL_INSULATION_UNDER_RAFTERS
 VAPOUR_BARRIER_BOTTOM = THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM-VAPOUR_BARRIER_THICKNESS
 GYPSUM_PLASTERBOARD_BOTTOM = VAPOUR_BARRIER_BOTTOM-INSTALLATION_SPACE_THICKNESS-GYPSUM_PLASTERBOARD_THICKNESS
+FLAT_VAPOUR_BARRIER_TOP_Z = PURLIN_Z+PURLIN_SIZE[1]/2
+FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z = (
+    FLAT_VAPOUR_BARRIER_TOP_Z-VAPOUR_BARRIER_THICKNESS
+    -INSTALLATION_SPACE_THICKNESS-GYPSUM_PLASTERBOARD_THICKNESS
+)
 MDF_BOTTOM = RAFTER_Z_OFFSET+RAFTER_HEIGHT
 UNDERLAY_BOTTOM = MDF_BOTTOM+MDF_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM+UNDERLAY_THICKNESS
@@ -992,9 +997,12 @@ window_living_room_front = wall_front_u.add_window(
 # Keep clear living-room strips along the east and back sides of the house.
 living_room_wall_x = BWT+LIVING_ROOM_WIDTH+DRY_WALL_WIDTH/2
 living_room_wall_y = LIVING_ROOM_WALL_FRONT_Y+DRY_WALL_WIDTH/2
-upper_partition_cuts = tuple(
-    offset_plane(*plane.points, offset=GYPSUM_PLASTERBOARD_BOTTOM)
-    for plane in (roof_east, roof_west)
+upper_partition_cuts = (
+    *(offset_plane(*plane.points, offset=GYPSUM_PLASTERBOARD_BOTTOM)
+      for plane in (roof_east, roof_west)),
+    ((0, 0, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z),
+     (1, 0, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z),
+     (0, 1, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z)),
 )
 wall_living_room_side_u = upper.wall(
     (living_room_wall_x, BWT), (living_room_wall_x, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2),
@@ -1398,7 +1406,8 @@ def add_timber_clearances(elements, members):
 
 def add_roof_build_up(plane, side, purlin_index, eave_x, inner_wall_x):
     """Build the original house's roof stack on one of the new roof planes."""
-    inner_x = (inner_wall_x, roof_ridge_x)
+    purlin_outer_x = PURLIN_X_POSITIONS[purlin_index]+(-1 if purlin_index == 0 else 1)*PURLIN_SIZE[0]/2
+    inner_x = (inner_wall_x, purlin_outer_x)
     inner_y = (BWT, HOUSE_DEPTH-BWT)
     outer_x = (eave_x, roof_ridge_x)
     inset_eave_x = eave_x+(ROOF_EAVE_SETBACK if eave_x<roof_ridge_x else -ROOF_EAVE_SETBACK)
@@ -1421,14 +1430,15 @@ def add_roof_build_up(plane, side, purlin_index, eave_x, inner_wall_x):
         is_tile = key=="Roof tiles"
         x_limits = inner_x if is_inner else outer_x if is_tile else board_x
         y_limits = inner_y if is_inner else tile_y if is_tile else board_y
-        extra_cuts = () if is_tile else (roof_vertical_cut(inner_wall_x if is_inner else inset_eave_x),)
+        extra_cuts = (
+            (roof_vertical_cut(inner_wall_x), roof_vertical_cut(purlin_outer_x)) if is_inner
+            else () if is_tile else (roof_vertical_cut(inset_eave_x),)
+        )
         layer = plane.layer(
             f"{side} {key}", outline=roof_layer_outline(plane, x_limits, y_limits, offset, thickness),
             z_offset=offset, thickness=thickness, material=material, color=color,
             transparency=transparency, extra_cuts=extra_cuts,
         )
-        if is_inner:
-            cut_roof_layer_at_purlin(layer, purlin_index)
         if is_tile:
             layer.set_tile_pattern(width=ROOF_TILE_PATTERN_WIDTH, course_length=TILE_BATTEN_SPACING)
         roof_layer_storeys[key].add(layer)
@@ -1463,9 +1473,43 @@ def add_roof_build_up(plane, side, purlin_index, eave_x, inner_wall_x):
     return tuple(layers)
 
 
+flat_ceiling_plane = roof.plane(
+    "Horizontal ceiling",
+    points=((0, 0, FLAT_VAPOUR_BARRIER_TOP_Z),
+            (1, 0, FLAT_VAPOUR_BARRIER_TOP_Z),
+            (0, 1, FLAT_VAPOUR_BARRIER_TOP_Z)),
+)
+
+
+def add_horizontal_roof_layers():
+    """Finish below the collar ties; their insulation is outside this stack."""
+    left = PURLIN_X_POSITIONS[0]+PURLIN_SIZE[0]/2
+    right = PURLIN_X_POSITIONS[1]-PURLIN_SIZE[0]/2
+    if left >= right:
+        raise ValueError("purlins leave no space for the horizontal ceiling")
+    outline = ((left, BWT), (right, BWT),
+               (right, HOUSE_DEPTH-BWT), (left, HOUSE_DEPTH-BWT))
+    layers = []
+    for key, offset, thickness, material, color, transparency in (
+        ("Vapour barrier", -VAPOUR_BARRIER_THICKNESS, VAPOUR_BARRIER_THICKNESS,
+         "Vapour barrier", "#4A90E2", 0.35),
+        ("Gypsum plasterboard", FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z-FLAT_VAPOUR_BARRIER_TOP_Z,
+         GYPSUM_PLASTERBOARD_THICKNESS, "Gypsum plasterboard", "#E8E5DE", 0),
+    ):
+        layer = flat_ceiling_plane.layer(
+            f"Horizontal {key}", outline=outline, z_offset=offset, thickness=thickness,
+            material=material, color=color, transparency=transparency,
+        )
+        roof_layer_storeys[key].add(layer)
+        layers.append(layer)
+    return tuple(layers)
+
+
+horizontal_roof_layers = add_horizontal_roof_layers()
 roof_layers = (
     *add_roof_build_up(roof_east, "East", 0, east_eave_x, BWT),
     *add_roof_build_up(roof_west, "West", 1, west_eave_x, HOUSE_WIDTH-BWT),
+    *horizontal_roof_layers,
 )
 # The transverse SDK partition also meets the exposed west purlin.
 cut_roof_layer_at_purlin(wall_living_room_back_u, 1)
@@ -1514,6 +1558,10 @@ plasterboard_height_at_wall = plane_height_at(
         x=BWT, y=HOUSE_DEPTH/2,
     )-UPPER_FINISHED_FLOOR_HEIGHT
 print(f"Plasterboard inner-face height at wall, above finished upper floor: {plasterboard_height_at_wall:.3f} m")
+print(
+    "Horizontal plasterboard inner-face height above finished upper floor: "
+    f"{FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z-UPPER_FINISHED_FLOOR_HEIGHT:.3f} m"
+)
 stair_arrival_west_corner = (upper_stairs.end[0]+STAIR_FLIGHT_WIDTH/2, upper_stairs.end[1])
 stair_arrival_roof_plane = roof_east if stair_arrival_west_corner[0] <= roof_ridge_x else roof_west
 plasterboard_height_at_stairs = plane_height_at(
