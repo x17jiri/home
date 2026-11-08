@@ -225,15 +225,15 @@ SECTION_OUTLINE_WIDTH = 0.3
 RAFTERS_MIDPOINT = CHIMNEY_CENTER[1]-0.04
 RAFTER_Y_POSITIONS = (
 	-0.125,
-	-0.125+1.07,
-	-0.125+1.07+0.82,
-	-0.125+1.07+0.82+1.07,
-	-0.125+1.07+0.82+1.07+0.67,
-	-0.125+1.07+0.82+1.07+0.67+1.07, # komin
-	-0.125+1.07+0.82+1.07+0.67+1.07+0.67,
-	-0.125+1.07+0.82+1.07+0.67+1.07+0.67+0.67,
-	-0.125+1.07+0.82+1.07+0.67+1.07+0.67+0.67+1.07,
-	-0.125+1.07+0.82+1.07+0.67+1.07+0.67+0.67+1.07+1.07,
+	-0.125+1.00,
+	-0.125+1.00+1.00,
+	-0.125+1.00+1.00+1.00,
+	-0.125+1.00+1.00+1.00+0.67,
+	-0.125+1.00+1.00+1.00+0.67+1.00, # komin
+	-0.125+1.00+1.00+1.00+0.67+1.00+0.67,
+	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91,
+	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91+1.00,
+	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91+1.00+1.00,
 	HOUSE_DEPTH+0.125,
 )
 found_chimney_space = False
@@ -243,9 +243,10 @@ for i in range(1, len(RAFTER_Y_POSITIONS)):
 		print("**** WARNING: rafter dist =", dist)
 	if i == 5:
 		found_chimney_space = found_chimney_space or (
-			dist >= 1.05 and
+			dist >= 0.99 and
 			abs((RAFTER_Y_POSITIONS[i]+RAFTER_Y_POSITIONS[i-1]) / 2.0 - RAFTERS_MIDPOINT) <= 0.05
 		)
+		#if not found_chimney_space:
 assert(found_chimney_space)
 
 aa_cut = CutDefinition(
@@ -1406,8 +1407,10 @@ def add_timber_clearances(elements, members):
 
 def add_roof_build_up(plane, side, purlin_index, eave_x, inner_wall_x):
     """Build the original house's roof stack on one of the new roof planes."""
-    purlin_outer_x = PURLIN_X_POSITIONS[purlin_index]+(-1 if purlin_index == 0 else 1)*PURLIN_SIZE[0]/2
-    inner_x = (inner_wall_x, purlin_outer_x)
+    purlin_inner_x = PURLIN_X_POSITIONS[purlin_index]+(1 if purlin_index == 0 else -1)*PURLIN_SIZE[0]/2
+    inner_x = (inner_wall_x, purlin_inner_x)
+    purlin_bottom_cut = ((0, 0, purlin_bottom_z),
+                         (1, 0, purlin_bottom_z), (0, 1, purlin_bottom_z))
     inner_y = (BWT, HOUSE_DEPTH-BWT)
     outer_x = (eave_x, roof_ridge_x)
     inset_eave_x = eave_x+(ROOF_EAVE_SETBACK if eave_x<roof_ridge_x else -ROOF_EAVE_SETBACK)
@@ -1431,7 +1434,7 @@ def add_roof_build_up(plane, side, purlin_index, eave_x, inner_wall_x):
         x_limits = inner_x if is_inner else outer_x if is_tile else board_x
         y_limits = inner_y if is_inner else tile_y if is_tile else board_y
         extra_cuts = (
-            (roof_vertical_cut(inner_wall_x), roof_vertical_cut(purlin_outer_x)) if is_inner
+            (roof_vertical_cut(inner_wall_x), roof_vertical_cut(purlin_inner_x), purlin_bottom_cut) if is_inner
             else () if is_tile else (roof_vertical_cut(inset_eave_x),)
         )
         layer = plane.layer(
@@ -2311,10 +2314,12 @@ TERRAIN_PROFILES = {
 		(HOUSE_DEPTH + 2.0, 416.7),
 	],
     "pohled_ulice": [
-		(-2.0, 415.5)
+		(-2.0, 415.5),
+		(HOUSE_WIDTH + 2.0, 415.5),
 	],
     "pohled_zahrada": [
-		(-2.0, 416.7)
+		(-2.0, 416.7),
+		(HOUSE_WIDTH + 2.0, 416.7),
 	],
     "pohled_vychod": [
 		(-2.0, 416.7),

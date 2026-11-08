@@ -178,7 +178,9 @@ facades, closes doors for rendering, and suppresses plan annotations.
 
 `TERRAIN_PROFILES` holds an independently editable profile for each view:
 global X with height above sea level for street/garden, and global Y with
-height above sea level for east/west. `earth_to_z()` uses
+height above sea level for east/west. Each profile requires at least two
+points at distinct horizontal positions; use the same height at both ends
+for flat terrain. `earth_to_z()` uses
 `GROUND_FINISHED_FLOOR_ELEVATION = 417.0 m`; the initial terrain follows the
 old house, at `TERRAIN_STREET_ELEVATION = 416.0 m` and
 `TERRAIN_GARDEN_ELEVATION = 416.6 m`. `y_to_earth()` interpolates between
@@ -498,7 +500,8 @@ horizontal cut, measured below the wall-plate bottom. It applies to the
 rafters and roof build-up alongside the retained vertical overhang limit.
 Layer source extents and tile-batten rows respect both limits.
 Both slopes use the previous house's build-up, with interior
-layers ending at vertical planes on the outer purlin faces: 140 mm
+layers clipped at the inner purlin faces and horizontally at the purlin
+undersides: 140 mm
 under-rafter wool, 15 mm OSB/vapour barrier, a 40 mm empty service space,
 and 25 mm plasterboard. Above the rafters are 15 mm MDF, 1 mm underlay,
 60 × 60 mm counter-battens at every rafter, 60 × 40 mm tile battens at
