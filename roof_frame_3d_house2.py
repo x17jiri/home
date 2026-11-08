@@ -772,7 +772,7 @@ def main(argv=None):
     parser.add_argument("--house", type=Path, default=Path(__file__).with_name("house2.py"))
     parser.add_argument("--output", type=Path, default=Path("roof_frame_3d_house2"))
     parser.add_argument("--rafter-material", default="C16", type=lambda x: resolve_timber_grade(x).name)
-    parser.add_argument("--beam-material", default="C20", type=lambda x: resolve_timber_grade(x).name)
+    parser.add_argument("--beam-material", default="C22", type=lambda x: resolve_timber_grade(x).name)
     parser.add_argument("--roof-mass", type=float, help="kg/m² actual sloped area; defaults to all rafter_load.py layers")
     parser.add_argument("--snow", type=float, help="kN/m² horizontal area; defaults to rafter_load.py roof snow")
     parser.add_argument("--gable-bearings", choices=("on", "off"), default="on")

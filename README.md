@@ -95,14 +95,26 @@ lines. Their ends extend by half the increase in thickness to fill junctions.
 Ground-floor doors, windows and the Liapor base course are not copied.
 
 `BASEMENT_WALL_HEIGHT = 2.25 m` leaves `CEILING_THICKNESS = 0.21 m` above
-the basement walls, immediately below the ground-floor layers at Z = 0;
-the basement ceiling itself remains to be added. With the current settings:
+the basement walls, immediately below the ground-floor layers at Z = 0.
+That space contains the same five MIAKO layouts as above the ground floor,
+in a separate `Basement ceiling` storey. The layouts reuse the original
+beam positions, lengths, block rows and end offsets without recalculation;
+their bottom is Z = −0.210 m and their top is Z = 0. The same stair opening
+and unresolved beam junctions are retained. With the current settings:
 
 | Element | Bottom Z | Top Z |
 | --- | ---: | ---: |
 | Basement walls | −2.460 m | −0.210 m |
+| Basement ceiling, 210 mm | −0.210 m | 0.000 m |
 | Foundation slab, 150 mm | −2.610 m | −2.460 m |
 | Strip footings, 600 × 600 mm | −3.210 m | −2.610 m |
+
+Ring beams occupy the 210 mm ceiling bands above all basement walls and
+all ground-floor load-bearing walls. Their widths and centrelines follow
+the physical wall bodies. The 115 mm partition between Pokoj 1 and 2 is
+excluded at the ground-floor ceiling; its 300 mm basement support wall
+receives a ring beam. These beams belong to the corresponding ceiling
+storeys, so hiding a ceiling hides its ring beams as well.
 
 The single `Base plate concrete` slab covers the outer footprint of the
 thicker basement walls. Every basement wall has a centred concrete strip
@@ -179,17 +191,19 @@ load-bearing wall along X separates the garden rooms, with clear depth
 `GARDEN_ROOMS_DEPTH`; the street-side area uses the remaining space.
 A stepped 175 mm VPC load-bearing wall splits the street-side area.
 Pokoj 3 keeps `THIRD_ROOM_WIDTH = 3.47 m` clear below its garden-side end;
-the top `THIRD_ROOM_NARROW_DEPTH = 1.25 m` is only
+the top `THIRD_ROOM_NARROW_DEPTH` is only
 `THIRD_ROOM_NARROW_WIDTH` wide, clearing the Pokoj 1 doorway.
+Its return aligns with both faces of the bathroom wall; the recess depth
+is calculated from `BATHROOM_PARTITION_Y` rather than set independently.
 The floor polygons and dimensions follow the step. Its street window stays
 centred on the wider street-side part.
 The stairs occupy the west/right side, enclosed by a 175 mm VPC wall from
 the front wall to the garden-room wall, with `STAIRWAY_WIDTH = 2.25 m`
 clear beside the west exterior wall. The 2.20 m wide bathroom sits to their
-left, next to room 3. A 115 mm VPC partition splits that area into hallway at
+left, next to room 3. A 175 mm VPC load-bearing wall splits that area into hallway at
 the garden end and bathroom at the front. `BATHROOM_DEPTH` is the
 clear bathroom depth. Both new walls have the common Liapor base course;
-the stairway wall is load-bearing and the bathroom partition is not.
+both the stairway wall and the bathroom wall are load-bearing.
 A door-height unfilled opening spans the stairway wall from the hallway
 face of the bathroom partition to the garden-room wall. The hallway's
 continuous floor extends through it into the stair approach, follows room
@@ -217,7 +231,10 @@ openings through the garden-room dividing wall. Each opening's nearest edge
 is 125 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
 `GARDEN_DOOR_CENTER_CLEARANCE`; the hinges face the centre partition.
 Pokoj 3 also has a 900 mm inward-opening door in a 1000 mm construction
-opening, centred along the wall at its narrow garden-side end.
+opening at its narrow garden-side end. The opening's garden-side edge is
+375 mm from the room 1 face of the garden-room dividing wall, controlled by
+`THIRD_ROOM_DOOR_GARDEN_CLEARANCE` (200 mm from the room 3 face with the
+current 175 mm wall).
 Opening dimensions are placed inside the rooms.
 Basement support walls will be added in a later step.
 Five room floors (`0.01–0.05`: Pokoj 1, Pokoj 2, Pokoj 3, Chodba, Koupelna)
@@ -246,30 +263,40 @@ the inside west wall. The terminal prints the plasterboard inner-face
 height above the finished upper floor at the west corner of the upper
 stair arrival, including that point's X/Y coordinates.
 
-The first MIAKO ceiling covers Pokoj 1 and 2, with its geometric centreline
-above their separating partition and beams running along Y. The beam length
-is the clear room depth rounded up to 250 mm (`GARDEN_CEILING_BEAM_LENGTH`,
-currently 3.50 m). The beams are centred along the room depth, giving 15 mm
-bearing at each end with the current dimensions; the inserts stop at the
-inside wall faces. `GARDEN_CEILING_STRUCTURE` starts and ends with a beam,
-with a beam between every infill row: four wide rows, five narrow rows,
-then five wide rows. Its 15 beams and 14 infill rows span 8.295 m across X,
-centred over the two rooms. This is the initial layout; the side gaps and
-ring beams are not filled yet. The assembly runs from the ground wall top
-to `UPPER_FLOOR_START`, using 150 mm blocks and 60 mm topping.
-The entire assembly belongs to its own `Ceiling` storey, starting at the
-ground-wall top, so it can be hidden separately in the 3D viewer.
+Five MIAKO assemblies cover the downstairs rooms. Pokoj 1 and 2 share one
+assembly with beams along Y, centred over their separating partition.
+Pokoj 3 has street and garden assemblies with beams along X, split at
+`BATHROOM_PARTITION_Y`, the bathroom-facing edge of the bathroom/hallway
+wall. The garden assembly uses the narrower room width. Chodba has beams
+along Y across the hallway and stair approach; its front bearing assumes
+the bathroom wall continues across that approach. This assumed support
+is marked by a blue dashed line in the ceiling plan and is not an added
+model wall. Koupelna has beams along X; its junction with Pokoj 3's beams
+is deliberately left unresolved for now. Opposing hallway and garden-room
+beam ends also overlap on their shared 175 mm wall; that junction remains
+unresolved and is noted in the ceiling drawing.
+
+`design_miako_structure()` starts and ends each layout with a 170 mm beam,
+alternating beams and 455 mm wide or 330 mm narrow block rows. It accepts
+a total width difference of up to `CEILING_LAYOUT_TOLERANCE = 0.07 m`,
+first trying all-wide blocks and otherwise minimising the number of narrow
+rows. Narrow rows are grouped in the middle; among layouts with the same
+number of narrow rows, the closest width wins. Layouts are centred over
+their covered widths, except the two Pokoj 3 assemblies: their adjoining
+edges stay fixed at the split so their parallel edge beams do not overlap.
+`add_miako_ceiling()` adds at least
+`CEILING_BEAM_BEARING = 0.125 m` at each end and rounds the full beam length
+up in `CEILING_BEAM_LENGTH_STEP = 0.25 m` increments. Blocks stop at the
+clear-span boundaries. The terminal reports beam counts/lengths, block-row
+counts, fitted/target widths, signed width differences and end bearings.
+The ceiling plan dimensions and beam schedule use the same assemblies.
+All five use 150 mm blocks and 60 mm topping, extending from the ground
+wall top to `UPPER_FLOOR_START`, in a separate `Ceiling` storey that can be
+hidden in the 3D viewer.
 Both ground and ceiling plans show 200 mm Rockwool around all four exterior
 walls (`FACADE_INSULATION_THICKNESS`). The shared `add_facade_insulation`
 helper uses opening-aware drawing annotations, closing the corners without
 adding insulation solids or changing the 3D wall construction.
-Pokoj 3 has a second slab in that same storey. Its eight beams run along X,
-all with length `THIRD_ROOM_CEILING_BEAM_LENGTH` (the full room width rounded
-up to 250 mm, currently 3.50 m). Seven wide infill rows, separated and
-bounded by beams, make a 4.545 m layout along Y. The slab is centred on the
-room's full rectangular envelope; the narrowed garden-side corner is
-deliberately ignored. It uses the same 150 mm blocks and 60 mm topping,
-and appears in the ceiling plan's spacing dimensions and beam schedule.
 
 `CEILING_THICKNESS = 0.21` and
 `UPPER_FLOOR_THICKNESS = 0.03 + CEMFLOW_AND_FINISH_THICKNESS` define the
@@ -318,10 +345,17 @@ The `Upper floor` storey starts at `UPPER_FLOOR_START` (Z = 3.035 m), with
 four 240 mm VPC exterior walls aligned above the ground-floor walls. The
 east/west wall height is `NADEZDIVKA = 1.125 + UPPER_RING_BEAM_HEIGHT`;
 with the initial 240 mm ring-beam-height parameter this is 1.365 m,
-reaching Z = 4.400 m. The front/back walls form gables, clipped by both
-roof planes at `RAFTER_Z_OFFSET`, so their tops follow the rafter undersides
-all the way to the ridge. Their existing X ranges and wall thicknesses are
-preserved. The ring beam and upper floor build-up are not yet modelled.
+reaching Z = 4.400 m. The front/back masonry follows both roof planes at
+`RAFTER_Z_OFFSET` near the sides and is capped horizontally at
+`purlin_bottom_z = PURLIN_Z - PURLIN_SIZE[1]/2`. The upper facade panels
+retain their roof-shaped tops all the way to the ridge. The existing wall
+X ranges and thicknesses are preserved. A common horizontal concrete band
+of height `UPPER_RING_BEAM_HEIGHT` ends at `UPPER_FLOOR_START+NADEZDIVKA`,
+directly below the wall plates. It replaces masonry in the four exterior
+walls and all four 1 m VPC sections, inherits each wall's width, and is
+interrupted by any opening crossing the band. The existing ring-beam
+helper supplies schematic reinforcement. Upper beams belong to the
+`Upper floor` storey and are included explicitly in the roof plan.
 The upper plan includes the same drawing-only Rockwool,
 material legend, and overall and inside dimensions. Both existing stair
 flights and the middle landing are explicitly included with their plan
@@ -382,6 +416,9 @@ insulation and 65 mm screed/finish, and supply labels and room-legend rows
 from their measured outlines.
 The upper hallway has the old house's 700 × 700 × 800 mm washing machine
 beside the west exterior wall, centred in the half nearest the stair arrival.
+The front pair of 1 m VPC wall sections align with both faces of the
+ground-floor bathroom wall and room 3 return. The washing machine keeps
+its wall gap as these sections move.
 A 600 × 550 mm basin occupies the other half, facing into the hallway,
 with its top 850 mm above the finished floor. Both positions follow the
 derived depth of the wider hallway. The bathroom's front end contains the
@@ -402,6 +439,10 @@ calculated from the available space. `KITCHEN_WALL_GAP = 0.03 m` keeps
 the units off the SDK and front wall. The cooker and sink retain the old
 700 mm centre spacing (60 mm gap), and the boxes start 30 mm above the
 finished upper floor as in the original kitchen.
+The attic `kamna` uses the original house's stove placeholder, controlled by
+`STOVE_SIZE = (0.60, 0.50, 1.50)`. Its X centre matches `kitchen_center_x`;
+its back face has `STOVE_WALL_GAP = 0.20 m` clear to the living-room side
+of the horizontal SDK wall. It faces the back/garden wall (+Y).
 Two wooden wall plates (`wall_plate_east`, `wall_plate_west`) sit directly
 on the east and west upper walls, centred across their 240 mm thickness.
 `WALL_PLATE_SIZE = (0.16, 0.12)` sets their width and height, matching the
@@ -495,7 +536,7 @@ automatically measured timber schedule. Roof covering and interior finishes
 are excluded from this framing view. Use `ground ceiling upper roof` to
 generate all four drawing targets in one run.
 Run `python3 house2.py upper` to create `projekt2/upper.svg` and
-`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.3. Půdorys 2.NP.pdf`.
+`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.3. Půdorys podkroví.pdf`.
 Use `python3 house2.py ground ceiling upper` to generate all three plans.
 
 ## IFC wall types and material layers
