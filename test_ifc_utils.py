@@ -1029,6 +1029,63 @@ class DrawingTitleTests(unittest.TestCase):
 
 
 class DrawingPrimitiveTests(unittest.TestCase):
+    def test_sloped_hatched_polygon_persists_vertices_and_mirrors(self):
+        outline = ((-3.5, 1), (-.205, 1), (-.205, 4), (-3.5, 3.2))
+        for mirror in (False, True):
+            with self.subTest(mirror=mirror):
+                house = House("Background wall", mirror_x=mirror)
+                drawing = house.add_drawing("Street", 1, -2, 3, 8, view="elevation", direction=(0,1,0))
+                polygon = drawing.add_polygon(outline, pattern="stone-wall-background", color="#d0d0d0")
+                self.assertEqual(polygon.ObjectType, "FILLAREA")
+                props = ifcopenshell.util.element.get_pset(polygon, "BBIM_DrawingPolygon")
+                self.assertEqual(json.loads(props["Outline"]), [list(p) for p in outline])
+                self.assertEqual(props["Pattern"], "stone-wall-background")
+                exported = house._export_model().by_guid(polygon.GlobalId)
+                placement = ifcopenshell.util.placement.get_local_placement(exported.ObjectPlacement)
+                item = exported.Representation.Representations[0].Items[0]
+                while item.is_a("IfcMappedItem"):
+                    placement = placement @ ifcopenshell.util.placement.get_mappeditem_transformation(item)
+                    item = item.MappingSource.MappedRepresentation.Items[0]
+                curve = item.OuterBoundary
+                actual = np.array([placement @ np.array((*p,0.,1.)) for p in curve.Points.CoordList])[:,:3]
+                expected = np.array([(x*(-1 if mirror else 1), -2, z) for x,z in (*outline,outline[0])])
+                np.testing.assert_allclose(sorted(map(tuple,actual)), sorted(map(tuple,expected)))
+                count = len(house.model.by_type("IfcAnnotation"))
+                for bad in ([(0,0),(1,1)], [(0,0),(1,1),(0,1),(1,0)]):
+                    with self.assertRaisesRegex(ValueError, "simple polygon"):
+                        drawing.add_polygon(bad, pattern="stone-wall")
+                self.assertEqual(len(house.model.by_type("IfcAnnotation")), count)
+
+    def test_pattern_filled_rectangle_in_plan_and_elevation(self):
+        for view, direction in (("plan", None), ("elevation", (-1, 0, 0))):
+            with self.subTest(view=view), TemporaryDirectory() as directory:
+                house = House("Stone wall", mirror_x=False)
+                drawing = house.add_drawing("View", 12, 6, 3, 9, view=view, direction=direction)
+                rectangle = drawing.add_rectangle((13.5, 1.2), (14, 3.2), pattern="stone-wall")
+                self.assertEqual(rectangle.ObjectType, "FILLAREA")
+                props = ifcopenshell.util.element.get_pset(rectangle, "BBIM_DrawingRectangle")
+                self.assertEqual(props["Pattern"], "stone-wall")
+                area = rectangle.Representation.Representations[0].Items[0]
+                self.assertTrue(area.is_a("IfcAnnotationFillArea"))
+                placement = ifcopenshell.util.placement.get_local_placement(rectangle.ObjectPlacement)
+                points = np.array([placement @ np.array((*p, 0., 1.)) for p in area.OuterBoundary.Points.CoordList])
+                if view == "elevation":
+                    np.testing.assert_allclose(points[:,0], 12)
+                    np.testing.assert_allclose((points[:,1].min(), points[:,1].max()), (13.5, 14))
+                    np.testing.assert_allclose((points[:,2].min(), points[:,2].max()), (1.2, 3.2))
+                path = Path(directory)/"stone.svg"
+                path.write_text('<svg width="100mm" height="100mm" viewBox="0 0 100 100">'
+                                '<path class="PredefinedType-FILLAREA drawing-fill-pattern-stone-wall" d="M0 0H5V20H0Z"/>'
+                                '</svg>')
+                _postprocess_drawing_line_colors(path)
+                self.assertIn('fill: url(#stone-wall) !important', path.read_text())
+                plain = drawing.add_rectangle((0, 0), (1, 1))
+                self.assertEqual(plain.ObjectType, "LINEWORK")
+                count = len(house.model.by_type("IfcAnnotation"))
+                with self.assertRaisesRegex(ValueError, "unknown rectangle pattern"):
+                    drawing.add_rectangle((0, 0), (1, 1), pattern="missing-pattern")
+                self.assertEqual(len(house.model.by_type("IfcAnnotation")), count)
+
     def test_circle_export_uses_exact_parameters_and_only_current_drawing(self):
         for mirror in (False, True):
             for view, direction in (("plan", None), ("elevation", (1,0,0)),

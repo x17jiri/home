@@ -2190,7 +2190,8 @@ def _postprocess_drawing_line_colors(svg_path: Path) -> None:
     text_colors = sorted(set(re.findall(r"\bdrawing-text-color-([0-9a-f]{6})\b", svg)))
     sizes = sorted(set(re.findall(r"\bdrawing-text-size-(\d+(?:p\d+)?(?:e-?\d+)?)\b", svg)))
     widths = sorted(set(re.findall(r"\bdrawing-line-width-(\d+(?:p\d+)?(?:e-?\d+)?)\b", svg)))
-    if not colors and not text_colors and not sizes and not widths:
+    patterns = sorted(set(re.findall(r"\bdrawing-fill-pattern-([a-zA-Z0-9_-]+)\b", svg)))
+    if not colors and not text_colors and not sizes and not widths and not patterns:
         return
     rules = "\n".join(f".drawing-line-color-{color}, "
                       f".PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-{color} "
@@ -2199,6 +2200,10 @@ def _postprocess_drawing_line_colors(svg_path: Path) -> None:
     rules += "\n" + "\n".join(
         f".drawing-text-color-{color}, .drawing-text-color-{color} tspan "
         f"{{ fill: #{color} !important; stroke: none !important; }}" for color in text_colors
+    )
+    rules += "\n" + "\n".join(
+        f".PredefinedType-FILLAREA.drawing-fill-pattern-{pattern} "
+        f"{{ fill: url(#{pattern}) !important; }}" for pattern in patterns
     )
     if sizes or widths:
         _, width, _, (_, _, view_width, _) = _drawing_svg_frame(svg)
@@ -8677,6 +8682,7 @@ class Drawing:
         self._drainage_stack_count = 0
         self._sanitary_symbol_count = 0
         self._rectangle_count = 0
+        self._polygon_count = 0
         self._text_count = 0
         self._entrance_arrow_count = 0
         self._change_floor_symbol_count = 0
@@ -10547,7 +10553,8 @@ class Drawing:
         Horizontal positions are global Y when looking along X, otherwise X.
         With earth_to_z, heights may instead be metres above sea level; the
         callable converts them to model Z once, when adding the annotation.
-        Points must be ordered horizontally, with no duplicate positions.
+        Points must be ordered horizontally. Repeated horizontal positions
+        with different heights describe vertical steps in the terrain.
         The SVG/PDF masks the model below the profile and adds a hatch band
         hatch_depth metres deep. Annotations stay above it. line_width is in
         printed millimetres. Section drawings are unaffected unless opted in.
@@ -10562,8 +10569,12 @@ class Drawing:
         if len(supplied) < 2:
             raise ValueError("profile must contain at least two points")
         differences = [b[0] - a[0] for a, b in zip(supplied, supplied[1:])]
-        if not (all(d > 0 for d in differences) or all(d < 0 for d in differences)):
-            raise ValueError("profile positions must be strictly increasing or decreasing")
+        if not any(d != 0 for d in differences) or not (
+            all(d >= 0 for d in differences) or all(d <= 0 for d in differences)
+        ):
+            raise ValueError("profile positions must be monotonic with a non-zero horizontal extent")
+        if any(a == b for a, b in zip(supplied, supplied[1:])):
+            raise ValueError("profile must not contain repeated identical points")
         points = tuple((x, _number(earth_to_z(z), "converted height") if earth_to_z else z)
                        for x, z in supplied)
         if hatch not in _drawing_pattern_ids():
@@ -11114,14 +11125,23 @@ class Drawing:
     def add_rectangle(
         self, start: Point, end: Point, *,
         style: Literal["solid", "dashed"] = "solid", color: str = "black", name: str | None = None,
+        pattern: str | None = None,
     ) -> ifcopenshell.entity_instance:
-        """Draw an unfilled rectangle from opposite corners in add_line() coordinates."""
+        """Draw opposite corners in add_line() coordinates, optionally hatch-filled.
+
+        ``pattern`` is an ID from drawings/assets/patterns.svg, such as
+        ``"stone-wall"``. Without a pattern the rectangle remains unfilled.
+        """
         start, end = _point(start, "start"), _point(end, "end")
         if abs(end[0] - start[0]) < 1e-9 or abs(end[1] - start[1]) < 1e-9:
             raise ValueError("rectangle width and height must be greater than zero")
         style = _enum(style, "style", {"SOLID", "DASHED"}).lower()
         style, color, classes = _drawing_line_appearance(style, color)
         rectangle_name = _name(name, "name") if name is not None else None
+        if pattern is not None:
+            if pattern not in _drawing_pattern_ids():
+                raise ValueError(f"unknown rectangle pattern: {pattern!r}")
+            classes += f" drawing-fill-pattern-{pattern}"
         x1, x2 = sorted((start[0], end[0]))
         y1, y2 = sorted((start[1], end[1]))
         placement = self._annotation_frame((x1, y1), "add_rectangle")
@@ -11134,9 +11154,52 @@ class Drawing:
         curve = model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(points), None, False)
         self._rectangle_count += 1
         return self._add_primitive_annotation(
-            rectangle_name or f"{self.name} Rectangle {self._rectangle_count}", "LINEWORK", placement,
-            [model.createIfcGeometricCurveSet([curve])], classes, "BBIM_DrawingRectangle",
-            {"Start": json.dumps(start), "End": json.dumps(end), "Style": style, "Color": color},
+            rectangle_name or f"{self.name} Rectangle {self._rectangle_count}",
+            "FILLAREA" if pattern is not None else "LINEWORK", placement,
+            [model.createIfcAnnotationFillArea(curve, None)] if pattern is not None
+            else [model.createIfcGeometricCurveSet([curve])],
+            classes, "BBIM_DrawingRectangle",
+            {"Start": json.dumps(start), "End": json.dumps(end), "Style": style, "Color": color,
+             "Pattern": pattern},
+        )
+
+    def add_polygon(
+        self, outline: Sequence[Point], *, pattern: str | None = None,
+        color: str = "black", name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw a closed polygon in add_line() coordinates, optionally hatched.
+
+        ``pattern`` is an ID from drawings/assets/patterns.svg; ``color``
+        controls the outline. The polygon is scoped to this drawing.
+        """
+        points = tuple(_point(point, "outline point") for point in outline)
+        if len(points) > 1 and points[0] == points[-1]:
+            points = points[:-1]
+        polygon = Polygon(points) if len(points) >= 3 else None
+        if polygon is None or not polygon.is_valid or polygon.area <= 1e-9:
+            raise ValueError("outline must be a simple polygon with non-zero area")
+        _, color, classes = _drawing_line_appearance("solid", color)
+        polygon_name = _name(name, "name") if name is not None else None
+        if pattern is not None:
+            if pattern not in _drawing_pattern_ids():
+                raise ValueError(f"unknown polygon pattern: {pattern!r}")
+            classes += f" drawing-fill-pattern-{pattern}"
+        placement = self._annotation_frame(points[0], "add_polygon")
+        local_points = []
+        for point in (*points, points[0]):
+            delta = self._annotation_frame(point, "add_polygon")[:3, 3]-placement[:3, 3]
+            local_points.append((float(np.dot(delta, placement[:3, 0])),
+                                 float(np.dot(delta, placement[:3, 1]))))
+        model = self.house.model
+        curve = model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(local_points), None, False)
+        self._polygon_count += 1
+        return self._add_primitive_annotation(
+            polygon_name or f"{self.name} Polygon {self._polygon_count}",
+            "FILLAREA" if pattern is not None else "LINEWORK", placement,
+            [model.createIfcAnnotationFillArea(curve, None)] if pattern is not None
+            else [model.createIfcGeometricCurveSet([curve])],
+            classes, "BBIM_DrawingPolygon",
+            {"Outline": json.dumps(points), "Pattern": pattern, "Color": color},
         )
 
     def add_text(

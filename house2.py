@@ -27,7 +27,6 @@ PARTITION_THICKNESS = 0.115
 DRY_WALL_WIDTH = 0.10
 FACADE_INSULATION_THICKNESS = 0.20
 FACADE_THICKNESS = 0.005
-PERIMETER_TOP_HEIGHT = 0.0
 GARDEN_ROOMS_DEPTH = 3.47  # Clear depth between the divider and inside garden wall.
 GARDEN_ROOMS_WALL_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT
 THIRD_ROOM_NARROW_WIDTH = HOUSE_WIDTH/2.0 - BWT - 0.125-1.0-0.1-0.05
@@ -62,6 +61,7 @@ ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.75
 CEMFLOW_AND_FINISH_THICKNESS = 0.065
 GROUND_FLOOR_INSULATION_THICKNESS = 0.14
 GROUND_FLOOR_THICKNESS = GROUND_FLOOR_INSULATION_THICKNESS+CEMFLOW_AND_FINISH_THICKNESS
+PERIMETER_TOP_HEIGHT = GROUND_FLOOR_THICKNESS
 GROUND_FINISHED_FLOOR_ELEVATION = 417.8  # Metres above sea level.
 # Corner terrain elevations above sea level: X=0 east, X=HOUSE_WIDTH west;
 # Y=0 street, Y=HOUSE_DEPTH garden.
@@ -69,6 +69,25 @@ TERRAIN_STREET_EAST_ELEVATION = 415.8
 TERRAIN_STREET_WEST_ELEVATION = 415.3
 TERRAIN_GARDEN_EAST_ELEVATION = 416.8
 TERRAIN_GARDEN_WEST_ELEVATION = 416.8
+WEST_STONE_WALL_DISTANCE = 4.5  # Beyond the garden end, measured from Y=HOUSE_DEPTH.
+WEST_STONE_WALL_WIDTH = 0.5
+STONE_WALL_SIDE_OVERHANG = 1.0
+WEST_STONE_WALL_TOP_ELEVATION = 418.8
+WEST_STONE_WALL_TERRAIN_SLOPE_DEGREES = 10.0
+WEST_STONE_WALL_TERRAIN_LENGTH = 2.0
+WEST_BACKGROUND_WALL_HOUSE_GAP = 0.05
+EAST_STONE_WALL_TERRAIN_SLOPE_DEGREES = 10.0
+EAST_STONE_WALL_TERRAIN_LENGTH = 2.0
+STREET_STONE_WALL_DISTANCE = 3.5
+STREET_STONE_WALL_WIDTH = 0.5
+STREET_STONE_WALL_TOP_ELEVATION = 418.0
+STREET_STONE_WALL_TERRAIN_SLOPE_DEGREES = 10.0
+STREET_STONE_WALL_TERRAIN_LENGTH = 2.0
+GARAGE_RETAINING_WALL_WIDTH = 0.30
+GARAGE_RETAINING_WALL_TOP_ELEVATION = 416.0
+SHOW_STREET_BACKGROUND_STONE_WALL = True
+STREET_BACKGROUND_WALL_HOUSE_GAP = 0.05
+STREET_BACKGROUND_WALL_WEST_EXTENT = 1.0
 CEILING_THICKNESS = 0.21
 # Retain the hallway ceiling layout while its separate front support is designed.
 HALLWAY_CEILING_SUPPORT_Y = BATHROOM_PARTITION_Y+INNER_BWT/2
@@ -2605,16 +2624,142 @@ TERRAIN_PROFILES = {
 def add_exterior_view(name, camera, direction, pdf):
     """Render a complete house elevation with terrain masking and closed doors."""
     view_top = max(roof_tiles_top_z, upper.elevation+chimney.end_height)
-    view_bottom = min(earth_to_z(height) for _, height in TERRAIN_PROFILES[name])-.4
+    terrain_profile = list(TERRAIN_PROFILES[name])
+    radius = 6.5
+    if name == "pohled_zapad":
+        stone_wall_y0 = HOUSE_DEPTH+WEST_STONE_WALL_DISTANCE
+        stone_wall_y1 = stone_wall_y0+WEST_STONE_WALL_WIDTH
+        # Flat garden terrain to the far wall face, then a vertical rise and
+        # the uphill ground behind the wall. Repeated Y marks the vertical face.
+        uphill_end_y = stone_wall_y1+WEST_STONE_WALL_TERRAIN_LENGTH
+        uphill_end_elevation = WEST_STONE_WALL_TOP_ELEVATION+math.tan(
+            math.radians(WEST_STONE_WALL_TERRAIN_SLOPE_DEGREES)
+        )*WEST_STONE_WALL_TERRAIN_LENGTH
+        terrain_profile[-1:] = [
+            (stone_wall_y1, TERRAIN_GARDEN_WEST_ELEVATION),
+            (stone_wall_y1, WEST_STONE_WALL_TOP_ELEVATION),
+            (uphill_end_y, uphill_end_elevation),
+        ]
+        y_min, y_max = terrain_profile[0][0], terrain_profile[-1][0]
+        camera = (camera[0], (y_min+y_max)/2)
+        radius = max(radius, (y_max-y_min)/2)
+        view_top = max(view_top, earth_to_z(uphill_end_elevation))
+    elif name == "pohled_zahrada":
+        # East is X<0, on the right of this view. Read the raised terrain
+        # from east to west so the vertical step retains the profile order.
+        wall_east_x = -STONE_WALL_SIDE_OVERHANG
+        uphill_end_x = wall_east_x-EAST_STONE_WALL_TERRAIN_LENGTH
+        uphill_end_elevation = WEST_STONE_WALL_TOP_ELEVATION+math.tan(
+            math.radians(EAST_STONE_WALL_TERRAIN_SLOPE_DEGREES)
+        )*EAST_STONE_WALL_TERRAIN_LENGTH
+        terrain_profile[:1] = [
+            (uphill_end_x, uphill_end_elevation),
+            (wall_east_x, WEST_STONE_WALL_TOP_ELEVATION),
+            (wall_east_x, TERRAIN_GARDEN_EAST_ELEVATION),
+        ]
+        x_min, x_max = terrain_profile[0][0], terrain_profile[-1][0]
+        radius = max(radius, (x_max-x_min)/2)
+        view_top = max(view_top, earth_to_z(uphill_end_elevation))
+        # Look toward the house from beyond the retaining wall.
+        camera = ((x_min+x_max)/2, HOUSE_DEPTH+WEST_STONE_WALL_DISTANCE+WEST_STONE_WALL_WIDTH+1)
+    elif name == "pohled_ulice":
+        # The east wall is left of the house in the street elevation.
+        street_wall_x1 = -STREET_STONE_WALL_DISTANCE
+        street_wall_x0 = street_wall_x1-STREET_STONE_WALL_WIDTH
+        uphill_end_x = street_wall_x0-STREET_STONE_WALL_TERRAIN_LENGTH
+        uphill_end_elevation = STREET_STONE_WALL_TOP_ELEVATION+math.tan(
+            math.radians(STREET_STONE_WALL_TERRAIN_SLOPE_DEGREES)
+        )*STREET_STONE_WALL_TERRAIN_LENGTH
+        garage_x0 = float(ifcopenshell.util.placement.get_local_placement(
+            garage_front_door.ObjectPlacement,
+        )[0, 3])
+        garage_x1 = garage_x0+garage_front_door.OverallWidth
+        garage_floor_elevation = GROUND_FINISHED_FLOOR_ELEVATION-BASEMENT_TO_GROUND_RISE
+
+        def street_earth_at(x):
+            return TERRAIN_STREET_EAST_ELEVATION+(x/HOUSE_WIDTH)*(
+                TERRAIN_STREET_WEST_ELEVATION-TERRAIN_STREET_EAST_ELEVATION
+            )
+
+        terrain_profile = [
+            (uphill_end_x, uphill_end_elevation),
+            (street_wall_x0, STREET_STONE_WALL_TOP_ELEVATION),
+            (street_wall_x0, TERRAIN_STREET_EAST_ELEVATION),
+            (0.0, TERRAIN_STREET_EAST_ELEVATION),
+            (garage_x0, street_earth_at(garage_x0)),
+            (garage_x0, garage_floor_elevation),
+            (garage_x1, garage_floor_elevation),
+            (garage_x1, street_earth_at(garage_x1)),
+            (HOUSE_WIDTH, TERRAIN_STREET_WEST_ELEVATION),
+            (HOUSE_WIDTH+2.0, TERRAIN_STREET_WEST_ELEVATION),
+        ]
+        x_min, x_max = terrain_profile[0][0], terrain_profile[-1][0]
+        camera = ((x_min+x_max)/2, camera[1])
+        radius = max(radius, (x_max-x_min)/2)
+        view_top = max(view_top, earth_to_z(uphill_end_elevation))
+    view_bottom = min(earth_to_z(height) for _, height in terrain_profile)-.4
     drawing = house.add_drawing(
         name, x=camera[0], y=camera[1], z=(view_bottom+view_top)/2,
-        radius=max(6.5, (view_top-view_bottom)/2+.5), view="elevation", direction=direction,
+        radius=max(radius, (view_top-view_bottom)/2+.5), view="elevation", direction=direction,
         storeys=[foundation, basement, basement_ceiling_storey, ground, ceiling_storey, upper, facade_storey,
                  *roof_layer_storeys.values()],
         door_annotations=False, automatic_plan_annotations=False,
         doors_closed=True, surface_fills=True,
     )
-    drawing.add_terrain(TERRAIN_PROFILES[name], earth_to_z=earth_to_z)
+    drawing.add_terrain(terrain_profile, earth_to_z=earth_to_z)
+    if name == "pohled_zapad":
+        garden_facade_y = HOUSE_DEPTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS
+        drawing.add_rectangle(
+            (garden_facade_y+WEST_BACKGROUND_WALL_HOUSE_GAP, earth_to_z(TERRAIN_GARDEN_WEST_ELEVATION)),
+            (stone_wall_y0, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
+            pattern="stone-wall-background", color="#d0d0d0",
+            name="West background connecting stone wall",
+        )
+        drawing.add_rectangle(
+            (stone_wall_y0, earth_to_z(TERRAIN_GARDEN_WEST_ELEVATION)),
+            (stone_wall_y1, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
+            pattern="stone-wall", name="Garden stone wall",
+        )
+    elif name == "pohled_zahrada":
+        drawing.add_rectangle(
+            (-STONE_WALL_SIDE_OVERHANG, earth_to_z(TERRAIN_GARDEN_WEST_ELEVATION)),
+            (HOUSE_WIDTH+STONE_WALL_SIDE_OVERHANG, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
+            pattern="stone-wall", name="Garden stone wall front",
+        )
+    elif name == "pohled_ulice":
+        if SHOW_STREET_BACKGROUND_STONE_WALL:
+            east_facade_x = -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS-STREET_BACKGROUND_WALL_HOUSE_GAP
+            drawing.add_polygon(
+                (
+                    (street_wall_x1, earth_to_z(TERRAIN_STREET_EAST_ELEVATION)),
+                    (east_facade_x, earth_to_z(TERRAIN_STREET_EAST_ELEVATION)),
+                    (east_facade_x, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
+                    (street_wall_x1, earth_to_z(STREET_STONE_WALL_TOP_ELEVATION)),
+                ),
+                pattern="stone-wall-background", color="#d0d0d0",
+                name="Street background connecting stone wall",
+            )
+            west_facade_x = HOUSE_WIDTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS
+            drawing.add_rectangle(
+                (west_facade_x+STREET_BACKGROUND_WALL_HOUSE_GAP, earth_to_z(TERRAIN_STREET_WEST_ELEVATION)),
+                (west_facade_x+STREET_BACKGROUND_WALL_WEST_EXTENT, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
+                pattern="stone-wall-background", color="#d0d0d0",
+                name="Street background west stone wall",
+            )
+        drawing.add_rectangle(
+            (street_wall_x0, earth_to_z(TERRAIN_STREET_EAST_ELEVATION)),
+            (street_wall_x1, earth_to_z(STREET_STONE_WALL_TOP_ELEVATION)),
+            pattern="stone-wall", name="Street east stone wall",
+        )
+        for side, x0, x1 in (
+            ("east", garage_x0-GARAGE_RETAINING_WALL_WIDTH, garage_x0),
+            ("west", garage_x1, garage_x1+GARAGE_RETAINING_WALL_WIDTH),
+        ):
+            drawing.add_rectangle(
+                (x0, earth_to_z(garage_floor_elevation)),
+                (x1, earth_to_z(GARAGE_RETAINING_WALL_TOP_ELEVATION)),
+                pattern="stone-wall", name=f"Garage retaining wall {side}",
+            )
     drawing.render(PROJECT_DIR / f"{name}.svg", pdf=pdf)
     return drawing
 

@@ -28,6 +28,53 @@ NS = {"s": "http://www.w3.org/2000/svg"}
 
 
 class TerrainTests(unittest.TestCase):
+    def test_generated_namespace_alias_preserves_referenced_pattern_art(self):
+        house = House("Referenced pattern")
+        drawing = house.add_drawing("Elevation", 0, -1, 4, 5, view="elevation", direction=(0,1,0))
+        drawing.add_terrain([(0,0), (6,0)])
+        svg = SVG.replace('width="100mm"', 'xmlns:ns0="http://www.w3.org/1999/xlink" width="100mm"', 1)
+        svg = svg.replace('</svg>', '<use ns0:href="#earth"/></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"referenced.svg"
+            path.write_text(svg)
+            add_terrain_overlay(path, drawing.element, width_mm=100, view_box=(0,0,100,100))
+            root = ET.fromstring(path.read_text())
+            reference = root.find('.//s:use', NS)
+            self.assertEqual(reference.get('{http://www.w3.org/1999/xlink}href'), '#earth')
+            self.assertIsNotNone(root.find('.//s:g[@class="terrain-overlays"]', NS))
+
+    def test_vertical_step_keeps_its_order_in_reversed_views_and_mirroring(self):
+        forward = [(0, 0), (3, 0), (3, 2), (6, 2.5)]
+        for source in (forward, list(reversed(forward))):
+            for mirror in (False, True):
+                for direction in ((1,0,0), (-1,0,0), (0,1,0), (0,-1,0)):
+                    with self.subTest(source=source, mirror=mirror, direction=direction), TemporaryDirectory() as directory:
+                        house = House("Terrain step", mirror_x=mirror)
+                        drawing = house.add_drawing("Elevation", 1, 1.5, 4, 5, view="elevation", direction=direction)
+                        drawing.add_terrain(source)
+                        model = ifcopenshell.file.from_string(house._export_model().to_string())
+                        camera = np.linalg.inv(ifcopenshell.util.placement.get_local_placement(
+                            model.by_guid(drawing.element.GlobalId).ObjectPlacement))
+                        expected = []
+                        for horizontal, height in source:
+                            world = np.array((1, horizontal, height, 1.) if direction[0]
+                                             else (horizontal, 1.5, height, 1.))
+                            if mirror:
+                                world[0] *= -1
+                            point = camera @ world
+                            expected.append((50+point[0]*10, 50-point[1]*10))
+                        if expected[0][0] > expected[-1][0]:
+                            expected.reverse()
+                        path = Path(directory)/"step.svg"
+                        path.write_text(SVG)
+                        add_terrain_overlay(path, model.by_guid(drawing.element.GlobalId), width_mm=100, view_box=(0,0,100,100))
+                        root = ET.fromstring(path.read_text())
+                        line = root.find('.//s:polyline[@class="terrain-line"]', NS)
+                        points = [tuple(map(float, p.split(','))) for p in line.get('points').split()]
+                        np.testing.assert_allclose(points, expected, atol=1e-9)
+                        self.assertAlmostEqual(points[1][0], points[2][0])
+                        self.assertAlmostEqual(abs(points[2][1]-points[1][1]), 20)
+
     def test_profile_projects_after_ifc_reload_in_all_views_and_mirroring(self):
         source = [(0, 417), (3, 418), (6, 417.5)]
         for mirror in (False, True):
@@ -112,6 +159,7 @@ class TerrainTests(unittest.TestCase):
         drawing = house.add_drawing("Elevation", 0, -1, 4, 5, view="elevation", direction=(0, 1, 0))
         original_members = drawing.group.IsGroupedBy[0].RelatedObjects
         for profile, options in (([(0, 0)], {}), ([(0, 0), (0, 1)], {}),
+                                 ([(0, 0), (0, 0), (1, 0)], {}),
                                  ([(0, 0), (2, 0), (1, 0)], {}),
                                  ([(0, 0), (1, 0)], {"earth_to_z": lambda z: float("nan")}),
                                  ([(0, 0), (1, 0)], {"hatch_depth": -1}),

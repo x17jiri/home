@@ -2091,7 +2091,9 @@ elevation.add_terrain(
 Profile positions are global X for views looking along Y, or global Y for
 views looking along X. Heights use model Z unless `earth_to_z` is supplied;
 that callable converts above-sea-level heights once when adding the profile.
-Points must be ordered horizontally. Hatch depth is in model metres and line
+Points must be ordered horizontally; consecutive points with the same
+horizontal position and different heights create a vertical terrain step.
+Hatch depth is in model metres and line
 width in printed millimetres. Terrain masks building geometry below the
 profile while dimensions and annotations remain visible. It adds no 3D earth
 solid and affects only the drawing receiving the call. Include the basement
@@ -2815,11 +2817,17 @@ Circles, rectangles and text use the same model coordinates as `add_line()`:
 drawing.add_circle(center=(2, 3), radius=0.5, color="blue")
 drawing.add_text(point=(2, 3), text="ČOV", font_size=3)
 drawing.add_rectangle(start=(4, 2), end=(6, 4), style="dashed")
+drawing.add_rectangle(start=(7, 2), end=(7.5, 4), pattern="stone-wall")
+drawing.add_polygon([(8, 2), (11, 2), (11, 4), (8, 3.5)],
+                    pattern="stone-wall-background", color="#d0d0d0")
 drawing.add_text(point=(5, 3), text="Nádrž", color="green")
 ```
 
 Circle radii and rectangle corners are in metres. Both shapes are unfilled
-and support `style="solid"` (default) or `"dashed"`. Text uses printed
+by default and support `style="solid"` (default) or `"dashed"`. Rectangles
+accept `pattern="stone-wall"` (or another ID in `drawings/assets/patterns.svg`)
+for a native filled area; the stone pattern has irregular polygon outlines
+and narrow white mortar gaps. Text uses printed
 millimetres for `font_size` (default 3 mm), so its size does not depend on the
 drawing scale. It is centred horizontally and vertically by default;
 `alignment="left"`/`"right"` changes horizontal alignment. All three helpers

@@ -10,6 +10,7 @@ stay above the terrain without changing the underlying model or section views.
 from fractions import Fraction
 from io import StringIO
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 import ifcopenshell.util.element
@@ -39,7 +40,10 @@ def add_terrain_overlay(svg_path: Path, drawing, *, width_mm, view_box):
     svg = svg_path.read_text(encoding="utf-8")
     # Retain Bonsai's namespace prefixes: subsequent SVG passes also use them.
     for _, (prefix, uri) in ET.iterparse(StringIO(svg), events=("start-ns",)):
-        ET.register_namespace(prefix, uri)
+        # SVG libraries can emit ns0/ns1 aliases for referenced pattern art.
+        # ElementTree reserves those names and assigns them itself on output.
+        if not re.fullmatch(r"ns\d+", prefix):
+            ET.register_namespace(prefix, uri)
     root = ET.fromstring(svg)
     if any(item.get("class") == "terrain-overlays" for item in root):
         return
@@ -71,7 +75,10 @@ def add_terrain_overlay(svg_path: Path, drawing, *, width_mm, view_box):
             camera = world_to_camera @ placement @ np.array((x, y, 0., 1.))
             points.append((view_x + view_width / 2 + camera[0] * units_per_metre,
                            view_y + view_height / 2 - camera[1] * units_per_metre))
-        points.sort()
+        # Reverse the whole profile when the camera flips its horizontal
+        # direction. Sorting (X, Y) pairs would reorder a vertical step.
+        if points[0][0] > points[-1][0]:
+            points.reverse()
         bottom = max(view_y + view_height, max(y for _, y in points))
         polygon([*points, (points[-1][0], bottom), (points[0][0], bottom)],
                 **{"class": "terrain-mask", "style": "fill:white !important;stroke:none !important"})
