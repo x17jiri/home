@@ -29,6 +29,31 @@ def layout_with_supports(positions):
 
 
 class InputTests(unittest.TestCase):
+    def test_purlin_height_keeps_top_and_roof_fixed_and_shortens_posts(self):
+        width, height = House2Inputs(HOUSE).get("PURLIN_SIZE")
+        layouts = []
+        for section_height in (height, height+.10):
+            inputs = House2Inputs(HOUSE)
+            inputs.cache["PURLIN_SIZE"] = (width, section_height)
+            g = inputs.get
+            top = g("UPPER_FLOOR_START")+g("PURLIN_CENTER_HEIGHT")
+            self.assertAlmostEqual(g("PURLIN_Z")+section_height/2, top)
+            self.assertAlmostEqual(g("FLAT_VAPOUR_BARRIER_TOP_Z"), top)
+            with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
+                layout = Layout.from_house(HOUSE)
+            for beam in layout.beams:
+                if beam.category == "post":
+                    self.assertAlmostEqual(beam.end[2], top-section_height)
+            layouts.append(layout)
+        self.assertAlmostEqual(layouts[0].slope, layouts[1].slope)
+        for original, taller in zip(layouts[0].beams, layouts[1].beams):
+            self.assertEqual(original.name, taller.name)
+            if original.category == "post":
+                self.assertAlmostEqual(original.length-taller.length, .10)
+            elif original.category == "rafter":
+                np.testing.assert_allclose(original.start, taller.start)
+                np.testing.assert_allclose(original.end, taller.end)
+
     def test_horizontal_restraint_accepts_exactly_free_rigid_or_positive_springs(self):
         self.assertEqual(Settings().horizontal_stiffness_kn_mm, 0)
         self.assertEqual(horizontal_stiffness("free"), 0)

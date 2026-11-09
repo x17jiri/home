@@ -2180,6 +2180,30 @@ def _join_dashed_drawing_lines(svg: str) -> str:
     return re.sub(r'<line\b[^>]*/>', replace_line, svg)
 
 
+def _postprocess_background_annotations(svg_path: Path) -> None:
+    """Paint native background primitives before the model, retaining their SVG transforms."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if "drawing-background" not in svg or 'class="drawing-background-layer"' in svg:
+        return
+    elements = []
+
+    def collect(match):
+        element = match.group(0)
+        classes = re.search(r'\bclass="([^"]*)"', element)
+        if classes and "drawing-background" in classes[1].split():
+            elements.append(element)
+            return ""
+        return element
+
+    updated = re.sub(r'<(?:path|polygon|polyline|line|rect|circle|ellipse)\b[^>]*/>', collect, svg)
+    if not elements:
+        return
+    resources = re.search(r'</defs\s*>', updated)
+    offset = resources.end() if resources else re.search(r'<svg\b[^>]*>', updated).end()
+    layer = '<g class="drawing-background-layer">'+"\n".join(elements)+'</g>'
+    svg_path.write_text(updated[:offset]+layer+updated[offset:], encoding="utf-8")
+
+
 def _postprocess_drawing_line_colors(svg_path: Path) -> None:
     """Style native lines, text and legend samples using persisted appearance classes."""
     original = svg_path.read_text(encoding="utf-8")
@@ -6053,6 +6077,7 @@ def _render_existing_drawing(
             offset_ratio=(drawing_properties or {}).get("SectionOutlineOffsetRatio", 0.25),
         )
         print(f"[drawing render] Added {count} exposed section outlines ({section_outline_width:g} mm)", flush=True)
+    _postprocess_background_annotations(absolute_output)
     if target_view != "PLAN_VIEW":
         _, width_mm, _, view_box = _drawing_svg_frame(absolute_output.read_text(encoding="utf-8"))
         add_terrain_overlay(absolute_output, drawing, width_mm=width_mm, view_box=view_box)
@@ -10546,6 +10571,7 @@ class Drawing:
         earth_to_z: Callable[[float], Number] | None = None,
         hatch: str = "earth", hatch_depth: Number = 0.4,
         line_width: Number = 0.35,
+        background: bool = False, opacity: Number = 1.0,
     ) -> ifcopenshell.entity_instance:
         """Draw terrain in an axis-aligned exterior elevation, without a 3D solid.
 
@@ -10558,9 +10584,16 @@ class Drawing:
         The SVG/PDF masks the model below the profile and adds a hatch band
         hatch_depth metres deep. Annotations stay above it. line_width is in
         printed millimetres. Section drawings are unaffected unless opted in.
+        Background profiles draw behind the model without masking it.
+        ``opacity`` (0 to 1) controls the profile line and hatch.
         """
         if self.view != "elevation":
             raise ValueError("add_terrain requires an elevation drawing")
+        if not isinstance(background, bool):
+            raise TypeError("background must be a boolean")
+        opacity = _number(opacity, "opacity")
+        if not 0 <= opacity <= 1:
+            raise ValueError("opacity must be between zero and one")
         if earth_to_z is not None and not callable(earth_to_z):
             raise TypeError("earth_to_z must be callable or None")
         if isinstance(profile, (str, bytes)):
@@ -10596,7 +10629,8 @@ class Drawing:
             f"{self.name} Terrain {self._terrain_count}", "LINEWORK", placement,
             [model.createIfcGeometricCurveSet([curve])], "drawing-terrain-source", "BBIM_DrawingTerrain",
             {"Profile": json.dumps(supplied), "ModelProfile": json.dumps(points),
-             "Hatch": hatch, "HatchDepth": hatch_depth, "LineWidth": line_width},
+             "Hatch": hatch, "HatchDepth": hatch_depth, "LineWidth": line_width,
+             "Background": background, "Opacity": opacity},
         )
 
     def add_circle(
@@ -11126,11 +11160,13 @@ class Drawing:
         self, start: Point, end: Point, *,
         style: Literal["solid", "dashed"] = "solid", color: str = "black", name: str | None = None,
         pattern: str | None = None,
+        background: bool = False,
     ) -> ifcopenshell.entity_instance:
         """Draw opposite corners in add_line() coordinates, optionally hatch-filled.
 
         ``pattern`` is an ID from drawings/assets/patterns.svg, such as
         ``"stone-wall"``. Without a pattern the rectangle remains unfilled.
+        ``background=True`` paints it behind model geometry and terrain.
         """
         start, end = _point(start, "start"), _point(end, "end")
         if abs(end[0] - start[0]) < 1e-9 or abs(end[1] - start[1]) < 1e-9:
@@ -11138,6 +11174,10 @@ class Drawing:
         style = _enum(style, "style", {"SOLID", "DASHED"}).lower()
         style, color, classes = _drawing_line_appearance(style, color)
         rectangle_name = _name(name, "name") if name is not None else None
+        if not isinstance(background, bool):
+            raise TypeError("background must be a boolean")
+        if background:
+            classes += " drawing-background"
         if pattern is not None:
             if pattern not in _drawing_pattern_ids():
                 raise ValueError(f"unknown rectangle pattern: {pattern!r}")
@@ -11160,17 +11200,19 @@ class Drawing:
             else [model.createIfcGeometricCurveSet([curve])],
             classes, "BBIM_DrawingRectangle",
             {"Start": json.dumps(start), "End": json.dumps(end), "Style": style, "Color": color,
-             "Pattern": pattern},
+             "Pattern": pattern, "Background": background},
         )
 
     def add_polygon(
         self, outline: Sequence[Point], *, pattern: str | None = None,
         color: str = "black", name: str | None = None,
+        background: bool = False,
     ) -> ifcopenshell.entity_instance:
         """Draw a closed polygon in add_line() coordinates, optionally hatched.
 
         ``pattern`` is an ID from drawings/assets/patterns.svg; ``color``
         controls the outline. The polygon is scoped to this drawing.
+        ``background=True`` paints it behind model geometry and terrain.
         """
         points = tuple(_point(point, "outline point") for point in outline)
         if len(points) > 1 and points[0] == points[-1]:
@@ -11180,6 +11222,10 @@ class Drawing:
             raise ValueError("outline must be a simple polygon with non-zero area")
         _, color, classes = _drawing_line_appearance("solid", color)
         polygon_name = _name(name, "name") if name is not None else None
+        if not isinstance(background, bool):
+            raise TypeError("background must be a boolean")
+        if background:
+            classes += " drawing-background"
         if pattern is not None:
             if pattern not in _drawing_pattern_ids():
                 raise ValueError(f"unknown polygon pattern: {pattern!r}")
@@ -11199,7 +11245,7 @@ class Drawing:
             [model.createIfcAnnotationFillArea(curve, None)] if pattern is not None
             else [model.createIfcGeometricCurveSet([curve])],
             classes, "BBIM_DrawingPolygon",
-            {"Outline": json.dumps(points), "Pattern": pattern, "Color": color},
+            {"Outline": json.dumps(points), "Pattern": pattern, "Color": color, "Background": background},
         )
 
     def add_text(

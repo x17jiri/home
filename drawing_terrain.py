@@ -19,6 +19,7 @@ import numpy as np
 
 
 _MODEL_LAYERS = {
+    "drawing-background-layer",
     "section", "section-outlines", "miako-reinforcement-overlays",
     "ring-beam-stirrups", "vapour-barrier-overlays", "section-opening-overlays",
     "wall-insulation-depth-layer", "wall-insulation-foreground",
@@ -55,13 +56,17 @@ def add_terrain_overlay(svg_path: Path, drawing, *, width_mm, view_box):
     units_per_metre = 1000 * scale * units_per_mm
     world_to_camera = np.linalg.inv(ifcopenshell.util.placement.get_local_placement(drawing.ObjectPlacement))
     overlay = ET.Element(tag("g"), {"class": "terrain-overlays"})
+    background_overlay = ET.Element(tag("g"), {"class": "terrain-background-overlays"})
 
-    def polygon(points, **attributes):
-        return ET.SubElement(overlay, tag("polygon"), {
+    def polygon(points, *, parent=overlay, **attributes):
+        return ET.SubElement(parent, tag("polygon"), {
             "points": " ".join(f"{x:.12g},{y:.12g}" for x, y in points), **attributes,
         })
 
     for item, properties in terrains:
+        background = bool(properties.get("Background", False))
+        opacity = str(float(properties.get("Opacity", 1.0)))
+        target = background_overlay if background else overlay
         placement = ifcopenshell.util.placement.get_local_placement(item.ObjectPlacement)
         geometry = item.Representation.Representations[0].Items[0]
         while geometry.is_a("IfcMappedItem"):
@@ -80,15 +85,19 @@ def add_terrain_overlay(svg_path: Path, drawing, *, width_mm, view_box):
         if points[0][0] > points[-1][0]:
             points.reverse()
         bottom = max(view_y + view_height, max(y for _, y in points))
-        polygon([*points, (points[-1][0], bottom), (points[0][0], bottom)],
-                **{"class": "terrain-mask", "style": "fill:white !important;stroke:none !important"})
+        if not background:
+            polygon([*points, (points[-1][0], bottom), (points[0][0], bottom)],
+                    **{"class": "terrain-mask", "style": "fill:white !important;stroke:none !important"})
         depth = float(properties["HatchDepth"]) * units_per_metre
         if depth:
             polygon([*points, *((x, min(y + depth, bottom)) for x, y in reversed(points))],
+                    parent=target,
                     **{"class": "terrain-hatch", "style":
-                       f"fill:url(#{properties['Hatch']}) !important;stroke:none !important"})
-        ET.SubElement(overlay, tag("polyline"), {
+                       f"fill:url(#{properties['Hatch']}) !important;stroke:none !important",
+                       "opacity": opacity})
+        ET.SubElement(target, tag("polyline"), {
             "class": "terrain-line",
+            "opacity": opacity,
             "points": " ".join(f"{x:.12g},{y:.12g}" for x, y in points),
             "style": "fill:none !important;stroke:black !important;"
                      f"stroke-width:{float(properties['LineWidth']) * units_per_mm:g} !important;"
@@ -108,6 +117,8 @@ def add_terrain_overlay(svg_path: Path, drawing, *, width_mm, view_box):
     style = ET.Element(tag("style"), {"type": "text/css"})
     style.text = ".drawing-terrain-source { display:none !important; }"
     model_group = ET.Element(tag("g"), {"class": "terrain-model"})
+    if len(background_overlay):
+        model_group.append(background_overlay)
     model_group.extend(model_layers)
     root[:] = [*resources, style, model_group, overlay, *annotations]
     svg_path.write_text(ET.tostring(root, encoding="unicode"), encoding="utf-8")

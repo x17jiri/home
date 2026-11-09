@@ -251,6 +251,15 @@ west wall from its start at Y = `BWT`. Its dimension and inward entrance
 arrow follow that wall. Its threshold and opening dimension use the finished-floor level,
 `GROUND_FLOOR_THICKNESS`, preserving the door's 2.125 m overall height and
 2.1 m clear height.
+`add_entrance_stairs()` adds a ground-storey timber flight and landing outside
+this west door, with the lower end toward the garden. `ENTRANCE_STAIR_RISERS`
+and `ENTRANCE_STAIR_TREAD_LENGTH` control its steps; their rise follows the
+actual door threshold and the west terrain interpolated at the flight's foot.
+`ENTRANCE_STAIR_WIDTH` follows the opening width, and
+`ENTRANCE_LANDING_DEPTH`/`ENTRANCE_LANDING_THICKNESS` set the landing geometry.
+The outer railing continues around the landing's street edge. The ground plan
+shows the stair symbols, uphill walking arrow and combined stair notes.
+
 A centred 115 mm VPC partition along Y splits the garden section into equal
 rooms, each with 4.2025 m clear width. The common finishing pass gives every
 ground-floor masonry wall a Liapor base course. Partitions remain non-load-bearing.
@@ -483,9 +492,11 @@ front/back wall faces: Y = −0.30 to 9.05 m, length 9.35 m. Their bottoms
 are at Z = 4.400 m and tops at Z = 4.520 m.
 Two wooden purlins (`purlins`) run parallel to the wall plates at
 `PURLIN_X_POSITIONS = (3.0, HOUSE_WIDTH-3.0)`. Their section is
-`PURLIN_SIZE = (0.16, 0.24)` and their centreline is
-`PURLIN_CENTER_HEIGHT = 3.5 m` above the upper-storey datum, which is the
-ceiling top. This gives world Z = 6.535 m (bottom 6.415 m, top 6.655 m).
+`PURLIN_SIZE = (0.16, 0.24)`. Despite its legacy name,
+`PURLIN_CENTER_HEIGHT = 3.65 m` specifies their **top** above the upper-storey
+datum (the ceiling top). `PURLIN_Z` is the derived centreline elevation.
+Changing the purlin height keeps its top and roof slope fixed and adjusts
+the post height below it.
 They share `WALL_PLATE_OVERHANG`, so their Y range is also −0.30 to 9.05 m.
 Each purlin has configurable vertical timber posts (`purlin_supports`) in the
 upper storey. `PURLIN_SUPPORT_Y_POSITIONS` contains a nonempty tuple of absolute
@@ -2095,7 +2106,12 @@ Points must be ordered horizontally; consecutive points with the same
 horizontal position and different heights create a vertical terrain step.
 Hatch depth is in model metres and line
 width in printed millimetres. Terrain masks building geometry below the
-profile while dimensions and annotations remain visible. It adds no 3D earth
+profile while dimensions and annotations remain visible.
+For distant terrain, `background=True, opacity=0.2` draws a pale
+profile and hatch behind the model without masking it. In `house2.py`,
+`STREET_BACKGROUND_TERRAIN_BELOW_STAIRS` sets the distance below the lowest
+entrance step for both faint wall bases and their background earth profiles.
+The normal terrain profile remains the foreground mask. Terrain adds no 3D earth
 solid and affects only the drawing receiving the call. Include the basement
 storey to show exposed walls when lowering the profile. In `house_ifc.py`, edit
 `TERRAIN_PROFILES` to tune each of the four exterior views independently.
@@ -2819,7 +2835,7 @@ drawing.add_text(point=(2, 3), text="ČOV", font_size=3)
 drawing.add_rectangle(start=(4, 2), end=(6, 4), style="dashed")
 drawing.add_rectangle(start=(7, 2), end=(7.5, 4), pattern="stone-wall")
 drawing.add_polygon([(8, 2), (11, 2), (11, 4), (8, 3.5)],
-                    pattern="stone-wall-background", color="#d0d0d0")
+                    pattern="stone-wall-background", color="#d0d0d0", background=True)
 drawing.add_text(point=(5, 3), text="Nádrž", color="green")
 ```
 
@@ -2827,7 +2843,9 @@ Circle radii and rectangle corners are in metres. Both shapes are unfilled
 by default and support `style="solid"` (default) or `"dashed"`. Rectangles
 accept `pattern="stone-wall"` (or another ID in `drawings/assets/patterns.svg`)
 for a native filled area; the stone pattern has irregular polygon outlines
-and narrow white mortar gaps. Text uses printed
+and narrow white mortar gaps. Rectangles and polygons accept `background=True`
+to paint them behind model geometry and terrain, keeping stairs and other
+foreground parts visible. Text uses printed
 millimetres for `font_size` (default 3 mm), so its size does not depend on the
 drawing scale. It is centred horizontally and vertically by default;
 `alignment="left"`/`"right"` changes horizontal alignment. All three helpers

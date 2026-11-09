@@ -72,7 +72,7 @@ TERRAIN_GARDEN_WEST_ELEVATION = 416.8
 WEST_STONE_WALL_DISTANCE = 4.5  # Beyond the garden end, measured from Y=HOUSE_DEPTH.
 WEST_STONE_WALL_WIDTH = 0.5
 STONE_WALL_SIDE_OVERHANG = 1.0
-WEST_STONE_WALL_TOP_ELEVATION = 418.8
+WEST_STONE_WALL_TOP_ELEVATION = 418.9
 WEST_STONE_WALL_TERRAIN_SLOPE_DEGREES = 10.0
 WEST_STONE_WALL_TERRAIN_LENGTH = 2.0
 WEST_BACKGROUND_WALL_HOUSE_GAP = 0.05
@@ -88,6 +88,7 @@ GARAGE_RETAINING_WALL_TOP_ELEVATION = 416.0
 SHOW_STREET_BACKGROUND_STONE_WALL = True
 STREET_BACKGROUND_WALL_HOUSE_GAP = 0.05
 STREET_BACKGROUND_WALL_WEST_EXTENT = 1.0
+STREET_BACKGROUND_TERRAIN_BELOW_STAIRS = 0.05
 CEILING_THICKNESS = 0.21
 # Retain the hallway ceiling layout while its separate front support is designed.
 HALLWAY_CEILING_SUPPORT_Y = BATHROOM_PARTITION_Y+INNER_BWT/2
@@ -121,11 +122,11 @@ NADEZDIVKA = 1.125+0.05+UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.30
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
-PURLIN_SIZE = (0.17, 0.25)
+PURLIN_SIZE = (0.16, 0.24)
 PURLIN_WALL_DISTANCE = 2.7
 PURLIN_X_POSITIONS = (BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0, HOUSE_WIDTH-BWT-PURLIN_WALL_DISTANCE+PURLIN_SIZE[0]/2.0)
-PURLIN_CENTER_HEIGHT = 3.65  # Above the upper-floor storey datum / ceiling top.
-PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]
+PURLIN_CENTER_HEIGHT = 3.51  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
+PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]/2
 PURLIN_SUPPORT_SIZE = (0.16, 0.16)
 PURLIN_SUPPORT_Y_POSITIONS = (
     (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 1, at PURLIN_X_POSITIONS[0].
@@ -218,6 +219,11 @@ if max(STAIR_LOWER_START_Y, STAIR_UPPER_END_Y) > GARDEN_ROOMS_WALL_Y+1e-9:
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
 ENTRANCE_OPENING_WIDTH = 1.1
+ENTRANCE_STAIR_RISERS = 8
+ENTRANCE_STAIR_TREAD_LENGTH = 0.30
+ENTRANCE_STAIR_WIDTH = ENTRANCE_OPENING_WIDTH
+ENTRANCE_LANDING_DEPTH = 1.125  # Projection beyond the facade, as in house_ifc.py.
+ENTRANCE_LANDING_THICKNESS = 0.20
 ENTRANCE_DOOR_WIDTH = 0.9
 ENTRANCE_DOOR_HEIGHT = GROUND_FLOOR_THICKNESS+2.125
 ENTRANCE_CLEAR_HEIGHT = 2.1
@@ -322,6 +328,11 @@ def add_purlin_support_planning_markers(drawing):
             (x-half_x, y+half_y), (x+half_x, y-half_y),
             color="#2e7d32", name=f"{name} Diagonal 2",
         )
+
+
+def earth_to_z(m_above_sea):
+    """Convert survey heights while keeping the ground-floor wall base at Z=0."""
+    return m_above_sea-(GROUND_FINISHED_FLOOR_ELEVATION-GROUND_FLOOR_THICKNESS)
 
 
 house = House("House 2", mirror_x=False, colors={"wall": "#ffffff", "window": "#ffffff"})
@@ -846,6 +857,62 @@ def stairway_notes_for(lower, upper):
 
 
 stairway_notes = stairway_notes_for(lower_stairs, upper_stairs)
+
+
+def add_entrance_stairs():
+    """West entrance landing and timber flight, descending towards the garden."""
+    opening = entrance_door.FillsVoids[0].RelatingOpeningElement
+    opening_placement = ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
+    landing_street_y = float(opening_placement[1, 3])
+    landing_garden_y = landing_street_y+ENTRANCE_OPENING_WIDTH
+    foot_y = landing_garden_y+(ENTRANCE_STAIR_RISERS-1)*ENTRANCE_STAIR_TREAD_LENGTH
+    fraction = min(1.0, max(0.0, foot_y/HOUSE_DEPTH))
+    foot_elevation = TERRAIN_STREET_WEST_ELEVATION+fraction*(
+        TERRAIN_GARDEN_WEST_ELEVATION-TERRAIN_STREET_WEST_ELEVATION
+    )
+    foot_z = earth_to_z(foot_elevation)
+    landing_z = float(ifcopenshell.util.placement.get_local_placement(entrance_door.ObjectPlacement)[2, 3])
+    if foot_z >= landing_z:
+        raise ValueError("entrance stair foot must be below the door threshold")
+    if not 0 < ENTRANCE_STAIR_WIDTH <= ENTRANCE_LANDING_DEPTH:
+        raise ValueError("entrance flight must fit within the landing projection")
+    facade_x = HOUSE_WIDTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS
+    outer_x = facade_x+ENTRANCE_LANDING_DEPTH
+    center_x = outer_x-ENTRANCE_STAIR_WIDTH/2
+    stairs = ground.stair(
+        (center_x, foot_y), (center_x, landing_garden_y),
+        name="Entrance stair", width=ENTRANCE_STAIR_WIDTH,
+        start_height=foot_z-ground.elevation, height=landing_z-foot_z,
+        risers=ENTRANCE_STAIR_RISERS, construction="timber",
+        color="#bfc3c5",
+    )
+    # Extend through the facade reveal to the west wall's outer face.
+    landing = ground.stair_landing(
+        (HOUSE_WIDTH, landing_street_y), (outer_x, landing_garden_y),
+        name="Entrance landing", height=stairs.end_height,
+        thickness=ENTRANCE_LANDING_THICKNESS, color="#bfc3c5",
+    )
+    inset = 0.03
+    path = stairs.railing_path("left", inset=inset)
+    path = path.extended((
+        (path[-1][0], landing_street_y+inset, landing_z),
+        (facade_x+inset, landing_street_y+inset, landing_z),
+    ))
+    railing = ground.railing(
+        "Entrance stair and landing railing", path=path,
+        height=STAIR_RAILING_HEIGHT, color="#C8B090",
+    )
+    return stairs, landing, railing
+
+
+entrance_stairs, entrance_landing, entrance_railing = add_entrance_stairs()
+entrance_stairway_notes = [
+    f"Vstupní: {entrance_stairs.risers} výšek po {entrance_stairs.riser_height*1000:.1f} mm".replace(".", ",")+".",
+    f"Šířka {entrance_stairs.width*1000:.0f} mm; nášlap {entrance_stairs.tread_length*1000:.0f} mm.",
+]
+print(f"Entrance stairs: {entrance_stairs.risers} risers x {entrance_stairs.riser_height*1000:.1f} mm; "
+      f"tread {entrance_stairs.tread_length*1000:.0f} mm; "
+      f"2h+b = {(2*entrance_stairs.riser_height+entrance_stairs.tread_length)*1000:.1f} mm")
 
 # Stack the same two-flight layout below the ground-floor stairway, shifted
 # just enough to fit the thicker, centred basement walls.
@@ -2157,7 +2224,7 @@ if "ground" in sys.argv:
     drawing1.add_room_legend()
     # Only openings in load-bearing masonry need lintel tags. The Pokoj 3
     # and bathroom doors are in drywall partitions and are omitted.
-    drawing1.add_lintel(entrance_door, 1, position="after")
+    drawing1.add_lintel(entrance_door, 1)
     drawing1.add_lintel(pokoj1_door, 2, direction="in")
     drawing1.add_lintel(pokoj2_door, 2, position="after", direction="in")
     drawing1.add_lintel(bathroom_left_opening, 3, direction="in")
@@ -2183,7 +2250,13 @@ if "ground" in sys.argv:
             end=(HOUSE_WIDTH-BWT, STAIR_LOWER_START_Y), offset=0.35,
             name="Stairway clearance to west wall",
         )
-    drawing1.add_notes(stairway_notes, title="SCHODIŠTĚ")
+    drawing1.add_notes(stairway_notes+entrance_stairway_notes, title="SCHODIŠTĚ")
+    drawing1.add_stair_annotation(entrance_stairs)
+    drawing1.add_stair_landing_annotation(entrance_landing)
+    drawing1.add_poly_line(
+        (entrance_stairs.start, entrance_stairs.end), arrow_end=True, circle_start=True,
+        name="Entrance stair walking route",
+    )
     drawing1.add_opening_dimension(entrance_door, offset=-1.6, finished_floor_height=GROUND_FLOOR_THICKNESS)
     for door in (pokoj1_door, pokoj2_door):
         drawing1.add_opening_dimension(
@@ -2589,11 +2662,6 @@ for name, cut, pdf in (("aa", aa_cut, PDF_AA), ("bb", bb_cut, PDF_BB)):
         add_house_section(cut, name, pdf)
 
 
-def earth_to_z(m_above_sea):
-    """Convert survey heights while keeping the ground-floor wall base at Z=0."""
-    return m_above_sea-(GROUND_FINISHED_FLOOR_ELEVATION-GROUND_FLOOR_THICKNESS)
-
-
 def terrain_edge_profile(length, start_elevation, end_elevation):
     """Slope between two house corners, with flat terrain beyond each end."""
     return (
@@ -2712,7 +2780,7 @@ def add_exterior_view(name, camera, direction, pdf):
         drawing.add_rectangle(
             (garden_facade_y+WEST_BACKGROUND_WALL_HOUSE_GAP, earth_to_z(TERRAIN_GARDEN_WEST_ELEVATION)),
             (stone_wall_y0, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
-            pattern="stone-wall-background", color="#d0d0d0",
+            pattern="stone-wall-background", color="#d0d0d0", background=True,
             name="West background connecting stone wall",
         )
         drawing.add_rectangle(
@@ -2728,24 +2796,34 @@ def add_exterior_view(name, camera, direction, pdf):
         )
     elif name == "pohled_ulice":
         if SHOW_STREET_BACKGROUND_STONE_WALL:
+            background_ground_z = ground.elevation+entrance_stairs.start_height-STREET_BACKGROUND_TERRAIN_BELOW_STAIRS
             east_facade_x = -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS-STREET_BACKGROUND_WALL_HOUSE_GAP
             drawing.add_polygon(
                 (
-                    (street_wall_x1, earth_to_z(TERRAIN_STREET_EAST_ELEVATION)),
-                    (east_facade_x, earth_to_z(TERRAIN_STREET_EAST_ELEVATION)),
+                    (street_wall_x1, background_ground_z),
+                    (east_facade_x, background_ground_z),
                     (east_facade_x, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
                     (street_wall_x1, earth_to_z(STREET_STONE_WALL_TOP_ELEVATION)),
                 ),
-                pattern="stone-wall-background", color="#d0d0d0",
+                pattern="stone-wall-background", color="#d0d0d0", background=True,
                 name="Street background connecting stone wall",
             )
             west_facade_x = HOUSE_WIDTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS
             drawing.add_rectangle(
-                (west_facade_x+STREET_BACKGROUND_WALL_HOUSE_GAP, earth_to_z(TERRAIN_STREET_WEST_ELEVATION)),
+                (west_facade_x+STREET_BACKGROUND_WALL_HOUSE_GAP, background_ground_z),
                 (west_facade_x+STREET_BACKGROUND_WALL_WEST_EXTENT, earth_to_z(WEST_STONE_WALL_TOP_ELEVATION)),
-                pattern="stone-wall-background", color="#d0d0d0",
+                pattern="stone-wall-background", color="#d0d0d0", background=True,
                 name="Street background west stone wall",
             )
+            for x0, x1 in (
+                (street_wall_x1, east_facade_x),
+                (west_facade_x+STREET_BACKGROUND_WALL_HOUSE_GAP,
+                 west_facade_x+STREET_BACKGROUND_WALL_WEST_EXTENT),
+            ):
+                drawing.add_terrain(
+                    ((x0, background_ground_z), (x1, background_ground_z)),
+                    background=True, opacity=0.2, line_width=0.2,
+                )
         drawing.add_rectangle(
             (street_wall_x0, earth_to_z(TERRAIN_STREET_EAST_ELEVATION)),
             (street_wall_x1, earth_to_z(STREET_STONE_WALL_TOP_ELEVATION)),

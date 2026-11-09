@@ -28,6 +28,29 @@ NS = {"s": "http://www.w3.org/2000/svg"}
 
 
 class TerrainTests(unittest.TestCase):
+    def test_faint_background_terrain_sits_behind_model_without_masking_it(self):
+        house = House("Rear terrain", mirror_x=False)
+        drawing = house.add_drawing("Street", 0, -1, 4, 5, view="elevation", direction=(0,1,0))
+        drawing.add_terrain([(0,0),(6,0)])
+        rear = drawing.add_terrain([(0,2),(6,2)], background=True, opacity=.2, line_width=.2)
+        props = ifcopenshell.util.element.get_pset(rear, "BBIM_DrawingTerrain")
+        self.assertTrue(props["Background"])
+        self.assertEqual(props["Opacity"], .2)
+        model = ifcopenshell.file.from_string(house._export_model().to_string())
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"rear.svg"
+            path.write_text(SVG)
+            add_terrain_overlay(path, model.by_guid(drawing.element.GlobalId), width_mm=100, view_box=(0,0,100,100))
+            root = ET.fromstring(path.read_text())
+            building = root.find('s:g[@class="terrain-model"]', NS)
+            background = building.find('s:g[@class="terrain-background-overlays"]', NS)
+            self.assertIsNotNone(background)
+            self.assertLess(list(building).index(background), list(building).index(building.find('s:g[@class="section target-view-ELEVATIONVIEW"]', NS)))
+            self.assertIsNone(background.find('s:polygon[@class="terrain-mask"]', NS))
+            self.assertEqual(background.find('s:polyline[@class="terrain-line"]', NS).get('opacity'), '0.2')
+            self.assertEqual(background.find('s:polygon[@class="terrain-hatch"]', NS).get('opacity'), '0.2')
+            self.assertEqual(len(root.findall('.//s:polygon[@class="terrain-mask"]', NS)), 1)
+
     def test_generated_namespace_alias_preserves_referenced_pattern_art(self):
         house = House("Referenced pattern")
         drawing = house.add_drawing("Elevation", 0, -1, 4, 5, view="elevation", direction=(0,1,0))
@@ -123,7 +146,9 @@ class TerrainTests(unittest.TestCase):
         drawing.add_terrain([(0, 0), (3, 1), (6, .5)])
         with TemporaryDirectory() as directory:
             path = Path(directory) / "elevation.svg"
-            path.write_text(SVG)
+            path.write_text(SVG.replace('<g class="section target-view-ELEVATIONVIEW">',
+                '<g class="drawing-background-layer"><path id="background" d="M0 0H10V10Z"/></g>'
+                '<g class="section target-view-ELEVATIONVIEW">'))
             add_terrain_overlay(path, drawing.element, width_mm=100, view_box=(0, 0, 100, 100))
             first = path.read_text()
             root = ET.fromstring(first)
@@ -135,6 +160,7 @@ class TerrainTests(unittest.TestCase):
             self.assertLess(children.index(overlay), children.index(annotation))
             self.assertEqual(annotation.get("transform"), "translate(2,3)")
             self.assertIsNotNone(model.find('s:g[@class="section-outlines"]', NS))
+            self.assertIsNotNone(model.find('s:g[@class="drawing-background-layer"]', NS))
             mask = overlay.find('s:polygon[@class="terrain-mask"]', NS)
             self.assertIn("fill:white", mask.get("style"))
             self.assertTrue(mask.get("points").endswith("0,100"))
@@ -167,6 +193,11 @@ class TerrainTests(unittest.TestCase):
                                  ([(0, 0), (1, 0)], {"hatch": "unknown"})):
             with self.subTest(profile=profile, options=options), self.assertRaises(ValueError):
                 drawing.add_terrain(profile, **options)
+        for opacity in (-.1, 1.1):
+            with self.assertRaisesRegex(ValueError, "opacity"):
+                drawing.add_terrain([(0,0),(1,0)], opacity=opacity)
+        with self.assertRaisesRegex(TypeError, "background"):
+            drawing.add_terrain([(0,0),(1,0)], background="yes")
         self.assertEqual(drawing.group.IsGroupedBy[0].RelatedObjects, original_members)
         plan = house.add_drawing("Plan", 0, 0, 1, 5)
         with self.assertRaisesRegex(ValueError, "elevation"):

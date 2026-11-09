@@ -24,6 +24,7 @@ import ifcopenshell.util.shape
 import numpy as np
 
 from ifc_utils import (
+    _postprocess_background_annotations,
     Beam,
     CeilingLayer,
     Chimney,
@@ -1029,6 +1030,29 @@ class DrawingTitleTests(unittest.TestCase):
 
 
 class DrawingPrimitiveTests(unittest.TestCase):
+    def test_background_primitives_are_painted_before_model_geometry(self):
+        house = House("Layers", mirror_x=False)
+        drawing = house.add_drawing("View", 0, -2, 3, 5, view="elevation", direction=(0,1,0))
+        rectangle = drawing.add_rectangle((0,0), (2,3), pattern="stone-wall-background", background=True)
+        polygon = drawing.add_polygon(((0,0),(2,0),(2,3)), pattern="stone-wall-background", background=True)
+        for annotation, pset in ((rectangle,"BBIM_DrawingRectangle"), (polygon,"BBIM_DrawingPolygon")):
+            self.assertTrue(ifcopenshell.util.element.get_pset(annotation, pset, "Background"))
+            self.assertIn("drawing-background", ifcopenshell.util.element.get_pset(annotation,"EPset_Annotation","Classes").split())
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"layers.svg"
+            path.write_text('<svg><defs/><g class="section" id="model"/>'
+                            '<path id="pale" class="drawing-background" transform="translate(1,2)" d="M0 0H2V3Z"/>'
+                            '<path id="foreground" d="M0 0H1"/></svg>')
+            _postprocess_background_annotations(path)
+            first = path.read_text()
+            root = ET.fromstring(first)
+            background = root.find('g[@class="drawing-background-layer"]')
+            self.assertLess(list(root).index(background), list(root).index(root.find('g[@id="model"]')))
+            self.assertEqual(background.find('path').get('transform'), 'translate(1,2)')
+            self.assertIsNotNone(root.find('path[@id="foreground"]'))
+            _postprocess_background_annotations(path)
+            self.assertEqual(path.read_text(), first)
+
     def test_sloped_hatched_polygon_persists_vertices_and_mirrors(self):
         outline = ((-3.5, 1), (-.205, 1), (-.205, 4), (-3.5, 3.2))
         for mirror in (False, True):
