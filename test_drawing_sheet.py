@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
@@ -27,6 +28,32 @@ def source(width=20, height=20, color="red"):
             '<path id="beam" class="projection" fill="#ff0000" style="stroke:url(#hatch)" '
             'marker-end="url(#batting-test)" d="M1 1H10V10H1Z"/>'
             '<use xlink:href="#symbol"/></svg>')
+
+
+class DrawingScaleTests(unittest.TestCase):
+    def test_scale_defaults_and_configured_denominators_are_persisted(self):
+        house = House("Scale tests", mirror_x=False)
+        for name, options, expected in (("Default", {}, "1/100"),
+                                        ("Small", {"scale": 200}, "1/200"),
+                                        ("Large", {"scale": 50}, "1/50")):
+            drawing = house.add_drawing(name, 0, 0, 2, 4, **options)
+            props = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+            self.assertEqual(props["Scale"], expected)
+            self.assertEqual(props["HumanScale"], expected.replace("/", ":"))
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"scales.ifc"
+            house.write(path)
+            model = ifcopenshell.open(path)
+            self.assertEqual(ifcopenshell.util.element.get_pset(
+                model.by_guid(house._drawings[1].element.GlobalId), "EPset_Drawing", "Scale"), "1/200")
+
+    def test_invalid_scales_are_rejected_before_creating_a_drawing(self):
+        house = House("Scale tests", mirror_x=False)
+        for value in (0, -100, float("nan"), float("inf"), True):
+            with self.subTest(scale=value), self.assertRaises((ValueError, TypeError)):
+                house.add_drawing("Invalid", 0, 0, 2, 4, scale=value)
+        self.assertEqual(house._drawings, [])
+        self.assertFalse(house.model.by_type("IfcAnnotation"))
 
 
 class DrawingSheetTests(unittest.TestCase):
@@ -159,8 +186,26 @@ class DrawingSheetTests(unittest.TestCase):
         self.assertEqual((drawing.get("x"), drawing.get("y")), ("129.5", "299.5"))
         title = drawing.find(f"{{{SVG}}}text")
         self.assertEqual((title.get("x"), title.get("y")), ("35", "56.5"))
-        body = drawing.find(f"{{{SVG}}}rect")
+        body = drawing.find(f".//{{{SVG}}}rect[@id='sheet-1-body']")
         self.assertEqual((body.get("x"), body.get("y"), body.get("width")), ("20", "60", "30"))
+
+    @unittest.skipUnless(shutil.which("inkscape"), "Inkscape is required to verify painted clipping bounds")
+    def test_cropping_does_not_reveal_geometry_outside_the_original_viewport(self):
+        from drawing_sheet import _crop
+        root = ET.fromstring(
+            f'<svg xmlns="{SVG}" width="100mm" height="100mm" viewBox="0 0 100 100">'
+            '<rect x="20" y="20" width="20" height="20"/>'
+            '<rect x="20" y="130" width="20" height="20"/></svg>'
+        )
+        width, height = _crop(root, self.directory/"crop.svg", "inkscape", (100, 100), (0, 0, 100, 100), 2)
+        self.assertAlmostEqual(width, 24, places=4)
+        # Inkscape intersects the group's bounds with the clip rectangle;
+        # it may retain empty space, but never expand to the off-camera body.
+        self.assertLess(height, 100)
+        _, y, _, frame_height = map(float, root.get("viewBox").split())
+        self.assertLessEqual(y+frame_height, 102.0001)
+        clip = root.find(f".//{{{SVG}}}clipPath/{{{SVG}}}rect")
+        self.assertEqual((clip.get("width"), clip.get("height")), ("100", "100"))
 
     def test_overflow_is_rejected_without_overwriting_the_old_sheet(self):
         self.sources = source(200, 200)

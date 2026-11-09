@@ -19,6 +19,9 @@ a:hover { cursor: pointer; }
     stroke-dasharray: 3, 2;
 }
 .surface { stroke: none; fill: #fff; fill-rule: evenodd; }
+.target-view-ELEVATIONVIEW .IfcWindow.surface.drawing-glazing {
+    fill: #d9f4f7;
+}
 .annotation { fill: none; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
 .IfcAnnotation { fill: none; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
 .IfcGeographicElement { fill: none; stroke: black; stroke-linecap: round; stroke-width: 1; }
@@ -75,8 +78,8 @@ a:hover { cursor: pointer; }
     fill: url(#perimeter-polystyrene) !important;
 }
 .PredefinedType-FILLAREA.ridge-tile {
-    fill: #a64b35 !important;
-    stroke: black !important;
+    fill: #e46b55 !important;
+    stroke: #b33425 !important;
     stroke-width: 0.10 !important;
     stroke-linejoin: round !important;
 }
@@ -163,7 +166,7 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 /* Plain roof-edge siding and exposed framing share one color. */
 .material-Exteriorwood.surface,
 .material-Woodsidingsolid.surface {
-    fill: #fcf2df !important;
+    fill: #f2d08b !important;
     stroke: none !important;
 }
 
@@ -334,12 +337,42 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 }
 
 .target-view-ELEVATIONVIEW .material-Rooftiles.cut {
-    fill: #a64b35 !important;
+    fill: #e46b55 !important;
+    stroke: #b33425 !important;
 }
 
 .target-view-ELEVATIONVIEW .material-Rooftiles.projection {
     fill: none !important;
-    stroke: black !important;
+    stroke: #b33425 !important;
+    stroke-width: 0.06 !important;
+}
+
+/* Plain roof-end trim matches the tile colours without the tile pattern. */
+.material-Roofedgetrim.surface {
+    fill: #e46b55 !important;
+    stroke: none !important;
+}
+
+.material-Roofedgetrim.cut {
+    fill: #e46b55 !important;
+    stroke: #b33425 !important;
+}
+
+.material-Roofedgetrim.projection {
+    fill: none !important;
+    stroke: #b33425 !important;
+    stroke-width: 0.06 !important;
+}
+
+.material-Guttermetal.surface,
+.material-Guttermetal.cut {
+    fill: #666666 !important;
+    stroke: none !important;
+}
+
+.material-Guttermetal.projection {
+    fill: none !important;
+    stroke: #444444 !important;
     stroke-width: 0.06 !important;
 }
 

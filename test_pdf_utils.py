@@ -8,7 +8,21 @@ from unittest.mock import Mock, patch
 
 from markdown_it import MarkdownIt
 
-from pdf_utils import markdown_to_pdf, _local_resource_fetcher
+from pdf_utils import PDFFolder, markdown_to_pdf, _local_resource_fetcher
+
+
+class PDFNamingTests(unittest.TestCase):
+    def test_numbering_matches_legacy_names_and_accepts_path_directories(self):
+        for directory in ("projekt/D1.1. Architektonicko Stavební Řešení/",
+                          Path("projekt/D1.1. Architektonicko Stavební Řešení")):
+            with self.subTest(directory=directory):
+                folder = PDFFolder("D1.1.", directory)
+                self.assertEqual(folder.add_pdf("Základy"),
+                                 "projekt/D1.1. Architektonicko Stavební Řešení/D1.1.1. Základy.pdf")
+                self.assertEqual(Path(folder.add_pdf("Pohledy")).name, "D1.1.2. Pohledy.pdf")
+                self.assertEqual(folder.counter, 2)
+                self.assertEqual(Path(PDFFolder("D1.5.", directory).add_pdf("Kanalizace")).name,
+                                 "D1.5.1. Kanalizace.pdf")
 
 
 class MarkdownPdfTests(unittest.TestCase):

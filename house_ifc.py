@@ -91,18 +91,9 @@ import xml.etree.ElementTree as ET
 import ifcopenshell.util.placement
 from ifc_utils import *
 from foundations import FoundationSpec, FoundationHeightMap, build_foundations
+from pdf_utils import PDFFolder
 from shapely.geometry import Polygon, box as geometry_box
 from shapely.ops import unary_union
-
-class PDFFolder:
-	def __init__(self, section, dir):
-		self.section = section
-		self.dir = dir
-		self.counter = 0
-
-	def add_pdf(self, name):
-		self.counter += 1
-		return self.dir + self.section + str(self.counter) + ". " + name + ".pdf"
 
 DIR = PDFFolder("D1.1.", "projekt/D1.1. Architektonicko Stavební Řešení/")
 DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = DIR

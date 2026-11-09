@@ -5786,22 +5786,22 @@ def _postprocess_drawing_title(svg_path: Path, title: str) -> None:
         raise ValueError("Drawing title requires a closing SVG tag")
     units_per_mm = view_height / height
     header = 10 * units_per_mm
-    updated_root = re.sub(r'\bheight="[^"]*"', f'height="{height + 10:g}mm"', root[0], count=1)
+    updated_root = re.sub(r'\bheight="[^"]*"', f'height="{height + 10:.12g}mm"', root[0], count=1)
     updated_root = re.sub(
         r'\bviewBox="[^"]*"',
-        f'viewBox="{view_x:g} {view_y:g} {view_width:g} {view_height + header:g}"',
+        f'viewBox="{view_x:.12g} {view_y:.12g} {view_width:.12g} {view_height + header:.12g}"',
         updated_root, count=1,
     )
     title_svg = (
-        f'<text class="drawing-title" x="{view_x + view_width / 2:g}" '
-        f'y="{view_y + 6.5 * units_per_mm:g}" text-anchor="middle" '
-        f'style="font-family: DejaVu Sans, sans-serif; font-size: {4 * units_per_mm:g}px; '
+        f'<text class="drawing-title" x="{view_x + view_width / 2:.12g}" '
+        f'y="{view_y + 6.5 * units_per_mm:.12g}" text-anchor="middle" '
+        f'style="font-family: DejaVu Sans, sans-serif; font-size: {4 * units_per_mm:.12g}px; '
         f'font-weight: bold; fill: black; stroke: none;">{escape(title)}</text>'
     )
     content = svg[root.end():closing]
     svg_path.write_text(
         f'{svg[:root.start()]}{updated_root}{title_svg}'
-        f'<g class="drawing-title-content" transform="translate(0, {header:g})">'
+        f'<g class="drawing-title-content" transform="translate(0, {header:.12g})">'
         f'{content}</g>{svg[closing:]}', encoding="utf-8",
     )
 
@@ -8355,6 +8355,7 @@ class House:
         section_outline_projected_walls: bool = False,
         section_outline_offset_ratio: Number = 0.25,
         surface_fills: bool = False,
+        scale: Number = 100,
     ) -> Drawing:
         """Add a persisted square plan or elevation drawing to this IFC model.
 
@@ -8363,6 +8364,8 @@ class House:
         ``direction`` pointing from the camera toward the building, such as
         ``(0, 1, 0)``.  Elevations use projected model geometry; plan-only
         annotations and automatic door labels are omitted.
+        ``scale`` is the scale denominator: 200 renders at 1:200, with text
+        and line widths retaining their physical printed sizes.
         Furniture text labels remain automatic in plans.  Elevations omit
         them unless explicitly added with
         :meth:`Drawing.add_furniture_label`; selected labels face the
@@ -8437,6 +8440,7 @@ class House:
             section_outline_projected_walls=section_outline_projected_walls,
             section_outline_offset_ratio=section_outline_offset_ratio,
             surface_fills=surface_fills,
+            scale=scale,
         )
         self._drawings.append(drawing)
         return drawing
@@ -8624,6 +8628,7 @@ class Drawing:
         section_outline_projected_walls: bool = True,
         section_outline_offset_ratio: Number = 0.25,
         surface_fills: bool = False,
+        scale: Number = 100,
     ) -> None:
         self.house = house
         self.name = name
@@ -8633,6 +8638,10 @@ class Drawing:
         self.radius = _number(radius, "radius")
         if self.radius <= 0:
             raise ValueError("radius must be greater than zero")
+        self.scale = _number(scale, "scale")
+        if self.scale <= 0:
+            raise ValueError("scale must be greater than zero")
+        scale_ratio = Fraction(1)/Fraction(str(self.scale))
         self.view = _enum(view, "view", {"PLAN", "ELEVATION"}).lower()
         if not isinstance(surface_fills, bool):
             raise TypeError("surface_fills must be a boolean")
@@ -8883,8 +8892,8 @@ class Drawing:
             "TargetView": (
                 "PLAN_VIEW" if self.view == "plan" else "ELEVATION_VIEW"
             ),
-            "Scale": "1/100",
-            "HumanScale": "1:100",
+            "Scale": str(scale_ratio),
+            "HumanScale": f"{scale_ratio.numerator}:{scale_ratio.denominator}",
             "HasUnderlay": False,
             "HasLinework": True,
             "HasAnnotation": self.view == "plan",
@@ -20609,6 +20618,78 @@ class Storey:
             },
         )
         return cylinder
+
+    def gutter(
+        self,
+        name: str,
+        *,
+        start: Point3D,
+        end: Point3D,
+        diameter: Number = 0.15,
+        wall_thickness: Number = 0.001,
+        end_caps: bool = True,
+        color: str = "#666666",
+    ) -> ifcopenshell.entity_instance:
+        """Create a horizontal, open-top half-round gutter with optional end caps.
+
+        Start/end are world-coordinate centres of the open rim, in metres.
+        The curved shell lies below them. No outlets or downpipes are added.
+        """
+        gutter_name = _name(name, "name")
+        start_point = np.asarray(_point_3d(start, "start"))
+        end_point = np.asarray(_point_3d(end, "end"))
+        diameter = _number(diameter, "diameter")
+        wall_thickness = _number(wall_thickness, "wall_thickness")
+        if diameter <= 0 or not 0 < wall_thickness < diameter/2:
+            raise ValueError("diameter must be positive and wall_thickness between zero and the radius")
+        if not isinstance(end_caps, bool):
+            raise TypeError("end_caps must be a boolean")
+        delta = end_point-start_point
+        length = float(np.linalg.norm(delta))
+        if length <= 0 or (end_caps and length <= 2*wall_thickness):
+            raise ValueError("gutter must have positive length and room for its end caps")
+        if abs(delta[2]) > 1e-9:
+            raise ValueError("gutter start and end must have the same Z coordinate")
+        style = self.house._surface_style("box", color=color, transparency=0)
+        model = self.house.model
+        gutter = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcPipeSegment", name=gutter_name, predefined_type="GUTTER",
+        )
+        ifcopenshell.api.spatial.assign_container(model, products=[gutter], relating_structure=self.element)
+        axis = delta/length
+        placement = np.eye(4)
+        placement[:3, :3] = np.column_stack((np.cross((0, 0, 1), axis), (0, 0, 1), axis))
+        placement[:3, 3] = start_point
+        ifcopenshell.api.geometry.edit_object_placement(model, product=gutter, matrix=placement, is_si=True)
+        builder = ShapeBuilder(model)
+        radius, inner = diameter/2, diameter/2-wall_thickness
+        shell = builder.polyline(
+            ((-radius, 0), (0, -radius), (radius, 0),
+             (inner, 0), (0, -inner), (-inner, 0)),
+            closed=True, arc_points=(1, 4),
+        )
+        items = [builder.extrude(builder.profile(shell), magnitude=length)]
+        if end_caps:
+            cap = builder.profile(builder.polyline(
+                ((-inner, 0), (0, -inner), (inner, 0)), closed=True, arc_points=(1,),
+            ))
+            items.extend(builder.extrude(cap, magnitude=wall_thickness, position=(0, 0, z))
+                         for z in (0, length-wall_thickness))
+        body = builder.get_representation(self.house._body_context, items)
+        ifcopenshell.api.geometry.assign_representation(model, product=gutter, representation=body)
+        ifcopenshell.api.style.assign_representation_styles(model, shape_representation=body, styles=[style])
+        material_name = "Gutter metal"
+        if material_name not in self.house._materials:
+            self.house._materials[material_name] = ifcopenshell.api.material.add_material(model, name=material_name)
+        ifcopenshell.api.material.assign_material(
+            model, products=[gutter], type="IfcMaterial", material=self.house._materials[material_name],
+        )
+        pset = ifcopenshell.api.pset.add_pset(model, product=gutter, name="BBIM_Gutter")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+            "Start": json.dumps(start_point.tolist()), "End": json.dumps(end_point.tolist()),
+            "Diameter": diameter, "WallThickness": wall_thickness, "Length": length, "EndCaps": end_caps,
+        })
+        return gutter
 
     def miako_slab(
         self,

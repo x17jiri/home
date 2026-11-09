@@ -1,4 +1,4 @@
-"""Markdown-to-PDF helpers, independent of the IFC/drawing libraries."""
+"""PDF naming and Markdown export helpers, independent of IFC libraries."""
 
 from __future__ import annotations
 
@@ -10,7 +10,20 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import urlparse
 
-__all__ = ["markdown_to_pdf"]
+__all__ = ["PDFFolder", "markdown_to_pdf"]
+
+
+class PDFFolder:
+    """Generate sequential document names within a project section."""
+
+    def __init__(self, section: str, dir: str | PathLike[str]):
+        self.section = section
+        self.dir = dir
+        self.counter = 0
+
+    def add_pdf(self, name: str) -> str:
+        self.counter += 1
+        return str(Path(self.dir)/f"{self.section}{self.counter}. {name}.pdf")
 
 _PAPER_SIZES = {"A4": (210, 297), "A3": (297, 420), "A2": (420, 594),
                 "A1": (594, 841), "A0": (841, 1189)}

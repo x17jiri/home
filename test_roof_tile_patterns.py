@@ -101,14 +101,14 @@ class RoofTilePatternTests(unittest.TestCase):
             self.assertEqual(pattern.get("data-tile-width-mm"), "300")
             self.assertEqual(pattern.get("data-course-mm"), "320")
 
-    def test_pattern_has_a_configurable_color_and_black_curved_outlines(self):
+    def test_pattern_has_configurable_colors_and_curved_outlines(self):
         pattern = ET.fromstring(self.template)
         self.assertEqual(len(pattern), 2)
         self.assertEqual(pattern[0].tag, "rect")
         self.assertRegex(pattern[0].get("fill"), r"^#[0-9a-fA-F]{6}$")
         self.assertEqual(pattern[1].tag, "path")
         self.assertEqual(pattern[1].get("fill"), "none")
-        self.assertEqual(pattern[1].get("stroke"), "black")
+        self.assertRegex(pattern[1].get("stroke"), r"^#[0-9a-fA-F]{6}$")
         self.assertIn(" C ", pattern[1].get("d"))
 
     def test_projected_patterns_preserve_the_configured_background_color(self):
@@ -120,7 +120,17 @@ class RoofTilePatternTests(unittest.TestCase):
                 _, root, _ = self.process(document.replace(original_color, color))
                 pattern, = self.patterns(root)
                 self.assertEqual(pattern.find(SVG + "rect").get("fill"), color)
-                self.assertEqual(pattern.find(SVG + "path").get("fill"), "black")
+                self.assertEqual(pattern.find(SVG + "path").get("fill"),
+                                 ET.fromstring(self.template).find("path").get("stroke"))
+
+    def test_projected_patterns_preserve_the_configured_outline_color(self):
+        document = self.document([self.layer()])
+        original = ET.fromstring(self.template).find("path").get("stroke")
+        for color in ("#b33425", "#1234ef", "black"):
+            with self.subTest(color=color):
+                _, root, _ = self.process(document.replace(f'stroke="{original}"', f'stroke="{color}"'))
+                pattern, = self.patterns(root)
+                self.assertEqual(pattern.find(SVG + "path").get("fill"), color)
 
     def test_exposed_tile_edge_has_the_background_color_without_a_pattern(self):
         layer = self.layer()
@@ -190,7 +200,7 @@ class RoofTilePatternTests(unittest.TestCase):
                     self.assertAlmostEqual(np.linalg.norm(self.matrix(pattern)[:2, 0]), .3*scale*units)
                     line = pattern.find(SVG + "path")
                     self.assertEqual(pattern.get("data-line-width-mm"), "0.06")
-                    self.assertEqual(line.get("fill"), "black")
+                    self.assertEqual(line.get("fill"), ET.fromstring(self.template).find("path").get("stroke"))
                     self.assertEqual(line.get("stroke"), "none")
                     outline = None
                     transform = self.matrix(pattern)
@@ -267,7 +277,10 @@ class RoofTilePatternTests(unittest.TestCase):
         self.assertLess(result.index(face.get("d")), result.index('class="roof-tile-hatch"'))
         self.assertLess(result.index('class="roof-tile-hatch"'), result.index('id="cut"'))
         stylesheet = (Path(__file__).parent / "bonsai_scripts/assets/plan.css").read_text(encoding="utf-8")
-        self.assertIn("fill: #a64b35 !important", stylesheet.split(".material-Rooftiles.cut {", 1)[1].split("}", 1)[0])
+        cut_style = stylesheet.split(".material-Rooftiles.cut {", 1)[1].split("}", 1)[0]
+        template = ET.fromstring(self.template)
+        self.assertIn(f'fill: {template.find("rect").get("fill")} !important', cut_style)
+        self.assertIn(f'stroke: {template.find("path").get("stroke")} !important', cut_style)
 
     def test_roofs_seen_edge_on_or_from_underneath_are_not_hatched(self):
         layer = self.layer()

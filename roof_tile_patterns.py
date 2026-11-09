@@ -120,7 +120,7 @@ def _glyph_lines(body):
     return lines
 
 
-def _printed_outline(lines, u, v, stroke, background):
+def _printed_outline(lines, u, v, stroke, background, foreground="black"):
     """Bake a fixed paper-width stroke before mapping back to pattern units.
 
     SVG vector-effect inside transformed patterns differs between Inkscape's
@@ -132,7 +132,7 @@ def _printed_outline(lines, u, v, stroke, background):
     inverse = np.linalg.inv(basis)
     local = affine_transform(outlines, (*inverse[0], *inverse[1], 0, 0))
     return (f'<rect width="1" height="1" fill="{escape(background, quote=True)}"/>'
-            f'<path d="{_contours(local)}" fill="black" stroke="none"/>')
+            f'<path d="{_contours(local)}" fill="{escape(foreground, quote=True)}" stroke="none"/>')
 
 
 def add_roof_tile_patterns(svg_path, model):
@@ -182,6 +182,9 @@ def add_roof_tile_patterns(svg_path, model):
     background_rect = re.search(r'<rect\b([^>]*)>', template["body"])
     background_attrs = dict(_ATTRS.findall(background_rect[1])) if background_rect else {}
     background = background_attrs.get("fill", "white")
+    outline_path = re.search(r'<path\b([^>]*)>', template["body"])
+    outline_attrs = dict(_ATTRS.findall(outline_path[1])) if outline_path else {}
+    foreground = outline_attrs.get("stroke", "black")
 
     products = {}
     for product in model.by_type("IfcSlab"):
@@ -276,7 +279,7 @@ def add_roof_tile_patterns(svg_path, model):
             downhill *= -1
         base, x, y = project((origin, origin + across * width, origin + downhill * course))
         u, v = x - base, y - base
-        pattern_body = _printed_outline(glyph_lines, u, v, stroke, background)
+        pattern_body = _printed_outline(glyph_lines, u, v, stroke, background, foreground)
         identifier = token.removeprefix("GlobalId-")
         pattern_id, clip_id = f"roof-tiles-{identifier}", f"roof-tiles-top-{identifier}"
         transform = " ".join(f"{value:.12g}" for value in (*u, *v, *base))

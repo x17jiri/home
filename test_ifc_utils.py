@@ -926,6 +926,24 @@ class DrawingPdfTests(unittest.TestCase):
 
 
 class DrawingTitleTests(unittest.TestCase):
+    def test_header_preserves_uniform_scale_for_fractional_camera_sizes(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"elevation.svg"
+            # A non-round 1:200 viewport must keep uniform physical scale
+            # after adding the title, or DrawingSheet correctly rejects it.
+            size = 70.46079158782959
+            path.write_text(
+                f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}mm" height="{size}mm" '
+                f'viewBox="0 0 {size} {size}"><path d="M0 0L1 1"/></svg>', encoding="utf-8",
+            )
+            _postprocess_drawing_title(path, "Pohled - Východ 1:200")
+            root = ET.parse(path).getroot()
+            width = float(root.get("width")[:-2])
+            height = float(root.get("height")[:-2])
+            _, _, vw, vh = map(float, root.get("viewBox").split())
+            self.assertAlmostEqual(vw/width, 1, places=10)
+            self.assertAlmostEqual(vh/height, 1, places=10)
+
     def test_title_has_compact_header_and_escapes_text_without_resizing_geometry(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "roof.svg"

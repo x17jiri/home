@@ -16,7 +16,8 @@ import numpy as np
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
-from ifc_utils import CutDefinition, House, offset_plane, plane_height_at, window_area
+from ifc_utils import CutDefinition, DrawingSheet, House, offset_plane, plane_height_at, window_area
+from pdf_utils import PDFFolder
 
 
 HOUSE_WIDTH = 8.75
@@ -55,7 +56,8 @@ KITCHEN_WALL_GAP = 0.03  # Same 350 mm centre offset as the old house's 640 mm u
 KITCHEN_COOKER_SINK_GAP = 0.06  # Old house: 700 mm centre spacing between 640 mm units.
 STOVE_SIZE = (0.60, 0.50, 1.50)
 
-GROUND_WALL_BASE_COURSE_HEIGHT = (20.0 + 2.0) / 100.0
+ZAKLADACI_MALTA = 0.02
+GROUND_WALL_BASE_COURSE_HEIGHT = ZAKLADACI_MALTA + 0.2
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
 ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.625
 CEMFLOW_AND_FINISH_THICKNESS = 0.065
@@ -78,6 +80,9 @@ WEST_STONE_WALL_TERRAIN_LENGTH = 2.0
 WEST_BACKGROUND_WALL_HOUSE_GAP = 0.05
 EAST_STONE_WALL_TERRAIN_SLOPE_DEGREES = 10.0
 EAST_STONE_WALL_TERRAIN_LENGTH = 2.0
+EAST_VIEW_STONE_WALL_OVERHANG = 2.0
+EAST_VIEW_STONE_WALL_LEFT_ELEVATION = 418.8
+EAST_VIEW_STONE_WALL_RIGHT_ELEVATION = 417.8
 STREET_STONE_WALL_DISTANCE = 3.5
 STREET_STONE_WALL_WIDTH = 0.5
 STREET_STONE_WALL_TOP_ELEVATION = 418.0
@@ -118,19 +123,22 @@ UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
 UPPER_FINISHED_FLOOR_HEIGHT = UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS
 UPPER_RING_BEAM_HEIGHT = 0.24
-NADEZDIVKA = 1.125+0.05+UPPER_RING_BEAM_HEIGHT
+NADEZDIVKA = ZAKLADACI_MALTA + 1.20 + UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
-WALL_PLATE_OVERHANG = 0.30
+WALL_PLATE_OVERHANG = 0.2
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
 PURLIN_SIZE = (0.16, 0.24)
 PURLIN_WALL_DISTANCE = 2.7
+#PURLIN_WALL_DISTANCE = 2.25
 PURLIN_X_POSITIONS = (BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0, HOUSE_WIDTH-BWT-PURLIN_WALL_DISTANCE+PURLIN_SIZE[0]/2.0)
-PURLIN_CENTER_HEIGHT = 3.55  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
+PURLIN_CENTER_HEIGHT = 3.59  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
 PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]/2
 PURLIN_SUPPORT_SIZE = (0.16, 0.16)
 PURLIN_SUPPORT_Y_POSITIONS = (
     (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 1, at PURLIN_X_POSITIONS[0].
     (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 2, at PURLIN_X_POSITIONS[1].
+#    (HOUSE_DEPTH-BWT-3.47,),  # Purlin 1, at PURLIN_X_POSITIONS[1].
+#    (HOUSE_DEPTH-BWT-3.47,),  # Purlin 2, at PURLIN_X_POSITIONS[1].
 )
 PURLIN_CONNECTION_BEAM_SIZE = (0.12, 0.20)  # Width along Y, height along Z.
 PURLIN_CONNECTION_WALL_CLEARANCE = 0.10  # Clear gap from each gable wall's inner face.
@@ -152,17 +160,25 @@ RAFTER_LAST_Y = HOUSE_DEPTH+0.125
 ROOF_EAVE_OVERHANG = .6
 ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
 ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
-ROOF_GABLE_OVERHANG = 0.25
+ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 1.6
-SHOW_CHIMNEY_PLANNING_MARKER = True  # Temporary location marker in ground/ceiling plans.
+SHOW_CHIMNEY_PLANNING_MARKER = True  # Temporary location marker in basement/ground/ceiling plans.
 SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True  # Project upper-floor post footprints onto those plans.
 ROOF_EAVE_SETBACK = 0.02
+ROOF_SLOPED_SIDING_BOARD_COUNT = 4
+ROOF_WOOD_SIDING_COLOR = "#f2d08b"
+ROOF_EDGE_TRIM_THICKNESS = 0.02  # Beyond the front/back tile edges along Y.
+GUTTER_DIAMETER = 0.15
+GUTTER_WALL_THICKNESS = 0.001
+GUTTER_EDGE_GAP = 0.005  # Horizontal clearance outside the tile edge.
+GUTTER_DROP_BELOW_TILES = 0.02  # Open rim below the tile edge's underside.
+GUTTER_COLOR = "#666666"
 # Same roof build-up as house_ifc.py; offsets are normal to each slope.
-THERMAL_INSULATION_UNDER_RAFTERS = 0.14
+THERMAL_INSULATION_UNDER_RAFTERS = 0.2
 VAPOUR_BARRIER_THICKNESS = 0.015
-INSTALLATION_SPACE_THICKNESS = 0.040
+INSTALLATION_SPACE_THICKNESS = 0.030
 GYPSUM_PLASTERBOARD_THICKNESS = 0.025
 MDF_THICKNESS = 0.015
 UNDERLAY_THICKNESS = 0.001
@@ -170,6 +186,7 @@ COUNTER_BATTEN_SIZE = (0.06, 0.06)
 TILE_BATTEN_SIZE = (0.06, 0.04)
 TILE_BATTEN_SPACING = 0.32
 ROOF_TILE_THICKNESS = 0.03
+ROOF_TILE_COLOR = "#e46b55"
 ROOF_TILE_PATTERN_WIDTH = 0.30
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = RAFTER_Z_OFFSET-THERMAL_INSULATION_UNDER_RAFTERS
 VAPOUR_BARRIER_BOTTOM = THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM-VAPOUR_BARRIER_THICKNESS
@@ -209,7 +226,8 @@ STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
 LIVING_ROOM_WALL_FRONT_Y = STAIR_UPPER_END_Y+LIVING_ROOM_STAIR_CLEARANCE
 LIVING_ROOM_DEPTH = HOUSE_DEPTH-BWT-LIVING_ROOM_WALL_FRONT_Y-DRY_WALL_WIDTH
 # Chimney against the stair-facing side of the horizontal living-room wall.
-CHIMNEY_CENTER = (HOUSE_WIDTH/2.0+0.4, LIVING_ROOM_WALL_FRONT_Y-CHIMNEY_SIZE/2)
+#CHIMNEY_CENTER = (HOUSE_WIDTH/2.0+0.4, LIVING_ROOM_WALL_FRONT_Y-CHIMNEY_SIZE/2)
+CHIMNEY_CENTER = (HOUSE_WIDTH/2.0, HOUSE_DEPTH-BWT-3.47-0.5)
 STAIR_WAIST_THICKNESS = 0.15
 STAIR_RAILING_HEIGHT = 1.0
 if STAIR_RIGHT_X > HOUSE_WIDTH-BWT+1e-9:
@@ -255,23 +273,26 @@ WINDOW_POSITION_STEP = 0.125
 
 PROJECT_DIR = Path("projekt2")
 DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = PROJECT_DIR / "D1.1. Architektonicko Stavební Řešení"
-PDF_GROUND = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.1. Půdorys 1.NP.pdf"
-PDF_CEILING = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.2. Strop nad 1.NP.pdf"
-PDF_UPPER = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.3. Půdorys podkroví.pdf"
-PDF_ROOF = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.4. Krov.pdf"
-PDF_POHLED_ZAPAD = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.5. Pohled - Západ.pdf"
-PDF_POHLED_ULICE = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.6. Pohled - Ulice.pdf"
-PDF_POHLED_ZAHRADA = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.7. Pohled - Zahrada.pdf"
-PDF_POHLED_VYCHOD = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.8. Pohled - Východ.pdf"
-PDF_BASEMENT = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.9. Půdorys suterénu.pdf"
-PDF_FOUND = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.10. Základy.pdf"
-PDF_AA = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.11. Řez AA.pdf"
-PDF_BB = DIR_ARCHITEKTONICKO_STAVEBNI_RESENI / "D1.1.12. Řez BB.pdf"
+PDF_FOLDER = PDFFolder("D1.1.", DIR_ARCHITEKTONICKO_STAVEBNI_RESENI)
+PDF_GROUND = Path(PDF_FOLDER.add_pdf("Půdorys 1.NP"))
+PDF_CEILING = Path(PDF_FOLDER.add_pdf("Strop nad 1.NP"))
+PDF_UPPER = Path(PDF_FOLDER.add_pdf("Půdorys podkroví"))
+PDF_ROOF = Path(PDF_FOLDER.add_pdf("Krov"))
+PDF_POHLEDY = Path(PDF_FOLDER.add_pdf("Pohledy"))
+# Reserve the former individual-elevation numbers to keep later plans stable.
+PDF_FOLDER.add_pdf("Pohled - Ulice")
+PDF_FOLDER.add_pdf("Pohled - Zahrada")
+PDF_FOLDER.add_pdf("Pohled - Východ")
+POHLEDY_SCALE = 200
+PDF_BASEMENT = Path(PDF_FOLDER.add_pdf("Půdorys suterénu"))
+PDF_FOUND = Path(PDF_FOLDER.add_pdf("Základy"))
+PDF_AA = Path(PDF_FOLDER.add_pdf("Řez AA"))
+PDF_BB = Path(PDF_FOLDER.add_pdf("Řez BB"))
 SECTION_OUTLINE_WIDTH = 0.3
 
 RAFTERS_MIDPOINT = CHIMNEY_CENTER[1]-0.04
 RAFTER_Y_POSITIONS = (
-	-0.125,
+	0.33,
 	-0.125+1.00,
 	-0.125+1.00+1.00,
 	-0.125+1.00+1.00+1.00,
@@ -281,7 +302,7 @@ RAFTER_Y_POSITIONS = (
 	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91,
 	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91+1.00,
 	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91+1.00+1.00,
-	HOUSE_DEPTH+0.125,
+	HOUSE_DEPTH-0.33,
 )
 found_chimney_space = False
 for i in range(1, len(RAFTER_Y_POSITIONS)):
@@ -294,7 +315,7 @@ for i in range(1, len(RAFTER_Y_POSITIONS)):
 			abs((RAFTER_Y_POSITIONS[i]+RAFTER_Y_POSITIONS[i-1]) / 2.0 - RAFTERS_MIDPOINT) <= 0.05
 		)
 		#if not found_chimney_space:
-assert(found_chimney_space)
+#assert(found_chimney_space)
 
 aa_cut = CutDefinition(
     start=(HOUSE_WIDTH/2+0.5, -1.5),
@@ -1700,7 +1721,7 @@ def add_roof_build_up(plane, side, purlin_index, eave_x, inner_wall_x):
          "Gypsum plasterboard", "#E8E5DE", 0),
         ("MDF", MDF_BOTTOM, MDF_THICKNESS, "MDF", "#f2b6d0", 0),
         ("Roofing underlay", UNDERLAY_BOTTOM, UNDERLAY_THICKNESS, "Roofing underlay", "#3B4148", 0),
-        ("Roof tiles", ROOF_TILE_BOTTOM, ROOF_TILE_THICKNESS, "Roof tiles", "#A64B35", 0),
+        ("Roof tiles", ROOF_TILE_BOTTOM, ROOF_TILE_THICKNESS, "Roof tiles", ROOF_TILE_COLOR, 0),
     )
     layers = []
     for key, offset, thickness, material, color, transparency in definitions:
@@ -1924,10 +1945,35 @@ def add_house_facades():
 
 
 def add_roof_edge_facades():
-    """Timber edge boards below the tiles; facade walls themselves stay white."""
+    """Timber siding and red trim along the sloped roof ends, plus eave boards."""
     if ROOF_EAVE_SETBACK <= 0:
         return ()
     boards = []
+
+    def add_sloped_board(name, plane, lo, hi, edge_y, normal_y,
+                         bottom_offset, top_offset, thickness, material, color):
+        bottom = offset_plane(*plane.points, offset=bottom_offset)
+        top = offset_plane(*plane.points, offset=top_offset)
+        profile = Polygon((
+            (lo, plane_height_at(*bottom, x=lo, y=edge_y)),
+            (hi, plane_height_at(*bottom, x=hi, y=edge_y)),
+            (hi, plane_height_at(*top, x=hi, y=edge_y)),
+            (lo, plane_height_at(*top, x=lo, y=edge_y)),
+        ))
+        profile = profile.intersection(box(lo, ROOF_EAVE_CUT_Z, hi, profile.bounds[3]+1))
+        if profile.is_empty or profile.geom_type != "Polygon":
+            raise ValueError(f"{name} has no continuous profile")
+        outline = [(float(x), edge_y, float(z)) for x, z in list(profile.exterior.coords)[:-1]]
+        vertices = np.asarray(outline)
+        area_normal = np.sum(np.cross(vertices, np.roll(vertices, -1, axis=0)), axis=0)
+        if area_normal[1]*normal_y < 0:
+            outline.reverse()
+        board = house.add_panel(
+            name, outline=outline, thickness=thickness, material=material, color=color,
+        )
+        board.ObjectType = "ROOF_EDGE_CLADDING"
+        boards.append(board)
+
     for side, edge_y, normal_y in (
         ("Street", -ROOF_GABLE_OVERHANG, 1),
         ("Garden", HOUSE_DEPTH+ROOF_GABLE_OVERHANG, -1),
@@ -1936,34 +1982,26 @@ def add_roof_edge_facades():
             ("east", roof_east, east_eave_x, roof_ridge_x),
             ("west", roof_west, roof_ridge_x, west_eave_x),
         ):
-            bottom = offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
-            top = offset_plane(*plane.points, offset=ROOF_TILE_BOTTOM)
-            profile = Polygon((
-                (lo, plane_height_at(*bottom, x=lo, y=edge_y)),
-                (hi, plane_height_at(*bottom, x=hi, y=edge_y)),
-                (hi, plane_height_at(*top, x=hi, y=edge_y)),
-                (lo, plane_height_at(*top, x=lo, y=edge_y)),
-            ))
-            profile = profile.intersection(box(lo, ROOF_EAVE_CUT_Z, hi, profile.bounds[3]+1))
-            if profile.is_empty or profile.geom_type != "Polygon":
-                raise ValueError(f"{side} {slope} roof-edge board has no continuous profile")
-            outline = [(float(x), edge_y, float(z)) for x, z in list(profile.exterior.coords)[:-1]]
-            vertices = np.asarray(outline)
-            area_normal = np.sum(np.cross(vertices, np.roll(vertices, -1, axis=0)), axis=0)
-            if area_normal[1]*normal_y < 0:
-                outline.reverse()
-            board = house.add_panel(
-                f"{side} {slope} roof-edge siding", outline=outline,
-                thickness=ROOF_EAVE_SETBACK, material="Wood siding solid", color="#f9e5bf",
+            board_width = (ROOF_TILE_BOTTOM-GYPSUM_PLASTERBOARD_BOTTOM)/ROOF_SLOPED_SIDING_BOARD_COUNT
+            for index in range(ROOF_SLOPED_SIDING_BOARD_COUNT):
+                # Equal widths perpendicular to the slope; each board runs eave to ridge.
+                bottom_offset = GYPSUM_PLASTERBOARD_BOTTOM+index*board_width
+                add_sloped_board(
+                    f"{side} {slope} roof-edge siding {index+1}", plane, lo, hi, edge_y, normal_y,
+                    bottom_offset, bottom_offset+board_width,
+                    ROOF_EAVE_SETBACK, "Wood siding solid", ROOF_WOOD_SIDING_COLOR,
+                )
+            add_sloped_board(
+                f"{side} {slope} red roof-edge trim", plane, lo, hi, edge_y, -normal_y,
+                TILE_BATTEN_BOTTOM, ROOF_TILE_BOTTOM+ROOF_TILE_THICKNESS,
+                ROOF_EDGE_TRIM_THICKNESS, "Roof edge trim", ROOF_TILE_COLOR,
             )
-            board.ObjectType = "ROOF_EDGE_CLADDING"
-            boards.append(board)
     y0, y1 = -ROOF_GABLE_OVERHANG+ROOF_EAVE_SETBACK, HOUSE_DEPTH+ROOF_GABLE_OVERHANG-ROOF_EAVE_SETBACK
     for side, plane, x0, x1 in (
         ("East", roof_east, east_eave_x, east_eave_x+ROOF_EAVE_SETBACK),
         ("West", roof_west, west_eave_x-ROOF_EAVE_SETBACK, west_eave_x),
     ):
-        bottom = offset_plane(*plane.points, offset=RAFTER_Z_OFFSET)
+        bottom = offset_plane(*plane.points, offset=GYPSUM_PLASTERBOARD_BOTTOM)
         top = offset_plane(*plane.points, offset=ROOF_TILE_BOTTOM)
         z0 = min(plane_height_at(*bottom, x=x, y=y0) for x in (x0, x1))-.1
         z1 = max(plane_height_at(*top, x=x, y=y0) for x in (x0, x1))+.1
@@ -1974,12 +2012,35 @@ def add_roof_edge_facades():
             raise ValueError(f"{side} eave board has no height above the horizontal roof cut")
         board = house.add_box(
             f"{side} eave siding", origin=(x0, y0, z0), size=(x1-x0, y1-y0, z1-z0),
-            material="Wood siding solid", color="#f9e5bf",
+            material="Wood siding solid", color=ROOF_WOOD_SIDING_COLOR,
             cuts=(bottom, top, horizontal_eave_cut), retained_point=(xmid, ymid, (zbottom+ztop)/2),
         )
         board.ObjectType = "ROOF_EDGE_CLADDING"
         boards.append(board)
     return tuple(boards)
+
+
+def add_roof_gutters(*, gutter_diameter=GUTTER_DIAMETER, color=GUTTER_COLOR):
+    """Follow the actual clipped tile edges, with no downpipes or outlets."""
+    settings = ifcopenshell.geom.settings()
+    settings.set(settings.USE_WORLD_COORDS, True)
+    gutters = []
+    for side, plane, outward in (("East", roof_east, -1), ("West", roof_west, 1)):
+        tiles = next(layer for layer in roof_layers
+                     if layer.material_name == "Roof tiles" and layer.plane is plane)
+        shape = ifcopenshell.geom.create_shape(settings, tiles)
+        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+        tile_edge_x = vertices[:, 0].min() if outward < 0 else vertices[:, 0].max()
+        edge = vertices[np.isclose(vertices[:, 0], tile_edge_x, rtol=0, atol=1e-7)]
+        x = tile_edge_x+outward*(gutter_diameter/2+GUTTER_EDGE_GAP)
+        rim_z = edge[:, 2].min()-GUTTER_DROP_BELOW_TILES
+        gutters.append(rainwater_storey.gutter(
+            f"{side} roof gutter",
+            start=(x, vertices[:, 1].min(), rim_z),
+            end=(x, vertices[:, 1].max(), rim_z),
+            diameter=gutter_diameter, wall_thickness=GUTTER_WALL_THICKNESS, color=color,
+        ))
+    return tuple(gutters)
 
 
 # Concrete at each ceiling occupies the reserved band directly above its walls.
@@ -2018,6 +2079,10 @@ facade_storey = house.storey("Facades", elevation=0)
 facade_storey.element.ObjectType = "FACADE_LAYER"
 facade_storey.element.Description = "Visibility container for grey/white facades and timber roof-edge boards"
 facade_storey.add(*perimeter_facades, *wall_facades, *roof_edge_facades)
+
+rainwater_storey = house.storey("Rainwater drainage", elevation=0)
+rainwater_storey.element.Description = "Roof gutters without downpipes"
+roof_gutters = add_roof_gutters()
 
 
 house.write("house2.ifc")
@@ -2098,6 +2163,8 @@ if "basement" in sys.argv:
         start=(float(basement_plan_max[0])+.6, float(basement_plan_min[1])),
         end=(float(basement_plan_max[0])+.6, float(basement_plan_min[1])+BASEMENT_WALL_THICKNESS),
     )
+    if SHOW_CHIMNEY_PLANNING_MARKER:
+        drawing1.add_chimney_annotation(chimney, projected=True)
     add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "basement.svg", pdf=PDF_BASEMENT)
 
@@ -2573,7 +2640,7 @@ if "roof" in sys.argv:
     roof_rafters = tuple(member for pair in rafter_pairs for member in pair)
     for element in (*upper_exterior_walls, *upper_ring_beams, wall_plate_east, wall_plate_west, *purlins,
                     *purlin_connection_beams, *purlin_supports, *purlin_braces,
-                    *roof_rafters, *collar_ties):
+                    *roof_rafters, *collar_ties, *roof_gutters):
         drawing1.include_element(element)
     drawing1.add_chimney_annotation(chimney)
     for index, (start_y, end_y) in enumerate(zip(RAFTER_Y_POSITIONS, RAFTER_Y_POSITIONS[1:]), 1):
@@ -2689,8 +2756,8 @@ TERRAIN_PROFILES = {
 }
 
 
-def add_exterior_view(name, camera, direction, pdf):
-    """Render a complete house elevation with terrain masking and closed doors."""
+def add_exterior_view(name, camera, direction):
+    """Create a complete elevation for the shared exterior-view sheet."""
     view_top = max(roof_tiles_top_z, upper.elevation+chimney.end_height)
     terrain_profile = list(TERRAIN_PROFILES[name])
     radius = 6.5
@@ -2765,16 +2832,30 @@ def add_exterior_view(name, camera, direction, pdf):
         camera = ((x_min+x_max)/2, camera[1])
         radius = max(radius, (x_max-x_min)/2)
         view_top = max(view_top, earth_to_z(uphill_end_elevation))
-    view_bottom = min(earth_to_z(height) for _, height in terrain_profile)-.4
+    elif name == "pohled_vychod":
+        # Looking along +X, garden (+Y) is left and street (-Y) is right.
+        east_house_left_y = HOUSE_DEPTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS
+        east_house_right_y = -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS
+        east_wall_left_y = east_house_left_y+EAST_VIEW_STONE_WALL_OVERHANG
+        east_wall_right_y = east_house_right_y-EAST_VIEW_STONE_WALL_OVERHANG
+        east_wall_bottom_z = FOUNDATION_FOOTING_BOTTOM_Z-.1
+        camera = (camera[0], (east_wall_left_y+east_wall_right_y)/2)
+        radius = max(radius, (east_wall_left_y-east_wall_right_y)/2+.1)
+        view_top = max(view_top, earth_to_z(EAST_VIEW_STONE_WALL_LEFT_ELEVATION),
+                       earth_to_z(EAST_VIEW_STONE_WALL_RIGHT_ELEVATION))
+    view_bottom = (east_wall_bottom_z if name == "pohled_vychod"
+                   else min(earth_to_z(height) for _, height in terrain_profile)-.4)
     drawing = house.add_drawing(
         name, x=camera[0], y=camera[1], z=(view_bottom+view_top)/2,
         radius=max(radius, (view_top-view_bottom)/2+.5), view="elevation", direction=direction,
-        storeys=[foundation, basement, basement_ceiling_storey, ground, ceiling_storey, upper, facade_storey,
+        storeys=[foundation, basement, basement_ceiling_storey, ground, ceiling_storey, upper, facade_storey, rainwater_storey,
                  *roof_layer_storeys.values()],
         door_annotations=False, automatic_plan_annotations=False,
         doors_closed=True, surface_fills=True,
+        scale=POHLEDY_SCALE,
     )
-    drawing.add_terrain(terrain_profile, earth_to_z=earth_to_z)
+    if name != "pohled_vychod":
+        drawing.add_terrain(terrain_profile, earth_to_z=earth_to_z)
     if name == "pohled_zapad":
         garden_facade_y = HOUSE_DEPTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS
         drawing.add_rectangle(
@@ -2838,15 +2919,28 @@ def add_exterior_view(name, camera, direction, pdf):
                 (x1, earth_to_z(GARAGE_RETAINING_WALL_TOP_ELEVATION)),
                 pattern="stone-wall", name=f"Garage retaining wall {side}",
             )
-    drawing.render(PROJECT_DIR / f"{name}.svg", pdf=pdf)
+    elif name == "pohled_vychod":
+        drawing.add_polygon(
+            (
+                (east_wall_left_y, earth_to_z(EAST_VIEW_STONE_WALL_LEFT_ELEVATION)),
+                (east_house_left_y, earth_to_z(EAST_VIEW_STONE_WALL_LEFT_ELEVATION)),
+                (east_wall_right_y, earth_to_z(EAST_VIEW_STONE_WALL_RIGHT_ELEVATION)),
+                (east_wall_right_y, east_wall_bottom_z),
+                (east_wall_left_y, east_wall_bottom_z),
+            ),
+            pattern="stone-wall", name="East stone wall",
+        )
     return drawing
 
 
-for name, camera, direction, pdf in (
-    ("pohled_zapad", (west_eave_x+1, HOUSE_DEPTH/2), (-1, 0, 0), PDF_POHLED_ZAPAD),
-    ("pohled_ulice", (HOUSE_WIDTH/2, -ROOF_GABLE_OVERHANG-1), (0, 1, 0), PDF_POHLED_ULICE),
-    ("pohled_zahrada", (HOUSE_WIDTH/2, HOUSE_DEPTH+ROOF_GABLE_OVERHANG+1), (0, -1, 0), PDF_POHLED_ZAHRADA),
-    ("pohled_vychod", (east_eave_x-1, HOUSE_DEPTH/2), (1, 0, 0), PDF_POHLED_VYCHOD),
-):
-    if "pohledy" in sys.argv or name in sys.argv:
-        add_exterior_view(name, camera, direction, pdf)
+if "pohledy" in sys.argv:
+    pohledy_sheet = DrawingSheet(paper="A3", orientation="landscape")
+    for name, title, camera, direction, x, y in (
+        ("pohled_zapad", "Pohled - Západ", (west_eave_x+1, HOUSE_DEPTH/2), (-1, 0, 0), .25, .25),
+        ("pohled_ulice", "Pohled - Ulice", (HOUSE_WIDTH/2, -ROOF_GABLE_OVERHANG-1), (0, 1, 0), .75, .25),
+        ("pohled_zahrada", "Pohled - Zahrada", (HOUSE_WIDTH/2, HOUSE_DEPTH+ROOF_GABLE_OVERHANG+1), (0, -1, 0), .25, .75),
+        ("pohled_vychod", "Pohled - Východ", (east_eave_x-1, HOUSE_DEPTH/2), (1, 0, 0), .75, .75),
+    ):
+        view = add_exterior_view(name, camera, direction)
+        pohledy_sheet.add(view, x=x, y=y, title=title, tables=False)
+    pohledy_sheet.render(PROJECT_DIR / "pohledy.svg", pdf=PDF_POHLEDY)

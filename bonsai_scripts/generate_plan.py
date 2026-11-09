@@ -208,14 +208,19 @@ def generate_plan(args: argparse.Namespace) -> Path:
     camera_props.height = 2 * args.radius
     camera_props.update_camera_resolution()
 
-    require_finished(
-        bpy.ops.bim.create_drawing(
-            print_all=False,
-            open_viewer=False,
-            sync=True,
-        ),
-        "creating the SVG drawing",
-    )
+    from bonsai.bim.module.drawing.operator import CreateDrawing
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from glazing_surfaces import glazing_surface_classes
+
+    with glazing_surface_classes(CreateDrawing, tool):
+        require_finished(
+            bpy.ops.bim.create_drawing(
+                print_all=False,
+                open_viewer=False,
+                sync=True,
+            ),
+            "creating the SVG drawing",
+        )
     if not output_path.is_file() or output_path.stat().st_size == 0:
         raise RuntimeError(f"Bonsai did not create the SVG: {output_path}")
     print(f"Bonsai SVG created: {output_path}", flush=True)

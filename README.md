@@ -174,19 +174,48 @@ the 200 mm facade-insulation allowance; the basement offset accounts for its
 thicker walls so the finishes align. Front/back panels cover the side-panel
 ends at the corners. `FACADE_THICKNESS` controls the finish thickness.
 
-`add_roof_edge_facades()` adds wood only around the roof edges: four sloped
-front/back boards and two eave boards. Their solid `Wood siding solid` colour
-is `#f9e5bf`, without a board-joint pattern. The 20 mm boards fill
-`ROOF_EAVE_SETBACK`, running from the rafter underside to the tile underside
-and respecting the horizontal eave cut. Rafters stop at the inside of the
+`add_roof_edge_facades()` adds four equal-width timber strips along each
+front/back slope and two eave boards. Their solid `Wood siding solid` colour
+is `ROOF_WOOD_SIDING_COLOR = "#f2d08b"`, without a board-joint pattern; the
+projected fill uses the same yellow in `plan.css`. The 20 mm boards fill
+`ROOF_EAVE_SETBACK`, running from the plasterboard underside to the tile underside
+and respecting the horizontal eave cut. A separate red trim on each front/back
+slope runs from the tile-batten bottom to the tile top. It starts at the tile's
+Y edge and extends outward by `ROOF_EDGE_TRIM_THICKNESS` (20 mm), matching the
+tiles' 3D and drawing colours without a tile pattern. Rafters stop at the inside of the
 eave boards. The upper plan explicitly includes the continuous white panels
 despite their ground-floor host, while their separate storey allows all
 facades and roof-edge boards to be toggled together in 3D.
 
-Run `python3 house2.py pohledy` for all four exterior views, or pass any of
-`pohled_zapad`, `pohled_ulice`, `pohled_zahrada`, and `pohled_vychod`
-individually. SVGs are written under `projekt2`; A4 landscape PDFs at 1:100
-are numbered D1.1.5–D1.1.8 in its architectural folder. The shared
+`add_roof_gutters(gutter_diameter=GUTTER_DIAMETER, color=GUTTER_COLOR)` adds
+two half-round, capped gutters without downpipes. They belong to the separate
+`Rainwater drainage` storey and appear in exterior views, sections and the roof
+plan. Positions and lengths follow the actual clipped tile geometry, including
+the horizontal eave cut. `GUTTER_EDGE_GAP` sets horizontal clearance outside
+the tile edge (5 mm); `GUTTER_DROP_BELOW_TILES` places the open rim below its
+underside (20 mm). `GUTTER_DIAMETER` and `GUTTER_WALL_THICKNESS` initially use
+150 mm and 1 mm. The default 3D colour and drawing fill are dark grey.
+For another model, use `storey.gutter(name, start=(x0, y0, z), end=(x1, y1, z),
+diameter=0.15, wall_thickness=0.001, end_caps=True, color="#666666")`.
+The endpoints are world-coordinate centres of the open rim; the shell lies
+below them. The IFC element is an `IfcPipeSegment` of type `GUTTER`, with
+true circular arcs and persisted dimensions in `BBIM_Gutter`.
+
+Roof extents are configured separately: `ROOF_EAVE_OVERHANG` measures the
+east/west X overhang from the outside structural walls, while
+`ROOF_GABLE_OVERHANG` measures the front/back Y overhang.
+`ROOF_EAVE_DROP_BELOW_WALL_PLATE` sets the horizontal eave cut, and
+`ROOF_EAVE_SETBACK` recesses the outer layers below the tiles by 20 mm.
+
+Run `python3 house2.py pohledy` for all four exterior views on one A3 landscape
+sheet at 1:200. `projekt2/pohledy.svg` and the architectural folder's
+`D1.1.5. Pohledy.pdf` replace the four separate elevation PDFs. Both house
+scripts share `pdf_utils.PDFFolder` for automatic numbering; the three former
+view numbers are reserved so subsequent plans keep their existing names.
+`POHLEDY_SCALE` sets
+the shared scale denominator; each view has its own title and scale label.
+The four `pohledy_sheet.add(...)` placements use normalized centre coordinates
+in a 2×2 layout. The shared
 `add_exterior_view()` helper includes the basement, ceilings, roof and
 facades, closes doors for rendering, and suppresses plan annotations.
 
@@ -202,6 +231,14 @@ Profile positions use global X for street/garden and global Y for east/west.
 `earth_to_z()` converts the heights using `GROUND_FINISHED_FLOOR_ELEVATION`
 and the ground-floor build-up. Terrain is a drawing overlay with earth
 hatching and a mask below the profile, rather than a 3D earth solid.
+
+The east view replaces its terrain overlay with a foreground `stone-wall`
+polygon. On the page, garden is left and street is right. The wall extends
+`EAST_VIEW_STONE_WALL_OVERHANG` (2 m) beyond each facade outline. Its top is
+flat at `EAST_VIEW_STONE_WALL_LEFT_ELEVATION` (418.8 m) up to the left house
+outline, then falls to `EAST_VIEW_STONE_WALL_RIGHT_ELEVATION` (417.8 m) at the
+right end. The bottom extends 100 mm below the footings. All profile heights
+use `earth_to_z()`; no earth line or hatch is added in this view.
 
 It starts with a ground-floor storey at Z = 0 and four 240 mm VPC
 outer walls enclosing the `HOUSE_WIDTH × HOUSE_DEPTH` footprint. A 175 mm VPC
@@ -365,6 +402,10 @@ an exactly centred 1.75 m front-wall window. The bathroom has a
 `GROUND_WALL_BASE_COURSE_HEIGHT + 2.25 m`; bedroom sills use
 `GROUND_WALL_BASE_COURSE_HEIGHT + 0.875 m`. The west-window sill follows from
 its 0.75 m height. All window frames use white in 3D.
+Exterior views fill visible window glazing light cyan (`#d9f4f7`), with
+white frames. The colour is in `bonsai_scripts/assets/plan.css`; the renderer
+identifies glazing using the native surface ray hit and its IFC aspect style,
+preserving Bonsai's occlusion. Plan drawings and 3D colours are unchanged.
 All four windows have construction-opening dimensions outside their host
 walls: width above the line and height/sill below, relative to the finished
 floor. The room legend includes summed nominal window area (modelled width
@@ -581,7 +622,7 @@ clearance parameter or dimension. It reuses the original model's
 an exact vertical shaft opening; the SDK partitions meet the chimney
 without intersecting it. The upper plan includes the chimney/flue
 symbol. `SHOW_CHIMNEY_PLANNING_MARKER = True` also adds a temporary
-flue symbol and dashed body footprint to the ground and ceiling plans.
+flue symbol and dashed body footprint to the basement, ground and ceiling plans.
 Set it to `False` to hide these planning markers. The physical chimney
 still begins upstairs. The reusable helper is
 `drawing.add_chimney_annotation(chimney, projected=True)`.
@@ -1818,6 +1859,10 @@ on each render, including when the drawing no longer contains dimensions.
 
 ### Multiple drawings on one sheet
 
+Set `house.add_drawing(..., scale=200)` to render a drawing at 1:200;
+the default denominator is 100. Sheet composition preserves that scale and
+the physical text sizes and line widths.
+
 ```python
 sheet = DrawingSheet(paper="A3", orientation="portrait")
 sheet.add(roof, x=0.5, y=0.25, title="D1.1.5. Krov", crop=False)
@@ -1835,6 +1880,8 @@ and 2 mm cropping padding; the roof sheet explicitly uses A3 portrait.
 
 `crop=True` (the default) trims empty camera space around the actual SVG
 geometry, text and markers, moving the title next to the cropped diagram.
+The original viewport clipping is retained so cropping cannot reveal geometry
+outside the camera frame.
 `crop=False` preserves the entire original viewport: an A4-sized main drawing
 centred at `(0.5, 0.25)` retains its previous position in the top half of A3.
 Neither option changes scale, line widths or text sizes. `title` defaults to
@@ -2032,13 +2079,16 @@ covering's start and bottom and must fit inside its length/height bounds;
 omitting `outline` preserves the existing rectangular behavior. IFC voids,
 host-wall clipping and X mirroring apply to either shape.
 
-Projected roof tiles use the `roof-tiles` SVG pattern: terracotta red
-background, thin black side joints and curved course edges. Projected facade siding
+Projected roof tiles use the `roof-tiles` SVG pattern: vivid terracotta red
+background (`#e46b55`), thin darker red (`#b33425`) side joints and curved course edges.
+The roof trim and ridge-tile symbols use the same colours in `plan.css`;
+`ROOF_TILE_COLOR` sets the tiles and trim in the house2 3D model. Projected facade siding
 uses the `wood-siding` pattern with a warm timber-brown background. Change the
 background `<rect fill="...">` in either pattern in `drawings/assets/patterns.svg`
 to tune its view color; the render passes preserve it while scaling/projecting
 the pattern. Exposed tile edges use that same color as a solid fill, without
-the top-face tile pattern. Section-cut colors are independent and remain unchanged. Tile width is
+the top-face tile pattern. The source path's `stroke` sets the pattern outline
+colour, including PDF exports. Section-cut colours are controlled in `plan.css`. Tile width is
 `ROOF_TILE_PATTERN_WIDTH` (initially 300 mm); course length follows
 `TILE_BATTEN_SPACING` (320 mm along the slope). `RoofLayer.set_tile_pattern()`
 persists these dimensions in `BBIM_RoofTilePattern`, without changing the 3D

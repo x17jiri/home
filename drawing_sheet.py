@@ -130,11 +130,29 @@ def _crop(root, path, inkscape, physical, view_box, padding):
               if "drawing-title" in child.get("class", "").split()]
     for parent, title in titles:
         parent.remove(title)
+    # Cropping can expand a viewport to include padding. Keep geometry that
+    # lay outside the original camera clipped, even in the expanded frame.
+    identifier = "sheet-original-viewport"
+    identifiers = {e.get("id") for e in root.iter()}
+    while identifier in identifiers:
+        identifier += "-clip"
+    definitions = ET.SubElement(root, f"{{{_SVG}}}defs")
+    clip = ET.SubElement(definitions, f"{{{_SVG}}}clipPath",
+                         {"id": identifier, "clipPathUnits": "userSpaceOnUse"})
+    ET.SubElement(clip, f"{{{_SVG}}}rect", {
+        key: f"{value:.12g}" for key, value in zip(("x", "y", "width", "height"), view_box)
+    })
+    content = ET.Element(f"{{{_SVG}}}g", {"class": "sheet-viewport", "clip-path": f"url(#{identifier})"})
+    for child in list(root):
+        if child.tag not in {f"{{{_SVG}}}defs", f"{{{_SVG}}}style"}:
+            root.remove(child)
+            content.append(child)
+    root.append(content)
     x, y, width, height = _content_bounds(root, path, inkscape, physical, view_box)
     for parent, title in titles:
         title.set("x", f"{x + width / 2:.12g}")
         title.set("y", f"{y - 3.5 * units:.12g}")
-        parent.append(title)
+        root.append(title)
     if titles:
         x, y, width, height = _content_bounds(root, path, inkscape, physical, view_box)
     pad = padding * units
