@@ -5629,6 +5629,35 @@ class HouseTests(unittest.TestCase):
                 "Chimney masonry",
             )
 
+    def test_projects_upstairs_chimney_marker_without_including_or_moving_body(self) -> None:
+        house = House("Chimney planning")
+        ground = house.storey("Ground", elevation=.25)
+        upper = house.storey("Upper", elevation=3.25)
+        chimney = upper.chimney((2, 3), size=.4, height=4, flue_diameter=.2)
+        drawing = house.add_drawing("Ground plan", 2, 3, 1.6, 3, storeys=[ground])
+        before = ifcopenshell.util.placement.get_local_placement(chimney.ObjectPlacement).copy()
+        include = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include")
+        with self.assertRaisesRegex(TypeError, "projected"):
+            drawing.add_chimney_annotation(chimney, projected="yes")
+        outline = drawing.add_chimney_annotation(chimney, projected=True)
+        self.assertEqual(ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing", "Include"), include)
+        np.testing.assert_allclose(ifcopenshell.util.placement.get_local_placement(chimney.ObjectPlacement), before)
+        self.assertEqual(len(house.model.by_type("IfcChimney")), 1)
+        members = drawing.group.IsGroupedBy[0].RelatedObjects
+        symbols = [item for item in members if item.is_a("IfcAnnotation") and item.id() != drawing.element.id()]
+        self.assertEqual(len(symbols), 3)
+        for symbol in symbols:
+            placement = ifcopenshell.util.placement.get_local_placement(symbol.ObjectPlacement)
+            self.assertAlmostEqual(placement[2, 3], ground.elevation)
+        np.testing.assert_allclose(ifcopenshell.util.placement.get_local_placement(outline.ObjectPlacement)[:2, 3], (2, 3))
+        body = next(item for item in symbols if ifcopenshell.util.element.get_pset(item, "BBIM_DrawingRectangle"))
+        props = ifcopenshell.util.element.get_pset(body, "BBIM_DrawingRectangle")
+        self.assertEqual(props["Style"], "dashed")
+        np.testing.assert_allclose(json.loads(props["Start"]), (1.8, 2.8))
+        np.testing.assert_allclose(json.loads(props["End"]), (2.2, 3.2))
+        with self.assertRaisesRegex(ValueError, "already"):
+            drawing.add_chimney_annotation(chimney, projected=True)
+
     def test_rejects_invalid_chimneys_and_duplicate_symbols(self) -> None:
         house = House("My house")
         ground = house.storey("Ground floor", elevation=0)

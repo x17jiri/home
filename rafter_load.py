@@ -41,9 +41,9 @@ rcParams["mathtext.fontset"] = "dejavusans"
 
 
 # Shared project inputs used by the checks in main().
-ROOF_ANGLE_DEGREES = 35.83
+ROOF_ANGLE_DEGREES = 36.0
 MAX_DEFLECTION_RATIO = 300.0  # 300 means L/300
-SNOW_LOAD_KN_M2 = 1.7  # vertical load per horizontal roof projection
+SNOW_LOAD_KN_M2 = 2.0  # vertical load per horizontal roof projection
 
 REPORT_SNOW_LOAD_STANDARD = "ČSN EN 1991-1-3:2005/Z1:2006"
 REPORT_SNOW_LOAD_ZONE = 3
@@ -64,6 +64,7 @@ ROOF_LAYERS_KG_M2: dict[str, float | None] = {
     "OSB": 10,
     "Installation battens/services": 5,
     "Gypsum plasterboard": 30,
+	"panely": 20,
 }
 
 # Shared calculation assumptions. These are model/code properties rather than
@@ -3843,61 +3844,13 @@ def main() -> None:
 #  DORMER_ROOF_ANGLE_DEGREES = 15.91
 #  RAFTER_LENGTH_ABOVE_PURLIN_M = 1.204
 #  PURLIN_SPANS_M = (3.710, 4.720, 2.720)
-        check_rafter(
-            title="Hlavní krokve, C16",
-            material="c16",
-            width=0.08,
-            height=0.20,
-            span=3.5,
-            spacing=0.80,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.05,
-        )
-        check_rafter(
-            title="Hlavní krokve, C18",
-            material="c18",
-            width=0.08,
-            height=0.20,
-            span=3.5,
-            spacing=0.91,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.05,
-        )
-        check_rafter(
-            title="Hlavní krokve, C22",
+        check_purlin(
+            title="Vaznice, House 2",
             material="c22",
-            width=0.08,
-            height=0.20,
-            span=3.5,
-            spacing=1.02	,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.05,
-        )
-        check_rafter(
-            title="Hlavní krokve, C24",
-            material="c24",
-            width=0.08,
-            height=0.20,
-            span=3.5,
-            spacing=1.0,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.05,
-        )
-        check_purlin(
-            title="Vaznice Mid, gl24c",
-            material="gl24c",
             width=0.20,
-            height=0.32,
-            span=4.5+0.1,
-            rafter_length_above=1.4,
+            height=0.26,
+            span=3.5,
+            rafter_length_above=2,
             lower_rafter_span=3.5,
             roof_angle=ROOF_ANGLE_DEGREES,
             rafter_width=0.08,
@@ -3905,24 +3858,88 @@ def main() -> None:
             rafter_spacing=0.75,
             max_deflection=MAX_DEFLECTION_RATIO,
             snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.1,
+            bearing_length=0.2,
         )
-        check_purlin(
-            title="Vaznice AC, c22",
-            material="gl24c",
-            width=0.16,
-            height=0.24,
-            span=3.25+0.2,
-            rafter_length_above=1.4,
-            lower_rafter_span=3.5,
-            roof_angle=ROOF_ANGLE_DEGREES,
-            rafter_width=0.08,
-            rafter_height=0.20,
-            rafter_spacing=0.75,
-            max_deflection=MAX_DEFLECTION_RATIO,
-            snow_load=SNOW_LOAD_KN_M2,
-            bearing_length=0.1,
-        )
+#        check_rafter(
+#            title="Hlavní krokve, C16",
+#            material="c16",
+#            width=0.08,
+#            height=0.20,
+#            span=3.5,
+#            spacing=0.80,
+#            roof_angle=ROOF_ANGLE_DEGREES,
+#            max_deflection=MAX_DEFLECTION_RATIO,
+#            snow_load=SNOW_LOAD_KN_M2,
+#            bearing_length=0.05,
+#        )
+#        check_rafter(
+#            title="Hlavní krokve, C18",
+#            material="c18",
+#            width=0.08,
+#            height=0.20,
+#            span=3.5,
+#            spacing=0.91,
+#            roof_angle=ROOF_ANGLE_DEGREES,
+#            max_deflection=MAX_DEFLECTION_RATIO,
+#            snow_load=SNOW_LOAD_KN_M2,
+#            bearing_length=0.05,
+#        )
+#        check_rafter(
+#            title="Hlavní krokve, C22",
+#            material="c22",
+#            width=0.08,
+#            height=0.20,
+#            span=3.5,
+#            spacing=1.02	,
+#            roof_angle=ROOF_ANGLE_DEGREES,
+#            max_deflection=MAX_DEFLECTION_RATIO,
+#            snow_load=SNOW_LOAD_KN_M2,
+#            bearing_length=0.05,
+#        )
+#        check_rafter(
+#            title="Hlavní krokve, C24",
+#            material="c24",
+#            width=0.08,
+#            height=0.20,
+#            span=3.5,
+#            spacing=1.0,
+#            roof_angle=ROOF_ANGLE_DEGREES,
+#            max_deflection=MAX_DEFLECTION_RATIO,
+#            snow_load=SNOW_LOAD_KN_M2,
+#            bearing_length=0.05,
+#        )
+#        check_purlin(
+#            title="Vaznice Mid, gl24c",
+#            material="gl24c",
+#            width=0.20,
+#            height=0.32,
+#            span=4.5+0.1,
+#            rafter_length_above=1.4,
+#            lower_rafter_span=3.5,
+#            roof_angle=ROOF_ANGLE_DEGREES,
+#            rafter_width=0.08,
+#            rafter_height=0.20,
+#            rafter_spacing=0.75,
+#            max_deflection=MAX_DEFLECTION_RATIO,
+#            snow_load=SNOW_LOAD_KN_M2,
+#            bearing_length=0.1,
+#        )
+#        check_purlin(
+#            title="Vaznice AC, c22",
+#            material="gl24c",
+#            width=0.16,
+#            height=0.24,
+#            span=3.25+0.2,
+#            rafter_length_above=1.4,
+#            lower_rafter_span=3.5,
+#            roof_angle=ROOF_ANGLE_DEGREES,
+#            rafter_width=0.08,
+#            rafter_height=0.20,
+#            rafter_spacing=0.75,
+#            max_deflection=MAX_DEFLECTION_RATIO,
+#            snow_load=SNOW_LOAD_KN_M2,
+#            bearing_length=0.1,
+#        )
 
 
 if __name__ == "__main__":

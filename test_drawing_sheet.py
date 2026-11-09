@@ -52,6 +52,28 @@ class DrawingSheetTests(unittest.TestCase):
         with patch("ifc_utils._render_existing_drawing", side_effect=self.renderer):
             return sheet.render(self.output, **kwargs)
 
+    def test_sheet_preserves_dimension_indexes_from_temporary_subdrawings(self):
+        from dimension_index import INDEX_FIELDS, read_dimension_rows, write_dimension_rows
+        self.sources = source()
+        sheet = DrawingSheet()
+        sheet.add(self.first, x=.25, y=.5, crop=False)
+        sheet.add(self.second, x=.75, y=.5, crop=False)
+
+        def renderer(*args, **kwargs):
+            path = self.renderer(*args, **kwargs)
+            row = dict.fromkeys(INDEX_FIELDS, "")
+            row.update(value="1000", drawing=args[1], dimension="Width", source="house.py:42",
+                       guid=args[1], label="length")
+            write_dimension_rows(Path(path).with_suffix(".dimensions.tsv"), [row])
+            return path
+
+        with patch("ifc_utils._render_existing_drawing", side_effect=renderer):
+            sheet.render(self.output)
+        rows = read_dimension_rows(self.output)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row["drawing"] for row in rows}, {self.first.element.GlobalId, self.second.element.GlobalId})
+        self.assertTrue(all(row["value"] == "1000" and row["source"] == "house.py:42" for row in rows))
+
     def test_normalized_centres_use_the_whole_page_and_keep_the_original_a4_top_half(self):
         self.sources = {self.first.element.GlobalId: source(235, 180), self.second.element.GlobalId: source(40, 20)}
         sheet = DrawingSheet(paper="A3", orientation="portrait")

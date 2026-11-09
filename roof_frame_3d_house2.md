@@ -14,6 +14,15 @@ It reuses the old simulator's timber sections, section orientation,
 equilibrium check and exact chord-deflection calculation. The House 2
 layout and frame connections are separate from the old house model.
 
+Edit the **USER INPUTS** block at the top of `roof_frame_3d_house2.py` to set
+loads, timber grades, density, gravity, supports, braces, purlin continuity,
+connection stiffness and output options. `Settings` is the single source for
+simulation defaults; the command-line run uses those exact values. Optional
+CLI flags override only the settings explicitly supplied for that run.
+For example, set `continuous_purlins = True` there to enable continuity by
+default; `--no-continuous-purlins` switches it off for a comparison.
+`house2.py` supplies geometry only. No load inputs are read from `rafter_load.py`.
+
 ## Geometry and load path
 
 Global X runs east to west, Y street to garden, and Z upward, matching
@@ -21,9 +30,11 @@ Global X runs east to west, Y street to garden, and Z upward, matching
 numeric assignments and the restricted rafter-spacing comprehension.
 The model follows the current dimensions and positions when rerun:
 
-- Two purlins along Y, including their end overhangs. By default each is
-  split at its two post centrelines into three members: `P1.1`–`P1.3` and
-  `P2.1`–`P2.3`. Both bending moments are released at each splice, with
+- Two purlins along Y, including their end overhangs. Configure one or more
+  posts per purlin using `PURLIN_SUPPORT_Y_POSITIONS`; each purlin has its own
+  tuple and the Y positions need not match. By default each purlin is split
+  at every post centreline: one post gives two members (`P1.1`–`P1.2`), two
+  posts give three. Both bending moments are released at each splice, with
   common axial/shear translations and retained torsional roll compatibility.
   No extra ground restraint is added. `--continuous-purlins` restores the
   original two continuous members (`Settings(continuous_purlins=True)` in
@@ -37,17 +48,19 @@ The model follows the current dimensions and positions when rerun:
   centreline intersects the two rafter axes. Its stiffness is `2 × E × A / L`;
   the two flanking boards' lateral eccentricities are omitted. The joint
   transmits axial force without moment resistance or connection slip.
-- Four X-aligned connecting beams between the purlins' inner faces, with
+- X-aligned connecting beams between the purlins' inner faces, with
   their centrelines at the same Z as the purlin centrelines. Their ends
   attach to the purlin sides through ideal pins at those faces.
-  `PURLIN_CONNECTION_Y_POSITIONS` is shared with the IFC: two connectors
-  at the post rows and two with a 100 mm clear gap to the inner gable-wall
+  `PURLIN_CONNECTION_Y_POSITIONS` is shared with the IFC: one connector
+  at each distinct post Y coordinate and two with a 100 mm clear gap to the inner gable-wall
   faces, controlled by `PURLIN_CONNECTION_WALL_CLEARANCE`. The extra
   connectors do not introduce additional posts or braces.
-- Four posts from the ceiling top directly to the purlin undersides.
-- Optional twelve 45-degree braces: two under the purlin and one under the
+- Posts from the ceiling top directly to the purlin undersides.
+- Optional three 45-degree braces per post: two under the purlin and one under the
   connecting beam at each post. The section and anchor drop follow
   `PURLIN_BRACE_SIZE` and `PURLIN_BRACE_DROP`.
+  A brace whose upper contact falls beyond its purlin end is omitted;
+  the other braces at that post remain.
   They are excluded by default; `--braces` includes them. Exclusion removes
   their stiffness, self-weight and attachment arms from the calculation,
   images, member CSV and active geometry in the calculation basis.
@@ -55,7 +68,7 @@ The model follows the current dimensions and positions when rerun:
 
 Both gable walls and the timber posts support the purlins. The gable
 bearings are at the front/back wall centrelines. There is no direct rigid
-ground support at the four purlin/post locations: the purlins bear directly
+ground support at the purlin/post locations: the purlins bear directly
 on the elastic posts. The side connectors and braces provide additional
 frame load paths. Post bases are pinned against an immovable
 supporting slab. The slab, gable walls, ring beams and their capacities
@@ -112,12 +125,11 @@ that tie or credit the chimney as a support. No purlin spacers are introduced.
 
 ## Loads and materials
 
-CLI defaults read `ROOF_LAYERS_KG_M2` and `SNOW_LOAD_KN_M2` from
-`rafter_load.py` as data. Currently these are:
+Defaults are local fields of `Settings` in the simulator's USER INPUTS block:
 
-- Full sloped build-up: **130 kg/m² of actual slope**, including the
+- `roof_mass`: **150 kg/m² of actual slope**, including the
   sloped internal insulation/OSB/installation space/plasterboard finish.
-- Roof snow: **1.7 kN/m² of horizontal projection**, already a roof load,
+- `snow_load`: **3.0 kN/m² of horizontal projection**, already a roof load,
   not ground snow requiring another shape coefficient.
 - Timber self-weight: **450 kg/m³**, with **g = 10 m/s²**.
 
@@ -150,8 +162,8 @@ This preserves the earlier simulator's symmetric/asymmetric snow pattern
 convention, reoriented to this roof. It is not an automatic determination
 of all project-specific snow, drift, wind or regulatory combinations.
 
-Both material options default to **C18**, as a trial selection consistent
-with the earlier simulator; this is not inferred from the ungraded IFC
+Material defaults are **C16 for rafters** (`rafter_material`) and **C22 for
+other timber** (`beam_material`); these are not inferred from the ungraded IFC
 `Wood` material. `--rafter-material` and `--beam-material` select properties
 from the shared `materials.py` registry. The second option applies to the
 purlins, cross beams, posts, braces and collar ties.
@@ -218,7 +230,7 @@ joint/anchor capacity, bearing compression or slab adequacy.
 ## Comparisons
 
 ```bash
-# Restore bending continuity over the two posts of each purlin.
+# Restore bending continuity over each purlin's configured posts.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
     --continuous-purlins --output /tmp/house2_continuous
 

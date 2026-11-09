@@ -2,6 +2,7 @@
 
 import math
 import argparse
+from dataclasses import replace
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -13,10 +14,18 @@ import numpy as np
 from roof_frame_3d_house2 import (
     House2Inputs, Layout, Settings, build_roof_model, member_rows,
     PLAN_CHECK_COLORS, horizontal_stiffness, plan_check_statuses, plot_plan_report,
-    project_loads, solve_roof_model, spring_axial_gap, support_rows, tributary_widths,
+    parse_arguments, purlin_configuration_description, solve_roof_model, spring_axial_gap,
+    support_rows, tributary_widths,
 )
 
 HOUSE = Path(__file__).with_name("house2.py")
+
+
+def layout_with_supports(positions):
+    inputs = House2Inputs(HOUSE)
+    inputs.cache["PURLIN_SUPPORT_Y_POSITIONS"] = positions
+    with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
+        return Layout.from_house(HOUSE)
 
 
 class InputTests(unittest.TestCase):
@@ -50,28 +59,34 @@ class InputTests(unittest.TestCase):
                             "step = .67\nn = math.floor(9/step)\n"
                             "positions = tuple(i*step + (.1 if i > n//2 else 0) for i in range(n+1))\n"
                             "layers: dict[str, float | None] = {'missing': None}\n"
+                            "rows = ((3.04,), (4.5,))\n"
+                            "connectors = (*sorted({y for row in rows for y in row}), .4, 8.6)\n"
                             "bad = __import__('os').getcwd()\n")
             data = House2Inputs(path)
             values = data.get("positions")
             self.assertEqual(len(values), 14)
             self.assertAlmostEqual(values[7]-values[6], .77)
             self.assertIsNone(data.get("layers")["missing"])
+            self.assertEqual(data.get("connectors"), (3.04, 4.5, .4, 8.6))
             with self.assertRaisesRegex(ValueError, "unsupported"):
                 data.get("bad")
 
     def test_geometry_follows_live_house_dimensions(self):
         g = House2Inputs(HOUSE).get
         layout = Layout.from_house(HOUSE)
-        self.assertEqual(sum(b.category == "brace" for b in layout.beams), 12)
-        self.assertEqual(sum(b.category == "post" for b in layout.beams), 4)
+        post_count = sum(map(len, g("PURLIN_SUPPORT_Y_POSITIONS")))
+        self.assertLessEqual(sum(b.category == "brace" for b in layout.beams), 3*post_count)
+        self.assertEqual(sum(b.category == "brace" and b.name.endswith(".cross")
+                             for b in layout.beams), post_count)
+        self.assertEqual(sum(b.category == "post" for b in layout.beams), post_count)
         crosses = [b for b in layout.beams if b.category == "cross_beam"]
-        self.assertEqual(len(crosses), 4)
+        self.assertEqual(len(crosses), len(g("PURLIN_CONNECTION_Y_POSITIONS")))
         self.assertEqual(tuple(b.start[1] for b in crosses), g("PURLIN_CONNECTION_Y_POSITIONS"))
         clearance = g("PURLIN_CONNECTION_WALL_CLEARANCE")
         half_width = g("PURLIN_CONNECTION_BEAM_SIZE")[0]/2
         self.assertAlmostEqual(min(b.start[1] for b in crosses)-half_width-g("BWT"), clearance)
         self.assertAlmostEqual(g("HOUSE_DEPTH")-g("BWT")-max(b.start[1] for b in crosses)-half_width, clearance)
-        self.assertEqual(len([p for p in layout.pins if p.name.startswith("purlin_cross_")]), 8)
+        self.assertEqual(len([p for p in layout.pins if p.name.startswith("purlin_cross_")]), 2*len(crosses))
         self.assertEqual(sum(b.category == "rafter" for b in layout.beams), 2*len(g("RAFTER_Y_POSITIONS")))
         collars = [b for b in layout.beams if b.category == "collar"]
         self.assertEqual(len(collars), len(layout.rafter_y))
@@ -97,33 +112,98 @@ class InputTests(unittest.TestCase):
                 self.assertAlmostEqual(math.hypot(dx, dy), dz)
         self.assertEqual(layout.rafter_y, g("RAFTER_Y_POSITIONS"))
         direct_bearings = [pin for pin in layout.pins if pin.name.startswith("purlin_post_")]
-        self.assertEqual(len(direct_bearings), 4)
+        self.assertEqual(len(direct_bearings), post_count)
         for pin in direct_bearings:
             self.assertAlmostEqual(pin.contact[2], purlin_bottom)
             self.assertEqual(pin.axes[1], pin.contact)
         self.assertFalse(any(pin.name.startswith("cross_post_") for pin in layout.pins))
 
-    def test_non_aligned_posts_rejected(self):
-        inputs = House2Inputs(HOUSE)
-        inputs.cache["PURLIN_SUPPORT_Y_POSITIONS"] = ((3, 6), (3.1, 6))
-        with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
-            with self.assertRaisesRegex(ValueError, "align"):
-                Layout.from_house(HOUSE)
+    def test_independent_post_rows_follow_each_purlin(self):
+        positions = ((3.04,), (4.5, 6))
+        layout = layout_with_supports(positions)
+        px = House2Inputs(HOUSE).get("PURLIN_X_POSITIONS")
+        for x, ys in zip(px, positions):
+            posts = [b.start[1] for b in layout.beams if b.category == "post" and b.start[0] == x]
+            self.assertEqual(tuple(posts), ys)
+        crosses = [b.start[1] for b in layout.beams if b.category == "cross_beam"]
+        for ys in positions:
+            for y in ys:
+                self.assertEqual(crosses.count(y), 1)
 
-    def test_shared_load_basis_includes_interior_finish(self):
-        mass, snow = project_loads()
-        layers = House2Inputs(HOUSE.with_name("rafter_load.py")).get("ROOF_LAYERS_KG_M2")
-        self.assertGreater(layers["Gypsum plasterboard"], 0)
-        self.assertEqual(mass, sum(layers.values()))
-        self.assertGreater(snow, 0)
+    def test_empty_duplicate_nonfinite_and_outside_posts_rejected(self):
+        for positions in (((), (4.5,)), ((3, 3), (4.5,)), ((3,), (float("nan"),)),
+                          ((3,), (0,)), ((3,), (100,)), ((3,),)):
+            with self.subTest(positions=positions), self.assertRaises(ValueError):
+                layout_with_supports(positions)
+
+    def test_braces_beyond_purlin_ends_are_skipped_individually(self):
+        g = House2Inputs(HOUSE).get
+        ys = (g("BWT")+.3, g("HOUSE_DEPTH")-g("BWT")-.3)
+        layout = layout_with_supports((ys, ys))
+        names = {b.name for b in layout.beams if b.category == "brace"}
+        self.assertEqual(names, {f"BRACE{i}.{j}.{side}" for i in (1, 2)
+                                for j, sides in ((1, ("back", "cross")), (2, ("front", "cross")))
+                                for side in sides})
+        for pin in (p for p in layout.pins if p.name.startswith("BRACE")):
+            self.assertIn(pin.name.rsplit("_", 1)[0], names)
+
+    def test_cli_uses_local_settings_without_reading_external_load_files(self):
+        with patch("roof_frame_3d_house2.House2Inputs", side_effect=AssertionError("no file reads")):
+            _, settings = parse_arguments([])
+        self.assertEqual(settings, Settings())
+
+    def test_edited_local_defaults_reach_cli_and_only_explicit_flags_override_them(self):
+        defaults = Settings(roof_mass=166, snow_load=2.35, rafter_material="C24", beam_material="GL24c",
+                            timber_density=510, gravity=9.81, gable_bearings=False, braces=True,
+                            continuous_purlins=True, brace_action="both", horizontal_stiffness_kn_mm=.14,
+                            joint_stiffness_factor=2000)
+        with patch("roof_frame_3d_house2.Settings", return_value=defaults):
+            _, unchanged = parse_arguments([])
+            _, overridden = parse_arguments(["--snow", "1.1", "--no-braces", "--no-continuous-purlins"])
+        self.assertEqual(unchanged, defaults)
+        self.assertEqual(overridden, replace(defaults, snow_load=1.1, braces=False, continuous_purlins=False))
 
 
 class SolverTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.layout = Layout.from_house(HOUSE)
+        # Preserve the two-post regression fixture independently of live edits.
+        cls.layout = layout_with_supports(((3, 6), (3, 6)))
         cls.roof = build_roof_model(cls.layout)
         cls.residuals = solve_roof_model(cls.roof)
+
+    def test_near_wall_posts_solve_with_only_the_fitting_braces(self):
+        g = House2Inputs(HOUSE).get
+        ys = (g("BWT")+.3, g("HOUSE_DEPTH")/2, g("HOUSE_DEPTH")-g("BWT")-.3)
+        roof = build_roof_model(layout_with_supports((ys, ys)), Settings(braces=True))
+        self.assertEqual(len(roof.brace_springs), 14)
+        self.assertLess(max(solve_roof_model(roof).values()), 1e-6)
+
+    def test_single_posts_solve_with_hinges_continuity_and_optional_braces(self):
+        for positions, settings in (
+            (((4.5,), (4.5,)), Settings()),
+            (((3.04,), (4.5,)), Settings()),
+            (((3.04,), (4.5,)), Settings(continuous_purlins=True)),
+            (((3.04,), (4.5,)), Settings(braces=True)),
+        ):
+            with self.subTest(positions=positions, settings=settings):
+                roof = build_roof_model(layout_with_supports(positions), settings)
+                self.assertLess(max(solve_roof_model(roof).values()), 1e-6)
+                purlins = [b for b in roof.layout.beams if b.category == "purlin"]
+                self.assertEqual(len(purlins), 2 if settings.continuous_purlins else 4)
+                self.assertEqual(len(roof.layout.purlin_joints), 0 if settings.continuous_purlins else 2)
+                self.assertEqual(purlin_configuration_description(roof),
+                                 "continuous" if settings.continuous_purlins else "2 pieces each")
+                self.assertEqual(len(roof.brace_springs), 6 if settings.braces else 0)
+                reactions = [r for r in support_rows(roof)
+                             if r["kind"] == "post_base" and r["combination"] == "SLS_dead"]
+                self.assertEqual(len(reactions), 2)
+                for left, right, point in roof.layout.purlin_joints:
+                    self.assertTrue(any(math.isclose(point[1], y) for ys in positions for y in ys))
+                    member = roof.model.members[left]
+                    for combo in roof.model.load_combos:
+                        for direction in ("My", "Mz"):
+                            self.assertLess(abs(member.moment(direction, member.L(), combo)), 1e-4)
 
     def test_braces_are_omitted_by_default_with_their_weight_and_connections(self):
         self.assertFalse(Settings().braces)

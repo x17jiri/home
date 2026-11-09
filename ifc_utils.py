@@ -59,6 +59,7 @@ from roof_tile_patterns import add_roof_tile_patterns
 from drawing_terrain import add_terrain_overlay
 from railings import Railing, RailingPath, create_railing
 from steel_profiles import HEBSection, heb_section, heb_profile
+from dimension_index import capture_dimension_source, write_dimension_index
 
 
 __all__ = [
@@ -6074,6 +6075,8 @@ def _render_existing_drawing(
     if scale_label and not resolved_title.endswith(f" {scale_label}"):
         resolved_title = f"{resolved_title} {scale_label}"
     _postprocess_drawing_title(absolute_output, resolved_title)
+    dimension_index = write_dimension_index(absolute_output, model, drawing)
+    print(f"[drawing render] Dimension source index: {dimension_index}", flush=True)
 
     if png:
         inkscape_command = shutil.which(str(inkscape))
@@ -11630,6 +11633,8 @@ class Drawing:
         metres; Bonsai displays the measured value in millimetres.  A non-zero
         offset adds extension lines from the measured points to 1 mm beyond
         the dimension line at 1:100.
+        The caller's source location and original inputs are saved on the
+        annotation for the dimension index produced by render().
         """
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
@@ -11754,6 +11759,15 @@ class Drawing:
             *(dimension_pset.HasProperties or ()),
             custom_unit,
         )
+
+        source_pset = ifcopenshell.api.pset.add_pset(
+            model, product=dimension, name="BBIM_DimensionSource",
+        )
+        ifcopenshell.api.pset.edit_pset(model, pset=source_pset, properties={
+            **capture_dimension_source(__file__),
+            "Start": json.dumps((start_x, start_y)), "End": json.dumps((end_x, end_y)),
+            "Offset": offset, "Length": length,
+        })
 
         drawing_products = [dimension]
         if offset != 0:
@@ -14641,6 +14655,7 @@ class Drawing:
         self,
         chimney: Chimney,
         *,
+        projected: bool = False,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add the chimney body and its flue symbol to this drawing.
@@ -14648,17 +14663,22 @@ class Drawing:
         If the chimney is spatially contained in a different storey, its
         GlobalId is added to this drawing's inclusion selector.  This lets one
         continuous multistorey chimney be cut in every annotated floor plan.
+        ``projected=True`` draws only a plan-level location marker, with a
+        dashed body outline and the flue symbol. The physical chimney is not
+        included or moved, so this can show an upstairs chimney on a lower plan.
         """
         self._require_plan_view("add_chimney_annotation")
         if not isinstance(chimney, Chimney):
             raise TypeError("chimney must be a Chimney created by Storey.chimney")
         if chimney.file is not self.house.model:
             raise ValueError("chimney must belong to this house")
+        if not isinstance(projected, bool):
+            raise TypeError("projected must be a boolean")
         if chimney.id() in self._annotated_chimneys:
             raise ValueError("chimney already has an annotation in this drawing")
 
         chimney_storey = ifcopenshell.util.element.get_container(chimney)
-        if not self._includes_storey_element(chimney_storey):
+        if not projected and not self._includes_storey_element(chimney_storey):
             self._include_model_element(chimney)
 
         annotation_name = (
@@ -14666,6 +14686,15 @@ class Drawing:
             if name is not None
             else f"{self.name} {chimney.Name} Flue Symbol"
         )
+        placement = chimney.placement.copy()
+        if projected:
+            placement[2, 3] = self._annotation_frame(chimney.center, "add_chimney_annotation")[2, 3]
+            x, y = chimney.center
+            half = chimney.size/2
+            self.add_rectangle(
+                (x-half, y-half), (x+half, y+half), style="dashed",
+                name=f"{annotation_name} Projected Body",
+            )
         model = self.house.model
         radius = chimney.flue_diameter / 2
         circle_points = [
@@ -14685,7 +14714,7 @@ class Drawing:
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=fill,
-            matrix=chimney.placement.copy(),
+            matrix=placement,
             is_si=True,
         )
         fill_points = [
@@ -14733,7 +14762,7 @@ class Drawing:
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=outline,
-            matrix=chimney.placement.copy(),
+            matrix=placement,
             is_si=True,
         )
         outline_curve = model.createIfcIndexedPolyCurve(
@@ -15033,6 +15062,8 @@ class Drawing:
         filename stem (or SVG filename stem when pdf=None). The title adds a
         10 mm header without rescaling geometry and appends the drawing scale,
         e.g. "Krov 1:100"; png_dpi affects only PNG.
+        Also writes <output stem>.dimensions.tsv, mapping rendered linear
+        dimension labels to their Python call sites and original endpoints.
         ``tables=False`` hides the right panel without dropping timber styles
         or changing the drawing's persisted schedule definitions.
         """
@@ -18130,6 +18161,114 @@ class Wall(ifcopenshell.entity_instance):
             if drawing._includes_door(door):
                 if not drawing._includes_model_element(door):
                     drawing._include_model_element(door)
+                if drawing._automatic_door_annotations:
+                    drawing.add_door_annotation(door, offset=drawing._door_annotation_offset)
+        return door
+
+    def add_garage_door(
+        self,
+        opening: ifcopenshell.entity_instance,
+        *,
+        section_height: Number = 0.5,
+        panel_thickness: Number = 0.04,
+        frame_width: Number = 0.06,
+        name: str | None = None,
+        color: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Fill an existing wall opening with a closed sectional garage door.
+
+        The opening must be an unfilled ``IfcOpeningElement`` created by this
+        wall. Its width, sill and top are retained, including facade voids and
+        opening annotations. ``section_height`` is the maximum panel height;
+        equal sections and recessed horizontal joints are modelled in 3D.
+        A continuous backing closes the joints. The plan shows the frame and
+        closed panel without a swing arc. All dimensions are in metres.
+
+        This is a simplified closed door, without tracks or opening motion.
+        """
+        if not isinstance(opening, ifcopenshell.entity_instance) or not opening.is_a("IfcOpeningElement"):
+            raise TypeError("opening must be an IfcOpeningElement")
+        if opening.file is not self.file:
+            raise ValueError("opening must belong to this house")
+        hosts = list(opening.VoidsElements or ())
+        if len(hosts) != 1 or hosts[0].RelatingBuildingElement != self:
+            raise ValueError("opening must belong to this wall")
+        if opening.PredefinedType == "RECESS":
+            raise ValueError("a wall recess cannot contain a garage door")
+        if opening.HasFillings:
+            raise ValueError("opening already has a filling")
+        section_height = _number(section_height, "section_height")
+        panel_thickness = _number(panel_thickness, "panel_thickness")
+        frame_width = _number(frame_width, "frame_width")
+        if min(section_height, panel_thickness, frame_width) <= 0:
+            raise ValueError("section_height, panel_thickness and frame_width must be positive")
+        if panel_thickness > self.thickness:
+            raise ValueError("panel_thickness must fit within the wall")
+        door_name = _name(name, "name") if name is not None else "Garage door"
+        house, model = self.storey.house, self.file
+        local = np.linalg.inv(self._placement(0, 0)) @ ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
+        intervals = [interval for interval in self._openings
+                     if isclose(interval[0], float(local[0, 3]), abs_tol=1e-7)
+                     and isclose(interval[2], float(local[2, 3]), abs_tol=1e-7)]
+        if len(intervals) != 1:
+            raise ValueError("opening must be created by this wall")
+        start, end, bottom, top = intervals[0]
+        width, height = end-start, top-bottom
+        panel_width, panel_height = width-2*frame_width, height-frame_width
+        if min(panel_width, panel_height) <= 0:
+            raise ValueError("frame_width leaves no space for the door panel")
+        style = house._surface_style("door", color=color, transparency=0)
+        door = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcDoor", name=door_name, predefined_type="DOOR",
+        )
+        door.OverallWidth, door.OverallHeight = width, height
+        door.OperationType = "USERDEFINED"
+        door.UserDefinedOperationType = "SECTIONAL_OVERHEAD"
+        builder = ShapeBuilder(model)
+        frame_depth = min(self.thickness, panel_thickness+0.02)
+        panel_y = self.body_offset+(frame_depth-panel_thickness)/2
+
+        def block(x, y, z, w, d, h):
+            return builder.extrude(builder.rectangle(size=(w, d)), magnitude=h, position=(x, y, z))
+
+        solids = [
+            block(0, self.body_offset, 0, frame_width, frame_depth, height),
+            block(width-frame_width, self.body_offset, 0, frame_width, frame_depth, height),
+            block(frame_width, self.body_offset, panel_height, panel_width, frame_depth, frame_width),
+        ]
+        section_count = ceil(panel_height/section_height)
+        pitch = panel_height/section_count
+        gap = min(0.002, pitch/10)
+        backing = min(0.002, panel_thickness/4)
+        solids.append(block(frame_width, panel_y+panel_thickness-backing, 0,
+                            panel_width, backing, panel_height))
+        for index in range(section_count):
+            z0 = index*pitch+(gap/2 if index else 0)
+            z1 = (index+1)*pitch-(gap/2 if index < section_count-1 else 0)
+            solids.append(block(frame_width, panel_y, z0, panel_width, panel_thickness-backing, z1-z0))
+        body = builder.get_representation(house._body_context, solids)
+        ifcopenshell.api.geometry.assign_representation(model, product=door, representation=body)
+        if style is not None:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=body, styles=[style])
+        curves = [
+            builder.rectangle(size=(frame_width, frame_depth), position=(0, self.body_offset)),
+            builder.rectangle(size=(frame_width, frame_depth), position=(width-frame_width, self.body_offset)),
+            builder.rectangle(size=(panel_width, panel_thickness), position=(frame_width, panel_y)),
+        ]
+        plan = builder.get_representation(house._plan_body_context, curves)
+        plan = ifcopenshell.api.geometry.map_representation(model, representation=plan)
+        plan.Items[0].MappingTarget.LocalOrigin.Coordinates = (0.0, 0.0, height/2)
+        ifcopenshell.api.geometry.assign_representation(model, product=door, representation=plan)
+        pset = ifcopenshell.api.pset.add_pset(model, product=door, name="EPset_Door")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+            "ClearHeight": panel_height, "OpenAngle": 0.0,
+            "SectionCount": section_count, "SectionHeight": pitch,
+            "FrameWidth": frame_width, "PanelThickness": panel_thickness,
+        })
+        self._place_filling(door, opening, self._placement(start, bottom))
+        for drawing in house._drawings:
+            if drawing._includes_door(door):
+                drawing._include_model_element(door)
                 if drawing._automatic_door_annotations:
                     drawing.add_door_annotation(door, offset=drawing._door_annotation_offset)
         return door

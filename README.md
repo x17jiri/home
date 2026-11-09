@@ -88,11 +88,17 @@ It creates both `house_plan.svg` and `house_plan.png`.
 ## Alternative house
 
 `house2.py` is an independent model using the shared `ifc_utils` helpers.
-Its `Basement` storey duplicates every ground-floor wall, including partitions,
-as solid 300 mm `ztracene bedneni` walls. The new walls are centred beneath
+Its `Basement` storey duplicates the selected `basement_source_walls`, including
+partitions, as solid 300 mm `ztracene bedneni` walls. The two SDK walls forming
+room 3's narrow end and the bathroom/hallway SDK partition are excluded,
+together with their strip footings and
+basement-ceiling ring beams. The new walls are centred beneath
 the physical ground-floor wall bodies, accounting for face-based reference
 lines. Their ends extend by half the increase in thickness to fill junctions.
 Ground-floor doors, windows and the Liapor base course are not copied.
+The basement hallway ceiling's front bearing also needs a separate structural
+support after omitting the wall beneath the bathroom/hallway partition;
+this is noted in the basement plan. No replacement support is modelled yet.
 
 `BASEMENT_WALL_HEIGHT = 2.25 m` leaves `CEILING_THICKNESS = 0.21 m` above
 the basement walls, immediately below the ground-floor layers at Z = 0.
@@ -127,7 +133,15 @@ Run `python3 house2.py basement found` to generate the basement and foundation
 plans. Their PDFs are `D1.1.9. Půdorys suterénu.pdf` (`PDF_BASEMENT`) and
 `D1.1.10. Základy.pdf` (`PDF_FOUND`) in the architectural folder; SVGs are
 `projekt2/basement.svg` and `projekt2/found.svg`. The basement cut passes
-through the middle of the basement walls; the foundation cut passes through
+through the middle of the basement walls.
+
+The basement plan labels the five clear rooms `S.01`–`S.05` and includes a
+room legend with areas and a width/depth dimension for every room. Names are
+`Garáž` below room 3, `Schody` below the stairway, and `Skladovací prostor`
+for the remaining rooms. Their boundaries and dimensions follow the actual
+300 mm basement walls; no extra floor layers are added.
+
+The foundation cut passes through
 the middle of the strip footings, at
 `FOUNDATION_FOOTING_BOTTOM_Z + FOUNDATION_FOOTING_HEIGHT/2` (currently
 Z = −2.910 m). The foundation plan includes black dashed outlines of the
@@ -176,41 +190,53 @@ are numbered D1.1.5–D1.1.8 in its architectural folder. The shared
 `add_exterior_view()` helper includes the basement, ceilings, roof and
 facades, closes doors for rendering, and suppresses plan annotations.
 
-`TERRAIN_PROFILES` holds an independently editable profile for each view:
-global X with height above sea level for street/garden, and global Y with
-height above sea level for east/west. Each profile requires at least two
-points at distinct horizontal positions; use the same height at both ends
-for flat terrain. `earth_to_z()` uses
-`GROUND_FINISHED_FLOOR_ELEVATION = 417.0 m`; the initial terrain follows the
-old house, at `TERRAIN_STREET_ELEVATION = 416.0 m` and
-`TERRAIN_GARDEN_ELEVATION = 416.6 m`. `y_to_earth()` interpolates between
-these values for the side-view slopes. Terrain is a drawing overlay with
-earth hatching and a mask below the profile, rather than a 3D earth solid.
+The four corner constants in `house2.py` define terrain heights above sea level:
+`TERRAIN_STREET_EAST_ELEVATION`, `TERRAIN_STREET_WEST_ELEVATION`,
+`TERRAIN_GARDEN_EAST_ELEVATION` and `TERRAIN_GARDEN_WEST_ELEVATION`.
+East is global X = 0, west is X = `HOUSE_WIDTH`; street is Y = 0 and garden
+is Y = `HOUSE_DEPTH`. `TERRAIN_PROFILES` derives each view's profile from its
+two corner heights through `terrain_edge_profile()`: a straight slope along
+the house and flat terrain beyond each end. Adjacent views share the same
+corner heights, and the cameras handle their orientation on the page.
+Profile positions use global X for street/garden and global Y for east/west.
+`earth_to_z()` converts the heights using `GROUND_FINISHED_FLOOR_ELEVATION`
+and the ground-floor build-up. Terrain is a drawing overlay with earth
+hatching and a mask below the profile, rather than a 3D earth solid.
 
 It starts with a ground-floor storey at Z = 0 and four 240 mm VPC
 outer walls enclosing the `HOUSE_WIDTH × HOUSE_DEPTH` footprint. A 175 mm VPC
 load-bearing wall along X separates the garden rooms, with clear depth
 `GARDEN_ROOMS_DEPTH`; the street-side area uses the remaining space.
-A stepped 175 mm VPC load-bearing wall splits the street-side area.
+A 175 mm VPC load-bearing wall separates room 3 from the bathroom.
+Two 100 mm SDK partitions define room 3's narrowed garden-side end, without
+a Liapor base course or a ground-ceiling ring beam above them.
 Pokoj 3 keeps `THIRD_ROOM_WIDTH = 3.47 m` clear below its garden-side end;
 the top `THIRD_ROOM_NARROW_DEPTH` is only
 `THIRD_ROOM_NARROW_WIDTH` wide, clearing the Pokoj 1 doorway.
-Its return aligns with both faces of the bathroom wall; the recess depth
-is calculated from `BATHROOM_PARTITION_Y` rather than set independently.
+The return's hallway-facing surface aligns with the street-side end of the
+two side-wall openings. Its room-facing surface is `THIRD_ROOM_STEP_Y`;
+the recess depth follows this position independently of the bathroom partition.
 The floor polygons and dimensions follow the step. Its street window stays
 centred on the wider street-side part.
 The stairs occupy the west/right side, enclosed by a 175 mm VPC wall from
 the front wall to the garden-room wall, with `STAIRWAY_WIDTH = 2.25 m`
 clear beside the west exterior wall. The 2.20 m wide bathroom sits to their
-left, next to room 3. A 175 mm VPC load-bearing wall splits that area into hallway at
+left, next to room 3. A 100 mm SDK partition splits that area into hallway at
 the garden end and bathroom at the front. `BATHROOM_DEPTH` is the
-clear bathroom depth. Both new walls have the common Liapor base course;
-both the stairway wall and the bathroom wall are load-bearing.
-A door-height unfilled opening spans the stairway wall from the hallway
-face of the bathroom partition to the garden-room wall. The hallway's
+clear bathroom depth. The stairway wall is load-bearing VPC with a Liapor base
+course; the bathroom/hallway partition is non-load-bearing SDK without a base
+course or a ground-ceiling ring beam above it. Its room-facing surface and
+door opening position along X follow the same bathroom dimensions.
+A matching unfilled opening spans each bathroom side wall across the hallway,
+running `HALLWAY_OPENING_LENGTH = 1.25 m` from the garden-room wall towards
+the street. The bathroom's horizontal SDK partition keeps its own position.
+Both openings stop `HALLWAY_OPENING_TOP_GAP = 0.25 m` below the ceiling
+underside. The left wall continues above its opening and its basement wall
+and footing follow the full extended wall length. The hallway's
 continuous floor extends through it into the stair approach, follows room
 3's stepped wall and excludes both stair-flight footprints. Its room area
-and legend update from that same outline.
+and legend update from that same outline. Floor build-up still reaches the
+bathroom partition and excludes the new solid side-wall segment below the opening.
 The bathroom uses a two-column layout read from garden to street:
 door/toilet, clear space/basin, shower/hydrobox and water meter. The 900 mm door leaf
 has a 1000 mm opening 125 mm from room 3's wall and swings into the
@@ -269,11 +295,15 @@ Five MIAKO assemblies cover the downstairs rooms. Pokoj 1 and 2 share one
 assembly with beams along Y, centred over their separating partition.
 Pokoj 3 has street and garden assemblies with beams along X, split at
 `BATHROOM_PARTITION_Y`, the bathroom-facing edge of the bathroom/hallway
-wall. The garden assembly uses the narrower room width. Chodba has beams
-along Y across the hallway and stair approach; its front bearing assumes
-the bathroom wall continues across that approach. This assumed support
-is marked by a blue dashed line in the ceiling plan and is not an added
-model wall. Koupelna has beams along X; its junction with Pokoj 3's beams
+wall. Both room 3 assemblies span to the full load-bearing bathroom wall,
+passing above the SDK partitions. Chodba has beams along Y from that
+load-bearing wall across the hallway and stair approach. Its front bearing
+requires a separate structural support above the SDK partition and stair
+approach. `HALLWAY_CEILING_SUPPORT_Y` and `HALLWAY_CEILING_SUPPORT_WIDTH`
+retain the previous ceiling layout independently of the partition thickness.
+The full support line is marked blue and dashed in the ceiling plan and
+noted as not yet designed; no structural member is added there.
+Koupelna has beams along X; its junction with Pokoj 3's beams
 is deliberately left unresolved for now. Opposing hallway and garden-room
 beam ends also overlap on their shared 175 mm wall; that junction remains
 unresolved and is noted in the ceiling drawing.
@@ -457,33 +487,38 @@ Two wooden purlins (`purlins`) run parallel to the wall plates at
 `PURLIN_CENTER_HEIGHT = 3.5 m` above the upper-storey datum, which is the
 ceiling top. This gives world Z = 6.535 m (bottom 6.415 m, top 6.655 m).
 They share `WALL_PLATE_OVERHANG`, so their Y range is also −0.30 to 9.05 m.
-Each purlin has two vertical timber posts (`purlin_supports`) in the upper
-storey. `PURLIN_SUPPORT_Y_POSITIONS` contains one independently editable
-pair of absolute Y coordinates per purlin, initially `(3.0, 6.0)` for each.
+Each purlin has configurable vertical timber posts (`purlin_supports`) in the
+upper storey. `PURLIN_SUPPORT_Y_POSITIONS` contains a nonempty tuple of absolute
+Y coordinates per purlin. For one post per purlin at the house centre, use
+`((HOUSE_DEPTH/2,), (HOUSE_DEPTH/2,))`; two-post layouts remain supported.
 `PURLIN_SUPPORT_SIZE = (0.16, 0.16)` sets their cross-section. They run from
 the ceiling top (`UPPER_FLOOR_START`, before the floor build-up) directly
-to the purlin undersides. Four X-aligned connecting beams
+to the purlin undersides. X-aligned connecting beams
 (`purlin_connection_beams`) span between the purlin inner faces, with their
 centrelines at `PURLIN_Z`, level with the purlin centrelines.
 `PURLIN_CONNECTION_BEAM_SIZE = (0.12, 0.20)` controls their section.
-`PURLIN_CONNECTION_Y_POSITIONS` is shared with the simulator: two beams
-align with the post rows, and two sit inside the front/back gable walls.
+`PURLIN_CONNECTION_Y_POSITIONS` is shared with the simulator: one beam
+aligns with each distinct post Y coordinate, and two sit inside the front/back
+gable walls.
 `PURLIN_CONNECTION_WALL_CLEARANCE = 0.10` measures the clear wall-to-beam
 gap; each end beam's centre includes half its 120 mm width.
-The purlin bears directly on its post; the connector is attached at its side. East/west
-post pairs must have matching Y coordinates. Each post has three 45-degree
-timber braces: two along Y beneath its purlin and one along X toward the
-opposite post, beneath the connecting beam. `PURLIN_BRACE_SIZE = (0.10, 0.12)`
+The purlin bears directly on its post; the connector is attached at its side.
+East/west posts can have different Y coordinates and different counts. Each
+post has three 45-degree timber braces: two along Y beneath its purlin and one
+along X toward the opposite purlin, beneath the connecting beam.
+`PURLIN_BRACE_SIZE = (0.10, 0.12)`
 sets the brace section, and `PURLIN_BRACE_DROP = 0.80` sets the anchor's drop
 below the post top. Brace ends are cut flush to the post face and beam
-underside. The upper plan shows the post cut footprints; the roof drawing
-and timber schedule include the posts, connecting beams and all 12 braces.
+underside. Braces that would extend beyond a purlin end are skipped individually.
+The upper plan shows the post cut footprints; the roof drawing
+and timber schedule include the posts, connecting beams and all fitting braces.
 Intersecting SDK partitions and inner roof finishes have clearance openings
 matching the new timber solids, so the frame remains exposed at penetrations.
 The upper plan dimensions only the east support row: inside front-wall face
-to front-post centre, between post centres, and rear-post centre to inside
-back-wall face. One horizontal dimension shows the clear distance from the
-front east post's face to the common front edge of the kitchen run.
+to first-post centre, between successive post centres when there is more than
+one, and last-post centre to inside back-wall face. One horizontal dimension
+shows the clear distance from the front east post's face to the common front
+edge of the kitchen run.
 All endpoints follow the configured post and kitchen positions.
 The roof has 14 pairs of `RAFTER_SIZE = (0.08, 0.20)` rafters, with their
 centres at `RAFTER_FIRST_Y = -0.125` through
@@ -534,7 +569,14 @@ clearance parameter or dimension. It reuses the original model's
 `CHIMNEY_ABOVE_ROOF = 0.65 m` above the roof-tile ridge. The roof receives
 an exact vertical shaft opening; the SDK partitions meet the chimney
 without intersecting it. The upper plan includes the chimney/flue
-symbol, while the ground and ceiling plans omit it.
+symbol. `SHOW_CHIMNEY_PLANNING_MARKER = True` also adds a temporary
+flue symbol and dashed body footprint to the ground and ceiling plans.
+Set it to `False` to hide these planning markers. The physical chimney
+still begins upstairs. The reusable helper is
+`drawing.add_chimney_annotation(chimney, projected=True)`.
+`SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True` adds green crossed rectangles
+for all timber-post footprints to the same plans. These follow the actual
+post positions and section size; set the flag to `False` to hide them.
 Run `python3 house2.py roof` for the roof framing plan (`projekt2/roof.svg`)
 and `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.4. Krov.pdf`.
 `COLLAR_TIE_SIZE = (0.05, 0.15)` sets paired collar ties, one on each side
@@ -1484,6 +1526,16 @@ overridden with `color`. `transparency` controls the frame and
 and sliding doors are supported; opening/closing and X mirroring also move
 the glass. Without `glazed=True`, solid doors are unchanged.
 
+Use `wall.add_garage_door(opening, section_height=0.5, color="#ffffff")`
+to fill an existing unfilled wall opening with a sectional garage door.
+It retains the original opening and its dimensions, lintel tags and facade
+voids. The closed 3D door has a frame and horizontal panel joints (equal
+sections no taller than `section_height`); a continuous backing closes the
+joints. Plans show a thin closed panel and frame without a swing arc.
+`panel_thickness=0.04` and `frame_width=0.06` control the simplified geometry.
+It is an `IfcDoor` with a user-defined `SECTIONAL_OVERHEAD` operation;
+tracks and opening motion are not modelled.
+
 Plan drawings automatically label every included door with its width and
 height in millimetres, separated by a line. The label sits inside the door
 swing. Use `clear_height` when the usable passage is lower than the door's
@@ -1727,6 +1779,31 @@ SVG filename when no PDF is requested). The drawing scale is appended to both
 automatic and custom titles, e.g. `D1.1.5. Krov 1:100`. The drawing is moved down, not scaled;
 the header is included in the paper-fit check. Print the PDF at actual size /
 100%, not "fit to page".
+
+### Finding dimensions in the source
+
+Every drawing render writes a UTF-8, tab-separated index beside the SVG,
+for example `projekt2/basement.dimensions.tsv`. Search by the exact value
+shown in the drawing:
+
+```bash
+rg '^3955\t' projekt2/basement.dimensions.tsv
+```
+
+Rows include the displayed value, drawing and dimension names, a
+`/path/to/house2.py:line` source location, original endpoints and offset,
+unrounded length in millimetres, and the caller chain for project helpers.
+Repeated values stay as separate rows, including iterations of the same loop.
+Opening captions below the width are indexed separately with `label=description`.
+Labels come from the final SVG, preserving Bonsai's rounding and formatting.
+The index covers linear dimensions, opening dimensions and helpers built on
+`add_dimension()`. Source information is captured when the dimension is
+created and persists in the IFC's `BBIM_DimensionSource` property set; rebuild
+older IFCs from Python to populate missing source locations. Source lines
+refer to generation time; regenerate a drawing after editing its script.
+A sheet's index
+combines its subdrawings and retains their drawing names. Indices are replaced
+on each render, including when the drawing no longer contains dimensions.
 
 ### Multiple drawings on one sheet
 
@@ -2413,16 +2490,17 @@ load conventions and remaining checks.
 
 `roof_frame_3d_house2.py` reads the current `house2.py` geometry without
 executing the IFC generator. It models the rafters, purlins,
-four side cross beams, four posts, optional pin-ended braces and paired
+side cross beams, configurable posts, optional pin-ended braces and paired
 collar ties above the purlins. Each collar pair is one bilateral axial spring
 with the combined stiffness and self-weight of its two IFC boards.
-By default each purlin is split into three members at the two post centres,
+Each purlin accepts one or more posts at independent Y coordinates. By default
+each purlin is split at every post centre (two pieces for one post),
 with bending hinges shown as blue diamonds on the plan. Use
 `--continuous-purlins` to restore continuous purlins. The cuts do not add
 ground supports or change timber weight; the IFC purlins remain unchanged.
 The default includes gable-wall bearings and omits the tesařské pásky,
 including their self-weight and attachment arms. Use `--braces` to include
-all twelve as compression-only axial springs, or `--braces --brace-action both`
+three per post as compression-only axial springs, or `--braces --brace-action both`
 to allow tension too. The IFC braces remain in the house model.
 Rafter-to-wall-plate seats are vertically supported and completely free
 to slide in X by default, with zero X reaction; Y stays fixed to prevent
@@ -2430,7 +2508,12 @@ sideways tipping. The console
 prints the maximum movement, including separate SLS/ULS maxima. Use
 `--horizontal-stiffness rigid` to compare with the previous restrained seats,
 or supply a positive kN/mm stiffness for elastic X connections (Y fixed).
-Loads come from `rafter_load.py`; material properties use `materials.py`.
+All simulation defaults are in the **USER INPUTS** block at the top of
+`roof_frame_3d_house2.py`: edit `Settings.roof_mass`, `snow_load`, material
+grades and connection/support options there. The CLI uses these local
+defaults and changes only explicitly supplied options. Loads are independent
+of `rafter_load.py`; geometry follows `house2.py`, and material properties
+use `materials.py`.
 
 ```bash
 .venv-roof3d/bin/python roof_frame_3d_house2.py

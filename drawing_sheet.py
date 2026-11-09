@@ -188,6 +188,7 @@ class DrawingSheet:
 
     def render(self, output, *, pdf=None, blender="blender", inkscape="inkscape"):
         from ifc_utils import _drawing_pdf_options, _drawing_svg_frame, _export_drawing_pdf, _render_existing_drawing
+        from dimension_index import read_dimension_rows, write_dimension_rows
         output = Path(output)
         if output.suffix.lower() != ".svg":
             raise ValueError("sheet output must use the .svg extension")
@@ -209,6 +210,7 @@ class DrawingSheet:
         with TemporaryDirectory(prefix="drawing-sheet-") as directory:
             directory = Path(directory)
             models = {}
+            dimension_rows = []
             for index, item in enumerate(self._drawings, 1):
                 house = item.drawing.house
                 if house not in models:
@@ -224,6 +226,7 @@ class DrawingSheet:
                     title=item.title if item.title is not None else item.drawing.name,
                     tables=item.tables,
                 )
+                dimension_rows.extend(read_dimension_rows(path))
                 _, width, height, view_box = _drawing_svg_frame(path.read_text())
                 if not isclose(view_box[2] / width, view_box[3] / height, rel_tol=1e-9):
                     raise ValueError("a sheet drawing must have a uniform physical SVG scale")
@@ -248,6 +251,7 @@ class DrawingSheet:
                 temporary_path.replace(output)
             finally:
                 temporary_path.unlink(missing_ok=True)
+        write_dimension_rows(output.with_suffix(".dimensions.tsv"), dimension_rows)
         if pdf is not None:
             _export_drawing_pdf(output, pdf, paper=self.paper, orientation=self.orientation, margin=0, inkscape=inkscape)
         return output
