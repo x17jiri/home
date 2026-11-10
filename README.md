@@ -326,13 +326,16 @@ Wall height is
 `GROUND_WALL_BASE_COURSE_HEIGHT + 2.625 m` (currently 2.825 m), including the
 200 mm Liapor base course.
 
-The stairway has two 1.05 m wide flights, each with **eight risers and seven
+The stairway has two 1.00 m wide flights, each with **eight risers and seven
 treads**, all with 270 mm treads.
 The lower flight runs toward the front wall (−Y); the upper returns toward
 the garden (+Y), with its left edge touching the stairway/bathroom wall.
 The landing is against the front wall and measures 2.25 × 1.05 m.
 Both runs are 1.89 m; the flights are separated by
-`STAIR_FLIGHT_GAP = 0.15 m`. Both flights are concrete with 150 mm
+`STAIR_FLIGHT_GAP = 0.25 m`; the outside flight touches the west wall.
+The basement flights keep the same gap and divide the remaining clear
+stairwell width equally (978.75 mm each with the current basement walls).
+Both flights are concrete with 150 mm
 sloped waists; there is no general floor build-up in the stairway room.
 Both floor plans show a dashed entrance-clearance curve beyond the flights:
 two quarter circles of radius `STAIR_FLIGHT_WIDTH`, centred on the inner
@@ -393,8 +396,11 @@ shows both flights, one continuous ascent arrow, and a stair configuration note.
 Wooden banisters run along the inner edges of both flights, also on the
 basement stairway. Each `railing_path("right", inset=STAIR_RAILING_INSET)`
 sets the slope and seats posts and balusters on the actual treads. The shared
-60 mm centreline inset leaves 30 mm between the posts and each flight edge.
+`STAIR_RAILING_INSET` controls the centreline inset onto each flight.
 `STAIR_RAILING_HEIGHT = 1.0` controls the vertical handrail height.
+Horizontal railings close the 250 mm flight gap at both middle landings
+and between the ascending and descending flights at ground-floor level.
+Another guards the 1.25 m edge from the upper stair arrival to the west wall.
 The ground-floor railings are explicitly included in the
 upper-floor plan; it is visible in both floor drawings and the 3D model.
 The living-room layout is retained. The relocated stairs are to its right

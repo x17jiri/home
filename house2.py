@@ -223,7 +223,7 @@ BASEMENT_STAIR_UPPER_RISERS = 8
 BASEMENT_STAIR_LOWER_RUN_LENGTH = (BASEMENT_STAIR_LOWER_RISERS-1)*STAIR_TREAD_LENGTH
 BASEMENT_STAIR_UPPER_RUN_LENGTH = (BASEMENT_STAIR_UPPER_RISERS-1)*STAIR_TREAD_LENGTH
 BASEMENT_STAIR_RISER_HEIGHT = BASEMENT_TO_GROUND_RISE/(BASEMENT_STAIR_LOWER_RISERS+BASEMENT_STAIR_UPPER_RISERS)
-STAIR_FLIGHT_GAP = 0.05
+STAIR_FLIGHT_GAP = 0.25
 STAIR_LEFT_X = STAIRWAY_WALL_X
 STAIR_UPPER_CENTER_X = STAIR_LEFT_X+STAIR_FLIGHT_WIDTH/2
 STAIR_LOWER_CENTER_X = STAIR_UPPER_CENTER_X+STAIR_FLIGHT_WIDTH+STAIR_FLIGHT_GAP
@@ -876,6 +876,34 @@ lower_stair_railing = ground.railing(
     path=lower_stairs.railing_path("right", inset=STAIR_RAILING_INSET),
     height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
+stair_landing_gap_railing = ground.railing(
+    "Middle landing - flight gap railing",
+    path=(
+        (*stair_railing.path[0][:2], ground.elevation+lower_stairs.end_height),
+        lower_stair_railing.path[-1],
+    ),
+    height=STAIR_RAILING_HEIGHT, color="#C8B090",
+)
+ground_stair_gap_railing = ground.railing(
+    "Ground floor - up/down stair gap railing",
+    path=(
+        (STAIR_UPPER_CENTER_X+STAIR_FLIGHT_WIDTH/2-STAIR_RAILING_INSET,
+         STAIR_LOWER_START_Y+STAIR_RAILING_INSET, GROUND_FLOOR_THICKNESS),
+        (STAIR_LOWER_CENTER_X-STAIR_FLIGHT_WIDTH/2+STAIR_RAILING_INSET,
+         STAIR_LOWER_START_Y+STAIR_RAILING_INSET, GROUND_FLOOR_THICKNESS),
+    ),
+    height=STAIR_RAILING_HEIGHT, color="#C8B090",
+)
+upper_stair_exit_railing = upper.railing(
+    "Upper stair exit - west wall railing",
+    path=(
+        (STAIR_UPPER_CENTER_X+STAIR_FLIGHT_WIDTH/2-STAIR_RAILING_INSET,
+         STAIR_UPPER_END_Y+STAIR_RAILING_INSET, UPPER_FINISHED_FLOOR_HEIGHT),
+        (HOUSE_WIDTH-BWT-0.03,
+         STAIR_UPPER_END_Y+STAIR_RAILING_INSET, UPPER_FINISHED_FLOOR_HEIGHT),
+    ),
+    height=STAIR_RAILING_HEIGHT, color="#C8B090",
+)
 stair_route_landing_y = (STAIR_LANDING_START_Y+STAIR_LANDING_END_Y)/2
 stair_walking_route = (
     lower_stairs.start, (STAIR_LOWER_CENTER_X, stair_route_landing_y),
@@ -958,23 +986,23 @@ print(f"Entrance stairs: {entrance_stairs.risers} risers x {entrance_stairs.rise
       f"tread {entrance_stairs.tread_length*1000:.0f} mm; "
       f"2h+b = {(2*entrance_stairs.riser_height+entrance_stairs.tread_length)*1000:.1f} mm")
 
-# Stack the same two-flight layout below the ground-floor stairway, shifted
-# just enough to fit the thicker, centred basement walls.
+# Fit the same flight gap between the thicker, centred basement walls.
 basement_stair_room = next(room["region"] for room in basement_rooms if room["name"] == "Schody")
 basement_stair_left_x, basement_landing_start_y, basement_stair_room_right_x, basement_stair_room_back_y = basement_stair_room.bounds
-basement_stair_right_x = basement_stair_left_x+2*STAIR_FLIGHT_WIDTH+STAIR_FLIGHT_GAP
+basement_stair_right_x = basement_stair_room_right_x
+basement_stair_width = (basement_stair_right_x-basement_stair_left_x-STAIR_FLIGHT_GAP)/2
 basement_landing_end_y = basement_landing_start_y+STAIR_LANDING_LENGTH
 basement_lower_start_y = basement_landing_end_y+BASEMENT_STAIR_LOWER_RUN_LENGTH
 basement_upper_end_y = basement_landing_end_y+BASEMENT_STAIR_UPPER_RUN_LENGTH
-if (basement_stair_right_x > basement_stair_room_right_x+1e-9
+if (basement_stair_width <= 0
         or max(basement_lower_start_y, basement_upper_end_y) > basement_stair_room_back_y+1e-9):
     raise ValueError("basement stairs do not fit inside the clear stairway room")
-basement_upper_center_x = basement_stair_left_x+STAIR_FLIGHT_WIDTH/2
-basement_lower_center_x = basement_stair_right_x-STAIR_FLIGHT_WIDTH/2
+basement_upper_center_x = basement_stair_left_x+basement_stair_width/2
+basement_lower_center_x = basement_stair_right_x-basement_stair_width/2
 basement_lower_stairs = basement.stair(
     (basement_lower_center_x, basement_lower_start_y),
     (basement_lower_center_x, basement_landing_end_y),
-    name="Basement lower stair flight", width=STAIR_FLIGHT_WIDTH,
+    name="Basement lower stair flight", width=basement_stair_width,
     start_height=BASEMENT_FLOOR_THICKNESS,
     height=BASEMENT_STAIR_RISER_HEIGHT*BASEMENT_STAIR_LOWER_RISERS,
     risers=BASEMENT_STAIR_LOWER_RISERS, underside="sloped", waist_thickness=STAIR_WAIST_THICKNESS,
@@ -988,7 +1016,7 @@ basement_stair_landing = basement.stair_landing(
 basement_upper_stairs = basement.stair(
     (basement_upper_center_x, basement_landing_end_y),
     (basement_upper_center_x, basement_upper_end_y),
-    name="Basement upper stair flight", width=STAIR_FLIGHT_WIDTH,
+    name="Basement upper stair flight", width=basement_stair_width,
     start_height=basement_lower_stairs.end_height,
     height=BASEMENT_STAIR_RISER_HEIGHT*BASEMENT_STAIR_UPPER_RISERS,
     risers=BASEMENT_STAIR_UPPER_RISERS, underside="sloped", waist_thickness=STAIR_WAIST_THICKNESS,
@@ -1001,6 +1029,14 @@ basement_stair_railing = basement.railing(
 basement_lower_stair_railing = basement.railing(
     "Basement lower stair flight railing",
     path=basement_lower_stairs.railing_path("right", inset=STAIR_RAILING_INSET),
+    height=STAIR_RAILING_HEIGHT, color="#C8B090",
+)
+basement_landing_gap_railing = basement.railing(
+    "Basement middle landing - flight gap railing",
+    path=(
+        (*basement_stair_railing.path[0][:2], basement.elevation+basement_lower_stairs.end_height),
+        basement_lower_stair_railing.path[-1],
+    ),
     height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
 basement_route_landing_y = (basement_landing_start_y+basement_landing_end_y)/2
@@ -2688,6 +2724,7 @@ if "upper" in sys.argv:
         )
     drawing1.include_element(stair_railing)
     drawing1.include_element(lower_stair_railing)
+    drawing1.include_element(stair_landing_gap_railing)
     drawing1.add_stair_annotation(lower_stairs)
     drawing1.add_stair_annotation(upper_stairs)
     drawing1.add_stair_landing_annotation(middle_stair_landing)
