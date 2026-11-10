@@ -4239,7 +4239,7 @@ def _postprocess_right_panel(
 
 
 def _postprocess_elevation_furniture_labels(svg_path: Path) -> None:
-    """Keep visible furniture labels above elevation linework."""
+    """Keep visible furniture labels above elevation linework and surfaces."""
     svg = svg_path.read_text(encoding="utf-8")
     if 'class="furniture-elevation-label-overlays"' in svg:
         return
@@ -4262,6 +4262,28 @@ def _postprocess_elevation_furniture_labels(svg_path: Path) -> None:
             match["body"],
         ):
             visible_products.add(product_guid)
+
+    # SHAPELY may emit a visible surface path followed by an empty product
+    # group. Resolve its CSS-safe GlobalId against the selected label owners.
+    aliases: dict[str, set[str]] = {}
+    for classes in re.findall(r'\bclass="([^"]*)"', svg):
+        for token in classes.split():
+            if token.startswith("furniture-owner-"):
+                owner = token.removeprefix("furniture-owner-")
+                for alias in (owner, owner.replace("$", "").replace("_", "")):
+                    aliases.setdefault(alias, set()).add(owner)
+    content = re.sub(r"<defs\b[^>]*>.*?</defs>", "", svg, flags=re.DOTALL)
+    for match in re.finditer(r"<(?:path|polygon)\b[^>]*>", content):
+        attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', match[0]))
+        classes = attributes.get("class", "").split()
+        if "surface" not in classes or not (attributes.get("d") or attributes.get("points")) \
+                or re.search(r"(?:^|;)\s*display\s*:\s*none\b", attributes.get("style", "")):
+            continue
+        for token in classes:
+            if token.startswith("GlobalId-"):
+                owners = aliases.get(token.removeprefix("GlobalId-"), set())
+                if len(owners) == 1:
+                    visible_products.update(owners)
 
     visible_labels: list[str] = []
 

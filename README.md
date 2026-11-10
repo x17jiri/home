@@ -441,7 +441,7 @@ retain their roof-shaped tops all the way to the ridge. The existing wall
 X ranges and thicknesses are preserved. A common horizontal concrete band
 of height `UPPER_RING_BEAM_HEIGHT` ends at `UPPER_FLOOR_START+NADEZDIVKA`,
 directly below the wall plates. It replaces masonry in the four exterior
-walls and all four 1 m VPC sections, inherits each wall's width, and is
+walls and both 1.25 m garden-side VPC sections, inherits each wall's width, and is
 interrupted by any opening crossing the band. The existing ring-beam
 helper supplies schematic reinforcement. Upper beams belong to the
 `Upper floor` storey and are included explicitly in the roof plan.
@@ -455,7 +455,7 @@ corner; the remaining L-shaped area is the living room.
 `LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - LIVING_ROOM_WALL_FRONT_Y -
 DRY_WALL_WIDTH` is the clear depth of its back/garden-side strip.
 The horizontal SDK partition's garden face aligns with the garden face of
-the nearby 1 m VPC section. It extends between the vertical partition and
+the nearby 1.25 m VPC section. It extends between the vertical partition and
 that section, whose centre stays over the ground-floor load-bearing wall.
 The vertical partition has two segments, stopping
 at the near chimney face and continuing from its far face to the horizontal
@@ -503,7 +503,7 @@ distance from the chimney to the stair-side partition. This wall has a
 `TECHNIKA_SLIDING_DOOR_Y = None` aligns the opening's garden edge with the
 chimney's street face; a number sets the absolute Y coordinate of its start instead. Dedicated
 `TECHNIKA_SLIDING_DOOR_WIDTH` and `TECHNIKA_SLIDING_DOOR_OPENING_WIDTH` control its size.
-The 1 m VPC sections stay centred above the ground-floor
+The two 1.25 m garden-side VPC sections stay centred above the ground-floor
 garden-room load-bearing wall, including its material offset and thickness.
 The horizontal SDK and nearby VPC section share the same garden face.
 The floor outlines follow the new wall faces, fill the removed step, and
@@ -518,9 +518,8 @@ insulation and 65 mm screed/finish, and supply labels and room-legend rows
 from their measured outlines.
 The upper hallway has the old house's 700 × 700 × 800 mm washing machine
 beside the west exterior wall, centred in the half nearest the stair arrival.
-The front pair of 1 m VPC wall sections align with both faces of the
-ground-floor bathroom wall and room 3 return. The washing machine keeps
-its wall gap as these sections move.
+The former street-side VPC pair is removed. The washing machine retains its
+position, using the downstairs bathroom partition as its reference.
 A basin sits beside the west wall, gardenward of the washing machine in
 the hallway's second half, with a 50 mm gap before the nearby VPC segment.
 It faces into the hallway (-X, `rotation=-90`).
@@ -539,13 +538,18 @@ When a plan cuts below a door's raised swing symbol, export lowers only
 the 2D symbol just beneath the cut. This keeps low upper-floor cuts from
 hiding the bathroom door, without changing its 3D position or floor levels.
 The kitchen follows the living-room side of the vertical SDK partition,
-from garden to street: cooker, sink, dishwasher, then worktop to the front
+from garden to street: cooker, sink, dishwasher, fridge, then worktop to the front
 wall. The three appliances use the old house's 640 × 640 × 750 mm boxes;
 the remaining worktop is 640 mm deep and 750 mm high, with its length
 calculated from the available space. `KITCHEN_WALL_GAP = 0.03 m` keeps
 the units off the SDK and front wall. The cooker and sink retain the old
 700 mm centre spacing (60 mm gap), and the boxes start 30 mm above the
 finished upper floor as in the original kitchen.
+`FRIDGE_SIZE = (0.64, 1.0, 1.95)` controls the fridge; the adjacent worktop
+shortens automatically to make room. The dining table reuses the old house's
+four-seat asset, aligned with the cooker between it and the east wall.
+`DINING_TABLE_SIZE = (1.25, 1.7)` includes the chairs, and
+`DINING_TABLE_WALL_GAP = 1.0` sets its clearance from the east wall's inner face.
 The attic `kamna` uses the original house's stove placeholder, controlled by
 `STOVE_SIZE = (0.60, 0.50, 1.50)`. Its X centre matches `kitchen_center_x`;
 its back face has `STOVE_WALL_GAP = 0.20 m` clear to the living-room side

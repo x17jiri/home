@@ -49,11 +49,22 @@ HALLWAY_OPENING_TOP_GAP = 0.25  # Masonry below the underside of the ground-floo
 
 UPPER_BATHROOM_WIDTH = 1.12
 LIVING_ROOM_WIDTH = HOUSE_WIDTH - 2*BWT - STAIRWAY_WIDTH - 2*DRY_WALL_WIDTH - UPPER_BATHROOM_WIDTH
-UPPER_VPC_RETURN_LENGTH = 1.0  # Four 175 mm wall sections extending from the side walls.
+UPPER_VPC_RETURN_LENGTH = 1.25  # Garden-side 175 mm VPC returns extending from the side walls.
 KITCHEN_UNIT_SIZE = (0.64, 0.64, 0.75)
+FRIDGE_SIZE = (0.64, 1.0, 1.95)
+DINING_TABLE_SIZE = (1.25, 1.7)  # Complete asset footprint, including chairs.
+DINING_TABLE_WALL_GAP = 1.0  # Clear distance from the east wall's inner face.
 KITCHEN_WALL_GAP = 0.03  # Same 350 mm centre offset as the old house's 640 mm units.
 KITCHEN_COOKER_SINK_GAP = 0.06  # Old house: 700 mm centre spacing between 640 mm units.
+KITCHEN_CHIMNEY_GAP = 0.20  # Clear Y gap from the cooker to the chimney's street face.
 STOVE_SIZE = (0.60, 0.50, 1.50)
+SOFA_SIZE = (2.5, 1.1)
+ARMCHAIR_SIZE = (1.1, 1.1)
+SEATING_WALL_GAP = 0.10
+SEATING_GAP = 0.10
+HEAT_PUMP_SIZE = (1.2, 0.5, 1.5)
+HEAT_PUMP_GARAGE_GAP = 0.50
+HEAT_PUMP_HEIGHT_ABOVE_BASEMENT_FLOOR = 0.60
 
 ZAKLADACI_MALTA = 0.02
 GROUND_WALL_BASE_COURSE_HEIGHT = ZAKLADACI_MALTA + 0.2
@@ -656,6 +667,16 @@ garage_front_opening = wall_basement_front.add_opening(
 garage_front_door = wall_basement_front.add_garage_door(
     garage_front_opening, name="Garage sectional door", color="#ffffff",
 )
+garage_front_opening_west_x = float(ifcopenshell.util.placement.get_local_placement(
+    garage_front_opening.ObjectPlacement,
+)[0, 3])+garage_front_door.OverallWidth
+heat_pump = basement.furniture(
+    "Tepelné\nČerpadlo", kind="USERDEFINED", size=HEAT_PUMP_SIZE, color="#ffffff",
+    center=(garage_front_opening_west_x+HEAT_PUMP_GARAGE_GAP+HEAT_PUMP_SIZE[0]/2,
+            wall_basement_front.start[1]+wall_basement_front.body_offset
+            -EXTERIOR_XPS_INSULATION_THICKNESS-FACADE_THICKNESS-0.05-HEAT_PUMP_SIZE[1]/2),
+    start_height=BASEMENT_FLOOR_THICKNESS+HEAT_PUMP_HEIGHT_ABOVE_BASEMENT_FLOOR,
+)
 foundation_footings = foundation.add_strip_footings_from(
     basement, width=FOUNDATION_FOOTING_WIDTH, height=FOUNDATION_FOOTING_HEIGHT,
     start_height=0, material="Concrete", color="#969696",
@@ -809,7 +830,7 @@ bathroom_water_heater = ground.furniture(
 )
 basement_water_meter = basement.furniture(
     "Vodo-\nměr", kind="USERDEFINED",
-    size=(0.6, 0.55, 0.4),
+    size=(0.6, 0.55, 0.5),
     center=(bathroom_services_center_x, BWT+0.7),
     start_height=BASEMENT_FLOOR_THICKNESS + 0.8,
     color="#ffffff",
@@ -1401,38 +1422,29 @@ technical_sliding_door = wall_technical_stairway_u.add_door(
     sill_height=UPPER_FLOOR_THICKNESS,
     operation="SLIDING_TO_RIGHT",  # Towards the street, clear of the horizontal wall.
 )
-# Keep the masonry sections in their existing rows. Align the front row
-# with the ground-floor bathroom/room 3 wall, on both sides of the house.
-upper_vpc_front_y = wall_bathroom_partition_g.start[1]+wall_bathroom_partition_g.body_offset
+# Keep only the garden-side returns, centred over the downstairs bearing wall.
 upper_vpc_walls = []
 upper_vpc_footprints = []
 for side, start_x in (
     ("West", HOUSE_WIDTH-BWT-UPPER_VPC_RETURN_LENGTH),
     ("East", BWT),
 ):
-    for position, front_y in (
-        ("living room", upper_vpc_living_room_center_y-INNER_BWT/2),
-        ("bathroom wall alignment", upper_vpc_front_y),
-    ):
-        end_x = start_x+UPPER_VPC_RETURN_LENGTH
-        # This face-based VPC type grows towards +Y. Keep the living-room
-        # sections over the ground-floor wall and the front sections aligned
-        # with the bathroom wall's room-facing surface.
-        center_y = front_y+INNER_BWT/2
-        height = min(
-            gable_wall_height,
-            2*(min(plane_height_at(*cut, x=(start_x+end_x)/2, y=center_y)
-                   for cut in upper_partition_cuts)-UPPER_FLOOR_START)-.01,
-        )
-        wall = upper.wall(
-            (start_x, front_y), (end_x, front_y),
-            wall_type=load_bearing_wall_inner, height=height, cuts=upper_partition_cuts,
-        )
-        wall.Name = f"Upper {side.lower()} VPC wall - {position}"
-        common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
-        ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": True})
-        upper_vpc_walls.append(wall)
-        upper_vpc_footprints.append(box(start_x, front_y, end_x, front_y+INNER_BWT))
+    front_y = upper_vpc_living_room_center_y-INNER_BWT/2
+    end_x = start_x+UPPER_VPC_RETURN_LENGTH
+    height = min(
+        gable_wall_height,
+        2*(min(plane_height_at(*cut, x=(start_x+end_x)/2, y=upper_vpc_living_room_center_y)
+               for cut in upper_partition_cuts)-UPPER_FLOOR_START)-.01,
+    )
+    wall = upper.wall(
+        (start_x, front_y), (end_x, front_y),
+        wall_type=load_bearing_wall_inner, height=height, cuts=upper_partition_cuts,
+    )
+    wall.Name = f"Upper {side.lower()} VPC wall - living room"
+    common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
+    ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": True})
+    upper_vpc_walls.append(wall)
+    upper_vpc_footprints.append(box(start_x, front_y, end_x, front_y+INNER_BWT))
 upper_vpc_walls = tuple(upper_vpc_walls)
 upper_vpc_region = unary_union(upper_vpc_footprints)
 living_room_door = wall_living_room_back_u.add_door(
@@ -1443,7 +1455,7 @@ living_room_door = wall_living_room_back_u.add_door(
     height=UPPER_FLOOR_THICKNESS+ROOM_DOOR_HEIGHT-GROUND_FLOOR_THICKNESS,
     clear_height=ROOM_DOOR_CLEAR_HEIGHT,
     sill_height=UPPER_FLOOR_THICKNESS,
-    operation="SINGLE_SWING_LEFT",
+    operation="SINGLE_SWING_RIGHT",
 )
 for wall, name in (
     (wall_living_room_side_u, "Living room - side partition"),
@@ -1516,12 +1528,14 @@ upper_room_windows = {
 
 # Reuse the old house's technical-equipment sizes, with small wall gaps.
 upper_fixture_wall_gap = 0.05
+# Preserve the washer position relative to the downstairs bathroom partition.
+upper_fixture_front_reference_y = wall_bathroom_partition_g.start[1]+wall_bathroom_partition_g.body_offset
 upper_hallway_right_depth = living_room_right_wall_front_y-STAIR_UPPER_END_Y
 upper_washing_machine = upper.furniture(
     "Pračka", kind="USERDEFINED", size=(0.7, 0.7, 0.8), color="#ffffff",
     center=(HOUSE_WIDTH-BWT-0.3-upper_fixture_wall_gap-0.35,
             max(STAIR_UPPER_END_Y+upper_hallway_right_depth/4,
-                upper_vpc_front_y+INNER_BWT+upper_fixture_wall_gap+0.35)),
+                upper_fixture_front_reference_y+INNER_BWT+upper_fixture_wall_gap+0.35)),
     start_height=UPPER_FLOOR_THICKNESS,
 )
 # Return the basin to the gardenward half of the hallway beside the washer.
@@ -1571,9 +1585,10 @@ kitchen_wall_face_x = wall_living_room_side_u.start[0]-(
     wall_living_room_side_u.body_offset+wall_living_room_side_u.thickness
 )
 kitchen_center_x = kitchen_wall_face_x-KITCHEN_WALL_GAP-KITCHEN_UNIT_SIZE[0]/2
-kitchen_cooker_y = wall_living_room_side_u.end[1]-KITCHEN_WALL_GAP-KITCHEN_UNIT_SIZE[1]/2
+kitchen_cooker_y = CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-KITCHEN_CHIMNEY_GAP-KITCHEN_UNIT_SIZE[1]/2
 kitchen_sink_y = kitchen_cooker_y-KITCHEN_UNIT_SIZE[1]-KITCHEN_COOKER_SINK_GAP
 kitchen_dishwasher_y = kitchen_sink_y-KITCHEN_UNIT_SIZE[1]
+kitchen_fridge_y = kitchen_dishwasher_y-KITCHEN_UNIT_SIZE[1]/2-FRIDGE_SIZE[1]/2
 kitchen_start_height = UPPER_FLOOR_THICKNESS+0.03
 kitchen_cooker, kitchen_sink, kitchen_dishwasher = (
     upper.furniture(
@@ -1584,8 +1599,13 @@ kitchen_cooker, kitchen_sink, kitchen_dishwasher = (
         ("Sporák", kitchen_cooker_y), ("Dřez", kitchen_sink_y), ("Myčka", kitchen_dishwasher_y),
     )
 )
+kitchen_fridge = upper.furniture(
+    "Lednice", kind="USERDEFINED", size=FRIDGE_SIZE,
+    center=(kitchen_center_x, kitchen_fridge_y),
+    start_height=kitchen_start_height,
+)
 kitchen_counter_start_y = BWT+KITCHEN_WALL_GAP
-kitchen_counter_end_y = kitchen_dishwasher_y-KITCHEN_UNIT_SIZE[1]/2
+kitchen_counter_end_y = kitchen_fridge_y-FRIDGE_SIZE[1]/2
 kitchen_counter_length = kitchen_counter_end_y-kitchen_counter_start_y
 if kitchen_counter_length <= 0:
     raise ValueError("the kitchen appliances leave no room for a worktop before the front wall")
@@ -1594,6 +1614,34 @@ kitchen_counter = upper.furniture(
     size=(KITCHEN_UNIT_SIZE[0], kitchen_counter_length, KITCHEN_UNIT_SIZE[2]),
     center=(kitchen_center_x, (kitchen_counter_start_y+kitchen_counter_end_y)/2),
     start_height=kitchen_start_height,
+)
+kitchen_front_counter_start_x = BWT+KITCHEN_WALL_GAP
+kitchen_front_counter_end_x = kitchen_center_x-KITCHEN_UNIT_SIZE[0]/2
+kitchen_front_counter = upper.furniture(
+    "Kuchyňská linka - přední stěna", label="Kuch.\nLinka", kind="USERDEFINED",
+    size=(kitchen_front_counter_end_x-kitchen_front_counter_start_x,
+          KITCHEN_UNIT_SIZE[0], KITCHEN_UNIT_SIZE[2]),
+    center=((kitchen_front_counter_start_x+kitchen_front_counter_end_x)/2,
+            kitchen_counter_start_y+KITCHEN_UNIT_SIZE[0]/2),
+    start_height=kitchen_start_height,
+)
+living_room_dining_table = upper.asset(
+    "Jídelní stůl", asset="retail_4_seater_rectangular_table", size=DINING_TABLE_SIZE,
+    center=(BWT+DINING_TABLE_WALL_GAP+DINING_TABLE_SIZE[0]/2, kitchen_cooker_y),
+    start_height=UPPER_FLOOR_THICKNESS,
+)
+# Reuse the old seating assets in an L at the garden/east corner.
+living_room_sofa = upper.asset(
+    "Gauč", asset="3_seater_sofa", size=SOFA_SIZE, rotation=90,
+    center=(BWT+SEATING_WALL_GAP+SOFA_SIZE[1]/2,
+            HOUSE_DEPTH-BWT-SEATING_WALL_GAP-SOFA_SIZE[0]/2),
+    start_height=UPPER_FLOOR_THICKNESS,
+)
+living_room_armchair = upper.asset(
+    "Křeslo", asset="1_seater_sofa", size=ARMCHAIR_SIZE,
+    center=(BWT+SEATING_WALL_GAP+SOFA_SIZE[1]+SEATING_GAP+ARMCHAIR_SIZE[0]/2,
+            HOUSE_DEPTH-BWT-SEATING_WALL_GAP-ARMCHAIR_SIZE[1]/2),
+    start_height=UPPER_FLOOR_THICKNESS,
 )
 kamna = upper.furniture(
     "Kamna", kind="USERDEFINED", size=STOVE_SIZE, color="#ffff2B",
@@ -2611,10 +2659,12 @@ if "upper" in sys.argv:
     )
     for room in upper_room_floors:
         position = Polygon(room.outline).representative_point().coords[0]
-        if room == upper_hallway:
-            position = (STAIR_LEFT_X+0.4,
+        if room == living_room:
+            position = (3.5, 7)
+        elif room == upper_hallway:
+            position = (STAIR_LEFT_X+0.5,
                         (technical_sliding_door_y+TECHNIKA_SLIDING_DOOR_OPENING_WIDTH
-                         +LIVING_ROOM_WALL_FRONT_Y)/2)
+                         +LIVING_ROOM_WALL_FRONT_Y)/2-0.05)
         elif room == upper_technical_room:
             position = (upper_technical_center_x,
                         (upper_recuperation_center[1]+0.25+upper_hydrobox_center[1]-0.5/2)/2)
@@ -2680,8 +2730,8 @@ if "upper" in sys.argv:
             offset=-0.35, name=f"East VPC wall clear section {index}",
         )
     drawing1.add_dimension(
-        start=(BWT, living_room_wall_y-DRY_WALL_WIDTH/2-0.9),
-        end=(living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y-DRY_WALL_WIDTH/2-0.9),
+        start=(BWT, 2.3),
+        end=(living_room_wall_x-DRY_WALL_WIDTH/2, 2.3),
     )
     drawing1.add_dimension(
         start=(HOUSE_WIDTH-BWT-1.0, living_room_right_wall_front_y+DRY_WALL_WIDTH),
@@ -2866,7 +2916,7 @@ def add_house_section(cut, name, pdf):
         )
     add_perimeter_insulation(drawing)
     if name == "bb":
-        for furniture in (kamna, kitchen_cooker, upper_washing_machine, basement_water_meter):
+        for furniture in (kamna, kitchen_cooker, upper_washing_machine, basement_water_meter, kitchen_front_counter):
             drawing.add_furniture_label(furniture)
         add_bb_roof_batting(drawing)
         drawing.add_dimension(
@@ -3058,6 +3108,7 @@ def add_exterior_view(name, camera, direction):
             pattern="stone-wall", name="Garden stone wall front",
         )
     elif name == "pohled_ulice":
+        drawing.add_furniture_label(heat_pump)
         if SHOW_STREET_BACKGROUND_STONE_WALL:
             background_ground_z = ground.elevation+entrance_stairs.start_height-STREET_BACKGROUND_TERRAIN_BELOW_STAIRS
             east_facade_x = -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS-STREET_BACKGROUND_WALL_HOUSE_GAP

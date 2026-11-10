@@ -13615,6 +13615,32 @@ class HouseTests(unittest.TestCase):
             self.assertIn('<g class="symbol"><text class="template"/></g>', svg)
             self.assertGreater(svg.index(overlay), svg.index("VISIBLE"))
 
+    def test_keeps_furniture_label_for_shapely_surface_with_empty_product_group(self) -> None:
+        owner = "0AAAA_AAAA$AAAAAAAAAAA"
+        safe = owner.replace("$", "").replace("_", "")
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"surface-label.svg"
+            path.write_text(
+                '<svg><defs><path class="surface GlobalId-HIDDEN" d="M0 0H1V1Z"/></defs>'
+                f'<path class="IfcFurniture surface GlobalId-{safe}" d="M0 0H10V10Z"/>'
+                f'<g ifc:guid="{owner}" class="projection"/>'
+                '<g ifc:guid="HIDDEN" class="projection"/>'
+                '<path class="surface GlobalId-DISABLED" d="M0 0H1V1Z" style="display:none"/>'
+                f'<text><tspan class="furniture-elevation-label furniture-owner-{owner}">Čerpadlo</tspan></text>'
+                '<text><tspan class="furniture-elevation-label furniture-owner-HIDDEN">Hidden</tspan></text>'
+                '<text><tspan class="furniture-elevation-label furniture-owner-DISABLED">Disabled</tspan></text>'
+                '</svg>', encoding="utf-8",
+            )
+            _postprocess_elevation_furniture_labels(path)
+            svg = path.read_text()
+            self.assertIn("Čerpadlo", svg)
+            self.assertNotIn(">Hidden<", svg)
+            self.assertNotIn(">Disabled<", svg)
+            self.assertIn('class="furniture-elevation-label-overlays"', svg)
+            original = path.read_bytes()
+            _postprocess_elevation_furniture_labels(path)
+            self.assertEqual(path.read_bytes(), original)
+
     def test_moves_complete_hexagon_markers_above_elevation_geometry(
         self,
     ) -> None:
