@@ -1378,7 +1378,7 @@ technical_sliding_door = wall_technical_stairway_u.add_door(
     height=UPPER_FLOOR_THICKNESS+ROOM_DOOR_HEIGHT-GROUND_FLOOR_THICKNESS,
     clear_height=ROOM_DOOR_CLEAR_HEIGHT,
     sill_height=UPPER_FLOOR_THICKNESS,
-    operation="SLIDING_TO_LEFT",  # Towards the street, clear of the horizontal wall.
+    operation="SLIDING_TO_RIGHT",  # Towards the street, clear of the horizontal wall.
 )
 # Keep the masonry sections in their existing rows. Align the front row
 # with the ground-floor bathroom/room 3 wall, on both sides of the house.

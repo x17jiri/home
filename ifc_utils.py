@@ -12767,9 +12767,10 @@ class Drawing:
 
         The values come from ``IfcDoor.OverallWidth`` and ``OverallHeight``
         and are displayed in millimetres on two lines with a separator between
-        them.  The label is placed inside the plan swing and oriented across
-        the wall.  ``offset`` moves it farther into the swing, in model metres;
-        a negative value moves it toward the wall.
+        them. Swing-door labels sit inside the plan swing and are oriented
+        across the wall. Sliding-door labels sit outside the shallow symbol,
+        with a centred 6 mm paper-space separator. ``offset`` moves the label
+        farther from the wall in model metres; a negative value moves it back.
         """
         self._require_plan_view("add_door_annotation")
         if not isinstance(door, ifcopenshell.entity_instance) or not door.is_a(
