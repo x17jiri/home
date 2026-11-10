@@ -967,7 +967,7 @@ ground.asset(
     asset="shower_90x90",
 	start_height=GROUND_FLOOR_THICKNESS,
     center=(wall4_start-0.5, BWTy+BATHROOM_DEPTH-0.5),
-	rotation=0,
+	rotation=180,
 )
 toilet_x = wall3_end+0.4
 toilet_y = BWTy+0.5

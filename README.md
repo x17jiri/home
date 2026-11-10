@@ -275,12 +275,13 @@ continuous floor extends through it into the stair approach, follows room
 and legend update from that same outline. Floor build-up still reaches the
 bathroom partition and excludes the new solid side-wall segment below the opening.
 The bathroom uses a two-column layout read from garden to street:
-door/toilet, clear space/basin, shower/hydrobox and water meter. The 900 mm door leaf
+door/toilet, clear space/basin, shower/hot-water tank. The 900 mm door leaf
 has a 1000 mm opening 125 mm from room 3's wall and swings into the
 bathroom. The WC and basin face inward from the stairway wall. The shower is
-900 × 900 mm. The bottom-right cell contains the old house's 800 × 500 ×
-900 mm hydrobox and 600 × 550 × 900 mm water-meter box, on a common X
-centreline at 300 and 700 mm from the inside front wall. Fixtures start at the
+900 × 900 mm. The bottom-right cell contains the 700 × 700 × 2000 mm
+hot-water tank swapped from upstairs, with a 50 mm gap from the front wall.
+The 600 × 550 × 900 mm water-meter box is in the basement, at its former
+ground-floor X/Y position and on the basement finished floor. Fixtures start at the
 finished floor, with the basin rim at 850 mm above it.
 The entrance has a 900 mm leaf; `ENTRANCE_OPENING_WIDTH` controls its
 construction opening. `ENTRANCE_OPENING_AT = 3.375 m` measures along the
@@ -485,6 +486,8 @@ the vertical living-room wall to the parallel stair-side wall. The latter
 runs from the cross-wall's street face to the horizontal living-room wall;
 its stair-facing side is flush with `STAIR_LEFT_X`. In front of the cross-wall,
 a timber banister replaces it, with its posts entirely on Technika's floor.
+`TECHNIKA_RAILING_START_FROM_FRONT = 1.5` sets its start distance from the
+front wall's inside face; its garden end meets the cross-wall's street face.
 The rear toilet floor excludes the chimney footprint and all room floors
 end at the appropriate partition faces.
 The plan dimensions the 1120 mm clear toilet-room width and both face-to-face gaps
@@ -519,11 +522,12 @@ It faces into the hallway (-X, `rotation=-90`).
 its top remains 850 mm above the finished floor. The technical room's front end contains the
 1000 × 500 × 1500 mm recuperation unit against the front wall, centred in Technika.
 The toilet faces the garden and stands gardenward of the first west-purlin
-post; `upper_toilet_center` controls its placement. A 700 × 700 × 2000 mm TUV tank stands beside the
-living-room wall, centred in the free space between the recuperation unit
-and toilet. Equipment starts at the finished upper floor;
+post; `upper_toilet_center` controls its placement. The 800 × 500 × 900 mm
+hydrobox swapped from downstairs stands beside the living-room wall, with
+a 50 mm wall gap, centred in Y between the recuperation unit and toilet.
+Equipment starts at the finished upper floor;
 `upper_fixture_wall_gap` controls its wall spacing (currently 50 mm).
-The Technika label sits between the recuperation unit and tank; Zachod has
+The Technika label sits between the recuperation unit and hydrobox; Zachod has
 its own label behind the toilet.
 When a plan cuts below a door's raised swing symbol, export lowers only
 the 2D symbol just beneath the cut. This keeps low upper-floor cuts from

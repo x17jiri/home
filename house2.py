@@ -131,7 +131,7 @@ PURLIN_X_POSITIONS = (
 	BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0,
 	HOUSE_WIDTH-BWT-PURLIN_WALL_DISTANCE+PURLIN_SIZE[0]/2.0
 )
-PURLIN_CENTER_HEIGHT = 3.59  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
+PURLIN_CENTER_HEIGHT = 3.75  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
 PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]/2
 PURLIN_SUPPORT_SIZE = (0.16, 0.16)
 PURLIN_SUPPORT_1_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT/2.0+0.3
@@ -227,6 +227,7 @@ STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
 CHIMNEY_CENTER = (HOUSE_WIDTH/2.0+0.7, HOUSE_DEPTH-BWT-3.47-0.5)
 STAIR_WAIST_THICKNESS = 0.15
 STAIR_RAILING_HEIGHT = 1.0
+TECHNIKA_RAILING_START_FROM_FRONT = 1.5  # Metres from the front wall's inside face.
 if STAIR_RIGHT_X > HOUSE_WIDTH-BWT+1e-9:
     raise ValueError("rotated stairs do not fit between room 3 and the west wall")
 if max(STAIR_LOWER_START_Y, STAIR_UPPER_END_Y) > GARDEN_ROOMS_WALL_Y+1e-9:
@@ -801,18 +802,18 @@ bathroom_shower = ground.asset(
     start_height=GROUND_FLOOR_THICKNESS,
 )
 bathroom_services_center_x = bathroom_right_x-(bathroom_right_x-BATHROOM_LEFT_X)/4
-bathroom_hydrobox = ground.furniture(
-    "Hydro-\nbox", kind="USERDEFINED",
-    size=(0.8, 0.5, 0.9),
-    center=(bathroom_services_center_x, BWT+0.3),
+bathroom_water_heater = ground.furniture(
+    "Zásobník\nTUV", kind="USERDEFINED",
+    size=(0.7, 0.7, 2.0),
+    center=(bathroom_services_center_x, BWT+0.05+0.7/2),
     start_height=GROUND_FLOOR_THICKNESS,
     color="#ffffff",
 )
-bathroom_water_meter = ground.furniture(
+basement_water_meter = basement.furniture(
     "Vodo-\nměr", kind="USERDEFINED",
     size=(0.6, 0.55, 0.9),
     center=(bathroom_services_center_x, BWT+0.7),
-    start_height=GROUND_FLOOR_THICKNESS,
+    start_height=BASEMENT_FLOOR_THICKNESS,
     color="#ffffff",
 )
 
@@ -1360,7 +1361,7 @@ upper_technical_railing = upper.railing(
     "Technika - stairwell railing",
     path=(
         (STAIR_LEFT_X-upper_technical_railing_inset,
-         BWT+upper_technical_railing_inset, UPPER_FINISHED_FLOOR_HEIGHT),
+         BWT+TECHNIKA_RAILING_START_FROM_FRONT+upper_technical_railing_inset, UPPER_FINISHED_FLOOR_HEIGHT),
         (STAIR_LEFT_X-upper_technical_railing_inset,
          upper_technical_cross_front_y-upper_technical_railing_inset, UPPER_FINISHED_FLOOR_HEIGHT),
     ),
@@ -1534,13 +1535,13 @@ upper_toilet = upper.asset(
     rotation=180,
     start_height=UPPER_FLOOR_THICKNESS,
 )
-upper_water_heater_center = (
-    upper_technical_left_x+upper_fixture_wall_gap+0.35,
+upper_hydrobox_center = (
+    upper_technical_left_x+upper_fixture_wall_gap+0.8/2,
     (upper_recuperation_center[1]+0.5/2+upper_toilet_center[1]-0.53/2)/2,
 )
-upper_water_heater = upper.furniture(
-    "Zásobník\nTUV", kind="USERDEFINED", size=(0.7, 0.7, 2.0), color="#ffffff",
-    center=upper_water_heater_center,
+upper_hydrobox = upper.furniture(
+    "Hydro-\nbox", kind="USERDEFINED", size=(0.8, 0.5, 0.9), color="#ffffff",
+    center=upper_hydrobox_center,
     start_height=UPPER_FLOOR_THICKNESS,
 )
 
@@ -2569,7 +2570,7 @@ if "upper" in sys.argv:
                          +LIVING_ROOM_WALL_FRONT_Y)/2)
         elif room == upper_technical_room:
             position = (upper_technical_center_x,
-                        (upper_recuperation_center[1]+0.25+upper_water_heater_center[1]-0.35)/2)
+                        (upper_recuperation_center[1]+0.25+upper_hydrobox_center[1]-0.5/2)/2)
         elif room == upper_toilet_room:
             position = ((upper_technical_left_x+upper_technical_right_x)/2,
                         (upper_toilet_center[1]+0.53/2+CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2)/2)
