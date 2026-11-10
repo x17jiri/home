@@ -129,11 +129,45 @@ footing, with returns at its ends. Footings belong to the separate
 `BASEMENT_SLAB_THICKNESS`, `FOUNDATION_FOOTING_WIDTH` and
 `FOUNDATION_FOOTING_HEIGHT`; all lower elevations follow automatically.
 
+AA and BB include drawing-only `Hydroizolace` linework and a matching line
+legend. It follows the foundation slab's top beneath the basement walls,
+then rises along both exterior wall faces to `PERIMETER_TOP_HEIGHT`, behind
+the perimeter XPS. `HYDROIZOLACE_LINE_WIDTH = 0.7` sets its printed width in
+millimetres; the `hydroizolace` CSS class uses 4 mm dashes and 1.5 mm gaps.
+BB also dimensions the basement and ground-floor clear heights from their
+finished floors to 15 mm below each structural ceiling underside, allowing
+for plaster. `CEILING_PLASTER_THICKNESS` controls this dimension allowance.
+BB also uses `add_bb_elevation_marks()` for nine signed level marks, in
+millimetres relative to the finished ground floor (`±0`). They cover the
+finished floors, plastered ceilings, lowest roof-tile edge, ridge, and slab
+and footing undersides. Closely spaced levels use opposite sides of the
+section; their X positions and names are grouped in that helper.
+Marks on the left use `add_elevation_dimension(..., side="left")`, putting
+their shelf and readable, right-aligned text to the left of the arrow.
+
+`add_section_ground()` adds soil and gravel only to AA/BB as background
+polygons. Terrain heights interpolate the same four corner elevations as the
+exterior views. The basement interior is excluded from the hatching; the
+foundation remains visible in front. `earth-section` uses groups of three
+diagonal lines, while `gravel` uses small angular aggregate marks. Both are
+included in the section material legends.
+Projected footings in elevations/sections have transparent fills and thin
+dashed edges so they do not hide soil between the cut footings. Cut footings
+retain their cross hatch; the foundation plan keeps its existing appearance.
+`SECTION_SOIL_EXTENT` and `SECTION_SOIL_DEPTH` control the displayed soil
+extent beside the walls and below the footings. Gravel starts at the footing
+tops, outside the perimeter insulation and finish. Its initial bottom width
+is 0.30 m (`SECTION_GRAVEL_BOTTOM_WIDTH`), widening by 0.50 m per metre of
+height (`SECTION_GRAVEL_SLOPE`). These are adjustable drawing settings.
+
 Run `python3 house2.py basement found` to generate the basement and foundation
 plans. Their PDFs are `D1.1.9. Půdorys suterénu.pdf` (`PDF_BASEMENT`) and
 `D1.1.10. Základy.pdf` (`PDF_FOUND`) in the architectural folder; SVGs are
 `projekt2/basement.svg` and `projekt2/found.svg`. The basement cut passes
 through the middle of the basement walls.
+The door between S.01 and S.03 is centred on their shared wall segment and
+opens into S.01. It uses the other basement door's 900 mm leaf and 1000 mm
+construction opening, with opening dimensions and a lintel tag in the plan.
 
 The basement plan labels the five clear rooms `S.01`–`S.05` and includes a
 room legend with areas and a width/depth dimension for every room. Names are
@@ -145,8 +179,9 @@ The foundation cut passes through
 the middle of the strip footings, at
 `FOUNDATION_FOOTING_BOTTOM_Z + FOUNDATION_FOOTING_HEIGHT/2` (currently
 Z = −2.910 m). The foundation plan includes black dashed outlines of the
-basement walls and blue dashed outlines of the ground-floor walls above,
-with matching line-legend entries. Both plans show overall dimensions and wall/footing thickness.
+basement walls and blue dashed outlines of the ground-floor load-bearing walls above,
+plus a green dashed outline of the chimney above its pad, with matching
+line-legend entries. Both plans show overall dimensions and wall/footing thickness.
 `foundation` is also accepted as an alias for `found`.
 The foundation plan includes a red dashed `Zemnící pásovina FeZn 30/35`
 ring through the four exterior wall centrelines. Each corner has a diagonal
@@ -213,7 +248,7 @@ east/west X overhang from the outside structural walls, while
 `ROOF_EAVE_SETBACK` recesses the outer layers below the tiles by 20 mm.
 
 Run `python3 house2.py pohledy` for all four exterior views on one A3 landscape
-sheet at 1:200. `projekt2/pohledy.svg` and the architectural folder's
+sheet at 1:130. `projekt2/pohledy.svg` and the architectural folder's
 `D1.1.5. Pohledy.pdf` replace the four separate elevation PDFs. Both house
 scripts share `pdf_utils.PDFFolder` for automatic numbering; the three former
 view numbers are reserved so subsequent plans keep their existing names.
@@ -307,9 +342,10 @@ A centred 115 mm VPC partition along Y splits the garden section into equal
 rooms, each with 4.2025 m clear width. The common finishing pass gives every
 ground-floor masonry wall a Liapor base course. Partitions remain non-load-bearing.
 Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
-openings through the garden-room dividing wall. Each opening's nearest edge
-is 125 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
-`GARDEN_DOOR_CENTER_CLEARANCE`; the hinges face the centre partition.
+openings through the garden-room dividing wall. Pokoj 1's opening is 125 mm
+from the house centreline (`HOUSE_WIDTH/2`), controlled by
+`GARDEN_DOOR_CENTER_CLEARANCE`. Pokoj 2's opening is 500 mm from the west
+wall's inner face, controlled by `ROOM_2_DOOR_WEST_CLEARANCE`.
 Pokoj 3 also has a 900 mm inward-opening door in a 1000 mm construction
 opening at its narrow garden-side end. The opening's garden-side edge is
 375 mm from the room 1 face of the garden-room dividing wall, controlled by
@@ -393,6 +429,9 @@ GROUND_FLOOR_THICKNESS`, shared equally between 16 risers. With the current
 parameters the rise is 2.945 m (184.0625 mm per riser), the middle landing
 is at Z = 1.6575 m and the upper finished level at Z = 3.130 m. The drawing
 shows both flights, one continuous ascent arrow, and a stair configuration note.
+`INTERNAL_STAIR_CONSTRUCTION = "timber"` selects open-riser wooden treads
+and side stringers for both internal stairways, with wooden middle landings.
+Set it to `"monolithic"` to restore the sloped concrete flights and landings.
 Wooden banisters run along the inner edges of both flights, also on the
 basement stairway. Each `railing_path("right", inset=STAIR_RAILING_INSET)`
 sets the slope and seats posts and balusters on the actual treads. The shared
@@ -647,21 +686,26 @@ horizontal ceiling as well as to the sloped finishes.
 front/back tile extents; `ROOF_EAVE_SETBACK = 0.02` leaves the same 20 mm
 setback beneath the tiles for boards and battens. Each new layer type has
 its own `Roof - …` visibility storey, including both roof slopes.
-The chimney starts at the upper-floor storey datum, centred at
+The chimney starts at the top of the foundation slab (`BASEMENT_FLOOR_START`), centred at
 `CHIMNEY_CENTER`. Its back face touches the stair-facing surface of the
 horizontal living-room wall, at `LIVING_ROOM_WALL_FRONT_Y`; its body is on
 the stairs side. The vertical SDK wall stops at the chimney's front face,
 and the kitchen follows the shortened wall. There is no chimney-to-stair
 clearance parameter or dimension. It reuses the original model's
 400 mm square body, 200 mm circular flue and material/colour. Its top is
-`CHIMNEY_ABOVE_ROOF = 0.65 m` above the roof-tile ridge. The roof receives
+`CHIMNEY_ABOVE_ROOF` above the roof-tile ridge. It belongs to the Basement
+storey; drawing bounds use the chimney's actual storey to retain the same roof
+and chimney-top elevations. An 800 × 800 mm concrete pad below the slab is
+centred under the stack: `CHIMNEY_FOOTING_OVERHANG = 0.20` adds 200 mm on
+every side, and its height follows `FOUNDATION_FOOTING_HEIGHT`. Its outline
+joins the strip-footing outlines in the foundation plan. The roof receives
 an exact vertical shaft opening; the SDK partitions meet the chimney
 without intersecting it. The upper plan includes the chimney/flue
-symbol. `SHOW_CHIMNEY_PLANNING_MARKER = True` also adds a temporary
-flue symbol and dashed body footprint to the basement, ground and ceiling plans.
-Set it to `False` to hide these planning markers. The physical chimney
-still begins upstairs. The reusable helper is
-`drawing.add_chimney_annotation(chimney, projected=True)`.
+symbol. Basement, ground and ceiling plans now include the real chimney and
+flue symbol through `drawing.add_chimney_annotation(chimney)`, replacing the
+temporary dashed planning outlines. The unchanged MIAKO layouts currently
+intersect the chimney at hallway beam 3 on both levels; the ceiling-plan
+notes record that the opening detail is unresolved.
 `SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True` adds green crossed rectangles
 for all timber-post footprints to the same plans. These follow the actual
 post positions and section size; set the flag to `False` to hide them.
@@ -874,6 +918,16 @@ at no more than 120 mm centres. Override these with `post_size`,
 leaves only the handrail and posts. Corners share a post and a mitered
 handrail; repeat the first point to close a path. The returned element is a
 single `IfcRailing`, with geometry, material and a `BBIM_Railing` property set.
+Railings have separate plan, elevation and section representations: a handrail
+and a continuous panel replace individual vertical infill members. The panel
+follows the stair pitch line, leaving a 50 mm gap above it and below the handrail
+(reduced proportionally for very low railings). Its thickness follows the baluster
+width. Cut panels have a white fill and thin outline; projected panels use a
+vertical board-joint pattern. Full posts and balusters remain in the normal
+`MODEL_VIEW` body for 3D viewing. Railings with `infill="none"` retain their open
+handrail/post design in drawings too.
+The unattended Bonsai exporter also activates these drawing meshes for its
+surface-fill raycasts, so the board pattern and occlusion match the linework.
 
 `add_house_railings()` adds the open-side guards for both indoor flights,
 the entrance flight and landing, and the gallery on either side of the
@@ -1198,7 +1252,10 @@ ground.asset("Shower", asset="shower_90x90", center=(0.8, 1.8))
 
 The object keeps its semantic IFC class and shares its imported IFC type with
 repeated instances. Its 3D body and purpose-made 2D plan symbol are both
-included. `center` consistently means the centre of the object in plan even
+included. On import, duplicate closing segments in area profiles are removed
+from the imported copy. This repairs missing basin edges in elevations without
+modifying the installed library or its plan symbols.
+`center` consistently means the centre of the object in plan even
 when the source library uses a corner or wall face as its origin. Pass
 `size=(width, depth)` to resize the complete footprint, including surrounding
 parts such as the chairs in a dining-table asset. The original height is kept.
@@ -1570,7 +1627,9 @@ just like `add_line()`. Axis-aligned elevation views are required. Optional
 `font_size=2` (matching other dimension labels), `line_width=0.1` and
 `color="black"` control appearance; sizes
 are printed millimetres, independent of scale. Mirroring keeps the arrow
-upright, the label readable and the shelf pointing right. The symbol and its
+upright and the label readable. `side="left"` reverses the shelf and puts
+right-aligned text above/left; the default `side="right"` keeps it above/right.
+These choices describe the printed page, including when the model is mirrored. The symbol and its
 text are native IFC annotations kept above model fills like other dimensions.
 
 `roof_elevation_definitions` holds the rafter indices, offsets and marker
@@ -2184,6 +2243,10 @@ automatic in plan drawings but are opt-in for elevations:
 stove = ground.furniture("Kamna", ...)
 elevation.add_furniture_label(stove)
 ```
+
+In `house2.py`, AA selects the stove, cooker, sink, dishwasher, fridge, both
+kitchen counters, shower and basement water meter. Labels follow their visible
+objects and use the shared light-blue furniture text style.
 
 Axis-aligned exterior elevations can have a drawing-only terrain overlay:
 
@@ -2831,6 +2894,10 @@ drawing.add_material_legend(
     title="LEGENDA MATERIÁLŮ",
 )
 ```
+
+The `reinforced-concrete` material sample adds four black bar dots joined by
+a rectangular stirrup over the concrete-grey background. The ceiling and AA/BB
+legends in `house2.py` use it for “Železobetonový věnec”.
 
 Line legends use the actual linework annotation's style, so dash spacing and
 thickness stay consistent with the drawing:

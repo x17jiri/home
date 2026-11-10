@@ -133,6 +133,19 @@
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
+<!-- Section soil: groups of three continuous diagonal lines. -->
+<pattern id="earth-section" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+    <rect width="6" height="6" fill="white" />
+    <path d="M 0 0 V 6 M 0.7 0 V 6 M 1.4 0 V 6" style="fill:none; stroke:#777777; stroke-width:0.12" />
+</pattern>
+<!-- Small angular aggregate marks, distinct from the larger retaining-wall stones. -->
+<pattern id="gravel" width="5" height="5" patternUnits="userSpaceOnUse">
+    <rect width="5" height="5" fill="white" />
+    <path d="M .3 .8 L .7 .4 L 1 .9 M 2 .4 L 2.5 .7 M 3.6 .5 L 4 .9 L 4.4 .6
+             M .5 2 L .9 2.4 M 1.8 1.6 L 2.2 2.1 L 2.6 1.8 M 3.5 2 L 4 2.3
+             M .3 3.6 L .7 3.2 L 1.1 3.5 M 1.9 3 L 2.4 3.4 M 3.4 3.5 L 3.8 3.1 L 4.3 3.6
+             M 1.3 4.4 L 1.8 4.6 M 3 4.5 L 3.4 4.2" style="fill:none; stroke:#777777; stroke-width:0.12" />
+</pattern>
 <pattern id="earth" width="6" height="6" patternUnits="userSpaceOnUse">
     <rect width="6" height="6" fill="white" />
     <line x1="0" y1="0" x2="0" y2="2" style="stroke:black; stroke-width:0.25" />
@@ -203,6 +216,14 @@
 <pattern id="solid-white" width="1" height="1" patternUnits="userSpaceOnUse">
     <rect width="1" height="1" fill="white" />
 </pattern>
+<!-- Match the solid concrete-grey cut fill used by ring beams and MIAKO topping. -->
+<pattern id="concrete-solid" width="1000" height="1000" patternUnits="userSpaceOnUse">
+    <rect width="1000" height="1000" fill="#c5c7c8" stroke="none" />
+</pattern>
+<!-- The legend adds one centred four-bar/stirrup symbol over this grey fill. -->
+<pattern id="reinforced-concrete" width="1000" height="1000" patternUnits="userSpaceOnUse">
+    <rect width="1000" height="1000" fill="#c5c7c8" stroke="none" />
+</pattern>
 <!-- MDF board keeps the model's cut tint, without insulation batting. -->
 <pattern id="mdf-solid" width="1" height="1" patternUnits="userSpaceOnUse">
     <rect width="1" height="1" fill="#f2b6d0" />
@@ -212,6 +233,11 @@
 <pattern id="wood-siding" width="10" height="1.5" patternUnits="userSpaceOnUse" data-board-height-mm="150">
     <rect width="10" height="1.5" fill="#fdf8ef" />
     <path d="M 0 0.75 H 10" style="fill:none;stroke:black;stroke-width:0.06" />
+</pattern>
+<!-- Graphic vertical joints for simplified railing panels in projections. -->
+<pattern id="railing-boards" width="1.2" height="1000" patternUnits="userSpaceOnUse">
+    <rect width="1.2" height="1000" fill="white" />
+    <path d="M 0.6 0 V 1000" fill="none" stroke="#555" stroke-width="0.06" />
 </pattern>
 <!-- One roof-local tile repeat. The render pass projects each roof separately
      and bakes a fixed paper-width outline for matching SVG/PNG/PDF output. -->

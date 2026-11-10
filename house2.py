@@ -8,7 +8,10 @@ import sys
 import ifcopenshell.api.pset
 import ifcopenshell.api.feature
 import ifcopenshell.api.geometry
+import ifcopenshell.api.material
 import ifcopenshell.api.root
+import ifcopenshell.api.spatial
+import ifcopenshell.api.style
 import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
@@ -73,7 +76,7 @@ ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.625
 CEMFLOW_AND_FINISH_THICKNESS = 0.065
 GROUND_FLOOR_INSULATION_THICKNESS = 0.14
 GROUND_FLOOR_THICKNESS = GROUND_FLOOR_INSULATION_THICKNESS+CEMFLOW_AND_FINISH_THICKNESS
-PERIMETER_TOP_HEIGHT = GROUND_FLOOR_THICKNESS
+PERIMETER_TOP_HEIGHT = 0.0#GROUND_FLOOR_THICKNESS
 GROUND_FINISHED_FLOOR_ELEVATION = 417.8  # Metres above sea level.
 # Corner terrain elevations above sea level: X=0 east, X=HOUSE_WIDTH west;
 # Y=0 street, Y=HOUSE_DEPTH garden.
@@ -105,6 +108,7 @@ STREET_BACKGROUND_WALL_HOUSE_GAP = 0.05
 STREET_BACKGROUND_WALL_WEST_EXTENT = 1.0
 STREET_BACKGROUND_TERRAIN_BELOW_STAIRS = 0.05
 CEILING_THICKNESS = 0.21
+CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height dimensions.
 # Retain the hallway ceiling layout while its separate front support is designed.
 HALLWAY_CEILING_SUPPORT_Y = BATHROOM_PARTITION_Y+INNER_BWT/2
 HALLWAY_CEILING_SUPPORT_WIDTH = INNER_BWT
@@ -126,6 +130,10 @@ GARAGE_FRONT_OPENING_TOP_HEIGHT = BASEMENT_WALL_HEIGHT-0.20
 BASEMENT_SLAB_BOTTOM_Z = BASEMENT_FLOOR_START-BASEMENT_SLAB_THICKNESS
 PERIMETER_BOTTOM_Z = BASEMENT_SLAB_BOTTOM_Z  # Top of the foundation footings.
 FOUNDATION_FOOTING_BOTTOM_Z = BASEMENT_SLAB_BOTTOM_Z-FOUNDATION_FOOTING_HEIGHT
+SECTION_SOIL_EXTENT = 2.0  # Visible ground beyond each exterior basement wall.
+SECTION_SOIL_DEPTH = 0.4  # Visible soil below the footings.
+SECTION_GRAVEL_BOTTOM_WIDTH = 0.3
+SECTION_GRAVEL_SLOPE = 0.5  # Horizontal widening per metre of height; drawing geometry.
 CEILING_BEAM_BEARING = 0.125  # Minimum at each end, before rounding the beam length up.
 CEILING_BEAM_LENGTH_STEP = 0.25
 CEILING_LAYOUT_TOLERANCE = 0.07  # Total width mismatch, not the gap at each side.
@@ -176,9 +184,9 @@ ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
 ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
 ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
+CHIMNEY_FOOTING_OVERHANG = 0.20
 CHIMNEY_FLUE_DIAMETER = 0.20
-CHIMNEY_ABOVE_ROOF = 1.6
-SHOW_CHIMNEY_PLANNING_MARKER = True  # Temporary location marker in basement/ground/ceiling plans.
+CHIMNEY_ABOVE_ROOF = 1.5
 SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True  # Project upper-floor post footprints onto those plans.
 ROOF_EAVE_SETBACK = 0.02
 ROOF_SLOPED_SIDING_BOARD_COUNT = 4
@@ -234,6 +242,9 @@ STAIR_LOWER_START_Y = STAIR_LANDING_END_Y+STAIR_LOWER_RUN_LENGTH
 STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
 CHIMNEY_CENTER = (HOUSE_WIDTH/2.0+0.7, HOUSE_DEPTH-BWT-3.47-0.5)
 STAIR_WAIST_THICKNESS = 0.15
+INTERNAL_STAIR_CONSTRUCTION = "timber"
+INTERNAL_STAIR_MATERIAL = "Wood" if INTERNAL_STAIR_CONSTRUCTION == "timber" else "Concrete"
+INTERNAL_STAIR_COLOR = "#C8B090" if INTERNAL_STAIR_CONSTRUCTION == "timber" else None
 STAIR_RAILING_HEIGHT = 1.0
 STAIR_RAILING_INSET = 0.02  # Centreline inset onto each flight; 60 mm posts clear the edge by 30 mm.
 TECHNIKA_RAILING_START_FROM_FRONT = 1.5  # Metres from the front wall's inside face.
@@ -260,6 +271,7 @@ TECHNIKA_SLIDING_DOOR_WIDTH = 0.7
 TECHNIKA_SLIDING_DOOR_OPENING_WIDTH = 0.8
 TECHNIKA_SLIDING_DOOR_Y = None  # None aligns the opening's garden edge with the chimney's street face.
 GARDEN_DOOR_CENTER_CLEARANCE = 0.125
+ROOM_2_DOOR_WEST_CLEARANCE = 0.5  # From the west wall's inner face to the construction opening.
 THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.125  # From the room 1 face to the construction opening.
 BATHROOM_DOOR_SIDE_CLEARANCE = 0.125
 ENTRANCE_OPENING_AT = 3.65  # Along the west wall, measured from its start.
@@ -291,12 +303,13 @@ PDF_POHLEDY = Path(PDF_FOLDER.add_pdf("Pohledy"))
 PDF_FOLDER.add_pdf("Pohled - Ulice")
 PDF_FOLDER.add_pdf("Pohled - Zahrada")
 PDF_FOLDER.add_pdf("Pohled - Východ")
-POHLEDY_SCALE = 200
+POHLEDY_SCALE = 130
 PDF_BASEMENT = Path(PDF_FOLDER.add_pdf("Půdorys suterénu"))
 PDF_FOUND = Path(PDF_FOLDER.add_pdf("Základy"))
 PDF_AA = Path(PDF_FOLDER.add_pdf("Řez AA"))
 PDF_BB = Path(PDF_FOLDER.add_pdf("Řez BB"))
 SECTION_OUTLINE_WIDTH = 0.3
+HYDROIZOLACE_LINE_WIDTH = 0.4  # Printed millimetres; drawing-only waterproofing.
 
 RAFTERS_MIDPOINT = CHIMNEY_CENTER[1]-0.04
 RAFTER_Y_POSITIONS = (
@@ -326,8 +339,8 @@ for i in range(1, len(RAFTER_Y_POSITIONS)):
 #assert(found_chimney_space)
 
 aa_cut = CutDefinition(
-    start=(HOUSE_WIDTH/2+0.5, -1.5),
-    end=(HOUSE_WIDTH/2+0.5, HOUSE_DEPTH+1.5),
+    start=(HOUSE_WIDTH/2+0.35, -1.5),
+    end=(HOUSE_WIDTH/2+0.35, HOUSE_DEPTH+1.5),
     identifier="A", direction=-1,  # Look towards +X.
 )
 bb_cut = CutDefinition(
@@ -357,6 +370,39 @@ def add_purlin_support_planning_markers(drawing):
             (x-half_x, y+half_y), (x+half_x, y-half_y),
             color="#2e7d32", name=f"{name} Diagonal 2",
         )
+
+
+def add_chimney_footing(chimney):
+    """Add a concrete pad beneath the foundation slab, centred under the stack."""
+    size = chimney.size+2*CHIMNEY_FOOTING_OVERHANG
+    half = size/2
+    model = house.model
+    footing = ifcopenshell.api.root.create_entity(
+        model, ifc_class="IfcFooting", predefined_type="PAD_FOOTING", name="Chimney pad footing",
+    )
+    ifcopenshell.api.spatial.assign_container(model, products=[footing], relating_structure=foundation.element)
+    placement = np.eye(4)
+    placement[:3, 3] = (*chimney.center, BASEMENT_SLAB_BOTTOM_Z-FOUNDATION_FOOTING_HEIGHT)
+    ifcopenshell.api.geometry.edit_object_placement(model, product=footing, matrix=placement, is_si=True)
+    body = ifcopenshell.api.geometry.add_slab_representation(
+        model, context=house._body_context, depth=FOUNDATION_FOOTING_HEIGHT,
+        polyline=[(-half, -half), (half, -half), (half, half), (-half, half), (-half, -half)],
+    )
+    ifcopenshell.api.geometry.assign_representation(model, product=footing, representation=body)
+    ifcopenshell.api.style.assign_representation_styles(
+        model, shape_representation=body, styles=[house._surface_style("slab", color="#969696", transparency=0)],
+    )
+    ifcopenshell.api.material.assign_material(
+        model, products=[footing], type="IfcMaterial", material=house._materials["Concrete"],
+    )
+    for name, properties in (
+        ("Pset_FootingCommon", {"LoadBearing": True}),
+        ("BBIM_ChimneyFooting", {"Chimney": chimney.GlobalId, "Width": size, "Length": size,
+                                 "Height": FOUNDATION_FOOTING_HEIGHT, "Overhang": CHIMNEY_FOOTING_OVERHANG}),
+    ):
+        pset = ifcopenshell.api.pset.add_pset(model, product=footing, name=name)
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties=properties)
+    return footing
 
 
 def earth_to_z(m_above_sea):
@@ -449,7 +495,7 @@ wall_bathroom_partition_g = ground.wall(
 wall_bathroom_partition_g.Name = "Hallway - bathroom SDK wall"
 stairway_opening = wall_stairway_g.add_opening(
     name="Hallway - stairway opening",
-    at=STAIRWAY_OPENING_START_Y-wall_stairway_g.start[1],
+    at=STAIRWAY_OPENING_START_Y-wall_stairway_g.start[1]-0.5,
     width=HALLWAY_OPENING_LENGTH,
     height=ground_floor_height-HALLWAY_OPENING_TOP_GAP,
 )
@@ -482,13 +528,14 @@ pokoj1_door = wall_garden_rooms_g.add_door(
 )
 pokoj2_door = wall_garden_rooms_g.add_door(
     name="Pokoj 2 door",
-    at=HOUSE_WIDTH/2+GARDEN_DOOR_CENTER_CLEARANCE-wall_garden_rooms_g.start[0],
+    at=(HOUSE_WIDTH-BWT-ROOM_2_DOOR_WEST_CLEARANCE
+        -ROOM_DOOR_OPENING_WIDTH-wall_garden_rooms_g.start[0]),
     opening_width=ROOM_DOOR_OPENING_WIDTH,
     width=ROOM_DOOR_WIDTH,
     height=ROOM_DOOR_HEIGHT,
     clear_height=ROOM_DOOR_CLEAR_HEIGHT,
     sill_height=0,
-    operation="SINGLE_SWING_LEFT",
+    operation="SINGLE_SWING_RIGHT",
 )
 pokoj3_door = wall_third_room_top_g.add_door(
     name="Pokoj 3 door",
@@ -636,6 +683,15 @@ basement_garage_door = wall_basement_s03_s04.add_door(
     height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
     operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True
+)
+basement_s01_s03_start_x = max(basement_rooms_by_id["S.01"].bounds[0], basement_rooms_by_id["S.03"].bounds[0])
+basement_s01_s03_end_x = min(basement_rooms_by_id["S.01"].bounds[2], basement_rooms_by_id["S.03"].bounds[2])
+basement_s01_s03_door = wall_basement_garden_rooms.add_door(
+    name="Basement door S.01 - S.03",
+    at=(basement_s01_s03_start_x+basement_s01_s03_end_x-BASEMENT_OPENING_WIDTH)/2-wall_basement_garden_rooms.start[0],
+    width=0.9, opening_width=BASEMENT_OPENING_WIDTH,
+    height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
+    operation="SINGLE_SWING_LEFT",
 )
 basement_stairway_opening = wall_basement_s04_s05.add_opening(
     name="Basement opening S.04 - S.05",
@@ -816,16 +872,16 @@ bathroom_basin = ground.asset(
     rotation=-90,
 )
 bathroom_shower = ground.asset(
-    "Sprcha", asset="shower_90x90",
+    "Sprcha", asset="shower_90x90", label="Sprcha",
     center=(BATHROOM_LEFT_X+0.55, BWT+0.55),
-    start_height=GROUND_FLOOR_THICKNESS,
+    start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 bathroom_services_center_x = bathroom_right_x-(bathroom_right_x-BATHROOM_LEFT_X)/4
 bathroom_water_heater = ground.furniture(
     "Zásobník\nTUV", kind="USERDEFINED",
     size=(0.7, 0.7, 2.0),
     center=(bathroom_services_center_x, BWT+0.05+0.7/2),
-    start_height=GROUND_FLOOR_THICKNESS,
+    start_height=GROUND_FLOOR_THICKNESS+0.03,
     color="#ffffff",
 )
 basement_water_meter = basement.furniture(
@@ -841,6 +897,7 @@ lower_stairs = ground.stair(
     (STAIR_LOWER_CENTER_X, STAIR_LOWER_START_Y),
     (STAIR_LOWER_CENTER_X, STAIR_LANDING_END_Y),
     name="Lower stair flight",
+    construction=INTERNAL_STAIR_CONSTRUCTION, color=INTERNAL_STAIR_COLOR,
     width=STAIR_FLIGHT_WIDTH,
     start_height=GROUND_FLOOR_THICKNESS,
     height=STAIR_RISER_HEIGHT*STAIR_LOWER_RISERS,
@@ -851,6 +908,7 @@ lower_stairs = ground.stair(
 middle_stair_landing = ground.stair_landing(
     (STAIR_LEFT_X, STAIR_LANDING_START_Y), (STAIR_RIGHT_X, STAIR_LANDING_END_Y),
     name="Middle stair landing",
+    material=INTERNAL_STAIR_MATERIAL, color=INTERNAL_STAIR_COLOR,
     height=lower_stairs.end_height,
     thickness=STAIR_WAIST_THICKNESS,
 )
@@ -858,6 +916,7 @@ upper_stairs = ground.stair(
     (STAIR_UPPER_CENTER_X, STAIR_LANDING_END_Y),
     (STAIR_UPPER_CENTER_X, STAIR_UPPER_END_Y),
     name="Upper stair flight",
+    construction=INTERNAL_STAIR_CONSTRUCTION, color=INTERNAL_STAIR_COLOR,
     width=STAIR_FLIGHT_WIDTH,
     start_height=lower_stairs.end_height,
     height=STAIR_RISER_HEIGHT*STAIR_UPPER_RISERS,
@@ -1003,6 +1062,7 @@ basement_lower_stairs = basement.stair(
     (basement_lower_center_x, basement_lower_start_y),
     (basement_lower_center_x, basement_landing_end_y),
     name="Basement lower stair flight", width=basement_stair_width,
+    construction=INTERNAL_STAIR_CONSTRUCTION, color=INTERNAL_STAIR_COLOR,
     start_height=BASEMENT_FLOOR_THICKNESS,
     height=BASEMENT_STAIR_RISER_HEIGHT*BASEMENT_STAIR_LOWER_RISERS,
     risers=BASEMENT_STAIR_LOWER_RISERS, underside="sloped", waist_thickness=STAIR_WAIST_THICKNESS,
@@ -1011,12 +1071,14 @@ basement_stair_landing = basement.stair_landing(
     (basement_stair_left_x, basement_landing_start_y),
     (basement_stair_right_x, basement_landing_end_y),
     name="Basement middle stair landing", height=basement_lower_stairs.end_height,
+    material=INTERNAL_STAIR_MATERIAL, color=INTERNAL_STAIR_COLOR,
     thickness=STAIR_WAIST_THICKNESS,
 )
 basement_upper_stairs = basement.stair(
     (basement_upper_center_x, basement_landing_end_y),
     (basement_upper_center_x, basement_upper_end_y),
     name="Basement upper stair flight", width=basement_stair_width,
+    construction=INTERNAL_STAIR_CONSTRUCTION, color=INTERNAL_STAIR_COLOR,
     start_height=basement_lower_stairs.end_height,
     height=BASEMENT_STAIR_RISER_HEIGHT*BASEMENT_STAIR_UPPER_RISERS,
     risers=BASEMENT_STAIR_UPPER_RISERS, underside="sloped", waist_thickness=STAIR_WAIST_THICKNESS,
@@ -1963,16 +2025,26 @@ roof_tiles_top_z = max(
     )
     for layer in roof_layers if layer.material_name=="Roof tiles"
 )
-chimney = upper.chimney(
+roof_tiles_lowest_z = min(
+    max(ROOF_EAVE_CUT_Z, plane_height_at(
+        *offset_plane(*layer.plane.points, offset=layer.z_offset),
+        x=east_eave_x if layer.plane is roof_east else west_eave_x,
+        y=HOUSE_DEPTH/2,
+    ))
+    for layer in roof_layers if layer.material_name=="Roof tiles"
+)
+chimney_top_z = roof_tiles_top_z+CHIMNEY_ABOVE_ROOF
+chimney = basement.chimney(
     center=CHIMNEY_CENTER,
     size=CHIMNEY_SIZE,
-    height=roof_tiles_top_z+CHIMNEY_ABOVE_ROOF-UPPER_FLOOR_START,
+    height=chimney_top_z-basement.elevation,
     flue_diameter=CHIMNEY_FLUE_DIAMETER,
     start_height=0,
     name="Main chimney",
     material="Chimney",
     color="#B8A99A",
 )
+chimney_footing = add_chimney_footing(chimney)
 chimney_roof_opening = roof.add_opening(
     name="Chimney roof penetration",
     rectangle=(
@@ -2277,7 +2349,7 @@ if "basement" in sys.argv:
             position, identifier=room["identifier"], description=room["name"], area=region.area,
         )
         inset = min(0.7, (x1-x0)/3, (y1-y0)/3)
-        width_y = y1-inset if room["identifier"] in ("S.02", "S.05") else y0+inset
+        width_y = y1-inset if room["identifier"] in ("S.01", "S.02", "S.05") else y0+inset
         depth_x = x1+0.45 if room["name"] == "Schody" else x0+inset
         drawing1.add_dimension(
             start=(x0, width_y), end=(x1, width_y),
@@ -2290,6 +2362,7 @@ if "basement" in sys.argv:
     drawing1.add_room_legend()
     for opening, offset in (
         (basement_garage_door, 1.15),
+        (basement_s01_s03_door, 1.0),
         (basement_stairway_opening, 0.7),
         (basement_garden_opening, 1.0),
         (basement_storage_opening, 0.7),
@@ -2299,6 +2372,7 @@ if "basement" in sys.argv:
             opening, offset=offset, finished_floor_height=BASEMENT_FLOOR_THICKNESS,
         )
     drawing1.add_lintel(basement_garage_door, 1, direction="in")
+    drawing1.add_lintel(basement_s01_s03_door, 1, direction="in")
     drawing1.add_lintel(basement_stairway_opening, 1, direction="in")
     drawing1.add_lintel(basement_garden_opening, 1, direction="in")
     drawing1.add_lintel(basement_storage_opening, 1, position="after", direction="in")
@@ -2323,8 +2397,7 @@ if "basement" in sys.argv:
         start=(float(basement_plan_max[0])+.6, float(basement_plan_min[1])),
         end=(float(basement_plan_max[0])+.6, float(basement_plan_min[1])+BASEMENT_WALL_THICKNESS),
     )
-    if SHOW_CHIMNEY_PLANNING_MARKER:
-        drawing1.add_chimney_annotation(chimney, projected=True)
+    drawing1.add_chimney_annotation(chimney)
     add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "basement.svg", pdf=PDF_BASEMENT)
 
@@ -2337,11 +2410,25 @@ if "found" in sys.argv or "foundation" in sys.argv:
     )
     wall_outline = drawing1.add_wall_outlines(basement_walls, style="dashed")
     ground_wall_outline = drawing1.add_wall_outlines(
-        ground.walls, style="dashed", color="blue", name="Ground-floor wall outlines",
+        ground_load_bearing_walls, style="dashed", color="blue",
+        name="Ground-floor load-bearing wall outlines",
+    )
+    chimney_half = chimney.size/2
+    chimney_corners = tuple(
+        (chimney.center[0]+dx*chimney_half, chimney.center[1]+dy*chimney_half)
+        for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+    )
+    chimney_outline = drawing1.add_poly_line(
+        (*chimney_corners, chimney_corners[0]), style="dashed", color="green",
+        line_width=.15, name="Chimney outline above footing",
     )
     # The common plan style hides individual footing cut edges to avoid
     # junction seams. Draw the boundary of their actual merged footprints.
-    footing_polygons = []
+    chimney_footing_half = chimney.size/2+CHIMNEY_FOOTING_OVERHANG
+    footing_polygons = [box(
+        chimney.center[0]-chimney_footing_half, chimney.center[1]-chimney_footing_half,
+        chimney.center[0]+chimney_footing_half, chimney.center[1]+chimney_footing_half,
+    )]
     for footing in foundation_footings:
         properties = ifcopenshell.util.element.get_pset(footing, "BBIM_StripFooting")
         length, width = properties["Length"], properties["Width"]
@@ -2392,11 +2479,13 @@ if "found" in sys.argv or "foundation" in sys.argv:
     drawing1.add_line_legend([
         {"style": "solid", "color": "black", "description": "Obrys základových pasů"},
         (wall_outline, "Obrys suterénních stěn nad pasy"),
-        (ground_wall_outline, "Obrys stěn 1.NP"),
+        (ground_wall_outline, "Obrys nosných stěn 1.NP"),
+        (chimney_outline, "Obrys komína"),
         (grounding_ring, "Zemnící pásovina FeZn 30/35"),
     ])
     drawing1.add_material_legend([
         ("solid-white", f"Betonové základové pasy\n{FOUNDATION_FOOTING_WIDTH*1000:.0f} × {FOUNDATION_FOOTING_HEIGHT*1000:.0f} mm"),
+        ("solid-white", f"Základ pod komín\n{2*chimney_footing_half*1000:.0f} × {2*chimney_footing_half*1000:.0f} × {FOUNDATION_FOOTING_HEIGHT*1000:.0f} mm"),
     ])
     footing_margin = (FOUNDATION_FOOTING_WIDTH-BASEMENT_WALL_THICKNESS)/2
     footing_plan_min = basement_plan_min-footing_margin
@@ -2455,7 +2544,7 @@ if "ground" in sys.argv:
     drawing1.add_lintel(pokoj1_door, 2, direction="in")
     drawing1.add_lintel(pokoj2_door, 2, position="after", direction="in")
     drawing1.add_lintel(bathroom_left_opening, 3, direction="in")
-    drawing1.add_lintel(stairway_opening, 3)
+    drawing1.add_lintel(stairway_opening, 3, position="after")
     drawing1.add_lintel(window_pokoj1, 4)
     drawing1.add_lintel(window_pokoj2, 4, position="after")
     drawing1.add_lintel(window_pokoj3, 4)
@@ -2485,10 +2574,12 @@ if "ground" in sys.argv:
         name="Entrance stair walking route",
     )
     drawing1.add_opening_dimension(entrance_door, offset=-1.6, finished_floor_height=GROUND_FLOOR_THICKNESS)
-    for door in (pokoj1_door, pokoj2_door):
-        drawing1.add_opening_dimension(
-            door, offset=1.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
-        )
+    drawing1.add_opening_dimension(
+        pokoj1_door, offset=1.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
+    )
+    drawing1.add_opening_dimension(
+        pokoj2_door, offset=1.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
+    )
     drawing1.add_opening_dimension(
         pokoj3_door, offset=-0.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
     )
@@ -2514,8 +2605,8 @@ if "ground" in sys.argv:
     drawing1.add_dimension(start=(0, 0), end=(0, HOUSE_DEPTH), offset=0.7)
 	# hloubka mistnosti do zahrady
     drawing1.add_dimension(
-        start=(HOUSE_WIDTH-BWT-0.5, GARDEN_ROOMS_WALL_Y+INNER_BWT),
-        end=(HOUSE_WIDTH-BWT-0.5, HOUSE_DEPTH-BWT),
+        start=(BWT+0.5, GARDEN_ROOMS_WALL_Y+INNER_BWT),
+        end=(BWT+0.5, HOUSE_DEPTH-BWT),
     )
 	# delka leva zahradni mistnost
     drawing1.add_dimension(
@@ -2567,8 +2658,7 @@ if "ground" in sys.argv:
         name="Bathroom clear width",
     )
 
-    if SHOW_CHIMNEY_PLANNING_MARKER:
-        drawing1.add_chimney_annotation(chimney, projected=True)
+    drawing1.add_chimney_annotation(chimney)
     if SHOW_PURLIN_SUPPORT_PLANNING_MARKERS:
         add_purlin_support_planning_markers(drawing1)
     add_house_cut_symbols(drawing1)
@@ -2593,7 +2683,7 @@ if "ceiling" in sys.argv:
     add_facade_insulation(drawing1)
     drawing1.add_material_legend([
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
-        ("concrete", "Železobetonový věnec"),
+        ("reinforced-concrete", "Železobetonový věnec"),
     ])
     drawing1.add_miako_beam_dimensions(ceiling_garden_rooms, side="end", offset=0.7)
     drawing1.add_miako_beam_dimensions(ceiling_third_room_front, side="start", offset=0.7)
@@ -2630,9 +2720,9 @@ if "ceiling" in sys.argv:
         "Modrá čárkovaná čára: nutná samostatná nosná podpora stropu chodby nad SDK příčkou a schodištěm; zatím nenavržena.",
         "Styk nosníků koupelny a pokoje 3 zatím není řešen.",
         "Styk protilehlých nosníků chodby a pokojů 1 a 2 na společné stěně zatím není řešen.",
+        "Komín protíná nosník chodby č. 3 ve stropě nad suterénem i 1.NP; detail otvoru zatím není řešen.",
     ])
-    if SHOW_CHIMNEY_PLANNING_MARKER:
-        drawing1.add_chimney_annotation(chimney, projected=True)
+    drawing1.add_chimney_annotation(chimney)
     if SHOW_PURLIN_SUPPORT_PLANNING_MARKERS:
         add_purlin_support_planning_markers(drawing1)
     add_house_cut_symbols(drawing1)
@@ -2814,7 +2904,7 @@ if "roof" in sys.argv:
         "roof",
         x=HOUSE_WIDTH/2,
         y=HOUSE_DEPTH/2,
-        z=max(roof_tiles_top_z, upper.elevation+chimney.end_height)+0.5,
+        z=max(roof_tiles_top_z, chimney.storey.elevation+chimney.end_height)+0.5,
         radius=6.5,
         storeys=[],
         door_annotations=False,
@@ -2914,10 +3004,96 @@ def add_bb_roof_batting(drawing):
     )
 
 
+def add_section_ground(drawing):
+    """Draw section-only natural soil and gravel outside the perimeter insulation."""
+    if math.isclose(abs(drawing.direction[0]), 1.0):
+        axis, length = 1, HOUSE_DEPTH
+        fraction = min(1.0, max(0.0, drawing.x/HOUSE_WIDTH))
+        first = TERRAIN_STREET_EAST_ELEVATION+fraction*(TERRAIN_STREET_WEST_ELEVATION-TERRAIN_STREET_EAST_ELEVATION)
+        last = TERRAIN_GARDEN_EAST_ELEVATION+fraction*(TERRAIN_GARDEN_WEST_ELEVATION-TERRAIN_GARDEN_EAST_ELEVATION)
+    else:
+        axis, length = 0, HOUSE_WIDTH
+        fraction = min(1.0, max(0.0, drawing.y/HOUSE_DEPTH))
+        first = TERRAIN_STREET_EAST_ELEVATION+fraction*(TERRAIN_GARDEN_EAST_ELEVATION-TERRAIN_STREET_EAST_ELEVATION)
+        last = TERRAIN_STREET_WEST_ELEVATION+fraction*(TERRAIN_GARDEN_WEST_ELEVATION-TERRAIN_STREET_WEST_ELEVATION)
+    first, last = earth_to_z(first), earth_to_z(last)
+    wall_start, wall_end = float(basement_plan_min[axis]), float(basement_plan_max[axis])
+    left, right = wall_start-SECTION_SOIL_EXTENT, wall_end+SECTION_SOIL_EXTENT
+    bottom = FOUNDATION_FOOTING_BOTTOM_Z-SECTION_SOIL_DEPTH
+    ground_region = Polygon(((left, bottom), (right, bottom), (right, last),
+                             (length, last), (0, first), (left, first)))
+    finish = EXTERIOR_XPS_INSULATION_THICKNESS+FACADE_THICKNESS
+    inner_left, inner_right = wall_start-finish, wall_end+finish
+    interior = box(inner_left, BASEMENT_SLAB_BOTTOM_Z, inner_right, max(first, last)+1)
+    gravel_regions = []
+    for face, outward, terrain_z in ((inner_left, -1, first), (inner_right, 1, last)):
+        if terrain_z <= BASEMENT_SLAB_BOTTOM_Z:
+            continue
+        top_width = SECTION_GRAVEL_BOTTOM_WIDTH+(terrain_z-BASEMENT_SLAB_BOTTOM_Z)*SECTION_GRAVEL_SLOPE
+        gravel_regions.append(Polygon((
+            (face, BASEMENT_SLAB_BOTTOM_Z),
+            (face+outward*SECTION_GRAVEL_BOTTOM_WIDTH, BASEMENT_SLAB_BOTTOM_Z),
+            (face+outward*top_width, terrain_z), (face, terrain_z),
+        )).intersection(ground_region))
+    soil = ground_region.difference(unary_union((interior, *gravel_regions)))
+    for region, pattern, label in ((soil, "earth-section", "Rostlý terén"),
+                                   *((region, "gravel", "Štěrkový zásyp") for region in gravel_regions)):
+        parts = (region,) if region.geom_type == "Polygon" else region.geoms
+        for index, part in enumerate(parts, 1):
+            if part.area > 1e-9:
+                drawing.add_polygon(tuple(part.exterior.coords)[:-1], pattern=pattern,
+                                    background=True, name=f"{drawing.name} {label} {index}")
+    # Background profiles add the ground line without hiding the foundations.
+    for start, end, z in ((left, inner_left, first), (inner_right, right, last)):
+        drawing.add_terrain(((start, z), (end, z)), hatch_depth=0, background=True, line_width=0.2)
+
+
+def add_section_waterproofing(drawing):
+    """Draw waterproofing above the foundation slab and behind the perimeter XPS."""
+    axis = 1 if math.isclose(abs(drawing.direction[0]), 1.0) else 0
+    outer_start, outer_end = float(basement_plan_min[axis]), float(basement_plan_max[axis])
+    line = drawing.add_poly_line(
+        (
+            (outer_start, PERIMETER_TOP_HEIGHT),
+            (outer_start, BASEMENT_FLOOR_START),
+            (outer_end, BASEMENT_FLOOR_START),
+            (outer_end, PERIMETER_TOP_HEIGHT),
+        ),
+        style="dashed", line_width=HYDROIZOLACE_LINE_WIDTH, name="Hydroizolace",
+    )
+    appearance = ifcopenshell.util.element.get_pset(line, "EPset_Annotation")
+    ifcopenshell.api.pset.edit_pset(
+        house.model, pset=house.model.by_id(appearance["id"]),
+        properties={"Classes": appearance["Classes"]+" hydroizolace"},
+    )
+    return line
+
+
+def add_bb_elevation_marks(drawing):
+    """Mark section levels relative to the finished ground floor, in millimetres."""
+    datum_z = ground.elevation+GROUND_FLOOR_THICKNESS
+    # Use opposite sides for close levels to keep their arrows and labels apart.
+    for z, west_side, label in (
+        (datum_z, False, "Ground finished floor level"),
+        (ceiling_storey.elevation-CEILING_PLASTER_THICKNESS, True, "Ground plastered ceiling level"),
+        (UPPER_FINISHED_FLOOR_HEIGHT, False, "Upper finished floor level"),
+        (roof_tiles_lowest_z, False, "Lowest roof tile level"),
+        (roof_tiles_top_z, False, "Roof ridge level"),
+        (basement_ceiling_storey.elevation-CEILING_PLASTER_THICKNESS, True, "Basement plastered ceiling level"),
+        (BASEMENT_FINISHED_FLOOR_HEIGHT, False, "Basement finished floor level"),
+        (BASEMENT_SLAB_BOTTOM_Z, True, "Foundation slab bottom level"),
+        (FOUNDATION_FOOTING_BOTTOM_Z, False, "Foundation footing bottom level"),
+    ):
+        x0, x1 = (HOUSE_WIDTH+1.25, HOUSE_WIDTH+1.85) if west_side else (-1.0, -0.4)
+        drawing.add_elevation_dimension(
+            x0=x0, x1=x1, z0=datum_z, z1=z, side="left" if west_side else "right", name=label,
+        )
+
+
 def add_house_section(cut, name, pdf):
     """Create a complete vertical section using the same cut as its plan markers."""
-    section_top = max(roof_tiles_top_z, upper.elevation+chimney.end_height)
-    section_bottom = FOUNDATION_FOOTING_BOTTOM_Z
+    section_top = max(roof_tiles_top_z, chimney.storey.elevation+chimney.end_height)
+    section_bottom = FOUNDATION_FOOTING_BOTTOM_Z-SECTION_SOIL_DEPTH
     drawing = cut.add_drawing(
         house, name, z=(section_bottom+section_top)/2,
         radius=max(6.5, (section_top-section_bottom)/2+.5),
@@ -2926,6 +3102,7 @@ def add_house_section(cut, name, pdf):
         right_panel_width=60, section_outline_width=SECTION_OUTLINE_WIDTH,
         hide_projected_ring_beam_seams=True,
     )
+    add_section_ground(drawing)
     # Batting is drawing-only. Add it only where this section crosses an
     # exterior wall, and let the wall helper leave gaps at openings.
     view_x, view_y, _ = cut.view_direction
@@ -2952,10 +3129,29 @@ def add_house_section(cut, name, pdf):
             start_z=PERIMETER_TOP_HEIGHT, end_z=insulation_top, opening_walls=(upper_wall,),
         )
     add_perimeter_insulation(drawing)
+    waterproofing = add_section_waterproofing(drawing)
+    if name == "aa":
+        for furniture in (
+            kamna, kitchen_cooker, kitchen_sink, kitchen_dishwasher, kitchen_fridge,
+            kitchen_counter, kitchen_front_counter, bathroom_shower, basement_water_meter,
+        ):
+            drawing.add_furniture_label(furniture)
     if name == "bb":
         for furniture in (kamna, kitchen_cooker, upper_washing_machine, basement_water_meter, kitchen_front_counter):
             drawing.add_furniture_label(furniture)
         add_bb_roof_batting(drawing)
+        add_bb_elevation_marks(drawing)
+        for finished_floor_z, ceiling_z, label in (
+            (BASEMENT_FINISHED_FLOOR_HEIGHT, basement_ceiling_storey.elevation,
+             "Basement finished floor to plastered ceiling"),
+            (ground.elevation+GROUND_FLOOR_THICKNESS, ceiling_storey.elevation,
+             "Ground finished floor to plastered ceiling"),
+        ):
+            drawing.add_dimension(
+                start=(BWT+0.4, finished_floor_z),
+                end=(BWT+0.4, ceiling_z-CEILING_PLASTER_THICKNESS),
+                name=label,
+            )
         drawing.add_dimension(
             start=(roof_ridge_x, UPPER_FINISHED_FLOOR_HEIGHT),
             end=(roof_ridge_x, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z),
@@ -2977,18 +3173,21 @@ def add_house_section(cut, name, pdf):
     drawing.add_material_legend([
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("brick", "Nosná zeď - VPC Cihla 175 mm"),
-        ("liapor-brick", "Zakládací řada - Liapor"),
+        ("liapor-brick", "Zakládací řada - Ytong Statik Plus"),
         ("ztracene-bedneni", "Ztracené bednění"),
         ("base-plate", "Základová deska"),
-        ("concrete", "Železobetonový věnec"),
+        ("earth-section", "Rostlý terén"),
+        ("gravel", "Štěrkový zásyp"),
+        ("reinforced-concrete", "Železobetonový věnec"),
         ("wood-solid", "Dřevo"),
         ("drywall-diagonal1", "Sádrokarton"),
         ("thermal-impact-insulation", "Podlahová izolace"),
         ("rockwool-wave", "Minerální vata"),
-        ("perimeter-polystyrene", "Perimetrická izolace XPS"),
+        ("perimeter-polystyrene", "Perimetrická izolace"),
         ("mdf-solid", "MDF záklop"),
         ("vapour-barrier-solid", "OSB záklop + parobrzda"),
     ])
+    drawing.add_line_legend([(waterproofing, "Hydroizolace")])
     drawing.render(PROJECT_DIR / f"{name}.svg", pdf=pdf)
     return drawing
 
@@ -3027,7 +3226,7 @@ TERRAIN_PROFILES = {
 
 def add_exterior_view(name, camera, direction):
     """Create a complete elevation for the shared exterior-view sheet."""
-    view_top = max(roof_tiles_top_z, upper.elevation+chimney.end_height)
+    view_top = max(roof_tiles_top_z, chimney.storey.elevation+chimney.end_height)
     terrain_profile = list(TERRAIN_PROFILES[name])
     radius = 6.5
     if name == "pohled_zapad":
@@ -3206,10 +3405,10 @@ def add_exterior_view(name, camera, direction):
 if "pohledy" in sys.argv:
     pohledy_sheet = DrawingSheet(paper="A3", orientation="landscape")
     for name, title, camera, direction, x, y in (
-        ("pohled_zapad", "Pohled - Západ", (west_eave_x+1, HOUSE_DEPTH/2), (-1, 0, 0), .25, .25),
-        ("pohled_ulice", "Pohled - Ulice", (HOUSE_WIDTH/2, -ROOF_GABLE_OVERHANG-1), (0, 1, 0), .75, .25),
-        ("pohled_zahrada", "Pohled - Zahrada", (HOUSE_WIDTH/2, HOUSE_DEPTH+ROOF_GABLE_OVERHANG+1), (0, -1, 0), .25, .75),
-        ("pohled_vychod", "Pohled - Východ", (east_eave_x-1, HOUSE_DEPTH/2), (1, 0, 0), .75, .75),
+        ("pohled_zapad", "Pohled - Západ", (west_eave_x+1, HOUSE_DEPTH/2), (-1, 0, 0), .35, .35),
+        ("pohled_ulice", "Pohled - Ulice", (HOUSE_WIDTH/2, -ROOF_GABLE_OVERHANG-1), (0, 1, 0), .65, .35),
+        ("pohled_zahrada", "Pohled - Zahrada", (HOUSE_WIDTH/2, HOUSE_DEPTH+ROOF_GABLE_OVERHANG+1), (0, -1, 0), .65, .75),
+        ("pohled_vychod", "Pohled - Východ", (east_eave_x-1, HOUSE_DEPTH/2), (1, 0, 0), .35, .75),
     ):
         view = add_exterior_view(name, camera, direction)
         pohledy_sheet.add(view, x=x, y=y, title=title, tables=False)

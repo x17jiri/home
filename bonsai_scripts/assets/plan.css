@@ -11,6 +11,17 @@ a text, a tspan { fill: blue !important; text-decoration: underline; }
 a:hover { cursor: pointer; }
 .cut { fill: black; stroke: black; stroke-linecap: round; stroke-width: 0.35; fill-rule: evenodd; }
 .projection { fill: white; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
+/* Railings have a simplified drawing panel; cuts show its plain outline. */
+.IfcRailing.material-Wood.cut {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.10 !important;
+}
+.IfcRailing.projection { fill: none !important; stroke-width: 0.10 !important; }
+.target-view-ELEVATIONVIEW .IfcRailing.material-Wood.surface,
+.target-view-SECTIONVIEW .IfcRailing.material-Wood.surface {
+    fill: url(#railing-boards) !important;
+}
 .IfcFurniture.projection,
 .IfcFurniture.cut {
     fill: none !important;
@@ -468,6 +479,21 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+/* Keep soil visible through footings behind an elevation/section plane.
+ * Native projection linework supplies the dashed edges, without a second
+ * overlapping outline on Bonsai's generated surface-fill polygons. */
+.target-view-ELEVATIONVIEW .IfcFooting.surface {
+    fill: none !important;
+    stroke: none !important;
+}
+
+.target-view-ELEVATIONVIEW .IfcFooting.projection {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: 0.7 0.8 !important;
+}
+
 /* In a foundation plan the strip footings are seen from above.  Keep their
  * cross hatch for elevation/section cuts, but use a plain fill in plan. */
 .target-view-PLANVIEW .IfcFooting.cut {
@@ -739,6 +765,17 @@ tspan.note-text {
 
 .PredefinedType-LINEWORK.drawing-line.dashed {
     stroke-dasharray: 0.7 0.8 !important;
+}
+
+/* Section waterproofing uses long, heavy dashes; width comes from the annotation. */
+.PredefinedType-LINEWORK.drawing-line.dashed.hydroizolace {
+    stroke-dasharray: 4 1.5 !important;
+    stroke-linecap: butt !important;
+}
+
+/* Clip section soil hatching without outlining its artificial display limits. */
+.PredefinedType-FILLAREA.drawing-fill-pattern-earth-section {
+    stroke: none !important;
 }
 
 /* Inserted immediately behind the four roof-window outline lines. */

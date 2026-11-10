@@ -11,16 +11,17 @@ from unittest.mock import patch
 
 import ifcopenshell.geom
 import ifcopenshell.util.element
+import ifcopenshell.util.representation
 import ifcopenshell.util.selector
 import numpy as np
 
 from ifc_utils import Drawing, House, RailingPath
 
 
-def mesh(element):
+def mesh(element, representation=None):
     settings = ifcopenshell.geom.settings()
     settings.set(settings.USE_WORLD_COORDS, True)
-    shape = ifcopenshell.geom.create_shape(settings, element)
+    shape = ifcopenshell.geom.create_shape(settings, element, representation)
     return (np.asarray(shape.geometry.verts).reshape(-1, 3).copy(),
             np.asarray(shape.geometry.faces).reshape(-1, 3).copy())
 
@@ -29,6 +30,36 @@ class RailingTests(unittest.TestCase):
     def setUp(self):
         self.house = House("Railing tests")
         self.storey = self.house.storey("Upper", elevation=3)
+
+    def test_drawings_use_panel_without_posts_and_keep_full_model_body(self):
+        railing = self.storey.railing("Plan", path=[(2, 1, 3), (2, 3, 4), (3, 3, 4)])
+        plan = ifcopenshell.util.representation.get_representation(railing, "Plan", "Body", "PLAN_VIEW")
+        body = ifcopenshell.util.representation.get_representation(railing, "Model", "Body", "MODEL_VIEW")
+        self.assertEqual(len(plan.Items), 2)
+        self.assertGreater(len(body.Items), 2)
+        np.testing.assert_allclose(plan.Items[0].Coordinates.CoordList,
+                                   body.Items[0].Coordinates.CoordList)
+        plan_vertices, _ = mesh(railing, plan)
+        model_vertices, _ = mesh(railing)
+        self.assertAlmostEqual(plan_vertices[:, 2].min(), 3.05)
+        self.assertAlmostEqual(model_vertices[:, 2].min(), 3)
+        panel = plan.Items[1]
+        np.testing.assert_allclose(np.array(panel.Coordinates.CoordList)[:4, 2],
+                                   (3.05, 3.05, 3.91, 3.91))
+        for target in ("ELEVATION_VIEW", "SECTION_VIEW"):
+            elevation = ifcopenshell.util.representation.get_representation(railing, "Model", "Body", target)
+            self.assertEqual(elevation.Items, plan.Items)
+        _, triangles = mesh(railing, plan)
+        edges = Counter(tuple(sorted(edge)) for a, b, c in triangles
+                        for edge in ((a, b), (b, c), (c, a)))
+        self.assertEqual(set(edges.values()), {2})
+
+        with patch.object(self.house, "mirror_x", True):
+            exported = self.house._export_model().by_guid(railing.GlobalId)
+            mirrored_plan = ifcopenshell.util.representation.get_representation(exported, "Plan", "Body", "PLAN_VIEW")
+            mirrored_vertices, _ = mesh(exported, mirrored_plan)
+        self.assertEqual({tuple(p) for p in np.round(mirrored_vertices, 7)},
+                         {tuple(p) for p in np.round(plan_vertices*(-1, 1, 1), 7)})
 
     def test_rotated_stair_path_and_posts_rest_on_treads(self):
         with redirect_stdout(StringIO()):

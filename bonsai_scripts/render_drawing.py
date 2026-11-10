@@ -136,6 +136,12 @@ def render_drawing(args: argparse.Namespace) -> Path:
         "activating the drawing",
     )
     report_stage("Drawing camera activated")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from railing_drawings import activate_railing_drawing_bodies
+
+    railing_count = activate_railing_drawing_bodies(tool, drawing)
+    if railing_count:
+        report_stage(f"Activated {railing_count} railing drawing bodies for surface visibility")
     # Native angle labels read this UI cache directly. In unattended exports
     # no Properties panel has loaded it after activating the drawing.
     from bonsai.bim.module.drawing.data import DrawingsData

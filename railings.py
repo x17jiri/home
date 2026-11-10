@@ -6,12 +6,14 @@ import json
 from math import ceil, isfinite
 
 import ifcopenshell
+import ifcopenshell.api.context
 import ifcopenshell.api.geometry
 import ifcopenshell.api.material
 import ifcopenshell.api.pset
 import ifcopenshell.api.root
 import ifcopenshell.api.spatial
 import ifcopenshell.api.style
+import ifcopenshell.util.representation
 import numpy as np
 
 
@@ -218,6 +220,37 @@ def create_railing(storey, name, *, path, height=1.0, post_spacing=.9,
     ifcopenshell.api.geometry.assign_representation(model, product=element, representation=body)
     if style is not None:
         ifcopenshell.api.style.assign_representation_styles(model, shape_representation=body, styles=[style])
+    # Drawings replace the individual infill members with one continuous
+    # sloping panel. Keep the full physical body above for normal 3D viewing.
+    panel_gap = min(.05, (height-rail_h)/4)
+    panel_thickness = baluster_w
+    drawing_items = body.Items
+    if infill == "vertical":
+        panel_vertices = []
+        for p, offset in zip(points, offsets):
+            for side, dz in ((-1, panel_gap), (1, panel_gap),
+                             (1, height-rail_h-panel_gap), (-1, height-rail_h-panel_gap)):
+                xy = p[:2]+side*offset*panel_thickness/2
+                panel_vertices.append((float(xy[0]), float(xy[1]), float(p[2]+dz)))
+        panel = ifcopenshell.api.geometry.add_mesh_representation(
+            model, context=house._body_context, vertices=[panel_vertices], faces=[rail_faces],
+        )
+        if style is not None:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=panel, styles=[style])
+        drawing_items = (body.Items[0], *panel.Items)
+        model.remove(panel)
+    for context_type, target_view in (("Plan", "PLAN_VIEW"), ("Model", "ELEVATION_VIEW"),
+                                      ("Model", "SECTION_VIEW")):
+        context = ifcopenshell.util.representation.get_context(model, context_type, "Body", target_view)
+        if context is None:
+            context = ifcopenshell.api.context.add_context(
+                model, context_type=context_type, context_identifier="Body", target_view=target_view,
+                parent=house._body_context.ParentContext,
+            )
+        representation = model.createIfcShapeRepresentation(
+            context, "Body", body.RepresentationType, drawing_items,
+        )
+        ifcopenshell.api.geometry.assign_representation(model, product=element, representation=representation)
     if material not in house._materials:
         house._materials[material] = ifcopenshell.api.material.add_material(model, name=material)
     ifcopenshell.api.material.assign_material(model, products=[element], type="IfcMaterial",
@@ -229,6 +262,8 @@ def create_railing(storey, name, *, path, height=1.0, post_spacing=.9,
         "HandrailSize": json.dumps((rail_w, rail_h)), "Infill": infill,
         "BalusterSize": json.dumps((baluster_w, baluster_d)), "BalusterSpacing": baluster_spacing,
         "PostCount": len(post_positions), "BalusterCount": len(baluster_positions),
+        "DrawingPanelGap": panel_gap if infill == "vertical" else None,
+        "DrawingPanelThickness": panel_thickness if infill == "vertical" else None,
     })
     return Railing(element, storey, path=tuple(tuple(p) for p in points), height=height,
                    post_positions=post_positions, baluster_positions=tuple(baluster_positions))

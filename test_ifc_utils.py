@@ -4574,6 +4574,49 @@ class HouseTests(unittest.TestCase):
                 transparency=1.1,
             )
 
+    def test_repairs_duplicate_asset_profile_closures_without_changing_library(self) -> None:
+        with TemporaryDirectory() as directory:
+            library_path = Path(directory) / "fixtures.ifc"
+            self.write_asset_library(library_path)
+            library = ifcopenshell.open(library_path)
+            asset_type = library.by_type("IfcSanitaryTerminalType")[0]
+            body = next(r.MappedRepresentation for r in asset_type.RepresentationMaps
+                        if r.MappedRepresentation.ContextOfItems.ContextType == "Model")
+
+            def broken_curve(points):
+                segments = [library.createIfcLineIndex(pair) for pair in
+                            ((4, 1), (1, 2), (2, 3), (3, 4), (4, 1))]
+                return library.createIfcIndexedPolyCurve(
+                    library.createIfcCartesianPointList2D(points), segments, False,
+                )
+
+            outer = broken_curve(((0., -.6), (.4, -.6), (.4, 0.), (0., 0.)))
+            inner = broken_curve(((.1, -.5), (.3, -.5), (.3, -.1), (.1, -.1)))
+            body.Items[0].SweptArea = library.createIfcArbitraryProfileDefWithVoids(
+                "AREA", None, outer, (inner,),
+            )
+            library.write(library_path)
+            original = library_path.read_bytes()
+            house = House("Asset repair", asset_library=library_path)
+            ground = house.storey("Ground", elevation=0)
+            first = ground.asset("Basin", asset="toilet_with_cistern", center=(2, 3))
+            second = ground.asset("Second basin", asset="toilet_with_cistern", center=(4, 3))
+            self.assertEqual(ifcopenshell.util.element.get_type(first),
+                             ifcopenshell.util.element.get_type(second))
+            profile = ifcopenshell.util.representation.resolve_representation(
+                ifcopenshell.util.representation.get_representation(first, "Model", "Body", "MODEL_VIEW")
+            ).Items[0].SweptArea
+            self.assertEqual(len(profile.OuterCurve.Segments), 4)
+            self.assertEqual(len(profile.InnerCurves[0].Segments), 4)
+            shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), first)
+            faces = np.asarray(shape.geometry.faces).reshape(-1, 3)
+            edges = np.sort(np.vstack((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+            _, counts = np.unique(edges, axis=0, return_counts=True)
+            self.assertTrue(np.all(counts == 2), "repaired solid must be watertight")
+            self.assertEqual(library_path.read_bytes(), original)
+            self.assertEqual(len(outer.Segments), 5)
+            self.assertEqual(len(inner.Segments), 5)
+
     def test_discovers_and_places_plan_ready_library_assets(self) -> None:
         with TemporaryDirectory() as directory:
             library_path = Path(directory) / "fixtures.ifc"

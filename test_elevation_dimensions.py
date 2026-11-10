@@ -75,6 +75,42 @@ class ElevationDimensionTests(unittest.TestCase):
                         self.assertGreater(text_origin[0], local[1][0][0])
                         self.assertGreater(text_origin[1], local[1][1][1])
 
+    def test_left_shelf_and_readable_label_across_views_and_mirroring(self):
+        for mirror in (False, True):
+            for direction in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)):
+                with self.subTest(mirror=mirror, direction=direction):
+                    house = House("Left levels", mirror_x=mirror)
+                    drawing = house.add_drawing("Section", 1, 1.5, 2, 5,
+                                                view="elevation", direction=direction)
+                    symbol = drawing.add_elevation_dimension(2, 4, 1, 2.5, side="left")
+                    props = ifcopenshell.util.element.get_pset(symbol, "BBIM_ElevationDimension")
+                    self.assertEqual((props["Side"], props["Height"], props["Label"]),
+                                     ("left", 1.5, "+1500"))
+                    label = next(a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                                 if (a.Name or "").endswith("Label"))
+                    self.assertEqual(ifcopenshell.util.element.get_pset(label, "BBIM_DrawingText", "Alignment"),
+                                     "right")
+                    drawing.add_elevation_dimension(2, 4, 1, 2.5, name="Right control")
+                    control_label = next(a for a in drawing.group.IsGroupedBy[0].RelatedObjects
+                                         if a.Name == "Right control Label")
+                    exported = house._export_model()
+                    inverse = np.linalg.inv(ifcopenshell.util.placement.get_local_placement(
+                        exported.by_guid(drawing.element.GlobalId).ObjectPlacement))
+                    curves = world_curves(exported.by_guid(symbol.GlobalId))
+                    local = [np.array([(inverse @ np.array((*p, 1)))[:3] for p in c]) for c in curves]
+                    np.testing.assert_allclose(local[1][1] - local[1][0], (0, .25, 0), atol=1e-12)
+                    self.assertLess(local[1][2][0], local[1][1][0])
+                    exported_label = exported.by_guid(label.GlobalId)
+                    text_frame = ifcopenshell.util.placement.get_local_placement(exported_label.ObjectPlacement)
+                    text_origin = (inverse @ text_frame[:, 3])[:3]
+                    self.assertLess(text_origin[0], local[1][0][0])
+                    self.assertGreater(text_origin[1], local[1][1][1])
+                    control_frame = ifcopenshell.util.placement.get_local_placement(
+                        exported.by_guid(control_label.GlobalId).ObjectPlacement)
+                    np.testing.assert_allclose(text_frame[:3, :3], control_frame[:3, :3], atol=1e-12)
+                    self.assertEqual(exported_label.Representation.Representations[0].Items[0].BoxAlignment,
+                                     "middle-right")
+
     def test_signed_values_zero_and_paper_sizes_follow_drawing_scale(self):
         house = House("Levels")
         drawing = house.add_drawing("Section", 0, 0, 2, 4, view="elevation", direction=(1, 0, 0))
@@ -95,7 +131,8 @@ class ElevationDimensionTests(unittest.TestCase):
         drawing = house.add_drawing("Section", 0, 0, 2, 4, view="elevation", direction=(1, 0, 0))
         invalid = [((0, 0, 0, 1), {}), ((True, 1, 0, 1), {}), ((0, 1, 0, float("inf")), {}),
                    ((0, 1, 0, 1), {"font_size": 0}), ((0, 1, 0, 1), {"line_width": -1}),
-                   ((0, 1, 0, 1), {"color": "bad-color"}), ((0, 1, 0, 1), {"name": " "})]
+                   ((0, 1, 0, 1), {"color": "bad-color"}), ((0, 1, 0, 1), {"name": " "}),
+                   ((0, 1, 0, 1), {"side": "up"}), ((0, 1, 0, 1), {"side": True})]
         for args, kwargs in invalid:
             before = len(house.model.by_type("IfcAnnotation"))
             with self.subTest(args=args, kwargs=kwargs), self.assertRaises((ValueError, TypeError)):

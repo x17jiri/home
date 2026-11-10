@@ -555,6 +555,19 @@ class AssetCatalog:
             element=self._source_types[entry.type_name],
             reuse_identities=self._reuse_identities,
         )
+        # Some library basins repeat the closing segment at both ends of an
+        # area profile. That creates non-manifold faces and missing HLR edges.
+        # Repair the imported copy, leaving the library and plan curves intact.
+        for profile in self._house.model.traverse(imported):
+            if not profile.is_a("IfcArbitraryClosedProfileDef"):
+                continue
+            for curve in (profile.OuterCurve, *getattr(profile, "InnerCurves", ())):
+                if not curve.is_a("IfcIndexedPolyCurve") or not curve.Segments:
+                    continue
+                segments = curve.Segments
+                if (len(segments) > 2 and segments[0].is_a() == segments[-1].is_a()
+                        and segments[0].wrappedValue == segments[-1].wrappedValue):
+                    curve.Segments = segments[:-1]
         self._imported_types[entry.type_name] = imported
         return imported
 
@@ -3178,6 +3191,24 @@ def _material_legend_svg(
                 f'y="{row_y:.6g}" width="{swatch_width:.6g}" '
                 f'height="{row_height:.6g}" fill="{fill}"/>'
             )
+            if pattern == "reinforced-concrete":
+                # One reinforcement section per swatch, independent of the
+                # repeating fill's origin and the legend's location/scale.
+                left, right_bar = x+swatch_width*.25, x+swatch_width*.75
+                top, bottom = row_y+row_height*.25, row_y+row_height*.75
+                parts.append(
+                    '<g class="material-legend-reinforcement">'
+                    f'<rect x="{left:.6g}" y="{top:.6g}" '
+                    f'width="{right_bar-left:.6g}" height="{bottom-top:.6g}" '
+                    f'style="fill:none;stroke:black;stroke-width:{.15*layout_scale*u:.6g}"/>'
+                )
+                for bar_x, bar_y in ((left, top), (right_bar, top),
+                                     (right_bar, bottom), (left, bottom)):
+                    parts.append(
+                        f'<circle cx="{bar_x:.6g}" cy="{bar_y:.6g}" '
+                        f'r="{.4*layout_scale*u:.6g}" style="fill:black;stroke:none"/>'
+                    )
+                parts.append('</g>')
         if is_batting:
             batting_height = row_height * (0.70 if is_pavatex else 0.82)
             batting_scale = batting_height / 1.825
@@ -11715,6 +11746,7 @@ class Drawing:
 
     def add_elevation_dimension(
         self, x0: Number, x1: Number, z0: Number, z1: Number, *,
+        side: Literal["left", "right"] = "right",
         font_size: Number = 2, line_width: Number = 0.1,
         color: str = "black", name: str | None = None,
     ) -> ifcopenshell.entity_instance:
@@ -11727,7 +11759,9 @@ class Drawing:
         world X when looking along Y, or world Y when looking along X.
         Requires an axis-aligned elevation. Reversed endpoints are supported.
         Arrow, shelf, text and stroke sizes use printed millimetres and remain
-        upright/right-facing under export mirroring. Returns the linework;
+        upright under export mirroring. side="left" puts the shelf and label
+        to the left on the page, with readable right-aligned text; the default
+        "right" retains the right-facing shelf and left-aligned text. Returns the linework;
         both it and its native text label belong only to this drawing.
         """
         if self.view != "elevation":
@@ -11736,6 +11770,7 @@ class Drawing:
                           (("x0", x0), ("x1", x1), ("z0", z0), ("z1", z1)))
         if abs(x1 - x0) < 1e-9:
             raise ValueError("x0 and x1 must be different")
+        side = _enum(side, "side", {"LEFT", "RIGHT"}).lower()
         font_size = _number(font_size, "font_size")
         if font_size <= 0:
             raise ValueError("font_size must be greater than zero")
@@ -11756,7 +11791,7 @@ class Drawing:
         label = "±0" if value == 0 else f"{value:+d}"
         # Native geometry is reflected locally during mirrored export, but
         # text and cameras are kept readable. Precompensate screen-side offsets.
-        screen_sign = -1 if self.house.mirror_x else 1
+        screen_sign = (-1 if side == "left" else 1) * (-1 if self.house.mirror_x else 1)
         shaft = 2.5 * units
         wing = 0.75 * units
         shelf = (font_size * 0.65 * len(label) + 1.5) * units
@@ -11777,14 +11812,15 @@ class Drawing:
             dimension_name, "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)],
             f"{classes} {width_class} elevation-dimension", "BBIM_ElevationDimension",
             {"X0": x0, "X1": x1, "Z0": z0, "Z1": z1, "Height": z1-z0,
-             "Label": label, "FontSize": font_size, "LineWidth": line_width, "Color": color},
+             "Label": label, "FontSize": font_size, "LineWidth": line_width, "Color": color, "Side": side},
         )
         label_origin = (placement[:3, 3] + placement[:3, 0] * screen_sign * 0.7 * units
                         + placement[:3, 1] * (shaft + (font_size / 2 + 0.6) * units))
         horizontal_axis = 1 if abs(self.direction[0]) > 0.5 else 0
         text = self.add_text(
             (float(label_origin[horizontal_axis]), float(label_origin[2])), label,
-            font_size=font_size, color=color, alignment="left", name=f"{dimension_name} Label",
+            font_size=font_size, color=color, alignment="right" if side == "left" else "left",
+            name=f"{dimension_name} Label",
         )
         properties = ifcopenshell.util.element.get_pset(text, "EPset_Annotation")
         ifcopenshell.api.pset.edit_pset(
