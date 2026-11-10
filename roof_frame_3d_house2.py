@@ -37,7 +37,7 @@ DEFORMATION_SCALE = 30.0
 @dataclass(frozen=True)
 class Settings:
     roof_mass: float = 150.0  # kg/m² of actual slope, including interior finish, excluding modelled timber.
-    snow_load: float = 2.0  # Vertical kN/m² of horizontal roof area, already a roof snow load.
+    snow_load: float = 1.5  # Vertical kN/m² of horizontal roof area, already a roof snow load.
     rafter_material: str = "C22"
     beam_material: str = "C22"  # Purlins, posts, connectors, braces and collar ties.
     timber_density: float = 450.0  # kg/m³
@@ -184,10 +184,15 @@ class Layout:
         result.width, result.depth = width, depth
         px = tuple(g("PURLIN_X_POSITIONS"))
         rows = tuple(tuple(sorted(row)) for row in g("PURLIN_SUPPORT_Y_POSITIONS"))
-        if len(px) != 2 or len(rows) != 2 or any(not row for row in rows):
-            raise ValueError("House 2 needs two purlins and at least one post under each")
-        if not 0 < px[0] < width/2 < px[1] < width:
-            raise ValueError("purlins must straddle the ridge")
+        if len(px) not in (2, 3) or len(rows) != len(px) or any(not row for row in rows):
+            raise ValueError("House 2 needs two or three purlins and at least one post row per purlin")
+        if (any(not math.isfinite(x) for x in px) or
+                any(b <= a for a, b in zip(px, px[1:])) or
+                not 0 < px[0] < width/2 < px[-1] < width or
+                (len(px) == 3 and not math.isclose(px[1], width/2, abs_tol=1e-8))):
+            raise ValueError("outer purlins must straddle the ridge; an optional third purlin must be at the ridge")
+        if len(px) == 3:
+            px = (px[0], width/2, px[-1])
         pwidth, pheight = g("PURLIN_SIZE")
         cwidth, cheight = g("PURLIN_CONNECTION_BEAM_SIZE")
         post_x, post_y = g("PURLIN_SUPPORT_SIZE")
@@ -196,8 +201,29 @@ class Layout:
         post_top = z-pheight/2
         anchor = post_top-drop
         cross_brace_rise = z-cheight/2-anchor
-        if anchor <= base or cross_brace_rise <= 0 or 2*cross_brace_rise >= px[1]-px[0]-post_x:
+        if anchor <= base or cross_brace_rise <= 0 or 2*cross_brace_rise >= px[-1]-px[0]-post_x:
             raise ValueError("braces do not fit between the posts or above the floor")
+        plate_width, plate_height = g("WALL_PLATE_SIZE")
+        top = g("WALL_PLATE_Z")+plate_height/2
+        ridge, rafter_size = width/2, g("RAFTER_SIZE")
+        # Only the two outer purlins define the slopes. The ridge purlin's
+        # flat top meets the same reference planes at its two outside faces.
+        ridge_tops = []
+        for i, direction in ((0, 1), (len(px)-1, -1)):
+            plate_x = wall/2 if direction == 1 else width-wall/2
+            seat_x = plate_x-direction*plate_width/2
+            contact_x = px[i]-direction*pwidth/2
+            slope = (z+pheight/2-top)/(contact_x-seat_x)
+            ridge_tops.append(top+slope*(ridge-direction*pwidth/2-seat_x))
+        if not math.isclose(*ridge_tops, abs_tol=1e-8):
+            raise ValueError("east and west roof planes do not meet symmetrically at the ridge")
+        purlin_z = [z]*len(px)
+        if len(px) == 3:
+            purlin_z[1] = ridge_tops[0]-pheight/2
+            if purlin_z[1] <= z:
+                raise ValueError("ridge purlin must sit above the outer purlins")
+            if px[1]-px[0] <= pwidth or px[2]-px[1] <= pwidth:
+                raise ValueError("ridge and outer purlin sections must not overlap")
         overhang = g("WALL_PLATE_OVERHANG")
         if any(any(not math.isfinite(y) or not wall/2 < y < depth-wall/2 for y in row)
                or any(b-a <= 1e-8 for a, b in zip(row, row[1:])) for row in rows):
@@ -209,24 +235,31 @@ class Layout:
             return member
 
         for i, x in enumerate(px):
+            member_z = purlin_z[i]
+            post_top = member_z-pheight/2
+            anchor = post_top-drop
             name = f"P{i+1}"
-            beam(name, "purlin", (x, -overhang, z), (x, depth+overhang, z), (pwidth, pheight))
-            result.gables.extend((name, (x, y, z)) for y in (wall/2, depth-wall/2))
+            beam(name, "purlin", (x, -overhang, member_z), (x, depth+overhang, member_z), (pwidth, pheight))
+            result.gables.extend((name, (x, y, member_z)) for y in (wall/2, depth-wall/2))
             result.chords[name] = tuple(sorted((wall/2, *rows[i], depth-wall/2)))
             for j, y in enumerate(rows[i]):
                 name = f"POST{i+1}.{j+1}"
                 beam(name, "post", (x, y, base), (x, y, post_top), (post_x, post_y))
                 result.bases.append((name, (x, y, base)))
-                result.pins.append(Pin(f"purlin_post_{i}_{j}", ((x, y, z), (x, y, post_top)), (x, y, post_top)))
+                result.pins.append(Pin(f"purlin_post_{i}_{j}", ((x, y, member_z), (x, y, post_top)), (x, y, post_top)))
                 for sign, label in ((-1, "front"), (1, "back")):
                     first = (x, y+sign*post_y/2, anchor)
-                    last = (x, first[1]+sign*(z-pheight/2-anchor), z-pheight/2)
+                    last = (x, first[1]+sign*drop, post_top)
                     if not -overhang <= last[1] <= depth+overhang:
                         continue
                     name = f"BRACE{i+1}.{j+1}.{label}"
                     beam(name, "brace", first, last, brace_size)
                     result.pins.extend((Pin(name+"_lower", ((x, y, anchor),), first),
-                                        Pin(name+"_upper", ((x, last[1], z),), last)))
+                                        Pin(name+"_upper", ((x, last[1], member_z),), last)))
+                if i not in (0, len(px)-1):
+                    # Existing transverse connectors stay at the outer-purlin
+                    # height, below the ridge-post brace anchors.
+                    continue
                 sign = 1 if i == 0 else -1
                 first = (x+sign*post_x/2, y, anchor)
                 last = (first[0]+sign*cross_brace_rise, y, z-cheight/2)
@@ -239,14 +272,11 @@ class Layout:
             raise ValueError("purlin connector Y positions must be distinct")
         for j, y in enumerate(cross_rows):
             cross = beam(f"CROSS{j+1}", "cross_beam", (px[0]+pwidth/2, y, z),
-                         (px[1]-pwidth/2, y, z), (cwidth, cheight))
+                         (px[-1]-pwidth/2, y, z), (cwidth, cheight))
             result.chords[cross.name] = (cross.start[0], cross.end[0])
-            for i, endpoint in enumerate((cross.start, cross.end)):
+            for i, endpoint in ((0, cross.start), (len(px)-1, cross.end)):
                 result.pins.append(Pin(f"purlin_cross_{i}_{j}", ((px[i], y, z), endpoint), endpoint))
 
-        plate_width, plate_height = g("WALL_PLATE_SIZE")
-        top = g("WALL_PLATE_Z")+plate_height/2
-        ridge, rafter_size = width/2, g("RAFTER_SIZE")
         result.rafter_y = tuple(g("RAFTER_Y_POSITIONS"))
         if len(result.rafter_y) < 2 or any(b <= a for a, b in zip(result.rafter_y, result.rafter_y[1:])):
             raise ValueError("rafter Y coordinates must be strictly increasing")
@@ -256,7 +286,8 @@ class Layout:
             plate_x = wall/2 if i == 0 else width-wall/2
             direction = 1 if i == 0 else -1
             seat_x = plate_x-direction*plate_width/2
-            purlin_x = px[i]-direction*pwidth/2
+            outer_index = 0 if i == 0 else len(px)-1
+            purlin_x = px[outer_index]-direction*pwidth/2
             slope = (z+pheight/2-top)/(purlin_x-seat_x)
             cosine = 1/math.sqrt(1+slope*slope)
             centre_offset = (g("RAFTER_Z_OFFSET")+rafter_size[1]/2)/cosine
@@ -278,8 +309,14 @@ class Layout:
                 seat, purlin_seat = point(seat_x, y), point(purlin_x, y)
                 result.seats[name] = (seat, purlin_seat, side, y)
                 result.chords[name] = tuple(sorted((math.dist(member.start, seat), math.dist(member.start, purlin_seat), member.length)))
-                result.pins.append(Pin(name+"_purlin", (purlin_seat, (px[i], y, z)),
+                result.pins.append(Pin(name+"_purlin", (purlin_seat, (px[outer_index], y, z)),
                                        (purlin_x, y, z+pheight/2)))
+                if len(px) == 3:
+                    ridge_face_x = ridge-direction*pwidth/2
+                    ridge_seat = point(ridge_face_x, y)
+                    result.pins.append(Pin(name+"_ridge_purlin", (ridge_seat, (ridge, y, purlin_z[1])),
+                                           (ridge_face_x, y, purlin_z[1]+pheight/2)))
+                    result.chords[name] = tuple(sorted((*result.chords[name], math.dist(member.start, ridge_seat))))
         if not math.isclose(*ridge_heights, abs_tol=1e-8):
             raise ValueError("east and west rafter axes do not meet at the ridge")
         tie_size = tuple(positive(value, "collar tie dimension") for value in g("COLLAR_TIE_SIZE"))
@@ -528,6 +565,25 @@ def support_rows(roof):
                              Fx_kN=-n.RxnFX[combo]/1000, Fy_kN=-n.RxnFY[combo]/1000,
                              Fz_kN=-n.RxnFZ[combo]/1000))
     return rows
+
+
+def purlin_support_load_envelopes(supports):
+    """Worst downward base load for each post and limit state (kN, +down)."""
+    worst = {}
+    for row in supports:
+        if row["kind"] != "post_base":
+            continue
+        limit = row["combination"].split("_", 1)[0]
+        if limit not in {"SLS", "ULS"}:
+            continue
+        key = (row["member"], limit)
+        # The support CSV uses +Z upward, i.e. downward loading is negative.
+        if key not in worst or row["Fz_kN"] < worst[key]["Fz_kN"]:
+            worst[key] = row
+    return [dict(post=post, limit_state=limit, combination=row["combination"],
+                 x_m=row["x_m"], y_m=row["y_m"], z_m=row["z_m"],
+                 downward_kN=-row["Fz_kN"])
+            for (post, limit), row in worst.items()]
 
 
 def member_rows(roof):
@@ -854,6 +910,11 @@ def main(argv=None):
           f"braces {settings.brace_action if settings.braces else 'off'}")
     print(f"Purlins: {purlin_configuration_description(roof)}"
           + ("" if settings.continuous_purlins else ", bending hinges above each post"))
+    purlin_levels = {b.name.split(".")[0]: (b.start[0], b.start[2]+b.timber.height/2)
+                     for b in layout.beams if b.category == "purlin"}
+    for name, (x, top_z) in purlin_levels.items():
+        print(f"  {name}: X={x:.3f} m, top Z={top_z:.3f} m "
+              f"({top_z-layout.bases[0][1][2]:.3f} m above ceiling top)")
     print(f"Collar ties: {sum(b.category == 'collar' for b in layout.beams)} axial pairs, "
           f"{sum(b.pieces for b in layout.beams if b.category == 'collar')} boards; ideal pinned connections")
     print(f"Materials: rafters {settings.rafter_material}, other timber {settings.beam_material}")
@@ -864,10 +925,12 @@ def main(argv=None):
     equilibrium = solve_roof_model(roof)
     rows, chords = member_rows(roof)
     supports = support_rows(roof)
+    post_loads = purlin_support_load_envelopes(supports)
     stem = args.output
     stem.parent.mkdir(parents=True, exist_ok=True)
     write_csv(f"{stem}_members.csv", rows)
     write_csv(f"{stem}_supports.csv", supports)
+    write_csv(f"{stem}_purlin_support_loads.csv", post_loads)
     write_csv(f"{stem}_deflections.csv", chords)
     metadata = dict(source=str(layout.source), settings=asdict(settings),
                     purlin_joints=[dict(left=left, right=right, point=point) for left, right, point in layout.purlin_joints],
@@ -894,6 +957,14 @@ def main(argv=None):
         "Collar self-weight includes sloped board ends and is shared between its two rafter joints; no direct roof/snow load.",
         "Collar joints have no slip; no collar bending, buckling, fastener or chimney-clearance verification.",
     ])
+    if len(purlin_levels) == 3:
+        metadata["assumptions"].extend([
+            "Ridge purlin height follows the roof reference planes at its two outer top corners; outer purlins define both slopes.",
+            "Both rafter halves bear on the ridge purlin through ideal pins at its outer faces; roof/snow loads are unchanged.",
+            "Ridge posts extend directly to the ceiling; lower transverse connectors remain between outer purlins, with no joint to the crossing ridge posts.",
+            "Ridge posts have optional longitudinal braces only; no transverse brace to the lower connectors is added.",
+            "Enabled gable bearings apply to all three purlins, including the raised ridge purlin; masonry bearing geometry is not verified.",
+        ])
     Path(f"{stem}_basis.json").write_text(json.dumps(metadata, indent=2)+"\n", encoding="utf-8")
     for plan, suffix in ((False, "model"), (True, "plan")):
         draw_results(roof, f"{stem}_{suffix}.png", plan=plan, combination=args.plot_combination,
@@ -909,6 +980,13 @@ def main(argv=None):
     for axis in ("x", "y"):
         maximum_force = max(abs(r[f"F{axis}_kN"]) for r in supports if r["kind"] == "wall_plate_seat")
         print(f"Maximum wall-plate {axis.upper()} restraint force: {maximum_force:.6f} kN")
+    print("Purlin post base loads: maximum downward force per post and limit state; "
+          "includes post self-weight (+ down, - uplift)")
+    for row in post_loads:
+        equivalent_kg = row["downward_kN"]*1000/settings.gravity
+        print(f"  {row['post']} (X={row['x_m']:.3f}, Y={row['y_m']:.3f} m), "
+              f"{row['limit_state']}: {row['downward_kN']:.3f} kN "
+              f"(~{equivalent_kg:.0f} kg at g={settings.gravity:g}); {row['combination']}")
     uplift = [r for r in supports if r["Fz_kN"] > 1e-5]
     print(f"Maximum support uplift: {max((r['Fz_kN'] for r in uplift), default=0):.3f} kN; {len({r['support'] for r in uplift})} marked locations")
     print(f"Instantaneous chord checks: {sum(r['L300_status']=='FAIL' for r in chords)} L/300 failures; {sum(r['L500_status']=='FAIL' for r in chords)} L/500 failures")

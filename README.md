@@ -391,7 +391,7 @@ sets the slope and seats posts and balusters on the actual treads.
 The railing belongs to the ground floor and is explicitly included in the
 upper-floor plan; it is visible in both floor drawings and the 3D model.
 The living-room layout is retained. The relocated stairs are to its right
-and no longer overlap its floor. The upper bathroom occupies the space
+and no longer overlap its floor. The technical room occupies the space
 between the stairs and the living-room wall, with the hallway beyond the
 stair arrival.
 
@@ -445,11 +445,15 @@ symbols and one continuous ascent arrow, retaining their ground-floor storey.
 Two upper-floor SDK partitions enclose a rectangle in the front-west
 corner; the remaining L-shaped area is the living room.
 `LIVING_ROOM_WIDTH` is the clear width of its east-side strip.
-`LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - STAIR_UPPER_END_Y -
-LIVING_ROOM_STAIR_CLEARANCE - DRY_WALL_WIDTH` is the clear depth of its
-back/garden-side strip (currently 4.13 m). `LIVING_ROOM_STAIR_CLEARANCE = 1.10`
-sets the clear gap from the upper stair arrival to the near wall face,
-dimensioned in the upper plan.
+`LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - LIVING_ROOM_WALL_FRONT_Y -
+DRY_WALL_WIDTH` is the clear depth of its back/garden-side strip.
+The horizontal partition's living-room face aligns with the 1 m VPC sections,
+which are centred over the garden-room load-bearing wall. It extends to the
+vertical partition. The latter has two segments, stopping
+at the near chimney face and continuing from its far face to the horizontal
+wall. The chimney footprint is left clear. The former two short SDK walls
+forming the hallway step are removed; the upper plan dimensions the actual
+clearance from the stair arrival to the retained horizontal wall.
 With `DRY_WALL_WIDTH = 0.10`, the excluded rectangle has clear dimensions
 `HOUSE_WIDTH - 2*BWT - DRY_WALL_WIDTH - LIVING_ROOM_WIDTH` by
 `HOUSE_DEPTH - 2*BWT - DRY_WALL_WIDTH - LIVING_ROOM_DEPTH`.
@@ -473,26 +477,27 @@ above the finished floor match the ground-floor room windows; dedicated
 `UPPER_WINDOW_SILL_HEIGHT` and `UPPER_WINDOW_TOP_HEIGHT` hold storey-relative
 coordinates. Both have opening dimensions in the upper plan, and
 `upper_room_windows` supplies their combined area to the room legend.
-`upper_room_floors` contains the living room (`1.01`), bathroom (`1.02`) and
-hallway (`1.03`). The bathroom has two 100 mm SDK partitions: one beside the
-stairs and a horizontal wall whose hallway face aligns with the stair
-arrival. Its clear dimensions are currently 1.20 × 2.84 m. An 800 mm
-door in a 900 mm opening swings inward from the hallway. The opening starts
-50 mm from the living-room wall's bathroom-side face, controlled by
-`UPPER_BATHROOM_DOOR_SIDE_CLEARANCE`. The horizontal
-partition is cut around the west purlin. The hallway is 1.10 m deep on the
-left, over the bathroom. On the right, above the stairs, the SDK wall is
-centred directly above the ground-floor garden-room load-bearing wall,
-including its material offset and thickness. This determines the wider
-hallway depth automatically (currently about 1.72 m).
-`UPPER_HALLWAY_WIDE_PART_START_X` controls the X coordinate where the wider
-part starts; it defaults to the bathroom's right face. The horizontal
-living-room wall steps back there, with a short SDK return. Both room outlines follow
-this step; the hallway excludes the chimney footprint. The upper plan also
+`upper_room_floors` contains the living room (`1.01`), Technika (`1.02`) and
+hallway (`1.03`). Technika is open to the hallway: its former front SDK wall,
+door and door dimension are removed. An upper-storey railing replaces the
+stair-side SDK wall, with the same `STAIR_RAILING_HEIGHT` and timber colour
+as the stair railing. Its 60 mm posts sit entirely on the technical-room
+floor, which extends across the removed wall footprints to the stairwell
+edge and hallway boundary. The hallway has one straight living-room boundary
+across its full width. The 1 m VPC sections stay centred above the ground-floor
+garden-room load-bearing wall, including its material offset and thickness.
+The horizontal SDK wall's living-room face aligns with their living-room face.
+The floor outlines follow the new wall faces, fill the removed step, and
+exclude the chimney footprint. The upper plan also
 dimensions the clear gap from the rear west post to the living-room wall.
 A 900 mm living-room door in a 1000 mm opening is centred on the upper
 stairway exit. It swings into the living room and has an opening dimension
 on that side of the wall.
+A second 900 mm door in a 1000 mm construction opening is hosted by the
+vertical SDK wall. `LIVING_ROOM_SIDE_DOOR_FROM_FRONT_WALL` measures
+from the front wall's inside face to the opening start. It opens into the
+living room and is dimensioned in the upper plan. The kitchen units remain
+in place for review of the overlap with this new doorway.
 Both new floors share the living room's 30 mm impact
 insulation and 65 mm screed/finish, and supply labels and room-legend rows
 from their measured outlines.
@@ -501,15 +506,18 @@ beside the west exterior wall, centred in the half nearest the stair arrival.
 The front pair of 1 m VPC wall sections align with both faces of the
 ground-floor bathroom wall and room 3 return. The washing machine keeps
 its wall gap as these sections move.
-A 600 × 550 mm basin occupies the other half, facing into the hallway,
-with its top 850 mm above the finished floor. Both positions follow the
-derived depth of the wider hallway. The bathroom's front end contains the
+A 600 × 550 mm basin is centred on Technika's X interval. On the nearest
+purlin, supports are ordered from street to garden: its back edge sits
+`UPPER_BASIN_SUPPORT_CLEARANCE` (50 mm) beyond the first post's garden face,
+between the first two posts. It faces +Y (`rotation=180`), towards someone
+approaching from the second post. `UPPER_BASIN_SIZE` controls its plan size;
+its top remains 850 mm above the finished floor. The technical room's front end contains the
 1000 × 500 × 1500 mm recuperation unit against the front wall, and a toilet
-facing the doorway. A 700 × 700 × 2000 mm TUV tank stands beside the
+facing the hallway. A 700 × 700 × 2000 mm TUV tank stands beside the
 living-room wall, centred in the free space between the recuperation unit
 and toilet. Equipment starts at the finished upper floor;
 `upper_fixture_wall_gap` controls its wall spacing (currently 50 mm).
-The bathroom label sits beside the tank.
+The Technika label sits near its open hallway edge, clear of the railing.
 When a plan cuts below a door's raised swing symbol, export lowers only
 the 2D symbol just beneath the cut. This keeps low upper-floor cuts from
 hiding the bathroom door, without changing its 3D position or floor levels.

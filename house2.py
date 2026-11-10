@@ -46,10 +46,8 @@ THIRD_ROOM_STEP_Y = STAIRWAY_OPENING_START_Y-DRY_WALL_WIDTH  # Hallway face meet
 THIRD_ROOM_NARROW_DEPTH = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_STEP_Y
 HALLWAY_OPENING_TOP_GAP = 0.25  # Masonry below the underside of the ground-floor ceiling.
 
-UPPER_BATHROOM_WIDTH = 1.35
+UPPER_BATHROOM_WIDTH = 1.12
 LIVING_ROOM_WIDTH = HOUSE_WIDTH - 2*BWT - STAIRWAY_WIDTH - 2*DRY_WALL_WIDTH - UPPER_BATHROOM_WIDTH
-LIVING_ROOM_STAIR_CLEARANCE = 1.10  # Clear distance to the stair-facing wall surface.
-UPPER_HALLWAY_WIDE_PART_START_X = STAIRWAY_WALL_X  # Default: bathroom's right face.
 UPPER_VPC_RETURN_LENGTH = 1.0  # Four 175 mm wall sections extending from the side walls.
 KITCHEN_UNIT_SIZE = (0.64, 0.64, 0.75)
 KITCHEN_WALL_GAP = 0.03  # Same 350 mm centre offset as the old house's 640 mm units.
@@ -127,18 +125,21 @@ NADEZDIVKA = ZAKLADACI_MALTA + 1.20 + UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.2
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
-PURLIN_SIZE = (0.16, 0.24)
+PURLIN_SIZE = (0.17, 0.24)
 PURLIN_WALL_DISTANCE = 2.7
-#PURLIN_WALL_DISTANCE = 2.25
-PURLIN_X_POSITIONS = (BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0, HOUSE_WIDTH-BWT-PURLIN_WALL_DISTANCE+PURLIN_SIZE[0]/2.0)
+PURLIN_X_POSITIONS = (
+	BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0,
+	HOUSE_WIDTH-BWT-PURLIN_WALL_DISTANCE+PURLIN_SIZE[0]/2.0
+)
 PURLIN_CENTER_HEIGHT = 3.59  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
 PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]/2
 PURLIN_SUPPORT_SIZE = (0.16, 0.16)
+PURLIN_SUPPORT_1_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT/2.0+0.3
 PURLIN_SUPPORT_Y_POSITIONS = (
-    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 1, at PURLIN_X_POSITIONS[0].
-    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 2, at PURLIN_X_POSITIONS[1].
-#    (HOUSE_DEPTH-BWT-3.47,),  # Purlin 1, at PURLIN_X_POSITIONS[1].
-#    (HOUSE_DEPTH-BWT-3.47,),  # Purlin 2, at PURLIN_X_POSITIONS[1].
+#    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 1, at PURLIN_X_POSITIONS[0].
+#    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 2, at PURLIN_X_POSITIONS[1].
+    (BWT+2.5, PURLIN_SUPPORT_1_Y, HOUSE_DEPTH-BWT-0.25),  # Purlin 2, at PURLIN_X_POSITIONS[1].
+    (BWT+2.5, PURLIN_SUPPORT_1_Y, HOUSE_DEPTH-BWT-0.25),  # Purlin 2, at PURLIN_X_POSITIONS[1].
 )
 PURLIN_CONNECTION_BEAM_SIZE = (0.12, 0.20)  # Width along Y, height along Z.
 PURLIN_CONNECTION_WALL_CLEARANCE = 0.10  # Clear gap from each gable wall's inner face.
@@ -223,11 +224,7 @@ STAIR_LANDING_START_Y = BWT
 STAIR_LANDING_END_Y = STAIR_LANDING_START_Y+STAIR_LANDING_LENGTH
 STAIR_LOWER_START_Y = STAIR_LANDING_END_Y+STAIR_LOWER_RUN_LENGTH
 STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
-LIVING_ROOM_WALL_FRONT_Y = STAIR_UPPER_END_Y+LIVING_ROOM_STAIR_CLEARANCE
-LIVING_ROOM_DEPTH = HOUSE_DEPTH-BWT-LIVING_ROOM_WALL_FRONT_Y-DRY_WALL_WIDTH
-# Chimney against the stair-facing side of the horizontal living-room wall.
-#CHIMNEY_CENTER = (HOUSE_WIDTH/2.0+0.4, LIVING_ROOM_WALL_FRONT_Y-CHIMNEY_SIZE/2)
-CHIMNEY_CENTER = (HOUSE_WIDTH/2.0, HOUSE_DEPTH-BWT-3.47-0.5)
+CHIMNEY_CENTER = (HOUSE_WIDTH/2.0+0.7, HOUSE_DEPTH-BWT-3.47-0.5)
 STAIR_WAIST_THICKNESS = 0.15
 STAIR_RAILING_HEIGHT = 1.0
 if STAIR_RIGHT_X > HOUSE_WIDTH-BWT+1e-9:
@@ -249,9 +246,7 @@ ROOM_DOOR_WIDTH = 0.9
 ROOM_DOOR_OPENING_WIDTH = 1.0
 ROOM_DOOR_HEIGHT = GROUND_FLOOR_THICKNESS+2.125
 ROOM_DOOR_CLEAR_HEIGHT = 2.1
-UPPER_BATHROOM_DOOR_WIDTH = 0.8
-UPPER_BATHROOM_DOOR_OPENING_WIDTH = 0.9
-UPPER_BATHROOM_DOOR_SIDE_CLEARANCE = 0.05
+LIVING_ROOM_SIDE_DOOR_FROM_FRONT_WALL = 3.0  # From the front wall's inside face.
 GARDEN_DOOR_CENTER_CLEARANCE = 0.125
 THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.125  # From the room 1 face to the construction opening.
 BATHROOM_DOOR_SIDE_CLEARANCE = 0.125
@@ -268,6 +263,8 @@ UPPER_WINDOW_SILL_HEIGHT = UPPER_FLOOR_THICKNESS+GROUND_WINDOW_SILL_HEIGHT-GROUN
 UPPER_WINDOW_TOP_HEIGHT = UPPER_WINDOW_SILL_HEIGHT+UPPER_WINDOW_HEIGHT
 BATHROOM_WINDOW_WIDTH = 0.75
 BATHROOM_WINDOW_HEIGHT = 0.75
+UPPER_BASIN_SIZE = (0.60, 0.5)
+UPPER_BASIN_SUPPORT_CLEARANCE = 0.05
 BATHROOM_WINDOW_CENTER_X = BATHROOM_RIGHT_X-0.25-BATHROOM_WINDOW_WIDTH/2
 WINDOW_POSITION_STEP = 0.125
 
@@ -1293,7 +1290,6 @@ window_living_room_front = wall_front_u.add_window(
 
 # Keep clear living-room strips along the east and back sides of the house.
 living_room_wall_x = BWT+LIVING_ROOM_WIDTH+DRY_WALL_WIDTH/2
-living_room_wall_y = LIVING_ROOM_WALL_FRONT_Y+DRY_WALL_WIDTH/2
 upper_partition_cuts = (
     *(offset_plane(*plane.points, offset=GYPSUM_PLASTERBOARD_BOTTOM)
       for plane in (roof_east, roof_west)),
@@ -1305,27 +1301,32 @@ wall_living_room_side_u = upper.wall(
     (living_room_wall_x, BWT), (living_room_wall_x, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2),
     wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
 )
-upper_bathroom_left_x = wall_living_room_side_u.start[0]-wall_living_room_side_u.body_offset
-upper_bathroom_right_x = STAIR_LEFT_X-DRY_WALL_WIDTH
-upper_bathroom_back_y = STAIR_UPPER_END_Y-DRY_WALL_WIDTH
-living_room_wall_step_x = UPPER_HALLWAY_WIDE_PART_START_X
-# Centre the wider hallway's SDK wall over the ground-floor load-bearing wall.
-living_room_right_wall_y = (
+living_room_side_door = wall_living_room_side_u.add_door(
+    name="Living room side door",
+    at=LIVING_ROOM_SIDE_DOOR_FROM_FRONT_WALL,
+    opening_width=ROOM_DOOR_OPENING_WIDTH,
+    width=ROOM_DOOR_WIDTH,
+    height=UPPER_FLOOR_THICKNESS+ROOM_DOOR_HEIGHT-GROUND_FLOOR_THICKNESS,
+    clear_height=ROOM_DOOR_CLEAR_HEIGHT,
+    sill_height=UPPER_FLOOR_THICKNESS,
+    operation="SINGLE_SWING_LEFT",  # Opens into the living room (-X).
+)
+upper_technical_left_x = wall_living_room_side_u.start[0]-wall_living_room_side_u.body_offset
+upper_technical_right_x = STAIR_LEFT_X
+upper_technical_back_y = STAIR_UPPER_END_Y
+# Keep the VPC sections centred over the ground-floor load-bearing wall.
+upper_vpc_living_room_center_y = (
     wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset+wall_garden_rooms_g.thickness/2
 )
+# Align the garden-facing (living-room) faces of the SDK and VPC sections.
+living_room_right_wall_y = upper_vpc_living_room_center_y+(INNER_BWT-DRY_WALL_WIDTH)/2
 living_room_right_wall_front_y = living_room_right_wall_y-DRY_WALL_WIDTH/2
-if living_room_right_wall_front_y < LIVING_ROOM_WALL_FRONT_Y:
-    raise ValueError("the garden-room wall must leave room for the wider upper hallway")
-if not living_room_wall_x+DRY_WALL_WIDTH/2 < living_room_wall_step_x < HOUSE_WIDTH-BWT:
-    raise ValueError("UPPER_HALLWAY_WIDE_PART_START_X must be between the living-room partition and west wall")
-wall_living_room_back_u = upper.wall(
-    (living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y),
-    (living_room_wall_step_x-DRY_WALL_WIDTH, living_room_wall_y),
-    wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
-)
-wall_living_room_back_step_u = upper.wall(
-    (living_room_wall_step_x-DRY_WALL_WIDTH/2, LIVING_ROOM_WALL_FRONT_Y),
-    (living_room_wall_step_x-DRY_WALL_WIDTH/2, living_room_right_wall_front_y+DRY_WALL_WIDTH),
+LIVING_ROOM_WALL_FRONT_Y = living_room_right_wall_front_y
+LIVING_ROOM_DEPTH = HOUSE_DEPTH-BWT-LIVING_ROOM_WALL_FRONT_Y-DRY_WALL_WIDTH
+living_room_wall_y = living_room_right_wall_y
+wall_living_room_side_extension_u = upper.wall(
+    (living_room_wall_x, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2),
+    (living_room_wall_x, living_room_wall_y+DRY_WALL_WIDTH/2),
     wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
 )
 # Keep the source-wall centre below the sloped ceiling so the clipping
@@ -1333,12 +1334,12 @@ wall_living_room_back_step_u = upper.wall(
 living_room_right_wall_height = min(
     gable_wall_height,
     2*(min(plane_height_at(
-        *cut, x=(living_room_wall_step_x+HOUSE_WIDTH-BWT)/2,
+        *cut, x=(living_room_wall_x+DRY_WALL_WIDTH/2+HOUSE_WIDTH-BWT-UPPER_VPC_RETURN_LENGTH)/2,
         y=living_room_right_wall_y,
     ) for cut in upper_partition_cuts)-UPPER_FLOOR_START)-0.01,
 )
-wall_living_room_back_right_u = upper.wall(
-    (living_room_wall_step_x, living_room_right_wall_y),
+wall_living_room_back_u = upper.wall(
+    (living_room_wall_x+DRY_WALL_WIDTH/2, living_room_right_wall_y),
     (HOUSE_WIDTH-BWT-UPPER_VPC_RETURN_LENGTH, living_room_right_wall_y),
     wall_type=dry_wall, height=living_room_right_wall_height, cuts=upper_partition_cuts,
 )
@@ -1352,13 +1353,13 @@ for side, start_x in (
     ("East", BWT),
 ):
     for position, front_y in (
-        ("living room", living_room_right_wall_y-INNER_BWT/2),
+        ("living room", upper_vpc_living_room_center_y-INNER_BWT/2),
         ("bathroom wall alignment", upper_vpc_front_y),
     ):
         end_x = start_x+UPPER_VPC_RETURN_LENGTH
-        # This face-based VPC type grows towards +Y. Centre the living-room
-        # sections on the SDK; keep the front sections aligned with the
-        # bathroom wall's room-facing surface.
+        # This face-based VPC type grows towards +Y. Keep the living-room
+        # sections over the ground-floor wall and the front sections aligned
+        # with the bathroom wall's room-facing surface.
         center_y = front_y+INNER_BWT/2
         height = min(
             gable_wall_height,
@@ -1376,9 +1377,9 @@ for side, start_x in (
         upper_vpc_footprints.append(box(start_x, front_y, end_x, front_y+INNER_BWT))
 upper_vpc_walls = tuple(upper_vpc_walls)
 upper_vpc_region = unary_union(upper_vpc_footprints)
-living_room_door = wall_living_room_back_right_u.add_door(
+living_room_door = wall_living_room_back_u.add_door(
     name="Living room door",
-    at=upper_stairs.end[0]-ROOM_DOOR_OPENING_WIDTH/2-wall_living_room_back_right_u.start[0],
+    at=upper_stairs.end[0]-ROOM_DOOR_OPENING_WIDTH/2-wall_living_room_back_u.start[0],
     opening_width=ROOM_DOOR_OPENING_WIDTH,
     width=ROOM_DOOR_WIDTH,
     height=UPPER_FLOOR_THICKNESS+ROOM_DOOR_HEIGHT-GROUND_FLOOR_THICKNESS,
@@ -1386,40 +1387,23 @@ living_room_door = wall_living_room_back_right_u.add_door(
     sill_height=UPPER_FLOOR_THICKNESS,
     operation="SINGLE_SWING_RIGHT",
 )
-# Bathroom between the living-room partition and stairs. Keep its hallway
-# face at the stair arrival so the full 1.10 m approach remains clear.
-if upper_bathroom_right_x-upper_bathroom_left_x < (
-    UPPER_BATHROOM_DOOR_SIDE_CLEARANCE+UPPER_BATHROOM_DOOR_OPENING_WIDTH
-):
-    raise ValueError("upper bathroom is too narrow for the configured door opening")
-wall_bathroom_stairway_u = upper.wall(
-    (STAIR_LEFT_X-DRY_WALL_WIDTH/2, BWT),
-    (STAIR_LEFT_X-DRY_WALL_WIDTH/2, upper_bathroom_back_y),
-    wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
-)
-wall_bathroom_hallway_u = upper.wall(
-    (upper_bathroom_left_x, STAIR_UPPER_END_Y-DRY_WALL_WIDTH/2),
-    (STAIR_LEFT_X, STAIR_UPPER_END_Y-DRY_WALL_WIDTH/2),
-    wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
-)
-upper_bathroom_door = wall_bathroom_hallway_u.add_door(
-    name="Upper bathroom door",
-    at=UPPER_BATHROOM_DOOR_SIDE_CLEARANCE,
-    opening_width=UPPER_BATHROOM_DOOR_OPENING_WIDTH,
-    width=UPPER_BATHROOM_DOOR_WIDTH,
-    height=UPPER_FLOOR_THICKNESS+ROOM_DOOR_HEIGHT-GROUND_FLOOR_THICKNESS,
-    clear_height=ROOM_DOOR_CLEAR_HEIGHT,
-    sill_height=UPPER_FLOOR_THICKNESS,
-    operation="SINGLE_SWING_LEFT",
-    reverse_swing=True,
+# Open technical room beside the stairwell. The 60 mm railing posts stand
+# entirely on its finished floor; the former hallway wall and door are gone.
+upper_technical_railing_inset = 0.03
+upper_technical_railing = upper.railing(
+    "Technika - stairwell railing",
+    path=(
+        (upper_technical_right_x-upper_technical_railing_inset,
+         BWT+upper_technical_railing_inset, UPPER_FINISHED_FLOOR_HEIGHT),
+        (upper_technical_right_x-upper_technical_railing_inset,
+         upper_technical_back_y-upper_technical_railing_inset, UPPER_FINISHED_FLOOR_HEIGHT),
+    ),
+    height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
 for wall, name in (
     (wall_living_room_side_u, "Living room - side partition"),
+    (wall_living_room_side_extension_u, "Living room - side partition above chimney"),
     (wall_living_room_back_u, "Living room - back partition"),
-    (wall_living_room_back_step_u, "Living room - hallway step partition"),
-    (wall_living_room_back_right_u, "Living room - back right partition"),
-    (wall_bathroom_stairway_u, "Upper bathroom - stairway partition"),
-    (wall_bathroom_hallway_u, "Upper bathroom - hallway partition"),
 ):
     wall.Name = name
     common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
@@ -1436,31 +1420,30 @@ living_room_outline = Polygon((
     (BWT, BWT),
     (living_room_wall_x-DRY_WALL_WIDTH/2, BWT),
     (living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y+DRY_WALL_WIDTH/2),
-    (living_room_wall_step_x-DRY_WALL_WIDTH, living_room_wall_y+DRY_WALL_WIDTH/2),
-    (living_room_wall_step_x-DRY_WALL_WIDTH, living_room_right_wall_front_y+DRY_WALL_WIDTH),
     (HOUSE_WIDTH-BWT, living_room_right_wall_front_y+DRY_WALL_WIDTH),
     (HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
     (BWT, HOUSE_DEPTH-BWT),
-)).difference(upper_vpc_region)
+)).difference(upper_vpc_region).difference(box(
+    CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2,
+    CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2,
+))
 living_room = upper.floor_layer(
     "Obývací pokoj", room_id="1.01",
     outline=tuple(living_room_outline.exterior.coords)[:-1],
     **upper_floor_layer_settings,
 )
-upper_bathroom = upper.floor_layer(
-    "Koupelna", room_id="1.02",
+upper_technical_room = upper.floor_layer(
+    "Technika", room_id="1.02",
     outline=(
-        (upper_bathroom_left_x, BWT), (upper_bathroom_right_x, BWT),
-        (upper_bathroom_right_x, upper_bathroom_back_y),
-        (upper_bathroom_left_x, upper_bathroom_back_y),
+        (upper_technical_left_x, BWT), (upper_technical_right_x, BWT),
+        (upper_technical_right_x, upper_technical_back_y),
+        (upper_technical_left_x, upper_technical_back_y),
     ),
     **upper_floor_layer_settings,
 )
 upper_hallway_outline = box(
-    upper_bathroom_left_x, STAIR_UPPER_END_Y, HOUSE_WIDTH-BWT, LIVING_ROOM_WALL_FRONT_Y,
-).union(box(
-    living_room_wall_step_x, STAIR_UPPER_END_Y, HOUSE_WIDTH-BWT, living_room_right_wall_front_y,
-)).difference(box(
+    upper_technical_left_x, STAIR_UPPER_END_Y, HOUSE_WIDTH-BWT, living_room_right_wall_front_y,
+).difference(box(
     CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2,
     CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2,
 )).difference(upper_vpc_region)
@@ -1468,10 +1451,10 @@ upper_hallway = upper.floor_layer(
     "Chodba", room_id="1.03", outline=tuple(upper_hallway_outline.exterior.coords)[:-1],
     **upper_floor_layer_settings,
 )
-upper_room_floors = (living_room, upper_bathroom, upper_hallway)
+upper_room_floors = (living_room, upper_technical_room, upper_hallway)
 upper_room_windows = {
     living_room.room_id: (window_living_room_front, *windows_living_room_back),
-    upper_bathroom.room_id: (),
+    upper_technical_room.room_id: (),
     upper_hallway.room_id: (),
 }
 
@@ -1485,16 +1468,31 @@ upper_washing_machine = upper.furniture(
                 upper_vpc_front_y+INNER_BWT+upper_fixture_wall_gap+0.35)),
     start_height=UPPER_FLOOR_THICKNESS,
 )
-upper_hallway_basin = upper.asset(
-    "Umyvadlo", asset="basin_large",
-    center=(HOUSE_WIDTH-BWT-0.4-upper_fixture_wall_gap-0.55/2,
-            STAIR_UPPER_END_Y+3*upper_hallway_right_depth/4),
-    start_height=UPPER_FLOOR_THICKNESS+0.85-0.25,
-    rotation=-90,
+upper_basin_center_x = upper_technical_right_x-0.4
+upper_basin_purlin_index = min(
+    range(len(PURLIN_X_POSITIONS)),
+    key=lambda index: abs(PURLIN_X_POSITIONS[index]-upper_basin_center_x),
 )
-upper_recuperation_center = ((upper_bathroom_left_x+upper_bathroom_right_x)/2,
+upper_basin_support_ys = sorted(PURLIN_SUPPORT_Y_POSITIONS[upper_basin_purlin_index])
+if len(upper_basin_support_ys) < 2:
+    raise ValueError("the upper basin needs two purlin supports to define its placement")
+upper_basin_center_y = (
+    upper_basin_support_ys[0]+PURLIN_SUPPORT_SIZE[1]/2
+    +UPPER_BASIN_SUPPORT_CLEARANCE+UPPER_BASIN_SIZE[1]/2
+)
+if upper_basin_center_y+UPPER_BASIN_SIZE[1]/2 > upper_basin_support_ys[1]-PURLIN_SUPPORT_SIZE[1]/2:
+    raise ValueError("the upper basin does not fit between the first two purlin supports")
+upper_hallway_basin = upper.asset(
+    "Umyvadlo", asset="basin_large", size=UPPER_BASIN_SIZE,
+    center=(upper_basin_center_x, upper_basin_center_y),
+    start_height=UPPER_FLOOR_THICKNESS+0.85-0.25,
+    rotation=180,  # Front towards +Y, facing someone approaching from the second post.
+)
+# Retain equipment positions as the floor expands over the former SDK wall.
+upper_fixture_stair_side_x = upper_technical_right_x-DRY_WALL_WIDTH
+upper_recuperation_center = ((upper_technical_left_x+upper_fixture_stair_side_x)/2,
                              BWT+upper_fixture_wall_gap+0.25)
-upper_toilet_center = (upper_bathroom_right_x-0.5, BWT+2.0)
+upper_toilet_center = (upper_fixture_stair_side_x-0.5, BWT+2.0)
 upper_recuperation = upper.furniture(
     "Rekuperace", kind="USERDEFINED", size=(1.0, 0.5, 1.5), color="#ffff00",
     center=upper_recuperation_center,
@@ -1508,7 +1506,7 @@ upper_toilet = upper.asset(
     start_height=UPPER_FLOOR_THICKNESS,
 )
 upper_water_heater_center = (
-    upper_bathroom_left_x+upper_fixture_wall_gap+0.35,
+    upper_technical_left_x+upper_fixture_wall_gap+0.35,
     (upper_recuperation_center[1]+0.5/2+upper_toilet_center[1]-0.53/2)/2,
 )
 upper_water_heater = upper.furniture(
@@ -1548,10 +1546,12 @@ kitchen_counter = upper.furniture(
 )
 kamna = upper.furniture(
     "Kamna", kind="USERDEFINED", size=STOVE_SIZE, color="#ffff2B",
-    center=(kitchen_center_x-0.1,
-            living_room_wall_y+DRY_WALL_WIDTH/2-0.1+STOVE_SIZE[1]/2),
+    center=(
+		CHIMNEY_CENTER[0]-0.6,
+        CHIMNEY_CENTER[1]
+	),
     start_height=UPPER_FLOOR_THICKNESS+0.05,
-    rotation=180,  # Front toward the garden / back wall (+Y).
+    rotation=90,  # Front toward the garden / back wall (+Y).
 )
 # Keep the plan label upright independently of the stove's facing direction.
 for assignment in kamna.ReferencedBy:
@@ -1812,12 +1812,8 @@ roof_layers = (
 )
 # The transverse SDK partition also meets the exposed west purlin.
 cut_roof_layer_at_purlin(wall_living_room_back_u, 1)
-cut_roof_layer_at_purlin(wall_living_room_back_step_u, 1)
-cut_roof_layer_at_purlin(wall_living_room_back_right_u, 1)
-cut_roof_layer_at_purlin(wall_bathroom_hallway_u, 1)
 add_timber_clearances(
-    (wall_living_room_side_u, wall_living_room_back_u, wall_living_room_back_step_u,
-     wall_living_room_back_right_u, wall_bathroom_stairway_u, wall_bathroom_hallway_u,
+    (wall_living_room_side_u, wall_living_room_side_extension_u, wall_living_room_back_u,
      *(layer for layer in roof_layers if layer.material_name in
        {"Thermal insulation", "Vapour barrier", "Gypsum plasterboard"})),
     (*purlin_connection_beams, *purlin_braces, *collar_ties),
@@ -2483,7 +2479,7 @@ if "upper" in sys.argv:
         "upper",
         x=HOUSE_WIDTH/2,
         y=HOUSE_DEPTH/2,
-        z=UPPER_FLOOR_START+1.0,
+        z=UPPER_FLOOR_START+1.2,
         radius=6.5,
         storeys=[upper],
         right_panel_width=60,
@@ -2509,20 +2505,21 @@ if "upper" in sys.argv:
     for room in upper_room_floors:
         position = Polygon(room.outline).representative_point().coords[0]
         if room == upper_hallway:
-            position = (upper_bathroom_right_x, (STAIR_UPPER_END_Y+LIVING_ROOM_WALL_FRONT_Y)/2)
-        elif room == upper_bathroom:
-            position = ((upper_water_heater_center[0]+0.35+upper_bathroom_right_x)/2,
-                        upper_water_heater_center[1])
+            position = (upper_technical_right_x, (STAIR_UPPER_END_Y+LIVING_ROOM_WALL_FRONT_Y)/2)
+        elif room == upper_technical_room:
+            # Keep the symbol clear of the basin at the room's open entrance.
+            position = ((upper_technical_left_x+upper_technical_right_x)/2-0.15,
+                        upper_basin_center_y+UPPER_BASIN_SIZE[1]/2+0.35)
         drawing1.add_room_annotation(
             position, identifier=room.room_id, description=room.Name, area=room.area,
             window_area=window_area(*upper_room_windows[room.room_id]),
         )
     drawing1.add_room_legend()
     drawing1.add_opening_dimension(
-        upper_bathroom_door, offset=0.4, finished_floor_height=UPPER_FLOOR_THICKNESS,
+        living_room_door, offset=1.15, finished_floor_height=UPPER_FLOOR_THICKNESS,
     )
     drawing1.add_opening_dimension(
-        living_room_door, offset=1.15, finished_floor_height=UPPER_FLOOR_THICKNESS,
+        living_room_side_door, offset=0.9, finished_floor_height=UPPER_FLOOR_THICKNESS,
     )
     for window, offset in (
         (window_living_room_front, -1.3),
@@ -2607,11 +2604,7 @@ if "upper" in sys.argv:
     west_purlin_index = max(range(len(PURLIN_X_POSITIONS)), key=lambda i: PURLIN_X_POSITIONS[i])
     west_support_x = PURLIN_X_POSITIONS[west_purlin_index]
     west_back_y = max(PURLIN_SUPPORT_Y_POSITIONS[west_purlin_index])
-    wall_back_face_y = (
-        living_room_wall_y+DRY_WALL_WIDTH/2
-        if west_support_x < living_room_wall_step_x-DRY_WALL_WIDTH
-        else living_room_right_wall_front_y+DRY_WALL_WIDTH
-    )
+    wall_back_face_y = living_room_right_wall_front_y+DRY_WALL_WIDTH
     drawing1.add_dimension(
         start=(west_support_x, wall_back_face_y),
         end=(west_support_x, west_back_y-PURLIN_SUPPORT_SIZE[1]/2), offset=0.35,

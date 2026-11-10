@@ -3847,9 +3847,9 @@ def main() -> None:
         check_purlin(
             title="Vaznice, House 2",
             material="c22",
-            width=0.20,
-            height=0.26,
-            span=3.5,
+            width=0.16,
+            height=0.24,
+            span=3.0,
             rafter_length_above=2,
             lower_rafter_span=3.5,
             roof_angle=ROOF_ANGLE_DEGREES,

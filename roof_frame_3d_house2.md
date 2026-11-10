@@ -30,14 +30,25 @@ Global X runs east to west, Y street to garden, and Z upward, matching
 numeric assignments and the restricted rafter-spacing comprehension.
 The model follows the current dimensions and positions when rerun:
 
-- Two purlins along Y, including their end overhangs. Configure one or more
+- Two or three purlins along Y, including their end overhangs. With three,
+  `PURLIN_X_POSITIONS` must be ordered east-to-west, with the middle entry
+  at `HOUSE_WIDTH/2`. Provide a matching tuple of post Y positions for each.
+  The two outside purlins keep `PURLIN_Z` and define the roof slopes. The
+  centre (`P2`) is automatically raised so its outer top corners meet those
+  reference planes under the ridge. Its posts become taller. The rafter
+  axes and roof/snow loading stay unchanged; both rafter halves have ideal
+  pinned bearings on the new purlin's outer faces. Rafter chord-deflection
+  checks include these extra supports. The command prints every purlin's
+  top elevation. This inferred ridge height is simulator geometry; no IFC
+  generator changes are made.
+  Configure one or more
   posts per purlin using `PURLIN_SUPPORT_Y_POSITIONS`; each purlin has its own
   tuple and the Y positions need not match. By default each purlin is split
   at every post centreline: one post gives two members (`P1.1`–`P1.2`), two
   posts give three. Both bending moments are released at each splice, with
   common axial/shear translations and retained torsional roll compatibility.
   No extra ground restraint is added. `--continuous-purlins` restores the
-  original two continuous members (`Settings(continuous_purlins=True)` in
+  continuous members (`Settings(continuous_purlins=True)` in
   Python). Only the simulator is split; the IFC geometry is unchanged.
 - Each rafter pair at every `RAFTER_Y_POSITIONS` station. Roof slopes pass
   through the outer top corners of the wall plates and purlins; rafter axes
@@ -48,19 +59,23 @@ The model follows the current dimensions and positions when rerun:
   centreline intersects the two rafter axes. Its stiffness is `2 × E × A / L`;
   the two flanking boards' lateral eccentricities are omitted. The joint
   transmits axial force without moment resistance or connection slip.
-- X-aligned connecting beams between the purlins' inner faces, with
+- X-aligned connecting beams between the **outer** purlins' inner faces, with
   their centrelines at the same Z as the purlin centrelines. Their ends
   attach to the purlin sides through ideal pins at those faces.
   `PURLIN_CONNECTION_Y_POSITIONS` is shared with the IFC: one connector
   at each distinct post Y coordinate and two with a 100 mm clear gap to the inner gable-wall
   faces, controlled by `PURLIN_CONNECTION_WALL_CLEARANCE`. The extra
   connectors do not introduce additional posts or braces.
+  With a ridge purlin, the lower connectors have no added joint to the
+  ridge posts they cross. The ridge posts run directly to the ceiling.
 - Posts from the ceiling top directly to the purlin undersides.
 - Optional three 45-degree braces per post: two under the purlin and one under the
   connecting beam at each post. The section and anchor drop follow
   `PURLIN_BRACE_SIZE` and `PURLIN_BRACE_DROP`.
   A brace whose upper contact falls beyond its purlin end is omitted;
   the other braces at that post remain.
+  Ridge posts have the two longitudinal braces only: the transverse
+  connectors lie below their upper brace anchors.
   They are excluded by default; `--braces` includes them. Exclusion removes
   their stiffness, self-weight and attachment arms from the calculation,
   images, member CSV and active geometry in the calculation basis.
@@ -172,6 +187,15 @@ purlins, cross beams, posts, braces and collar ties.
 
 The default prefix is `roof_frame_3d_house2`. A run creates:
 
+- `_purlin_support_loads.csv`: maximum downward load at each purlin post base,
+  separately for SLS and ULS, with coordinates and the governing combination.
+  Positive values mean downward loading; negative values mean uplift.
+  These loads include post self-weight and are delivered to the supporting
+  ceiling. The terminal prints the same envelope in kN and equivalent kg
+  using the configured gravity. Values come from the solved base reactions,
+  so enabled braces and purlin continuity are included. Each post's maximum
+  is selected independently; do not sum these envelopes as one load case.
+  `_supports.csv` retains every combination with its original +Z-up sign.
 - `_model.png`: original and amplified deformed frame in 3D.
 - `_plan.png`: undeformed top view with timber footprints coloured by the
   worst instantaneous chord check over every SLS combination and support

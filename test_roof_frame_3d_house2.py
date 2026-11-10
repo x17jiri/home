@@ -15,20 +15,45 @@ from roof_frame_3d_house2 import (
     House2Inputs, Layout, Settings, build_roof_model, member_rows,
     PLAN_CHECK_COLORS, horizontal_stiffness, plan_check_statuses, plot_plan_report,
     parse_arguments, purlin_configuration_description, solve_roof_model, spring_axial_gap,
-    support_rows, tributary_widths,
+    support_rows, tributary_widths, purlin_support_load_envelopes,
 )
 
 HOUSE = Path(__file__).with_name("house2.py")
 
 
-def layout_with_supports(positions):
+def layout_with_supports(positions, **overrides):
     inputs = House2Inputs(HOUSE)
+    px = inputs.get("PURLIN_X_POSITIONS")
+    inputs.cache["PURLIN_X_POSITIONS"] = ((px[0], inputs.get("HOUSE_WIDTH")/2, px[-1])
+                                         if len(positions) == 3 else (px[0], px[-1]))
     inputs.cache["PURLIN_SUPPORT_Y_POSITIONS"] = positions
+    inputs.cache.update(overrides)
     with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
         return Layout.from_house(HOUSE)
 
 
 class InputTests(unittest.TestCase):
+    def test_post_load_envelopes_separate_limit_states_and_ignore_uplift_extremes(self):
+        def reaction(post, combo, force, kind="post_base"):
+            return dict(member=post, combination=combo, Fz_kN=force, kind=kind,
+                        x_m=2, y_m=3, z_m=0)
+        rows = [reaction("POST1.1", "SLS_dead", -10),
+                reaction("POST1.1", "SLS_east", -15),
+                reaction("POST1.1", "SLS_west", 25),
+                reaction("POST1.1", "ULS_symmetric", -22),
+                reaction("POST1.1", "ULS_dead", -14),
+                reaction("POST2.1", "SLS_symmetric", 3),
+                reaction("POST2.1", "SLS_west", 5),
+                reaction("P1", "SLS_symmetric", -100, "gable_bearing")]
+        envelopes = {(r["post"], r["limit_state"]): r
+                     for r in purlin_support_load_envelopes(rows)}
+        self.assertEqual(len(envelopes), 3)
+        sls = envelopes["POST1.1", "SLS"]
+        self.assertEqual((sls["downward_kN"], sls["combination"]), (15, "SLS_east"))
+        self.assertEqual(envelopes["POST1.1", "ULS"]["downward_kN"], 22)
+        self.assertEqual(envelopes["POST2.1", "SLS"]["downward_kN"], -3)
+        self.assertEqual((sls["x_m"], sls["y_m"], sls["z_m"]), (2, 3, 0))
+
     def test_purlin_height_keeps_top_and_roof_fixed_and_shortens_posts(self):
         width, height = House2Inputs(HOUSE).get("PURLIN_SIZE")
         layouts = []
@@ -41,9 +66,10 @@ class InputTests(unittest.TestCase):
             self.assertAlmostEqual(g("FLAT_VAPOUR_BARRIER_TOP_Z"), top)
             with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
                 layout = Layout.from_house(HOUSE)
+            bottoms = {b.start[0]: b.start[2]-section_height/2 for b in layout.beams if b.category == "purlin"}
             for beam in layout.beams:
                 if beam.category == "post":
-                    self.assertAlmostEqual(beam.end[2], top-section_height)
+                    self.assertAlmostEqual(beam.end[2], bottoms[beam.start[0]])
             layouts.append(layout)
         self.assertAlmostEqual(layouts[0].slope, layouts[1].slope)
         for original, taller in zip(layouts[0].beams, layouts[1].beams):
@@ -102,7 +128,8 @@ class InputTests(unittest.TestCase):
         post_count = sum(map(len, g("PURLIN_SUPPORT_Y_POSITIONS")))
         self.assertLessEqual(sum(b.category == "brace" for b in layout.beams), 3*post_count)
         self.assertEqual(sum(b.category == "brace" and b.name.endswith(".cross")
-                             for b in layout.beams), post_count)
+                             for b in layout.beams), len(g("PURLIN_SUPPORT_Y_POSITIONS")[0])
+                         + len(g("PURLIN_SUPPORT_Y_POSITIONS")[-1]))
         self.assertEqual(sum(b.category == "post" for b in layout.beams), post_count)
         crosses = [b for b in layout.beams if b.category == "cross_beam"]
         self.assertEqual(len(crosses), len(g("PURLIN_CONNECTION_Y_POSITIONS")))
@@ -121,17 +148,17 @@ class InputTests(unittest.TestCase):
             self.assertAlmostEqual(tie.start[2]-tie.timber.height/2, g("PURLIN_Z")+g("PURLIN_SIZE")[1]/2)
             self.assertAlmostEqual(tie.start[2], tie.end[2])
             self.assertGreater(tie.weight_length, tie.length)
-        purlin_bottom = g("PURLIN_Z")-g("PURLIN_SIZE")[1]/2
+        bottoms = {b.start[0]: b.start[2]-b.timber.height/2 for b in layout.beams if b.category == "purlin"}
         for beam in layout.beams:
             if beam.category == "post":
-                self.assertAlmostEqual(beam.end[2], purlin_bottom)
+                self.assertAlmostEqual(beam.end[2], bottoms[beam.start[0]])
                 self.assertAlmostEqual(beam.start[2], g("UPPER_FLOOR_START"))
             if beam.category == "cross_beam":
                 self.assertEqual((beam.timber.width, beam.timber.height), g("PURLIN_CONNECTION_BEAM_SIZE"))
                 self.assertAlmostEqual(beam.start[2], g("PURLIN_Z"))
                 self.assertAlmostEqual(beam.end[2], g("PURLIN_Z"))
                 self.assertAlmostEqual(beam.start[0], g("PURLIN_X_POSITIONS")[0]+g("PURLIN_SIZE")[0]/2)
-                self.assertAlmostEqual(beam.end[0], g("PURLIN_X_POSITIONS")[1]-g("PURLIN_SIZE")[0]/2)
+                self.assertAlmostEqual(beam.end[0], g("PURLIN_X_POSITIONS")[-1]-g("PURLIN_SIZE")[0]/2)
             if beam.category == "brace":
                 dx, dy, dz = np.array(beam.end)-beam.start
                 self.assertAlmostEqual(math.hypot(dx, dy), dz)
@@ -139,14 +166,14 @@ class InputTests(unittest.TestCase):
         direct_bearings = [pin for pin in layout.pins if pin.name.startswith("purlin_post_")]
         self.assertEqual(len(direct_bearings), post_count)
         for pin in direct_bearings:
-            self.assertAlmostEqual(pin.contact[2], purlin_bottom)
+            self.assertAlmostEqual(pin.contact[2], bottoms[pin.contact[0]])
             self.assertEqual(pin.axes[1], pin.contact)
         self.assertFalse(any(pin.name.startswith("cross_post_") for pin in layout.pins))
 
     def test_independent_post_rows_follow_each_purlin(self):
         positions = ((3.04,), (4.5, 6))
         layout = layout_with_supports(positions)
-        px = House2Inputs(HOUSE).get("PURLIN_X_POSITIONS")
+        px = tuple(b.start[0] for b in layout.beams if b.category == "purlin")
         for x, ys in zip(px, positions):
             posts = [b.start[1] for b in layout.beams if b.category == "post" and b.start[0] == x]
             self.assertEqual(tuple(posts), ys)
@@ -164,7 +191,7 @@ class InputTests(unittest.TestCase):
     def test_braces_beyond_purlin_ends_are_skipped_individually(self):
         g = House2Inputs(HOUSE).get
         ys = (g("BWT")+.3, g("HOUSE_DEPTH")-g("BWT")-.3)
-        layout = layout_with_supports((ys, ys))
+        layout = layout_with_supports((ys, ys), PURLIN_BRACE_DROP=.8)
         names = {b.name for b in layout.beams if b.category == "brace"}
         self.assertEqual(names, {f"BRACE{i}.{j}.{side}" for i in (1, 2)
                                 for j, sides in ((1, ("back", "cross")), (2, ("front", "cross")))
@@ -189,6 +216,59 @@ class InputTests(unittest.TestCase):
         self.assertEqual(overridden, replace(defaults, snow_load=1.1, braces=False, continuous_purlins=False))
 
 
+class ThreePurlinTests(unittest.TestCase):
+    def test_middle_purlin_must_be_at_the_ridge_and_have_its_own_post_row(self):
+        for positions, rows in (((2, 4, 7), ((4.5,),)*3),
+                                ((2, float("nan"), 7), ((4.5,),)*3),
+                                ((2, 4.375, 7), ((4.5,),)*2)):
+            inputs = House2Inputs(HOUSE)
+            inputs.cache.update(PURLIN_X_POSITIONS=positions, PURLIN_SUPPORT_Y_POSITIONS=rows)
+            with self.subTest(positions=positions), patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
+                with self.assertRaises(ValueError):
+                    Layout.from_house(HOUSE)
+
+    def test_ridge_support_preserves_rafters_and_bears_at_both_outer_faces(self):
+        two = layout_with_supports(((4.5,), (4.5,)))
+        three = layout_with_supports(((4.5,), (4.5,), (4.5,)))
+        self.assertAlmostEqual(two.slope, three.slope)
+        two_rafters = {b.name: b for b in two.beams if b.category == "rafter"}
+        for rafter in (b for b in three.beams if b.category == "rafter"):
+            np.testing.assert_allclose(rafter.start, two_rafters[rafter.name].start)
+            np.testing.assert_allclose(rafter.end, two_rafters[rafter.name].end)
+        purlins = [b for b in three.beams if b.category == "purlin"]
+        self.assertEqual(len(purlins), 3)
+        middle = purlins[1]
+        self.assertGreater(middle.start[2], purlins[0].start[2])
+        ridge_pins = [p for p in three.pins if p.name.endswith("_ridge_purlin")]
+        self.assertEqual(len(ridge_pins), len(two_rafters))
+        for pin in ridge_pins:
+            self.assertAlmostEqual(abs(pin.contact[0]-three.width/2), middle.timber.width/2)
+            self.assertAlmostEqual(pin.contact[2], middle.start[2]+middle.timber.height/2)
+            self.assertAlmostEqual(pin.axes[1][0], three.width/2)
+            self.assertAlmostEqual(pin.axes[1][2], middle.start[2])
+            rafter_name = pin.name.removesuffix("_ridge_purlin")
+            self.assertEqual(len(three.chords[rafter_name]), 4)
+        self.assertFalse(any(b.name.startswith("BRACE2.") and b.name.endswith(".cross") for b in three.beams))
+
+    def test_three_purlins_solve_and_conserve_roof_loading_with_all_options(self):
+        layout = layout_with_supports(((4.5,), (4.5,), (4.5,)))
+        baseline = build_roof_model(layout_with_supports(((4.5,), (4.5,))))
+        roof_loads = [(name, case, q, a, b) for name, case, q, a, b in baseline.loads if name.startswith("R")]
+        for continuous in (False, True):
+            for braces in (False, True):
+                with self.subTest(continuous=continuous, braces=braces):
+                    roof = build_roof_model(layout, Settings(continuous_purlins=continuous, braces=braces))
+                    self.assertEqual(roof_loads, [row for row in roof.loads if row[0].startswith("R")])
+                    self.assertLess(max(solve_roof_model(roof).values()), 1e-6)
+                    self.assertEqual(len(roof.layout.purlin_joints), 0 if continuous else 3)
+                    reactions = [r for r in support_rows(roof)
+                                 if r["combination"] == "SLS_symmetric" and r["kind"] == "post_base"]
+                    self.assertEqual(len(reactions), 3)
+                    middle = next(r for r in reactions if r["member"] == "POST2.1")
+                    self.assertGreater(abs(middle["Fz_kN"]), 1)
+                    self.assertEqual(sum(kind == "gable_bearing" for kind in roof.support_kinds.values()), 6)
+
+
 class SolverTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -197,10 +277,20 @@ class SolverTests(unittest.TestCase):
         cls.roof = build_roof_model(cls.layout)
         cls.residuals = solve_roof_model(cls.roof)
 
+    def test_post_base_load_envelope_matches_solved_axial_force(self):
+        envelopes = purlin_support_load_envelopes(support_rows(self.roof))
+        self.assertEqual(len(envelopes), 2*len(self.layout.bases))
+        for row in envelopes:
+            post = self.roof.model.members[row["post"]]
+            # Local X runs upward along each post. Base compression includes
+            # the post's own weight and must match the downward base reaction.
+            compression = post.axial(0, row["combination"])/1000
+            self.assertAlmostEqual(row["downward_kN"], compression, places=6)
+
     def test_near_wall_posts_solve_with_only_the_fitting_braces(self):
         g = House2Inputs(HOUSE).get
         ys = (g("BWT")+.3, g("HOUSE_DEPTH")/2, g("HOUSE_DEPTH")-g("BWT")-.3)
-        roof = build_roof_model(layout_with_supports((ys, ys)), Settings(braces=True))
+        roof = build_roof_model(layout_with_supports((ys, ys), PURLIN_BRACE_DROP=.8), Settings(braces=True))
         self.assertEqual(len(roof.brace_springs), 14)
         self.assertLess(max(solve_roof_model(roof).values()), 1e-6)
 
