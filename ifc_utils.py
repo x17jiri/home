@@ -2376,6 +2376,28 @@ def _postprocess_roof_batting(
     )
 
 
+def _postprocess_roof_batting_overlays(svg_path: Path) -> None:
+    """Keep explicitly foreground roof batting above model fills and masks."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="roof-batting-overlays"' in svg:
+        return
+    elements = []
+
+    def collect(match: re.Match[str]) -> str:
+        element = match[0]
+        attributes = dict(re.findall(r'([\w:-]+)="([^\"]*)"', element))
+        if "roof-batting-overlay" not in attributes.get("class", "").split():
+            return element
+        elements.append(element)
+        return ""
+
+    updated = re.sub(r"<polyline\b[^>]*/>", collect, svg)
+    closing = updated.rfind("</svg>")
+    if elements and closing >= 0:
+        overlay = '<g class="roof-batting-overlays">\n'+"\n".join(elements)+'\n</g>\n'
+        svg_path.write_text(updated[:closing]+overlay+updated[closing:], encoding="utf-8")
+
+
 _UNDER_RAFTER_BATTING_OWNER_PREFIX = "under-rafter-owner-"
 
 
@@ -6092,6 +6114,7 @@ def _render_existing_drawing(
             drawing_properties or {},
         )
     _postprocess_change_floor_symbol_overlays(absolute_output)
+    _postprocess_roof_batting_overlays(absolute_output)
     _postprocess_dimension_overlays(absolute_output)
     _postprocess_floor_corner_overlays(absolute_output)
     _postprocess_drawing_line_colors(absolute_output)
@@ -7773,6 +7796,8 @@ class House:
         ``offset`` is measured from the selected finished wall face to the
         covering's inner face.  The four opening-space parameters expand each
         void in wall-relative and vertical directions.
+        ``start_height`` is relative to the host storey and may be negative,
+        allowing a perimeter covering to continue over the slab below its wall.
 
         ``outline`` optionally defines one continuous, possibly stepped face
         as (along, height) points relative to the covering's start and bottom.
@@ -7805,8 +7830,6 @@ class House:
             if start_height is None
             else _number(start_height, "start_height")
         )
-        if resolved_start_height < 0:
-            raise ValueError("start_height must not be negative")
         resolved_height = (
             wall.end_height - resolved_start_height
             if height is None
@@ -13992,6 +14015,7 @@ class Drawing:
         start_z: Number | None,
         end_z: Number | None,
         name: str | None,
+        opening_walls: tuple[Wall, ...] = (),
     ) -> tuple[ifcopenshell.entity_instance, ...]:
         """Draw insulation where an elevation section cuts a wall end-on."""
         tangent_x = (wall.end[0] - wall.start[0]) / wall.length
@@ -14050,21 +14074,23 @@ class Drawing:
             (
                 max(
                     resolved_start_z,
-                    wall.storey.elevation + opening_bottom,
+                    source.storey.elevation + opening_bottom,
                 ),
                 min(
                     resolved_end_z,
-                    wall.storey.elevation + opening_top,
+                    source.storey.elevation + opening_top,
                 ),
             )
+            for source in (wall, *opening_walls)
             for (
                 opening_start,
                 opening_end,
                 opening_bottom,
                 opening_top,
-            ) in wall._openings
+            ) in source._openings
             if opening_start - 1e-9
-            <= wall_parameter
+            <= float(np.dot(section_point-np.asarray(source.start),
+                            (np.asarray(source.end)-source.start)/source.length))
             <= opening_end + 1e-9
         )
         merged_blocked: list[list[float]] = []
@@ -14442,6 +14468,7 @@ class Drawing:
         start_z: Number | None = None,
         end_z: Number | None = None,
         name: str | None = None,
+        opening_walls: Sequence[Wall] | None = None,
     ) -> tuple[ifcopenshell.entity_instance, ...]:
         """Draw opening-aware insulation outside one wall in this drawing.
 
@@ -14468,6 +14495,8 @@ class Drawing:
         pink tint; ``material="rockwool"`` draws direction-aware batting.
         All materials leave gaps for doors and windows intersected by this
         drawing's cut plane.
+        In elevations, ``opening_walls`` adds openings from aligned walls on
+        other storeys, allowing one continuous insulation strip across floors.
         Walls from another storey are supported when explicitly included
         with :meth:`include_element`, including projected walls below the cut.
         """
@@ -14496,6 +14525,16 @@ class Drawing:
         start_extension = _number(start_extension, "start_extension")
         end_extension = _number(end_extension, "end_extension")
         if self.view == "elevation":
+            sources = tuple(opening_walls) if opening_walls is not None else ()
+            tangent = (np.asarray(wall.end)-wall.start)/wall.length
+            normal = np.array((-tangent[1], tangent[0]))
+            for source in sources:
+                if not isinstance(source, Wall) or source.file is not self.house.model:
+                    raise ValueError("opening_walls must contain walls from this house")
+                axis = (np.asarray(source.end)-source.start)/source.length
+                if abs(float(axis@tangent)) < 1-1e-9 \
+                        or abs(float((np.asarray(source.start)-wall.start)@normal)) > 1e-9:
+                    raise ValueError("opening_walls must be aligned with the insulation host")
             if any(
                 coordinate is not None
                 for coordinate in (start_x, end_x, start_y, end_y)
@@ -14519,7 +14558,10 @@ class Drawing:
                 start_z=start_z,
                 end_z=end_z,
                 name=name,
+                opening_walls=sources,
             )
+        if opening_walls is not None:
+            raise ValueError("opening_walls is only supported for elevation insulation")
         if start_z is not None or end_z is not None:
             raise ValueError(
                 "start_z and end_z are only supported for elevation drawings"
@@ -21875,6 +21917,7 @@ class Storey:
         height: Number,
         thickness: Number,
         name: str | None = None,
+        material: str = "Concrete",
         color: str | None = None,
         transparency: Number = 0,
     ) -> ifcopenshell.entity_instance:
@@ -21882,12 +21925,14 @@ class Storey:
 
         ``height`` is the coordinate of the landing's top surface measured
         above this storey's elevation.  The slab extends downward by
-        ``thickness``.  ``color`` and ``transparency`` affect only its 3D body.
+        ``thickness``. ``material`` controls its drawing style; ``color`` and
+        ``transparency`` affect only its 3D body.
         """
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
         height = _number(height, "height")
         thickness = _number(thickness, "thickness")
+        material_name = _name(material, "material")
         if thickness <= 0:
             raise ValueError("thickness must be greater than zero")
         min_x, max_x = sorted((start_x, end_x))
@@ -21952,6 +21997,13 @@ class Storey:
                 shape_representation=body,
                 styles=[surface_style],
             )
+        ifc_material = self.house._materials.get(material_name)
+        if ifc_material is None:
+            ifc_material = ifcopenshell.api.material.add_material(model, name=material_name)
+            self.house._materials[material_name] = ifc_material
+        ifcopenshell.api.material.assign_material(
+            model, products=[landing], type="IfcMaterial", material=ifc_material,
+        )
         return landing
 
     def stair(

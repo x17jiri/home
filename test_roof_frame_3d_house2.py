@@ -16,6 +16,7 @@ from roof_frame_3d_house2 import (
     PLAN_CHECK_COLORS, horizontal_stiffness, plan_check_statuses, plot_plan_report,
     parse_arguments, purlin_configuration_description, solve_roof_model, spring_axial_gap,
     support_rows, tributary_widths, purlin_support_load_envelopes,
+    purlin_deflection_failure_messages,
 )
 
 HOUSE = Path(__file__).with_name("house2.py")
@@ -33,6 +34,34 @@ def layout_with_supports(positions, **overrides):
 
 
 class InputTests(unittest.TestCase):
+    def test_purlin_failure_messages_show_worst_case_and_keep_separate_spans(self):
+        beams = [SimpleNamespace(name="P1.1", category="purlin"),
+                 SimpleNamespace(name="P2.1", category="purlin"),
+                 SimpleNamespace(name="R01E", category="rafter")]
+        def check(member, combo, actual, start=0, end=3):
+            l300, l500 = (end-start)*1000/300, (end-start)*1000/500
+            return dict(member=member, combination=combo, departure_mm=actual,
+                        start_m=start, end_m=end, L300_limit_mm=l300, L500_limit_mm=l500,
+                        L300_status="FAIL" if actual>l300 else "PASS",
+                        L500_status="FAIL" if actual>l500 else "PASS")
+        chords = [check("P1.1", "SLS_dead", 5), check("P1.1", "SLS_east", 8),
+                  check("P1.1", "SLS_symmetric", 12), check("P1.1", "ULS_symmetric", 99),
+                  check("P1.1", "SLS_west", 4, 3, 4.5),
+                  check("P2.1", "SLS_symmetric", 6), check("R01E", "SLS_symmetric", 30)]
+        messages = purlin_deflection_failure_messages(beams, chords)
+        self.assertEqual(len(messages), 3)
+        self.assertIn("P1.1, SLS_symmetric: L/300 failed; maximum allowed 10.000 mm, actual 12.000 mm", messages[0])
+        self.assertIn("P1.1, SLS_symmetric: L/500 failed; maximum allowed 6.000 mm, actual 12.000 mm", messages[1])
+        self.assertIn("P1.1, SLS_west: L/500 failed; maximum allowed 3.000 mm, actual 4.000 mm", messages[2])
+        self.assertIn("span 3.000–4.500 m along member", messages[2])
+
+    def test_purlin_failure_messages_are_empty_when_all_spans_pass(self):
+        beam = SimpleNamespace(name="P1", category="purlin")
+        row = dict(member="P1", combination="SLS_symmetric", start_m=0, end_m=3,
+                   departure_mm=6, L300_limit_mm=10, L500_limit_mm=6,
+                   L300_status="PASS", L500_status="PASS")
+        self.assertEqual(purlin_deflection_failure_messages([beam], [row]), [])
+
     def test_post_load_envelopes_separate_limit_states_and_ignore_uplift_extremes(self):
         def reaction(post, combo, force, kind="post_base"):
             return dict(member=post, combination=combo, Fz_kN=force, kind=kind,
@@ -63,7 +92,6 @@ class InputTests(unittest.TestCase):
             g = inputs.get
             top = g("UPPER_FLOOR_START")+g("PURLIN_CENTER_HEIGHT")
             self.assertAlmostEqual(g("PURLIN_Z")+section_height/2, top)
-            self.assertAlmostEqual(g("FLAT_VAPOUR_BARRIER_TOP_Z"), top)
             with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
                 layout = Layout.from_house(HOUSE)
             bottoms = {b.start[0]: b.start[2]-section_height/2 for b in layout.beams if b.category == "purlin"}

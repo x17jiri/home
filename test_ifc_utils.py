@@ -77,6 +77,7 @@ from ifc_utils import (
     _postprocess_pavatex_batting,
     _postprocess_ring_beam_stirrups,
     _postprocess_roof_batting,
+    _postprocess_roof_batting_overlays,
     _postprocess_under_rafter_batting_depth,
     _postprocess_right_panel,
     _postprocess_vapour_barrier_overlays,
@@ -7017,6 +7018,22 @@ class HouseTests(unittest.TestCase):
                 opening_walls=[shifted],
             )
 
+    def test_perimeter_facade_can_extend_below_its_host_wall(self) -> None:
+        house = House("Perimeter")
+        basement = house.storey("Basement", elevation=-2.5)
+        wall = basement.wall((0, 0), (4, 0), thickness=.25, height=2.25)
+        facade = house.add_facade_layer(
+            wall, offset=.12, thickness=.005, start_height=-.15, height=2.9,
+        )
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), facade)
+        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+        # The representation is local to the covering; its placement carries
+        # the slab-depth extension below the basement wall's datum.
+        placement = ifcopenshell.util.placement.get_local_placement(facade.ObjectPlacement)
+        self.assertAlmostEqual(placement[2, 3]+vertices[:, 2].min(), -2.65)
+        self.assertAlmostEqual(placement[2, 3]+vertices[:, 2].max(), .25)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry), 4*.005*2.9)
+
     def test_adds_horizontal_frame_spanning_wall_with_extensions(self) -> None:
         house = House("My house")
         wall_type = house.wall_type(
@@ -11943,6 +11960,29 @@ class HouseTests(unittest.TestCase):
             ((-0.28, 1.0), (-0.28, 2.2)),
         )
 
+    def test_continuous_section_insulation_preserves_openings_on_both_storeys(self) -> None:
+        house = House("Continuous facade")
+        ground = house.storey("Ground", elevation=0)
+        upper = house.storey("Upper", elevation=3.2)
+        wall = ground.wall((0, 0), (4, 0), thickness=.24, height=3)
+        upper_wall = upper.wall((4, 0), (0, 0), thickness=.24, height=2)
+        wall.add_opening(at=1, width=1, sill_height=0, height=2)
+        upper_wall.add_opening(at=2, width=1, sill_height=.8, height=1.8)
+        drawing = house.add_drawing("Section", 1.5, 0, 2.5, 6, view="elevation", direction=(-1, 0, 0))
+        annotations = drawing.add_wall_insulation(
+            wall, thickness=.2, material="rockwool", start_z=.2, end_z=5.3,
+            opening_walls=(upper_wall,),
+        )
+        self.assertEqual(len(annotations), 2)
+        for annotation in annotations:
+            properties = ifcopenshell.util.element.get_pset(annotation, "BBIM_WallInsulation")
+            segments = json.loads(properties["Segments"])
+            np.testing.assert_allclose(segments, ((2, 4), (5, 5.3)))
+            self.assertNotIn(3.2, [z for segment in segments for z in segment])
+        shifted = upper.wall((0, 1), (4, 1), thickness=.24, height=2)
+        with self.assertRaisesRegex(ValueError, "aligned"):
+            drawing.add_wall_insulation(wall, thickness=.2, material="rockwool", opening_walls=(shifted,))
+
     def test_adds_xps_wall_insulation_with_its_own_material_class(
         self,
     ) -> None:
@@ -14864,6 +14904,27 @@ class HouseTests(unittest.TestCase):
                 svg.index('id="under-rafter-batting"'),
                 svg.index('id="foreground-geometry"'),
             )
+
+    def test_foreground_roof_batting_moves_above_fills_but_preserves_depth_batting(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"batting.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg">'
+                            '<defs><marker id="batting"/></defs>'
+                            '<polyline id="depth" class="roof-batting" points="0,0 1,1"/>'
+                            '<polyline id="front" class="roof-batting roof-batting-overlay" '
+                            'points="2,3 4,5" style="marker-start:url(#batting)"/>'
+                            '<g id="covering-fill"><path d="M0 0H10V10Z"/></g></svg>')
+            _postprocess_roof_batting_overlays(path)
+            root = ET.parse(path).getroot()
+            overlay = root[-1]
+            self.assertEqual(overlay.get("class"), "roof-batting-overlays")
+            self.assertEqual(overlay[0].get("id"), "front")
+            self.assertEqual(overlay[0].get("points"), "2,3 4,5")
+            self.assertEqual(overlay[0].get("style"), "marker-start:url(#batting)")
+            self.assertEqual(root[1].get("id"), "depth")
+            original = path.read_bytes()
+            _postprocess_roof_batting_overlays(path)
+            self.assertEqual(path.read_bytes(), original)
 
     def test_places_pavatex_batting_in_its_depth_ordered_owner_group(self) -> None:
         owner_guid = "0AAAAAAAAAAAAAAAAAAAAA"

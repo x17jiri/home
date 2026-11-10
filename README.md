@@ -165,13 +165,18 @@ in the architectural folder, with SVGs in `projekt2/aa.svg` and
 `projekt2/bb.svg`. Regenerate the corresponding plans to update their symbols.
 
 All exterior finishes belong to the separate `Facades` visibility storey.
-`add_house_facades()` adds a grey perimeter band from the basement floor
-to `PERIMETER_TOP_HEIGHT = 0`, and white finishes above it through both
+`add_house_facades()` adds a grey perimeter band from `PERIMETER_BOTTOM_Z`
+(the footing tops) to `PERIMETER_TOP_HEIGHT` (the finished ground-floor level),
+and white finishes above it through both
 storeys, including the gables and low upper walls. Each white side is one
 continuous 5 mm covering, with openings projected from the ground and upper
 walls and its top cut at the roof's rafter undersides. The panels sit outside
-the 200 mm facade-insulation allowance; the basement offset accounts for its
-thicker walls so the finishes align. Front/back panels cover the side-panel
+the 200 mm facade-insulation allowance. The recessed perimeter finish sits
+outside `EXTERIOR_XPS_INSULATION_THICKNESS = 0.12` m of insulation on the
+thicker basement walls. Pink hexagonal XPS hatching appears in the basement
+plan and sections; section wool starts above the perimeter and continues
+as one strip across the ceiling up to the wall-plate top at the eaves.
+Openings on both storeys remain clear. Front/back panels cover the side-panel
 ends at the corners. `FACADE_THICKNESS` controls the finish thickness.
 
 `add_roof_edge_facades()` adds four equal-width timber strips along each
@@ -385,11 +390,12 @@ GROUND_FLOOR_THICKNESS`, shared equally between 16 risers. With the current
 parameters the rise is 2.945 m (184.0625 mm per riser), the middle landing
 is at Z = 1.6575 m and the upper finished level at Z = 3.130 m. The drawing
 shows both flights, one continuous ascent arrow, and a stair configuration note.
-The former SDK divider is replaced by a wooden banister along the inner
-edge of the shorter upper flight. `upper_stairs.railing_path("right")`
-sets the slope and seats posts and balusters on the actual treads.
+Wooden banisters run along the inner edges of both flights, also on the
+basement stairway. Each `railing_path("right", inset=STAIR_RAILING_INSET)`
+sets the slope and seats posts and balusters on the actual treads. The shared
+60 mm centreline inset leaves 30 mm between the posts and each flight edge.
 `STAIR_RAILING_HEIGHT = 1.0` controls the vertical handrail height.
-The railing belongs to the ground floor and is explicitly included in the
+The ground-floor railings are explicitly included in the
 upper-floor plan; it is visible in both floor drawings and the 3D model.
 The living-room layout is retained. The relocated stairs are to its right
 and no longer overlap its floor. The technical room occupies the space
@@ -607,8 +613,8 @@ rafters and roof build-up alongside the retained vertical overhang limit.
 Layer source extents and tile-batten rows respect both limits.
 Both slopes use the previous house's build-up, with interior
 layers clipped at the inner purlin faces and horizontally at the purlin
-undersides: 140 mm
-under-rafter wool, 15 mm OSB/vapour barrier, a 40 mm empty service space,
+undersides: 200 mm
+under-rafter wool, 15 mm OSB/vapour barrier, a 30 mm empty service space,
 and 25 mm plasterboard. Above the rafters are 15 mm MDF, 1 mm underlay,
 60 × 60 mm counter-battens at every rafter, 60 × 40 mm tile battens at
 320 mm slope spacing, and 30 mm roof tiles with the shared tile pattern.
@@ -616,10 +622,11 @@ The materials and IFC colours match `house_ifc.py`. As in that model,
 the between-rafter wool space has no additional solid overlapping the rafters.
 The sloped inner sheets and wool run from the inside wall faces to the
 purlins. Between the purlins' inner faces, a horizontal roof plane carries
-the 15 mm vapour barrier with its top at `FLAT_VAPOUR_BARRIER_TOP_Z`, the
-purlin-top/collar-tie-bottom level. A 40 mm service void separates it from
-25 mm plasterboard, whose underside is
-`FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z`. There is no horizontal under-rafter
+25 mm plasterboard whose underside, `FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z`,
+meets the sloped plasterboard underside at the purlins' inner faces.
+This height is calculated from the offset roof plane. Above it are a
+30 mm service void and the 15 mm vapour barrier, whose top is
+`FLAT_VAPOUR_BARRIER_TOP_Z`. There is no horizontal under-rafter
 insulation solid: that insulation belongs between the collar ties. Both
 horizontal layers share their corresponding `Roof - …` visibility storeys
 with the slopes, receive timber-clearance openings, and are penetrated by
@@ -1106,10 +1113,10 @@ The independent `section_outlines.add_section_outlines()` postprocessor reads
 Bonsai's actual closed SVG cut polygons and uses IFC metadata to group the
 assemblies. It merges adjoining materials, retains room and opening boundaries,
 and suppresses edges in contact with other cut solids. MIAKO internal ceramic
-cells are not treated as room openings. Foundation slabs (`BASESLAB`) and walls
-made of `ztracene bedneni` keep their original thin lines in all views; they
-still mask contact edges of adjoining outlined solids. Ordinary walls, floors
-and ceilings remain outlined.
+cells are not treated as room openings. Foundation slabs (`BASESLAB`) keep
+their original thin lines in all views and still mask contact edges of
+adjoining outlined solids. Permanent-formwork (`ztracene bedneni`) basement
+walls receive the same exposed outlines as other walls, floors and ceilings.
 Roof layers, rafters, purlins and other
 projected objects retain their original line weights. Existing SVG paths are
 unchanged; a replaceable `section-outlines` group is inserted below annotation
@@ -1821,6 +1828,9 @@ the wall-side boundary remains absent to avoid duplicating opening linework.
 The insulation begins directly at the finished wall face and is drawn at its
 full requested thickness. It is placed behind the wall linework so the shared
 boundary remains visible without introducing a geometric gap.
+In elevation sections, `opening_walls=[upper_wall]` includes openings from
+aligned walls on other storeys in the same `start_z`–`end_z` strip, avoiding
+separate boundary lines at floor levels.
 
 The camera is centred at `(x, y, z)`. Its square view covers `2 * radius`
 metres in both X and Y, so the example cuts the model at 1.6 m and covers a

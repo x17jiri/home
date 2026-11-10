@@ -185,7 +185,23 @@ purlins, cross beams, posts, braces and collar ties.
 
 ## Outputs
 
-The default prefix is `roof_frame_3d_house2`. A run creates:
+The default prefix is `roof_frame_3d_house2`.
+
+The terminal explains each failed purlin deflection limit, for example:
+
+```text
+P1.3, SLS_symmetric: L/500 failed; maximum allowed 3.000 mm, actual 4.000 mm (span 0.000–1.500 m along member)
+```
+
+It reports the worst SLS combination for each purlin support span, printing
+both limits if L/300 and L/500 fail. The span coordinates are measured from
+that member's start. Actual deflection is departure from the straight chord
+between the deformed span supports, matching `_deflections.csv` and the plan
+colours. The overall failure counts still count individual span/combination
+checks for all assessed member types; the CSV retains all combinations.
+If all purlin spans pass, the terminal explicitly says so.
+
+A run creates:
 
 - `_purlin_support_loads.csv`: maximum downward load at each purlin post base,
   separately for SLS and ULS, with coordinates and the governing combination.

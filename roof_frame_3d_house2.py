@@ -634,6 +634,30 @@ def member_rows(roof):
     return rows, chord_rows
 
 
+def purlin_deflection_failure_messages(beams, chords):
+    """Explain failed purlin limits, keeping the worst SLS case per span."""
+    purlins = {beam.name for beam in beams if beam.category == "purlin"}
+    worst = {}
+    for row in chords:
+        if row["member"] not in purlins or not row["combination"].startswith("SLS_"):
+            continue
+        key = (row["member"], row["start_m"], row["end_m"])
+        if key not in worst or row["departure_mm"] > worst[key]["departure_mm"]:
+            worst[key] = row
+    messages = []
+    for key in sorted(worst):
+        row = worst[key]
+        for ratio in (300, 500):
+            if row[f"L{ratio}_status"] == "FAIL":
+                messages.append(
+                    f"  {row['member']}, {row['combination']}: L/{ratio} failed; "
+                    f"maximum allowed {row[f'L{ratio}_limit_mm']:.3f} mm, "
+                    f"actual {row['departure_mm']:.3f} mm "
+                    f"(span {row['start_m']:.3f}–{row['end_m']:.3f} m along member)"
+                )
+    return messages
+
+
 def write_csv(path, rows):
     with Path(path).open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(dict.fromkeys(key for row in rows for key in row)))
@@ -990,6 +1014,12 @@ def main(argv=None):
     uplift = [r for r in supports if r["Fz_kN"] > 1e-5]
     print(f"Maximum support uplift: {max((r['Fz_kN'] for r in uplift), default=0):.3f} kN; {len({r['support'] for r in uplift})} marked locations")
     print(f"Instantaneous chord checks: {sum(r['L300_status']=='FAIL' for r in chords)} L/300 failures; {sum(r['L500_status']=='FAIL' for r in chords)} L/500 failures")
+    failures = purlin_deflection_failure_messages(layout.beams, chords)
+    if failures:
+        print("Purlin deflection failures (worst SLS combination per support span):")
+        print("\n".join(failures))
+    else:
+        print("Purlin deflection checks: all support spans pass L/300 and L/500.")
     worst = max(chords, key=lambda row: row["departure_mm"]/row["L300_limit_mm"])
     print(f"Governing L/300 chord: {worst['member']}, {worst['combination']}: {worst['departure_mm']:.3f} / {worst['L300_limit_mm']:.3f} mm")
     print(f"Maximum relative equilibrium residual: {max(equilibrium.values()):.3g}")

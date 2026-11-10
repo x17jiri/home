@@ -20,7 +20,7 @@ from xml.parsers import expat
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import numpy as np
-from shapely.geometry import GeometryCollection, LineString, Polygon
+from shapely.geometry import GeometryCollection, LineString, Point, Polygon
 from shapely.ops import polygonize, unary_union
 
 _NUMBER = r"[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?"
@@ -193,20 +193,17 @@ def _category(element):
     if any(e.is_a("IfcRoof") or e.is_a("IfcSlab")
            and ifcopenshell.util.element.get_predefined_type(e) == "ROOF" for e in ancestors):
         return None, element.GlobalId, False
-    # Foundation concrete keeps its native thin strokes in every view. Still
+    # Foundation slabs keep their native thin strokes in every view. Still
     # retain its cut geometry as a contact mask for adjoining outlined solids.
     if any(owner.is_a("IfcSlab")
            and ifcopenshell.util.element.get_predefined_type(owner) == "BASESLAB"
-           or owner.is_a("IfcWall") and any(
-               material.Name.casefold().replace(" ", "-")
-               in {"ztracene-bedneni", "ztracené-bednění"}
-               for material in ifcopenshell.util.element.get_materials(owner))
            for owner in ancestors):
         return None, element.GlobalId, False
     for owner in ancestors:
         if ifcopenshell.util.element.get_pset(owner, "BBIM_MiakoSlab"):
             return "ceilings", owner.GlobalId, not bool(owner.HasOpenings)
-        if owner.is_a("IfcWall") or ifcopenshell.util.element.get_pset(owner, "BBIM_RingBeam"):
+        if owner.is_a("IfcWall") or ifcopenshell.util.element.get_pset(owner, "BBIM_RingBeam") \
+                or ifcopenshell.util.element.get_pset(owner, "BBIM_FacadeLayer"):
             return "walls", owner.GlobalId, False
         if owner.is_a("IfcCovering") and ifcopenshell.util.element.get_predefined_type(owner) == "CEILING":
             return "ceilings", owner.GlobalId, False
@@ -330,11 +327,14 @@ def _plasterboard_underside(geometry, normal, offset, grid):
         return unary_union([_plasterboard_underside(part, normal, offset, grid)
                             for part in geometry.geoms])
     rings = [geometry.exterior, *geometry.interiors]
-    bottom = min(np.dot(point, normal) for ring in rings for point in ring.coords)
     edges = []
     for ring in rings:
         for a, b in zip(ring.coords, list(ring.coords)[1:]):
-            if all(abs(np.dot(point, normal) - bottom) <= grid * 2 for point in (a, b)):
+            # A merged cut can contain several slopes and a flat ceiling.
+            # Select room-facing edges parallel to this board, rather than
+            # the single lowest supporting line of the entire merged shape.
+            if abs(np.dot(np.subtract(b, a), normal)) <= grid * 2 \
+                    and geometry.covers(Point((np.array(a)+b)/2+normal*grid*2)):
                 edges.append(LineString([np.array(point) - normal * offset for point in (a, b)]))
     return unary_union(edges)
 
@@ -391,8 +391,9 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
     themselves. Internal MIAKO cells are not treated as room openings.
     With projected_walls enabled, all closed visible projected beam regions
     also suppress contact edges, without receiving new outlines themselves.
-    Foundation slabs and permanent-formwork walls keep their original thin
-    strokes in all views, but still suppress contact edges of adjacent solids.
+    Foundation slabs keep their original thin strokes in all views, but still
+    suppress contact edges of adjacent solids. Permanent-formwork basement
+    walls receive the same exposed outlines as other walls.
     In elevations/sections, cut roof plasterboard adds only its underside edge
     under the ceilings category. It never joins the assembly union; upper/end
     edges, projected boards and window linings retain their original strokes.
@@ -457,7 +458,7 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
             drawing, "EPset_Drawing", "TargetView") in {"ELEVATION_VIEW", "SECTION_VIEW"}:
         camera = ifcopenshell.util.placement.get_local_placement(drawing.ObjectPlacement)
 
-    def product(element, classes, inherited, is_cut, is_projected):
+    def product(element, classes, inherited, inherited_products, is_cut, is_projected):
         candidates = [element.get(_IFC + "guid", "")]
         for token in sorted(classes):
             guid = token.removeprefix("GlobalId-")
@@ -469,6 +470,7 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
                 guid = next(iter(aliases))
             candidates.append(guid)
         first = None
+        products = {}
         walls = set()
         for guid in candidates:
             if not _GUID.fullmatch(guid):
@@ -479,6 +481,7 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
                 except RuntimeError:
                     cache[guid] = None
             if cache[guid] is not None:
+                products[cache[guid].id()] = cache[guid]
                 # Bonsai may merge adjoining cuts into one polygon carrying
                 # several product IDs. Every wall still owns its insulation;
                 # choosing only one ID makes other hosts disappear at random.
@@ -499,10 +502,11 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
             included_walls.update(walls)
         if first is not None and is_projected:
             projection_aliases[first.GlobalId].update(walls)
-        return first if first is not None else inherited
+        return (first if first is not None else inherited,
+                tuple(products.values()) if products else inherited_products)
 
     def walk(element, matrix, owner=None, is_cut=False, is_projected=False,
-             inherited_classes=frozenset()):
+             inherited_classes=frozenset(), owners=()):
         tag = element.tag.rsplit("}", 1)[-1]
         if tag in {"defs", "symbol", "clipPath", "mask"}:
             return
@@ -519,7 +523,7 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
             geometry = _opening_exclusion(element, matrix, grid, opening_inset)
             if not geometry.is_empty:
                 opening_masks.append(geometry)
-        owner = product(element, own_classes, owner, is_cut, is_projected)
+        owner, owners = product(element, own_classes, owner, owners, is_cut, is_projected)
         if owner is not None and is_cut and owner.is_a("IfcWall"):
             included_walls.add(owner.GlobalId)
         insulation = "wall-insulation" in classes and owner is not None and owner.is_a("IfcAnnotation")
@@ -558,26 +562,27 @@ def add_section_outlines(svg_path, model, drawing=None, *, width_mm=0.20,
                 else:
                     if not geometry.is_empty:
                         if is_cut and camera is not None and "ceilings" in categories:
-                            if owner.id() not in plasterboard_normals:
-                                normal = None
-                                if owner.is_a("IfcSlab") and ifcopenshell.util.element.get_pset(owner, "BBIM_RoofLayer") \
+                            for board in owners:
+                                if board.id() not in plasterboard_normals:
+                                    normal = None
+                                    if board.is_a("IfcSlab") and ifcopenshell.util.element.get_pset(board, "BBIM_RoofLayer") \
                                         and any(material.Name == "Gypsum plasterboard" for material in
-                                                ifcopenshell.util.element.get_materials(owner)):
-                                    up = ifcopenshell.util.placement.get_local_placement(owner.ObjectPlacement)[:3, 2]
-                                    normal = np.array((np.dot(up, camera[:3, 0]), -np.dot(up, camera[:3, 1])))
-                                    if np.linalg.norm(normal) <= 1e-9:
-                                        normal = None
-                                plasterboard_normals[owner.id()] = normal
-                            normal = plasterboard_normals[owner.id()]
-                            if normal is not None:
-                                normal = np.linalg.inv(matrix[:2, :2]).T @ normal
-                                normal /= np.linalg.norm(normal)
-                                plasterboard_edges.append(_plasterboard_underside(geometry, normal, offset, grid))
-                                plasterboard_ids.add(assembly)
+                                                    ifcopenshell.util.element.get_materials(board)):
+                                        up = ifcopenshell.util.placement.get_local_placement(board.ObjectPlacement)[:3, 2]
+                                        normal = np.array((np.dot(up, camera[:3, 0]), -np.dot(up, camera[:3, 1])))
+                                        if np.linalg.norm(normal) <= 1e-9:
+                                            normal = None
+                                    plasterboard_normals[board.id()] = normal
+                                normal = plasterboard_normals[board.id()]
+                                if normal is not None:
+                                    normal = np.linalg.inv(matrix[:2, :2]).T @ normal
+                                    normal /= np.linalg.norm(normal)
+                                    plasterboard_edges.append(_plasterboard_underside(geometry, normal, offset, grid))
+                                    plasterboard_ids.add(assembly)
                         host = ifcopenshell.util.element.get_pset(owner, "BBIM_WallInsulation", "HostWall") if insulation else None
                         sources.append((category, assembly, fill_cells, geometry, host, insulation))
         for child in element:
-            walk(child, matrix, owner, is_cut, is_projected, classes)
+            walk(child, matrix, owner, is_cut, is_projected, classes, owners)
 
     walk(root, np.eye(3))
     cut_source_count = len(sources)

@@ -104,6 +104,30 @@ class SectionOutlineTests(unittest.TestCase):
                 expected = LineString([np.array((20, 5)) + shift, np.array((0, 15)) + shift])
                 self.assertLess(self.lines().hausdorff_distance(expected), 1e-7)
 
+    def test_merged_sloped_and_horizontal_plasterboard_keeps_all_three_undersides(self):
+        _, plane, board, drawing = self.roof_ceiling(slope=1)
+        other = plane.roof.plane("Opposite", points=((0, 0, 0), (1, 0, 0), (0, 1, -1)))
+        flat = plane.roof.plane("Flat", points=((0, 0, 0), (1, 0, 0), (0, 1, 0)))
+        boards = [board, *(p.layer("Board", outline=((0, 0), (10, 0), (10, 10), (0, 10)),
+                                  thickness=.1, material="Gypsum plasterboard") for p in (other, flat))]
+        guids = " ".join(p.GlobalId for p in boards)
+        for transform in ("", "translate(20,3) scale(-2,2)"):
+            self.svg(f'<g transform="{transform}"><g class="IfcSlab cut {guids}">'
+                     '<path d="M0 5L4 1H6L10 5V6L6 2H4L0 6Z"/></g></g>')
+            self.outline(drawing=drawing.element)
+            matrix = _transform(transform)
+            expected = LineString([(matrix @ (*point, 1))[:2]
+                                   for point in ((0, 6), (4, 2), (6, 2), (10, 6))])
+            self.assertLess(self.lines().hausdorff_distance(expected), 1e-7)
+
+    def test_facade_cut_finishes_the_insulated_wall_outer_outline(self):
+        wall = self.product()
+        facade = self.product("IfcCovering", pset="BBIM_FacadeLayer")
+        self.svg(self.cut(wall, "M0 0H2V4H0Z")
+                 + self.cut(facade, "M2 0H2.05V4H2Z"))
+        self.outline()
+        self.assertTrue(self.lines().equals(box(0, 0, 2.05, 4).boundary))
+
     def test_plasterboard_underside_preserves_opening_gaps_and_hides_wall_contacts(self):
         _, _, board, drawing = self.roof_ceiling()
         wall = self.product()
@@ -224,7 +248,7 @@ class SectionOutlineTests(unittest.TestCase):
         self.assertAlmostEqual(self.lines().intersection(LineString([(0, 0), (10, 0)])).length, 10)
         self.assertEqual(self.lines().intersection(LineString([(1, .5), (9, .5)])).length, 0)
 
-    def test_foundations_keep_native_strokes_in_every_view_and_with_any_offset(self):
+    def test_basement_walls_are_outlined_but_foundation_slabs_keep_native_strokes(self):
         slab = self.product("IfcSlab")
         slab_type = self.product("IfcSlabType", "BASESLAB")
         ifcopenshell.api.type.assign_type(self.model, related_objects=[slab], relating_type=slab_type)
@@ -246,8 +270,13 @@ class SectionOutlineTests(unittest.TestCase):
                         + self.cut(floor, "M2 1H8V3H2Z") + '</g>')
                     self.outline(width_mm=.6, offset_ratio=ratio)
                     offset = .6 * ratio
-                    self.assertTrue(self.lines().equals(
-                        box(2-offset, 1-offset, 8+offset, 3+offset).boundary))
+                    lines = self.lines()
+                    floor_boundary = box(2-offset, 1-offset, 8+offset, 3+offset).boundary
+                    self.assertAlmostEqual(lines.intersection(floor_boundary).length, floor_boundary.length)
+                    self.assertAlmostEqual(lines.intersection(LineString([(0, 10+offset), (2, 10+offset)])).length, 2)
+                    # No slab outline, including at its shared face with the wall.
+                    self.assertEqual(lines.intersection(LineString([(3, 5), (9, 5)])).length, 0)
+                    self.assertEqual(lines.intersection(LineString([(.1, 7), (1.9, 7)])).length, 0)
                     result = self.path.read_text()
                     self.assertIn(original[:-6], result)
                     self.outline(width_mm=.6, offset_ratio=ratio)
@@ -264,7 +293,7 @@ class SectionOutlineTests(unittest.TestCase):
         self.assertEqual(self.lines().intersection(LineString([(0, 2), (10, 2)])).length, 0)
         self.assertAlmostEqual(self.lines().intersection(LineString([(0, 0), (10, 0)])).length, 10)
 
-    def test_permanent_formwork_exclusion_uses_material_not_wall_name(self):
+    def test_permanent_formwork_materials_receive_normal_wall_outlines(self):
         for name in ("ztracene bedneni", "Ztracené bednění", "ztracene-bedneni", "Brick"):
             with self.subTest(material=name):
                 wall = self.product()
@@ -272,11 +301,9 @@ class SectionOutlineTests(unittest.TestCase):
                 ifcopenshell.api.material.assign_material(self.model, products=[wall], material=material)
                 original = self.svg(self.cut(wall, "M0 0H10V7H0Z"))
                 count = self.outline()
-                if name == "Brick":
-                    self.assertGreater(count, 0)
-                else:
-                    self.assertEqual(count, 0)
-                    self.assertEqual(self.path.read_text(), original)
+                self.assertGreater(count, 0)
+                self.assertTrue(self.lines().equals(box(0, 0, 10, 7).boundary))
+                self.assertIn(original[:-6], self.path.read_text())
 
     def test_roof_exclusion_also_respects_inherited_types(self):
         roof = self.product("IfcSlab")

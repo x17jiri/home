@@ -18,6 +18,11 @@ a:hover { cursor: pointer; }
     stroke-width: 0.25 !important;
     stroke-dasharray: 3, 2;
 }
+.IfcSlab.material-Concrete.cut {
+    fill: #c5c7c8 !important;
+    stroke: black !important;
+    stroke-width: 0.08 !important;
+}
 .surface { stroke: none; fill: #fff; fill-rule: evenodd; }
 .target-view-ELEVATIONVIEW .IfcWindow.surface.drawing-glazing {
     fill: #d9f4f7;

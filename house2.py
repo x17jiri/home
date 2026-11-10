@@ -27,6 +27,7 @@ INNER_BWT = 0.175
 PARTITION_THICKNESS = 0.115
 DRY_WALL_WIDTH = 0.10
 FACADE_INSULATION_THICKNESS = 0.20
+EXTERIOR_XPS_INSULATION_THICKNESS = 0.12
 FACADE_THICKNESS = 0.005
 GARDEN_ROOMS_DEPTH = 3.47  # Clear depth between the divider and inside garden wall.
 GARDEN_ROOMS_WALL_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT
@@ -112,6 +113,7 @@ BASEMENT_OPENING_TOP_HEIGHT = BASEMENT_WALL_HEIGHT-0.25
 GARAGE_FRONT_OPENING_SIDE_CLEARANCE = 0.50
 GARAGE_FRONT_OPENING_TOP_HEIGHT = BASEMENT_WALL_HEIGHT-0.20
 BASEMENT_SLAB_BOTTOM_Z = BASEMENT_FLOOR_START-BASEMENT_SLAB_THICKNESS
+PERIMETER_BOTTOM_Z = BASEMENT_SLAB_BOTTOM_Z  # Top of the foundation footings.
 FOUNDATION_FOOTING_BOTTOM_Z = BASEMENT_SLAB_BOTTOM_Z-FOUNDATION_FOOTING_HEIGHT
 CEILING_BEAM_BEARING = 0.125  # Minimum at each end, before rounding the beam length up.
 CEILING_BEAM_LENGTH_STEP = 0.25
@@ -125,7 +127,7 @@ NADEZDIVKA = ZAKLADACI_MALTA + 1.20 + UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.2
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
-PURLIN_SIZE = (0.17, 0.24)
+PURLIN_SIZE = (0.17, 0.25)
 PURLIN_WALL_DISTANCE = 2.93
 PURLIN_X_POSITIONS = (
 	BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0,
@@ -138,8 +140,8 @@ PURLIN_SUPPORT_1_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT/2.0+0.3
 PURLIN_SUPPORT_Y_POSITIONS = (
 #    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 1, at PURLIN_X_POSITIONS[0].
 #    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 2, at PURLIN_X_POSITIONS[1].
-    (BWT+2.5, PURLIN_SUPPORT_1_Y, HOUSE_DEPTH-BWT-0.25),  # Purlin 2, at PURLIN_X_POSITIONS[1].
-    (BWT+2.5, PURLIN_SUPPORT_1_Y, HOUSE_DEPTH-BWT-0.25),  # Purlin 2, at PURLIN_X_POSITIONS[1].
+    (BWT+2.52, BWT+2.52+3),  # Purlin 2, at PURLIN_X_POSITIONS[1].
+    (BWT+2.52, BWT+2.52+3),  # Purlin 2, at PURLIN_X_POSITIONS[1].
 )
 PURLIN_CONNECTION_BEAM_SIZE = (0.12, 0.20)  # Width along Y, height along Z.
 PURLIN_CONNECTION_WALL_CLEARANCE = 0.10  # Clear gap from each gable wall's inner face.
@@ -149,7 +151,7 @@ PURLIN_CONNECTION_Y_POSITIONS = (
     HOUSE_DEPTH-BWT-PURLIN_CONNECTION_WALL_CLEARANCE-PURLIN_CONNECTION_BEAM_SIZE[0]/2,
 )
 PURLIN_BRACE_SIZE = (0.10, 0.12)
-PURLIN_BRACE_DROP = 0.40  # Brace anchor below the post top; braces rise at 45 degrees.
+PURLIN_BRACE_DROP = 0.80  # Brace anchor below the post top; braces rise at 45 degrees.
 RAFTER_THICKNESS = 0.08
 RAFTER_HEIGHT = 0.20
 RAFTER_SIZE = (RAFTER_THICKNESS, RAFTER_HEIGHT)
@@ -192,11 +194,6 @@ ROOF_TILE_PATTERN_WIDTH = 0.30
 THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM = RAFTER_Z_OFFSET-THERMAL_INSULATION_UNDER_RAFTERS
 VAPOUR_BARRIER_BOTTOM = THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM-VAPOUR_BARRIER_THICKNESS
 GYPSUM_PLASTERBOARD_BOTTOM = VAPOUR_BARRIER_BOTTOM-INSTALLATION_SPACE_THICKNESS-GYPSUM_PLASTERBOARD_THICKNESS
-FLAT_VAPOUR_BARRIER_TOP_Z = PURLIN_Z+PURLIN_SIZE[1]/2
-FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z = (
-    FLAT_VAPOUR_BARRIER_TOP_Z-VAPOUR_BARRIER_THICKNESS
-    -INSTALLATION_SPACE_THICKNESS-GYPSUM_PLASTERBOARD_THICKNESS
-)
 MDF_BOTTOM = RAFTER_Z_OFFSET+RAFTER_HEIGHT
 UNDERLAY_BOTTOM = MDF_BOTTOM+MDF_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM+UNDERLAY_THICKNESS
@@ -227,6 +224,7 @@ STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
 CHIMNEY_CENTER = (HOUSE_WIDTH/2.0+0.7, HOUSE_DEPTH-BWT-3.47-0.5)
 STAIR_WAIST_THICKNESS = 0.15
 STAIR_RAILING_HEIGHT = 1.0
+STAIR_RAILING_INSET = 0.02  # Centreline inset onto each flight; 60 mm posts clear the edge by 30 mm.
 TECHNIKA_RAILING_START_FROM_FRONT = 1.5  # Metres from the front wall's inside face.
 if STAIR_RIGHT_X > HOUSE_WIDTH-BWT+1e-9:
     raise ValueError("rotated stairs do not fit between room 3 and the west wall")
@@ -848,9 +846,14 @@ upper_stairs = ground.stair(
 )
 stair_railing = ground.railing(
     "Stair flight railing",
-    path=upper_stairs.railing_path("right"),
+    path=upper_stairs.railing_path("right", inset=STAIR_RAILING_INSET),
     height=STAIR_RAILING_HEIGHT,
     color="#C8B090",
+)
+lower_stair_railing = ground.railing(
+    "Lower stair flight railing",
+    path=lower_stairs.railing_path("right", inset=STAIR_RAILING_INSET),
+    height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
 stair_route_landing_y = (STAIR_LANDING_START_Y+STAIR_LANDING_END_Y)/2
 stair_walking_route = (
@@ -970,7 +973,13 @@ basement_upper_stairs = basement.stair(
     risers=BASEMENT_STAIR_UPPER_RISERS, underside="sloped", waist_thickness=STAIR_WAIST_THICKNESS,
 )
 basement_stair_railing = basement.railing(
-    "Basement stair flight railing", path=basement_upper_stairs.railing_path("right"),
+    "Basement stair flight railing",
+    path=basement_upper_stairs.railing_path("right", inset=STAIR_RAILING_INSET),
+    height=STAIR_RAILING_HEIGHT, color="#C8B090",
+)
+basement_lower_stair_railing = basement.railing(
+    "Basement lower stair flight railing",
+    path=basement_lower_stairs.railing_path("right", inset=STAIR_RAILING_INSET),
     height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
 basement_route_landing_y = (basement_landing_start_y+basement_landing_end_y)/2
@@ -1227,6 +1236,17 @@ roof_west = roof.plane(
             (PURLIN_X_POSITIONS[1]+PURLIN_SIZE[0]/2, 0, purlin_top_z)),
     cuts=[ridge_cut, horizontal_eave_cut,
           ((west_eave_x, 0, 0), (west_eave_x, 1, 0), (west_eave_x, 0, 1))],
+)
+# Match the visible plasterboard faces at the inner edge of the east purlin.
+# Layer offsets are perpendicular to the slope, so the purlin bottom alone
+# does not give the height of this junction. The west junction is symmetric.
+FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z = plane_height_at(
+    *offset_plane(*roof_east.points, offset=GYPSUM_PLASTERBOARD_BOTTOM),
+    x=PURLIN_X_POSITIONS[0]+PURLIN_SIZE[0]/2, y=0,
+)
+FLAT_VAPOUR_BARRIER_TOP_Z = (
+    FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z+GYPSUM_PLASTERBOARD_THICKNESS
+    +INSTALLATION_SPACE_THICKNESS+VAPOUR_BARRIER_THICKNESS
 )
 roof_angle_degrees = math.degrees(math.atan2(
     math.hypot(roof_east.z_axis[0], roof_east.z_axis[1]), roof_east.z_axis[2],
@@ -1536,13 +1556,14 @@ upper_toilet = upper.asset(
     start_height=UPPER_FLOOR_THICKNESS,
 )
 upper_hydrobox_center = (
-    upper_technical_left_x+upper_fixture_wall_gap+0.8/2,
+    upper_technical_left_x+0.3,
     (upper_recuperation_center[1]+0.5/2+upper_toilet_center[1]-0.53/2)/2,
 )
 upper_hydrobox = upper.furniture(
     "Hydro-\nbox", kind="USERDEFINED", size=(0.8, 0.5, 0.9), color="#ffffff",
     center=upper_hydrobox_center,
     start_height=UPPER_FLOOR_THICKNESS,
+	rotation=90,
 )
 
 # Kitchen on the living-room side of the vertical SDK wall, toward the front.
@@ -1811,7 +1832,7 @@ flat_ceiling_plane = roof.plane(
 
 
 def add_horizontal_roof_layers():
-    """Finish below the collar ties; their insulation is outside this stack."""
+    """Join the sloped plasterboard undersides, preserving the horizontal stack."""
     left = PURLIN_X_POSITIONS[0]+PURLIN_SIZE[0]/2
     right = PURLIN_X_POSITIONS[1]-PURLIN_SIZE[0]/2
     if left >= right:
@@ -1922,6 +1943,28 @@ def add_facade_insulation(drawing, walls=None):
         )
 
 
+def add_perimeter_insulation(drawing):
+    """Draw pink XPS around the basement, down to the footing tops in sections."""
+    exterior = (wall_front_g, wall_west_g, wall_back_g, wall_east_g)
+    extra = (BASEMENT_WALL_THICKNESS-BWT)/2
+    for wall in basement_walls:
+        if wall.source_wall not in exterior:
+            continue
+        if drawing.view == "elevation":
+            dx, dy = wall.end[0]-wall.start[0], wall.end[1]-wall.start[1]
+            if abs((dx*drawing.direction[0]+dy*drawing.direction[1])/wall.length) < 1-1e-9:
+                continue
+            endpoints = dict(start_z=PERIMETER_BOTTOM_Z, end_z=PERIMETER_TOP_HEIGHT)
+        elif math.isclose(wall.start[1], wall.end[1], abs_tol=1e-9):
+            extension = extra+EXTERIOR_XPS_INSULATION_THICKNESS
+            endpoints = dict(start_x=-extension, end_x=HOUSE_WIDTH+extension)
+        else:
+            endpoints = dict(start_y=-extra, end_y=HOUSE_DEPTH+extra)
+        drawing.add_wall_insulation(
+            wall, thickness=EXTERIOR_XPS_INSULATION_THICKNESS, material="xps", **endpoints,
+        )
+
+
 def add_house_facades():
     """Continuous grey/white wall finishes, with openings from both floors."""
     perimeter, white = [], []
@@ -1934,15 +1977,16 @@ def add_house_facades():
         tangent = (np.asarray(ground_wall.end)-ground_wall.start)/ground_wall.length
         normal = np.array((-tangent[1], tangent[0]))
         axis = 0 if abs(tangent[0]) > .5 else 1
-        # Front/back panels cover the side-panel ends, forming butt joints.
-        extension = FACADE_INSULATION_THICKNESS+(FACADE_THICKNESS if axis == 0 else 0)
-        low, high = -extension, (HOUSE_WIDTH if axis == 0 else HOUSE_DEPTH)+extension
-        ground_face = np.asarray(ground_wall.start)+normal*ground_wall.body_offset
-
-        def panel_options(host):
+        def panel_options(host, reference_wall, insulation_thickness):
+            # Front/back panels cover side-panel ends. The thicker basement
+            # masonry projects slightly beyond the ground-floor wall faces.
+            extra = (BASEMENT_WALL_THICKNESS-BWT)/2 if reference_wall == basement_wall else 0
+            extension = insulation_thickness+extra+(FACADE_THICKNESS if axis == 0 else 0)
+            low, high = -extension, (HOUSE_WIDTH if axis == 0 else HOUSE_DEPTH)+extension
             first, last = (low, high) if tangent[axis] > 0 else (high, low)
+            reference_face = np.asarray(reference_wall.start)+normal*reference_wall.body_offset
             host_face = np.asarray(host.start)+normal*host.body_offset
-            offset = FACADE_INSULATION_THICKNESS+float((ground_face-host_face)@(-normal))
+            offset = insulation_thickness+float((reference_face-host_face)@(-normal))
             return dict(
                 offset=offset, thickness=FACADE_THICKNESS, side="right",
                 start_extension=float((host.start[axis]-first)*tangent[axis]),
@@ -1953,8 +1997,9 @@ def add_house_facades():
         perimeter.append(house.add_facade_layer(
             basement_wall, name=f"{side} facade - grey perimeter",
             material="Perimeter facade finish", color="#d9d9d9",
-            start_height=0, height=PERIMETER_TOP_HEIGHT-basement.elevation,
-            cuts=(), **panel_options(basement_wall),
+            start_height=PERIMETER_BOTTOM_Z-basement.elevation,
+            height=PERIMETER_TOP_HEIGHT-PERIMETER_BOTTOM_Z,
+            cuts=(), **panel_options(basement_wall, basement_wall, EXTERIOR_XPS_INSULATION_THICKNESS),
         ))
         face_midpoint = (np.asarray(ground_wall.start)+ground_wall.end)/2
         face_midpoint -= normal*(FACADE_INSULATION_THICKNESS+FACADE_THICKNESS/2)
@@ -1968,7 +2013,7 @@ def add_house_facades():
             start_height=PERIMETER_TOP_HEIGHT-ground.elevation,
             height=top-PERIMETER_TOP_HEIGHT,
             cuts=gable_wall_cuts, opening_walls=(upper_wall,),
-            **panel_options(ground_wall),
+            **panel_options(ground_wall, ground_wall, FACADE_INSULATION_THICKNESS),
         ))
     return tuple(perimeter), tuple(white)
 
@@ -2127,7 +2172,9 @@ if "basement" in sys.argv:
     )
     drawing1.add_material_legend([
         ("ztracene-bedneni", f"Ztracené bednění {BASEMENT_WALL_THICKNESS*1000:.0f} mm"),
+        ("perimeter-polystyrene", f"Perimetrická izolace {EXTERIOR_XPS_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
+    add_perimeter_insulation(drawing1)
     drawing1.add_notes([
         "Strop nad suterénem: samostatná nosná podpora čela stropu chodby zatím nenavržena.",
     ])
@@ -2590,6 +2637,7 @@ if "upper" in sys.argv:
             window, offset=offset, finished_floor_height=UPPER_FLOOR_THICKNESS,
         )
     drawing1.include_element(stair_railing)
+    drawing1.include_element(lower_stair_railing)
     drawing1.add_stair_annotation(lower_stairs)
     drawing1.add_stair_annotation(upper_stairs)
     drawing1.add_stair_landing_annotation(middle_stair_landing)
@@ -2728,6 +2776,57 @@ if "roof" in sys.argv:
     drawing1.render(PROJECT_DIR / "roof.svg", pdf=PDF_ROOF)
 
 
+def add_bb_roof_batting(drawing):
+    """Draw the two roof-insulation layers in the section plane."""
+    clearance = 0.01
+    purlin_overlap = 0.10  # Batting overlap above the purlin bottom, in metres.
+    for index, side, plane in ((0, "East", roof_east), (1, "West", roof_west)):
+        inward = 1 if index == 0 else -1
+
+        def point(x, offset):
+            return (x, drawing.y, plane_height_at(
+                *offset_plane(*plane.points, offset=offset), x=x, y=drawing.y,
+            ))
+
+        # The first layer occupies the full rafter depth, up to the ridge.
+        offset = RAFTER_Z_OFFSET+RAFTER_HEIGHT/2
+        half_x = abs(plane.z_axis[0])*RAFTER_HEIGHT/2
+        wall_plate_x = BWT/2 if index == 0 else HOUSE_WIDTH-BWT/2
+        drawing.add_batting(
+            point(wall_plate_x+inward*clearance, offset),
+            point(roof_ridge_x-inward*(half_x+clearance), offset),
+            thickness=RAFTER_HEIGHT, name=f"BB {side} between-rafter insulation",
+            classes="roof-batting roof-batting-overlay",
+        )
+
+        # The second sloped layer follows the actual under-rafter space,
+        # ending slightly above the purlin bottom for a fuller batting symbol.
+        thickness = THERMAL_INSULATION_UNDER_RAFTERS
+        offset = THERMAL_INSULATION_UNDER_RAFTERS_BOTTOM+thickness/2
+        half_x = abs(plane.z_axis[0])*thickness/2
+        half_z = plane.z_axis[2]*thickness/2
+        wall_x = BWT if index == 0 else HOUSE_WIDTH-BWT
+        purlin_inner_x = PURLIN_X_POSITIONS[index]+inward*PURLIN_SIZE[0]/2
+        start = point(wall_x+inward*(half_x+clearance), offset)
+        end = point(purlin_inner_x-inward*(half_x+clearance), offset)
+        end_z_limit = purlin_bottom_z-half_z+purlin_overlap
+        if end[2] > end_z_limit:
+            fraction = (end_z_limit-start[2])/(end[2]-start[2])
+            end = point(start[0]+fraction*(end[0]-start[0]), offset)
+        drawing.add_batting(
+            start, end, thickness=thickness,
+            name=f"BB {side} under-rafter insulation", classes="roof-batting roof-batting-overlay",
+        )
+
+    center_z = FLAT_VAPOUR_BARRIER_TOP_Z+THERMAL_INSULATION_UNDER_RAFTERS/2
+    drawing.add_batting(
+        (PURLIN_X_POSITIONS[0]+PURLIN_SIZE[0]/2+clearance, drawing.y, center_z),
+        (PURLIN_X_POSITIONS[1]-PURLIN_SIZE[0]/2-clearance, drawing.y, center_z),
+        thickness=THERMAL_INSULATION_UNDER_RAFTERS,
+        name="BB horizontal ceiling insulation", classes="roof-batting roof-batting-overlay",
+    )
+
+
 def add_house_section(cut, name, pdf):
     """Create a complete vertical section using the same cut as its plan markers."""
     section_top = max(roof_tiles_top_z, upper.elevation+chimney.end_height)
@@ -2742,12 +2841,15 @@ def add_house_section(cut, name, pdf):
     # Batting is drawing-only. Add it only where this section crosses an
     # exterior wall, and let the wall helper leave gaps at openings.
     view_x, view_y, _ = cut.view_direction
-    for wall in (wall_front_g, wall_west_g, wall_back_g, wall_east_g, *upper_exterior_walls):
+    for wall, upper_wall in zip(
+        (wall_front_g, wall_west_g, wall_back_g, wall_east_g), upper_exterior_walls,
+    ):
         dx, dy = wall.end[0]-wall.start[0], wall.end[1]-wall.start[1]
         if abs((dx*view_x+dy*view_y)/wall.length) < 1-1e-9:
             continue
-        options = {}
-        if wall in upper_exterior_walls:
+        if upper_wall in (wall_east_u, wall_west_u):
+            insulation_top = wall_plate_top_z
+        else:
             fraction = -((wall.start[0]-cut.center[0])*view_x
                          +(wall.start[1]-cut.center[1])*view_y)/(dx*view_x+dy*view_y)
             section_x = wall.start[0]+fraction*dx
@@ -2756,10 +2858,32 @@ def add_house_section(cut, name, pdf):
                 *offset_plane(*roof_plane.points, offset=RAFTER_Z_OFFSET),
                 x=section_x, y=cut.center[1],
             )
-            options["end_z"] = min(wall.storey.elevation+wall.end_height, roof_bottom_z)
+            insulation_top = min(upper_wall.storey.elevation+upper_wall.end_height, roof_bottom_z)
         drawing.add_wall_insulation(
-            wall, thickness=FACADE_INSULATION_THICKNESS, material="rockwool", **options,
+            wall, thickness=FACADE_INSULATION_THICKNESS, material="rockwool",
+            start_z=PERIMETER_TOP_HEIGHT, end_z=insulation_top, opening_walls=(upper_wall,),
         )
+    add_perimeter_insulation(drawing)
+    if name == "bb":
+        add_bb_roof_batting(drawing)
+        drawing.add_dimension(
+            start=(roof_ridge_x, UPPER_FINISHED_FLOOR_HEIGHT),
+            end=(roof_ridge_x, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z),
+            name="Upper finished floor to horizontal plasterboard underside",
+        )
+        for x, y, offset, label in (
+            (*stair_arrival_west_corner, .3, "Lowest ceiling clearance at west edge of upper stair exit"),
+            (BWT, HOUSE_DEPTH/2, -.4, "Lowest ceiling clearance at east wall"),
+        ):
+            ceiling_z = min(
+                FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z,
+                *(plane_height_at(*offset_plane(*plane.points, offset=GYPSUM_PLASTERBOARD_BOTTOM), x=x, y=y)
+                  for plane in (roof_east, roof_west)),
+            )
+            drawing.add_dimension(
+                start=(x, UPPER_FINISHED_FLOOR_HEIGHT), end=(x, ceiling_z),
+                offset=offset, name=label,
+            )
     drawing.add_material_legend([
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("brick", "Nosná zeď - VPC Cihla 175 mm"),
@@ -2771,6 +2895,7 @@ def add_house_section(cut, name, pdf):
         ("drywall-diagonal1", "Sádrokarton"),
         ("thermal-impact-insulation", "Podlahová izolace"),
         ("rockwool-wave", "Minerální vata"),
+        ("perimeter-polystyrene", "Perimetrická izolace XPS"),
         ("mdf-solid", "MDF záklop"),
         ("vapour-barrier-solid", "OSB záklop + parobrzda"),
     ])
