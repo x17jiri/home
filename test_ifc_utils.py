@@ -9851,6 +9851,49 @@ class HouseTests(unittest.TestCase):
                 {"900", "2100"},
             )
 
+    def test_sliding_door_divider_is_centred_under_labels_and_clear_of_symbol(self) -> None:
+        for operation in ("SLIDING_TO_LEFT", "SLIDING_TO_RIGHT", "DOUBLE_DOOR_SLIDING"):
+            for start, end in (((0, 0), (5, 0)), ((0, 5), (0, 0))):
+                for scale in (100, 200):
+                    with self.subTest(operation=operation, end=end, scale=scale):
+                        house = House("Sliding door label")
+                        storey = house.storey("Ground", elevation=0)
+                        wall = storey.wall(start, end, thickness=0.1, height=2.8)
+                        door = wall.add_door(at=1, width=0.7, height=2.1, operation=operation)
+                        drawing = house.add_drawing(
+                            "Plan", 2, 2, 1.5, 5, storeys=[storey],
+                            scale=scale, door_annotations=False,
+                        )
+                        width_label = drawing.add_door_annotation(door, name="Sliding label")
+                        products = drawing.group.IsGroupedBy[0].RelatedObjects
+                        height_label = next(p for p in products if p.Name == "Sliding label Height")
+                        separator = next(p for p in products if p.Name == "Sliding label Separator")
+                        transform = ifcopenshell.util.placement.get_local_placement(separator.ObjectPlacement)
+                        inverse = np.linalg.inv(transform)
+                        points = np.asarray(separator.Representation.Representations[0].Items[0].Points.CoordList)
+                        # A centred 6 mm printed line, independent of leaf depth.
+                        self.assertAlmostEqual(np.ptp(points[:, 0])*1000/scale, 6)
+                        self.assertAlmostEqual(points[:, 0].mean(), 0)
+                        for label in (width_label, height_label):
+                            placement = ifcopenshell.util.placement.get_local_placement(label.ObjectPlacement)
+                            position = inverse @ np.append(placement[:3, 3], 1)
+                            self.assertAlmostEqual(position[0], 0)
+                        plan = ifcopenshell.util.representation.get_representation(door, "Plan", "Body", "PLAN_VIEW")
+                        plan = ifcopenshell.util.representation.resolve_representation(plan)
+                        door_transform = ifcopenshell.util.placement.get_local_placement(door.ObjectPlacement)
+                        symbol_points = [
+                            (inverse @ door_transform @ np.array((*p[:2], 0, 1)))[0]
+                            for curve in plan.Items if curve.is_a("IfcIndexedPolyCurve")
+                            for p in curve.Points.CoordList
+                        ]
+                        # The divider and text remain outside the complete
+                        # sliding symbol, so later symbol overlays cannot hide it.
+                        clearance = max(
+                            points[:, 0].min()-max(symbol_points),
+                            min(symbol_points)-points[:, 0].max(),
+                        )
+                        self.assertGreaterEqual(clearance, 0.5*scale/1000-1e-9)
+
     def test_adds_a_numbered_lintel_symbol_at_a_selected_opening_jamb(
         self,
     ) -> None:

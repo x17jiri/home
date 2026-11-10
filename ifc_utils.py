@@ -12824,6 +12824,14 @@ class Drawing:
         label_y = swing_y * 0.55 + swing_sign * offset
         if abs(label_y) < 0.2:
             label_y = swing_sign * (0.2 + offset)
+        sliding_separator_half_length = None
+        if "SLIDING" in (door.OperationType or ""):
+            # Sliding leaves have almost no plan depth. Give their label a
+            # centred 6 mm paper-space divider, clear of the door symbol.
+            sliding_separator_half_length = 3.0 * self.scale / 1000
+            label_y = swing_y + swing_sign * (
+                sliding_separator_half_length + 0.5 * self.scale / 1000 + offset
+            )
 
         door_placement = ifcopenshell.util.placement.get_local_placement(
             door.ObjectPlacement
@@ -12946,6 +12954,9 @@ class Drawing:
             separator_direction * (y - label_y)
             for y in (min(y_coordinates), max(y_coordinates))
         )
+        if sliding_separator_half_length is not None:
+            separator_start = -sliding_separator_half_length
+            separator_end = sliding_separator_half_length
         separator_representation = ifcopenshell.api.geometry.add_axis_representation(
             model,
             context=self.house._annotation_context,
