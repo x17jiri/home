@@ -55,6 +55,7 @@ from shapely.ops import unary_union
 from pdf_utils import markdown_to_pdf
 from drawing_sheet import DrawingSheet
 from section_outlines import add_section_outlines
+from ring_beam_seams import remove_projected_ring_beam_seams
 from roof_tile_patterns import add_roof_tile_patterns
 from drawing_terrain import add_terrain_overlay
 from railings import Railing, RailingPath, create_railing
@@ -6099,6 +6100,9 @@ def _render_existing_drawing(
             offset_ratio=(drawing_properties or {}).get("SectionOutlineOffsetRatio", 0.25),
         )
         print(f"[drawing render] Added {count} exposed section outlines ({section_outline_width:g} mm)", flush=True)
+    if target_view == "ELEVATION_VIEW" and (drawing_properties or {}).get("HideProjectedRingBeamSeams"):
+        count = remove_projected_ring_beam_seams(absolute_output, model)
+        print(f"[drawing render] Cleaned projected ring-beam seams in {count} strokes", flush=True)
     _postprocess_background_annotations(absolute_output)
     if target_view != "PLAN_VIEW":
         _, width_mm, _, view_box = _drawing_svg_frame(absolute_output.read_text(encoding="utf-8"))
@@ -8377,6 +8381,7 @@ class House:
         section_outline_color: str = "black",
         section_outline_projected_walls: bool = False,
         section_outline_offset_ratio: Number = 0.25,
+        hide_projected_ring_beam_seams: bool = False,
         surface_fills: bool = False,
         scale: Number = 100,
     ) -> Drawing:
@@ -8434,6 +8439,9 @@ class House:
         air by this fraction of its width: 0.25 by default, 0 for centred, 0.5
         for a stroke entirely outside the assembly. Original model lines stay
         unchanged. The ratio must be non-negative and finite.
+        ``hide_projected_ring_beam_seams=True`` removes shared projected
+        wall/ring-beam interfaces in elevations, retaining cuts and outer edges.
+        Leave it disabled for exterior views and plans.
         ``surface_fills=True`` enables Bonsai's SHAPELY projected surfaces in
         plans. Wood colours/hatches style those surfaces without hull fills
         or drawing_order overrides; visibility follows actual 3D geometry.
@@ -8462,6 +8470,7 @@ class House:
             section_outline_color=section_outline_color,
             section_outline_projected_walls=section_outline_projected_walls,
             section_outline_offset_ratio=section_outline_offset_ratio,
+            hide_projected_ring_beam_seams=hide_projected_ring_beam_seams,
             surface_fills=surface_fills,
             scale=scale,
         )
@@ -8650,6 +8659,7 @@ class Drawing:
         section_outline_color: str = "black",
         section_outline_projected_walls: bool = True,
         section_outline_offset_ratio: Number = 0.25,
+        hide_projected_ring_beam_seams: bool = False,
         surface_fills: bool = False,
         scale: Number = 100,
     ) -> None:
@@ -8669,6 +8679,9 @@ class Drawing:
         if not isinstance(surface_fills, bool):
             raise TypeError("surface_fills must be a boolean")
         self.surface_fills = surface_fills
+        if not isinstance(hide_projected_ring_beam_seams, bool):
+            raise TypeError("hide_projected_ring_beam_seams must be a boolean")
+        self.hide_projected_ring_beam_seams = hide_projected_ring_beam_seams
         if not isinstance(section_outline_projected_walls, bool):
             raise TypeError("section_outline_projected_walls must be a boolean")
         self.section_outline_projected_walls = section_outline_projected_walls
@@ -8960,6 +8973,8 @@ class Drawing:
             )
         if self.model_line_width is not None:
             drawing_properties["ModelLineWidth"] = self.model_line_width
+        if self.hide_projected_ring_beam_seams:
+            drawing_properties["HideProjectedRingBeamSeams"] = True
         if self.section_outline_width is not None:
             drawing_properties["SectionOutlineWidth"] = self.section_outline_width
             drawing_properties["SectionOutlineColor"] = self.section_outline_color
@@ -19203,6 +19218,7 @@ class Storey:
                 pset=ring_beam_pset,
                 properties={
                     "SourceWall": source_wall.GlobalId,
+                    "ReplacesWallBand": replace_wall_band,
                     "Width": resolved_structural_width,
                     "Height": height,
                     "Length": run_length,

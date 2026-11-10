@@ -320,8 +320,8 @@ aa_cut = CutDefinition(
     identifier="A", direction=-1,  # Look towards +X.
 )
 bb_cut = CutDefinition(
-    start=(-1.5, HOUSE_DEPTH/2),
-    end=(HOUSE_WIDTH+1.5, HOUSE_DEPTH/2),
+    start=(-1.5, HOUSE_DEPTH/2-0.2),
+    end=(HOUSE_WIDTH+1.5, HOUSE_DEPTH/2-0.2),
     identifier="B", direction=-1,  # Look towards -Y.
 )
 
@@ -809,9 +809,9 @@ bathroom_water_heater = ground.furniture(
 )
 basement_water_meter = basement.furniture(
     "Vodo-\nměr", kind="USERDEFINED",
-    size=(0.6, 0.55, 0.9),
+    size=(0.6, 0.55, 0.4),
     center=(bathroom_services_center_x, BWT+0.7),
-    start_height=BASEMENT_FLOOR_THICKNESS,
+    start_height=BASEMENT_FLOOR_THICKNESS + 0.8,
     color="#ffffff",
 )
 
@@ -2837,6 +2837,7 @@ def add_house_section(cut, name, pdf):
         storeys=None, doors_closed=True,
         door_annotations=False, automatic_plan_annotations=False,
         right_panel_width=60, section_outline_width=SECTION_OUTLINE_WIDTH,
+        hide_projected_ring_beam_seams=True,
     )
     # Batting is drawing-only. Add it only where this section crosses an
     # exterior wall, and let the wall helper leave gaps at openings.
@@ -2865,6 +2866,8 @@ def add_house_section(cut, name, pdf):
         )
     add_perimeter_insulation(drawing)
     if name == "bb":
+        for furniture in (kamna, kitchen_cooker, upper_washing_machine, basement_water_meter):
+            drawing.add_furniture_label(furniture)
         add_bb_roof_batting(drawing)
         drawing.add_dimension(
             start=(roof_ridge_x, UPPER_FINISHED_FLOOR_HEIGHT),
@@ -2872,7 +2875,7 @@ def add_house_section(cut, name, pdf):
             name="Upper finished floor to horizontal plasterboard underside",
         )
         for x, y, offset, label in (
-            (*stair_arrival_west_corner, .3, "Lowest ceiling clearance at west edge of upper stair exit"),
+            (*stair_arrival_west_corner, 0.0, "Lowest ceiling clearance at west edge of upper stair exit"),
             (BWT, HOUSE_DEPTH/2, -.4, "Lowest ceiling clearance at east wall"),
         ):
             ceiling_z = min(

@@ -1039,6 +1039,13 @@ and longitudinal bars at existing openings intersecting that level. Walls
 wholly above or below the band are skipped. Call after wall joins and openings;
 the original wall heights and roof clipping planes are preserved. Without
 `replace_wall_band`, the helper retains its existing wall-capping behaviour.
+For section elevations, `hide_projected_ring_beam_seams=True` on
+`house.add_drawing()` removes shared level strokes between an inserted beam
+and its source wall. Cut geometry, reinforcement, fills, jambs and exterior
+silhouettes remain intact. This uses the `BBIM_RingBeam` source-wall link and
+`ReplacesWallBand` flag; it does not infer joins between unrelated elements.
+House 2 enables it for AA and BB only. Plans and exterior views keep the
+default `False`.
 In `house_ifc.py`, `UPPER_RING_BEAM_HEIGHT` controls the additional concrete band,
 whose top is at `UPPER_FLOOR_START + NADEZDIVKA` on the higher perimeter parts
 and internal load-bearing walls, interrupted at existing openings.
