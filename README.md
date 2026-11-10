@@ -337,7 +337,7 @@ The basement flights keep the same gap and divide the remaining clear
 stairwell width equally (978.75 mm each with the current basement walls).
 Both flights are concrete with 150 mm
 sloped waists; there is no general floor build-up in the stairway room.
-Both floor plans show a dashed entrance-clearance curve beyond the flights:
+The ground-floor plan shows a dashed entrance-clearance curve beyond the flights:
 two quarter circles of radius `STAIR_FLIGHT_WIDTH`, centred on the inner
 flight corners, joined by a straight segment across `STAIR_FLIGHT_GAP`.
 This is a drawing annotation only.
