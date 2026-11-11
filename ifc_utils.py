@@ -47,6 +47,7 @@ import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.representation
+import ifcopenshell.util.selector
 import ifcopenshell.util.type
 from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
@@ -1100,8 +1101,15 @@ def _postprocess_ring_beam_stirrups(
     geometry_settings.set(geometry_settings.USE_WORLD_COORDS, True)
     stirrups: list[tuple[str, float, list[tuple[float, float]]]] = []
     reinforcement_global_ids: set[str] = set()
+    drawing_properties = ifcopenshell.util.element.get_pset(drawing, "EPset_Drawing") or {}
+    include_query = drawing_properties.get("Include")
+    included = ifcopenshell.util.selector.filter_elements(model, include_query) if include_query else None
+    exclude_query = drawing_properties.get("Exclude")
+    excluded = ifcopenshell.util.selector.filter_elements(model, exclude_query) if exclude_query else set()
 
     for ring_beam in model.by_type("IfcBeam"):
+        if ring_beam in excluded or (included is not None and ring_beam not in included):
+            continue
         properties = ifcopenshell.util.element.get_pset(
             ring_beam, "BBIM_RingBeam"
         )
@@ -1443,6 +1451,11 @@ def _postprocess_elevation_opening_overlays(
     polygons: list[tuple[str, str, list[tuple[float, float]]]] = []
     tolerance = 1e-7
     face_on_dot_tolerance = sin(radians(5))
+    drawing_properties = ifcopenshell.util.element.get_pset(drawing, "EPset_Drawing") or {}
+    include_query = drawing_properties.get("Include")
+    included = ifcopenshell.util.selector.filter_elements(model, include_query) if include_query else None
+    exclude_query = drawing_properties.get("Exclude")
+    excluded = ifcopenshell.util.selector.filter_elements(model, exclude_query) if exclude_query else set()
 
     for opening in model.by_type("IfcOpeningElement"):
         void_relationships = list(opening.VoidsElements or ())
@@ -1450,6 +1463,8 @@ def _postprocess_elevation_opening_overlays(
             continue
         wall = void_relationships[0].RelatingBuildingElement
         if not wall.is_a("IfcWall"):
+            continue
+        if wall in excluded or (included is not None and wall not in included):
             continue
         wall_is_face_on = face_on_walls.get(wall.id())
         if wall_is_face_on is None:
@@ -2160,7 +2175,7 @@ def _join_dashed_drawing_lines(svg: str) -> str:
     def line_attributes(tag):
         attributes = dict(re.findall(r'([\w:-]+)="([^"]*)"', tag))
         classes = attributes.get("class", "").split()
-        if "drawing-line" not in classes or "dashed" not in classes:
+        if "drawing-line" not in classes or not {"dashed", "dash-dot"}.intersection(classes):
             return attributes, None
         return attributes, next((token for token in classes if token.startswith("GlobalId-")), None)
 
@@ -5486,7 +5501,7 @@ def _color(value: str, argument: str) -> tuple[float, float, float]:
 
 def _drawing_line_appearance(style: str, color: str) -> tuple[str, str, str]:
     """Return validated style, normalized color and shared native/legend CSS classes."""
-    style = _enum(style, "style", {"SOLID", "DASHED", "DASHED-ARROWS"}).lower()
+    style = _enum(style, "style", {"SOLID", "DASHED", "DASH-DOT", "DASHED-ARROWS"}).lower()
     rgb = _color(color, "color")
     color = "#" + "".join(f"{round(channel * 255):02x}" for channel in rgb)
     classes = f"drawing-line {style} drawing-line-color-{color[1:]}"
@@ -9952,7 +9967,7 @@ class Drawing:
         returned by add_wall_outlines(). Samples reuse the annotation's CSS
         classes, including its dash style and thickness. All annotations must
         belong to this drawing. For legend-only samples, supply a dict with
-        description, style (solid/dashed/dashed-arrows), color (default black)
+        description, style (solid/dashed/dash-dot/dashed-arrows), color (default black)
         and optional line_width in printed millimetres, instead of an
         annotation pair. Tables stack in call order and persist in IFC.
         """
@@ -11474,7 +11489,7 @@ class Drawing:
         start: Point,
         end: Point,
         *,
-        style: Literal["solid", "dashed", "dashed-arrows"] = "solid",
+        style: Literal["solid", "dashed", "dash-dot", "dashed-arrows"] = "solid",
         color: str = "black",
         line_width: Number = 0.1,
         name: str | None = None,
@@ -11542,7 +11557,7 @@ class Drawing:
         self,
         points: Sequence[Point],
         *,
-        style: Literal["solid", "dashed", "dashed-arrows"] = "solid",
+        style: Literal["solid", "dashed", "dash-dot", "dashed-arrows"] = "solid",
         color: str = "black",
         line_width: Number = 0.1,
         arrow_end: bool = False,

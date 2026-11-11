@@ -13990,6 +13990,24 @@ class HouseTests(unittest.TestCase):
             self.assertIn('ifc:name="Hall &amp; &quot;door&quot; opening"', svg)
             self.assertIn('points="20,45 30,45 30,25 20,25"', svg)
 
+            # A framing-only section must not acquire masks from hidden storeys.
+            for included in (False, True):
+                scoped = house.add_drawing(
+                    f"Scoped section {included}", x=2, y=0, z=1.5, radius=3,
+                    view="elevation", direction=(0, 1, 0), storeys=[],
+                )
+                if included:
+                    scoped.include_element(wall)
+                else:
+                    scoped.exclude_element(wall)
+                svg_path.write_text(
+                    '<svg data-scale="1:100" viewBox="0 0 60 60" '
+                    'xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>',
+                    encoding="utf-8",
+                )
+                _postprocess_elevation_opening_overlays(svg_path, house.model, scoped.element)
+                self.assertEqual('class="section-opening-mask"' in svg_path.read_text(), included)
+
     def test_does_not_mask_openings_in_projected_walls(self) -> None:
         house = House("Projected openings")
         storey = house.storey("Ground", elevation=0)
@@ -15767,6 +15785,22 @@ class HouseTests(unittest.TestCase):
                 1,
             )
         self.assertNotIn('href="#projected"', svg)
+
+        # Drawing-only roof views must not acquire reinforcement from beams
+        # outside their selected scope, or from explicitly excluded beams.
+        for exclude in (False, True):
+            scoped = house.add_drawing(
+                f"Scoped ring beam {exclude}", x=2, y=.12, z=2.905, radius=4,
+                view="elevation", direction=(-1, 0, 0), storeys=[],
+            )
+            if exclude:
+                scoped.include_element(ring_beam)
+                scoped.exclude_element(ring_beam)
+            with TemporaryDirectory() as directory:
+                path = Path(directory)/"scoped.svg"
+                path.write_text('<svg data-scale="1:100" viewBox="0 0 100 100"></svg>')
+                _postprocess_ring_beam_stirrups(path, house.model, scoped.element)
+                self.assertNotIn('ring-beam-stirrup', path.read_text())
 
     def test_ring_beam_band_replaces_masonry_and_splits_at_openings(self) -> None:
         house = House("Ring beam band")

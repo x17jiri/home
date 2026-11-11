@@ -43,6 +43,7 @@ a:hover { cursor: pointer; }
 .IfcGeographicElement { fill: none; stroke: black; stroke-linecap: round; stroke-width: 1; }
 .PredefinedType-LINEWORK { stroke: black; stroke-width: 0.25; }
 .PredefinedType-LINEWORK.dashed { stroke-dasharray: 3, 2; }
+.PredefinedType-LINEWORK.drawing-line.dash-dot { stroke-dasharray: 3, 1.5, 0.15, 1.5 !important; }
 .PredefinedType-LINEWORK.stair.dashed,
 .PredefinedType-LINEWORK.stair-landing.dashed {
     stroke-width: 0.08;

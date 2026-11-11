@@ -711,6 +711,34 @@ for all timber-post footprints to the same plans. These follow the actual
 post positions and section size; set the flag to `False` to hide them.
 Run `python3 house2.py roof` for the roof framing plan (`projekt2/roof.svg`)
 and `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.4. Krov.pdf`.
+The roof PDF is an A3 portrait sheet: the framing plan with its schedule above
+and sections XX and YY below, all at 1:100. `roof_xx_cut` is fixed at `Y = 4.00 m`,
+looking toward −Y; it does not depend on BB's position. `roof_yy_cut` runs along
+the ridge at `X = HOUSE_WIDTH/2`, looking toward +X, perpendicular to XX.
+Their X/Y markers appear only in the roof plan. Both sections use
+`add_roof_framing_section()` and share `roof_framing_elements` and
+`roof_timber_schedule_rows` with the plan; the schedule is printed once. Edit the normalized
+centres in the `roof_sheet.add(...)` calls to adjust the sheet layout.
+XX dimensions show purlin centre spacing, finished rafter and collar-tie lengths,
+and three rafter segments between the eave, wall-plate bearing, purlin bearing
+and ridge. The bearing points are the supports' outer top corners. Finished tips
+are measured from the clipped solids and projected along the rafter axis, so
+the segments add up to the finished length used in the timber schedule.
+The total rafter dimension and segment chain share the west slope, with the
+total farther outward. YY dimensions the finished length of a longitudinal
+brace under a purlin. Both cuts use the same projected wall/ring-beam seam
+cleanup as AA and BB. `PURLIN_CONNECTION_BEAM_SIZE = (0.16, 0.16)` sets the
+connecting beams; `PURLIN_BRACE_SIZE = (0.12, 0.12)` sets all purlin braces.
+`PURLIN_CONNECTION_BRACE_DROP = 0.60` sets the connector brace anchor below the
+connector underside; `PURLIN_BRACE_DROP = 0.80` sets the purlin brace anchor
+below the purlin underside (post top). XX dimensions the connector drop from
+the connector underside; YY dimensions the purlin drop from the purlin underside.
+Both brace types retain their 45° slope.
+`ROOF_TIMBER_MATERIAL` supplies C22 for every row of the shared roof schedule.
+AA adds two uninterrupted 200 mm drawing-only batting bands: through the cut
+rafters and above the horizontal vapour barrier. Both extend to the outer
+faces of the façade insulation and overlay the timber. AA's façade batting
+continues up to the underside of the upper band to close the insulation outline.
 `COLLAR_TIE_SIZE = (0.05, 0.15)` sets paired collar ties, one on each side
 of every rafter pair. Their bottom is at the purlin top; their ends are cut
 by the upper rafter-face planes. They belong to the upper-floor storey and
@@ -720,7 +748,11 @@ currently crosses the chimney.
 It includes only the structural timber, exterior wall context and chimney,
 with real material fills, rafter spacings, support centre distances and an
 automatically measured timber schedule. Roof covering and interior finishes
-are excluded from this framing view. Use `ground ceiling upper roof` to
+and gutters are excluded from this framing view. Timber uses solid colours
+without hatching: wall plates and collar ties `#f4d35e`, purlins `#f4a261`,
+rafters bright yellow `#ffeb3b`, and posts, connecting beams and braces light
+green `#c8e6c9`. The schedule uses the same colours. Gutters remain in the 3D
+model and exterior views. Use `ground ceiling upper roof` to
 generate all four drawing targets in one run.
 Run `python3 house2.py upper` to create `projekt2/upper.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.3. Půdorys podkroví.pdf`.

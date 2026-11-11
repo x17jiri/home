@@ -20,6 +20,7 @@ from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
 from ifc_utils import CutDefinition, DrawingSheet, House, offset_plane, plane_height_at, window_area
+from materials import resolve_timber_grade
 from pdf_utils import PDFFolder
 
 
@@ -147,6 +148,7 @@ WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.2
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
 PURLIN_SIZE = (0.17, 0.25)
+ROOF_TIMBER_MATERIAL = resolve_timber_grade("c22").name
 PURLIN_WALL_DISTANCE = 2.93
 PURLIN_X_POSITIONS = (
 	BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0,
@@ -162,15 +164,16 @@ PURLIN_SUPPORT_Y_POSITIONS = (
     (BWT+2.52, BWT+2.52+3),  # Purlin 2, at PURLIN_X_POSITIONS[1].
     (BWT+2.52, BWT+2.52+3),  # Purlin 2, at PURLIN_X_POSITIONS[1].
 )
-PURLIN_CONNECTION_BEAM_SIZE = (0.12, 0.20)  # Width along Y, height along Z.
+PURLIN_CONNECTION_BEAM_SIZE = (0.16, 0.16)  # Width along Y, height along Z.
 PURLIN_CONNECTION_WALL_CLEARANCE = 0.10  # Clear gap from each gable wall's inner face.
 PURLIN_CONNECTION_Y_POSITIONS = (
     *sorted({y for positions in PURLIN_SUPPORT_Y_POSITIONS for y in positions}),
     BWT+PURLIN_CONNECTION_WALL_CLEARANCE+PURLIN_CONNECTION_BEAM_SIZE[0]/2,
     HOUSE_DEPTH-BWT-PURLIN_CONNECTION_WALL_CLEARANCE-PURLIN_CONNECTION_BEAM_SIZE[0]/2,
 )
-PURLIN_BRACE_SIZE = (0.10, 0.12)
+PURLIN_BRACE_SIZE = (0.12, 0.12)
 PURLIN_BRACE_DROP = 0.80  # Brace anchor below the post top; braces rise at 45 degrees.
+PURLIN_CONNECTION_BRACE_DROP = 0.60  # Anchor drop below the connector underside.
 RAFTER_THICKNESS = 0.08
 RAFTER_HEIGHT = 0.20
 RAFTER_SIZE = (RAFTER_THICKNESS, RAFTER_HEIGHT)
@@ -315,17 +318,17 @@ HYDROIZOLACE_LINE_WIDTH = 0.4  # Printed millimetres; drawing-only waterproofing
 RAFTERS_MIDPOINT = CHIMNEY_CENTER[1]-0.04
 4.79
 RAFTER_Y_POSITIONS = (
-	-0.125
-	-0.125+1.00,
-	-0.125+1.00+1.00,
-	-3.72,
-	+4.39,
-	-0.125+1.00+1.00+1.00+0.67+1.00, # komin
-	-0.125+1.00+1.00+1.00+0.67+1.00+0.67,
-	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91,
-	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91+1.00,
-	-0.125+1.00+1.00+1.00+0.67+1.00+0.67+0.91+1.00+1.00,
-	9.125
+	-0.12,
+	4.29-0.67-2.75,
+	4.29-0.67-1.75,
+	4.29-0.67-1.0,
+	4.29-0.67,
+	4.29,
+	5.29,
+	5.29+0.84,
+	5.29+0.84+1.0,
+	5.29+0.84+2.0,
+	9.12
 )
 found_chimney_space = False
 for i in range(1, len(RAFTER_Y_POSITIONS)):
@@ -346,9 +349,19 @@ aa_cut = CutDefinition(
     identifier="A", direction=-1,  # Look towards +X.
 )
 bb_cut = CutDefinition(
-    start=(-1.5, HOUSE_DEPTH/2-0.2),
-    end=(HOUSE_WIDTH+1.5, HOUSE_DEPTH/2-0.2),
+    start=(-2.5, HOUSE_DEPTH/2-0.2),
+    end=(HOUSE_WIDTH+2.5, HOUSE_DEPTH/2-0.2),
     identifier="B", direction=-1,  # Look towards -Y.
+)
+roof_xx_cut = CutDefinition(
+    start=(-2, 4.0),
+    end=(HOUSE_WIDTH+1, 4.0),
+    identifier="X", direction=-1,  # Fixed Y; independent of BB. Look towards -Y.
+)
+roof_yy_cut = CutDefinition(
+    start=(HOUSE_WIDTH/2, -1.3),
+    end=(HOUSE_WIDTH/2, HOUSE_DEPTH+1),
+    identifier="Y", direction=-1,  # Along the ridge; look towards +X.
 )
 
 
@@ -1295,14 +1308,19 @@ def add_purlin_support_brace(name, start, end, post_face_cut):
 
 if not math.isfinite(PURLIN_BRACE_DROP) or PURLIN_BRACE_DROP <= 0:
     raise ValueError("PURLIN_BRACE_DROP must be positive and finite")
+if not math.isfinite(PURLIN_CONNECTION_BRACE_DROP) or PURLIN_CONNECTION_BRACE_DROP <= 0:
+    raise ValueError("PURLIN_CONNECTION_BRACE_DROP must be positive and finite")
 brace_anchor_z = purlin_support_top_z-PURLIN_BRACE_DROP
+connection_brace_anchor_z = purlin_connection_bottom_z-PURLIN_CONNECTION_BRACE_DROP
 if brace_anchor_z-PURLIN_BRACE_SIZE[1] <= UPPER_FINISHED_FLOOR_HEIGHT:
     raise ValueError("purlin braces must start above the finished upper floor")
-connection_brace_rise = purlin_connection_bottom_z-brace_anchor_z
+if connection_brace_anchor_z-PURLIN_BRACE_SIZE[1] <= UPPER_FINISHED_FLOOR_HEIGHT:
+    raise ValueError("connection-beam braces must start above the finished upper floor")
+connection_brace_rise = purlin_connection_bottom_z-connection_brace_anchor_z
 if connection_brace_rise <= 0:
     raise ValueError("connection-beam underside must be above the brace anchors")
 if 2*connection_brace_rise >= support_west_x-support_east_x-PURLIN_SUPPORT_SIZE[0]:
-    raise ValueError("purlin connection-beam braces would overlap; reduce PURLIN_BRACE_DROP")
+    raise ValueError("purlin connection-beam braces would overlap; reduce PURLIN_CONNECTION_BRACE_DROP")
 purlin_y_braces = []
 purlin_x_braces = []
 for purlin_index, (x, positions) in enumerate(zip(PURLIN_X_POSITIONS, PURLIN_SUPPORT_Y_POSITIONS), 1):
@@ -1323,7 +1341,7 @@ for purlin_index, (x, positions) in enumerate(zip(PURLIN_X_POSITIONS, PURLIN_SUP
         post_face_x = x+sign*PURLIN_SUPPORT_SIZE[0]/2
         purlin_x_braces.append(add_purlin_support_brace(
             f"Tesařský pásek {purlin_index}.{support_index} - příčný trám",
-            (post_face_x, y, brace_anchor_z),
+            (post_face_x, y, connection_brace_anchor_z),
             (post_face_x+sign*connection_brace_rise, y, purlin_connection_bottom_z),
             ((post_face_x, 0, 0), (post_face_x, 1, 0), (post_face_x, 0, 1)),
         ))
@@ -2901,6 +2919,99 @@ if "upper" in sys.argv:
     add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "upper.svg", pdf=PDF_UPPER)
 
+def roof_member_axial_ends(beam, reference, *, horizontal_axis=0):
+    """Project finished timber tips onto a reference line in XZ or YZ."""
+    settings = ifcopenshell.geom.settings()
+    settings.set(settings.USE_WORLD_COORDS, True)
+    shape = ifcopenshell.geom.create_shape(settings, beam)
+    vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+    axes = (horizontal_axis, 2)
+    used = vertices[np.unique(np.asarray(shape.geometry.faces, dtype=int))][:, axes]
+    axis = np.asarray(beam.end)[list(axes)]-np.asarray(beam.start)[list(axes)]
+    axis = axis/np.linalg.norm(axis)
+    reference = np.asarray(reference)
+    stations = (used-reference) @ axis
+    return tuple(tuple(float(v) for v in reference+axis*station)
+                 for station in (stations.min(), stations.max()))
+
+
+def add_roof_framing_dimensions(drawing, *, rafter_index):
+    """Dimension finished timber extents and bearing stations in a roof section.
+
+    Project the clipped rafter tips onto the support-contact line: all three
+    segments then use the same longitudinal stations as the procurement length.
+    Bearing stations are the supports' outer top corners. The ridge station
+    is the actual longest timber tip, including the oblique ridge end cut.
+    """
+    axial_ends = roof_member_axial_ends
+    _, west_rafter = rafter_pairs[rafter_index]
+    wall_seat = (west_contact_x, wall_plate_top_z)
+    purlin_seat = (PURLIN_X_POSITIONS[1]+PURLIN_SIZE[0]/2, purlin_top_z)
+    eave, ridge = axial_ends(west_rafter, wall_seat)
+    for start, end, name in (
+        (eave, wall_seat, "rafter eave to wall plate"),
+        (wall_seat, purlin_seat, "rafter wall plate to purlin"),
+        (purlin_seat, ridge, "rafter purlin to ridge"),
+    ):
+        drawing.add_dimension(start, end, offset=-.55, name=f"{drawing.name} {name}")
+    drawing.add_dimension(
+        eave, ridge, offset=-1.15, name=f"{drawing.name} rafter total finished length",
+    )
+    drawing.add_dimension(
+        (PURLIN_X_POSITIONS[0], PURLIN_Z), (PURLIN_X_POSITIONS[1], PURLIN_Z),
+        offset=+0.35, name=f"{drawing.name} purlin centre distance",
+    )
+    tie = collar_ties[2*rafter_index+1]
+    tie_start, tie_end = axial_ends(tie, (tie.start[0], tie.start[2]-tie.height/2))
+    drawing.add_dimension(
+        tie_start, tie_end, offset=2.3, name=f"{drawing.name} collar tie total finished length",
+    )
+    supports = (post for post in purlin_supports
+         if math.isclose(post.start[0], PURLIN_X_POSITIONS[0]) and post.start[1] < drawing.y)
+    support = max(
+        supports,
+        key=lambda post: post.start[1],
+    )
+    supports = (post for post in purlin_supports
+         if math.isclose(post.start[0], PURLIN_X_POSITIONS[1]) and post.start[1] < drawing.y)
+    other_support = max(
+        supports,
+        key=lambda post: post.start[1],
+    )
+    support_start, support_end = axial_ends(support, (support.start[0], support.start[2]))
+    drawing.add_dimension(
+        support_start, support_end, offset=.5, name=f"{drawing.name} support height",
+    )
+    brace = min(
+        (beam for beam in purlin_x_braces if math.isclose(beam.start[1], support.start[1])),
+        key=lambda beam: abs(beam.start[0]-support.start[0]),
+    )
+    brace_start, brace_end = axial_ends(brace, (brace.start[0], brace.start[2]))
+    drawing.add_dimension(
+        brace_start, brace_end, offset=-.5, name=f"{drawing.name} brace finished length",
+    )
+    drawing.add_dimension(
+        (other_support.start[0], connection_brace_anchor_z),
+        (other_support.start[0], purlin_connection_bottom_z), offset=1.0,
+        name=f"{drawing.name} connector brace drop",
+    )
+
+
+def add_roof_framing_section(name, cut, *, framing_elements, schedule_rows):
+    """Create a framing-only section with the shared roof palette and context."""
+    drawing = cut.add_drawing(
+        house, name, z=(UPPER_FLOOR_START+roof_tiles_top_z)/2+0.5,
+        radius=7, storeys=[], door_annotations=False, automatic_plan_annotations=False,
+        model_line_width=0.06, right_panel_width=65,
+        hide_projected_ring_beam_seams=True,
+    )
+    for element in framing_elements:
+        drawing.include_element(element)
+    # Keep the colour definitions even when the sheet hides this view's table.
+    drawing.add_timber_schedule(schedule_rows)
+    return drawing
+
+
 if "roof" in sys.argv:
     drawing1 = house.add_drawing(
         "roof",
@@ -2911,7 +3022,7 @@ if "roof" in sys.argv:
         storeys=[],
         door_annotations=False,
         automatic_plan_annotations=False,
-        projected_wood_color="#f4d35e",
+        projected_wood_color="#c8e6c9",
         surface_fills=True,
         model_line_width=0.06,
         right_panel_width=65,
@@ -2919,11 +3030,18 @@ if "roof" in sys.argv:
         section_outline_projected_walls=True,
     )
     roof_rafters = tuple(member for pair in rafter_pairs for member in pair)
-    for element in (*upper_exterior_walls, *upper_ring_beams, wall_plate_east, wall_plate_west, *purlins,
-                    *purlin_connection_beams, *purlin_supports, *purlin_braces,
-                    *roof_rafters, *collar_ties, *roof_gutters):
+    roof_framing_elements = (
+        *upper_exterior_walls, *upper_ring_beams, wall_plate_east, wall_plate_west, *purlins,
+        *purlin_connection_beams, *purlin_supports, *purlin_braces, *roof_rafters, *collar_ties,
+    )
+    for element in roof_framing_elements:
         drawing1.include_element(element)
     drawing1.add_chimney_annotation(chimney)
+    for index, y in enumerate(RAFTER_Y_POSITIONS, 1):
+        drawing1.add_line(
+            (east_eave_x-.15, y), (west_eave_x+.15, y),
+            style="dash-dot", line_width=.08, name=f"Rafter centreline {index}",
+        )
     for index, (start_y, end_y) in enumerate(zip(RAFTER_Y_POSITIONS, RAFTER_Y_POSITIONS[1:]), 1):
         drawing1.add_dimension(
             start=(east_eave_x, start_y), end=(east_eave_x, end_y), offset=0.65,
@@ -2932,27 +3050,99 @@ if "roof" in sys.argv:
     support_x_positions = (BWT/2, *PURLIN_X_POSITIONS, HOUSE_WIDTH-BWT/2)
     for index, (start_x, end_x) in enumerate(zip(support_x_positions, support_x_positions[1:]), 1):
         drawing1.add_dimension(
-            start=(start_x, -WALL_PLATE_OVERHANG), end=(end_x, -WALL_PLATE_OVERHANG), offset=-0.2,
+            start=(start_x, -WALL_PLATE_OVERHANG), end=(end_x, -WALL_PLATE_OVERHANG), offset=-0.5,
             name=f"Roof support centre distance {index}",
         )
-    drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-1.0)
+    drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-2.0)
     drawing1.add_dimension(
-        start=(HOUSE_WIDTH+ROOF_EAVE_OVERHANG+0.7, 0),
-        end=(HOUSE_WIDTH+ROOF_EAVE_OVERHANG+0.7, HOUSE_DEPTH),
+        start=(HOUSE_WIDTH, 0),
+        end=(HOUSE_WIDTH, HOUSE_DEPTH),
+		offset=-1.0
     )
-    drawing1.add_timber_schedule([
+    roof_timber_schedule_rows = [
         ("Pozednice", (wall_plate_east, wall_plate_west), 0,
-         {"color": "#f4d35e", "pattern": "brick-opposite"}),
-        ("Vaznice", purlins, 0, {"color": "#f4a261", "pattern": "brick"}),
-        ("Sloupky pod vaznice", purlin_supports, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
-        ("Spojovací trámy", purlin_connection_beams, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
-        ("Pásky pod vaznice", purlin_y_braces, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
-        ("Pásky pod spojovací trámy", purlin_x_braces, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
-        ("Krokve", roof_rafters, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
-        ("Kleštiny", collar_ties, 0, {"color": "#f4d35e", "pattern": "diagonal1"}),
-    ])
-    add_house_cut_symbols(drawing1)
-    drawing1.render(PROJECT_DIR / "roof.svg", pdf=PDF_ROOF)
+         {"color": "#f4d35e"}),
+        ("Vaznice", purlins, 0, {"color": "#f4a261"}),
+        ("Sloupky pod vaznice", purlin_supports, 0, {"color": "#c8e6c9"}),
+        ("Spojovací trámy", purlin_connection_beams, 0, {"color": "#c8e6c9"}),
+        ("Pásky pod vaznice", purlin_y_braces, 0, {"color": "#c8e6c9"}),
+        ("Pásky pod spojovací trámy", purlin_x_braces, 0, {"color": "#c8e6c9"}),
+        ("Krokve", roof_rafters, 0, {"color": "#ffeb3b"}),
+        ("Kleštiny", collar_ties, 0, {"color": "#f4d35e"}),
+    ]
+    roof_timber_schedule_rows = [
+        (name, members, extra_length, {**settings, "material": ROOF_TIMBER_MATERIAL})
+        for name, members, extra_length, settings in roof_timber_schedule_rows
+    ]
+    drawing1.add_timber_schedule(roof_timber_schedule_rows)
+    #add_house_cut_symbols(drawing1)
+    roof_xx_cut.add_symbol(drawing1)
+    roof_yy_cut.add_symbol(drawing1)
+    roof_plan = drawing1
+    roof_xx = add_roof_framing_section(
+        "roof_xx", roof_xx_cut, framing_elements=roof_framing_elements,
+        schedule_rows=roof_timber_schedule_rows,
+    )
+    roof_yy = add_roof_framing_section(
+        "roof_yy", roof_yy_cut, framing_elements=roof_framing_elements,
+        schedule_rows=roof_timber_schedule_rows,
+    )
+    xx_rafter_index = max(
+        (index for index, y in enumerate(RAFTER_Y_POSITIONS) if y < roof_xx.y),
+        key=lambda index: RAFTER_Y_POSITIONS[index],
+    )
+    add_roof_framing_dimensions(roof_xx, rafter_index=xx_rafter_index)
+    # Dimension a longitudinal brace on the visible purlin, below its front span.
+    yy_purlin_x = min(x for x in PURLIN_X_POSITIONS if x > roof_yy.x)
+    yy_brace = min(
+        (brace for brace in purlin_y_braces if math.isclose(brace.start[0], yy_purlin_x)),
+        key=lambda brace: (brace.start[1], brace.end[1]),
+    )
+    yy_brace_start, yy_brace_end = roof_member_axial_ends(
+        yy_brace, (yy_brace.start[1], yy_brace.start[2]), horizontal_axis=1,
+    )
+    roof_yy.add_dimension(
+        yy_brace_start, yy_brace_end, offset=-.35,
+        name="roof_yy purlin brace finished length",
+    )
+    yy_brace_support = min(
+        (post for post in purlin_supports if math.isclose(post.start[0], yy_purlin_x)),
+        key=lambda post: abs(post.start[1]-yy_brace.start[1]),
+    )
+    roof_yy.add_dimension(
+        (yy_brace_support.start[1], brace_anchor_z),
+        (yy_brace_support.start[1], purlin_support_top_z),
+        offset=0.5, name="roof_yy purlin brace drop",
+    )
+    roof_sheet = DrawingSheet(paper="A3", orientation="portrait")
+    roof_sheet.add(roof_plan, x=0.5, y=0.25, title=PDF_ROOF.stem, crop=False)
+    roof_sheet.add(roof_xx, x=0.5, y=0.65, title="Řez XX", tables=False)
+    roof_sheet.add(roof_yy, x=0.5, y=0.87, title="Řez YY", tables=False)
+    roof_sheet.render(PROJECT_DIR / "roof.svg", pdf=PDF_ROOF)
+
+
+def aa_roof_batting_bands(x):
+    """Return the two horizontal insulation bands at the AA section's X."""
+    plane = roof_east if x <= roof_ridge_x else roof_west
+    rafter_center_z = plane_height_at(
+        *offset_plane(*plane.points, offset=RAFTER_Z_OFFSET+RAFTER_HEIGHT/2), x=x, y=0,
+    )
+    return (
+        ("between-rafter insulation", rafter_center_z, RAFTER_HEIGHT),
+        ("horizontal ceiling insulation", FLAT_VAPOUR_BARRIER_TOP_Z+THERMAL_INSULATION_UNDER_RAFTERS/2,
+         THERMAL_INSULATION_UNDER_RAFTERS),
+    )
+
+
+def add_aa_roof_batting(drawing):
+    """Overlay uninterrupted insulation across the rafters and projected purlins."""
+    for label, center_z, thickness in aa_roof_batting_bands(drawing.x):
+        drawing.add_batting(
+            (drawing.x, -FACADE_INSULATION_THICKNESS, center_z),
+            (drawing.x, HOUSE_DEPTH+FACADE_INSULATION_THICKNESS, center_z),
+            thickness=thickness, name=f"AA {label}",
+            classes="roof-batting roof-batting-overlay",
+        )
 
 
 def add_bb_roof_batting(drawing):
@@ -3126,6 +3316,9 @@ def add_house_section(cut, name, pdf):
                 x=section_x, y=cut.center[1],
             )
             insulation_top = min(upper_wall.storey.elevation+upper_wall.end_height, roof_bottom_z)
+            if name == "aa":
+                _, center_z, thickness = aa_roof_batting_bands(section_x)[0]
+                insulation_top = center_z-thickness/2
         drawing.add_wall_insulation(
             wall, thickness=FACADE_INSULATION_THICKNESS, material="rockwool",
             start_z=PERIMETER_TOP_HEIGHT, end_z=insulation_top, opening_walls=(upper_wall,),
@@ -3133,6 +3326,7 @@ def add_house_section(cut, name, pdf):
     add_perimeter_insulation(drawing)
     waterproofing = add_section_waterproofing(drawing)
     if name == "aa":
+        add_aa_roof_batting(drawing)
         for furniture in (
             kamna, kitchen_cooker, kitchen_sink, kitchen_dishwasher, kitchen_fridge,
             kitchen_counter, kitchen_front_counter, bathroom_shower, basement_water_meter,
