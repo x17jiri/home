@@ -508,6 +508,26 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+/* Wooden partitions: yellow diagonal cuts and vertical board joints in projection. */
+.material-drevenastena {
+    fill: white !important;
+}
+.material-drevenastena.projection {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.10 !important;
+}
+.target-view-ELEVATIONVIEW .material-drevenastena.surface,
+.target-view-SECTIONVIEW .material-drevenastena.surface {
+    fill: url(#railing-boards) !important;
+}
+.cut.material-drevenastena,
+.cut.layer-material-drevenastena {
+    fill: url(#wooden-wall) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
 .cut.layer-material-Polystyrene,
 .cut.material-Polystyrene {
     fill: url(#polystyrene-transparent) !important;

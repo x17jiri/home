@@ -96,17 +96,23 @@ basement-ceiling ring beams. The new walls are centred beneath
 the physical ground-floor wall bodies, accounting for face-based reference
 lines. Their ends extend by half the increase in thickness to fill junctions.
 Ground-floor doors, windows and the Liapor base course are not copied.
-The basement hallway ceiling's front bearing also needs a separate structural
-support after omitting the wall beneath the bathroom/hallway partition;
-this is noted in the basement plan. No replacement support is modelled yet.
+The basement ceilings now follow the actual basement room boundaries rather
+than the ground-floor grid. S.01 and S.02 have separate slabs with beams along
+Y; S.03 has one slab without the former intermediate double beam. S.04 and
+S.05 also use beams along X, bearing on the existing side walls, so the former
+assumed front support is no longer used downstairs.
 
 `BASEMENT_WALL_HEIGHT = 2.25 m` leaves `CEILING_THICKNESS = 0.21 m` above
 the basement walls, immediately below the ground-floor layers at Z = 0.
-That space contains the same five MIAKO layouts as above the ground floor,
-in a separate `Basement ceiling` storey. The layouts reuse the original
-beam positions, lengths, block rows and end offsets without recalculation;
-their bottom is Z = −0.210 m and their top is Z = 0. The same stair opening
-and unresolved beam junctions are retained. With the current settings:
+That space contains five independent MIAKO layouts in a separate `Basement
+ceiling` storey. Each basement layout is fitted to its room's clear wall
+faces using the shared beam/block sizing rules; ground-floor ceiling layouts
+remain independent. `BASEMENT_STAIR_OPENING_LENGTH = 3.0` leaves S.05 open
+for three metres from the inside face of the street wall. Its ceiling starts
+exactly at that boundary, with any layout-width tolerance left at the garden
+edge. The basement ceiling bottom is Z = −0.210 m and its top is Z = 0.
+Details of opposing beam ends on shared walls and the chimney penetration
+are still unresolved. With the current settings:
 
 | Element | Bottom Z | Top Z |
 | --- | ---: | ---: |
@@ -165,15 +171,44 @@ plans. Their PDFs are `D1.1.9. Půdorys suterénu.pdf` (`PDF_BASEMENT`) and
 `D1.1.10. Základy.pdf` (`PDF_FOUND`) in the architectural folder; SVGs are
 `projekt2/basement.svg` and `projekt2/found.svg`. The basement cut passes
 through the middle of the basement walls.
+Run `python3 house2.py basement_ceiling` for the separate basement-ceiling
+plan, `projekt2/basement_ceiling.svg`, and
+`D1.1.13. Strop nad suterénem.pdf` (`PDF_BASEMENT_CEILING`). It includes the
+basement walls, ring beams, perimeter insulation, MIAKO beam dimensions and
+schedule, chimney and AA/BB markers. The existing `ceiling` target remains
+the ceiling above 1.NP. Existing PDF numbers are unchanged.
 The door between S.01 and S.03 is centred on their shared wall segment and
 opens into S.01. It uses the other basement door's 900 mm leaf and 1000 mm
 construction opening, with opening dimensions and a lintel tag in the plan.
+S.05 also has a front-wall door centred on that room, with the same leaf/opening
+widths, finished-floor sill and 250 mm masonry band below the ceiling.
+It opens inward. The water meter remains in S.04, 50 mm from its side wall.
+The exterior heat pump retains its configured position. The street elevation
+shows a drawing-only three-blade fan on its front instead of a text label;
+the basement plan retains the automatic furniture label.
+In the street view, both the garage and S.05 entrance have separate terrain
+pockets lowered to the basement finished floor, following their construction
+openings. Both use the same 300 mm stone side walls up to elevation 416.0 m,
+controlled by `GARAGE_RETAINING_WALL_WIDTH` and `GARAGE_RETAINING_WALL_TOP_ELEVATION`.
+The basement stairs, landing, railings and stair annotations are omitted.
+Their layout coordinates and the existing ceiling opening remain reserved for
+future installation. A continuous 60 mm non-load-bearing wooden wall covers the
+former descending stair entrance and the adjacent 240 mm flight gap, extending
+from the finished floor to the plastered ceiling. `wall_stairwell_wood_g` replaces
+the earlier tall railing and keeps its outer envelope. Its material is
+`drevena stena`: `wooden-wall` cuts use the drywall diagonal hatch over light
+yellow (`#fff2cc`), while projected surfaces use the vertical `railing-boards`
+pattern. The ground and AA/BB legends call it `Dřevěná stěna`.
+The hallway floor reaches the first tread
+of the retained ground-to-upper stairs. The bathroom SDK's hallway face aligns
+with the front edge of the opening in the 175 mm stairway wall; the concrete
+ceiling grid stays fixed independently of this partition movement.
 
 The basement plan labels the five clear rooms `S.01`–`S.05` and includes a
 room legend with areas and a width/depth dimension for every room. Names are
 `Garáž` below room 3, `Schody` below the stairway, and `Skladovací prostor`
 for the remaining rooms. Their boundaries and dimensions follow the actual
-300 mm basement walls; no extra floor layers are added.
+basement walls, with the configured cement floor buildup.
 
 The foundation cut passes through
 the middle of the strip footings, at
@@ -296,7 +331,7 @@ the recess depth follows this position independently of the bathroom partition.
 The floor polygons and dimensions follow the step. Its street window stays
 centred on the wider street-side part.
 The stairs occupy the west/right side, enclosed by a 175 mm VPC wall from
-the front wall to the garden-room wall, with `STAIRWAY_WIDTH = 2.25 m`
+the front wall to the garden-room wall, with `STAIRWAY_WIDTH = 2.24 m`
 clear beside the west exterior wall. The 2.20 m wide bathroom sits to their
 left, next to room 3. A 100 mm SDK partition splits that area into hallway at
 the garden end and bathroom at the front. `BATHROOM_DEPTH` is the
@@ -324,7 +359,7 @@ The 600 × 550 × 900 mm water-meter box is in the basement, at its former
 ground-floor X/Y position and on the basement finished floor. Fixtures start at the
 finished floor, with the basin rim at 850 mm above it.
 The entrance has a 900 mm leaf; `ENTRANCE_OPENING_WIDTH` controls its
-construction opening. `ENTRANCE_OPENING_AT = 3.375 m` measures along the
+construction opening. `ENTRANCE_OPENING_AT = 3.75 m` measures along the
 west wall from its start at Y = `BWT`. Its dimension and inward entrance
 arrow follow that wall. Its threshold and opening dimension use the finished-floor level,
 `GROUND_FLOOR_THICKNESS`, preserving the door's 2.125 m overall height and
@@ -334,7 +369,10 @@ this west door, with the lower end toward the garden. `ENTRANCE_STAIR_RISERS`
 and `ENTRANCE_STAIR_TREAD_LENGTH` control its steps; their rise follows the
 actual door threshold and the west terrain interpolated at the flight's foot.
 `ENTRANCE_STAIR_WIDTH` follows the opening width, and
-`ENTRANCE_LANDING_DEPTH`/`ENTRANCE_LANDING_THICKNESS` set the landing geometry.
+`ENTRANCE_LANDING_LENGTH = 2.0 m` extends the landing from the opening's street
+edge towards the garden; `ENTRANCE_LANDING_DEPTH` keeps its projection from the
+facade, and `ENTRANCE_LANDING_THICKNESS` sets its thickness. The current flight
+has seven risers and six 300 mm treads, with the rise calculated at its new foot.
 The outer railing continues around the landing's street edge. The ground plan
 shows the stair symbols, uphill walking arrow and combined stair notes.
 
@@ -366,16 +404,15 @@ The stairway has two 1.00 m wide flights, each with **eight risers and seven
 treads**, all with 270 mm treads.
 The lower flight runs toward the front wall (−Y); the upper returns toward
 the garden (+Y), with its left edge touching the stairway/bathroom wall.
-The landing is against the front wall and measures 2.25 × 1.05 m.
+The landing is against the front wall and measures 2.24 × 1.05 m.
 Both runs are 1.89 m; the flights are separated by
-`STAIR_FLIGHT_GAP = 0.25 m`; the outside flight touches the west wall.
-The basement flights keep the same gap and divide the remaining clear
-stairwell width equally (978.75 mm each with the current basement walls).
-Both flights are concrete with 150 mm
-sloped waists; there is no general floor build-up in the stairway room.
-The ground-floor plan shows a dashed entrance-clearance curve beyond the flights:
-two quarter circles of radius `STAIR_FLIGHT_WIDTH`, centred on the inner
-flight corners, joined by a straight segment across `STAIR_FLIGHT_GAP`.
+`STAIR_FLIGHT_GAP = 0.24 m`; the outside flight touches the west wall.
+The reserved future basement layout keeps the same gap and divides the remaining
+clear stairwell width equally; these flights are not built in the current model.
+`INTERNAL_STAIR_CONSTRUCTION` controls the retained stairway's construction;
+there is no general floor build-up in the stairway room.
+The ground-floor plan shows one dashed quarter-circle entrance-clearance curve
+of radius `STAIR_FLIGHT_WIDTH`, centred on the ascending flight's inner corner.
 This is a drawing annotation only.
 Both floor plans dimension any clear gap from the stairway's west edge to
 the inside west wall. The terminal prints the plasterboard inner-face
@@ -430,22 +467,25 @@ parameters the rise is 2.945 m (184.0625 mm per riser), the middle landing
 is at Z = 1.6575 m and the upper finished level at Z = 3.130 m. The drawing
 shows both flights, one continuous ascent arrow, and a stair configuration note.
 `INTERNAL_STAIR_CONSTRUCTION = "timber"` selects open-riser wooden treads
-and side stringers for both internal stairways, with wooden middle landings.
+and side stringers for the ground-to-upper stairway, with a wooden middle landing.
 Set it to `"monolithic"` to restore the sloped concrete flights and landings.
-Wooden banisters run along the inner edges of both flights, also on the
-basement stairway. Each `railing_path("right", inset=STAIR_RAILING_INSET)`
+Wooden banisters run along the inner edges of both retained flights.
+Each `railing_path("right", inset=STAIR_RAILING_INSET)`
 sets the slope and seats posts and balusters on the actual treads. The shared
 `STAIR_RAILING_INSET` controls the centreline inset onto each flight.
 `STAIR_RAILING_HEIGHT = 1.0` controls the vertical handrail height.
-Horizontal railings close the 250 mm flight gap at both middle landings
-and between the ascending and descending flights at ground-floor level.
-Another guards the 1.25 m edge from the upper stair arrival to the west wall.
+The middle landing has a normal-height railing across the 240 mm flight gap.
+At ground-floor level, `wall_stairwell_wood_g` continues across the former
+stair entrance and reaches the plastered ceiling (2.625 m above finished floor).
+Another guards the 1.24 m edge from the upper stair arrival to the west wall.
 The ground-floor railings are explicitly included in the
 upper-floor plan; it is visible in both floor drawings and the 3D model.
 The living-room layout is retained. The relocated stairs are to its right
 and no longer overlap its floor. The technical room occupies the space
 between the stairs and the living-room wall, with the hallway beyond the
 stair arrival.
+The living-room door follows the stair-exit centre while keeping its opening
+inside the drywall segment, clear of the adjoining VPC return.
 
 Pokoj 1 and 2 have 1.75 m windows centred on their back-wall segments, with
 the opening starts rounded to the nearest 0.125 m along the wall. Pokoj 3 has
@@ -687,9 +727,11 @@ front/back tile extents; `ROOF_EAVE_SETBACK = 0.02` leaves the same 20 mm
 setback beneath the tiles for boards and battens. Each new layer type has
 its own `Roof - …` visibility storey, including both roof slopes.
 The chimney starts at the top of the foundation slab (`BASEMENT_FLOOR_START`), centred at
-`CHIMNEY_CENTER`. Its back face touches the stair-facing surface of the
-horizontal living-room wall, at `LIVING_ROOM_WALL_FRONT_Y`; its body is on
-the stairs side. The vertical SDK wall stops at the chimney's front face,
+`CHIMNEY_CENTER`. Its Y coordinate is calculated from the street face of the
+basement garden-room wall, leaving `CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.05 m`
+between that wall and the chimney's garden face. The wall face accounts for
+the basement wall's greater thickness, centred beneath the divider above.
+The vertical SDK wall stops at the chimney's front face,
 and the kitchen follows the shortened wall. There is no chimney-to-stair
 clearance parameter or dimension. It reuses the original model's
 400 mm square body, 200 mm circular flue and material/colour. Its top is

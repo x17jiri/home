@@ -18,6 +18,11 @@
     <rect width="1" height="1" fill="#dfefcf" />
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.25" />
 </pattern>
+<!-- The drywall hatch geometry, with a light-yellow background for wooden walls. -->
+<pattern id="wooden-wall" width="1" height="1" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+    <rect width="1" height="1" fill="#fff2cc" />
+    <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.25" />
+</pattern>
 <pattern id="diagonal2" width="2" height="2" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
     <rect width="2" height="2" fill="white" />
     <line x1="0" y1="0" x2="0" y2="2" style="stroke:black; stroke-width:0.25" />
