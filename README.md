@@ -481,6 +481,20 @@ per-floor layout function. Steel reinforcement beneath the purlin posts and
 the bearing details remain for the following design steps; the ground-floor
 walls are thinner than their basement counterparts. `CEILING_ROOM3_SPLIT_Y`
 now remains only as the old bathroom reference used by upstairs fixtures.
+`ceiling_hallway_beam` is a separate strip of two adjacent long MIAKO beams
+across Pokoj 3 and the hallway. `HALLWAY_MIAKO_BEAM_COUNT = 2` controls their
+number; `HALLWAY_MIAKO_BEAM_LENGTH` controls their common length. Both start
+at X = 0.110 m for 130 mm bearing in the east wall. The first beam occupies
+Y = 5.025–5.195 m, overlapping the garden-room wall by 40 mm; the second is
+directly beside it towards the street, at Y = 4.855–5.025 m. They have the
+same ceramic shells, reinforcement and concrete ribs as the other beams,
+without block rows. Both ceiling plans and schedules include both beams.
+The Pokoj 3 ceiling's first beam sits directly against the streetmost long
+beam: 170 mm centre-to-centre, with no gap or overlap. The hallway/bathroom
+ceiling leaves 455 mm clear for a wide block, or 625 mm between beam centres.
+Their starting Y coordinates follow `hallway_miako_beam_y` and the long-beam count, with their spans
+and editable `structure` lists retained. Both plans dimension these two centre
+distances through `add_hallway_beam_spacing_dimensions()`.
 
 `design_miako_structure()` starts and ends each layout with a 170 mm beam,
 alternating beams and 455 mm wide or 330 mm narrow block rows. It accepts

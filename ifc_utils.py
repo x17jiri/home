@@ -20891,6 +20891,8 @@ class Storey:
         cross-section: the item immediately before the marker ends at the
         axis and the item immediately after it starts there.  Without an axis
         marker, the existing one-sided behaviour is retained.
+        ``structure=["beam"]`` creates one independent beam strip, including
+        its ceramic shell, reinforcement and concrete rib, without block rows.
         Consequently a wide bay plus a beam forms a 0.625 m module and a
         narrow bay plus a beam forms a 0.5 m module.  When ``expected_width``
         is supplied, a warning is printed if the total width on both sides
@@ -21037,8 +21039,6 @@ class Storey:
             previous_was_block = is_block
         if "beam" not in normalised_structure:
             raise ValueError("structure must contain at least one beam")
-        if not any(item in {"wide", "narrow"} | _MIAKO_HEB_ITEMS for item in normalised_structure):
-            raise ValueError("structure must contain at least one block bay or HEB180")
         structure_tuple = tuple(normalised_structure)
         has_steel = any(item in _MIAKO_HEB_ITEMS for item in structure_tuple)
         physical_structure = tuple(item for item in structure_tuple if item != "axis")

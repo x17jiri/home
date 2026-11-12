@@ -6795,10 +6795,6 @@ class HouseTests(unittest.TestCase):
             upper.miako_slab(
                 "Invalid", **(valid_arguments | {"structure": ["wide"]})
             )
-        with self.assertRaisesRegex(ValueError, "at least one block bay"):
-            upper.miako_slab(
-                "Invalid", **(valid_arguments | {"structure": ["beam"]})
-            )
         with self.assertRaisesRegex(ValueError, "block_length"):
             upper.miako_slab(
                 "Invalid", **valid_arguments, block_length=0
@@ -6815,6 +6811,38 @@ class HouseTests(unittest.TestCase):
                 topping=0.07,
                 beam_height=0.06,
             )
+
+    def test_creates_miako_beam_strips_without_block_rows(self):
+        for count in (1, 2):
+            for end, direction in (((5, 0), (0, -1)), ((0, 5), (1, 0))):
+                with self.subTest(count=count, end=end):
+                    house = House("Independent MIAKO beams")
+                    storey = house.storey("Ceiling", elevation=3)
+                    slab = storey.miako_slab(
+                        "Beam strip", start=(0, 0), end=end, direction=direction,
+                        top=.21, structure=["beam"]*count,
+                        block_height=.15, topping=.06, beam_height=.06,
+                    )
+                    self.assertEqual(len(slab.beams), count)
+                    self.assertEqual(len(slab.beam_shells), count)
+                    self.assertEqual(len(slab.reinforcements), count)
+                    self.assertFalse(slab.blocks)
+                    self.assertAlmostEqual(slab.width, .17*count)
+                    self.assertAlmostEqual(slab.length, 5)
+                    settings = ifcopenshell.geom.settings()
+                    settings.set(settings.USE_WORLD_COORDS, True)
+                    points = []
+                    for component in slab.components:
+                        shape = ifcopenshell.geom.create_shape(settings, component)
+                        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+                        points.extend(vertices[np.unique(np.asarray(shape.geometry.faces, dtype=int))])
+                    points = np.asarray(points)
+                    footprint = np.asarray(slab.footprint)
+                    np.testing.assert_allclose(points[:,:2].min(axis=0), footprint.min(axis=0), atol=1e-8)
+                    np.testing.assert_allclose(points[:,:2].max(axis=0), footprint.max(axis=0), atol=1e-8)
+                    np.testing.assert_allclose((points[:,2].min(), points[:,2].max()), (3, 3.21), atol=1e-8)
+                    cover = ifcopenshell.geom.create_shape(settings, slab.topping_element)
+                    self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(cover.geometry), 5*.17*count*(.21-.06))
 
     def test_fills_concrete_cover_at_edge_and_consecutive_miako_beams(
         self,

@@ -1371,13 +1371,13 @@ ceiling_pokoj1 = ceiling_storey.miako_slab(
     end=(BWT-GARDEN_CEILING_OUTER_BEARING+GARDEN_CEILING_BEAM_LENGTH, GARDEN_CEILING_START_Y),
     direction=(0, 1), top=CEILING_THICKNESS,
     structure=[  # Street to garden; seven beam/narrow pairs, ending in a block.
+        "beam", "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
-        "beam", "narrow",
-        "beam", "narrow",
+        "beam", "beam",
     ],
     block_length=0.25,
     block_start_offset=GARDEN_CEILING_OUTER_BEARING,
@@ -1391,13 +1391,13 @@ ceiling_pokoj2 = ceiling_storey.miako_slab(
     end=(HOUSE_WIDTH-BWT+GARDEN_CEILING_OUTER_BEARING, GARDEN_CEILING_START_Y),
     direction=(0, 1), top=CEILING_THICKNESS,
     structure=[  # Street to garden; seven beam/narrow pairs, ending in a block.
+        "beam", "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
         "beam", "narrow",
-        "beam", "narrow",
-        "beam", "narrow",
+        "beam", "beam",
     ],
     block_length=0.25,
     block_start_offset=GARDEN_CEILING_MIDDLE_BEARING,
@@ -1405,20 +1405,28 @@ ceiling_pokoj2 = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
+# Position these layouts relative to the long beams beside the garden-room wall.
+HALLWAY_MIAKO_BEAM_LENGTH = 5.25
+HALLWAY_MIAKO_BEAM_COUNT = 2
+HALLWAY_MIAKO_BEAM_EAST_BEARING = 0.13
+HALLWAY_MIAKO_BEAM_WALL_OVERLAP = 0.04
+hallway_miako_beam_y = GARDEN_ROOMS_WALL_Y+HALLWAY_MIAKO_BEAM_WALL_OVERLAP
+ceiling_pokoj3_start_y = hallway_miako_beam_y-HALLWAY_MIAKO_BEAM_COUNT*CEILING_STRIP_WIDTHS["beam"]
+ceiling_bathroom_hallway_start_y = ceiling_pokoj3_start_y-CEILING_STRIP_WIDTHS["wide"]
+
 ceiling_pokoj3 = ceiling_storey.miako_slab(
     "Ceiling - Pokoj 3",
-    start=(0.08375, 5.0625), end=(3.83375, 5.0625),
+    start=(0.08375, ceiling_pokoj3_start_y), end=(3.83375, ceiling_pokoj3_start_y),
     direction=(0, -1), top=CEILING_THICKNESS,
     structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
-        "beam",
-        "wide", "beam",
-        "narrow", "beam",
         "narrow", "beam",
         "wide", "beam",
         "wide", "beam",
         "wide", "beam",
         "wide", "beam",
         "wide", "beam",
+        "wide", "beam",
+        "narrow", "beam",
     ],
     block_length=0.25,
     block_start_offset=0.16125, block_end_offset=0.16125,
@@ -1427,17 +1435,17 @@ ceiling_pokoj3 = ceiling_storey.miako_slab(
 
 ceiling_bathroom_hallway = ceiling_storey.miako_slab(
     "Ceiling - Koupelna a chodba",
-    start=(3.74, 4.6175), end=(6.24, 4.6175),
+    start=(3.74, ceiling_bathroom_hallway_start_y), end=(6.24, ceiling_bathroom_hallway_start_y),
     direction=(0, -1), top=CEILING_THICKNESS,
     structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
         "beam",
         "narrow", "beam",
+        "wide", "beam",
+        "wide", "beam",
+        "wide", "beam",
+        "wide", "beam",
+        "wide", "beam",
         "narrow", "beam",
-        "wide", "beam",
-        "wide", "beam",
-        "wide", "beam",
-        "wide", "beam",
-        "wide", "beam",
     ],
     block_length=0.25,
     block_start_offset=0.1825, block_end_offset=0.1825,
@@ -1450,13 +1458,22 @@ ceiling_stairway = ceiling_storey.miako_slab(
     start=(6.15625, 5.16), end=(8.65625, 5.16),
     direction=(0, -1), top=CEILING_THICKNESS,
     structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
+        "beam", "beam", "beam",
         "beam",
         "wide", "beam",
         "wide", "beam",
-        "narrow", "beam",
     ],
     block_length=0.25,
     block_start_offset=0.15125, block_end_offset=0.15125,
+    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
+)
+
+# Adjacent long beams parallel to the garden-room divider, spanning Pokoj 3 and the hallway.
+ceiling_hallway_beam = ceiling_storey.miako_slab(
+    "Ceiling - long beams Pokoj 3 and hallway",
+    start=(BWT-HALLWAY_MIAKO_BEAM_EAST_BEARING, hallway_miako_beam_y),
+    end=(BWT-HALLWAY_MIAKO_BEAM_EAST_BEARING+HALLWAY_MIAKO_BEAM_LENGTH, hallway_miako_beam_y),
+    direction=(0, -1), top=CEILING_THICKNESS, structure=["beam"]*HALLWAY_MIAKO_BEAM_COUNT,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
@@ -1480,7 +1497,25 @@ ceiling_schedule_rows = [
     {"location": "Pokoj 3", "slab": ceiling_pokoj3},
     {"location": "Koupelna a chodba", "slab": ceiling_bathroom_hallway},
     {"location": "Schodiště", "slab": ceiling_stairway},
+    {"location": "Pokoj 3 / chodba", "slab": ceiling_hallway_beam},
 ]
+
+def add_hallway_beam_spacing_dimensions(drawing):
+    """Dimension the long beams and extend the adjoining ceilings' spacing chains."""
+    long_beams = ceiling_hallway_beam.beam_centerlines
+    dimension_x = float(np.mean(ceiling_pokoj3.beam_centerlines[0], axis=0)[0])
+    for index, (first, second) in enumerate(zip(long_beams, long_beams[1:]), 1):
+        drawing.add_dimension(
+            (dimension_x, first[0][1]), (dimension_x, second[0][1]),
+            name=f"Long Hallway MIAKO Beams Centre Distance {index}",
+        )
+    long_beam_y = long_beams[-1][0][1]
+    for slab in (ceiling_pokoj3, ceiling_bathroom_hallway):
+        midpoint = np.mean(slab.beam_centerlines[0], axis=0)
+        drawing.add_dimension(
+            (float(midpoint[0]), long_beam_y), tuple(midpoint),
+            name=f"{slab.Name} First Beam Centre Distance to Long Beam",
+        )
 
 wall_plate_east = upper.beam(
     "Pozednice - východ",
@@ -3049,6 +3084,24 @@ if "ceiling" in sys.argv:
                 start=tuple(dimension_start), end=tuple(dimension_end),
                 name=f"{slab.Name} {label}",
             )
+    # The long beams share their span and east bearing; west ends will be tuned separately.
+    for index, (start, end) in enumerate(ceiling_hallway_beam.beam_centerlines, 1):
+        axis = drawing1.add_line(
+            start, end, style="dash-dot", color="red", line_width=0.08,
+            name=f"{ceiling_hallway_beam.Name} Beam {index} Centreline",
+        )
+        appearance = ifcopenshell.util.element.get_pset(axis, "EPset_Annotation")
+        ifcopenshell.api.pset.edit_pset(
+            house.model, pset=house.model.by_id(appearance["id"]),
+            properties={"Classes": appearance["Classes"]+" ceiling-beam-axis"},
+        )
+    start, end = ceiling_hallway_beam.beam_centerlines[0]
+    drawing1.add_dimension(start, end, offset=1.2, name="Standalone hallway MIAKO beam length")
+    drawing1.add_dimension(
+        start, (BWT, start[1]), offset=0.35,
+        name="Standalone hallway MIAKO beam east bearing",
+    )
+    add_hallway_beam_spacing_dimensions(drawing1)
     drawing1.add_miako_beam_schedule(ceiling_schedule_rows)
     drawing1.add_chimney_annotation(chimney)
     if SHOW_PURLIN_SUPPORT_PLANNING_MARKERS:
@@ -3076,6 +3129,13 @@ if "ceiling2" in sys.argv:
     drawing1.add_miako_beam_dimensions(ceiling_pokoj3, side="start", offset=0.7)
     drawing1.add_miako_beam_dimensions(ceiling_bathroom_hallway, side="end", offset=0.45)
     drawing1.add_miako_beam_dimensions(ceiling_stairway, side="end", offset=0.65)
+    start, end = ceiling_hallway_beam.beam_centerlines[0]
+    drawing1.add_dimension(start, end, offset=1.2, name="Standalone hallway MIAKO beam length")
+    drawing1.add_dimension(
+        start, (BWT, start[1]), offset=0.35,
+        name="Standalone hallway MIAKO beam east bearing",
+    )
+    add_hallway_beam_spacing_dimensions(drawing1)
     drawing1.add_dimension(
         start=tuple(ceiling_plan_min),
         end=(float(ceiling_plan_max[0]), float(ceiling_plan_min[1])), offset=-1.0,
