@@ -101,6 +101,19 @@ than the ground-floor grid. S.01 and S.02 have separate slabs with beams along
 Y; S.03 has one slab without the former intermediate double beam. S.04 and
 S.05 also use beams along X, bearing on the existing side walls, so the former
 assumed front support is no longer used downstairs.
+S.04 starts at the chimney: the garden edge of its first 170 mm beam is
+`BASEMENT_S04_CHIMNEY_BEAM_CLEARANCE = 0.03 m` from the chimney's street face.
+Rows are numbered and laid out towards the street, keeping this edge fixed;
+layout-width tolerance is taken at the street end. The chimney-side strip
+remains outside this MIAKO layout pending the opening detail.
+The S.03, S.04 and S.05 creation calls in `house2.py` contain directly editable
+`structure=[...]` lists of `beam`, `wide` and `narrow` elements. All three run
+garden to street (starting just below the chimney in S.04). S.03 anchors to
+the garden edge with `BASEMENT_S03_CEILING_STREET_SHIFT = 0.015 m` translating
+its entire layout towards the street. S.04 keeps the chimney-side edge fixed and S.05 keeps
+the 3 m opening edge fixed as the list changes. Beam lengths and bearing
+remain calculated automatically. Omit `structure` (or use `None`) to restore
+automatic row selection. The independent upper ceiling uses explicit snapshot layouts.
 
 `BASEMENT_WALL_HEIGHT = 2.25 m` leaves `CEILING_THICKNESS = 0.21 m` above
 the basement walls, immediately below the ground-floor layers at Z = 0.
@@ -173,10 +186,25 @@ plans. Their PDFs are `D1.1.9. Půdorys suterénu.pdf` (`PDF_BASEMENT`) and
 through the middle of the basement walls.
 Run `python3 house2.py basement_ceiling` for the separate basement-ceiling
 plan, `projekt2/basement_ceiling.svg`, and
-`D1.1.13. Strop nad suterénem.pdf` (`PDF_BASEMENT_CEILING`). It includes the
-basement walls, ring beams, perimeter insulation, MIAKO beam dimensions and
-schedule, chimney and AA/BB markers. The existing `ceiling` target remains
-the ceiling above 1.NP. Existing PDF numbers are unchanged.
+`D1.1.13. Strop nad suterénem.pdf` (`PDF_BASEMENT_CEILING`). This simplified
+layout shows thin solid black load-bearing wall outlines and
+one red dash-dot centreline for each beam (half the roof-rafter dash and gap lengths),
+centre-to-centre spacing dimensions at midspan, and bearing dimensions
+at both beam ends for each of the five ceilings. Separate dimensions beside
+the spacing chains measure the inner wall faces to the first and last beam axes;
+these show the actual distance even if an outer beam axis lies inside a wall.
+The bearing dimensions use the
+actual beam end and supporting inner wall face, retaining the individual
+start/end bearing offsets. The chimney is included for orientation.
+A right-side `SPECIFIKACE MIAKO NOSNÍKŮ` schedule lists beam lengths and
+counts for all five rooms; both ceiling formats share `basement_ceiling_schedule_rows`.
+The previous detailed format is preserved as `basement_ceiling2`:
+`python3 house2.py basement_ceiling2` produces `projekt2/basement_ceiling2.svg`
+and `D1.1.14. Strop nad suterénem - podrobný plán.pdf`
+(`PDF_BASEMENT_CEILING2`). It keeps the modelled MIAKO blocks, beams, ring
+beams, perimeter insulation, dimensions, schedule, notes and AA/BB markers.
+Both targets can be generated in one command. The existing `ceiling` target
+remains the ceiling above 1.NP; other drawing PDF numbers are unchanged.
 The door between S.01 and S.03 is centred on their shared wall segment and
 opens into S.01. It uses the other basement door's 900 mm leaf and 1000 mm
 construction opening, with opening dimensions and a lintel tag in the plan.
@@ -206,8 +234,11 @@ ceiling grid stays fixed independently of this partition movement.
 
 The basement plan labels the five clear rooms `S.01`–`S.05` and includes a
 room legend with areas and a width/depth dimension for every room. Names are
-`Garáž` below room 3, `Schody` below the stairway, and `Skladovací prostor`
-for the remaining rooms. Their boundaries and dimensions follow the actual
+`Garáž` below room 3 and `Skladovací prostor` for the remaining rooms,
+including S.05. The reserved future stair coordinates and S.05-specific
+dimension placement use the stable `S.05` identifier, independent of its
+display name. Its beam-schedule row is labelled `S.05` without a stair-room
+designation. Their boundaries and dimensions follow the actual
 basement walls, with the configured cement floor buildup.
 
 The foundation cut passes through
@@ -419,31 +450,28 @@ the inside west wall. The terminal prints the plasterboard inner-face
 height above the finished upper floor at the west corner of the upper
 stair arrival, including that point's X/Y coordinates.
 
-Five MIAKO assemblies cover the downstairs rooms. Pokoj 1 and 2 share one
-assembly with beams along Y, centred over their separating partition.
-Pokoj 3 has street and garden assemblies with beams along X, split at
-`BATHROOM_PARTITION_Y`, the bathroom-facing edge of the bathroom/hallway
-wall. Both room 3 assemblies span to the full load-bearing bathroom wall,
-passing above the SDK partitions. Chodba has beams along Y from that
-load-bearing wall across the hallway and stair approach. Its front bearing
-requires a separate structural support above the SDK partition and stair
-approach. `HALLWAY_CEILING_SUPPORT_Y` and `HALLWAY_CEILING_SUPPORT_WIDTH`
-retain the previous ceiling layout independently of the partition thickness.
-The full support line is marked blue and dashed in the ceiling plan and
-noted as not yet designed; no structural member is added there.
-Koupelna has beams along X; its junction with Pokoj 3's beams
-is deliberately left unresolved for now. Opposing hallway and garden-room
-beam ends also overlap on their shared 175 mm wall; that junction remains
-unresolved and is noted in the ceiling drawing.
+Five independent MIAKO assemblies cover the downstairs rooms. Their starting
+geometry is an exact XY copy of the basement ceiling, raised to the `Ceiling`
+storey: separate layouts for Pokoj 1/Pokoj 2 along Y, plus Pokoj 3, the
+bathroom/hallway area and the stairway along X. The five calls use literal
+`start`, `end`, `direction`, `structure` lists and block-bearing offsets,
+so later basement edits do not propagate upstairs. Edit `ceiling_pokoj1`,
+`ceiling_pokoj2`, `ceiling_pokoj3`, `ceiling_bathroom_hallway` and
+`ceiling_stairway` directly. `ceiling_wall_bounds` holds this level's actual
+inner wall faces for dimensions. The upper ceiling's beam geometry and its
+two drawing blocks are deliberately copied, not generated by a shared
+per-floor layout function. Steel reinforcement beneath the purlin posts and
+the bearing details remain for the following design steps; the ground-floor
+walls are thinner than their basement counterparts. `CEILING_ROOM3_SPLIT_Y`
+now remains only as the old bathroom reference used by upstairs fixtures.
 
 `design_miako_structure()` starts and ends each layout with a 170 mm beam,
 alternating beams and 455 mm wide or 330 mm narrow block rows. It accepts
 a total width difference of up to `CEILING_LAYOUT_TOLERANCE = 0.07 m`,
 first trying all-wide blocks and otherwise minimising the number of narrow
 rows. Narrow rows are grouped in the middle; among layouts with the same
-number of narrow rows, the closest width wins. Layouts are centred over
-their covered widths, except the two Pokoj 3 assemblies: their adjoining
-edges stay fixed at the split so their parallel edge beams do not overlap.
+number of narrow rows, the closest width wins. `add_miako_ceiling()` still
+uses these fitting rules for basement layouts without an explicit list.
 `add_miako_ceiling()` adds at least
 `CEILING_BEAM_BEARING = 0.125 m` at each end and rounds the full beam length
 up in `CEILING_BEAM_LENGTH_STEP = 0.25 m` increments. Blocks stop at the
@@ -511,9 +539,16 @@ Run `python3 house2.py` to export `house2.ifc`. Run
 (A4 landscape, 1:100), matching the original project's PDF directory structure.
 Run `python3 house2.py ceiling` for `projekt2/ceiling.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.2. Strop nad 1.NP.pdf`.
-The ceiling plan shows the wall context, beam spacing, overall and slab
-dimensions, and a MIAKO beam schedule. Pass both `ground ceiling` to generate
-both plans in one run.
+The `ceiling` plan has thin solid wall outlines, red dash-dot beam axes,
+spacing, end-bearing and wall-offset dimensions, a beam schedule and the
+optional green purlin-post planning markers. Its bearing dimensions use the
+actual ground-floor wall faces, which differ from the cloned basement offsets.
+Run `python3 house2.py ceiling2` for the separate detailed model view,
+`projekt2/ceiling2.svg`, and
+`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.15. Strop nad 1.NP - podrobný plán.pdf`
+(`PDF_CEILING2`). It has the independent upper schedule, notes, facade wool,
+ring beams, chimney and AA/BB symbols. Generate both with
+`python3 house2.py ceiling ceiling2`; the basement targets remain separate.
 
 The `Upper floor` storey starts at `UPPER_FLOOR_START` (Z = 3.035 m), with
 four 240 mm VPC exterior walls aligned above the ground-floor walls. The
@@ -745,12 +780,14 @@ an exact vertical shaft opening; the SDK partitions meet the chimney
 without intersecting it. The upper plan includes the chimney/flue
 symbol. Basement, ground and ceiling plans now include the real chimney and
 flue symbol through `drawing.add_chimney_annotation(chimney)`, replacing the
-temporary dashed planning outlines. The unchanged MIAKO layouts currently
-intersect the chimney at hallway beam 3 on both levels; the ceiling-plan
-notes record that the opening detail is unresolved.
+temporary dashed planning outlines. The current MIAKO layouts leave the
+chimney-side strip open; the final opening detail remains to be designed.
 `SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True` adds green crossed rectangles
 for all timber-post footprints to the same plans. These follow the actual
 post positions and section size; set the flag to `False` to hide them.
+The ground-floor plan also projects the upstairs stove as a green outline
+labelled `Kamna` under this same switch. Its footprint follows the stove's
+actual placement and rotation without adding a second stove to the model.
 Run `python3 house2.py roof` for the roof framing plan (`projekt2/roof.svg`)
 and `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.4. Krov.pdf`.
 The roof PDF is an A3 portrait sheet: the framing plan with its schedule above

@@ -13529,6 +13529,7 @@ class Drawing:
         *,
         style: Literal["dashed", "solid"] = "dashed",
         color: str | None = None,
+        line_width: Number | None = None,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add one merged plan outline of the supplied wall footprints.
@@ -13539,6 +13540,8 @@ class Drawing:
         internal end lines at corners and T-junctions. Source walls may belong
         to any storey of this house. ``color`` optionally overrides the default
         black outline and is also used by an associated line-legend sample.
+        ``line_width`` optionally sets the stroke in printed millimetres;
+        omit it to retain the existing thin outline.
         """
         self._require_plan_view("add_wall_outlines")
         if isinstance(walls, (str, bytes)):
@@ -13560,6 +13563,9 @@ class Drawing:
             ):
                 raise ValueError(f"wall {index} must belong to this house")
         style_name = _enum(style, "style", {"DASHED", "SOLID"}).lower()
+        width_class = ""
+        if line_width is not None:
+            _, width_class = _drawing_line_width(line_width)
         color_class = ""
         if color is not None:
             _, normalized_color, _ = _drawing_line_appearance(style_name, color)
@@ -13658,8 +13664,9 @@ class Drawing:
             name="EPset_Annotation",
         )
         classes = "load-bearing-wall-outline"
-        if style_name == "dashed":
-            classes += " dashed"
+        classes += f" {style_name}"
+        if width_class:
+            classes += f" drawing-line {width_class}"
         classes += color_class
         ifcopenshell.api.pset.edit_pset(
             model,
