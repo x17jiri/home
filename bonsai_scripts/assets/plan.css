@@ -446,6 +446,23 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+.cut.material-YtongKlasik,
+.cut.material-LoadbearingwallYtongKlasik300mm,
+.cut.layer-material-YtongKlasik {
+    fill: url(#ytong-klasik) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.material-YtongStatik,
+.cut.material-LoadbearingwallYtongStatik200mm,
+.cut.material-LoadbearingwallYtongStatik250mm,
+.cut.layer-material-YtongStatik {
+    fill: url(#ytong-statik) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
 .cut.layer-material-Liaporbrick {
     fill: url(#liapor-brick) !important;
     stroke: black;

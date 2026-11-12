@@ -44,6 +44,9 @@ class Settings:
     gravity: float = 10.0  # m/s²
     gable_bearings: bool = True
     braces: bool = False
+    saddles: bool = True
+    wall_bearings: bool = True
+    saddle_contact_points: int = 5  # Odd grid along each sedlo; centre has the existing ideal pin.
     continuous_purlins: bool = False
     brace_action: str = "compression"
     horizontal_stiffness_kn_mm: float | None = 0.0  # X: 0 free; None rigid; positive spring stiffness. Y fixed.
@@ -62,6 +65,8 @@ class Settings:
                 raise ValueError("horizontal stiffness must be finite and non-negative, or None for rigid")
         if self.brace_action not in {"compression", "both"}:
             raise ValueError("brace_action must be compression or both")
+        if not isinstance(self.saddle_contact_points, int) or self.saddle_contact_points < 3 or self.saddle_contact_points % 2 != 1:
+            raise ValueError("saddle_contact_points must be an odd integer of at least three")
 
 
 class House2Inputs(HouseInputs):
@@ -155,6 +160,15 @@ class Pin:
     contact: tuple[float, float, float]
 
 
+@dataclass(frozen=True)
+class SaddleContact:
+    name: str
+    lower: tuple[float, float, float]
+    upper: tuple[float, float, float]
+    stiffness: float  # N/m, transverse compression of the two half-depths in series.
+    tributary_length: float
+
+
 @dataclass
 class Layout:
     source: Path
@@ -164,6 +178,9 @@ class Layout:
     seats: dict = field(default_factory=dict)
     bases: list = field(default_factory=list)
     gables: list = field(default_factory=list)
+    walls: list = field(default_factory=list)
+    saddle_contacts: list[SaddleContact] = field(default_factory=list)
+    bearing_wall_outline: tuple = ()
     chords: dict = field(default_factory=dict)
     slope: float = 0.0
     width: float = 0.0
@@ -173,7 +190,8 @@ class Layout:
     purlin_joints: list = field(default_factory=list)
 
     @classmethod
-    def from_house(cls, path, rafter_material=None, beam_material=None):
+    def from_house(cls, path, rafter_material=None, beam_material=None, *, saddles=True,
+                   wall_bearings=True, saddle_contact_points=5):
         defaults = Settings()
         rafter_material = defaults.rafter_material if rafter_material is None else rafter_material
         beam_material = defaults.beam_material if beam_material is None else beam_material
@@ -196,6 +214,15 @@ class Layout:
         pwidth, pheight = g("PURLIN_SIZE")
         cwidth, cheight = g("PURLIN_CONNECTION_BEAM_SIZE")
         post_x, post_y = g("PURLIN_SUPPORT_SIZE")
+        saddle_width, saddle_height = g("PURLIN_SADDLE_SIZE") if saddles else (0, 0)
+        saddle_length = positive(g("PURLIN_SADDLE_LENGTH"), "sedlo length") if saddles else 0
+        if saddle_contact_points < 3 or saddle_contact_points % 2 != 1:
+            raise ValueError("saddle_contact_points must be odd and at least three")
+        wall_y = g("PURLIN_BEARING_WALL_Y") if wall_bearings else None
+        if wall_bearings:
+            half_wall = g("UPPER_BEARING_WALL_THICKNESS")/2
+            result.bearing_wall_outline = ((wall, wall_y-half_wall), (width-wall, wall_y-half_wall),
+                                           (width-wall, wall_y+half_wall), (wall, wall_y+half_wall))
         brace_size, drop = g("PURLIN_BRACE_SIZE"), positive(g("PURLIN_BRACE_DROP"), "brace drop")
         z, base = g("PURLIN_Z"), g("UPPER_FLOOR_START")
         post_top = z-pheight/2
@@ -236,16 +263,49 @@ class Layout:
 
         for i, x in enumerate(px):
             member_z = purlin_z[i]
-            post_top = member_z-pheight/2
+            purlin_bottom = member_z-pheight/2
+            post_top = purlin_bottom-saddle_height
             anchor = post_top-drop
             name = f"P{i+1}"
             beam(name, "purlin", (x, -overhang, member_z), (x, depth+overhang, member_z), (pwidth, pheight))
             result.gables.extend((name, (x, y, member_z)) for y in (wall/2, depth-wall/2))
-            result.chords[name] = tuple(sorted((wall/2, *rows[i], depth-wall/2)))
+            member_wall_bearing = wall_bearings and i in (0, len(px)-1)
+            if member_wall_bearing:
+                result.walls.append((name, (x, wall_y, member_z)))
+            result.chords[name] = tuple(sorted({wall/2, *rows[i], depth-wall/2,
+                                                *((wall_y,) if member_wall_bearing else ())}))
             for j, y in enumerate(rows[i]):
                 name = f"POST{i+1}.{j+1}"
                 beam(name, "post", (x, y, base), (x, y, post_top), (post_x, post_y))
                 result.bases.append((name, (x, y, base)))
+                if saddles:
+                    if y-saddle_length/2 < -overhang or y+saddle_length/2 > depth+overhang:
+                        raise ValueError("sedlo extends beyond its purlin")
+                    if post_top <= base:
+                        raise ValueError("sedlo leaves no height for its post")
+                    saddle_z = purlin_bottom-saddle_height/2
+                    saddle = beam(f"SEDLO{i+1}.{j+1}", "saddle",
+                                  (x, y-saddle_length/2, saddle_z), (x, y+saddle_length/2, saddle_z),
+                                  (saddle_width, saddle_height))
+                    result.chords[saddle.name] = (0, saddle_length/2, saddle_length)
+                    result.pins.extend((
+                        Pin(f"saddle_post_{i}_{j}", ((x, y, saddle_z), (x, y, post_top)), (x, y, post_top)),
+                        Pin(f"purlin_saddle_{i}_{j}", ((x, y, member_z), (x, y, saddle_z)), (x, y, purlin_bottom)),
+                    ))
+                    e90 = resolve_timber_grade(beam_material).perpendicular_modulus_pa
+                    stations = np.linspace(y-saddle_length/2, y+saddle_length/2, saddle_contact_points)
+                    spacing = saddle_length/(saddle_contact_points-1)
+                    for k, station in enumerate(stations):
+                        if k == saddle_contact_points//2:
+                            continue  # Central translation tie; wing contacts only transmit compression in Z.
+                        tributary = spacing/2 if k in (0, saddle_contact_points-1) else spacing
+                        area = min(pwidth, saddle_width)*tributary
+                        stiffness = area/((pheight+saddle_height)/(2*e90))
+                        result.saddle_contacts.append(SaddleContact(
+                            f"BEARING{i+1}.{j+1}.{k+1}", (x, float(station), saddle_z),
+                            (x, float(station), member_z), stiffness, tributary,
+                        ))
+                    continue  # Sedla replace all three diagonal braces at this post.
                 result.pins.append(Pin(f"purlin_post_{i}_{j}", ((x, y, member_z), (x, y, post_top)), (x, y, post_top)))
                 for sign, label in ((-1, "front"), (1, "back")):
                     first = (x, y+sign*post_y/2, anchor)
@@ -354,6 +414,7 @@ class RoofModel:
     nodal_loads: list = field(default_factory=list)
     brace_springs: dict = field(default_factory=dict)
     collar_springs: dict = field(default_factory=dict)
+    saddle_springs: dict = field(default_factory=dict)
     seat_nodes: dict = field(default_factory=dict)
     joint_members: list = field(default_factory=list)
     tributary_widths: dict = field(default_factory=dict)
@@ -367,20 +428,20 @@ def tributary_widths(stations, low, high):
 
 
 def split_purlins_at_posts(layout):
-    """Split at every post, with shared translations at each post axis."""
+    """Split at each internal bearing (post or masonry), sharing translations."""
     if layout.purlin_joints:
         return layout
     beams, joints = [], []
-    chords, gables = dict(layout.chords), []
+    chords, gables, walls = dict(layout.chords), [], []
     for beam in layout.beams:
         if beam.category != "purlin":
             beams.append(beam)
             continue
-        cuts = sorted(point[1] for _, point in layout.bases
-                      if math.isclose(point[0], beam.start[0], abs_tol=1e-8))
+        cuts = sorted({point[1] for _, point in (*layout.bases, *layout.walls)
+                       if math.isclose(point[0], beam.start[0], abs_tol=1e-8)})
         if (not cuts or not beam.start[1] < cuts[0] <= cuts[-1] < beam.end[1]
                 or any(b-a <= 1e-8 for a, b in zip(cuts, cuts[1:]))):
-            raise ValueError(f"{beam.name} requires distinct post cuts inside its length")
+            raise ValueError(f"{beam.name} requires distinct bearing cuts inside its length")
         x, _, z = beam.start
         points = (beam.start, *((x, y, z) for y in cuts), beam.end)
         references = chords.pop(beam.name)
@@ -395,7 +456,11 @@ def split_purlins_at_posts(layout):
             if label == beam.name:
                 owner = next(piece for piece in pieces if piece.start[1] <= point[1] <= piece.end[1])
                 gables.append((owner.name, point))
-    return replace(layout, beams=beams, chords=chords, gables=gables, purlin_joints=joints)
+        for label, point in layout.walls:
+            if label == beam.name:
+                owner = next(piece for piece in pieces if piece.start[1] <= point[1] <= piece.end[1])
+                walls.append((owner.name, point))
+    return replace(layout, beams=beams, chords=chords, gables=gables, walls=walls, purlin_joints=joints)
 
 
 def build_roof_model(layout, settings=Settings()):
@@ -457,6 +522,11 @@ def build_roof_model(layout, settings=Settings()):
             # The pinned vertical post has an unloaded spin about its Z
             # axis. Set only that orientation, leaving both bending axes free.
             model.def_support(member.j_node.name, False, False, False, False, False, True)
+        elif beam.category == "saddle":
+            # A central pin plus normal wing contacts leaves unloaded roll/yaw
+            # orientations free. Set only these; vertical bending remains free.
+            middle = node(tuple((np.array(beam.start)+beam.end)/2), True)
+            model.def_support(middle, False, False, False, False, True, True)
         if math.hypot(member.j_node.X-member.i_node.X, member.j_node.Y-member.i_node.Y) > 1e-8:
             orient_section(member)
         q = -settings.timber_density*settings.gravity*beam.timber.width*beam.timber.height
@@ -476,6 +546,10 @@ def build_roof_model(layout, settings=Settings()):
             model.add_member(name, root, contact, "JOINT", "JOINT")
             model.def_releases(name, Rxj=True, Ryj=True, Rzj=True)
             result.joint_members.append(name)
+    for contact in layout.saddle_contacts:
+        model.add_spring(contact.name, node(contact.lower, True), node(contact.upper, True),
+                         contact.stiffness, comp_only=True)
+        result.saddle_springs[contact.name] = contact.name
     for name in model.nodes:
         if name not in structural:
             # Only massless pin-node rotations: every incident arm releases them.
@@ -489,6 +563,10 @@ def build_roof_model(layout, settings=Settings()):
             name = node(point, True)
             model.def_support(name, True, True, True, False, True, False)
             result.supports[name], result.support_kinds[name] = label, "gable_bearing"
+    for label, point in layout.walls:
+        name = node(point, True)
+        model.def_support(name, True, True, True, False, True, False)
+        result.supports[name], result.support_kinds[name] = label, "wall_bearing"
     for name, (seat, _, side, _) in layout.seats.items():
         n = node(seat, True)
         rigid = settings.horizontal_stiffness_kn_mm is None
@@ -518,7 +596,10 @@ def build_roof_model(layout, settings=Settings()):
 
 
 def solve_roof_model(roof):
-    if not roof.brace_springs or roof.settings.brace_action == "both":
+    compression_springs = set(roof.saddle_springs)
+    if roof.settings.brace_action == "compression":
+        compression_springs.update(roof.brace_springs)
+    if not compression_springs:
         roof.model.analyze_linear(check_stability=True)
     else:
         # First-order opening/reclosing active set, using the pinned solver version.
@@ -534,7 +615,7 @@ def solve_roof_model(roof):
                 d = Analysis._solve_unknown_disp(k11, p-fer-k12@known, sparse=True, check_stability=True)
                 Analysis._store_displacements(model, d, known, free, fixed, combo)
                 changes = []
-                for name in roof.brace_springs:
+                for name in compression_springs:
                     spring = model.springs[name]
                     compression = -spring.ks*spring_axial_gap(spring, combo.name)
                     if spring.active[combo.name] and compression < -1e-5:
@@ -546,7 +627,7 @@ def solve_roof_model(roof):
                 for spring, active in changes:
                     spring.active[combo.name] = active
             else:
-                raise ValueError(f"brace contact did not converge: {combo.name}")
+                raise ValueError(f"compression contact did not converge: {combo.name}")
         Analysis._calc_reactions(model, log=False)
         model.solution = "Nonlinear TC"
     return check_equilibrium(roof)
@@ -564,6 +645,25 @@ def support_rows(roof):
                              # Force delivered TO the foundation/wall; positive Z means uplift.
                              Fx_kN=-n.RxnFX[combo]/1000, Fy_kN=-n.RxnFY[combo]/1000,
                              Fz_kN=-n.RxnFZ[combo]/1000))
+    return rows
+
+
+def saddle_contact_rows(roof):
+    """Normal contact forces; compression is positive and open wings carry zero."""
+    rows = []
+    for contact in roof.layout.saddle_contacts:
+        spring = roof.model.springs[contact.name]
+        for combo in roof.model.load_combos:
+            gap = spring_axial_gap(spring, combo)
+            active = bool(spring.active[combo])
+            force = -spring.ks*gap if active else 0.0
+            if force < -1e-5:
+                raise ValueError("a compression-only sedlo contact carries tension")
+            rows.append(dict(contact=contact.name, combination=combo, active=active,
+                             x_m=contact.upper[0], y_m=contact.upper[1],
+                             compression_kN=max(0, force)/1000, opening_mm=gap*1000,
+                             stiffness_kN_per_mm=spring.ks/1e6,
+                             tributary_length_m=contact.tributary_length))
     return rows
 
 
@@ -665,7 +765,7 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-COLORS = {"rafter": "#98652f", "purlin": "#2477a8", "cross_beam": "#af4f8b", "post": "#307a48", "brace": "#dc9a22", "collar": "#d000d0"}
+COLORS = {"rafter": "#98652f", "purlin": "#2477a8", "cross_beam": "#af4f8b", "post": "#307a48", "brace": "#dc9a22", "saddle": "#b48845", "collar": "#d000d0"}
 PLAN_CHECK_COLORS = {"L500": "#39a852", "L300": "#f4a340", "fail": "#d9534f", "not_assessed": "#c8ccd0"}
 
 
@@ -712,9 +812,14 @@ def plot_plan_report(roof, chords, path, *, combination="SLS_symmetric"):
     figure = Figure(figsize=(14, 12))
     ax = figure.add_subplot()
     figure.subplots_adjust(left=.08, right=.96, bottom=.22, top=.88)
+    if roof.layout.bearing_wall_outline:
+        ax.add_patch(Polygon(roof.layout.bearing_wall_outline, closed=True, facecolor="#eeeeee",
+                             edgecolor="#777777", linewidth=.7, linestyle="--", zorder=0))
+        first = roof.layout.bearing_wall_outline[0]
+        ax.text(first[0], first[1]-.1, "Ytong bearing wall", fontsize=7, color="#555555", va="top")
     beams = (*roof.layout.beams, *roof.layout.plates)
     statuses = plan_check_statuses(beams, chords)
-    order = {"wall_plate": 0, "brace": 1, "purlin": 2, "cross_beam": 3,
+    order = {"wall_plate": 0, "brace": 1, "saddle": 1, "purlin": 2, "cross_beam": 3,
              "rafter": 4, "post": 5, "collar": 6}
     for beam in sorted(beams, key=lambda b: order[b.category]):
         start, end = np.asarray(beam.start[:2]), np.asarray(beam.end[:2])
@@ -790,7 +895,7 @@ def plot_plan_report(roof, chords, path, *, combination="SLS_symmetric"):
     figure.text(.5, .935, "Worst instantaneous chord checks over ALL SLS combinations; undeformed member positions\n"
                 f"Force arrows: {combination}; red circles: uplift envelope over all combinations\n"
                 f"Wall-plate X/Y restraint: {horizontal_restraint_description(roof.settings.horizontal_stiffness_kn_mm)}; "
-                f"braces: {roof.settings.brace_action if roof.settings.braces else 'off'}; "
+                f"braces: {roof.settings.brace_action if roof.brace_springs else 'off'}; "
                 f"purlins: {purlin_configuration_description(roof)}",
                 ha="center", va="top", fontsize=9)
     descriptions = {
@@ -806,7 +911,7 @@ def plot_plan_report(roof, chords, path, *, combination="SLS_symmetric"):
     handles.append(Line2D([], [], color="#182d55", label="Blue: force delivered to wall plate"))
     if roof.layout.purlin_joints:
         handles.append(Line2D([], [], marker="D", markerfacecolor="white", markeredgecolor="#1565c0",
-                              linestyle="none", label="Blue diamonds: purlin bending hinges above posts"))
+                              linestyle="none", label="Blue diamonds: purlin hinges above internal bearings"))
     figure.legend(handles=handles, loc="lower center", bbox_to_anchor=(.5, .09), ncol=2,
                   fontsize=9, frameon=False)
     figure.text(.5, .065,
@@ -901,9 +1006,15 @@ def parse_arguments(argv=None):
     parser.add_argument("--gravity", type=float, default=defaults.gravity, help="m/s²")
     parser.add_argument("--gable-bearings", choices=("on", "off"), default="on" if defaults.gable_bearings else "off")
     parser.add_argument("--braces", action=argparse.BooleanOptionalAction, default=defaults.braces,
-                        help="include the tesařské pásky")
+                        help="include legacy tesařské pásky when --no-saddles is used")
+    parser.add_argument("--saddles", action=argparse.BooleanOptionalAction, default=defaults.saddles,
+                        help="use sedla beneath purlins; they replace diagonal braces")
+    parser.add_argument("--wall-bearings", action=argparse.BooleanOptionalAction, default=defaults.wall_bearings,
+                        help="include the internal Ytong wall as an anchored purlin bearing")
+    parser.add_argument("--saddle-contact-points", type=int, default=defaults.saddle_contact_points,
+                        help="odd number of bearing stations along each sedlo (centre is an ideal pin)")
     parser.add_argument("--continuous-purlins", action=argparse.BooleanOptionalAction, default=defaults.continuous_purlins,
-                        help="use continuous purlins instead of splitting at each post with bending hinges")
+                        help="use continuous purlins instead of splitting at each internal bearing")
     parser.add_argument("--brace-action", choices=("compression", "both"), default=defaults.brace_action,
                         help="when braces are enabled: compression only or tension/compression")
     parser.add_argument("--horizontal-stiffness", type=horizontal_stiffness, default=defaults.horizontal_stiffness_kn_mm,
@@ -917,6 +1028,8 @@ def parse_arguments(argv=None):
                        rafter_material=args.rafter_material, beam_material=args.beam_material,
                        timber_density=args.timber_density, gravity=args.gravity,
                        gable_bearings=args.gable_bearings == "on", braces=args.braces, brace_action=args.brace_action,
+                       saddles=args.saddles, wall_bearings=args.wall_bearings,
+                       saddle_contact_points=args.saddle_contact_points,
                        continuous_purlins=args.continuous_purlins,
                        horizontal_stiffness_kn_mm=args.horizontal_stiffness,
                        joint_stiffness_factor=args.joint_stiffness_factor)
@@ -925,15 +1038,20 @@ def parse_arguments(argv=None):
 
 def main(argv=None):
     args, settings = parse_arguments(argv)
-    layout = Layout.from_house(args.house, settings.rafter_material, settings.beam_material)
+    layout = Layout.from_house(args.house, settings.rafter_material, settings.beam_material,
+                               saddles=settings.saddles, wall_bearings=settings.wall_bearings,
+                               saddle_contact_points=settings.saddle_contact_points)
     roof = build_roof_model(layout, settings)
     layout = roof.layout
     print(f"Roof angle: {math.degrees(math.atan(layout.slope)):.2f}° ({layout.slope*100:.2f}%)")
     print(f"Loads: roof layers {settings.roof_mass:g} kg/m² slope; snow {settings.snow_load:g} kN/m² plan; timber {settings.timber_density:g} kg/m³; g={settings.gravity:g}")
     print(f"Members: {len(layout.beams)}; gable bearings {'on' if settings.gable_bearings else 'off'}; "
-          f"braces {settings.brace_action if settings.braces else 'off'}")
+          f"braces {settings.brace_action if roof.brace_springs else 'off'}")
     print(f"Purlins: {purlin_configuration_description(roof)}"
-          + ("" if settings.continuous_purlins else ", bending hinges above each post"))
+          + ("" if settings.continuous_purlins else ", bending hinges above each internal bearing"))
+    print(f"Sedla: {sum(b.category == 'saddle' for b in layout.beams)} separate beams; "
+          f"{len(layout.saddle_contacts)} compression-only wing contacts, central pinned attachment")
+    print(f"Internal Ytong wall bearings: {len(layout.walls)}")
     purlin_levels = {b.name.split(".")[0]: (b.start[0], b.start[2]+b.timber.height/2)
                      for b in layout.beams if b.category == "purlin"}
     for name, (x, top_z) in purlin_levels.items():
@@ -954,9 +1072,13 @@ def main(argv=None):
     stem.parent.mkdir(parents=True, exist_ok=True)
     write_csv(f"{stem}_members.csv", rows)
     write_csv(f"{stem}_supports.csv", supports)
+    if layout.saddle_contacts:
+        write_csv(f"{stem}_sedlo_contacts.csv", saddle_contact_rows(roof))
     write_csv(f"{stem}_purlin_support_loads.csv", post_loads)
     write_csv(f"{stem}_deflections.csv", chords)
     metadata = dict(source=str(layout.source), settings=asdict(settings),
+                    wall_bearings=layout.walls,
+                    saddle_contacts=[asdict(contact) for contact in layout.saddle_contacts],
                     purlin_joints=[dict(left=left, right=right, point=point) for left, right, point in layout.purlin_joints],
                     members=[asdict(member) for member in layout.beams],
                     materials=dict(rafter=settings.rafter_material, other=settings.beam_material),
@@ -970,10 +1092,15 @@ def main(argv=None):
                                  "Prismatic rafter axes end at vertical eaves; local horizontal end cuts/notches omitted.",
                                  "No roof diaphragm, wind, chimney load, or wall-plate self-weight in roof-frame reactions."])
     metadata["assumptions"].extend([
-        f"Tesařské pásky {'included as '+settings.brace_action+' axial springs' if settings.braces else 'excluded, including their self-weight and attachment arms'}.",
+        f"Tesařské pásky {'included as '+settings.brace_action+' axial springs' if roof.brace_springs else 'excluded, including their self-weight and attachment arms'}.",
         "Purlins continuous." if settings.continuous_purlins else
-        f"Purlins split at every post ({purlin_configuration_description(roof)}); both bending rotations released at each cut, with axial/shear and roll compatibility retained.",
-        "Purlins bear directly on posts; connector ends are pinned to the purlin inner faces at purlin centre height.",
+        f"Purlins split at every internal bearing ({purlin_configuration_description(roof)}); both bending rotations released at each cut, with axial/shear and roll compatibility retained.",
+        ("Purlins bear on separate flexible sedla above the posts; central attachments are ideal pins, wing contacts transfer vertical compression only, with axial slip and separate bending rotations."
+         if layout.saddle_contacts else "Purlins bear directly on posts."),
+        "Sedlo wing stiffness is E90,mean times tributary bearing area divided by the two half-depths in series; no composite-section stiffness or bolt slip is assumed.",
+        "Sedlo unloaded roll and yaw orientations are fixed; vertical bending rotation is free at the central connection.",
+        "Internal masonry bearings are immovable, anchored pins at the purlin axes; wall, lintel and local bearing capacity are not designed here.",
+        "Connector ends are pinned to the purlin inner faces at purlin centre height.",
         "One connector X rotation is fixed only to remove unloaded axial spin; no translational support or bending fixity is added.",
         "One post Z rotation is fixed only to remove unloaded axial spin; no translational support or bending fixity is added.",
         f"Rafter-to-wall-plate translation restraint: {restraint}; vertical support and yaw restraint retained.",
@@ -1011,6 +1138,15 @@ def main(argv=None):
         print(f"  {row['post']} (X={row['x_m']:.3f}, Y={row['y_m']:.3f} m), "
               f"{row['limit_state']}: {row['downward_kN']:.3f} kN "
               f"(~{equivalent_kg:.0f} kg at g={settings.gravity:g}); {row['combination']}")
+    wall_groups = {}
+    for row in supports:
+        if row["kind"] == "wall_bearing":
+            wall_groups.setdefault((row["member"], row["combination"].split("_", 1)[0]), []).append(row)
+    if wall_groups:
+        print("Internal Ytong wall loads: maximum downward force per purlin and limit state (+ down)")
+        for (member, limit), group in sorted(wall_groups.items()):
+            worst = min(group, key=lambda row: row["Fz_kN"])
+            print(f"  {member}, {limit}: {-worst['Fz_kN']:.3f} kN; {worst['combination']}")
     uplift = [r for r in supports if r["Fz_kN"] > 1e-5]
     print(f"Maximum support uplift: {max((r['Fz_kN'] for r in uplift), default=0):.3f} kN; {len({r['support'] for r in uplift})} marked locations")
     print(f"Instantaneous chord checks: {sum(r['L300_status']=='FAIL' for r in chords)} L/300 failures; {sum(r['L500_status']=='FAIL' for r in chords)} L/500 failures")
@@ -1020,6 +1156,17 @@ def main(argv=None):
         print("\n".join(failures))
     else:
         print("Purlin deflection checks: all support spans pass L/300 and L/500.")
+    Path(f"{stem}_failures.md").write_text(
+        "# Roof simulator: current purlin deflection checks\n\n"
+        f"Roof layers: {settings.roof_mass:g} kg/m²; snow: {settings.snow_load:g} kN/m².\n\n"
+        f"Purlins: {purlin_configuration_description(roof)}; "
+        f"{len(layout.bases)} posts, {len(layout.walls)} internal-wall bearings, "
+        f"{sum(b.category == 'saddle' for b in layout.beams)} sedla.\n\n"
+        + ("\n".join(f"- {message.strip()}" for message in failures) if failures else
+           "All purlin support spans pass instantaneous L/300 and L/500 checks.")
+        + "\n\nFirst-order elastic deflection checks; strength, wall/lintel capacity and connections are not verified.\n",
+        encoding="utf-8",
+    )
     worst = max(chords, key=lambda row: row["departure_mm"]/row["L300_limit_mm"])
     print(f"Governing L/300 chord: {worst['member']}, {worst['combination']}: {worst['departure_mm']:.3f} / {worst['L300_limit_mm']:.3f} mm")
     print(f"Maximum relative equilibrium residual: {max(equilibrium.values()):.3g}")

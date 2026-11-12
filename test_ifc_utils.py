@@ -195,6 +195,39 @@ class GlazedDoorTests(unittest.TestCase):
         geometry = shape.geometry if hasattr(shape, "geometry") else shape
         return np.asarray(geometry.verts).reshape(-1, 3)
 
+    def test_reversed_sliding_leaf_changes_wall_face_but_keeps_slide_direction(self):
+        for operation in ("SLIDING_TO_LEFT", "SLIDING_TO_RIGHT", "DOUBLE_DOOR_SLIDING"):
+            for start, end in (((0, 0), (5, 0)), ((0, 5), (0, 0))):
+                for glazed in (False, True):
+                    with self.subTest(operation=operation, end=end, glazed=glazed):
+                        house = House("Sliding door faces")
+                        wall = house.storey("Ground", elevation=0).wall(start, end, thickness=.1, height=3)
+                        options = dict(width=.7, opening_width=.8, height=2.1,
+                                       operation=operation, glazed=glazed)
+                        normal = wall.add_door(at=.5, **options)
+                        reversed_door = wall.add_door(at=3, reverse_swing=True, **options)
+                        mirror_sum = 2*wall.body_offset+wall.thickness
+                        for aspect in ("Framing", "Glazing", "Lining", "Casing"):
+                            for original, reversed_item in zip(self.aspect_items(normal, aspect),
+                                                               self.aspect_items(reversed_door, aspect)):
+                                expected = self.vertices(original).copy()
+                                if aspect in {"Framing", "Glazing"}:
+                                    expected[:, 1] = mirror_sum-expected[:, 1]
+                                actual = self.vertices(reversed_item)
+                                np.testing.assert_allclose(actual.min(axis=0), expected.min(axis=0), atol=1e-8)
+                                np.testing.assert_allclose(actual.max(axis=0), expected.max(axis=0), atol=1e-8)
+                        def plan(door):
+                            rep = ifcopenshell.util.representation.get_representation(door, "Plan", "Body", "PLAN_VIEW")
+                            return ifcopenshell.util.representation.resolve_representation(rep)
+                        for index, (original, reversed_item) in enumerate(zip(plan(normal).Items, plan(reversed_door).Items)):
+                            expected = np.asarray(original.Points.CoordList).copy()
+                            if index >= 2:  # Keep both jambs; mirror only the sliding leaves.
+                                expected[:, 1] = mirror_sum-expected[:, 1]
+                            np.testing.assert_allclose(reversed_item.Points.CoordList, expected, atol=1e-9)
+                        self.vertices(reversed_door)  # The mirrored solid remains meshable.
+                        self.assertEqual(reversed_door.OperationType, operation)
+                        self.assertEqual(_close_door_bodies(house.model), 0)
+
     def test_glazed_leaf_has_a_real_frame_and_centred_pane_but_keeps_the_door_and_plan(self):
         house = House("Balcony doors", colors={"window": "#ffffff", "door": "#8B5A2B"})
         wall = house.storey("Ground", elevation=0).wall((0, 0), (7, 0), thickness=.25, height=3)
@@ -246,7 +279,7 @@ class GlazedDoorTests(unittest.TestCase):
                       "DOUBLE_SWING_RIGHT", "DOUBLE_DOOR_SINGLE_SWING", "DOUBLE_DOOR_DOUBLE_SWING",
                       "SLIDING_TO_LEFT", "SLIDING_TO_RIGHT", "DOUBLE_DOOR_SLIDING")
         for operation in operations:
-            for reverse in ((False,) if "SLIDING" in operation else (False, True)):
+            for reverse in (False, True):
                 with self.subTest(operation=operation, reverse=reverse):
                     house = House("Door swings")
                     wall = house.storey("Ground", elevation=0).wall((0, 0), (6, 0), thickness=.25, height=3)
@@ -8565,14 +8598,6 @@ class HouseTests(unittest.TestCase):
                 height=2.1,
                 reverse_swing="yes",
             )
-        with self.assertRaisesRegex(ValueError, "sliding doors"):
-            wall.add_door(
-                at=1,
-                width=0.9,
-                height=2.1,
-                operation="SLIDING_TO_LEFT",
-                reverse_swing=True,
-            )
         with self.assertRaisesRegex(ValueError, "sill_height"):
             wall.add_door(
                 at=1,
@@ -9914,12 +9939,12 @@ class HouseTests(unittest.TestCase):
     def test_sliding_door_divider_is_centred_under_labels_and_clear_of_symbol(self) -> None:
         for operation in ("SLIDING_TO_LEFT", "SLIDING_TO_RIGHT", "DOUBLE_DOOR_SLIDING"):
             for start, end in (((0, 0), (5, 0)), ((0, 5), (0, 0))):
-                for scale in (100, 200):
-                    with self.subTest(operation=operation, end=end, scale=scale):
+                for scale, reverse in ((100, False), (200, False), (100, True), (200, True)):
+                    with self.subTest(operation=operation, end=end, scale=scale, reverse=reverse):
                         house = House("Sliding door label")
                         storey = house.storey("Ground", elevation=0)
                         wall = storey.wall(start, end, thickness=0.1, height=2.8)
-                        door = wall.add_door(at=1, width=0.7, height=2.1, operation=operation)
+                        door = wall.add_door(at=1, width=0.7, height=2.1, operation=operation, reverse_swing=reverse)
                         drawing = house.add_drawing(
                             "Plan", 2, 2, 1.5, 5, storeys=[storey],
                             scale=scale, door_annotations=False,

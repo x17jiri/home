@@ -136,9 +136,9 @@ are still unresolved. With the current settings:
 
 Ring beams occupy the 210 mm ceiling bands above all basement walls and
 all ground-floor load-bearing walls. Their widths and centrelines follow
-the physical wall bodies. The 115 mm partition between Pokoj 1 and 2 is
-excluded at the ground-floor ceiling; its 300 mm basement support wall
-receives a ring beam. These beams belong to the corresponding ceiling
+the physical wall bodies. The 300 mm load-bearing Ytong wall between Pokoj 1 and 2
+receives a ground-floor ceiling ring beam, centred over the wall like the
+ring beam above its basement support. These beams belong to the corresponding ceiling
 storeys, so hiding a ceiling hides its ring beams as well.
 
 The single `Base plate concrete` slab covers the outer footprint of the
@@ -355,7 +355,10 @@ Two 100 mm SDK partitions define room 3's narrowed garden-side end, without
 a Liapor base course or a ground-ceiling ring beam above them.
 Pokoj 3 keeps `THIRD_ROOM_WIDTH = 3.47 m` clear below its garden-side end;
 the top `THIRD_ROOM_NARROW_DEPTH` is only
-`THIRD_ROOM_NARROW_WIDTH` wide, clearing the Pokoj 1 doorway.
+`THIRD_ROOM_NARROW_WIDTH` wide, currently 2.735 m. Its hallway-facing SDK
+surface is 50 mm clear of the near jamb of the Pokoj 1 opening, controlled
+by `THIRD_ROOM_DRYWALL_DOOR_CLEARANCE`; the position follows the actual
+garden-door centre offset and opening width.
 The return's hallway-facing surface aligns with the street-side end of the
 two side-wall openings. Its room-facing surface is `THIRD_ROOM_STEP_Y`;
 the recess depth follows this position independently of the bathroom partition.
@@ -407,21 +410,28 @@ has seven risers and six 300 mm treads, with the rise calculated at its new foot
 The outer railing continues around the landing's street edge. The ground plan
 shows the stair symbols, uphill walking arrow and combined stair notes.
 
-A centred 115 mm VPC partition along Y splits the garden section into equal
-rooms, each with 4.2025 m clear width. The common finishing pass gives every
-ground-floor masonry wall a Liapor base course. Partitions remain non-load-bearing.
+A centred 300 mm load-bearing Ytong Klasik wall along Y splits the garden
+section into equal rooms, each 3.985 m wide and 3.430 m deep. Its cut hatch
+uses the paired diagonals of 175 mm VPC over light orange (`ytong-klasik`,
+`YTONG_COLOR = "#ffd9b3"`).
+The common finishing pass retains the Liapor base below the Ytong masonry.
+The 175 mm transverse divider and its corresponding basement and upper-floor
+walls follow `GARDEN_ROOMS_DEPTH`, keeping their physical centres aligned.
 Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
-openings through the garden-room dividing wall. Pokoj 1's opening is 125 mm
-from the house centreline (`HOUSE_WIDTH/2`), controlled by
-`GARDEN_DOOR_CENTER_CLEARANCE`. Pokoj 2's opening is 500 mm from the west
-wall's inner face, controlled by `ROOM_2_DOOR_WEST_CLEARANCE`.
+openings through the garden-room dividing wall. Their nearest opening edges
+are each 250 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
+`GARDEN_DOOR_CENTER_CLEARANCE`, leaving 500 mm between openings. The centred
+300 mm Ytong wall has 100 mm clear between each face and the nearest opening.
+`rozvadec` is a white 360 × 150 × 500 mm cabinet on the hallway face of
+the 500 mm pier, centred at `HOUSE_WIDTH/2`. `ROZVADEC_SIZE` stores width,
+depth and height; `ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.20` sets its mounting level
+above the finished ground floor, and `ROZVADEC_WALL_GAP = 0.01` clears the wall.
 Pokoj 3 also has a 900 mm inward-opening door in a 1000 mm construction
 opening at its narrow garden-side end. The opening's garden-side edge is
 375 mm from the room 1 face of the garden-room dividing wall, controlled by
 `THIRD_ROOM_DOOR_GARDEN_CLEARANCE` (200 mm from the room 3 face with the
 current 175 mm wall).
 Opening dimensions are placed inside the rooms.
-Basement support walls will be added in a later step.
 Five room floors (`0.01–0.05`: Pokoj 1, Pokoj 2, Pokoj 3, Chodba, Koupelna)
 use 120 mm insulation and 65 mm screed/finish,
 starting at Z = 0. The stairway room has no floor build-up. Floor polygons
@@ -450,12 +460,19 @@ the inside west wall. The terminal prints the plasterboard inner-face
 height above the finished upper floor at the west corner of the upper
 stair arrival, including that point's X/Y coordinates.
 
-Five independent MIAKO assemblies cover the downstairs rooms. Their starting
-geometry is an exact XY copy of the basement ceiling, raised to the `Ceiling`
-storey: separate layouts for Pokoj 1/Pokoj 2 along Y, plus Pokoj 3, the
-bathroom/hallway area and the stairway along X. The five calls use literal
-`start`, `end`, `direction`, `structure` lists and block-bearing offsets,
-so later basement edits do not propagate upstairs. Edit `ceiling_pokoj1`,
+Five independent MIAKO assemblies cover the downstairs rooms in the `Ceiling`
+storey. Pokoj 1 and Pokoj 2 use 4250 mm beams along X: 130 mm bearing on the
+outside walls and 135 mm on the centred 300 mm Ytong wall, leaving 30 mm
+between the opposing beam ends. Each layout is seven `beam, narrow` pairs
+(no final beam), 3500 mm wide. It starts 40 mm inside the transverse 175 mm
+wall and ends 30 mm inside the garden 240 mm wall around the 3430 mm room.
+`GARDEN_CEILING_*` constants configure these spans and offsets.
+The other layouts remain independent of their basement counterparts.
+The stairway ceiling has four 2500 mm beams, two wide rows and one narrow
+row, totalling 1920 mm across the beams. Its street edge is 3000 mm from
+the front wall's inner face (Y = 3.240 m); its garden edge at Y = 5.160 m
+overlaps the garden-room wall by 5 mm. All five calls keep directly editable `structure` lists, so
+later basement edits do not propagate upstairs. Edit `ceiling_pokoj1`,
 `ceiling_pokoj2`, `ceiling_pokoj3`, `ceiling_bathroom_hallway` and
 `ceiling_stairway` directly. `ceiling_wall_bounds` holds this level's actual
 inner wall faces for dimensions. The upper ceiling's beam geometry and its
@@ -500,7 +517,8 @@ Set it to `"monolithic"` to restore the sloped concrete flights and landings.
 Wooden banisters run along the inner edges of both retained flights.
 Each `railing_path("right", inset=STAIR_RAILING_INSET)`
 sets the slope and seats posts and balusters on the actual treads. The shared
-`STAIR_RAILING_INSET` controls the centreline inset onto each flight.
+`STAIR_RAILING_INSET` controls the centreline inset onto each flight and
+onto the middle landing for the short railing across the flight gap.
 `STAIR_RAILING_HEIGHT = 1.0` controls the vertical handrail height.
 The middle landing has a normal-height railing across the 240 mm flight gap.
 At ground-floor level, `wall_stairwell_wood_g` continues across the former
@@ -561,7 +579,7 @@ retain their roof-shaped tops all the way to the ridge. The existing wall
 X ranges and thicknesses are preserved. A common horizontal concrete band
 of height `UPPER_RING_BEAM_HEIGHT` ends at `UPPER_FLOOR_START+NADEZDIVKA`,
 directly below the wall plates. It replaces masonry in the four exterior
-walls and both 1.25 m garden-side VPC sections, inherits each wall's width, and is
+walls, inherits each wall's width, and is
 interrupted by any opening crossing the band. The existing ring-beam
 helper supplies schematic reinforcement. Upper beams belong to the
 `Upper floor` storey and are included explicitly in the roof plan.
@@ -569,73 +587,115 @@ The upper plan includes the same drawing-only Rockwool,
 material legend, and overall and inside dimensions. Both existing stair
 flights and the middle landing are explicitly included with their plan
 symbols and one continuous ascent arrow, retaining their ground-floor storey.
-Two upper-floor SDK partitions enclose a rectangle in the front-west
-corner; the remaining L-shaped area is the living room.
+The upper vertical SDK separates the front kitchen area from the technical
+rooms and stairway; the full-width masonry wall separates it from the
+garden-side living area.
 `LIVING_ROOM_WIDTH` is the clear width of its east-side strip.
-`LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - LIVING_ROOM_WALL_FRONT_Y -
-DRY_WALL_WIDTH` is the clear depth of its back/garden-side strip.
-The horizontal SDK partition's garden face aligns with the garden face of
-the nearby 1.25 m VPC section. It extends between the vertical partition and
-that section, whose centre stays over the ground-floor load-bearing wall.
-The vertical partition has two segments, stopping
-at the near chimney face and continuing from its far face to the horizontal
-wall. The chimney footprint is left clear. The former two short SDK walls
+`LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - living_room_back_face_y` is the
+clear depth of the back/garden-side strip.
+The former horizontal SDK and two 1.25 m VPC returns are replaced by one
+250 mm load-bearing Ytong Statik wall across the full inside house width.
+Its centre follows the actual centre of the ground-floor garden-room divider.
+Its sloped top is 50 mm below the rafter tops, measured perpendicular to the
+roof slope (`UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE`). It is capped
+horizontally at `purlin_bottom_z`; unlike the SDK, it is not capped at the
+plasterboard. The exterior gable walls keep their separate underside cuts.
+Cuts use the `ytong-statik` diagonal cross hatch over the same light orange
+as Ytong Klasik. The removed returns' ring-beam bands are not extended
+through this new wall; the wall-plate ring beams remain on the perimeter.
+The vertical SDK partition is one continuous wall from the front wall's
+inside face to the street-facing face of the Ytong wall. Its length is
+independent of the chimney position; the old chimney gap and separate
+extension are removed. The former two short SDK walls
 forming the hallway step are removed; the upper plan dimensions the actual
 clearance from the stair arrival to the living-room wall's facing surface.
-With `DRY_WALL_WIDTH = 0.10`, the excluded rectangle has clear dimensions
-`HOUSE_WIDTH - 2*BWT - DRY_WALL_WIDTH - LIVING_ROOM_WIDTH` by
-`HOUSE_DEPTH - 2*BWT - DRY_WALL_WIDTH - LIVING_ROOM_DEPTH`.
 The non-load-bearing walls start at the upper-storey datum, meet without
 overlap, and are clipped to the underside of the sloped plasterboard.
-The back partition has a clearance where the west purlin passes through it.
-The upper plan dimensions the two living-room strips and includes the SDK
-material legend.
-The living room has an L-shaped floor build-up (`living_room`, room `1.01`,
-"Obývací pokoj") following the clear inside faces of the partitions and
-exterior walls. It uses 30 mm impact insulation and 65 mm screed/finish,
-from Z = 3.035 to 3.130 m. Its 48.90 m² area supplies the room label and
-room legend via `upper_room_floors`. The stair arrival currently crosses this
-layout; the upstairs layout will be revised separately.
+Timber clearances are retained where sedla and posts intersect the wall
+or SDK finishes. The upper plan dimensions the clear sections on each side
+of the Ytong wall and includes both masonry and SDK material legends.
+`living_room_floor_parts` models the clear kitchen and garden floor regions,
+excluding masonry and the chimney while continuing through the wide passage.
+All regions keep room `1.01` ("Obývací pokoj"). The room label and legend use
+`living_room_outline.area`, including the passage threshold. Each uses 30 mm impact insulation and 65 mm screed/finish
+relative to `UPPER_FLOOR_START`.
 The living room has two 1.50 m back windows (`UPPER_BACK_WINDOW_WIDTH`),
 centred as a pair with a 1.00 m gap (`UPPER_BACK_WINDOW_GAP`),
 and a 1.50 m front window. The front opening
 starts 2.00 m from the east wall's inside face
-(`UPPER_FRONT_WINDOW_EAST_CLEARANCE`). Their 1.375 m height and 0.890 m sill
-above the finished floor match the ground-floor room windows; dedicated
+(`UPPER_FRONT_WINDOW_EAST_CLEARANCE`). Upper opening levels use their own
+125 mm masonry courses (`UPPER_MASONRY_COURSE_HEIGHT`) above the 20 mm
+levelling mortar, independently of the ground floor. The window sill is at
+`ZAKLADACI_MALTA + 8*UPPER_MASONRY_COURSE_HEIGHT = 1.020 m` above the slab;
+the top is at 19 courses, or 2.395 m. With 95 mm of floor layers, these are
+0.925 m and 2.300 m above finished floor, retaining a 1.375 m window height.
 `UPPER_WINDOW_SILL_HEIGHT` and `UPPER_WINDOW_TOP_HEIGHT` hold storey-relative
-coordinates. Both have opening dimensions in the upper plan, and
+coordinates. All have opening dimensions in the upper plan, and
 `upper_room_windows` supplies their combined area to the room legend.
 `upper_room_floors` contains the living room (`1.01`), front Technika (`1.02`),
 hallway (`1.03`) and rear Zachod (`1.04`). A 100 mm SDK cross-wall is centred
-on the first west-purlin post, with a clearance for the post itself. It joins
+so its street-facing face has `UPPER_TECHNICAL_POST_CLEARANCE = 0.05 m`
+clearance behind the garden face of the first west-purlin post.
+`UPPER_TECHNICAL_CROSS_Y` includes the post and drywall half-thicknesses.
+Moving this wall gardenwards enlarges Technika (1.02) and reduces Zachod
+(1.04); their floor outlines and the stair-side railing follow it. It joins
 the vertical living-room wall to the parallel stair-side wall. The latter
 runs from the cross-wall's street face to the horizontal living-room wall;
 its stair-facing side is flush with `STAIR_LEFT_X`. In front of the cross-wall,
 a timber banister replaces it, with its posts entirely on Technika's floor.
+Just beyond the toilet door, the wall angles towards the nearest living-room
+door jamb in the Ytong wall. `TECHNIKA_SLIDING_DOOR_TAPER_CLEARANCE = 0.05 m`
+leaves a short straight return after the toilet opening. The hallway-facing
+edge ends `TECHNIKA_SLIDING_DOOR_TAPER_JAMB_OFFSET = 0.05 m` past the Ytong
+opening's near jamb, towards the toilet. Both floor outlines follow the angled
+wall. The two SDK pieces have a mitred joint.
 `TECHNIKA_RAILING_START_FROM_FRONT = 1.5` sets its start distance from the
 front wall's inside face; its garden end meets the cross-wall's street face.
-The rear toilet floor excludes the chimney footprint and all room floors
-end at the appropriate partition faces.
+The toilet extends to the horizontal living-room wall, with no partition
+separating it from the chimney. Its floor outline excludes the chimney footprint;
+all room floors end at the appropriate partition faces.
 The plan dimensions the 1120 mm clear toilet-room width and both face-to-face gaps
-beside the first west-purlin post. A further dimension measures the clear X
-distance from the chimney to the stair-side partition. This wall has a
+beside the first west-purlin post. This wall has a
 700 mm sliding door in an 800 mm opening, sliding towards the street.
-`TECHNIKA_SLIDING_DOOR_Y = None` aligns the opening's garden edge with the
-chimney's street face; a number sets the absolute Y coordinate of its start instead. Dedicated
+`reverse_swing=True` places its sliding leaf on the toilet (1.04) side of
+the wall in both the plan symbol and 3D, without reversing its sliding direction.
+The upper plan adds its door-size labels explicitly, keeping the sliding
+door's label in the hallway (`offset=-0.9`) to avoid the room identifier.
+`TECHNIKA_SLIDING_DOOR_Y = None` puts the opening's garden edge
+`TECHNIKA_SLIDING_DOOR_CHIMNEY_CLEARANCE = 0.05 m` before the chimney's
+street face; a number sets the absolute Y coordinate of its start instead.
+The upper plan dimensions the Y clearance from the stair exit to the nearest
+construction-opening jamb. Dedicated
 `TECHNIKA_SLIDING_DOOR_WIDTH` and `TECHNIKA_SLIDING_DOOR_OPENING_WIDTH` control its size.
-The two 1.25 m garden-side VPC sections stay centred above the ground-floor
-garden-room load-bearing wall, including its material offset and thickness.
-The horizontal SDK and nearby VPC section share the same garden face.
+`UPPER_BEARING_WALL_THICKNESS = 0.25` sets the full-width Ytong Statik wall.
+Its front/back faces also locate the adjoining SDK, room floors, basin
+clearance and wall-section dimensions.
 The floor outlines follow the new wall faces, fill the removed step, and
 exclude the chimney footprint. The upper plan also
-dimensions the clear gap from the rear west post to the living-room wall.
-A 900 mm living-room door in a 1000 mm opening is centred on the upper
-stairway exit and hosted by the horizontal living-room SDK wall. It swings
+dimensions the clear gap from the remaining street-side west post to the living-room wall.
+The 900 mm living-room door in a 1000 mm opening is hosted by the Ytong Statik
+wall. Its opening's west edge is 1.30 m from the inner west wall face,
+controlled by `LIVING_ROOM_DOOR_WEST_CLEARANCE`. The wide unfilled opening
+starts 1.40 m from the inner east wall face and ends at the living-room face
+of the vertical SDK (`LIVING_ROOM_OPENING_END_X = BWT+LIVING_ROOM_WIDTH`).
+Its current width is 3.43 m, derived by `LIVING_ROOM_OPENING_WIDTH`;
+`LIVING_ROOM_OPENING_EAST_CLEARANCE` controls the starting clearance. Both openings share their sill and
+top elevations and have opening dimensions in the upper plan. The upper doors
+and wide opening use `UPPER_DOOR_TOP_HEIGHT`, 20 mm mortar plus 18 courses:
+2.270 m above the slab, or 2.175 m above finished floor.
+`UPPER_DOOR_CLEAR_HEIGHT = 2.1` retains the usable door height. This is the
+nearest course-aligned head that leaves room for that clear height; 17 courses
+would leave only 2.050 m above finished floor. The existing opening bottoms
+stay as configured (slab level in masonry, finished floor for the sliding door).
+The door swings
 towards the garden (+Y), with an opening dimension on the living-room side.
 The vertical SDK wall between the living room and Technika has no doorway.
 The upper room floors share the living room's 30 mm impact
-insulation and 65 mm screed/finish, and supply labels and room-legend rows
-from their measured outlines.
+insulation and 65 mm screed/finish. The kitchen and garden-side living area
+remain room `1.01`, now connected through the wide passage. One room symbol
+and legend row report the clear area and existing window areas; no extra
+kitchen room number is introduced. Other room areas follow their updated
+clear outlines.
 The upper hallway has the old house's 700 × 700 × 800 mm washing machine
 beside the west exterior wall, centred in the half nearest the stair arrival.
 The former street-side VPC pair is removed. The washing machine retains its
@@ -672,59 +732,49 @@ four-seat asset, aligned with the cooker between it and the east wall.
 `DINING_TABLE_WALL_GAP = 1.0` sets its clearance from the east wall's inner face.
 The attic `kamna` uses the original house's stove placeholder, controlled by
 `STOVE_SIZE = (0.60, 0.50, 1.50)`. Its X centre matches `kitchen_center_x`;
-its back face has `STOVE_WALL_GAP = 0.20 m` clear to the living-room side
-of the horizontal SDK wall. It faces the back/garden wall (+Y).
+its Y follows `CHIMNEY_CENTER[1]`. It faces the back/garden wall (+Y) and
+clears the continuous vertical SDK wall on the kitchen side.
 Two wooden wall plates (`wall_plate_east`, `wall_plate_west`) sit directly
 on the east and west upper walls, centred across their 240 mm thickness.
 `WALL_PLATE_SIZE = (0.16, 0.12)` sets their width and height, matching the
-original house. `WALL_PLATE_OVERHANG = 0.30` extends them beyond both outside
-front/back wall faces: Y = −0.30 to 9.05 m, length 9.35 m. Their bottoms
-are at Z = 4.400 m and tops at Z = 4.520 m.
+original house. `WALL_PLATE_OVERHANG = 0.20` extends them beyond both outside
+front/back wall faces. Their bottoms are at `UPPER_FLOOR_START+NADEZDIVKA`;
+their tops are one wall-plate height above that.
 Two wooden purlins (`purlins`) run parallel to the wall plates at
-`PURLIN_X_POSITIONS = (3.0, HOUSE_WIDTH-3.0)`. Their section is
-`PURLIN_SIZE = (0.16, 0.24)`. Despite its legacy name,
-`PURLIN_CENTER_HEIGHT = 3.65 m` specifies their **top** above the upper-storey
+`PURLIN_X_POSITIONS`, currently X = 3.085 and 5.665 m. Their section is
+`PURLIN_SIZE = (0.17, 0.25)`. Despite its legacy name,
+`PURLIN_CENTER_HEIGHT = 3.75 m` specifies their **top** above the upper-storey
 datum (the ceiling top). `PURLIN_Z` is the derived centreline elevation.
 Changing the purlin height keeps its top and roof slope fixed and adjusts
 the post height below it.
-They share `WALL_PLATE_OVERHANG`, so their Y range is also −0.30 to 9.05 m.
-Each purlin has configurable vertical timber posts (`purlin_supports`) in the
-upper storey. `PURLIN_SUPPORT_Y_POSITIONS` contains a nonempty tuple of absolute
-Y coordinates per purlin. For one post per purlin at the house centre, use
-`((HOUSE_DEPTH/2,), (HOUSE_DEPTH/2,))`; two-post layouts remain supported.
-`PURLIN_SUPPORT_SIZE = (0.16, 0.16)` sets their cross-section. They run from
-the ceiling top (`UPPER_FLOOR_START`, before the floor build-up) directly
-to the purlin undersides. X-aligned connecting beams
-(`purlin_connection_beams`) span between the purlin inner faces, with their
-centrelines at `PURLIN_Z`, level with the purlin centrelines.
-`PURLIN_CONNECTION_BEAM_SIZE = (0.12, 0.20)` controls their section.
-`PURLIN_CONNECTION_Y_POSITIONS` is shared with the simulator: one beam
-aligns with each distinct post Y coordinate, and two sit inside the front/back
-gable walls.
-`PURLIN_CONNECTION_WALL_CLEARANCE = 0.10` measures the clear wall-to-beam
-gap; each end beam's centre includes half its 120 mm width.
-The purlin bears directly on its post; the connector is attached at its side.
-East/west posts can have different Y coordinates and different counts. Each
-post has three 45-degree timber braces: two along Y beneath its purlin and one
-along X toward the opposite purlin, beneath the connecting beam.
-`PURLIN_BRACE_SIZE = (0.10, 0.12)`
-sets the brace section, and `PURLIN_BRACE_DROP = 0.80` sets the anchor's drop
-below the post top. Brace ends are cut flush to the post face and beam
-underside. Braces that would extend beyond a purlin end are skipped individually.
-The upper plan shows the post cut footprints; the roof drawing
-and timber schedule include the posts, connecting beams and all fitting braces.
-Intersecting SDK partitions and inner roof finishes have clearance openings
-matching the new timber solids, so the frame remains exposed at penetrations.
-The upper plan dimensions only the east support row: inside front-wall face
-to first-post centre, between successive post centres when there is more than
-one, and last-post centre to inside back-wall face. One horizontal dimension
-shows the clear distance from the front east post's face to the common front
-edge of the kitchen run.
-All endpoints follow the configured post and kitchen positions.
-The roof has 14 pairs of `RAFTER_SIZE = (0.08, 0.20)` rafters, with their
-centres at `RAFTER_FIRST_Y = -0.125` through
-`RAFTER_LAST_Y = HOUSE_DEPTH + 0.125`. There are six 670 mm gaps, one
-central 960 mm gap, and six more 670 mm gaps. Both slopes are defined by
+They share `WALL_PLATE_OVERHANG`, giving Y = −0.20 to `HOUSE_DEPTH+0.20`.
+Each purlin now has one street-side post (`purlin_supports`), centred in the
+clear span between the front wall and the Ytong wall:
+`PURLIN_SUPPORT_STREET_Y = (BWT+PURLIN_BEARING_WALL_Y-UPPER_BEARING_WALL_THICKNESS/2)/2`,
+currently Y = 2.67875 m. The former garden posts are removed; the Ytong wall
+at `PURLIN_BEARING_WALL_Y = 5.2425 m` supports the purlins there instead.
+`PURLIN_SUPPORT_Y_POSITIONS` retains one tuple per purlin for editable layouts.
+The 160 × 160 mm posts run from the ceiling top to the underside of a sedlo,
+currently 3.25 m high. `PURLIN_SADDLE_LENGTH = 1.50` and
+`PURLIN_SADDLE_SIZE = PURLIN_SIZE` create a 170 × 250 mm saddle beam centred
+on each post, immediately under its purlin. All diagonal braces are removed
+from the IFC. Their old `PURLIN_BRACE_*` settings remain solely for optional
+legacy simulator comparisons with `--no-saddles --braces`.
+
+X-aligned connecting beams remain between the purlin inner faces at
+`PURLIN_Z`, with section `PURLIN_CONNECTION_BEAM_SIZE = (0.16, 0.16)`.
+The street connector follows the moved posts; the garden connector retains
+its old Y through `PURLIN_CONNECTION_GARDEN_Y`. The two end connectors retain
+`PURLIN_CONNECTION_WALL_CLEARANCE = 0.10` from the gable walls.
+The roof drawing and schedule include the two sedla and no brace rows;
+XX dimensions the shortened post and sedlo height, YY the sedlo length.
+Ground and ceiling planning markers follow the two remaining posts.
+The upper plan dimensions the east post stations and kitchen-run clearance,
+and the west post's clearance to the front face of the Ytong wall.
+
+The roof has pairs of `RAFTER_SIZE = (0.08, 0.20)` rafters at the editable
+`RAFTER_Y_POSITIONS`, from `RAFTER_FIRST_Y = -0.125` through
+`RAFTER_LAST_Y = HOUSE_DEPTH + 0.125`. Both slopes are defined by
 the outer top corners of their wall plate and purlin, meeting at
 `X = HOUSE_WIDTH/2`. `RAFTER_Z_OFFSET = -0.05` sets the rafter bottom
 50 mm below that reference plane, measured perpendicular to the slope.

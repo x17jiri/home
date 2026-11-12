@@ -17891,7 +17891,7 @@ class Wall(ifcopenshell.entity_instance):
         self,
         representation: ifcopenshell.entity_instance,
     ) -> None:
-        """Mirror the plan swing onto the opposite room-side wall face."""
+        """Mirror the plan leaf onto the opposite room-side wall face."""
         items = list(representation.Items)
         if len(items) < 3:
             raise RuntimeError("unexpected door plan representation structure")
@@ -18116,7 +18116,9 @@ class Wall(ifcopenshell.entity_instance):
         Plan exports lower that 2D symbol just below the cut when necessary;
         the physical door and its opening keep their original placement.
         ``reverse_swing`` opens the leaf on the opposite side of the wall
-        without changing its hinge end, in both 3D and plan.  ``show_overhead``
+        without changing its hinge end, in both 3D and plan. For sliding doors,
+        it moves the leaf to the opposite wall face, keeping the sliding direction.
+        ``show_overhead``
         adds thin solid plan-only wall linework across the rough opening. Casings
         on both wall faces bridge any clearance between the door and rough
         opening; ``casing_overlap`` is how far they continue over the wall
@@ -18142,8 +18144,6 @@ class Wall(ifcopenshell.entity_instance):
             raise ValueError("open_angle must be between 0 and 180 degrees")
         if not isinstance(reverse_swing, bool):
             raise TypeError("reverse_swing must be a boolean")
-        if reverse_swing and "SLIDING" in operation:
-            raise ValueError("reverse_swing is not supported for sliding doors")
         if not isinstance(show_overhead, bool):
             raise TypeError("show_overhead must be a boolean")
         if not isinstance(glazed, bool):
@@ -18301,6 +18301,18 @@ class Wall(ifcopenshell.entity_instance):
             product=door,
             representation=body_representation,
         )
+        if reverse_swing and "SLIDING" in operation:
+            # Mirror the generated vertical leaf solids before glazing replaces
+            # them with frames extruded along Y, which ShapeBuilder.mirror does
+            # not handle correctly. Glazing then inherits the reversed position.
+            framing = next(aspect for aspect in door.Representation.HasShapeAspects
+                           if aspect.Name == "Framing")
+            items = [item for representation in framing.ShapeRepresentations
+                     for item in representation.Items]
+            ShapeBuilder(model).mirror(
+                items, mirror_axes=(0.0, 1.0),
+                mirror_point=(0.0, self.body_offset+self.thickness/2),
+            )
         glass_items = self._glaze_door_leaf(door, body_representation) if glazed else []
         self._add_door_casings(
             door,

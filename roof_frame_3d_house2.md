@@ -44,8 +44,8 @@ The model follows the current dimensions and positions when rerun:
   Configure one or more
   posts per purlin using `PURLIN_SUPPORT_Y_POSITIONS`; each purlin has its own
   tuple and the Y positions need not match. By default each purlin is split
-  at every post centreline: one post gives two members (`P1.1`–`P1.2`), two
-  posts give three. Both bending moments are released at each splice, with
+  at every internal support: the current post plus Ytong wall give three
+  members (`P1.1`–`P1.3`) per purlin. Without a wall bearing, one post gives two. Both bending moments are released at each splice, with
   common axial/shear translations and retained torsional roll compatibility.
   No extra ground restraint is added. `--continuous-purlins` restores the
   continuous members (`Settings(continuous_purlins=True)` in
@@ -63,31 +63,61 @@ The model follows the current dimensions and positions when rerun:
   their centrelines at the same Z as the purlin centrelines. Their ends
   attach to the purlin sides through ideal pins at those faces.
   `PURLIN_CONNECTION_Y_POSITIONS` is shared with the IFC: one connector
-  at each distinct post Y coordinate and two with a 100 mm clear gap to the inner gable-wall
+  at each distinct post Y coordinate, the retained garden connector, and two with a 100 mm clear gap to the inner gable-wall
   faces, controlled by `PURLIN_CONNECTION_WALL_CLEARANCE`. The extra
   connectors do not introduce additional posts or braces.
   With a ridge purlin, the lower connectors have no added joint to the
   ridge posts they cross. The ridge posts run directly to the ceiling.
-- Posts from the ceiling top directly to the purlin undersides.
-- Optional three 45-degree braces per post: two under the purlin and one under the
-  connecting beam at each post. The section and anchor drop follow
-  `PURLIN_BRACE_SIZE` and `PURLIN_BRACE_DROP`.
-  A brace whose upper contact falls beyond its purlin end is omitted;
-  the other braces at that post remain.
-  Ridge posts have the two longitudinal braces only: the transverse
-  connectors lie below their upper brace anchors.
-  They are excluded by default; `--braces` includes them. Exclusion removes
-  their stiffness, self-weight and attachment arms from the calculation,
-  images, member CSV and active geometry in the calculation basis.
-  The IFC model keeps its braces.
+- One 160 × 160 mm street-side post per purlin, at the midpoint of the clear
+  front-wall/Ytong-wall span (Y = 2.67875 m). The two garden posts are removed.
+- One `SEDLO` (saddle beam) per post, 1.50 m along Y, with the purlin's
+  170 × 250 mm section. Its top touches the purlin bottom. Post tops are
+  lowered by the sedlo height; the roof slopes and purlin tops stay fixed.
+- The interior Ytong wall supports each outer purlin at Y = 5.2425 m. It does
+  not reach a raised optional ridge purlin. Wall reactions are exported as
+  `wall_bearing` rows and printed separately from post loads.
+- Diagonal braces are absent with sedla. The legacy comparison
+  `--no-saddles --braces` restores the optional axial brace model; the IFC
+  remains brace-free. `--no-wall-bearings` omits the interior-wall restraint.
 
-Both gable walls and the timber posts support the purlins. The gable
-bearings are at the front/back wall centrelines. There is no direct rigid
-ground support at the purlin/post locations: the purlins bear directly
-on the elastic posts. The side connectors and braces provide additional
-frame load paths. Post bases are pinned against an immovable
-supporting slab. The slab, gable walls, ring beams and their capacities
-are outside this model.
+Front/back gable bearings, the interior Ytong wall and the elastic timber
+post/sedlo assemblies support the purlins. Masonry bearings are anchored
+translation pins with unloaded purlin-roll orientation fixed. Post bases
+are pinned to the immovable supporting slab. Wall/lintel capacity, wall
+settlement and local timber bearing capacity are outside this frame model.
+
+### Sedlo contact model
+
+Purlin and sedlo are separate elastic bending members, each with its own
+section stiffness. There is no composite-section stiffness. An ideal
+central translation pin attaches the purlin to the sedlo, and another
+attaches the sedlo to the post; these retain the existing anchored-joint
+assumption. The two beams can have different bending rotations. Away from
+that centre, only vertical compression is transferred; axial slip is free.
+No wing fastener slip or fastener capacity is assumed verified.
+
+`Settings.saddle_contact_points = 5` selects an odd, evenly spaced grid along
+the sedlo. The centre uses the ideal pin; four wing contacts per sedlo are
+compression-only axial springs. Their transverse-compression stiffness is
+
+```text
+A = min(purlin width, sedlo width) × tributary contact length
+k = A / ((purlin height / 2) / E90,mean + (sedlo height / 2) / E90,mean)
+```
+
+`E90,mean` comes from the selected shared timber grade. End stations have
+half the interior tributary length. Contact opening/reclosing is solved
+per load combination. Sedlo unloaded roll/yaw orientations are fixed to
+remove free spin; vertical bending rotation remains free. Sedlo self-weight
+is included and the shorter posts lose their removed self-weight. Roof and
+snow loads are unchanged. Refining from 5 to 9 contact stations changes
+current SLS post loads by about 0.05%; a 17-station check differs by about
+0.08% from the default. This checks discretisation, not joint capacity.
+
+`--no-saddles` selects direct purlin/post bearing for a comparison;
+`--saddle-contact-points 9` refines the bearing grid. Geometry options are
+passed to `Layout.from_house(..., saddles=..., wall_bearings=...,
+saddle_contact_points=...)`; material/load defaults remain in `Settings`.
 
 The rafters are continuous over their purlin seats. The ridge is a pin
 between each pair, with no ridge beam or ground support. Wall plates are
@@ -122,7 +152,7 @@ post bending remains pinned and the tests check for zero artificial moment.
 not a claimed carpentry-joint stiffness; the tests compare factors 1,000
 and 10,000 to check convergence of the rigid-arm approximation.
 
-When enabled with `--braces` (or `Settings(braces=True)`), braces are axial
+When using the legacy `--no-saddles --braces` comparison, braces are axial
 springs with stiffness E×A/L, pin-ended and initially snug. The enabled
 default is compression only, with an iterative active-set
 solution that permits opening and reclosing separately in every load
@@ -144,7 +174,7 @@ Defaults are local fields of `Settings` in the simulator's USER INPUTS block:
 
 - `roof_mass`: **150 kg/m² of actual slope**, including the
   sloped internal insulation/OSB/installation space/plasterboard finish.
-- `snow_load`: **3.0 kN/m² of horizontal projection**, already a roof load,
+- `snow_load`: **1.5 kN/m² of horizontal projection**, already a roof load,
   not ground snow requiring another shape coefficient.
 - Timber self-weight: **450 kg/m³**, with **g = 10 m/s²**.
 
@@ -212,6 +242,8 @@ A run creates:
   so enabled braces and purlin continuity are included. Each post's maximum
   is selected independently; do not sum these envelopes as one load case.
   `_supports.csv` retains every combination with its original +Z-up sign.
+- `_sedlo_contacts.csv`: wing contact stiffness, compression force, opening and
+  active state for every combination. Central pin forces are not wing pressures.
 - `_model.png`: original and amplified deformed frame in 3D.
 - `_plan.png`: undeformed top view with timber footprints coloured by the
   worst instantaneous chord check over every SLS combination and support
@@ -220,7 +252,7 @@ A run creates:
   chord checks are grey; axial collar ties have magenta outlines and no
   deflection classification. These colours are independent of the chosen
   force-arrow combination and deformation scale.
-  Blue diamonds mark the purlin cuts above the posts. Each of the six pieces
+  Blue diamonds mark the purlin cuts above posts and the interior bearing wall. Each of the six pieces
   gets its own member ID, check colour and CSV rows. Self-weight is unchanged
   by splitting, and deflection chords still use the actual wall/post supports.
   Blue arrows show horizontal forces delivered to the wall plates for the
@@ -288,15 +320,15 @@ joint/anchor capacity, bearing compression or slab adequacy.
 
 # Enable the IFC's tesařské pásky as compression-only axial springs.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
-    --braces --output /tmp/house2_with_braces
+    --no-saddles --braces --output /tmp/house2_with_braces
 
 # Enabled braces capable of both axial tension and compression.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
-    --braces --brace-action both --output /tmp/house2_bilateral_braces
+    --no-saddles --braces --brace-action both --output /tmp/house2_bilateral_braces
 
 # Compare against posts alone, without gable-wall purlin bearings.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
-    --gable-bearings off --braces --output /tmp/house2_posts_only
+    --gable-bearings off --no-saddles --no-wall-bearings --braces --output /tmp/house2_posts_only
 
 # Override the load basis and show the west-heavy ULS case.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \

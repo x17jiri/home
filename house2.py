@@ -28,16 +28,21 @@ HOUSE_WIDTH = 8.75
 HOUSE_DEPTH = 9.0
 BWT = 0.24
 INNER_BWT = 0.175
-PARTITION_THICKNESS = 0.115
+GARDEN_PARTITION_THICKNESS = 0.30
 DRY_WALL_WIDTH = 0.10
 WOODEN_WALL_THICKNESS = 0.06
 FACADE_INSULATION_THICKNESS = 0.20
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.10
 FACADE_THICKNESS = 0.005
-GARDEN_ROOMS_DEPTH = 3.47  # Clear depth between the divider and inside garden wall.
+GARDEN_ROOMS_DEPTH = 3.43  # Clear depth between the divider and inside garden wall.
 GARDEN_ROOMS_WALL_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT
-THIRD_ROOM_NARROW_WIDTH = HOUSE_WIDTH/2.0 - BWT - 0.125-1.0-0.1-0.05
-THIRD_ROOM_NARROW_WALL_X = BWT+THIRD_ROOM_NARROW_WIDTH+DRY_WALL_WIDTH
+ROOM_DOOR_OPENING_WIDTH = 1.0
+GARDEN_DOOR_CENTER_CLEARANCE = 0.25  # Each construction opening stops this far from the centreline.
+THIRD_ROOM_DRYWALL_DOOR_CLEARANCE = 0.05  # Hallway face to the near jamb of the Pokoj 1 opening.
+THIRD_ROOM_NARROW_WALL_X = (
+    HOUSE_WIDTH/2-GARDEN_DOOR_CENTER_CLEARANCE-ROOM_DOOR_OPENING_WIDTH-THIRD_ROOM_DRYWALL_DOOR_CLEARANCE
+)
+THIRD_ROOM_NARROW_WIDTH = THIRD_ROOM_NARROW_WALL_X-BWT-DRY_WALL_WIDTH
 THIRD_ROOM_WIDTH = 3.47  # Clear width of the left street-side room.
 THIRD_ROOM_WALL_X = BWT+THIRD_ROOM_WIDTH+INNER_BWT
 STAIRWAY_WIDTH = 2.24  # Clear width beside the west exterior wall.
@@ -55,7 +60,9 @@ HALLWAY_OPENING_TOP_GAP = 0.25  # Masonry below the underside of the ground-floo
 
 UPPER_BATHROOM_WIDTH = 1.0
 LIVING_ROOM_WIDTH = HOUSE_WIDTH - 2*BWT - STAIRWAY_WIDTH - 2*DRY_WALL_WIDTH - UPPER_BATHROOM_WIDTH
-UPPER_VPC_RETURN_LENGTH = 1.25  # Garden-side 175 mm VPC returns extending from the side walls.
+UPPER_BEARING_WALL_THICKNESS = 0.25
+UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE = 0.05  # Perpendicular to the roof slope.
+YTONG_COLOR = "#ffd9b3"  # Light orange, shared by Klasik and Statik.
 KITCHEN_UNIT_SIZE = (0.64, 0.64, 0.75)
 FRIDGE_SIZE = (0.64, 1.0, 1.95)
 DINING_TABLE_SIZE = (1.25, 1.7)  # Complete asset footprint, including chairs.
@@ -71,6 +78,9 @@ SEATING_GAP = 0.10
 HEAT_PUMP_SIZE = (1.2, 0.5, 1.5)
 HEAT_PUMP_GARAGE_GAP = 0.50
 HEAT_PUMP_HEIGHT_ABOVE_BASEMENT_FLOOR = 0.60
+ROZVADEC_SIZE = (0.7, 0.3, 0.50)  # Width along X, depth, height.
+ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.20
+ROZVADEC_WALL_GAP = 0.05
 
 ZAKLADACI_MALTA = 0.02
 GROUND_WALL_BASE_COURSE_HEIGHT = ZAKLADACI_MALTA + 0.2
@@ -144,6 +154,7 @@ BASEMENT_STAIR_OPENING_LENGTH = 3.0  # Clear depth from the inside face of the s
 BASEMENT_S03_CEILING_STREET_SHIFT = 0.015
 BASEMENT_S04_CHIMNEY_BEAM_CLEARANCE = 0.03  # Chimney street face to the nearest MIAKO beam edge.
 UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
+UPPER_MASONRY_COURSE_HEIGHT = 0.125
 UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
 UPPER_FINISHED_FLOOR_HEIGHT = UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS
 UPPER_RING_BEAM_HEIGHT = 0.24
@@ -151,30 +162,36 @@ NADEZDIVKA = ZAKLADACI_MALTA + 1.20 + UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.2
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
-PURLIN_SIZE = (0.17, 0.25)
+PURLIN_SIZE = (0.16, 0.24)
 ROOF_TIMBER_MATERIAL = resolve_timber_grade("c22").name
-PURLIN_WALL_DISTANCE = 2.93
+PURLIN_WALL_DISTANCE = 3.13
 PURLIN_X_POSITIONS = (
 	BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0,
 	HOUSE_WIDTH-BWT-PURLIN_WALL_DISTANCE+PURLIN_SIZE[0]/2.0
 )
-PURLIN_CENTER_HEIGHT = 3.75  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
+PURLIN_CENTER_HEIGHT = 3.9  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
 PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]/2
 PURLIN_SUPPORT_SIZE = (0.16, 0.16)
-PURLIN_SUPPORT_1_Y = HOUSE_DEPTH-BWT-GARDEN_ROOMS_DEPTH-INNER_BWT/2.0+0.3
-PURLIN_SUPPORT_Y_POSITIONS = (
-#    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 1, at PURLIN_X_POSITIONS[0].
-#    (BWT+2.8, HOUSE_DEPTH-BWT-2.8),  # Purlin 2, at PURLIN_X_POSITIONS[1].
-    (BWT+2.52, BWT+2.52+3),  # Purlin 2, at PURLIN_X_POSITIONS[1].
-    (BWT+2.52, BWT+2.52+3),  # Purlin 2, at PURLIN_X_POSITIONS[1].
+# Centre the remaining posts between the facing masonry surfaces.
+PURLIN_BEARING_WALL_Y = GARDEN_ROOMS_WALL_Y+INNER_BWT/2
+PURLIN_SUPPORT_STREET_Y = (BWT+PURLIN_BEARING_WALL_Y-UPPER_BEARING_WALL_THICKNESS/2)/2
+PURLIN_SUPPORT_Y_POSITIONS = tuple((PURLIN_SUPPORT_STREET_Y,) for _ in PURLIN_X_POSITIONS)
+UPPER_TECHNICAL_CROSS_Y = (
+    min(PURLIN_SUPPORT_Y_POSITIONS[-1])+PURLIN_SUPPORT_SIZE[1]/2
+    -DRY_WALL_WIDTH/2
 )
+PURLIN_SADDLE_LENGTH = 1.50
+PURLIN_SADDLE_SIZE = PURLIN_SIZE
+PURLIN_CONNECTION_GARDEN_Y = BWT+2.52+3  # Retain the transverse connector after removing its old posts.
 PURLIN_CONNECTION_BEAM_SIZE = (0.16, 0.16)  # Width along Y, height along Z.
 PURLIN_CONNECTION_WALL_CLEARANCE = 0.10  # Clear gap from each gable wall's inner face.
 PURLIN_CONNECTION_Y_POSITIONS = (
     *sorted({y for positions in PURLIN_SUPPORT_Y_POSITIONS for y in positions}),
+    PURLIN_CONNECTION_GARDEN_Y,
     BWT+PURLIN_CONNECTION_WALL_CLEARANCE+PURLIN_CONNECTION_BEAM_SIZE[0]/2,
     HOUSE_DEPTH-BWT-PURLIN_CONNECTION_WALL_CLEARANCE-PURLIN_CONNECTION_BEAM_SIZE[0]/2,
 )
+# Legacy simulator comparison settings; the IFC model has sedla, no diagonal braces.
 PURLIN_BRACE_SIZE = (0.12, 0.12)
 PURLIN_BRACE_DROP = 0.80  # Brace anchor below the post top; braces rise at 45 degrees.
 PURLIN_CONNECTION_BRACE_DROP = 0.60  # Anchor drop below the connector underside.
@@ -191,7 +208,7 @@ ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
 ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
 ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
-CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.03
+CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.05
 CHIMNEY_FOOTING_OVERHANG = 0.20
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 1.25
@@ -253,16 +270,21 @@ BASEMENT_GARDEN_WALL_STREET_Y = (
     GARDEN_ROOMS_WALL_Y+INNER_BWT/2-BASEMENT_WALL_THICKNESS/2
 )
 CHIMNEY_CENTER = (
-    HOUSE_WIDTH/2.0+0.5,
+    BWT+3.47+INNER_BWT+2.21-0.07-0.2,
     BASEMENT_GARDEN_WALL_STREET_Y-CHIMNEY_SIZE/2-CHIMNEY_BASEMENT_WALL_CLEARANCE,
 )
 print("CHIMNEY_CENTER =", CHIMNEY_CENTER)
+for purlin_index, purlin_x in enumerate(PURLIN_X_POSITIONS, 1):
+    purlin_chimney_clearance = abs(purlin_x-CHIMNEY_CENTER[0])-(PURLIN_SIZE[0]+CHIMNEY_SIZE)/2
+    # Ignore sub-nanometre roundoff at the exact 100 mm warning boundary.
+    warning_prefix = "**** WARNING: " if purlin_chimney_clearance < 0.10-1e-9 else ""
+    print(f"{warning_prefix}Purlin {purlin_index} to chimney clearance: {purlin_chimney_clearance*1000:.1f} mm")
 STAIR_WAIST_THICKNESS = 0.15
 INTERNAL_STAIR_CONSTRUCTION = "timber"
 INTERNAL_STAIR_MATERIAL = "Wood" if INTERNAL_STAIR_CONSTRUCTION == "timber" else "Concrete"
 INTERNAL_STAIR_COLOR = "#C8B090" if INTERNAL_STAIR_CONSTRUCTION == "timber" else None
 STAIR_RAILING_HEIGHT = 1.0
-STAIR_RAILING_INSET = 0.02  # Centreline inset onto each flight; 60 mm posts clear the edge by 30 mm.
+STAIR_RAILING_INSET = 0.03  # Centreline inset onto each flight and the middle landing.
 TECHNIKA_RAILING_START_FROM_FRONT = 1.5  # Metres from the front wall's inside face.
 if STAIR_RIGHT_X > HOUSE_WIDTH-BWT+1e-9:
     raise ValueError("rotated stairs do not fit between room 3 and the west wall")
@@ -281,14 +303,20 @@ ENTRANCE_DOOR_WIDTH = 0.9
 ENTRANCE_DOOR_HEIGHT = GROUND_FLOOR_THICKNESS+2.135
 ENTRANCE_CLEAR_HEIGHT = 2.1
 ROOM_DOOR_WIDTH = 0.9
-ROOM_DOOR_OPENING_WIDTH = 1.0
 ROOM_DOOR_HEIGHT = GROUND_FLOOR_THICKNESS+2.135
 ROOM_DOOR_CLEAR_HEIGHT = 2.1
+UPPER_DOOR_TOP_HEIGHT = ZAKLADACI_MALTA+18*UPPER_MASONRY_COURSE_HEIGHT
+UPPER_DOOR_CLEAR_HEIGHT = 2.1
+LIVING_ROOM_DOOR_WEST_CLEARANCE = 1.25  # From the inner west wall face to the construction opening.
+LIVING_ROOM_OPENING_EAST_CLEARANCE = 1.40  # From the inner east wall face to the unfilled opening.
+LIVING_ROOM_OPENING_END_X = BWT+LIVING_ROOM_WIDTH  # Living-room face of the vertical SDK.
+LIVING_ROOM_OPENING_WIDTH = LIVING_ROOM_OPENING_END_X-BWT-LIVING_ROOM_OPENING_EAST_CLEARANCE
 TECHNIKA_SLIDING_DOOR_WIDTH = 0.7
 TECHNIKA_SLIDING_DOOR_OPENING_WIDTH = 0.8
-TECHNIKA_SLIDING_DOOR_Y = None  # None aligns the opening's garden edge with the chimney's street face.
-GARDEN_DOOR_CENTER_CLEARANCE = 0.125
-ROOM_2_DOOR_WEST_CLEARANCE = 0.5  # From the west wall's inner face to the construction opening.
+TECHNIKA_SLIDING_DOOR_CHIMNEY_CLEARANCE = 0.05  # Garden jamb to the chimney's street face.
+TECHNIKA_SLIDING_DOOR_Y = None  # None places the opening before the chimney, with the configured gap.
+TECHNIKA_SLIDING_DOOR_TAPER_CLEARANCE = 0.05  # Straight wall beyond the opening before angling towards the Ytong jamb.
+TECHNIKA_SLIDING_DOOR_TAPER_JAMB_OFFSET = 0.05  # Continue inward past the Ytong opening's near jamb.
 THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.125  # From the room 1 face to the construction opening.
 BATHROOM_DOOR_SIDE_CLEARANCE = 0.125
 ENTRANCE_OPENING_AT = 3.75  # Along the west wall, measured from its start.
@@ -299,9 +327,9 @@ UPPER_WINDOW_WIDTH = 1.5
 UPPER_BACK_WINDOW_WIDTH = 1.5
 UPPER_BACK_WINDOW_GAP = 1.0
 UPPER_FRONT_WINDOW_EAST_CLEARANCE = 2.25
-UPPER_WINDOW_HEIGHT = GROUND_WINDOW_TOP_HEIGHT-GROUND_WINDOW_SILL_HEIGHT
-UPPER_WINDOW_SILL_HEIGHT = UPPER_FLOOR_THICKNESS+GROUND_WINDOW_SILL_HEIGHT-GROUND_FLOOR_THICKNESS
-UPPER_WINDOW_TOP_HEIGHT = UPPER_WINDOW_SILL_HEIGHT+UPPER_WINDOW_HEIGHT
+UPPER_WINDOW_SILL_HEIGHT = ZAKLADACI_MALTA+8*UPPER_MASONRY_COURSE_HEIGHT
+UPPER_WINDOW_TOP_HEIGHT = ZAKLADACI_MALTA+19*UPPER_MASONRY_COURSE_HEIGHT
+UPPER_WINDOW_HEIGHT = UPPER_WINDOW_TOP_HEIGHT-UPPER_WINDOW_SILL_HEIGHT
 BATHROOM_WINDOW_WIDTH = 0.75
 BATHROOM_WINDOW_HEIGHT = 0.75
 UPPER_BASIN_SIZE = (0.60, 0.5)
@@ -514,9 +542,15 @@ load_bearing_wall_inner = house.wall_type(
     "Load bearing wall - VPC 175 mm",
     layers=[("Brick", INNER_BWT), "axis"],
 )
-partition_wall = house.wall_type(
-    "Partition wall - VPC 115 mm",
-    layers=[("Brick", PARTITION_THICKNESS)],  # Centred on its reference line.
+garden_partition_wall = house.wall_type(
+    "Load bearing wall - Ytong Klasik 300 mm",
+    layers=[("Ytong Klasik", GARDEN_PARTITION_THICKNESS)],  # Centred between rooms.
+    color=YTONG_COLOR,
+)
+upper_bearing_wall_type = house.wall_type(
+    f"Load bearing wall - Ytong Statik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm",
+    layers=[("Ytong Statik", UPPER_BEARING_WALL_THICKNESS)],
+    color=YTONG_COLOR,
 )
 dry_wall = house.wall_type(
     f"drywall - {DRY_WALL_WIDTH*1000:g} mm", layers=[("SDK", DRY_WALL_WIDTH)], color="#dfefcf",
@@ -553,7 +587,7 @@ wall_garden_rooms_g = ground.wall(
 wall_garden_partition_g = ground.wall(
     (HOUSE_WIDTH/2, GARDEN_ROOMS_WALL_Y+INNER_BWT),
     (HOUSE_WIDTH/2, HOUSE_DEPTH-BWT),
-    wall_type=partition_wall, height=ground_floor_height,
+    wall_type=garden_partition_wall, height=ground_floor_height,
 )
 wall_third_room_g = ground.wall(
     (THIRD_ROOM_WALL_X, BWT), (THIRD_ROOM_WALL_X, GARDEN_ROOMS_WALL_Y),
@@ -619,14 +653,13 @@ pokoj1_door = wall_garden_rooms_g.add_door(
 )
 pokoj2_door = wall_garden_rooms_g.add_door(
     name="Pokoj 2 door",
-    at=(HOUSE_WIDTH-BWT-ROOM_2_DOOR_WEST_CLEARANCE
-        -ROOM_DOOR_OPENING_WIDTH-wall_garden_rooms_g.start[0]),
+    at=HOUSE_WIDTH/2+GARDEN_DOOR_CENTER_CLEARANCE-wall_garden_rooms_g.start[0],
     opening_width=ROOM_DOOR_OPENING_WIDTH,
     width=ROOM_DOOR_WIDTH,
     height=ROOM_DOOR_HEIGHT,
     clear_height=ROOM_DOOR_CLEAR_HEIGHT,
     sill_height=0,
-    operation="SINGLE_SWING_RIGHT",
+    operation="SINGLE_SWING_LEFT",
 )
 pokoj3_door = wall_third_room_top_g.add_door(
     name="Pokoj 3 door",
@@ -651,7 +684,7 @@ bathroom_door = wall_bathroom_partition_g.add_door(
 )
 ground_load_bearing_walls = (
     wall_front_g, wall_west_g, wall_back_g, wall_east_g, wall_garden_rooms_g, wall_third_room_g,
-    wall_stairway_g,
+    wall_stairway_g, wall_garden_partition_g,
 )
 # Apply the base course to all ground-floor masonry walls.
 # Add subsequent ground-floor walls above this common finishing pass.
@@ -660,14 +693,15 @@ for wall in ground.walls:
     role = "load bearing" if load_bearing else "partition"
     material_set = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
     wall_material = material_set.MaterialLayers[0].Material.Name
-    if wall_material == "Brick":
+    if wall_material in ("Brick", "Ytong Klasik"):
         layers = [
             (GROUND_WALL_BASE_COURSE_MATERIAL, GROUND_WALL_BASE_COURSE_HEIGHT),
             (wall_material, wall.height-GROUND_WALL_BASE_COURSE_HEIGHT),
         ]
+        masonry_name = "VPC" if wall_material == "Brick" else wall_material
         wall.set_vertical_material_layers(
             layers,
-            type_name=f"Ground {role} wall - VPC {wall.thickness*1000:g} mm - Liapor base course",
+            type_name=f"Ground {role} wall - {masonry_name} {wall.thickness*1000:g} mm - Liapor base course",
         )
     common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
     ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": load_bearing})
@@ -685,8 +719,9 @@ for source in basement_source_walls:
     tangent = (np.asarray(source.end)-source.start)/source.length
     normal = np.array((-tangent[1], tangent[0]))
     centre_offset = source.body_offset+source.thickness/2
-    # Fill the thicker corner/partition junctions without moving wall centres.
-    extension = (BASEMENT_WALL_THICKNESS-source.thickness)/2
+    # Fill thicker junctions without moving wall centres. A thinner support
+    # (below the 300 mm Ytong wall) must still reach the adjoining walls.
+    extension = max(0, (BASEMENT_WALL_THICKNESS-source.thickness)/2)
     start = np.asarray(source.start)+normal*centre_offset-tangent*extension
     end = np.asarray(source.end)+normal*centre_offset+tangent*extension
     wall = basement.wall(
@@ -851,8 +886,8 @@ pokoj1 = ground.floor_layer(
     "Pokoj 1", room_id="0.01",
     outline=(
         (BWT, GARDEN_ROOMS_WALL_Y+INNER_BWT),
-        (HOUSE_WIDTH/2-PARTITION_THICKNESS/2, GARDEN_ROOMS_WALL_Y+INNER_BWT),
-        (HOUSE_WIDTH/2-PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT),
+        (HOUSE_WIDTH/2-GARDEN_PARTITION_THICKNESS/2, GARDEN_ROOMS_WALL_Y+INNER_BWT),
+        (HOUSE_WIDTH/2-GARDEN_PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT),
         (BWT, HOUSE_DEPTH-BWT),
     ),
     **floor_layer_settings,
@@ -860,10 +895,10 @@ pokoj1 = ground.floor_layer(
 pokoj2 = ground.floor_layer(
     "Pokoj 2", room_id="0.02",
     outline=(
-        (HOUSE_WIDTH/2+PARTITION_THICKNESS/2, GARDEN_ROOMS_WALL_Y+INNER_BWT),
+        (HOUSE_WIDTH/2+GARDEN_PARTITION_THICKNESS/2, GARDEN_ROOMS_WALL_Y+INNER_BWT),
         (HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y+INNER_BWT),
         (HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
-        (HOUSE_WIDTH/2+PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT),
+        (HOUSE_WIDTH/2+GARDEN_PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT),
     ),
     **floor_layer_settings,
 )
@@ -961,6 +996,15 @@ ground_room_windows = {
     koupelna.room_id: (window_koupelna,),
 }
 
+# Hallway-facing cabinet, centred on the pier between the garden-room doors.
+rozvadec = ground.furniture(
+    "Rozvaděč", kind="USERDEFINED", size=ROZVADEC_SIZE, color="#ffffff",
+    center=(HOUSE_WIDTH/2,
+            wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset
+            -ROZVADEC_WALL_GAP-ROZVADEC_SIZE[1]/2),
+    start_height=GROUND_FLOOR_THICKNESS+ROZVADEC_BOTTOM_ABOVE_FLOOR,
+)
+
 # Bathroom grid, garden to street: door/WC, clear space/basin, shower/services.
 bathroom_right_x = BATHROOM_RIGHT_X
 bathroom_row_depth = BATHROOM_DEPTH/3
@@ -1043,18 +1087,17 @@ lower_stair_railing = ground.railing(
 )
 stair_landing_gap_railing = ground.railing(
     "Middle landing - flight gap railing",
-    path=(
-        (*stair_railing.path[0][:2], ground.elevation+lower_stairs.end_height),
-        lower_stair_railing.path[-1],
+    path=tuple(
+        (point[0], STAIR_LANDING_END_Y-STAIR_RAILING_INSET,
+         ground.elevation+lower_stairs.end_height)
+        for point in (stair_railing.path[0], lower_stair_railing.path[-1])
     ),
     height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
 # Match the former railing's outer envelope, including its end posts.
 wall_stairwell_wood_g = ground.wall(
-    (STAIR_LEFT_X+STAIR_RAILING_INSET-WOODEN_WALL_THICKNESS/2,
-     STAIR_LOWER_START_Y+STAIR_RAILING_INSET),
-    (STAIR_LOWER_CENTER_X-STAIR_FLIGHT_WIDTH/2+STAIR_RAILING_INSET+WOODEN_WALL_THICKNESS/2,
-     STAIR_LOWER_START_Y+STAIR_RAILING_INSET),
+    (STAIR_LEFT_X, STAIR_LOWER_START_Y+STAIR_RAILING_INSET),
+    (STAIR_LEFT_X+1.2, STAIR_LOWER_START_Y+STAIR_RAILING_INSET),
     wall_type=wooden_wall, start_height=GROUND_FLOOR_THICKNESS,
     height=ground_floor_height-CEILING_PLASTER_THICKNESS-GROUND_FLOOR_THICKNESS,
 )
@@ -1314,43 +1357,51 @@ basement_ceiling_schedule_rows = [
     {"location": "S.05", "slab": basement_ceiling_s05},
 ]
 
-# Independent starting copy of the basement MIAKO layouts at the ceiling above 1.NP.
-# Coordinates and lists are snapshots: edit them here without changing the basement.
+# Independent layouts above 1.NP; basement ceilings retain their own design.
+# The 300 mm middle wall leaves 3.985 m clear spans: 4.25 m beams bear
+# 130 mm on the outside walls and 135 mm on the middle wall.
+GARDEN_CEILING_BEAM_LENGTH = 4.25
+GARDEN_CEILING_OUTER_BEARING = 0.13
+GARDEN_CEILING_MIDDLE_BEARING = 0.135
+GARDEN_CEILING_DIVIDER_OVERLAP = 0.04
+GARDEN_CEILING_START_Y = GARDEN_ROOMS_WALL_Y+INNER_BWT-GARDEN_CEILING_DIVIDER_OVERLAP
 ceiling_pokoj1 = ceiling_storey.miako_slab(
     "Ceiling - Pokoj 1",
-    start=(0.225, 5.16625), end=(0.225, 8.91625),
-    direction=(1, 0), top=CEILING_THICKNESS,
-    structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
-        "beam",
-        "wide", "beam",
-        "narrow", "beam",
-        "narrow", "beam",
-        "narrow", "beam",
-        "narrow", "beam",
-        "wide", "beam",
-        "wide", "beam",
+    start=(BWT-GARDEN_CEILING_OUTER_BEARING, GARDEN_CEILING_START_Y),
+    end=(BWT-GARDEN_CEILING_OUTER_BEARING+GARDEN_CEILING_BEAM_LENGTH, GARDEN_CEILING_START_Y),
+    direction=(0, 1), top=CEILING_THICKNESS,
+    structure=[  # Street to garden; seven beam/narrow pairs, ending in a block.
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
     ],
     block_length=0.25,
-    block_start_offset=0.16125, block_end_offset=0.16125,
+    block_start_offset=GARDEN_CEILING_OUTER_BEARING,
+    block_end_offset=GARDEN_CEILING_MIDDLE_BEARING,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
 ceiling_pokoj2 = ceiling_storey.miako_slab(
     "Ceiling - Pokoj 2",
-    start=(4.48, 5.16625), end=(4.48, 8.91625),
-    direction=(1, 0), top=CEILING_THICKNESS,
-    structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
-        "beam",
-        "wide", "beam",
-        "narrow", "beam",
-        "narrow", "beam",
-        "narrow", "beam",
-        "narrow", "beam",
-        "wide", "beam",
-        "wide", "beam",
+    start=(HOUSE_WIDTH-BWT+GARDEN_CEILING_OUTER_BEARING-GARDEN_CEILING_BEAM_LENGTH, GARDEN_CEILING_START_Y),
+    end=(HOUSE_WIDTH-BWT+GARDEN_CEILING_OUTER_BEARING, GARDEN_CEILING_START_Y),
+    direction=(0, 1), top=CEILING_THICKNESS,
+    structure=[  # Street to garden; seven beam/narrow pairs, ending in a block.
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
+        "beam", "narrow",
     ],
     block_length=0.25,
-    block_start_offset=0.16125, block_end_offset=0.16125,
+    block_start_offset=GARDEN_CEILING_MIDDLE_BEARING,
+    block_end_offset=GARDEN_CEILING_OUTER_BEARING,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
@@ -1395,12 +1446,13 @@ ceiling_bathroom_hallway = ceiling_storey.miako_slab(
 
 ceiling_stairway = ceiling_storey.miako_slab(
     "Ceiling - Schodiště",
-    start=(6.15625, 5.04), end=(8.65625, 5.04),
+    # 1920 mm wide: 3000 mm clear from the front wall, 5 mm into the garden-room wall.
+    start=(6.15625, 5.16), end=(8.65625, 5.16),
     direction=(0, -1), top=CEILING_THICKNESS,
     structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
         "beam",
         "wide", "beam",
-        "narrow", "beam",
+        "wide", "beam",
         "narrow", "beam",
     ],
     block_length=0.25,
@@ -1414,8 +1466,8 @@ ceiling_slabs = (
 )
 # Actual ground-floor inner wall faces, used by this level's dimensions.
 ceiling_wall_bounds = (
-    (BWT, GARDEN_ROOMS_WALL_Y+INNER_BWT, HOUSE_WIDTH/2-PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT),
-    (HOUSE_WIDTH/2+PARTITION_THICKNESS/2, GARDEN_ROOMS_WALL_Y+INNER_BWT, HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
+    (BWT, GARDEN_ROOMS_WALL_Y+INNER_BWT, HOUSE_WIDTH/2-GARDEN_PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT),
+    (HOUSE_WIDTH/2+GARDEN_PARTITION_THICKNESS/2, GARDEN_ROOMS_WALL_Y+INNER_BWT, HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
     (BWT, BWT, THIRD_ROOM_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y),
     (BATHROOM_LEFT_X, BWT, BATHROOM_RIGHT_X, GARDEN_ROOMS_WALL_Y),
     (STAIRWAY_WALL_X, BWT, HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y),
@@ -1459,7 +1511,8 @@ if len(PURLIN_SUPPORT_Y_POSITIONS) != len(purlins) or any(
 ):
     raise ValueError("PURLIN_SUPPORT_Y_POSITIONS must contain a nonempty tuple of Y coordinates for each purlin")
 purlin_bottom_z = PURLIN_Z-PURLIN_SIZE[1]/2
-purlin_support_top_z = purlin_bottom_z
+purlin_saddle_center_z = purlin_bottom_z-PURLIN_SADDLE_SIZE[1]/2
+purlin_support_top_z = purlin_bottom_z-PURLIN_SADDLE_SIZE[1]
 purlin_connection_bottom_z = PURLIN_Z-PURLIN_CONNECTION_BEAM_SIZE[1]/2
 support_east_x, support_west_x = sorted(PURLIN_X_POSITIONS)
 purlin_connection_beams = tuple(
@@ -1484,62 +1537,20 @@ purlin_supports = tuple(
 )
 
 
-def add_purlin_support_brace(name, start, end, post_face_cut):
-    """Trim a diagonal brace flush to the post face and supported beam underside."""
-    length = math.dist(start, end)
-    extension = PURLIN_BRACE_SIZE[1]
-    direction = tuple((b-a)/length for a, b in zip(start, end))
-    return upper.beam(
-        name,
-        start=tuple(a-extension*d for a, d in zip(start, direction)),
-        end=tuple(b+extension*d for b, d in zip(end, direction)),
-        size=PURLIN_BRACE_SIZE,
-        cuts=(post_face_cut, ((0, 0, end[2]), (1, 0, end[2]), (0, 1, end[2]))),
+if not math.isfinite(PURLIN_SADDLE_LENGTH) or PURLIN_SADDLE_LENGTH <= 0:
+    raise ValueError("PURLIN_SADDLE_LENGTH must be positive and finite")
+if purlin_support_top_z <= UPPER_FINISHED_FLOOR_HEIGHT:
+    raise ValueError("sedla leave no height for the purlin posts")
+purlin_saddles = tuple(
+    upper.beam(
+        f"Sedlo vaznice {purlin_index}.{support_index}",
+        start=(x, y-PURLIN_SADDLE_LENGTH/2, purlin_saddle_center_z),
+        end=(x, y+PURLIN_SADDLE_LENGTH/2, purlin_saddle_center_z),
+        size=PURLIN_SADDLE_SIZE,
     )
-
-
-if not math.isfinite(PURLIN_BRACE_DROP) or PURLIN_BRACE_DROP <= 0:
-    raise ValueError("PURLIN_BRACE_DROP must be positive and finite")
-if not math.isfinite(PURLIN_CONNECTION_BRACE_DROP) or PURLIN_CONNECTION_BRACE_DROP <= 0:
-    raise ValueError("PURLIN_CONNECTION_BRACE_DROP must be positive and finite")
-brace_anchor_z = purlin_support_top_z-PURLIN_BRACE_DROP
-connection_brace_anchor_z = purlin_connection_bottom_z-PURLIN_CONNECTION_BRACE_DROP
-if brace_anchor_z-PURLIN_BRACE_SIZE[1] <= UPPER_FINISHED_FLOOR_HEIGHT:
-    raise ValueError("purlin braces must start above the finished upper floor")
-if connection_brace_anchor_z-PURLIN_BRACE_SIZE[1] <= UPPER_FINISHED_FLOOR_HEIGHT:
-    raise ValueError("connection-beam braces must start above the finished upper floor")
-connection_brace_rise = purlin_connection_bottom_z-connection_brace_anchor_z
-if connection_brace_rise <= 0:
-    raise ValueError("connection-beam underside must be above the brace anchors")
-if 2*connection_brace_rise >= support_west_x-support_east_x-PURLIN_SUPPORT_SIZE[0]:
-    raise ValueError("purlin connection-beam braces would overlap; reduce PURLIN_CONNECTION_BRACE_DROP")
-purlin_y_braces = []
-purlin_x_braces = []
-for purlin_index, (x, positions) in enumerate(zip(PURLIN_X_POSITIONS, PURLIN_SUPPORT_Y_POSITIONS), 1):
-    for support_index, y in enumerate(positions, 1):
-        # Two braces in the YZ plane, one on each side of the post.
-        for sign, side in ((-1, "ulice"), (1, "zahrada")):
-            post_face_y = y+sign*PURLIN_SUPPORT_SIZE[1]/2
-            contact_y = post_face_y+sign*(purlin_bottom_z-brace_anchor_z)
-            if not -WALL_PLATE_OVERHANG <= contact_y <= HOUSE_DEPTH+WALL_PLATE_OVERHANG:
-                continue
-            purlin_y_braces.append(add_purlin_support_brace(
-                f"Tesařský pásek {purlin_index}.{support_index} - {side}",
-                (x, post_face_y, brace_anchor_z), (x, contact_y, purlin_bottom_z),
-                ((0, post_face_y, 0), (1, post_face_y, 0), (0, post_face_y, 1)),
-            ))
-        # The third brace supports the X beam toward the opposite post.
-        sign = 1 if x == support_east_x else -1
-        post_face_x = x+sign*PURLIN_SUPPORT_SIZE[0]/2
-        purlin_x_braces.append(add_purlin_support_brace(
-            f"Tesařský pásek {purlin_index}.{support_index} - příčný trám",
-            (post_face_x, y, connection_brace_anchor_z),
-            (post_face_x+sign*connection_brace_rise, y, purlin_connection_bottom_z),
-            ((post_face_x, 0, 0), (post_face_x, 1, 0), (post_face_x, 0, 1)),
-        ))
-purlin_y_braces = tuple(purlin_y_braces)
-purlin_x_braces = tuple(purlin_x_braces)
-purlin_braces = (*purlin_y_braces, *purlin_x_braces)
+    for purlin_index, (x, positions) in enumerate(zip(PURLIN_X_POSITIONS, PURLIN_SUPPORT_Y_POSITIONS), 1)
+    for support_index, y in enumerate(positions, 1)
+)
 
 # Each reference plane passes through the outer top corners of its supports.
 roof = upper.roof("Roof")
@@ -1650,57 +1661,113 @@ upper_partition_cuts = (
      (1, 0, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z),
      (0, 1, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z)),
 )
+# The side partition ends at the masonry wall, independently of the chimney.
+upper_bearing_wall_center_y = (
+    wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset+wall_garden_rooms_g.thickness/2
+)
+living_room_right_wall_y = upper_bearing_wall_center_y
+living_room_right_wall_front_y = living_room_right_wall_y-UPPER_BEARING_WALL_THICKNESS/2
+living_room_back_face_y = living_room_right_wall_y+UPPER_BEARING_WALL_THICKNESS/2
 wall_living_room_side_u = upper.wall(
-    (living_room_wall_x, BWT), (living_room_wall_x, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2),
+    (living_room_wall_x, BWT), (living_room_wall_x, living_room_right_wall_front_y),
     wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
 )
 upper_technical_left_x = wall_living_room_side_u.start[0]-wall_living_room_side_u.body_offset
 upper_technical_right_x = STAIR_LEFT_X-DRY_WALL_WIDTH
 upper_technical_center_x = (upper_technical_left_x+STAIR_LEFT_X)/2
-# Keep the VPC sections centred over the ground-floor load-bearing wall.
-upper_vpc_living_room_center_y = (
-    wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset+wall_garden_rooms_g.thickness/2
-)
-# Use the first west-purlin support for the new technical-room cross-wall.
-living_room_support_ys = sorted(PURLIN_SUPPORT_Y_POSITIONS[max(
-    range(len(PURLIN_X_POSITIONS)), key=lambda index: PURLIN_X_POSITIONS[index],
-)])
-upper_technical_cross_y = living_room_support_ys[0]
+# Leave the configured face-to-face gap behind the west purlin post.
+upper_technical_cross_y = UPPER_TECHNICAL_CROSS_Y
 upper_technical_cross_front_y = upper_technical_cross_y-DRY_WALL_WIDTH/2
 upper_technical_cross_back_y = upper_technical_cross_y+DRY_WALL_WIDTH/2
-# Align the garden faces of the horizontal SDK and the nearby VPC sections.
-living_room_right_wall_y = upper_vpc_living_room_center_y+(INNER_BWT-DRY_WALL_WIDTH)/2
-living_room_right_wall_front_y = living_room_right_wall_y-DRY_WALL_WIDTH/2
 upper_technical_back_y = living_room_right_wall_front_y
 LIVING_ROOM_WALL_FRONT_Y = living_room_right_wall_front_y
-LIVING_ROOM_DEPTH = HOUSE_DEPTH-BWT-LIVING_ROOM_WALL_FRONT_Y-DRY_WALL_WIDTH
+LIVING_ROOM_DEPTH = HOUSE_DEPTH-BWT-living_room_back_face_y
 living_room_wall_y = living_room_right_wall_y
-wall_living_room_side_extension_u = upper.wall(
-    (living_room_wall_x, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2),
-    (living_room_wall_x, living_room_wall_y+DRY_WALL_WIDTH/2),
-    wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
-)
 # Keep the source-wall centre below the sloped ceiling so the clipping
 # retains the wall below it rather than the wedge above the roof plane.
 living_room_right_wall_height = min(
     gable_wall_height,
     2*(min(plane_height_at(
-        *cut, x=(living_room_wall_x+DRY_WALL_WIDTH/2+HOUSE_WIDTH-BWT-UPPER_VPC_RETURN_LENGTH)/2,
+        *cut, x=(living_room_wall_x+DRY_WALL_WIDTH/2+HOUSE_WIDTH-BWT)/2,
         y=living_room_right_wall_y,
     ) for cut in upper_partition_cuts)-UPPER_FLOOR_START)-0.01,
 )
+# One continuous masonry wall replaces both VPC returns and the SDK between them.
+# Cut the slopes 50 mm below the rafter tops; keep the cap below the purlins.
+upper_bearing_wall_cuts = (
+    *(offset_plane(
+        *plane.points,
+        offset=RAFTER_Z_OFFSET+RAFTER_HEIGHT-UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE,
+    ) for plane in (roof_east, roof_west)),
+    gable_masonry_cuts[-1],  # Horizontal plane at the purlin underside.
+)
 wall_living_room_back_u = upper.wall(
-    (living_room_wall_x+DRY_WALL_WIDTH/2, living_room_right_wall_y),
-    (HOUSE_WIDTH-BWT-UPPER_VPC_RETURN_LENGTH, living_room_right_wall_y),
-    wall_type=dry_wall, height=living_room_right_wall_height, cuts=upper_partition_cuts,
+    (BWT, upper_bearing_wall_center_y), (HOUSE_WIDTH-BWT, upper_bearing_wall_center_y),
+    wall_type=upper_bearing_wall_type, height=gable_masonry_height, cuts=upper_bearing_wall_cuts,
+)
+wall_living_room_back_u.Name = f"Upper load-bearing wall - Ytong Statik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm"
+common = ifcopenshell.api.pset.add_pset(house.model, product=wall_living_room_back_u, name="Pset_WallCommon")
+ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": True})
+upper_bearing_wall_region = box(
+    BWT, living_room_right_wall_front_y, HOUSE_WIDTH-BWT, living_room_back_face_y,
 )
 # Keep the stair-side face flush with the stairwell edge; thickness is in Technika.
 upper_technical_wall_x = STAIR_LEFT_X-DRY_WALL_WIDTH/2
+technical_sliding_door_y = (
+    CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-TECHNIKA_SLIDING_DOOR_CHIMNEY_CLEARANCE-TECHNIKA_SLIDING_DOOR_OPENING_WIDTH
+    if TECHNIKA_SLIDING_DOOR_Y is None else TECHNIKA_SLIDING_DOOR_Y
+)
+living_room_door_opening_x = HOUSE_WIDTH-BWT-LIVING_ROOM_DOOR_WEST_CLEARANCE-ROOM_DOOR_OPENING_WIDTH
+upper_technical_taper_y = (
+    technical_sliding_door_y+TECHNIKA_SLIDING_DOOR_OPENING_WIDTH+TECHNIKA_SLIDING_DOOR_TAPER_CLEARANCE
+)
+# Define the hallway face, ending just past the jamb towards the toilet.
+upper_technical_taper_start = np.array((STAIR_LEFT_X, upper_technical_taper_y))
+upper_technical_taper_end = np.array((
+    living_room_door_opening_x-TECHNIKA_SLIDING_DOOR_TAPER_JAMB_OFFSET,
+    living_room_right_wall_front_y,
+))
+upper_technical_taper_delta = upper_technical_taper_end-upper_technical_taper_start
+if upper_technical_taper_delta[1] <= 0:
+    raise ValueError("the toilet opening must leave room for the angled wall before the Ytong wall")
+upper_technical_taper_length = float(np.linalg.norm(upper_technical_taper_delta))
+upper_technical_taper_normal = np.array((upper_technical_taper_delta[1], -upper_technical_taper_delta[0]))/upper_technical_taper_length
+# Intersect the offset axis with the straight wall axis for a mitred bend.
+upper_technical_taper_axis_y = (
+    upper_technical_taper_y+DRY_WALL_WIDTH/2*upper_technical_taper_delta[0]
+    /(upper_technical_taper_length+upper_technical_taper_delta[1])
+)
+upper_technical_taper_inner_y = (
+    upper_technical_taper_y+DRY_WALL_WIDTH*upper_technical_taper_delta[0]
+    /(upper_technical_taper_length+upper_technical_taper_delta[1])
+)
+
+def upper_technical_toilet_face_x(y):
+    """Toilet-facing wall boundary, including the mitred transition."""
+    if y <= upper_technical_taper_inner_y:
+        return upper_technical_right_x
+    return float(
+        STAIR_LEFT_X+upper_technical_taper_delta[0]/upper_technical_taper_delta[1]*(y-upper_technical_taper_y)
+        -DRY_WALL_WIDTH*upper_technical_taper_length/upper_technical_taper_delta[1]
+    )
+
 wall_technical_stairway_u = upper.wall(
     (upper_technical_wall_x, upper_technical_cross_front_y),
-    (upper_technical_wall_x, living_room_right_wall_front_y),
+    (upper_technical_wall_x, upper_technical_taper_axis_y),
     wall_type=dry_wall, height=living_room_right_wall_height, cuts=upper_partition_cuts,
 )
+wall_technical_taper_u = upper.wall(
+    (upper_technical_wall_x, upper_technical_taper_axis_y),
+    # Extend beyond the masonry face, then trim the whole end flush with it.
+    tuple(upper_technical_taper_end-DRY_WALL_WIDTH/2*upper_technical_taper_normal
+          +0.05*upper_technical_taper_delta/upper_technical_taper_length),
+    wall_type=dry_wall, height=living_room_right_wall_height,
+    cuts=(*upper_partition_cuts,
+          ((0, living_room_right_wall_front_y, 0),
+           (1, living_room_right_wall_front_y, 0),
+           (0, living_room_right_wall_front_y, 1))),
+)
+upper.connect_wall(wall_technical_stairway_u, wall_technical_taper_u)
 wall_technical_cross_u = upper.wall(
     (upper_technical_left_x, upper_technical_cross_y),
     (upper_technical_right_x, upper_technical_cross_y),
@@ -1718,62 +1785,44 @@ upper_technical_railing = upper.railing(
     ),
     height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
-technical_sliding_door_y = (
-    CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-TECHNIKA_SLIDING_DOOR_OPENING_WIDTH
-    if TECHNIKA_SLIDING_DOOR_Y is None else TECHNIKA_SLIDING_DOOR_Y
-)
 technical_sliding_door = wall_technical_stairway_u.add_door(
     name="Technika sliding door",
     at=technical_sliding_door_y-wall_technical_stairway_u.start[1],
     opening_width=TECHNIKA_SLIDING_DOOR_OPENING_WIDTH,
     width=TECHNIKA_SLIDING_DOOR_WIDTH,
-    height=UPPER_FLOOR_THICKNESS+ROOM_DOOR_HEIGHT-GROUND_FLOOR_THICKNESS,
-    clear_height=ROOM_DOOR_CLEAR_HEIGHT,
+    height=UPPER_DOOR_TOP_HEIGHT,
+    clear_height=UPPER_DOOR_CLEAR_HEIGHT,
     sill_height=UPPER_FLOOR_THICKNESS,
-    operation="SLIDING_TO_RIGHT",  # Towards the street, clear of the horizontal wall.
+    operation="SLIDING_TO_LEFT",  # Towards the street, clear of the horizontal wall.
+	reverse_swing=True,
 )
-# Keep only the garden-side returns, centred over the downstairs bearing wall.
-upper_vpc_walls = []
-upper_vpc_footprints = []
-for side, start_x in (
-    ("West", HOUSE_WIDTH-BWT-UPPER_VPC_RETURN_LENGTH),
-    ("East", BWT),
-):
-    front_y = upper_vpc_living_room_center_y-INNER_BWT/2
-    end_x = start_x+UPPER_VPC_RETURN_LENGTH
-    height = min(
-        gable_wall_height,
-        2*(min(plane_height_at(*cut, x=(start_x+end_x)/2, y=upper_vpc_living_room_center_y)
-               for cut in upper_partition_cuts)-UPPER_FLOOR_START)-.01,
-    )
-    wall = upper.wall(
-        (start_x, front_y), (end_x, front_y),
-        wall_type=load_bearing_wall_inner, height=height, cuts=upper_partition_cuts,
-    )
-    wall.Name = f"Upper {side.lower()} VPC wall - living room"
-    common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
-    ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": True})
-    upper_vpc_walls.append(wall)
-    upper_vpc_footprints.append(box(start_x, front_y, end_x, front_y+INNER_BWT))
-upper_vpc_walls = tuple(upper_vpc_walls)
-upper_vpc_region = unary_union(upper_vpc_footprints)
 living_room_door = wall_living_room_back_u.add_door(
     name="Living room door",
-    # Centre on the stair exit as far as the adjacent VPC return permits.
-    at=min(upper_stairs.end[0]-ROOM_DOOR_OPENING_WIDTH/2-wall_living_room_back_u.start[0],
-           wall_living_room_back_u.length-ROOM_DOOR_OPENING_WIDTH),
+    # Measure the construction opening from the west wall's inner face.
+    at=living_room_door_opening_x-wall_living_room_back_u.start[0],
     opening_width=ROOM_DOOR_OPENING_WIDTH,
     width=ROOM_DOOR_WIDTH,
-    height=UPPER_FLOOR_THICKNESS+ROOM_DOOR_HEIGHT-GROUND_FLOOR_THICKNESS,
-    clear_height=ROOM_DOOR_CLEAR_HEIGHT,
-    sill_height=UPPER_FLOOR_THICKNESS,
+    height=UPPER_DOOR_TOP_HEIGHT,
+    clear_height=UPPER_DOOR_CLEAR_HEIGHT,
+    sill_height=0.0,
     operation="SINGLE_SWING_RIGHT",
 )
+living_room_opening = wall_living_room_back_u.add_opening(
+    name="Living room - kitchen opening",
+    at=BWT+LIVING_ROOM_OPENING_EAST_CLEARANCE-wall_living_room_back_u.start[0],
+    width=LIVING_ROOM_OPENING_WIDTH,
+    height=UPPER_DOOR_TOP_HEIGHT,
+    sill_height=0.0,
+)
+# Continue the finished floor through this passage between the two parts of 1.01.
+upper_bearing_wall_region = upper_bearing_wall_region.difference(box(
+    BWT+LIVING_ROOM_OPENING_EAST_CLEARANCE, living_room_right_wall_front_y,
+    BWT+LIVING_ROOM_OPENING_EAST_CLEARANCE+LIVING_ROOM_OPENING_WIDTH, living_room_back_face_y,
+))
 for wall, name in (
     (wall_living_room_side_u, "Living room - side partition"),
-    (wall_living_room_side_extension_u, "Living room - side partition above chimney"),
-    (wall_living_room_back_u, "Living room - back partition"),
     (wall_technical_stairway_u, "Technika - stairway partition"),
+    (wall_technical_taper_u, "Toilet - angled partition to Ytong opening"),
     (wall_technical_cross_u, "Technika - toilet cross partition"),
 ):
     wall.Name = name
@@ -1790,19 +1839,28 @@ upper_floor_layer_settings = dict(
 living_room_outline = Polygon((
     (BWT, BWT),
     (living_room_wall_x-DRY_WALL_WIDTH/2, BWT),
-    (living_room_wall_x-DRY_WALL_WIDTH/2, living_room_wall_y+DRY_WALL_WIDTH/2),
-    (HOUSE_WIDTH-BWT, living_room_right_wall_front_y+DRY_WALL_WIDTH),
+    (living_room_wall_x-DRY_WALL_WIDTH/2, living_room_back_face_y),
+    (HOUSE_WIDTH-BWT, living_room_back_face_y),
     (HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
     (BWT, HOUSE_DEPTH-BWT),
-)).difference(upper_vpc_region).difference(box(
+)).difference(upper_bearing_wall_region).difference(box(
     CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2,
     CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2,
 ))
-living_room = upper.floor_layer(
-    "Obývací pokoj", room_id="1.01",
-    outline=tuple(living_room_outline.exterior.coords)[:-1],
-    **upper_floor_layer_settings,
+# Both sides retain room 1.01, whether connected through a passage or separate.
+living_room_regions = sorted(
+    (living_room_outline,) if living_room_outline.geom_type == "Polygon" else living_room_outline.geoms,
+    key=lambda region: -region.centroid.y,
 )
+living_room_floor_parts = tuple(
+    upper.floor_layer(
+        "Obývací pokoj + KK" if index == 0 else "Obývací pokoj - kuchyňská část",
+        room_id="1.01", outline=tuple(region.exterior.coords)[:-1],
+        **upper_floor_layer_settings,
+    )
+    for index, region in enumerate(living_room_regions)
+)
+living_room = living_room_floor_parts[0]
 upper_technical_outline = box(
     upper_technical_left_x, BWT, STAIR_LEFT_X, upper_technical_cross_front_y,
 )
@@ -1810,9 +1868,13 @@ upper_technical_room = upper.floor_layer(
     "Technika", room_id="1.02", outline=tuple(upper_technical_outline.exterior.coords)[:-1],
     **upper_floor_layer_settings,
 )
-upper_toilet_outline = box(
-    upper_technical_left_x, upper_technical_cross_back_y, upper_technical_right_x, upper_technical_back_y,
-).difference(box(
+upper_toilet_outline = Polygon((
+    (upper_technical_left_x, upper_technical_cross_back_y),
+    (upper_technical_right_x, upper_technical_cross_back_y),
+    (upper_technical_right_x, upper_technical_taper_inner_y),
+    (upper_technical_toilet_face_x(upper_technical_back_y), upper_technical_back_y),
+    (upper_technical_left_x, upper_technical_back_y),
+)).difference(box(
     CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2,
     CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2,
 ))
@@ -1820,12 +1882,16 @@ upper_toilet_room = upper.floor_layer(
     "Zachod", room_id="1.04", outline=tuple(upper_toilet_outline.exterior.coords)[:-1],
     **upper_floor_layer_settings,
 )
-upper_hallway_outline = box(
-    STAIR_LEFT_X, STAIR_UPPER_END_Y, HOUSE_WIDTH-BWT, living_room_right_wall_front_y,
-).difference(box(
+upper_hallway_outline = Polygon((
+    (STAIR_LEFT_X, STAIR_UPPER_END_Y),
+    (HOUSE_WIDTH-BWT, STAIR_UPPER_END_Y),
+    (HOUSE_WIDTH-BWT, living_room_right_wall_front_y),
+    tuple(upper_technical_taper_end),
+    tuple(upper_technical_taper_start),
+)).difference(box(
     CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2,
     CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2,
-)).difference(upper_vpc_region)
+)).difference(upper_bearing_wall_region)
 upper_hallway = upper.floor_layer(
     "Chodba", room_id="1.03", outline=tuple(upper_hallway_outline.exterior.coords)[:-1],
     **upper_floor_layer_settings,
@@ -1854,7 +1920,7 @@ upper_washing_machine = upper.furniture(
 upper_basin_center_x = HOUSE_WIDTH-BWT-0.4-upper_fixture_wall_gap-UPPER_BASIN_SIZE[1]/2
 upper_basin_center_y = min(
     STAIR_UPPER_END_Y+3*upper_hallway_right_depth/4,
-    upper_vpc_living_room_center_y-INNER_BWT/2-upper_fixture_wall_gap-UPPER_BASIN_SIZE[0]/2,
+    living_room_right_wall_front_y-upper_fixture_wall_gap-UPPER_BASIN_SIZE[0]/2,
 )
 upper_hallway_basin = upper.asset(
     "Umyvadlo", asset="basin_large", size=UPPER_BASIN_SIZE,
@@ -1867,7 +1933,7 @@ upper_recuperation_center = (upper_technical_center_x,
                              BWT+upper_fixture_wall_gap+0.25)
 upper_toilet_center = (
     upper_technical_right_x - 0.5,
-    living_room_support_ys[0]+PURLIN_SUPPORT_SIZE[1]/2+upper_fixture_wall_gap+0.35,
+    UPPER_TECHNICAL_CROSS_Y+PURLIN_SUPPORT_SIZE[1]/2+upper_fixture_wall_gap+0.35,
 )
 upper_recuperation = upper.furniture(
     "Rekuperace", kind="USERDEFINED", size=(1.0, 0.5, 1.5), color="#ffff00",
@@ -1957,10 +2023,7 @@ living_room_armchair = upper.asset(
 )
 kamna = upper.furniture(
     "Kamna", kind="USERDEFINED", size=STOVE_SIZE, color="#ffff2B",
-    center=(
-		CHIMNEY_CENTER[0]-0.6,
-        CHIMNEY_CENTER[1]
-	),
+    center=(kitchen_center_x, CHIMNEY_CENTER[1]),
     start_height=UPPER_FLOOR_THICKNESS+0.05,
     rotation=90,  # Front toward the garden / back wall (+Y).
 )
@@ -2221,16 +2284,15 @@ roof_layers = (
     *add_roof_build_up(roof_west, "West", 1, west_eave_x, HOUSE_WIDTH-BWT),
     *horizontal_roof_layers,
 )
-# The transverse SDK partition also meets the exposed west purlin.
-cut_roof_layer_at_purlin(wall_living_room_back_u, 1)
+# The masonry wall already ends below the purlins; only SDK needs a timber pocket.
 cut_roof_layer_at_purlin(wall_technical_cross_u, 1)
-add_timber_clearances((wall_living_room_back_u, wall_technical_stairway_u, wall_technical_cross_u), purlin_supports)
+add_timber_clearances((wall_living_room_back_u, wall_technical_stairway_u, wall_technical_taper_u, wall_technical_cross_u), purlin_supports)
 add_timber_clearances(
-    (wall_living_room_side_u, wall_living_room_side_extension_u, wall_living_room_back_u,
-     wall_technical_stairway_u, wall_technical_cross_u,
+    (wall_living_room_side_u, wall_living_room_back_u,
+     wall_technical_stairway_u, wall_technical_taper_u, wall_technical_cross_u,
      *(layer for layer in roof_layers if layer.material_name in
        {"Thermal insulation", "Vapour barrier", "Gypsum plasterboard"})),
-    (*purlin_connection_beams, *purlin_braces, *collar_ties),
+    (*purlin_connection_beams, *purlin_saddles, *collar_ties),
 )
 roof_tiles_top_z = max(
     plane_height_at(
@@ -2507,7 +2569,7 @@ upper_ring_beams = tuple(
     beam
     for source_type in dict.fromkeys(
         ifcopenshell.util.element.get_type(wall)
-        for wall in (*upper_exterior_walls, *upper_vpc_walls)
+        for wall in upper_exterior_walls
     )
     for beam in upper.add_ring_beams_from(
         upper, source_wall_type=source_type,
@@ -2726,7 +2788,7 @@ if "ground" in sys.argv:
     drawing1.add_material_legend([
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("brick", "Nosná zeď - VPC Cihla 175 mm"),
-        ("diagonal1", "Příčka - VPC Cihla 115 mm"),
+        ("ytong-klasik", "Nosná zeď - Ytong Klasik 300 mm"),
         ("drywall-diagonal1", f"Příčka - SDK {DRY_WALL_WIDTH*1000:g} mm"),
         ("wooden-wall", "Dřevěná stěna"),
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
@@ -2819,11 +2881,11 @@ if "ground" in sys.argv:
 	# delka leva zahradni mistnost
     drawing1.add_dimension(
         start=(BWT, HOUSE_DEPTH-BWT-0.5),
-        end=(HOUSE_WIDTH/2-PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT-0.5),
+        end=(HOUSE_WIDTH/2-GARDEN_PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT-0.5),
     )
 	# delka prava zahradni mistnost
     drawing1.add_dimension(
-        start=(HOUSE_WIDTH/2+PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT-0.5),
+        start=(HOUSE_WIDTH/2+GARDEN_PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT-0.5),
         end=(HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT-0.5),
     )
 	# delka tretiho pokoje
@@ -2943,18 +3005,23 @@ if "ceiling" in sys.argv:
                 name=f"{slab.Name} Beam Center Distance {index}",
             )
 
-        start, end = (np.asarray(point) for point in slab.beam_centerlines[0])
+        # Put the rotated garden-room bearings above the plan, staggered so
+        # the two 135 mm labels at the shared middle wall remain readable.
+        garden_slab = slab in (ceiling_pokoj1, ceiling_pokoj2)
+        bearing_row = -1 if garden_slab else 0
+        bearing_offset = (0.85 if slab == ceiling_pokoj1 else 1.25) if garden_slab else -0.3
+        start, end = (np.asarray(point) for point in slab.beam_centerlines[bearing_row])
         along = (end-start)/slab.length
         # Measure against the real wall faces at this level, not the cloned insert offsets.
         span_axis = int(np.argmax(np.abs(along)))
         start_wall, end_wall = start.copy(), end.copy()
         start_wall[span_axis], end_wall[span_axis] = wall_bounds[span_axis], wall_bounds[span_axis+2]
         drawing1.add_dimension(
-            start=tuple(start), end=tuple(start_wall), offset=-0.3,
+            start=tuple(start), end=tuple(start_wall), offset=bearing_offset,
             name=f"{slab.Name} Start Bearing",
         )
         drawing1.add_dimension(
-            start=tuple(end_wall), end=tuple(end), offset=-0.3,
+            start=tuple(end_wall), end=tuple(end), offset=bearing_offset,
             name=f"{slab.Name} End Bearing",
         )
 
@@ -3026,7 +3093,8 @@ if "ceiling2" in sys.argv:
     )
     for slab in (ceiling_pokoj1, ceiling_pokoj2):
         drawing1.add_dimension(
-            start=slab.end, end=(slab.end[0]+slab.width, slab.end[1]), offset=1.15,
+            start=slab.end, end=tuple(np.asarray(slab.end)+slab.width*np.asarray(slab.direction)),
+            offset=-0.45,
         )
     for slab in (ceiling_pokoj3, ceiling_bathroom_hallway):
         street_edge_y = min(point[1] for point in slab.footprint)
@@ -3047,7 +3115,8 @@ if "ceiling2" in sys.argv:
     )
     drawing1.add_miako_beam_schedule(ceiling_schedule_rows)
     drawing1.add_notes([
-        "Výchozí geometrie převzata ze stropu nad suterénem; další úpravy jsou samostatné.",
+        "Pokoje 1 a 2: nosníky 4250 mm, uložení 130 mm na obvodu / 135 mm na střední stěně.",
+        "Pokoje 1 a 2: šířka 3500 mm; přesah do příčné stěny 40 mm, do zahradní stěny 30 mm.",
         "Uložení nosníků je nutné upravit podle stěn v 1.NP.",
         "Zesílení pod sloupky vaznic zatím není navrženo.",
         f"Otvor schodiště: {(ceiling_stair_opening_end_y-BWT)*1000:.0f} mm od vnitřního líce uliční stěny.",
@@ -3156,13 +3225,14 @@ if "upper" in sys.argv:
         z=UPPER_FLOOR_START+1.2,
         radius=6.5,
         storeys=[upper],
+        door_annotations=False,
         right_panel_width=60,
         section_outline_width=SECTION_OUTLINE_WIDTH,
     )
     drawing1.add_material_legend([
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("drywall-diagonal1", f"Sádrokartonová příčka {DRY_WALL_WIDTH*1000:.0f} mm"),
-        ("brick", f"Nosná zeď - VPC Cihla {INNER_BWT*1000:.0f} mm"),
+        ("ytong-statik", f"Nosná zeď - Ytong Statik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm"),
         ("wood-solid", "Dřevěný sloupek pod vaznicí"),
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
@@ -3171,15 +3241,13 @@ if "upper" in sys.argv:
     for facade in wall_facades:
         drawing1.include_element(facade)
     drawing1.add_chimney_annotation(chimney)
-    drawing1.add_dimension(
-        start=(CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]),
-        end=(upper_technical_right_x, CHIMNEY_CENTER[1]),
-        name="Chimney clearance to stairway partition",
-    )
+    drawing1.add_door_annotation(living_room_door)
+    # Keep the size label in the hallway while the sliding leaf is in 1.04.
+    drawing1.add_door_annotation(technical_sliding_door, offset=-0.9)
     drawing1.add_dimension(
         start=(upper_technical_left_x, STAIR_UPPER_END_Y),
         end=(upper_technical_right_x, STAIR_UPPER_END_Y),
-        offset=0.2,
+        offset=0.4,
         name="Toilet clear width between vertical walls",
     )
     technical_purlin_index = max(range(len(PURLIN_X_POSITIONS)), key=lambda i: PURLIN_X_POSITIONS[i])
@@ -3199,6 +3267,12 @@ if "upper" in sys.argv:
     )
     hallway_dimension_x = upper_stairs.end[0]+ROOM_DOOR_OPENING_WIDTH/2+0.1
     drawing1.add_dimension(
+        start=(STAIR_LEFT_X, upper_stairs.end[1]),
+        end=(STAIR_LEFT_X, technical_sliding_door_y),
+        offset=-0.40,
+        name="Toilet door opening clearance from stair exit",
+    )
+    drawing1.add_dimension(
         start=(hallway_dimension_x, upper_stairs.end[1]),
         end=(hallway_dimension_x, living_room_right_wall_front_y),
         name="Living room wall clearance from stairs",
@@ -3216,14 +3290,18 @@ if "upper" in sys.argv:
                         (upper_recuperation_center[1]+0.25+upper_hydrobox_center[1]-0.5/2)/2)
         elif room == upper_toilet_room:
             position = ((upper_technical_left_x+upper_technical_right_x)/2,
-                        (upper_toilet_center[1]+0.53/2+CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2)/2)
+                        (upper_toilet_center[1]-0.1))
         drawing1.add_room_annotation(
-            position, identifier=room.room_id, description=room.Name, area=room.area,
+            position, identifier=room.room_id, description=room.Name,
+            area=living_room_outline.area if room == living_room else room.area,
             window_area=window_area(*upper_room_windows[room.room_id]),
         )
     drawing1.add_room_legend()
     drawing1.add_opening_dimension(
         living_room_door, offset=1.15, finished_floor_height=UPPER_FLOOR_THICKNESS,
+    )
+    drawing1.add_opening_dimension(
+        living_room_opening, offset=0.0, finished_floor_height=UPPER_FLOOR_THICKNESS,
     )
     for window, offset in (
         (window_living_room_front, -1.3),
@@ -3258,30 +3336,21 @@ if "upper" in sys.argv:
         start=(BWT+0.5, BWT),
         end=(BWT+0.5, HOUSE_DEPTH-BWT),
     )
-    # Clear lengths between the faces of the east-side VPC sections.
-    east_vpc_walls = sorted(
-        (wall for wall in upper_vpc_walls if math.isclose(wall.start[0], BWT)),
-        key=lambda wall: wall.start[1]+wall.body_offset,
-    )
-    east_vpc_gaps = []
-    previous_y = BWT
-    for wall in east_vpc_walls:
-        front_y = wall.start[1]+wall.body_offset
-        east_vpc_gaps.append((previous_y, front_y))
-        previous_y = front_y+wall.thickness
-    east_vpc_gaps.append((previous_y, HOUSE_DEPTH-BWT))
-    for index, (start_y, end_y) in enumerate(east_vpc_gaps, 1):
+    # Clear sections on each side of the full-width masonry wall.
+    for index, (start_y, end_y) in enumerate((
+        (BWT, living_room_right_wall_front_y),
+        (living_room_back_face_y, HOUSE_DEPTH-BWT),
+    ), 1):
         drawing1.add_dimension(
-            start=(BWT+UPPER_VPC_RETURN_LENGTH, start_y),
-            end=(BWT+UPPER_VPC_RETURN_LENGTH, end_y),
-            offset=-0.35, name=f"East VPC wall clear section {index}",
+            start=(BWT+1.25, start_y), end=(BWT+1.25, end_y),
+            offset=-0.35, name=f"East Ytong wall clear section {index}",
         )
     drawing1.add_dimension(
         start=(BWT, 2.3),
         end=(living_room_wall_x-DRY_WALL_WIDTH/2, 2.3),
     )
     drawing1.add_dimension(
-        start=(HOUSE_WIDTH-BWT-1.0, living_room_right_wall_front_y+DRY_WALL_WIDTH),
+        start=(HOUSE_WIDTH-BWT-1.0, living_room_back_face_y),
         end=(HOUSE_WIDTH-BWT-1.0, HOUSE_DEPTH-BWT),
     )
     # Locate the east posts by their configured coordinates, even if the
@@ -3309,12 +3378,11 @@ if "upper" in sys.argv:
     )
     west_purlin_index = max(range(len(PURLIN_X_POSITIONS)), key=lambda i: PURLIN_X_POSITIONS[i])
     west_support_x = PURLIN_X_POSITIONS[west_purlin_index]
-    west_back_y = max(PURLIN_SUPPORT_Y_POSITIONS[west_purlin_index])
-    wall_back_face_y = living_room_right_wall_front_y+DRY_WALL_WIDTH
+    west_front_y = min(PURLIN_SUPPORT_Y_POSITIONS[west_purlin_index])
     drawing1.add_dimension(
-        start=(west_support_x, wall_back_face_y),
-        end=(west_support_x, west_back_y-PURLIN_SUPPORT_SIZE[1]/2), offset=0.35,
-        name="Rear west purlin support clearance to living room wall",
+        start=(west_support_x, west_front_y+PURLIN_SUPPORT_SIZE[1]/2),
+        end=(west_support_x, living_room_right_wall_front_y), offset=0.35,
+        name="Street west purlin support clearance to living room wall",
     )
     add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "upper.svg", pdf=PDF_UPPER)
@@ -3366,34 +3434,21 @@ def add_roof_framing_dimensions(drawing, *, rafter_index):
     drawing.add_dimension(
         tie_start, tie_end, offset=2.3, name=f"{drawing.name} collar tie total finished length",
     )
-    supports = (post for post in purlin_supports
-         if math.isclose(post.start[0], PURLIN_X_POSITIONS[0]) and post.start[1] < drawing.y)
     support = max(
-        supports,
-        key=lambda post: post.start[1],
-    )
-    supports = (post for post in purlin_supports
-         if math.isclose(post.start[0], PURLIN_X_POSITIONS[1]) and post.start[1] < drawing.y)
-    other_support = max(
-        supports,
+        (post for post in purlin_supports
+         if math.isclose(post.start[0], PURLIN_X_POSITIONS[0]) and post.start[1] < drawing.y),
         key=lambda post: post.start[1],
     )
     support_start, support_end = axial_ends(support, (support.start[0], support.start[2]))
     drawing.add_dimension(
         support_start, support_end, offset=.5, name=f"{drawing.name} support height",
     )
-    brace = min(
-        (beam for beam in purlin_x_braces if math.isclose(beam.start[1], support.start[1])),
-        key=lambda beam: abs(beam.start[0]-support.start[0]),
-    )
-    brace_start, brace_end = axial_ends(brace, (brace.start[0], brace.start[2]))
+    saddle = next(beam for beam in purlin_saddles
+                  if math.isclose(beam.start[0], PURLIN_X_POSITIONS[1]))
     drawing.add_dimension(
-        brace_start, brace_end, offset=-.5, name=f"{drawing.name} brace finished length",
-    )
-    drawing.add_dimension(
-        (other_support.start[0], connection_brace_anchor_z),
-        (other_support.start[0], purlin_connection_bottom_z), offset=1.0,
-        name=f"{drawing.name} connector brace drop",
+        (saddle.start[0], saddle.start[2]-PURLIN_SADDLE_SIZE[1]/2),
+        (saddle.start[0], saddle.start[2]+PURLIN_SADDLE_SIZE[1]/2),
+        offset=1.0, name=f"{drawing.name} sedlo height",
     )
 
 
@@ -3431,8 +3486,8 @@ if "roof" in sys.argv:
     )
     roof_rafters = tuple(member for pair in rafter_pairs for member in pair)
     roof_framing_elements = (
-        *upper_exterior_walls, *upper_ring_beams, wall_plate_east, wall_plate_west, *purlins,
-        *purlin_connection_beams, *purlin_supports, *purlin_braces, *roof_rafters, *collar_ties,
+        *upper_exterior_walls, wall_living_room_back_u, *upper_ring_beams, wall_plate_east, wall_plate_west, *purlins,
+        *purlin_connection_beams, *purlin_supports, *purlin_saddles, *roof_rafters, *collar_ties,
     )
     for element in roof_framing_elements:
         drawing1.include_element(element)
@@ -3465,8 +3520,7 @@ if "roof" in sys.argv:
         ("Vaznice", purlins, 0, {"color": "#f4a261"}),
         ("Sloupky pod vaznice", purlin_supports, 0, {"color": "#c8e6c9"}),
         ("Spojovací trámy", purlin_connection_beams, 0, {"color": "#c8e6c9"}),
-        ("Pásky pod vaznice", purlin_y_braces, 0, {"color": "#c8e6c9"}),
-        ("Pásky pod spojovací trámy", purlin_x_braces, 0, {"color": "#c8e6c9"}),
+        ("Sedla pod vaznice", purlin_saddles, 0, {"color": "#c8e6c9"}),
         ("Krokve", roof_rafters, 0, {"color": "#ffeb3b"}),
         ("Kleštiny", collar_ties, 0, {"color": "#f4d35e"}),
     ]
@@ -3492,28 +3546,13 @@ if "roof" in sys.argv:
         key=lambda index: RAFTER_Y_POSITIONS[index],
     )
     add_roof_framing_dimensions(roof_xx, rafter_index=xx_rafter_index)
-    # Dimension a longitudinal brace on the visible purlin, below its front span.
+    # Show the longitudinal sedlo replacing the diagonal purlin braces.
     yy_purlin_x = min(x for x in PURLIN_X_POSITIONS if x > roof_yy.x)
-    yy_brace = min(
-        (brace for brace in purlin_y_braces if math.isclose(brace.start[0], yy_purlin_x)),
-        key=lambda brace: (brace.start[1], brace.end[1]),
+    yy_saddle = next(beam for beam in purlin_saddles if math.isclose(beam.start[0], yy_purlin_x))
+    yy_start, yy_end = roof_member_axial_ends(
+        yy_saddle, (yy_saddle.start[1], yy_saddle.start[2]), horizontal_axis=1,
     )
-    yy_brace_start, yy_brace_end = roof_member_axial_ends(
-        yy_brace, (yy_brace.start[1], yy_brace.start[2]), horizontal_axis=1,
-    )
-    roof_yy.add_dimension(
-        yy_brace_start, yy_brace_end, offset=-.35,
-        name="roof_yy purlin brace finished length",
-    )
-    yy_brace_support = min(
-        (post for post in purlin_supports if math.isclose(post.start[0], yy_purlin_x)),
-        key=lambda post: abs(post.start[1]-yy_brace.start[1]),
-    )
-    roof_yy.add_dimension(
-        (yy_brace_support.start[1], brace_anchor_z),
-        (yy_brace_support.start[1], purlin_support_top_z),
-        offset=0.5, name="roof_yy purlin brace drop",
-    )
+    roof_yy.add_dimension(yy_start, yy_end, offset=-.35, name="roof_yy sedlo length")
     roof_sheet = DrawingSheet(paper="A3", orientation="portrait")
     roof_sheet.add(roof_plan, x=0.5, y=0.25, title=PDF_ROOF.stem, crop=False)
     roof_sheet.add(roof_xx, x=0.5, y=0.65, title="Řez XX", tables=False)
@@ -3769,6 +3808,8 @@ def add_house_section(cut, name, pdf):
     drawing.add_material_legend([
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("brick", "Nosná zeď - VPC Cihla 175 mm"),
+        ("ytong-klasik", "Nosná zeď - Ytong Klasik 300 mm"),
+        ("ytong-statik", f"Nosná zeď - Ytong Statik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm"),
         ("liapor-brick", "Zakládací řada - Ytong Statik Plus"),
         ("ztracene-bedneni", "Ztracené bednění"),
         ("base-plate", "Základová deska"),

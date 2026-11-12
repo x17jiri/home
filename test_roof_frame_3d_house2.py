@@ -30,7 +30,7 @@ def layout_with_supports(positions, **overrides):
     inputs.cache["PURLIN_SUPPORT_Y_POSITIONS"] = positions
     inputs.cache.update(overrides)
     with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
-        return Layout.from_house(HOUSE)
+        return Layout.from_house(HOUSE, saddles=False, wall_bearings=False)
 
 
 class InputTests(unittest.TestCase):
@@ -93,7 +93,7 @@ class InputTests(unittest.TestCase):
             top = g("UPPER_FLOOR_START")+g("PURLIN_CENTER_HEIGHT")
             self.assertAlmostEqual(g("PURLIN_Z")+section_height/2, top)
             with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
-                layout = Layout.from_house(HOUSE)
+                layout = Layout.from_house(HOUSE, saddles=False, wall_bearings=False)
             bottoms = {b.start[0]: b.start[2]-section_height/2 for b in layout.beams if b.category == "purlin"}
             for beam in layout.beams:
                 if beam.category == "post":
@@ -150,9 +150,9 @@ class InputTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsupported"):
                 data.get("bad")
 
-    def test_geometry_follows_live_house_dimensions(self):
+    def test_legacy_direct_post_geometry_follows_live_house_dimensions(self):
         g = House2Inputs(HOUSE).get
-        layout = Layout.from_house(HOUSE)
+        layout = Layout.from_house(HOUSE, saddles=False, wall_bearings=False)
         post_count = sum(map(len, g("PURLIN_SUPPORT_Y_POSITIONS")))
         self.assertLessEqual(sum(b.category == "brace" for b in layout.beams), 3*post_count)
         self.assertEqual(sum(b.category == "brace" and b.name.endswith(".cross")
@@ -565,6 +565,71 @@ class SolverTests(unittest.TestCase):
             self.assertEqual(patches["CT01"].get_facecolor()[3], 0)
             np.testing.assert_allclose(patches["CT01"].get_edgecolor(), to_rgba("#d000d0"))
             figure.clear()
+
+
+class SedloAndWallTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.layout = Layout.from_house(HOUSE)
+        cls.roof = build_roof_model(cls.layout)
+        cls.residuals = solve_roof_model(cls.roof)
+
+    def test_masonry_replaces_garden_posts_and_carries_load(self):
+        g = House2Inputs(HOUSE).get
+        self.assertEqual(len(self.layout.bases), len(g('PURLIN_X_POSITIONS')))
+        midpoint = (g('BWT')+g('PURLIN_BEARING_WALL_Y')-g('UPPER_BEARING_WALL_THICKNESS')/2)/2
+        for _, point in self.layout.bases:
+            self.assertAlmostEqual(point[1], midpoint)
+        self.assertEqual(len(self.layout.walls), 2)
+        reactions = [row for row in support_rows(self.roof)
+                     if row['kind']=='wall_bearing' and row['combination']=='SLS_symmetric']
+        self.assertEqual(len(reactions), 2)
+        for row in reactions:
+            self.assertLess(row['Fz_kN'], -1)
+            self.assertEqual(row['Dz_mm'], 0)
+        self.assertLess(max(self.residuals.values()), 1e-6)
+        self.assertEqual(len(self.roof.layout.purlin_joints), 4)  # Posts and internal wall.
+        self.assertFalse(any(b.category=='brace' for b in self.roof.layout.beams))
+
+    def test_sedla_add_only_their_actual_self_weight_and_no_extra_roof_load(self):
+        direct = build_roof_model(Layout.from_house(HOUSE, saddles=False))
+        def weight(roof):
+            return -sum(q*(b-a) for _, case, q, a, b in roof.loads if case=='G') \
+                   -sum(force[2] for _, case, force in roof.nodal_loads if case=='G')
+        g = House2Inputs(HOUSE).get
+        sw,sh = g('PURLIN_SADDLE_SIZE'); px,py = g('PURLIN_SUPPORT_SIZE')
+        delta_volume = len(self.layout.bases)*(sw*sh*g('PURLIN_SADDLE_LENGTH')-px*py*sh)
+        self.assertAlmostEqual(weight(self.roof)-weight(direct),
+                               delta_volume*self.roof.settings.timber_density*self.roof.settings.gravity,places=5)
+        self.assertEqual([row for row in self.roof.loads if row[0].startswith('R')],
+                         [row for row in direct.loads if row[0].startswith('R')])
+
+    def test_contacts_carry_compression_and_refinement_preserves_post_loads(self):
+        from roof_frame_3d_house2 import saddle_contact_rows
+        rows = saddle_contact_rows(self.roof)
+        self.assertTrue(rows)
+        self.assertTrue(all(row['compression_kN']>=0 for row in rows))
+        refined = build_roof_model(Layout.from_house(HOUSE, saddle_contact_points=9),
+                                   Settings(saddle_contact_points=9))
+        self.assertLess(max(solve_roof_model(refined).values()), 1e-6)
+        def sls_posts(roof):
+            return {row['post']:row['downward_kN'] for row in
+                    purlin_support_load_envelopes(support_rows(roof)) if row['limit_state']=='SLS'}
+        coarse,fine = sls_posts(self.roof),sls_posts(refined)
+        self.assertEqual(coarse.keys(),fine.keys())
+        for post in coarse:
+            self.assertLess(abs(coarse[post]-fine[post])/fine[post], .01)
+
+    def test_sedlo_orientation_constraints_supply_no_artificial_moment(self):
+        for beam in self.roof.layout.beams:
+            if beam.category != 'saddle':
+                continue
+            middle = (np.asarray(beam.start)+beam.end)/2
+            node = next(n for n in self.roof.model.nodes.values()
+                        if np.allclose((n.X,n.Y,n.Z),middle,atol=1e-8))
+            self.assertFalse(node.support_DX or node.support_DY or node.support_DZ)
+            for reaction in (node.RxnMY,node.RxnMZ):
+                self.assertLess(max(abs(value) for value in reaction.values()),1e-3)
 
 
 if __name__ == "__main__":
