@@ -232,8 +232,16 @@ class InputTests(unittest.TestCase):
             _, settings = parse_arguments([])
         self.assertEqual(settings, Settings())
 
+    def test_outside_roof_mass_factor_validation_and_cli(self):
+        for factor in (-1, float("nan"), float("inf")):
+            with self.subTest(factor=factor), self.assertRaises(ValueError):
+                Settings(roof_mass_outside_supports_factor=factor)
+        _, settings = parse_arguments(["--roof-mass-outside-supports-factor", "1"])
+        self.assertEqual(settings.roof_mass_outside_supports_factor, 1)
+
     def test_edited_local_defaults_reach_cli_and_only_explicit_flags_override_them(self):
-        defaults = Settings(roof_mass=166, snow_load=2.35, rafter_material="C24", beam_material="GL24c",
+        defaults = Settings(roof_mass=166, roof_mass_outside_supports_factor=.45,
+                            snow_load=2.35, rafter_material="C24", beam_material="GL24c",
                             timber_density=510, gravity=9.81, gable_bearings=False, braces=True,
                             continuous_purlins=True, brace_action="both", horizontal_stiffness_kn_mm=.14,
                             joint_stiffness_factor=2000)
@@ -402,6 +410,33 @@ class SolverTests(unittest.TestCase):
         self.assertAlmostEqual(actual, expected, places=6)
         for combo, relative in self.residuals.items():
             self.assertLess(relative, 1e-6, combo)
+
+    def test_roof_mass_zones_change_only_roof_layers_and_preserve_snow_and_timber(self):
+        reduced = self.roof
+        uniform = build_roof_model(self.layout, replace(reduced.settings, roof_mass_outside_supports_factor=1))
+        self.assertAlmostEqual(reduced.settings.roof_mass_outside_supports_factor, 1/3)
+        for beam in reduced.layout.beams:
+            if beam.category != "rafter":
+                self.assertEqual([load for load in reduced.loads if load[0] == beam.name],
+                                 [load for load in uniform.loads if load[0] == beam.name])
+                continue
+            seat, purlin, side, _ = reduced.layout.seats[beam.name]
+            a, b = math.dist(beam.start, seat), math.dist(beam.start, purlin)
+            width = reduced.tributary_widths[beam.name]
+            roof_q = reduced.settings.roof_mass*reduced.settings.gravity*width
+            timber_q = reduced.settings.timber_density*reduced.settings.gravity*beam.timber.width*beam.timber.height
+            for model, factor in ((reduced, 1/3), (uniform, 1)):
+                loads = model.model.members[beam.name].DistLoads
+                for station, multiplier in ((a/2, factor), ((a+b)/2, 1), ((b+beam.length)/2, factor)):
+                    actual = -sum(load[1] for load in loads if load[5] == "G" and load[3] < station < load[4])
+                    self.assertAlmostEqual(actual, timber_q+roof_q*multiplier, places=6)
+                actual_weight = -sum(load[1]*(load[4]-load[3]) for load in loads if load[5] == "G")
+                expected = timber_q*beam.length+roof_q*((b-a)+factor*(beam.length-(b-a)))
+                self.assertAlmostEqual(actual_weight, expected, places=6)
+            snow_case = f"S_{side}"
+            self.assertEqual([load for load in reduced.model.members[beam.name].DistLoads if load[5] == snow_case],
+                             [load for load in uniform.model.members[beam.name].DistLoads if load[5] == snow_case])
+            self.assertEqual([load for load in reduced.nodal_loads], [load for load in uniform.nodal_loads])
 
     def test_seats_and_post_ports_split_their_continuous_members(self):
         # A rounded sloping port could otherwise float beside its physical
@@ -577,9 +612,9 @@ class SedloAndWallTests(unittest.TestCase):
     def test_masonry_replaces_garden_posts_and_carries_load(self):
         g = House2Inputs(HOUSE).get
         self.assertEqual(len(self.layout.bases), len(g('PURLIN_X_POSITIONS')))
-        midpoint = (g('BWT')+g('PURLIN_BEARING_WALL_Y')-g('UPPER_BEARING_WALL_THICKNESS')/2)/2
-        for _, point in self.layout.bases:
-            self.assertAlmostEqual(point[1], midpoint)
+        expected = [(x, y) for x, positions in zip(g('PURLIN_X_POSITIONS'), g('PURLIN_SUPPORT_Y_POSITIONS'))
+                    for y in sorted(positions)]
+        np.testing.assert_allclose([point[:2] for _, point in self.layout.bases], expected)
         self.assertEqual(len(self.layout.walls), 2)
         reactions = [row for row in support_rows(self.roof)
                      if row['kind']=='wall_bearing' and row['combination']=='SLS_symmetric']

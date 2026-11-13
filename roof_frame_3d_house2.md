@@ -174,6 +174,11 @@ Defaults are local fields of `Settings` in the simulator's USER INPUTS block:
 
 - `roof_mass`: **150 kg/m² of actual slope**, including the
   sloped internal insulation/OSB/installation space/plasterboard finish.
+- `roof_mass_outside_supports_factor`: **1/3**. Roof layers keep the full
+  `roof_mass` between the wall-plate and outer-purlin contact points, and use
+  one third before the wall plate and above the outer purlin (currently
+  **50 kg/m²**). This reduction does not apply to snow or timber self-weight.
+  Set the factor to `1` to restore uniform roof-layer weight.
 - `snow_load`: **1.5 kN/m² of horizontal projection**, already a roof load,
   not ground snow requiring another shape coefficient.
 - Timber self-weight: **450 kg/m³**, with **g = 10 m/s²**.
@@ -207,7 +212,7 @@ This preserves the earlier simulator's symmetric/asymmetric snow pattern
 convention, reoriented to this roof. It is not an automatic determination
 of all project-specific snow, drift, wind or regulatory combinations.
 
-Material defaults are **C16 for rafters** (`rafter_material`) and **C22 for
+Material defaults are **C22 for rafters** (`rafter_material`) and **C22 for
 other timber** (`beam_material`); these are not inferred from the ungraded IFC
 `Wood` material. `--rafter-material` and `--beam-material` select properties
 from the shared `materials.py` registry. The second option applies to the
@@ -302,6 +307,10 @@ joint/anchor capacity, bearing compression or slab adequacy.
 ## Comparisons
 
 ```bash
+# Restore uniform roof-layer weight for comparison; snow and timber unchanged.
+.venv-roof3d/bin/python roof_frame_3d_house2.py \
+    --roof-mass-outside-supports-factor 1 --output /tmp/house2_uniform_layers
+
 # Restore bending continuity over each purlin's configured posts.
 .venv-roof3d/bin/python roof_frame_3d_house2.py \
     --continuous-purlins --output /tmp/house2_continuous

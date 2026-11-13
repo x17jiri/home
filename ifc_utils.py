@@ -17697,6 +17697,7 @@ class Wall(ifcopenshell.entity_instance):
         opening_top: float,
         wall_faces: bool = False,
         show_line: bool = True,
+        wall_face_widths: tuple[float, float] | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add plan opening linework, or invisible sources for its white mask."""
         model = self.storey.house.model
@@ -17712,11 +17713,14 @@ class Wall(ifcopenshell.entity_instance):
             relating_structure=self.storey.element,
         )
         if wall_faces:
-            inset = min(0.025, opening_width / 4)
             curves = []
-            for y in (self.body_offset, self.body_offset + self.thickness):
+            for y, face_width in zip(
+                (self.body_offset, self.body_offset + self.thickness),
+                wall_face_widths or (opening_width, opening_width),
+            ):
+                inset = min(0.025, face_width / 4)
                 point_list = model.createIfcCartesianPointList2D(
-                    [(inset, y), (opening_width - inset, y)]
+                    [(inset, y), (face_width - inset, y)]
                 )
                 curves.append(
                     model.createIfcIndexedPolyCurve(point_list, None, False)
@@ -17910,6 +17914,7 @@ class Wall(ifcopenshell.entity_instance):
         height: Number,
         sill_height: Number = 0,
         show_overhead: bool = False,
+        plan_mask_width: Number | Sequence[Number] | None = None,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Cut an unfilled rectangular opening in this wall.
@@ -17921,6 +17926,11 @@ class Wall(ifcopenshell.entity_instance):
         default. ``show_overhead=True`` explicitly adds thin solid plan-only
         wall linework across the opening. A white mask still hides projected
         wall edges when the opening intersects the plan's cut height.
+        ``plan_mask_width`` can shorten that mask from the opening's end
+        when modelled infill occupies part of it. The physical opening and
+        its construction-opening dimensions retain the full ``width``.
+        A pair of widths sets the ends independently at the two wall faces
+        (``body_offset`` first), forming a trapezoid beside angled infill.
         """
         if not isinstance(show_overhead, bool):
             raise TypeError("show_overhead must be a boolean")
@@ -17937,6 +17947,15 @@ class Wall(ifcopenshell.entity_instance):
                 sill_height=sill_height,
             )
         )
+        if isinstance(plan_mask_width, Sequence) and not isinstance(plan_mask_width, (str, bytes)):
+            if len(plan_mask_width) != 2:
+                raise ValueError("plan_mask_width must contain exactly two widths")
+            mask_widths = tuple(_number(value, "plan_mask_width") for value in plan_mask_width)
+        else:
+            mask_width = width if plan_mask_width is None else _number(plan_mask_width, "plan_mask_width")
+            mask_widths = (mask_width, mask_width)
+        if any(not 0 < value <= width for value in mask_widths):
+            raise ValueError("plan_mask_width must be greater than zero and no larger than width")
 
         self.storey._opening_count += 1
         opening_name = (
@@ -17969,6 +17988,7 @@ class Wall(ifcopenshell.entity_instance):
             opening_top=sill_height + opening_height,
             wall_faces=True,
             show_line=show_overhead,
+            wall_face_widths=mask_widths,
         )
         return opening
 

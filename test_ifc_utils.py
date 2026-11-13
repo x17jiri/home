@@ -8917,6 +8917,57 @@ class HouseTests(unittest.TestCase):
             self.assertEqual(len(reopened.by_type("IfcOpeningElement")), 1)
             self.assertEqual(len(reopened.by_type("IfcDoor")), 0)
 
+    def test_shortens_plan_opening_mask_without_changing_the_construction_opening(self) -> None:
+        house = House("Partly infilled opening")
+        ground = house.storey("Ground", elevation=0)
+        wall = ground.wall((1, 2), (1, 8), thickness=.24, height=3)
+        opening = wall.add_opening(
+            at=.5, width=2.625, height=2.27, plan_mask_width=2.225,
+        )
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), wall)
+        self.assertAlmostEqual(
+            ifcopenshell.util.shape.get_volume(shape.geometry),
+            6*.24*3-2.625*.24*2.27,
+        )
+        self.assertEqual(wall._openings[0][:2], (.5, 3.125))
+        self.assertEqual(opening.VoidsElements[0].RelatingBuildingElement, wall)
+        mask = house._plan_annotations[0]
+        self.assertEqual(ifcopenshell.util.element.get_pset(
+            mask, "EPset_Annotation", "Classes"), "opening-mask-source")
+        representation = mask.Representation.Representations[0]
+        curves = representation.Items[0].Elements
+        self.assertEqual(len(curves), 2)
+        for curve in curves:
+            points = curve.Points.CoordList
+            self.assertAlmostEqual(points[0][0], .025)
+            self.assertAlmostEqual(points[-1][0], 2.225-.025)
+
+    def test_opening_plan_mask_follows_an_angled_infill(self) -> None:
+        house = House("Angled infill")
+        ground = house.storey("Ground", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=.24, height=3)
+        opening = wall.add_opening(
+            at=.5, width=2.625, height=2.27, plan_mask_width=(2.225, 2.625),
+        )
+        curves = house._plan_annotations[0].Representation.Representations[0].Items[0].Elements
+        for curve, width in zip(curves, (2.225, 2.625)):
+            self.assertAlmostEqual(curve.Points.CoordList[0][0], .025)
+            self.assertAlmostEqual(curve.Points.CoordList[-1][0], width-.025)
+        self.assertEqual(wall._openings[0][:2], (.5, 3.125))
+        self.assertEqual(opening.VoidsElements[0].RelatingBuildingElement, wall)
+
+    def test_rejects_invalid_plan_mask_width_before_creating_an_opening(self) -> None:
+        house = House("Invalid mask")
+        ground = house.storey("Ground", elevation=0)
+        wall = ground.wall((0, 0), (5, 0), thickness=.24, height=3)
+        for width in (0, -.1, 3, (.5,), (.5, .5, .5), (.5, 3)):
+            with self.subTest(width=width):
+                with self.assertRaisesRegex(ValueError, "plan_mask_width"):
+                    wall.add_opening(at=.5, width=2.625, height=2.27, plan_mask_width=width)
+                self.assertFalse(house.model.by_type("IfcOpeningElement"))
+                self.assertFalse(house._plan_annotations)
+                self.assertFalse(wall._openings)
+
     def test_opening_continuation_defaults_and_explicit_overrides(self) -> None:
         house = House("Opening lines")
         ground = house.storey("Ground", elevation=0)

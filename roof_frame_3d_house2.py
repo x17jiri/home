@@ -37,6 +37,7 @@ DEFORMATION_SCALE = 30.0
 @dataclass(frozen=True)
 class Settings:
     roof_mass: float = 150.0  # kg/m² of actual slope, including interior finish, excluding modelled timber.
+    roof_mass_outside_supports_factor: float = 1/3  # Roof layers before the wall plate and above the outer purlin; 1 restores uniform load.
     snow_load: float = 1.5  # Vertical kN/m² of horizontal roof area, already a roof snow load.
     rafter_material: str = "C22"
     beam_material: str = "C22"  # Purlins, posts, connectors, braces and collar ties.
@@ -53,7 +54,7 @@ class Settings:
     joint_stiffness_factor: float = 1000.0  # Numerical rigid-arm multiplier, not joint slip stiffness.
 
     def __post_init__(self):
-        for name in ("roof_mass", "snow_load"):
+        for name in ("roof_mass", "roof_mass_outside_supports_factor", "snow_load"):
             if not math.isfinite(getattr(self, name)) or getattr(self, name) < 0:
                 raise ValueError(f"{name} must be finite and non-negative")
         for name in ("timber_density", "gravity", "joint_stiffness_factor"):
@@ -580,14 +581,24 @@ def build_roof_model(layout, settings=Settings()):
         model.def_support(ridge, False, False, False, True, True, True)
     widths = tributary_widths(layout.rafter_y, *layout.roof_y)
     for beam in (b for b in layout.beams if b.category == "rafter"):
-        seat, _, side, y = layout.seats[beam.name]
+        seat, purlin_seat, side, y = layout.seats[beam.name]
         width = widths[layout.rafter_y.index(y)]
         result.tributary_widths[beam.name] = width
         cosine = abs(beam.end[0]-beam.start[0])/beam.length
-        for case, q in (("G", -settings.roof_mass*settings.gravity*width),
-                        (f"S_{side}", -settings.snow_load*1000*width*cosine)):
-            model.add_member_dist_load(beam.name, "FZ", q, q, case=case)
-            result.loads.append((beam.name, case, q, 0, beam.length))
+        plate_station = math.dist(beam.start, seat)
+        purlin_station = math.dist(beam.start, purlin_seat)
+        roof_q = -settings.roof_mass*settings.gravity*width
+        for start, end, factor in (
+            (0, plate_station, settings.roof_mass_outside_supports_factor),
+            (plate_station, purlin_station, 1.0),
+            (purlin_station, beam.length, settings.roof_mass_outside_supports_factor),
+        ):
+            q = roof_q*factor
+            model.add_member_dist_load(beam.name, "FZ", q, q, start, end, case="G")
+            result.loads.append((beam.name, "G", q, start, end))
+        snow_q = -settings.snow_load*1000*width*cosine
+        model.add_member_dist_load(beam.name, "FZ", snow_q, snow_q, case=f"S_{side}")
+        result.loads.append((beam.name, f"S_{side}", snow_q, 0, beam.length))
     for limit, g, s in (("SLS", 1.0, 1.0), ("ULS", 1.35, 1.5)):
         model.add_load_combo(f"{limit}_dead", {"G": g})
         for pattern, east, west in (("symmetric", 1, 1), ("east", 1, .5), ("west", .5, 1)):
@@ -1001,6 +1012,9 @@ def parse_arguments(argv=None):
     parser.add_argument("--rafter-material", default=defaults.rafter_material, type=lambda x: resolve_timber_grade(x).name)
     parser.add_argument("--beam-material", default=defaults.beam_material, type=lambda x: resolve_timber_grade(x).name)
     parser.add_argument("--roof-mass", type=float, default=defaults.roof_mass, help="kg/m² actual sloped area")
+    parser.add_argument("--roof-mass-outside-supports-factor", type=float,
+                        default=defaults.roof_mass_outside_supports_factor,
+                        help="roof-layer multiplier before the wall plate and above the outer purlin; 1 restores uniform weight")
     parser.add_argument("--snow", type=float, default=defaults.snow_load, help="kN/m² horizontal roof area")
     parser.add_argument("--timber-density", type=float, default=defaults.timber_density, help="kg/m³")
     parser.add_argument("--gravity", type=float, default=defaults.gravity, help="m/s²")
@@ -1024,7 +1038,9 @@ def parse_arguments(argv=None):
     parser.add_argument("--deformation-scale", type=float, default=DEFORMATION_SCALE)
     args = parser.parse_args(argv)
     positive(args.deformation_scale, "deformation scale")
-    settings = replace(defaults, roof_mass=args.roof_mass, snow_load=args.snow,
+    settings = replace(defaults, roof_mass=args.roof_mass,
+                       roof_mass_outside_supports_factor=args.roof_mass_outside_supports_factor,
+                       snow_load=args.snow,
                        rafter_material=args.rafter_material, beam_material=args.beam_material,
                        timber_density=args.timber_density, gravity=args.gravity,
                        gable_bearings=args.gable_bearings == "on", braces=args.braces, brace_action=args.brace_action,
@@ -1045,6 +1061,10 @@ def main(argv=None):
     layout = roof.layout
     print(f"Roof angle: {math.degrees(math.atan(layout.slope)):.2f}° ({layout.slope*100:.2f}%)")
     print(f"Loads: roof layers {settings.roof_mass:g} kg/m² slope; snow {settings.snow_load:g} kN/m² plan; timber {settings.timber_density:g} kg/m³; g={settings.gravity:g}")
+    print(f"Roof-layer weight: full between wall plate and outer purlin; "
+          f"{settings.roof_mass_outside_supports_factor:g}× before wall plate and above outer purlin "
+          f"({settings.roof_mass*settings.roof_mass_outside_supports_factor:g} kg/m²). "
+          "Snow and timber self-weight unchanged along the full rafter.")
     print(f"Members: {len(layout.beams)}; gable bearings {'on' if settings.gable_bearings else 'off'}; "
           f"braces {settings.brace_action if roof.brace_springs else 'off'}")
     print(f"Purlins: {purlin_configuration_description(roof)}"
@@ -1092,6 +1112,9 @@ def main(argv=None):
                                  "Prismatic rafter axes end at vertical eaves; local horizontal end cuts/notches omitted.",
                                  "No roof diaphragm, wind, chimney load, or wall-plate self-weight in roof-frame reactions."])
     metadata["assumptions"].extend([
+        f"Roof layers have full weight between the wall-plate and outer-purlin contact stations and "
+        f"{settings.roof_mass_outside_supports_factor:g} times that weight elsewhere on each rafter. "
+        "Snow and timber self-weight cover the full rafter without this reduction.",
         f"Tesařské pásky {'included as '+settings.brace_action+' axial springs' if roof.brace_springs else 'excluded, including their self-weight and attachment arms'}.",
         "Purlins continuous." if settings.continuous_purlins else
         f"Purlins split at every internal bearing ({purlin_configuration_description(roof)}); both bending rotations released at each cut, with axial/shear and roll compatibility retained.",
@@ -1159,6 +1182,8 @@ def main(argv=None):
     Path(f"{stem}_failures.md").write_text(
         "# Roof simulator: current purlin deflection checks\n\n"
         f"Roof layers: {settings.roof_mass:g} kg/m²; snow: {settings.snow_load:g} kN/m².\n\n"
+        f"Roof-layer weight outside the wall-plate–outer-purlin span: "
+        f"{settings.roof_mass_outside_supports_factor:g}×; snow and timber self-weight unchanged.\n\n"
         f"Purlins: {purlin_configuration_description(roof)}; "
         f"{len(layout.bases)} posts, {len(layout.walls)} internal-wall bearings, "
         f"{sum(b.category == 'saddle' for b in layout.beams)} sedla.\n\n"
