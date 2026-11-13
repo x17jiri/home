@@ -150,6 +150,7 @@ CEILING_BEAM_BEARING = 0.125  # Minimum at each end, before rounding the beam le
 CEILING_BEAM_LENGTH_STEP = 0.25
 CEILING_LAYOUT_TOLERANCE = 0.07  # Total width mismatch, not the gap at each side.
 CEILING_STRIP_WIDTHS = {"beam": 0.16, "wide": 0.455, "narrow": 0.33, "space": 0.005}
+CEILING_BEAM_SPACING_OUTSIDE_OFFSETS = (1.0, 1.5)  # Alternate beyond the exterior wall faces.
 BASEMENT_STAIR_OPENING_LENGTH = 3.0  # Clear depth from the inside face of the street wall.
 BASEMENT_S03_CEILING_STREET_SHIFT = 0.015
 BASEMENT_S04_CHIMNEY_BEAM_CLEARANCE = 0.03  # Chimney street face to the nearest MIAKO beam edge.
@@ -212,7 +213,7 @@ ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
 ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
 ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
-CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.05
+CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.125
 CHIMNEY_FOOTING_OVERHANG = 0.20
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 1.25
@@ -315,12 +316,12 @@ LIVING_ROOM_DOOR_WEST_CLEARANCE = 1.25  # From the inner west wall face to the c
 LIVING_ROOM_OPENING_EAST_CLEARANCE = 1.40  # From the inner east wall face to the unfilled opening.
 LIVING_ROOM_OPENING_END_X = BWT+LIVING_ROOM_WIDTH  # Living-room face of the vertical SDK.
 LIVING_ROOM_OPENING_WIDTH = LIVING_ROOM_OPENING_END_X-BWT-LIVING_ROOM_OPENING_EAST_CLEARANCE
-TECHNIKA_SLIDING_DOOR_WIDTH = 0.7
-TECHNIKA_SLIDING_DOOR_OPENING_WIDTH = 0.8
-TECHNIKA_SLIDING_DOOR_CHIMNEY_CLEARANCE = 0.05  # Garden jamb to the chimney's street face.
-TECHNIKA_SLIDING_DOOR_Y = None  # None places the opening before the chimney, with the configured gap.
-TECHNIKA_SLIDING_DOOR_TAPER_CLEARANCE = 0.05  # Straight wall beyond the opening before angling towards the Ytong jamb.
-TECHNIKA_SLIDING_DOOR_TAPER_JAMB_OFFSET = 0.05  # Continue inward past the Ytong opening's near jamb.
+UPPER_TOILET_DOOR_WIDTH = 0.7
+UPPER_TOILET_DOOR_OPENING_WIDTH = 0.8
+UPPER_TOILET_DOOR_CHIMNEY_CLEARANCE = 0.10  # Garden jamb to the chimney's street face.
+UPPER_TOILET_DOOR_Y = None  # None places the opening before the chimney, with the configured gap.
+UPPER_TOILET_DOOR_TAPER_CLEARANCE = 0.05  # Straight wall beyond the opening before angling towards the Ytong jamb.
+UPPER_TOILET_DOOR_TAPER_JAMB_OFFSET = 0.05  # Continue inward past the Ytong opening's near jamb.
 THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.125  # From the room 1 face to the construction opening.
 BATHROOM_DOOR_SIDE_CLEARANCE = 0.125
 ENTRANCE_OPENING_AT = 3.75  # Along the west wall, measured from its start.
@@ -436,7 +437,8 @@ def add_purlin_support_planning_markers(drawing):
 
 
 def add_purlin_support_girder_plan(drawing):
-    """Outline the embedded-HEB girders and dimension their span and bearings."""
+    """Outline the embedded-HEB girders and dimension their span, bearings and position."""
+    front_wall_inner_y = wall_front_g.start[1]+wall_front_g.body_offset+wall_front_g.thickness
     for girder in purlin_support_girders:
         x0, y = girder.start[:2]
         x1 = girder.end[0]
@@ -447,10 +449,10 @@ def add_purlin_support_girder_plan(drawing):
         )
         drawing.add_text(
             (x0+(x1-x0)*0.18, y),
-            f"{girder.heb_section.name} / {girder.width*1000:.0f} × {girder.height*1000:.0f}",
+            f"{girder.heb_section.name}",
             font_size=1.5, name=f"{girder.Name} Plan label",
         )
-        drawing.add_dimension((x0, y), (x1, y), offset=-0.5, name=f"{girder.Name} Length")
+        drawing.add_dimension((x0, y), (x1, y), offset=-0.7, name=f"{girder.Name} Length")
         drawing.add_dimension(
             (x0, y), (purlin_girder_east_wall_face_x, y), offset=0.35,
             name=f"{girder.Name} East wall bearing",
@@ -458,6 +460,10 @@ def add_purlin_support_girder_plan(drawing):
         drawing.add_dimension(
             (purlin_girder_stairway_wall_face_x, y), (x1, y), offset=0.35,
             name=f"{girder.Name} Stairway wall bearing",
+        )
+        drawing.add_dimension(
+            (BWT, front_wall_inner_y), (BWT, y), offset=-0.5,
+            name=f"{girder.Name} Centre distance from front wall",
         )
 
 
@@ -1026,6 +1032,27 @@ ground_room_windows = {
     koupelna.room_id: (window_koupelna,),
 }
 
+
+def add_ground_room_annotations(drawing):
+    """Share ground-floor room identifiers and their table between plans."""
+    for room in ground_room_floors:
+        match room:
+            case (room, offset_x, offset_y):
+                pass
+            case _:
+                offset_x = 0.0
+                offset_y = 0.0
+        position = Polygon(room.outline).representative_point().coords[0]
+        position = (position[0]+offset_x, position[1]+offset_y)
+        if room == chodba:
+            position = (position[0]+1.0, position[1]-0.1)
+        drawing.add_room_annotation(
+            position, identifier=room.room_id, description=room.Name, area=room.area,
+            window_area=window_area(*ground_room_windows[room.room_id]),
+        )
+    drawing.add_room_legend()
+
+
 # Hallway-facing cabinet, centred on the pier between the garden-room doors.
 rozvadec = ground.furniture(
     "Rozvaděč", kind="USERDEFINED", size=ROZVADEC_SIZE, color="#ffffff",
@@ -1149,11 +1176,11 @@ stair_walking_route = (
     lower_stairs.start, (STAIR_LOWER_CENTER_X, stair_route_landing_y),
     (STAIR_UPPER_CENTER_X, stair_route_landing_y), upper_stairs.end,
 )
-# Keep one quarter circle in front of the ascending flight's inner corner.
+# Keep one quarter circle aligned with the street edge of the stairway opening.
 stair_entry_clearance_points = tuple(
     (center_x+STAIR_FLIGHT_WIDTH*math.cos(angle), center_y+STAIR_FLIGHT_WIDTH*math.sin(angle))
     for center_x, center_y, angle_start, angle_end in (
-        (STAIR_LOWER_CENTER_X-STAIR_FLIGHT_WIDTH/2, STAIR_LOWER_START_Y, math.pi/2, 0),
+        (STAIR_LOWER_CENTER_X-STAIR_FLIGHT_WIDTH/2, BWT+3.0, math.pi/2, 0),
     )
     for angle in np.linspace(angle_start, angle_end, 33)
 )
@@ -1401,13 +1428,13 @@ ceiling_pokoj1 = ceiling_storey.miako_slab(
     end=(BWT-GARDEN_CEILING_OUTER_BEARING+GARDEN_CEILING_BEAM_LENGTH, GARDEN_CEILING_START_Y),
     direction=(0, 1), top=CEILING_THICKNESS,
     structure=[  # Street to garden; seven beam/narrow pairs, ending in a block.
-        "beam", "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
-        "beam", "beam",
+        "beam", "space", "narrow", "space",
+        "beam", "space", "narrow"
     ],
     block_length=0.25,
     block_start_offset=GARDEN_CEILING_OUTER_BEARING,
@@ -1421,13 +1448,13 @@ ceiling_pokoj2 = ceiling_storey.miako_slab(
     end=(HOUSE_WIDTH-BWT+GARDEN_CEILING_OUTER_BEARING, GARDEN_CEILING_START_Y),
     direction=(0, 1), top=CEILING_THICKNESS,
     structure=[  # Street to garden; seven beam/narrow pairs, ending in a block.
-        "beam", "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
         "beam", "space", "narrow", "space",
-        "beam", "beam",
+        "beam", "space", "narrow", "space",
+        "beam", "space", "narrow"
     ],
     block_length=0.25,
     block_start_offset=GARDEN_CEILING_MIDDLE_BEARING,
@@ -1435,53 +1462,122 @@ ceiling_pokoj2 = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-# Position these layouts relative to the long beams beside the garden-room wall.
-HALLWAY_MIAKO_BEAM_LENGTH = 5.25
+# Position the chimney-side beam from the chimney's garden face.
+HALLWAY_MIAKO_BEAM_LENGTH = 6.0
 HALLWAY_MIAKO_BEAM_COUNT = 1
-HALLWAY_MIAKO_BEAM_EAST_BEARING = 0.13
-HALLWAY_MIAKO_BEAM_WALL_OVERLAP = 0.03
-hallway_miako_beam_y = GARDEN_ROOMS_WALL_Y+HALLWAY_MIAKO_BEAM_WALL_OVERLAP
-ceiling_pokoj3_start_y = hallway_miako_beam_y-HALLWAY_MIAKO_BEAM_COUNT*CEILING_STRIP_WIDTHS["beam"]
-ceiling_bathroom_hallway_start_y = ceiling_pokoj3_start_y-(0.005+CEILING_STRIP_WIDTHS["wide"]+0.005)
+HALLWAY_MIAKO_BEAM_EAST_BEARING = 0.075
+HALLWAY_MIAKO_BEAM_STAIRWAY_BEARING = 0.07
+HALLWAY_MIAKO_BEAM_CHIMNEY_CLEARANCE = 0.03
+HALLWAY_MIAKO_BLOCK_CHIMNEY_CLEARANCE = 0.05
+hallway_miako_beam_y = (
+    CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2+HALLWAY_MIAKO_BEAM_CHIMNEY_CLEARANCE
+    +HALLWAY_MIAKO_BEAM_COUNT*CEILING_STRIP_WIDTHS["beam"]
+)
+hallway_miako_beam_end_x = BATHROOM_RIGHT_X+HALLWAY_MIAKO_BEAM_STAIRWAY_BEARING
+hallway_miako_block_end_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-HALLWAY_MIAKO_BLOCK_CHIMNEY_CLEARANCE
+if not math.isclose(
+    BWT-HALLWAY_MIAKO_BEAM_EAST_BEARING+HALLWAY_MIAKO_BEAM_LENGTH,
+    hallway_miako_beam_end_x, abs_tol=1e-9,
+):
+    raise ValueError("hallway MIAKO beam length does not match its wall bearings")
+# The chimney-side block bay shares the shorter beam span. The next slab
+# starts at this assembly's street edge, preserving the spacing between rows.
+ceiling_hallway_beam = ceiling_storey.miako_slab(
+    "Ceiling - long beams Pokoj 3 and hallway",
+    start=(BWT-HALLWAY_MIAKO_BEAM_EAST_BEARING, hallway_miako_beam_y),
+    end=(BWT-HALLWAY_MIAKO_BEAM_EAST_BEARING+HALLWAY_MIAKO_BEAM_LENGTH, hallway_miako_beam_y),
+    direction=(0, -1), top=CEILING_THICKNESS,
+    structure=["beam"]*HALLWAY_MIAKO_BEAM_COUNT+["space", "wide", "space"],
+    block_length=0.25,
+    block_start_offset=HALLWAY_MIAKO_BEAM_EAST_BEARING,
+    block_end_offset=hallway_miako_beam_end_x-hallway_miako_block_end_x,
+    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
+)
+ceiling_room3_hallway_start_y = hallway_miako_beam_y-ceiling_hallway_beam.width
+# Match the topping's chimney-side edge to the shortened block bay. Keep
+# the full-length beam and its concrete rib intact on the garden side.
+hallway_chimney_opening = ifcopenshell.api.root.create_entity(
+    house.model, ifc_class="IfcOpeningElement", predefined_type="OPENING",
+    name="Ceiling - chimney-side block bay clearance",
+)
+hallway_chimney_opening_body = ifcopenshell.api.geometry.add_slab_representation(
+    house.model, context=house._body_context, depth=CEILING_THICKNESS+0.02,
+    polyline=(
+        (hallway_miako_block_end_x, ceiling_room3_hallway_start_y),
+        (hallway_miako_beam_end_x+0.01, ceiling_room3_hallway_start_y),
+        (hallway_miako_beam_end_x+0.01, hallway_miako_beam_y-HALLWAY_MIAKO_BEAM_COUNT*CEILING_STRIP_WIDTHS["beam"]),
+        (hallway_miako_block_end_x, hallway_miako_beam_y-HALLWAY_MIAKO_BEAM_COUNT*CEILING_STRIP_WIDTHS["beam"]),
+    ),
+)
+ifcopenshell.api.geometry.assign_representation(house.model, product=hallway_chimney_opening, representation=hallway_chimney_opening_body)
+ifcopenshell.api.feature.add_feature(house.model, feature=hallway_chimney_opening, element=ceiling_hallway_beam.topping_element)
+hallway_chimney_opening_placement = np.eye(4)
+hallway_chimney_opening_placement[2, 3] = ceiling_storey.elevation-0.01
+ifcopenshell.api.geometry.edit_object_placement(house.model, product=hallway_chimney_opening, matrix=hallway_chimney_opening_placement, is_si=True)
+ROOM3_HALLWAY_CEILING_BEAM_LENGTH = 6.25
+ROOM3_HALLWAY_CEILING_EAST_BEARING = 0.23
+ROOM3_HALLWAY_CEILING_STAIRWAY_BEARING = 0.165
+ceiling_room3_hallway_start_x = BWT-ROOM3_HALLWAY_CEILING_EAST_BEARING
 
-ceiling_pokoj3 = ceiling_storey.miako_slab(
-    "Ceiling - Pokoj 3",
-    start=(0.08375, ceiling_pokoj3_start_y), end=(3.83375, ceiling_pokoj3_start_y),
+ceiling_room3_hallway = ceiling_storey.miako_slab(
+    "Ceiling - Pokoj 3 a chodba",
+    start=(ceiling_room3_hallway_start_x, ceiling_room3_hallway_start_y),
+    end=(ceiling_room3_hallway_start_x+ROOM3_HALLWAY_CEILING_BEAM_LENGTH, ceiling_room3_hallway_start_y),
     direction=(0, -1), top=CEILING_THICKNESS,
     structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
-        "space", "wide", "space",
         "beam", "beam",
 		"space", "wide", "space", "beam",
 		"space", "wide", "space", "beam",
 		"beam"
     ],
     block_length=0.25,
-    block_start_offset=0.16125, block_end_offset=0.16125,
+    block_start_offset=ROOM3_HALLWAY_CEILING_EAST_BEARING,
+    block_end_offset=ROOM3_HALLWAY_CEILING_STAIRWAY_BEARING,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-ceiling_bathroom_hallway = ceiling_storey.miako_slab(
-    "Ceiling - Koupelna a chodba",
-    start=(3.74, ceiling_bathroom_hallway_start_y), end=(6.24, ceiling_bathroom_hallway_start_y),
-    direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
-        "beam", "beam",
-		"space", "wide", "space", "beam",
-		"space", "wide", "space", "beam",
-		"beam"
+FRONT_CEILING_WALL_OVERLAP = 0.03
+ceiling_front_girder_edge_y = min(
+    y for positions in PURLIN_SUPPORT_Y_POSITIONS for y in positions
+)-PURLIN_SUPPORT_GIRDER_SIZE[0]/2
+ceiling_front = ceiling_storey.miako_slab(
+    "Ceiling - Pokoj 3 a chodba u ulice",
+    start=(ceiling_room3_hallway_start_x, BWT-FRONT_CEILING_WALL_OVERLAP),
+    end=(ceiling_room3_hallway_start_x+ROOM3_HALLWAY_CEILING_BEAM_LENGTH, BWT-FRONT_CEILING_WALL_OVERLAP),
+    direction=(0, 1), top=CEILING_THICKNESS,
+    structure=[  # Street to garden; another full wide-block bay would reach the girder.
+        "beam", "space", "narrow", "space",
+        "beam", "space", "narrow", "space",
+        "beam", "space", "narrow", "space",
+        "beam", "space", "narrow", "space",
+		"beam",
+		"beam",
     ],
     block_length=0.25,
-    block_start_offset=0.1825, block_end_offset=0.1825,
+    block_start_offset=ROOM3_HALLWAY_CEILING_EAST_BEARING,
+    block_end_offset=ROOM3_HALLWAY_CEILING_STAIRWAY_BEARING,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
+STAIRWAY_CEILING_WALL_OVERLAP = 0.03
+ceiling_stairway_start_y = GARDEN_ROOMS_WALL_Y+STAIRWAY_CEILING_WALL_OVERLAP
+STAIRWAY_FIRST_BEAM_BEARING = 0.10
+STAIRWAY_FIRST_BEAM_LENGTH = 2.50
+ceiling_stairway_first_beam = ceiling_storey.miako_slab(
+    "Ceiling - Schodiště krajní nosník",
+    start=(STAIRWAY_WALL_X-STAIRWAY_FIRST_BEAM_BEARING, ceiling_stairway_start_y),
+    end=(STAIRWAY_WALL_X-STAIRWAY_FIRST_BEAM_BEARING+STAIRWAY_FIRST_BEAM_LENGTH, ceiling_stairway_start_y),
+    direction=(0, -1), top=CEILING_THICKNESS, structure=["beam"],
+    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
+)
+ceiling_stairway_remaining_start_y = ceiling_stairway_start_y-ceiling_stairway_first_beam.width
 ceiling_stairway = ceiling_storey.miako_slab(
     "Ceiling - Schodiště",
     # Keep the garden edge fixed; the structure determines the street edge.
-    start=(6.15625, hallway_miako_beam_y), end=(8.65625, hallway_miako_beam_y),
+    start=(6.15625, ceiling_stairway_remaining_start_y), end=(8.65625, ceiling_stairway_remaining_start_y),
     direction=(0, -1), top=CEILING_THICKNESS,
     structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
-        "beam", "beam",
+        "beam",
 		"space", "space", "space", "space", "space",
 		"space", "space", "space", "space", "space", "space",
 		"beam",
@@ -1494,25 +1590,15 @@ ceiling_stairway = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-# Adjacent long beams parallel to the garden-room divider, spanning Pokoj 3 and the hallway.
-ceiling_hallway_beam = ceiling_storey.miako_slab(
-    "Ceiling - long beams Pokoj 3 and hallway",
-    start=(BWT-HALLWAY_MIAKO_BEAM_EAST_BEARING, hallway_miako_beam_y),
-    end=(BWT-HALLWAY_MIAKO_BEAM_EAST_BEARING+HALLWAY_MIAKO_BEAM_LENGTH, hallway_miako_beam_y),
-    direction=(0, -1), top=CEILING_THICKNESS, structure=["beam"]*HALLWAY_MIAKO_BEAM_COUNT,
-    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
-)
-
 ceiling_slabs = (
-    ceiling_pokoj1, ceiling_pokoj2, ceiling_pokoj3,
-    ceiling_bathroom_hallway, ceiling_stairway,
+    ceiling_pokoj1, ceiling_pokoj2, ceiling_room3_hallway, ceiling_front, ceiling_stairway,
 )
 # Actual ground-floor inner wall faces, used by this level's dimensions.
 ceiling_wall_bounds = (
     (BWT, GARDEN_ROOMS_WALL_Y+INNER_BWT, HOUSE_WIDTH/2-GARDEN_PARTITION_THICKNESS/2, HOUSE_DEPTH-BWT),
     (HOUSE_WIDTH/2+GARDEN_PARTITION_THICKNESS/2, GARDEN_ROOMS_WALL_Y+INNER_BWT, HOUSE_WIDTH-BWT, HOUSE_DEPTH-BWT),
-    (BWT, BWT, THIRD_ROOM_WALL_X-INNER_BWT, GARDEN_ROOMS_WALL_Y),
-    (BATHROOM_LEFT_X, BWT, BATHROOM_RIGHT_X, GARDEN_ROOMS_WALL_Y),
+    (BWT, BWT, BATHROOM_RIGHT_X, GARDEN_ROOMS_WALL_Y),
+    (BWT, BWT, BATHROOM_RIGHT_X, ceiling_front_girder_edge_y),
     (STAIRWAY_WALL_X, BWT, HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y),
 )
 ceiling_plan_min, ceiling_plan_max = (0., 0.), (HOUSE_WIDTH, HOUSE_DEPTH)
@@ -1520,28 +1606,73 @@ ceiling_stair_opening_end_y = min(point[1] for point in ceiling_stairway.footpri
 ceiling_schedule_rows = [
     {"location": "Pokoj 1", "slab": ceiling_pokoj1},
     {"location": "Pokoj 2", "slab": ceiling_pokoj2},
-    {"location": "Pokoj 3", "slab": ceiling_pokoj3},
-    {"location": "Koupelna a chodba", "slab": ceiling_bathroom_hallway},
-    {"location": "Schodiště", "slab": ceiling_stairway},
-    {"location": "Pokoj 3 / chodba", "slab": ceiling_hallway_beam},
+    {"location": "Pokoj 3 + Koupelna", "slab": (ceiling_room3_hallway, ceiling_front)},
+    {"location": "Pokoj 3 + Koupelna, zkrácený nosník", "slab": ceiling_hallway_beam},
+    {"location": "Chodba", "slab": (ceiling_stairway, ceiling_stairway_first_beam)},
 ]
+
+def add_ceiling_spacing_dimension(drawing, start, end, *, side, index, name):
+    """Alternate consecutive spacing dimensions between the two outside lines."""
+    distance = CEILING_BEAM_SPACING_OUTSIDE_OFFSETS[index % 2]
+    dimension_x = -distance if side == "left" else HOUSE_WIDTH+distance
+    normal_x = 1 if end[1] < start[1] else -1
+    drawing.add_dimension(
+        start, end, offset=(dimension_x-start[0])/normal_x, name=name,
+    )
+
+
+def add_ceiling_beam_spacing_dimensions(drawing, slab, *, side):
+    """Continue each spacing sequence after its separate leading beams."""
+    first_index = (
+        len(ceiling_hallway_beam.beams) if slab == ceiling_room3_hallway
+        else len(ceiling_stairway_first_beam.beams) if slab == ceiling_stairway else 0
+    )
+    endpoint = 0 if side == "left" else 1
+    lines = slab.beam_centerlines
+    for index, (first, second) in enumerate(zip(lines, lines[1:]), 1):
+        add_ceiling_spacing_dimension(
+            drawing, first[endpoint], second[endpoint], side=side, index=first_index+index-1,
+            name=f"{slab.Name} Beam Center Distance {index}",
+        )
+
 
 def add_hallway_beam_spacing_dimensions(drawing):
     """Dimension the long beams and extend the adjoining ceilings' spacing chains."""
     long_beams = ceiling_hallway_beam.beam_centerlines
-    dimension_x = float(np.mean(ceiling_pokoj3.beam_centerlines[0], axis=0)[0])
+    midpoint = np.mean(ceiling_room3_hallway.beam_centerlines[0], axis=0)
+    dimension_x = float(ceiling_hallway_beam.start[0])
     for index, (first, second) in enumerate(zip(long_beams, long_beams[1:]), 1):
-        drawing.add_dimension(
+        add_ceiling_spacing_dimension(
+            drawing,
             (dimension_x, first[0][1]), (dimension_x, second[0][1]),
+            side="left", index=index-1,
             name=f"Long Hallway MIAKO Beams Centre Distance {index}",
         )
     long_beam_y = long_beams[-1][0][1]
-    for slab in (ceiling_pokoj3, ceiling_bathroom_hallway):
-        midpoint = np.mean(slab.beam_centerlines[0], axis=0)
-        drawing.add_dimension(
-            (float(midpoint[0]), long_beam_y), tuple(midpoint),
-            name=f"{slab.Name} First Beam Centre Distance to Long Beam",
-        )
+    add_ceiling_spacing_dimension(
+        drawing, (dimension_x, long_beam_y), (dimension_x, midpoint[1]),
+        side="left", index=len(long_beams)-1,
+        name=f"{ceiling_room3_hallway.Name} First Beam Centre Distance to Long Beam",
+    )
+
+
+def add_stairway_first_beam_dimensions(drawing):
+    """Dimension the moved beam's bearings and link the stairway spacing chain."""
+    start, end = ceiling_stairway_first_beam.beam_centerlines[0]
+    drawing.add_dimension(
+        start, (STAIRWAY_WALL_X, start[1]), offset=0.65,
+        name="Stairway first MIAKO beam stairway-wall bearing",
+    )
+    drawing.add_dimension(
+        (HOUSE_WIDTH-BWT, end[1]), end, offset=0.65,
+        name="Stairway first MIAKO beam outside-wall bearing",
+    )
+    next_start, next_end = ceiling_stairway.beam_centerlines[0]
+    dimension_x = next_end[0]
+    add_ceiling_spacing_dimension(
+        drawing, (dimension_x, start[1]), (dimension_x, next_start[1]), side="right", index=0,
+        name="Stairway first MIAKO beam centre distance to remaining slab",
+    )
 
 wall_plate_east = upper.beam(
     "Pozednice - východ",
@@ -1789,18 +1920,18 @@ upper_bearing_wall_region = box(
 )
 # Keep the stair-side face flush with the stairwell edge; thickness is in Technika.
 upper_technical_wall_x = STAIR_LEFT_X-DRY_WALL_WIDTH/2
-technical_sliding_door_y = (
-    CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-TECHNIKA_SLIDING_DOOR_CHIMNEY_CLEARANCE-TECHNIKA_SLIDING_DOOR_OPENING_WIDTH
-    if TECHNIKA_SLIDING_DOOR_Y is None else TECHNIKA_SLIDING_DOOR_Y
+upper_toilet_door_y = (
+    CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-UPPER_TOILET_DOOR_CHIMNEY_CLEARANCE-UPPER_TOILET_DOOR_OPENING_WIDTH
+    if UPPER_TOILET_DOOR_Y is None else UPPER_TOILET_DOOR_Y
 )
 living_room_door_opening_x = HOUSE_WIDTH-BWT-LIVING_ROOM_DOOR_WEST_CLEARANCE-ROOM_DOOR_OPENING_WIDTH
 upper_technical_taper_y = (
-    technical_sliding_door_y+TECHNIKA_SLIDING_DOOR_OPENING_WIDTH+TECHNIKA_SLIDING_DOOR_TAPER_CLEARANCE
+    upper_toilet_door_y+UPPER_TOILET_DOOR_OPENING_WIDTH+UPPER_TOILET_DOOR_TAPER_CLEARANCE
 )
 # Define the hallway face, ending just past the jamb towards the toilet.
 upper_technical_taper_start = np.array((STAIR_LEFT_X, upper_technical_taper_y))
 upper_technical_taper_end = np.array((
-    living_room_door_opening_x-TECHNIKA_SLIDING_DOOR_TAPER_JAMB_OFFSET,
+    living_room_door_opening_x-UPPER_TOILET_DOOR_TAPER_JAMB_OFFSET,
     living_room_right_wall_front_y,
 ))
 upper_technical_taper_delta = upper_technical_taper_end-upper_technical_taper_start
@@ -1861,16 +1992,15 @@ upper_technical_railing = upper.railing(
     ),
     height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
-technical_sliding_door = wall_technical_stairway_u.add_door(
-    name="Technika sliding door",
-    at=technical_sliding_door_y-wall_technical_stairway_u.start[1],
-    opening_width=TECHNIKA_SLIDING_DOOR_OPENING_WIDTH,
-    width=TECHNIKA_SLIDING_DOOR_WIDTH,
+upper_toilet_door = wall_technical_stairway_u.add_door(
+    name="Upper toilet door",
+    at=upper_toilet_door_y-wall_technical_stairway_u.start[1],
+    opening_width=UPPER_TOILET_DOOR_OPENING_WIDTH,
+    width=UPPER_TOILET_DOOR_WIDTH,
     height=UPPER_DOOR_TOP_HEIGHT,
     clear_height=UPPER_DOOR_CLEAR_HEIGHT,
     sill_height=UPPER_FLOOR_THICKNESS,
-    operation="SLIDING_TO_LEFT",  # Towards the street, clear of the horizontal wall.
-	reverse_swing=True,
+    operation="SINGLE_SWING_RIGHT",  # Garden-side hinge; opens into 1.04.
 )
 living_room_door = wall_living_room_back_u.add_door(
     name="Living room door",
@@ -2870,20 +3000,7 @@ if "ground" in sys.argv:
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
     add_facade_insulation(drawing1)
-    for room in ground_room_floors:
-        match room:
-            case (room, offset_x, offset_y):
-                pass
-            case _:
-                offset_x = 0.0
-                offset_y = 0.0
-        position = Polygon(room.outline).representative_point().coords[0]
-        position = (position[0] + offset_x, position[1] + offset_y)
-        drawing1.add_room_annotation(
-            position, identifier=room.room_id, description=room.Name, area=room.area,
-            window_area=window_area(*ground_room_windows[room.room_id]),
-        )
-    drawing1.add_room_legend()
+    add_ground_room_annotations(drawing1)
     # Only openings in load-bearing masonry need lintel tags. The Pokoj 3
     # and bathroom doors are in drywall partitions and are omitted.
     drawing1.add_lintel(entrance_door, 1)
@@ -2912,6 +3029,13 @@ if "ground" in sys.argv:
             end=(HOUSE_WIDTH-BWT, STAIR_LOWER_START_Y), offset=0.35,
             name="Stairway clearance to west wall",
         )
+    # Along Y to a point 100 mm gardenward of the street-side entrance jamb.
+    entrance_opening_street_y = wall_west_g.start[1]+ENTRANCE_OPENING_AT
+    drawing1.add_dimension(
+        start=(STAIR_RIGHT_X, lower_stairs.start[1]+0.02),
+        end=(STAIR_RIGHT_X, entrance_opening_street_y+0.08), offset=0.35,
+        name="Ground stairway clearance to entrance opening plus 100 mm",
+    )
     drawing1.add_notes(stairway_notes+entrance_stairway_notes, title="SCHODIŠTĚ")
     drawing1.add_stair_annotation(entrance_stairs)
     drawing1.add_stair_landing_annotation(entrance_landing)
@@ -3026,7 +3150,7 @@ if "ground" in sys.argv:
         end=(chimney.center[0]+chimney.size/2,
              wall_bathroom_partition_g.start[1]+wall_bathroom_partition_g.body_offset
              +wall_bathroom_partition_g.thickness),
-        offset=.10, name="Ground chimney clearance to bathroom drywall",
+        offset=-0.2, name="Ground chimney clearance to bathroom drywall",
     )
     if SHOW_PURLIN_SUPPORT_PLANNING_MARKERS:
         add_purlin_support_planning_markers(drawing1)
@@ -3073,13 +3197,11 @@ if "ceiling" in sys.argv:
                 drawing1.house.model, pset=drawing1.house.model.by_id(appearance["id"]),
                 properties={"Classes": appearance["Classes"]+" ceiling-beam-axis"},
             )
-        # Dimension directly at midspan so black extension lines do not cover the red axes.
+        add_ceiling_beam_spacing_dimensions(
+            drawing1, slab, side="right" if slab in (ceiling_pokoj2, ceiling_stairway) else "left",
+        )
+        # Room wall-offset dimensions still reference the inner wall faces.
         midpoints = tuple(np.mean(centreline, axis=0) for centreline in slab.beam_centerlines)
-        for index, (first, second) in enumerate(zip(midpoints, midpoints[1:]), 1):
-            drawing1.add_dimension(
-                start=tuple(first), end=tuple(second),
-                name=f"{slab.Name} Beam Center Distance {index}",
-            )
 
         # Put the rotated garden-room bearings above the plan, staggered so
         # the two 135 mm labels at the shared middle wall remain readable.
@@ -3101,7 +3223,7 @@ if "ceiling" in sys.argv:
             name=f"{slab.Name} End Bearing",
         )
 
-        # Keep wall offsets beside the spacing chain, clear of the chimney and small end spacings.
+        # Keep room wall offsets clear of the chimney and small end spacings.
         across_axis = int(np.argmax(np.abs(slab.direction)))
         near_face, far_face = wall_bounds[across_axis], wall_bounds[across_axis+2]
         if slab.direction[across_axis] < 0:
@@ -3125,26 +3247,33 @@ if "ceiling" in sys.argv:
                 start=tuple(dimension_start), end=tuple(dimension_end),
                 name=f"{slab.Name} {label}",
             )
-    # The long beams share their span and east bearing; west ends will be tuned separately.
-    for index, (start, end) in enumerate(ceiling_hallway_beam.beam_centerlines, 1):
-        axis = drawing1.add_line(
-            start, end, style="dash-dot", color="red", line_width=0.08,
-            name=f"{ceiling_hallway_beam.Name} Beam {index} Centreline",
-        )
-        appearance = ifcopenshell.util.element.get_pset(axis, "EPset_Annotation")
-        ifcopenshell.api.pset.edit_pset(
-            house.model, pset=house.model.by_id(appearance["id"]),
-            properties={"Classes": appearance["Classes"]+" ceiling-beam-axis"},
-        )
+    # The chimney-side strip and the moved stairway beam have separate spans.
+    for slab in (ceiling_hallway_beam, ceiling_stairway_first_beam):
+        for index, (start, end) in enumerate(slab.beam_centerlines, 1):
+            axis = drawing1.add_line(
+                start, end, style="dash-dot", color="red", line_width=0.08,
+                name=f"{slab.Name} Beam {index} Centreline",
+            )
+            appearance = ifcopenshell.util.element.get_pset(axis, "EPset_Annotation")
+            ifcopenshell.api.pset.edit_pset(
+                house.model, pset=house.model.by_id(appearance["id"]),
+                properties={"Classes": appearance["Classes"]+" ceiling-beam-axis"},
+            )
     start, end = ceiling_hallway_beam.beam_centerlines[0]
     drawing1.add_dimension(start, end, offset=1.2, name="Standalone hallway MIAKO beam length")
     drawing1.add_dimension(
         start, (BWT, start[1]), offset=0.35,
         name="Standalone hallway MIAKO beam east bearing",
     )
+    drawing1.add_dimension(
+        (BATHROOM_RIGHT_X, end[1]), end, offset=0.35,
+        name="Standalone hallway MIAKO beam stairway bearing",
+    )
     add_hallway_beam_spacing_dimensions(drawing1)
+    add_stairway_first_beam_dimensions(drawing1)
     add_purlin_support_girder_plan(drawing1)
     drawing1.add_miako_beam_schedule(ceiling_schedule_rows)
+    add_ground_room_annotations(drawing1)
     drawing1.add_chimney_annotation(chimney)
     if SHOW_PURLIN_SUPPORT_PLANNING_MARKERS:
         add_purlin_support_planning_markers(drawing1)
@@ -3166,18 +3295,22 @@ if "ceiling2" in sys.argv:
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
         ("reinforced-concrete", "Železobetonový věnec"),
     ])
-    drawing1.add_miako_beam_dimensions(ceiling_pokoj1, side="end", offset=0.7)
-    drawing1.add_miako_beam_dimensions(ceiling_pokoj2, side="end", offset=0.7)
-    drawing1.add_miako_beam_dimensions(ceiling_pokoj3, side="start", offset=0.7)
-    drawing1.add_miako_beam_dimensions(ceiling_bathroom_hallway, side="end", offset=0.45)
-    drawing1.add_miako_beam_dimensions(ceiling_stairway, side="end", offset=0.65)
+    for slab in ceiling_slabs:
+        add_ceiling_beam_spacing_dimensions(
+            drawing1, slab, side="right" if slab in (ceiling_pokoj2, ceiling_stairway) else "left",
+        )
     start, end = ceiling_hallway_beam.beam_centerlines[0]
     drawing1.add_dimension(start, end, offset=1.2, name="Standalone hallway MIAKO beam length")
     drawing1.add_dimension(
         start, (BWT, start[1]), offset=0.35,
         name="Standalone hallway MIAKO beam east bearing",
     )
+    drawing1.add_dimension(
+        (BATHROOM_RIGHT_X, end[1]), end, offset=0.35,
+        name="Standalone hallway MIAKO beam stairway bearing",
+    )
     add_hallway_beam_spacing_dimensions(drawing1)
+    add_stairway_first_beam_dimensions(drawing1)
     add_purlin_support_girder_plan(drawing1)
     drawing1.add_dimension(
         start=tuple(ceiling_plan_min),
@@ -3199,18 +3332,26 @@ if "ceiling2" in sys.argv:
             start=slab.end, end=tuple(np.asarray(slab.end)+slab.width*np.asarray(slab.direction)),
             offset=-0.45,
         )
-    for slab in (ceiling_pokoj3, ceiling_bathroom_hallway):
-        street_edge_y = min(point[1] for point in slab.footprint)
-        drawing1.add_dimension(
-            start=(slab.start[0], street_edge_y), end=(slab.end[0], street_edge_y), offset=-0.75,
-        )
+    merged_street_edge_y = min(point[1] for point in ceiling_room3_hallway.footprint)
+    drawing1.add_dimension(
+        start=(ceiling_room3_hallway.start[0], merged_street_edge_y),
+        end=(ceiling_room3_hallway.end[0], merged_street_edge_y), offset=-1.0,
+        name="Merged Pokoj 3 and hallway beam length",
+    )
+    front_ceiling_garden_edge_y = max(point[1] for point in ceiling_front.footprint)
+    front_ceiling_dimension_x = (ceiling_front.start[0]+ceiling_front.end[0])/2+0.4
+    drawing1.add_dimension(
+        start=(front_ceiling_dimension_x, front_ceiling_garden_edge_y),
+        end=(front_ceiling_dimension_x, ceiling_front_girder_edge_y),
+        name="Front ceiling clear gap to purlin support girder",
+    )
     ceiling_stairway_street_y = min(point[1] for point in ceiling_stairway.footprint)
     drawing1.add_dimension(
         start=(ceiling_stairway.start[0], ceiling_stairway_street_y),
         end=(ceiling_stairway.end[0], ceiling_stairway_street_y),
         offset=-0.35,
     )
-    ceiling_stair_opening_dimension_x = (ceiling_wall_bounds[4][0]+ceiling_wall_bounds[4][2])/2
+    ceiling_stair_opening_dimension_x = (ceiling_wall_bounds[-1][0]+ceiling_wall_bounds[-1][2])/2
     drawing1.add_dimension(
         start=(ceiling_stair_opening_dimension_x, BWT),
         end=(ceiling_stair_opening_dimension_x, ceiling_stair_opening_end_y),
@@ -3345,8 +3486,8 @@ if "upper" in sys.argv:
         drawing1.include_element(facade)
     drawing1.add_chimney_annotation(chimney)
     drawing1.add_door_annotation(living_room_door)
-    # Keep the size label in the hallway while the sliding leaf is in 1.04.
-    drawing1.add_door_annotation(technical_sliding_door, offset=-0.9)
+    # Keep the size label in the hallway, clear of the inward door swing.
+    drawing1.add_door_annotation(upper_toilet_door, offset=-0.9)
     drawing1.add_dimension(
         start=(upper_technical_left_x, STAIR_UPPER_END_Y),
         end=(upper_technical_right_x, STAIR_UPPER_END_Y),
@@ -3371,9 +3512,15 @@ if "upper" in sys.argv:
     hallway_dimension_x = upper_stairs.end[0]+ROOM_DOOR_OPENING_WIDTH/2+0.1
     drawing1.add_dimension(
         start=(STAIR_LEFT_X, upper_stairs.end[1]),
-        end=(STAIR_LEFT_X, technical_sliding_door_y),
+        end=(STAIR_LEFT_X, upper_toilet_door_y),
         offset=-0.40,
         name="Toilet door opening clearance from stair exit",
+    )
+    drawing1.add_dimension(
+        start=(STAIR_LEFT_X, upper_technical_cross_back_y),
+        end=(STAIR_LEFT_X, upper_toilet_door_y+UPPER_TOILET_DOOR_OPENING_WIDTH),
+        offset=0.8,
+        name="Upper toilet lower drywall to garden end of door opening",
     )
     drawing1.add_dimension(
         start=(hallway_dimension_x, upper_stairs.end[1]),
@@ -3386,7 +3533,7 @@ if "upper" in sys.argv:
             position = (3.5, 7)
         elif room == upper_hallway:
             position = (STAIR_LEFT_X+0.5,
-                        (technical_sliding_door_y+TECHNIKA_SLIDING_DOOR_OPENING_WIDTH
+                        (upper_toilet_door_y+UPPER_TOILET_DOOR_OPENING_WIDTH
                          +LIVING_ROOM_WALL_FRONT_Y)/2-0.05)
         elif room == upper_technical_room:
             position = (upper_technical_center_x,
