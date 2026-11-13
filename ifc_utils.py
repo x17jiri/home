@@ -4911,7 +4911,7 @@ SlabKind: TypeAlias = Literal[
     "USERDEFINED",
     "NOTDEFINED",
 ]
-MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow", "heb180+", "heb180-", "axis"]
+MiakoStructureItem: TypeAlias = Literal["beam", "wide", "narrow", "space", "heb180+", "heb180-", "axis"]
 
 _COLOR_NAMES = {
     "black": "#000000",
@@ -4982,9 +4982,10 @@ _SLAB_KINDS = {
     "NOTDEFINED",
 }
 _MIAKO_WIDTHS = {
-    "beam": 0.17,
+    "beam": 0.16,
     "wide": 0.455,
     "narrow": 0.33,
+    "space": 0.005,
     "axis": 0.0,
     "heb180+": 0.18 - 2 * 0.03,
     "heb180-": 0.18,
@@ -20883,8 +20884,11 @@ class Storey:
         ``start`` and ``end`` define the joist span.  ``direction`` must be
         perpendicular to that line and selects the positive layout side.
         Items in ``structure`` are inserted successively in that direction:
-        ``"beam"`` is 0.17 m wide, ``"wide"`` is a 0.455 m block bay, and
-        ``"narrow"`` is a 0.33 m block bay.  One optional zero-width
+        ``"beam"`` is 0.16 m wide, ``"wide"`` is a 0.455 m block bay, and
+        ``"narrow"`` is a 0.33 m block bay. ``"space"`` advances the layout
+        by 0.005 m without creating a component; the topping remains continuous
+        above it. Spaces are explicit and are never inserted automatically.
+        One optional zero-width
         ``"axis"`` marker makes the supplied start-end line an internal
         divider: items after it remain on the positive side, while items
         before it occupy the opposite side.  The array remains a physical
@@ -20893,8 +20897,9 @@ class Storey:
         marker, the existing one-sided behaviour is retained.
         ``structure=["beam"]`` creates one independent beam strip, including
         its ceramic shell, reinforcement and concrete rib, without block rows.
-        Consequently a wide bay plus a beam forms a 0.625 m module and a
-        narrow bay plus a beam forms a 0.5 m module.  When ``expected_width``
+        A wide bay plus a beam forms a 0.615 m module and a narrow bay plus
+        a beam forms a 0.490 m module. Two explicit spaces per bay increase
+        these to 0.625 m and 0.500 m, respectively. When ``expected_width``
         is supplied, a warning is printed if the total width on both sides
         does not match it.
 
@@ -20928,7 +20933,7 @@ class Storey:
         use matching bearing lips at the shell top.  These profiles are
         extruded along the joist span.  Repeated components use mapped type
         geometry and are decomposed beneath one semantic ``IfcSlab`` contained
-        by this storey.  The standard beam shell is 170 mm wide and 60 mm high.
+        by this storey.  The standard beam shell is 160 mm wide and 60 mm high.
         Its two lower reinforcement bars are centred 40 mm above the bottom,
         with a third bar centred at the 175 mm apex.  Two diagonal wires join
         the inner sides of the lower bars to the outer sides of the upper bar.
@@ -21031,6 +21036,9 @@ class Storey:
                     raise ValueError("structure must contain at most one axis")
                 normalised_structure.append(item)
                 previous_was_block = False
+                continue
+            if item == "space":
+                normalised_structure.append(item)
                 continue
             is_block = item in {"wide", "narrow"}
             if is_block and previous_was_block:
@@ -21640,7 +21648,7 @@ class Storey:
                 steel_beams.append(steel)
                 components.append(steel)
                 component_placements.append(component_placement(0., signed_offset, 0.))
-            else:
+            elif item in {"wide", "narrow"}:
                 bay_number += 1
                 block_lengths = [block_length] * full_block_count
                 if remainder:
@@ -21699,6 +21707,16 @@ class Storey:
         # first/last beams; the 35 mm inset exists only beside a block bearing.
         # A single profile avoids an artificial horizontal joint at block
         # height.
+        def bearing_reach(index, step):
+            """How far a neighbouring block lip reaches across any spaces."""
+            gap = 0.0
+            while 0 <= index < len(physical_structure) and physical_structure[index] == "space":
+                gap += _MIAKO_WIDTHS["space"]
+                index += step
+            if 0 <= index < len(physical_structure) and physical_structure[index] in {"wide", "narrow"}:
+                return max(0.0, beam_bearing-gap)
+            return 0.0
+
         cover_bottom_points: list[tuple[float, float]] = [
             (signed_before_axis, block_height)
         ]
@@ -21712,7 +21730,7 @@ class Storey:
                 continue
 
             run_start = cover_offset
-            run_starts_at_slab_edge = item_index == 0
+            run_first_index = item_index
             steel_gaps: list[tuple[float, float]] = []
             while (
                 item_index < len(physical_structure)
@@ -21730,13 +21748,10 @@ class Storey:
                         steel_gaps.append((item_start, cover_offset))
                 item_index += 1
             run_end = cover_offset
-            run_ends_at_slab_edge = item_index == len(physical_structure)
-            stem_start = run_start + (
-                0.0 if run_starts_at_slab_edge else beam_bearing
-            )
-            stem_end = run_end - (
-                0.0 if run_ends_at_slab_edge else beam_bearing
-            )
+            # Block lips project 35 mm beyond the nominal bay. Explicit
+            # spaces reduce how far that lip reaches onto the adjacent beam.
+            stem_start = run_start + bearing_reach(run_first_index-1, -1)
+            stem_end = run_end - bearing_reach(item_index, 1)
             stem_points = [
                 (layout_sign * stem_start, block_height),
                 (layout_sign * stem_start, beam_height),

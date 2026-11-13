@@ -39,7 +39,7 @@ class MiakoHebTests(unittest.TestCase):
     def test_profile_bears_30mm_on_both_beams_at_shell_top(self):
         house, storey, slab = self.make_slab()
         self.assertEqual(slab.structure, ("beam", "heb180+", "beam"))
-        self.assertAlmostEqual(slab.width, .17+.12+.17)
+        self.assertAlmostEqual(slab.width, .16+.12+.16)
         self.assertEqual(len(slab.beams), 2)
         self.assertEqual(len(slab.steel_beams), 1)
         self.assertEqual(slab.blocks, ())
@@ -47,8 +47,8 @@ class MiakoHebTests(unittest.TestCase):
         points = vertices(steel)
         lower, upper = points.min(axis=0), points.max(axis=0)
         np.testing.assert_allclose(upper-lower, (slab.length, .18, .18), atol=1e-8)
-        self.assertAlmostEqual(lower[1], .17-.03)
-        self.assertAlmostEqual(upper[1], .17+.12+.03)
+        self.assertAlmostEqual(lower[1], .16-.03)
+        self.assertAlmostEqual(upper[1], .16+.12+.03)
         self.assertAlmostEqual(lower[2], storey.elevation+slab.bottom+slab.beam_height)
         self.assertEqual(steel.is_a(), "IfcBeam")
         self.assertEqual(ifcopenshell.util.element.get_material(steel).Name, "Structural steel")
@@ -64,18 +64,18 @@ class MiakoHebTests(unittest.TestCase):
         self.assertAlmostEqual(profile.FilletRadius, .015)
         # Every bit of steel is excluded from the cast-in-place concrete.
         self.assertAlmostEqual(volume(slab.topping_element)+volume(steel),
-            slab.length*(slab.width*slab.height-2*.17*slab.beam_height))
+            slab.length*(slab.width*slab.height-2*.16*slab.beam_height))
 
     def test_mixed_layout_and_schedule_count_only_miako_beams(self):
         house, storey, slab = self.make_slab(structure=["beam", "wide", "beam", "heb180+", "beam", "narrow", "beam"])
-        self.assertAlmostEqual(slab.width, 4*.17+.455+.12+.33)
+        self.assertAlmostEqual(slab.width, 4*.16+.455+.12+.33)
         self.assertEqual(len(slab.beam_centerlines), 4)
         self.assertEqual(len(slab.beam_shells), 4)
         self.assertEqual(len(slab.reinforcements), 4)
         self.assertEqual(len(slab.blocks), 24)
         points = vertices(slab.steel_beams[0])
-        self.assertAlmostEqual(points[:, 1].min(), .17+.455+.17-.03)
-        self.assertAlmostEqual(points[:, 1].max(), .17+.455+.17+.12+.03)
+        self.assertAlmostEqual(points[:, 1].min(), .16+.455+.16-.03)
+        self.assertAlmostEqual(points[:, 1].max(), .16+.455+.16+.12+.03)
         drawing = house.add_drawing("Plan", x=1.5, y=.8, z=3.1, radius=2,
                                     storeys=[storey], right_panel_width=40)
         drawing.add_miako_beam_schedule([{"location": "Test", "slab": slab}])
@@ -84,19 +84,19 @@ class MiakoHebTests(unittest.TestCase):
     def test_minus_is_flush_with_beam_bottoms_without_overlap(self):
         house, storey, slab = self.make_slab(structure=["beam", "HEB180-", "beam"])
         self.assertEqual(slab.structure, ("beam", "heb180-", "beam"))
-        self.assertAlmostEqual(slab.width, .52)
+        self.assertAlmostEqual(slab.width, .50)
         steel, = slab.steel_beams
         points = vertices(steel)
-        self.assertAlmostEqual(points[:, 1].min(), .17)
-        self.assertAlmostEqual(points[:, 1].max(), .35)
+        self.assertAlmostEqual(points[:, 1].min(), .16)
+        self.assertAlmostEqual(points[:, 1].max(), .34)
         self.assertAlmostEqual(points[:, 2].min(), storey.elevation+slab.bottom)
         self.assertAlmostEqual(points[:, 2].max(), storey.elevation+slab.bottom+.18)
         # Concrete reaches the bottom throughout the gap, excluding only the
         # steel profile and the two prefabricated beam strips beside it.
         self.assertAlmostEqual(volume(slab.topping_element)+volume(steel),
-            slab.length*(slab.width*slab.height-2*.17*slab.beam_height), delta=1e-6)
+            slab.length*(slab.width*slab.height-2*.16*slab.beam_height), delta=1e-6)
         # Each flange touches the adjacent beam side, without intersecting it.
-        np.testing.assert_allclose(slab.beam_centerlines, (((0, .085), (3, .085)), ((0, .435), (3, .435))))
+        np.testing.assert_allclose(slab.beam_centerlines, (((0, .08), (3, .08)), ((0, .42), (3, .42))))
         old_cover = volume(slab.topping_element)
         old_steel = points.copy()
         slab.add_stiffening_rib(at=1.5)
@@ -110,14 +110,14 @@ class MiakoHebTests(unittest.TestCase):
 
     def test_two_minus_sections_share_gap_and_keep_types_and_voids(self):
         house, storey, slab = self.make_slab(structure=["beam", "heb180-", "heb180-", "beam"])
-        self.assertAlmostEqual(slab.width, .7)
+        self.assertAlmostEqual(slab.width, .68)
         self.assertEqual(len(slab.beams), 2)
         self.assertEqual(len(slab.steel_beams), 2)
         first, second = slab.steel_beams
         self.assertAlmostEqual(vertices(first)[:, 1].max(), vertices(second)[:, 1].min())
         self.assertEqual(ifcopenshell.util.element.get_type(first), ifcopenshell.util.element.get_type(second))
         self.assertAlmostEqual(volume(slab.topping_element)+volume(first)+volume(second),
-            slab.length*(slab.width*slab.height-2*.17*slab.beam_height), delta=1e-6)
+            slab.length*(slab.width*slab.height-2*.16*slab.beam_height), delta=1e-6)
 
     def test_bare_heb180_is_rejected_with_migration_hint(self):
         with self.assertRaisesRegex(ValueError, r"heb180\+.*heb180-"):
@@ -128,8 +128,8 @@ class MiakoHebTests(unittest.TestCase):
             with self.subTest(direction=direction):
                 house, _, slab = self.make_slab(start=(2, 6), end=(2, 3), direction=direction,
                     structure=["beam", "wide", "beam", "heb180-", "axis", "heb180-", "beam"])
-                self.assertAlmostEqual(slab.width_before_axis, .17+.455+.17+.18)
-                self.assertAlmostEqual(slab.width_after_axis, .18+.17)
+                self.assertAlmostEqual(slab.width_before_axis, .16+.455+.16+.18)
+                self.assertAlmostEqual(slab.width_after_axis, .18+.16)
                 first, second = slab.steel_beams
                 first_offsets = (vertices(first)[:, 0]-2)*direction[0]
                 second_offsets = (vertices(second)[:, 0]-2)*direction[0]
@@ -147,8 +147,8 @@ class MiakoHebTests(unittest.TestCase):
             with self.subTest(direction=direction):
                 house, _, slab = self.make_slab(start=(2, 6), end=(2, 3), direction=direction,
                     structure=["beam", "wide", "beam", "axis", "heb180+", "beam"])
-                self.assertAlmostEqual(slab.width_before_axis, .17+.455+.17)
-                self.assertAlmostEqual(slab.width_after_axis, .12+.17)
+                self.assertAlmostEqual(slab.width_before_axis, .16+.455+.16)
+                self.assertAlmostEqual(slab.width_after_axis, .12+.16)
                 steel = slab.steel_beams[0]
                 local_offsets = (vertices(steel)[:, 0]-2)*direction[0]
                 self.assertAlmostEqual(local_offsets.min(), -.03)

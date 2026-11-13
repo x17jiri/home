@@ -6153,7 +6153,7 @@ class HouseTests(unittest.TestCase):
                 top=0,
                 direction=(1, 0),
                 structure=["wide", "beam", "narrow", "beam"],
-                expected_width=1.125,
+                expected_width=1.105,
             )
         print_mock.assert_not_called()
 
@@ -6169,22 +6169,23 @@ class HouseTests(unittest.TestCase):
             ("wide", "beam", "narrow", "beam"),
         )
         self.assertEqual(slab.length, 8)
-        self.assertAlmostEqual(slab.width, 1.125)
+        self.assertAlmostEqual(slab.width, 1.105)
         self.assertAlmostEqual(slab.width_before_axis, 0)
-        self.assertAlmostEqual(slab.width_after_axis, 1.125)
-        self.assertAlmostEqual(slab.expected_width, 1.125)
+        self.assertAlmostEqual(slab.width_after_axis, 1.105)
+        self.assertAlmostEqual(slab.expected_width, 1.105)
         self.assertAlmostEqual(slab.block_start_offset, 0)
         self.assertAlmostEqual(slab.block_end_offset, 0)
         self.assertEqual(
             slab.footprint,
-            ((0, 0), (0, 8), (1.125, 8.0), (1.125, 0.0)),
+            ((0, 0), (0, 8), (1.105, 8.0), (1.105, 0.0)),
         )
-        self.assertEqual(
+        np.testing.assert_allclose(
             slab.beam_centerlines,
             (
-                ((0.54, 0.0), (0.54, 8.0)),
-                ((1.04, 0.0), (1.04, 8.0)),
+                ((0.535, 0.0), (0.535, 8.0)),
+                ((1.025, 0.0), (1.025, 8.0)),
             ),
+            atol=1e-9,
         )
         self.assertAlmostEqual(slab.height, 0.25)
         self.assertAlmostEqual(slab.bottom, -0.25)
@@ -6208,8 +6209,8 @@ class HouseTests(unittest.TestCase):
             (
                 (0.0, 0.0),
                 (8.0, 0.0),
-                (8.0, -1.125),
-                (0.0, -1.125),
+                (8.0, -1.105),
+                (0.0, -1.105),
                 (0.0, 0.0),
             ),
         )
@@ -6242,7 +6243,7 @@ class HouseTests(unittest.TestCase):
             second_beam.ObjectPlacement
         )
         self.assertEqual(tuple(first_beam_placement[:2, 3]), (0.455, 0))
-        self.assertAlmostEqual(second_beam_placement[0, 3], 0.955)
+        self.assertAlmostEqual(second_beam_placement[0, 3], 0.945)
         self.assertAlmostEqual(second_beam_placement[1, 3], 0)
         beam_body = ifcopenshell.util.representation.get_representation(
             first_beam, "Model", "Body", "MODEL_VIEW"
@@ -6255,7 +6256,7 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_x(beam_shape.geometry), 8
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_y(beam_shape.geometry), 0.13
+            ifcopenshell.util.shape.get_y(beam_shape.geometry), 0.12
         )
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_z(beam_shape.geometry), 0.06 - 0.02
@@ -6293,7 +6294,7 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.geom.settings(), first_shell
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_y(shell_shape.geometry), 0.17
+            ifcopenshell.util.shape.get_y(shell_shape.geometry), 0.16
         )
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_z(shell_shape.geometry), 0.06
@@ -6320,8 +6321,8 @@ class HouseTests(unittest.TestCase):
         ]
         for wire_profile, expected_bottom, expected_top in zip(
             wire_profiles,
-            ((-0.061, 0.04), (-0.109, 0.04)),
-            ((-0.079, 0.175), (-0.091, 0.175)),
+            ((-0.061, 0.04), (-0.099, 0.04)),
+            ((-0.074, 0.175), (-0.086, 0.175)),
         ):
             np.testing.assert_allclose(
                 np.mean((wire_profile[0], wire_profile[3]), axis=0),
@@ -6342,7 +6343,7 @@ class HouseTests(unittest.TestCase):
         )
         for dot, (expected_y, expected_z) in zip(
             reinforcement_dots,
-            ((-0.055, 0.04), (-0.115, 0.04), (-0.085, 0.175)),
+            ((-0.055, 0.04), (-0.105, 0.04), (-0.08, 0.175)),
         ):
             dot_y, dot_z = dot.Position.Location.Coordinates
             self.assertAlmostEqual(dot_y, expected_y)
@@ -6411,7 +6412,7 @@ class HouseTests(unittest.TestCase):
                 tuple(round(coordinate, 9) for coordinate in point)
                 for point in beam_profile[:4]
             ),
-            ((-0.02, 0.02), (-0.15, 0.02), (-0.15, 0.06), (-0.02, 0.06)),
+            ((-0.02, 0.02), (-0.14, 0.02), (-0.14, 0.06), (-0.02, 0.06)),
         )
         self.assertTrue(
             beam_type_body.Items[0].SweptArea.is_a(
@@ -6441,9 +6442,9 @@ class HouseTests(unittest.TestCase):
         )
         self.assertIn((-0.49, 0.19), topping_profile)
         self.assertIn((-0.49, 0.06), topping_profile)
-        self.assertIn((-0.59, 0.06), topping_profile)
-        self.assertIn((-0.59, 0.19), topping_profile)
-        self.assertIn((-1.125, 0.25), topping_profile)
+        self.assertIn((-0.58, 0.06), topping_profile)
+        self.assertIn((-0.58, 0.19), topping_profile)
+        self.assertIn((-1.105, 0.25), topping_profile)
         topping_shape = ifcopenshell.geom.create_shape(
             ifcopenshell.geom.settings(), slab.topping_element
         )
@@ -6451,7 +6452,7 @@ class HouseTests(unittest.TestCase):
             ifcopenshell.util.shape.get_x(topping_shape.geometry), 8
         )
         self.assertAlmostEqual(
-            ifcopenshell.util.shape.get_y(topping_shape.geometry), 1.125
+            ifcopenshell.util.shape.get_y(topping_shape.geometry), 1.105
         )
         self.assertAlmostEqual(
             ifcopenshell.util.shape.get_z(topping_shape.geometry), 0.19
@@ -6505,33 +6506,33 @@ class HouseTests(unittest.TestCase):
                 "narrow",
                 "beam",
             ],
-            expected_width=1.465,
+            expected_width=1.425,
         )
 
         self.assertEqual(
             slab.structure,
             ("beam", "wide", "beam", "axis", "beam", "narrow", "beam"),
         )
-        self.assertAlmostEqual(slab.width_before_axis, 0.795)
-        self.assertAlmostEqual(slab.width_after_axis, 0.67)
-        self.assertAlmostEqual(slab.width, 1.465)
+        self.assertAlmostEqual(slab.width_before_axis, 0.775)
+        self.assertAlmostEqual(slab.width_after_axis, 0.65)
+        self.assertAlmostEqual(slab.width, 1.425)
         np.testing.assert_allclose(
             slab.footprint,
             (
-                (1.0, 1.205),
-                (5.0, 1.205),
-                (5.0, 2.67),
-                (1.0, 2.67),
+                (1.0, 1.225),
+                (5.0, 1.225),
+                (5.0, 2.65),
+                (1.0, 2.65),
             ),
             atol=1e-9,
         )
         np.testing.assert_allclose(
             slab.beam_centerlines,
             (
-                ((1.0, 1.29), (5.0, 1.29)),
-                ((1.0, 1.915), (5.0, 1.915)),
-                ((1.0, 2.085), (5.0, 2.085)),
-                ((1.0, 2.585), (5.0, 2.585)),
+                ((1.0, 1.305), (5.0, 1.305)),
+                ((1.0, 1.92), (5.0, 1.92)),
+                ((1.0, 2.08), (5.0, 2.08)),
+                ((1.0, 2.57), (5.0, 2.57)),
             ),
             atol=1e-9,
         )
@@ -6542,11 +6543,11 @@ class HouseTests(unittest.TestCase):
         np.testing.assert_allclose(
             plan.Items[0].Points.CoordList,
             (
-                (0.0, -0.795),
-                (4.0, -0.795),
-                (4.0, 0.67),
-                (0.0, 0.67),
-                (0.0, -0.795),
+                (0.0, -0.775),
+                (4.0, -0.775),
+                (4.0, 0.65),
+                (0.0, 0.65),
+                (0.0, -0.775),
             ),
             atol=1e-9,
         )
@@ -6558,7 +6559,7 @@ class HouseTests(unittest.TestCase):
         ]
         np.testing.assert_allclose(
             beam_origins,
-            ((1.0, 1.205), (1.0, 1.83), (1.0, 2.0), (1.0, 2.5)),
+            ((1.0, 1.225), (1.0, 1.84), (1.0, 2.0), (1.0, 2.49)),
             atol=1e-9,
         )
 
@@ -6570,18 +6571,18 @@ class HouseTests(unittest.TestCase):
             miako_properties["Structure"],
             "beam,wide,beam,axis,beam,narrow,beam",
         )
-        self.assertAlmostEqual(miako_properties["WidthBeforeAxis"], 0.795)
-        self.assertAlmostEqual(miako_properties["WidthAfterAxis"], 0.67)
+        self.assertAlmostEqual(miako_properties["WidthBeforeAxis"], 0.775)
+        self.assertAlmostEqual(miako_properties["WidthAfterAxis"], 0.65)
 
         topping_body = ifcopenshell.util.representation.get_representation(
             slab.topping_element, "Model", "Body", "MODEL_VIEW"
         )
         profile = topping_body.Items[0].SweptArea.OuterCurve.Points.CoordList
         self.assertTrue(
-            any(np.allclose(point, (-0.135, 0.06)) for point in profile)
+            any(np.allclose(point, (-0.125, 0.06)) for point in profile)
         )
         self.assertTrue(
-            any(np.allclose(point, (0.135, 0.06)) for point in profile)
+            any(np.allclose(point, (0.125, 0.06)) for point in profile)
         )
         self.assertNotIn((0.0, 0.19), profile)
 
@@ -6703,7 +6704,7 @@ class HouseTests(unittest.TestCase):
         plan = ifcopenshell.util.representation.get_representation(
             slab, "Plan", "Body", "PLAN_VIEW"
         )
-        self.assertEqual(plan.Items[0].Points.CoordList[2], (0.6, 1.125))
+        self.assertEqual(plan.Items[0].Points.CoordList[2], (0.6, 1.105))
         first_beam_placement = ifcopenshell.util.placement.get_local_placement(
             slab.beams[0].ObjectPlacement
         )
@@ -6752,10 +6753,10 @@ class HouseTests(unittest.TestCase):
                 **valid_arguments,
                 expected_width=1,
             )
-        self.assertAlmostEqual(mismatched.width, 0.625)
+        self.assertAlmostEqual(mismatched.width, 0.615)
         self.assertEqual(mismatched.expected_width, 1)
         print_mock.assert_called_once_with(
-            "WARNING: MIAKO slab 'Unexpected width' width is 0.625 m; "
+            "WARNING: MIAKO slab 'Unexpected width' width is 0.615 m; "
             "expected 1 m"
         )
         with self.assertRaisesRegex(ValueError, "expected_width"):
@@ -6827,7 +6828,7 @@ class HouseTests(unittest.TestCase):
                     self.assertEqual(len(slab.beam_shells), count)
                     self.assertEqual(len(slab.reinforcements), count)
                     self.assertFalse(slab.blocks)
-                    self.assertAlmostEqual(slab.width, .17*count)
+                    self.assertAlmostEqual(slab.width, .16*count)
                     self.assertAlmostEqual(slab.length, 5)
                     settings = ifcopenshell.geom.settings()
                     settings.set(settings.USE_WORLD_COORDS, True)
@@ -6842,7 +6843,7 @@ class HouseTests(unittest.TestCase):
                     np.testing.assert_allclose(points[:,:2].max(axis=0), footprint.max(axis=0), atol=1e-8)
                     np.testing.assert_allclose((points[:,2].min(), points[:,2].max()), (3, 3.21), atol=1e-8)
                     cover = ifcopenshell.geom.create_shape(settings, slab.topping_element)
-                    self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(cover.geometry), 5*.17*count*(.21-.06))
+                    self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(cover.geometry), 5*.16*count*(.21-.06))
 
     def test_fills_concrete_cover_at_edge_and_consecutive_miako_beams(
         self,
@@ -6874,23 +6875,23 @@ class HouseTests(unittest.TestCase):
             (
                 (0.0, 0.19),
                 (0.0, 0.06),
-                (0.135, 0.06),
-                (0.135, 0.19),
-                (0.66, 0.19),
-                (0.66, 0.06),
-                (0.93, 0.06),
-                (0.93, 0.19),
-                (1.33, 0.19),
-                (1.33, 0.06),
-                (1.465, 0.06),
-                (1.465, 0.19),
-                (1.465, 0.25),
+                (0.125, 0.06),
+                (0.125, 0.19),
+                (0.65, 0.19),
+                (0.65, 0.06),
+                (0.90, 0.06),
+                (0.90, 0.19),
+                (1.30, 0.19),
+                (1.30, 0.06),
+                (1.425, 0.06),
+                (1.425, 0.19),
+                (1.425, 0.25),
             ),
             atol=1e-9,
         )
         self.assertNotIn((0.035, 0.06), profile)
-        self.assertNotIn((0.795, 0.19), profile)
-        self.assertNotIn((1.43, 0.06), profile)
+        self.assertNotIn((0.775, 0.19), profile)
+        self.assertNotIn((1.39, 0.06), profile)
 
     def test_adds_a_regular_vertical_frame_from_a_storey_relative_height(
         self,
@@ -9434,8 +9435,8 @@ class HouseTests(unittest.TestCase):
             ],
         )
         expected_lines = (
-            ((0.6, 2.085), (0.6, 2.585)),
-            ((0.6, 2.585), (0.6, 3.21)),
+            ((0.6, 2.08), (0.6, 2.57)),
+            ((0.6, 2.57), (0.6, 3.185)),
         )
         for dimension, expected_line in zip(dimensions, expected_lines):
             representation = ifcopenshell.util.representation.get_representation(
@@ -9457,7 +9458,7 @@ class HouseTests(unittest.TestCase):
         )
         np.testing.assert_allclose(
             end_representation.Items[0].Points.CoordList,
-            ((5.4, 2.085), (5.4, 2.585)),
+            ((5.4, 2.08), (5.4, 2.57)),
             atol=1e-9,
         )
 
@@ -9473,7 +9474,7 @@ class HouseTests(unittest.TestCase):
         )
         np.testing.assert_allclose(
             reversed_representation.Items[0].Points.CoordList,
-            ((1.4, 2.085), (1.4, 2.585)),
+            ((1.4, 2.08), (1.4, 2.57)),
             atol=1e-9,
         )
 
