@@ -12254,6 +12254,7 @@ class Drawing:
         window_area: Number | None = None,
         description: str | None = None,
         name: str | None = None,
+        show_area: bool = True,
     ) -> ifcopenshell.entity_instance:
         """Add a manual room identifier and area label to this drawing.
 
@@ -12264,8 +12265,12 @@ class Drawing:
         in the in-room annotation.  Supplying ``window_area`` adds it and its
         percentage of floor area to the room legend.  This helper does not
         create an ``IfcSpace`` or calculate area from room boundaries.
+        ``show_area=False`` draws only the identifier at ``position`` while
+        retaining the room's name and area for :meth:`add_room_legend`.
         """
         self._require_plan_view("add_room_annotation")
+        if not isinstance(show_area, bool):
+            raise TypeError("show_area must be a boolean")
         x, y = _point(position, "position")
         identifier = _name(identifier, "identifier")
         if any(
@@ -12359,15 +12364,8 @@ class Drawing:
         identifier_annotation = create_text_annotation(
             annotation_name,
             identifier,
-            0.18,
+            0.18 if show_area else 0,
             "room-annotation room-identifier",
-        )
-        area_text = f"{area:.2f}".replace(".", ",") + " m²"
-        area_annotation = create_text_annotation(
-            f"{annotation_name} Area",
-            area_text,
-            -0.15,
-            "room-annotation room-area",
         )
         metadata = ifcopenshell.api.pset.add_pset(
             model,
@@ -12385,6 +12383,23 @@ class Drawing:
             model,
             pset=metadata,
             properties=room_properties,
+        )
+
+        room_data = {
+            "identifier": identifier,
+            "description": description,
+            "area": area,
+        }
+        if window_area is not None:
+            room_data["window_area"] = window_area
+        self._room_annotations.append(room_data)
+        if not show_area:
+            ifcopenshell.api.group.assign_group(model, group=self.group, products=[identifier_annotation])
+            return identifier_annotation
+
+        area_text = f"{area:.2f}".replace(".", ",") + " m²"
+        area_annotation = create_text_annotation(
+            f"{annotation_name} Area", area_text, -0.15, "room-annotation room-area",
         )
 
         line_width = max(0.75, len(identifier) * 0.18)
@@ -12430,14 +12445,6 @@ class Drawing:
             group=self.group,
             products=[identifier_annotation, area_annotation, separator],
         )
-        room_data = {
-            "identifier": identifier,
-            "description": description,
-            "area": area,
-        }
-        if window_area is not None:
-            room_data["window_area"] = window_area
-        self._room_annotations.append(room_data)
         return identifier_annotation
 
     def add_change_floor_symbol(
@@ -20304,6 +20311,7 @@ class Storey:
         places the bottom of the object above this storey's elevation.
         Supplying ``label`` adds centred text to plan drawings and makes the
         label available to :meth:`Drawing.add_furniture_label` in elevations.
+        Plan text is kept readable independently of the object's rotation.
         """
         object_name = _name(name, "name")
         center_x, center_y = _point(center, "center")
@@ -20463,6 +20471,11 @@ class Storey:
     ) -> ifcopenshell.entity_instance:
         """Create the plan label and register it for optional elevation use."""
         model = self.house.model
+        label_placement = placement.copy()
+        # A half-turn changes text direction without changing its centre or
+        # footprint. Keep the original object axes for elevation projections.
+        if label_placement[0, 0] < -1e-9:
+            label_placement[:3, :2] *= -1
         annotation = ifcopenshell.api.root.create_entity(
             model,
             ifc_class="IfcAnnotation",
@@ -20477,7 +20490,7 @@ class Storey:
         ifcopenshell.api.geometry.edit_object_placement(
             model,
             product=annotation,
-            matrix=placement,
+            matrix=label_placement,
             is_si=True,
         )
         literal_origin = model.createIfcAxis2Placement3D(
@@ -20569,7 +20582,8 @@ class Storey:
         counter-clockwise in degrees from global X, and ``start_height`` is
         measured above this storey's elevation.  The plan representation is a
         dashed rectangle with ``label`` centred inside; when omitted, the
-        furniture name is used as the label.  Use
+        furniture name is used as the label. Plan text stays readable even
+        when the furniture is turned through 180 degrees. Use
         :meth:`Drawing.add_furniture_label` to place a camera-facing copy in
         a selected elevation drawing.
         """

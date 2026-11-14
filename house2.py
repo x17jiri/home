@@ -125,9 +125,9 @@ CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height d
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
 CEILING_ROOM3_SPLIT_Y = BWT+3.0
 BASEMENT_WALL_HEIGHT = ZAKLADACI_MALTA + 2.35 # 7*25 + 3*20 = 235cm
-BASEMENT_WALL_THICKNESS = 0.25
+BASEMENT_WALL_THICKNESS = 0.30
 BASEMENT_SLAB_THICKNESS = 0.15
-FOUNDATION_FOOTING_WIDTH = 0.60
+FOUNDATION_FOOTING_WIDTH = 0.74
 FOUNDATION_FOOTING_HEIGHT = 0.50
 GROUNDING_LEAD_LENGTH = 1.0  # Length beyond the outside masonry face/corner.
 BASEMENT_WALL_TOP_Z = -CEILING_THICKNESS  # Ground-floor layers start at Z = 0.
@@ -217,7 +217,7 @@ CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.125
 CHIMNEY_FOOTING_OVERHANG = 0.20
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 1.25
-SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True  # Upper-floor post footprints, plus the stove in the ground plan.
+SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True  # Ground-floor post footprints and stove; ceiling plans always show posts.
 ROOF_EAVE_SETBACK = 0.02
 ROOF_SLOPED_SIDING_BOARD_COUNT = 4
 ROOF_WOOD_SIDING_COLOR = "#f2d08b"
@@ -360,6 +360,14 @@ PDF_BB = Path(PDF_FOLDER.add_pdf("Řez BB"))
 PDF_BASEMENT_CEILING = Path(PDF_FOLDER.add_pdf("Strop nad suterénem"))
 PDF_BASEMENT_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad suterénem - podrobný plán"))
 PDF_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad 1.NP - podrobný plán"))
+DIR_ZDRAVOTECHNICKE_INSTALACE = PROJECT_DIR / "D1.5. Zdravotechnické Instalace"
+PDF_KANAL_FOLDER = PDFFolder("D1.5.", DIR_ZDRAVOTECHNICKE_INSTALACE)
+PDF_KANAL_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys suterénu"))
+PDF_KANAL_GROUND = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys 1.NP"))
+PDF_KANAL_UPPER = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys podkroví"))
+SEWER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
+SEWER_OUTLET_Y = -1.0  # Continue outside through the street wall.
+SEWER_LINE_WIDTH = 0.30  # Printed millimetres.
 SECTION_OUTLINE_WIDTH = 0.3
 HYDROIZOLACE_LINE_WIDTH = 0.4  # Printed millimetres; drawing-only waterproofing.
 
@@ -1535,7 +1543,7 @@ ceiling_room3_hallway = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-FRONT_CEILING_WALL_OVERLAP = 0.03
+FRONT_CEILING_WALL_OVERLAP = 0.04
 ceiling_front_girder_edge_y = min(
     y for positions in PURLIN_SUPPORT_Y_POSITIONS for y in positions
 )-PURLIN_SUPPORT_GIRDER_SIZE[0]/2
@@ -1545,9 +1553,9 @@ ceiling_front = ceiling_storey.miako_slab(
     end=(ceiling_room3_hallway_start_x+ROOM3_HALLWAY_CEILING_BEAM_LENGTH, BWT-FRONT_CEILING_WALL_OVERLAP),
     direction=(0, 1), top=CEILING_THICKNESS,
     structure=[  # Street to garden; another full wide-block bay would reach the girder.
+        "narrow", "space",
         "beam", "space", "narrow", "space",
-        "beam", "space", "narrow", "space",
-        "beam", "space", "narrow", "space",
+        "beam", "space", "wide", "space",
         "beam", "space", "narrow", "space",
 		"beam",
 		"beam",
@@ -2842,6 +2850,153 @@ roof_gutters = add_roof_gutters()
 
 house.write("house2.ifc")
 
+
+def sewer_fixture_center(fixture):
+    """Use the actual plan centre, including library assets with shifted origins."""
+    settings = ifcopenshell.geom.settings()
+    settings.set(settings.USE_WORLD_COORDS, True)
+    shape = ifcopenshell.geom.create_shape(settings, fixture)
+    vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+    used = np.unique(np.asarray(shape.geometry.faces, dtype=int))
+    points = vertices[used, :2]
+    return tuple(float(v) for v in (points.min(axis=0)+points.max(axis=0))/2)
+
+
+def sewer_plan_layout():
+    """Shared floor-change coordinates keep the three drainage plans aligned."""
+    clearance = SEWER_WALL_CLEARANCE
+    sink = sewer_fixture_center(kitchen_sink)
+    dishwasher = sewer_fixture_center(kitchen_dishwasher)
+    upstairs_toilet = sewer_fixture_center(upper_toilet)
+    upstairs_basin = sewer_fixture_center(upper_hallway_basin)
+    washing_machine = sewer_fixture_center(upper_washing_machine)
+    toilet = sewer_fixture_center(bathroom_toilet)
+    basin = sewer_fixture_center(bathroom_basin)
+    kitchen_run_x = kitchen_wall_face_x-clearance
+    bathroom_street_y = upper_technical_cross_back_y+clearance
+    # Use the 175 mm ground-floor masonry face, rather than the upper SDK.
+    stairway_room_face_x = wall_stairway_g.start[0]-(
+        wall_stairway_g.body_offset+wall_stairway_g.thickness
+    )
+    bathroom_run_x = stairway_room_face_x-clearance
+    upper_drop = (bathroom_run_x, bathroom_street_y)
+    roof_vent = (upstairs_toilet[0], bathroom_street_y)
+    west_wall_face_x = wall_west_u.start[0]-(wall_west_u.body_offset+wall_west_u.thickness)
+    west_run_x = west_wall_face_x-clearance
+    hallway_turn_y = STAIR_UPPER_END_Y-clearance  # Along the street side, outside room 1.03.
+    bathroom_drop = (bathroom_run_x, (toilet[1]+basin[1])/2)
+    bathroom_corner = (bathroom_run_x, BWT+clearance)
+    shower_corner = (BATHROOM_LEFT_X, BWT)
+    basement_x0, basement_y0, _, _ = basement_rooms_by_id["S.04"].bounds
+    shower_shift = max(basement_x0+clearance-shower_corner[0],
+                       basement_y0+clearance-shower_corner[1])
+    shower_drop = tuple(value+shower_shift for value in shower_corner)
+    outlet = (bathroom_run_x, SEWER_OUTLET_Y)
+    return dict(
+        upper_drop=upper_drop, roof_vent=roof_vent,
+        bathroom_drop=bathroom_drop, bathroom_corner=bathroom_corner,
+        shower_drop=shower_drop, outlet=outlet,
+        upper_routes=(
+            ("Kitchen sink branch", (sink, (kitchen_run_x, sink[1]))),
+            ("Dishwasher branch", (dishwasher, (kitchen_run_x, dishwasher[1]))),
+            ("Kitchen vertical run", ((kitchen_run_x, max(sink[1], dishwasher[1], bathroom_street_y)),
+                                      (kitchen_run_x, min(sink[1], dishwasher[1], bathroom_street_y)))),
+            ("Kitchen to bathroom", ((kitchen_run_x, bathroom_street_y), upper_drop)),
+            ("Upper toilet branch", (upstairs_toilet, roof_vent)),
+            ("Upper hallway basin branch", (upstairs_basin, (west_run_x, upstairs_basin[1]))),
+            ("Upper washing machine branch", (washing_machine, (west_run_x, washing_machine[1]))),
+            ("West wall collector", ((west_run_x, max(upstairs_basin[1], washing_machine[1], hallway_turn_y)),
+                                     (west_run_x, min(upstairs_basin[1], washing_machine[1], hallway_turn_y)))),
+            ("Hallway to upper bathroom", ((west_run_x, hallway_turn_y),
+                                           (bathroom_run_x, hallway_turn_y), upper_drop)),
+        ),
+        ground_routes=(
+            ("Shower to basement", (shower_corner, shower_drop)),
+            ("Toilet branch", (toilet, (bathroom_run_x, toilet[1]))),
+            ("Basin branch", (basin, (bathroom_run_x, basin[1]))),
+            ("Bathroom to basement", ((bathroom_run_x, max(toilet[1], basin[1], upper_drop[1])),
+                                      (bathroom_run_x, min(toilet[1], basin[1])))),
+        ),
+        basement_routes=(
+            ("Basement collector to street", (bathroom_drop, bathroom_corner, outlet)),
+            ("Shower collector", (shower_drop, (shower_drop[0], bathroom_corner[1]), bathroom_corner)),
+        ),
+        # Route, segment index, nominal diameter, one-time text offset (metres).
+        # Fixture offsets are from the connection point; basement offsets are
+        # from the segment midpoint. All offsets are editable for clarity.
+        upper_pipe_labels=(
+            ("Kitchen sink branch", 0, 50, (0, .20)),
+            ("Dishwasher branch", 0, 50, (0, .20)),
+            ("Upper toilet branch", 0, 100, (0, .20)),
+            ("Upper hallway basin branch", 0, 50, (0, .20)),
+            ("Upper washing machine branch", 0, 50, (0, .20)),
+        ),
+        ground_pipe_labels=(
+            ("Shower to basement", 0, 50, (.48, .30)),
+            ("Toilet branch", 0, 100, (0, .20)),
+            ("Basin branch", 0, 50, (0, -.15)),
+        ),
+        basement_pipe_labels=(
+            ("Shower collector", 1, 50, (0, .14)),
+            ("Basement collector to street", 0, 100, (-.35, .05)),
+            ("Basement collector to street", 1, 160, (-.35, 0)),
+        ),
+    )
+
+
+def add_sewer_plan(name, storey, cut_height, room_floors, *, room_positions=None):
+    """Bare-wall plan with room IDs, furniture labels, chimney and room legend."""
+    drawing = house.add_drawing(
+        name, x=HOUSE_WIDTH/2, y=HOUSE_DEPTH/2,
+        z=storey.elevation+cut_height, radius=6.5, storeys=[storey],
+        door_annotations=False, automatic_plan_annotations=True,
+        right_panel_width=60,
+        section_outline_width=SECTION_OUTLINE_WIDTH,
+    )
+    # Facade boards are offset past insulation and otherwise appear as a
+    # detached outer contour. Show the same bare masonry at every level.
+    for facade in (*perimeter_facades, *wall_facades, *roof_edge_facades):
+        drawing.exclude_element(facade)
+    for entry in room_floors:
+        room = entry[0] if isinstance(entry, tuple) else entry
+        position = Polygon(room.outline).representative_point().coords[0]
+        position = (room_positions or {}).get(room.room_id, position)
+        drawing.add_room_annotation(
+            position, identifier=room.room_id, description=room.Name,
+            area=living_room_outline.area if room == living_room else room.area,
+            show_area=False, name=f"{name} Room {room.room_id}",
+        )
+    drawing.add_room_legend()
+    drawing.add_chimney_annotation(chimney)
+    return drawing
+
+
+def add_sewer_routes(drawing, routes):
+    for name, points in routes:
+        drawing.add_poly_line(points, color="orange", line_width=SEWER_LINE_WIDTH,
+                              name=f"{drawing.name} {name}")
+
+
+def add_sewer_pipe_labels(drawing, routes, labels, *, at_start=False):
+    """Place nominal pipe sizes near the selected branch or collector segment."""
+    routes_by_name = dict(routes)
+    for route_name, segment, diameter, offset in labels:
+        points = routes_by_name[route_name]
+        anchor = np.asarray(points[segment]) if at_start else (np.asarray(points[segment])+points[segment+1])/2
+        position = anchor+offset
+        drawing.add_text(
+            tuple(float(value) for value in position), f"DN{diameter}", font_size=2.2,
+            name=f"{drawing.name} {route_name} DN{diameter}",
+        )
+
+
+def add_sewer_floor_change(drawing, point, direction, name):
+    drawing.add_change_floor_symbol(
+        *point, direction, color="black", line_width=SEWER_LINE_WIDTH,
+        name=f"{drawing.name} {name}",
+    )
+
+
 if "basement" in sys.argv:
     drawing1 = house.add_drawing(
         "basement", x=HOUSE_WIDTH/2, y=HOUSE_DEPTH/2,
@@ -3231,6 +3386,9 @@ if "ceiling" in sys.argv:
         radius=7, storeys=[], right_panel_width=60,
         door_annotations=False, automatic_plan_annotations=False,
     )
+    drawing1.add_material_legend([
+        ("purlin-support-footprint", "Sloupek krovu"),
+    ])
     drawing1.add_wall_outlines(
         ground_load_bearing_walls, style="solid", color="black",
         name="Ground-floor ceiling load-bearing wall outlines",
@@ -3325,8 +3483,7 @@ if "ceiling" in sys.argv:
     drawing1.add_miako_beam_schedule(ceiling_schedule_rows)
     add_ground_room_annotations(drawing1)
     drawing1.add_chimney_annotation(chimney)
-    if SHOW_PURLIN_SUPPORT_PLANNING_MARKERS:
-        add_purlin_support_planning_markers(drawing1)
+    add_purlin_support_planning_markers(drawing1)
     drawing1.render(PROJECT_DIR / "ceiling.svg", pdf=PDF_CEILING)
 
 if "ceiling2" in sys.argv:
@@ -3344,6 +3501,7 @@ if "ceiling2" in sys.argv:
     drawing1.add_material_legend([
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
         ("reinforced-concrete", "Železobetonový věnec"),
+        ("purlin-support-footprint", "Sloupek krovu"),
     ])
     for slab in ceiling_slabs:
         add_ceiling_beam_spacing_dimensions(
@@ -3417,8 +3575,7 @@ if "ceiling2" in sys.argv:
         "Detail otvoru pro komín zatím není řešen.",
     ])
     drawing1.add_chimney_annotation(chimney)
-    if SHOW_PURLIN_SUPPORT_PLANNING_MARKERS:
-        add_purlin_support_planning_markers(drawing1)
+    add_purlin_support_planning_markers(drawing1)
     add_house_cut_symbols(drawing1)
     drawing1.render(PROJECT_DIR / "ceiling2.svg", pdf=PDF_CEILING2)
 
@@ -4409,3 +4566,42 @@ if "pohledy" in sys.argv:
         view = add_exterior_view(name, camera, direction)
         pohledy_sheet.add(view, x=x, y=y, title=title, tables=False)
     pohledy_sheet.render(PROJECT_DIR / "pohledy.svg", pdf=PDF_POHLEDY)
+
+
+# `kanal` creates all three plans; each kanal_* target can also run separately.
+if {"kanal", "kanal_upper", "kanal_ground", "kanal_basement"}.intersection(sys.argv):
+    sewer_layout = sewer_plan_layout()
+
+if "kanal" in sys.argv or "kanal_upper" in sys.argv:
+    kanal_upper = add_sewer_plan(
+        "kanal_upper", upper, 1.20, upper_room_floors,
+        room_positions={
+            "1.01": (3.5, 7),
+            "1.04": ((upper_technical_left_x+upper_technical_right_x)/2, upper_toilet_end_front_y-0.20),
+        },
+    )
+    add_sewer_routes(kanal_upper, sewer_layout["upper_routes"])
+    add_sewer_pipe_labels(kanal_upper, sewer_layout["upper_routes"], sewer_layout["upper_pipe_labels"], at_start=True)
+    add_sewer_floor_change(kanal_upper, sewer_layout["upper_drop"], "to down", "Down to ground floor")
+    add_sewer_floor_change(kanal_upper, sewer_layout["roof_vent"], "to up", "Roof vent up")
+    kanal_upper.render(PROJECT_DIR / "kanal_upper.svg", pdf=PDF_KANAL_UPPER)
+
+if "kanal" in sys.argv or "kanal_ground" in sys.argv:
+    kanal_ground = add_sewer_plan("kanal_ground", ground, 2.0, ground_room_floors)
+    add_sewer_routes(kanal_ground, sewer_layout["ground_routes"])
+    add_sewer_pipe_labels(kanal_ground, sewer_layout["ground_routes"], sewer_layout["ground_pipe_labels"], at_start=True)
+    # Riser arrows show continuation away from the circle, not water flow.
+    add_sewer_floor_change(kanal_ground, sewer_layout["upper_drop"], "to up", "From upper floor")
+    add_sewer_floor_change(kanal_ground, sewer_layout["shower_drop"], "to down", "Shower down to basement")
+    add_sewer_floor_change(kanal_ground, sewer_layout["bathroom_drop"], "to down", "Bathroom down to basement")
+    kanal_ground.render(PROJECT_DIR / "kanal_ground.svg", pdf=PDF_KANAL_GROUND)
+
+if "kanal" in sys.argv or "kanal_basement" in sys.argv:
+    kanal_basement = add_sewer_plan(
+        "kanal_basement", basement, BASEMENT_FLOOR_THICKNESS+1.01, basement_room_floors,
+    )
+    add_sewer_routes(kanal_basement, sewer_layout["basement_routes"])
+    add_sewer_pipe_labels(kanal_basement, sewer_layout["basement_routes"], sewer_layout["basement_pipe_labels"])
+    add_sewer_floor_change(kanal_basement, sewer_layout["shower_drop"], "to up", "Shower from ground floor")
+    add_sewer_floor_change(kanal_basement, sewer_layout["bathroom_drop"], "to up", "Bathroom from ground floor")
+    kanal_basement.render(PROJECT_DIR / "kanal_basement.svg", pdf=PDF_KANAL_BASEMENT)

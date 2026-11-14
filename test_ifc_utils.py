@@ -4922,6 +4922,29 @@ class HouseTests(unittest.TestCase):
                 center=(0, 0), radius=1, height=1, material=""
             )
 
+    def test_plan_furniture_labels_stay_readable_without_rotating_the_object(self):
+        house = House("Readable furniture labels")
+        ground = house.storey("Ground", elevation=.25)
+        for rotation in (0, 45, 90, -90, 135, 180, -180, 225, 270, 359):
+            with self.subTest(rotation=rotation):
+                item = ground.furniture(
+                    f"Furniture {rotation}", kind="USERDEFINED", size=(.9, .6, .5),
+                    center=(2, 3), rotation=rotation, start_height=.1,
+                )
+                body = ifcopenshell.util.placement.get_local_placement(item.ObjectPlacement)
+                angle = np.radians(rotation)
+                expected = np.array(((np.cos(angle), -np.sin(angle)), (np.sin(angle), np.cos(angle))))
+                np.testing.assert_allclose(body[:2, :2], expected, atol=1e-12)
+                label = next(a for a in house.model.by_type("IfcAnnotation") if a.Name == f"Furniture {rotation} Label")
+                text = ifcopenshell.util.placement.get_local_placement(label.ObjectPlacement)
+                self.assertGreaterEqual(text[0, 0], -1e-9)
+                np.testing.assert_allclose(text[:3, 3], (2, 3, .35), atol=1e-12)
+                self.assertAlmostEqual(abs(np.dot(text[:2, 0], body[:2, 0])), 1)
+                self.assertAlmostEqual(np.linalg.det(text[:3, :3]), 1)
+                spec = house._furniture_label_specs[-1]
+                np.testing.assert_allclose(spec.local_x, body[:2, 0])
+                np.testing.assert_allclose(spec.local_y, body[:2, 1])
+
     def test_creates_semantic_box_furniture_with_a_labeled_plan_symbol(
         self,
     ) -> None:
@@ -9608,6 +9631,28 @@ class HouseTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "duplicated"):
             drawing.add_room_annotation((1, 1), identifier="P.01", area=5)
+
+    def test_room_identifier_only_keeps_area_for_the_room_legend(self) -> None:
+        house = House("Identifier-only rooms")
+        ground = house.storey("Ground", elevation=0)
+        drawing = house.add_drawing("Plan", 2, 3, 1.6, 5, storeys=[ground], right_panel_width=60)
+        before = set(house.model.by_type("IfcAnnotation"))
+        identifier = drawing.add_room_annotation(
+            (2, 3), identifier="0.01", description="Bedroom", area=18.25,
+            show_area=False,
+        )
+        self.assertEqual(set(house.model.by_type("IfcAnnotation"))-before, {identifier})
+        matrix = ifcopenshell.util.placement.get_local_placement(identifier.ObjectPlacement)
+        np.testing.assert_allclose(matrix[:2, 3], (2, 3))
+        metadata = ifcopenshell.util.element.get_pset(identifier, "EPset_RoomAnnotation")
+        self.assertEqual(metadata["Area"], 18.25)
+        drawing.add_room_legend()
+        self.assertEqual(drawing._right_panel_tables[0]["items"], [
+            {"identifier": "0.01", "description": "Bedroom", "area": 18.25},
+        ])
+        with self.assertRaisesRegex(TypeError, "show_area must be a boolean"):
+            drawing.add_room_annotation((1, 1), identifier="0.02", area=2, show_area="no")
+        self.assertEqual(len(drawing._room_annotations), 1)
 
     def test_persists_room_legend_from_room_annotations(self) -> None:
         house = House("My house")

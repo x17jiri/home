@@ -625,6 +625,36 @@ Run `python3 house2.py` to export `house2.ifc`. Run
 `python3 house2.py ground` to also render `projekt2/ground.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.1. Půdorys 1.NP.pdf`
 (A4 landscape, 1:100), matching the original project's PDF directory structure.
+Run `python3 house2.py kanal` for three drainage plans, or select
+`kanal_basement`, `kanal_ground`, and `kanal_upper` individually. Their numbered
+PDFs use a separate `PDFFolder("D1.5.", ...)` in
+`projekt2/D1.5. Zdravotechnické Instalace`: basement 1, ground 2, upper 3.
+These plans show room IDs, furniture labels, the chimney symbol, orange drainage
+routes and black floor-change arrows, plus a room legend with names and areas.
+Facade cladding is excluded consistently at every level, so the contours follow
+the bare walls without the detached outline beyond the omitted insulation.
+Only IDs are printed in the
+rooms (`add_room_annotation(show_area=False)`); there are no dimensions.
+`sewer_plan_layout()` shares the drop
+coordinates across floors; `SEWER_WALL_CLEARANCE` is 100 mm and
+`SEWER_OUTLET_Y` controls the basement outlet beyond the street wall.
+The ground bathroom collector stops at the basin; its basement drop is halfway
+between basin and toilet. In the basement it runs to the street-side corner,
+meets the shower branch and continues outside. The upstairs toilet has a short
+branch to the kitchen/bathroom collector.
+The upstairs hallway basin and washer have branches to a collector 100 mm
+inside the west wall. It turns left 100 mm beyond the hallway's street end,
+following that edge outside room 1.03,
+enters the upper bathroom and joins the same drop to the ground floor.
+Fixture branches are labelled DN100 for toilets and DN50 for other fixtures.
+Basement labels distinguish the DN50 shower branch, DN100 bathroom collector
+and DN160 street outlet. The upper toilet junction also has a `to up` arrow
+for roof venting. Each `*_pipe_labels` list in `sewer_plan_layout()` contains
+the route, segment, diameter and editable text offset. Fixture labels are
+anchored beside their connection points; basement labels use segment midpoints.
+Riser arrows always point away from their circles. A connection received from
+above uses the up-right (`to up`) symbol: it shows continuation, not water flow.
+Routes are drawing annotations; they do not create physical pipes or openings.
 Run `python3 house2.py ceiling` for `projekt2/ceiling.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.2. Strop nad 1.NP.pdf`.
 The `ceiling` plan has thin solid wall outlines, red dash-dot beam axes,
@@ -840,6 +870,9 @@ its old Y through `PURLIN_CONNECTION_GARDEN_Y`. The two end connectors retain
 The roof drawing and schedule include the two sedla and no brace rows;
 XX dimensions the shortened post and sedlo height, YY the sedlo length.
 Ground and ceiling planning markers follow the two remaining posts.
+The `ceiling` and `ceiling2` plans always show these green crossed footprints,
+with a matching “Sloupek krovu” material-legend sample.
+`SHOW_PURLIN_SUPPORT_PLANNING_MARKERS` controls only their optional ground-plan display.
 The upper plan dimensions the east post stations and kitchen-run clearance,
 and the west post's clearance to the front face of the Ytong wall.
 
