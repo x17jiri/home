@@ -17,8 +17,8 @@ import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import numpy as np
-from shapely.geometry import Polygon, box
-from shapely.ops import unary_union
+from shapely.geometry import Point, Polygon, box
+from shapely.ops import nearest_points, unary_union
 
 from ifc_utils import CutDefinition, DrawingSheet, House, offset_plane, plane_height_at, window_area
 from materials import resolve_timber_grade
@@ -385,6 +385,17 @@ PDF_KANAL = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace"))
 PDF_VODA_GROUND = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys 1.NP"))
 PDF_VODA_UPPER = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys podkroví"))
 PDF_VODA_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys suterénu"))
+DIR_ELEKTRO = PROJECT_DIR / "D1.4. Zařízení Silnoproudé Elektrotechniky"
+PDF_ELEKTRO_FOLDER = PDFFolder("D1.4.", DIR_ELEKTRO)
+PDF_ELEKTRO_GROUND = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys 1.NP"))
+PDF_ELEKTRO_UPPER = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys podkroví"))
+PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
+ELECTRICAL_LINE_WIDTH = 0.30  # Printed millimetres, matching the reference electrical plans.
+ELECTRICAL_LIGHT_OFFSETS = {}  # Optional room-specific offsets from the calculated centre.
+ELECTRICAL_ENTRANCE_LIGHT_WALL_GAP = 0.25  # Outside the finished west facade.
+ELECTRICAL_TRUNK_LINE_WIDTH = 0.70  # Printed millimetres: bundled cable routes.
+ELECTRICAL_TRUNK_SEPARATION = 0.15
+ELECTRICAL_TRUNK_CHIMNEY_CLEARANCE = 0.55  # From the chimney's street-facing surface.
 WATER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
 WATER_HOT_ROUTE_OFFSET = 0.10  # Hot water is drawn farther into the room than cold water.
 WATER_BASEMENT_RISER_OFFSET_Y = 0.50  # From the drawn bottom-right corner towards the garden.
@@ -3161,8 +3172,9 @@ def water_riser_positions():
     return cold, hot
 
 
-def add_plumbing_plan(name, storey, cut_height, room_floors, *, room_positions=None):
-    """Bare-wall plan with room IDs, furniture labels, chimney and room legend."""
+def add_plumbing_plan(name, storey, cut_height, room_floors, *, room_positions=None,
+                      include_room_legend=True):
+    """Bare-wall services plan with room IDs, furniture labels and chimney."""
     drawing = house.add_drawing(
         name, x=HOUSE_WIDTH/2, y=HOUSE_DEPTH/2,
         z=storey.elevation+cut_height, radius=6.5, storeys=[storey],
@@ -3183,8 +3195,75 @@ def add_plumbing_plan(name, storey, cut_height, room_floors, *, room_positions=N
             area=living_room_outline.area if room == living_room else room.area,
             show_area=False, name=f"{name} Room {room.room_id}",
         )
-    drawing.add_room_legend()
+    if include_room_legend:
+        drawing.add_room_legend()
     drawing.add_chimney_annotation(chimney)
+    return drawing
+
+
+def electrical_trunk_layout():
+    """Two separated routes from the distribution board to the chimney-front risers."""
+    board_x, board_y = sewer_fixture_center(rozvadec)
+    front_y = CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-ELECTRICAL_TRUNK_CHIMNEY_CLEARANCE
+    half_gap = ELECTRICAL_TRUNK_SEPARATION/2
+    down = (CHIMNEY_CENTER[0]-half_gap, front_y)
+    up = (CHIMNEY_CENTER[0]+half_gap, front_y+ELECTRICAL_TRUNK_SEPARATION)
+    routes = []
+    for name, start_x, end in (("down", board_x-half_gap, down), ("up", board_x+half_gap, up)):
+        routes.append((name, ((start_x, board_y+ROZVADEC_SIZE[1]/2), end)))
+    return dict(down=down, up=up, routes=tuple(routes))
+
+
+def add_electrical_trunk_legend(drawing):
+    drawing.add_line_legend([
+        {"style": "solid", "color": "black", "line_width": ELECTRICAL_TRUNK_LINE_WIDTH,
+         "description": "Sdružená trasa kabelů"},
+    ])
+
+
+def electrical_region_centre(region, offset=(0.0, 0.0)):
+    """Keep a light near an area's centre with space for its full symbol."""
+    centre = region.centroid
+    centre = Point(centre.x+offset[0], centre.y+offset[1])
+    clear_region = region.buffer(-.25)
+    if not clear_region.is_empty and not clear_region.covers(centre):
+        centre = nearest_points(clear_region, centre)[0]
+    elif not region.contains(centre):
+        centre = region.representative_point()
+    return centre
+
+
+def electrical_room_centres(room_floors):
+    """Place lights near room centroids with clearance for the full symbol."""
+    centres, labels = {}, {}
+    for entry in room_floors:
+        room = entry[0] if isinstance(entry, tuple) else entry
+        region = living_room_outline if room == living_room else Polygon(room.outline)
+        centre = electrical_region_centre(region, ELECTRICAL_LIGHT_OFFSETS.get(room.room_id, (0.0, 0.0)))
+        centres[room.room_id] = (centre.x, centre.y)
+        # Keep the room ID clear of its light symbol, including small rooms.
+        for dx, dy in ((0, -.40), (0, .40), (.40, 0), (-.40, 0)):
+            label = Point(centre.x+dx, centre.y+dy)
+            if region.contains(label):
+                labels[room.room_id] = (label.x, label.y)
+                break
+    return centres, labels
+
+
+def add_electrical_plan(name, storey, cut_height, room_floors, *, skip_lights=()):
+    centres, labels = electrical_room_centres(room_floors)
+    drawing = add_plumbing_plan(
+        name, storey, cut_height, room_floors, room_positions=labels,
+        include_room_legend=False,
+    )
+    drawing.add_symbol_legend([("light", "Světlo")])
+    for identifier, centre in centres.items():
+        if identifier in skip_lights:
+            continue
+        drawing.add_light_symbol(
+            centre, color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+            name=f"{name} Room {identifier} light",
+        )
     return drawing
 
 
@@ -5351,3 +5430,70 @@ if "voda" in sys.argv or "voda_upper" in sys.argv:
             name=f"Upper {name} water from ground floor",
         )
     voda_upper.render(PROJECT_DIR / "voda_upper.svg", pdf=PDF_VODA_UPPER)
+
+
+if "elektro" in sys.argv or "elektro_basement" in sys.argv:
+    elektro_basement = add_electrical_plan(
+        "elektro_basement", basement, BASEMENT_FLOOR_THICKNESS+1.01, basement_room_floors,
+    )
+    add_electrical_trunk_legend(elektro_basement)
+    elektro_basement.add_change_floor_symbol(
+        *electrical_trunk_layout()["down"], "from up", color="black",
+        line_width=ELECTRICAL_TRUNK_LINE_WIDTH, name="elektro_basement Cables from ground floor",
+    )
+    elektro_basement.render(PROJECT_DIR / "elektro_basement.svg", pdf=PDF_ELEKTRO_BASEMENT)
+
+if "elektro" in sys.argv or "elektro_ground" in sys.argv:
+    elektro_ground = add_electrical_plan("elektro_ground", ground, 2.0, ground_room_floors)
+    add_electrical_trunk_legend(elektro_ground)
+    electrical_trunks = electrical_trunk_layout()
+    for direction, points in electrical_trunks["routes"]:
+        elektro_ground.add_poly_line(
+            points, color="black", line_width=ELECTRICAL_TRUNK_LINE_WIDTH,
+            name=f"elektro_ground Bundled cables to {direction}",
+        )
+        elektro_ground.add_change_floor_symbol(
+            *points[-1], f"to {direction}", color="black", line_width=ELECTRICAL_TRUNK_LINE_WIDTH,
+            name=f"elektro_ground Cable riser {direction}",
+        )
+    elektro_ground.add_stair_annotation(lower_stairs)
+    elektro_ground.add_stair_annotation(upper_stairs)
+    elektro_ground.add_stair_landing_annotation(middle_stair_landing)
+    elektro_ground.add_light_symbol(
+        (HOUSE_WIDTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS+ELECTRICAL_ENTRANCE_LIGHT_WALL_GAP,
+         wall_west_g.start[1]+ENTRANCE_OPENING_AT+ENTRANCE_OPENING_WIDTH/2),
+        color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+        name="elektro_ground Outside entrance landing light",
+    )
+    elektro_ground.render(PROJECT_DIR / "elektro_ground.svg", pdf=PDF_ELEKTRO_GROUND)
+
+if "elektro" in sys.argv or "elektro_upper" in sys.argv:
+    elektro_upper = add_electrical_plan(
+        "elektro_upper", upper, 1.20, upper_room_floors, skip_lights=("1.01", "1.02"),
+    )
+    add_electrical_trunk_legend(elektro_upper)
+    elektro_upper.add_change_floor_symbol(
+        *electrical_trunk_layout()["up"], "from down", color="black",
+        line_width=ELECTRICAL_TRUNK_LINE_WIDTH, name="elektro_upper Cables from ground floor",
+    )
+    for name, region in (
+        ("street-side", living_room_outline.intersection(box(0, 0, HOUSE_WIDTH, living_room_right_wall_front_y))),
+        ("garden-side", living_room_outline.intersection(box(0, living_room_back_face_y, HOUSE_WIDTH, HOUSE_DEPTH))),
+    ):
+        centre = electrical_region_centre(region)
+        elektro_upper.add_light_symbol(
+            (centre.x, centre.y), color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+            name=f"elektro_upper Living room {name} light",
+        )
+    elektro_upper.include_element(stair_railing)
+    elektro_upper.include_element(lower_stair_railing)
+    elektro_upper.include_element(stair_landing_gap_railing)
+    elektro_upper.add_stair_annotation(lower_stairs)
+    elektro_upper.add_stair_annotation(upper_stairs)
+    elektro_upper.add_stair_landing_annotation(middle_stair_landing)
+    elektro_upper.add_light_symbol(
+        ((STAIR_LEFT_X+STAIR_RIGHT_X)/2, (STAIR_LANDING_START_Y+STAIR_LANDING_END_Y)/2),
+        color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+        name="elektro_upper Middle stair landing light",
+    )
+    elektro_upper.render(PROJECT_DIR / "elektro_upper.svg", pdf=PDF_ELEKTRO_UPPER)

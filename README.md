@@ -766,6 +766,27 @@ aligns with the ground-floor cold-water line; `water_basement_layout()` shares
 the corner and riser coordinates between both drawings. The basement's thicker
 walls leave 70 mm between the route and their inner faces. `voda` generates
 all three floor plans.
+Run `python3 house2.py elektro` for all three electrical plans, or select
+`elektro_ground`, `elektro_upper`, and `elektro_basement` individually.
+Their SVGs are in `projekt2/`; PDFs use
+`projekt2/D1.4. Zařízení Silnoproudé Elektrotechniky/`, numbered ground 1,
+upper 2 and basement 3. Blue circle-with-X light symbols sit near room/area
+centroids, nudged to maintain 250 mm clearance from the room boundary where
+needed. Room IDs are offset from the lights, and the symbol legend uses
+the original electrical plans' `Světlo` sample.
+`ELECTRICAL_LIGHT_OFFSETS` allows room-specific offsets. Room 1.01 has two lights,
+centred on its clear areas below and above the middle VPC wall. Room 1.02 has
+no light. The upper plan adds a separate
+light centred over the middle stair landing, with both flights and the landing
+shown for context. The ground-floor plan adds an outside landing light 250 mm
+from the finished west facade, aligned in Y with the entrance opening's centre.
+The plans contain 5 basement, 6 ground-floor and 5 upper-floor lights.
+Two thick black routes leave the ground-floor rozvaděč and reach separate
+risers in front of the chimney: one to the basement and one to the upper floor.
+`electrical_trunk_layout()` shares their coordinates with receiving symbols
+on the other floors. The solid 0.70 mm line is labelled `Sdružená trasa kabelů`
+in each plan's line legend. Both routes run diagonally in a straight line from
+the board to their risers; connection positions are separated by 150 mm in X.
 Run `python3 house2.py ceiling` for `projekt2/ceiling.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.2. Strop nad 1.NP.pdf`.
 The `ceiling` plan has thin solid wall outlines, red dash-dot beam axes,
