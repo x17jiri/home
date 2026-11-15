@@ -78,7 +78,7 @@ class GardenPartitionTests(unittest.TestCase):
         self.assertEqual(slab.structure, tuple(["beam"]+["space", "wide", "space", "beam"]*13))
         self.assertAlmostEqual(slab.width, 8.285)
         self.assertEqual(v["ceiling_slabs"].count(slab), 1)
-        garden_rows = [row for row in v["ceiling_schedule_rows"] if "Pokoj 1" in row["location"] or "Pokoj 2" in row["location"]]
+        garden_rows = [row for row in v["ceiling_schedule_rows"] if row["slab"] == slab]
         self.assertEqual(len(garden_rows), 1)
         self.assertEqual(garden_rows[0]["slab"], slab)
         self.assertNotIn("ceiling_pokoj1", v)
@@ -110,8 +110,8 @@ class GardenPartitionTests(unittest.TestCase):
         self.assertFalse(any(slab.Name == "Ceiling - Schodiště krajní nosník"
                              for slab in v["house"].model.by_type("IfcSlab")))
         slab = v["ceiling_stairway"]
-        row = next(row for row in v["ceiling_schedule_rows"] if row["location"] == "Chodba")
-        self.assertEqual(row["slab"], slab)
+        row = next(row for row in v["ceiling_schedule_rows"] if row["location"] == "0.04, 0.05")
+        self.assertIn(slab, row["slab"])
         self.assertAlmostEqual(slab.start[1], v["GARDEN_ROOMS_WALL_Y"]-v["STAIRWAY_CEILING_GARDEN_WALL_CLEARANCE"])
 
     def test_stairway_ceiling_bearings_and_blocks_follow_physical_wall_faces(self):
@@ -135,7 +135,7 @@ class GardenPartitionTests(unittest.TestCase):
         v = self.v
         _, outer_hi = self.bounds(v["wall_east_g"])
         middle_lo, _ = self.bounds(v["wall_third_room_g"])
-        for key in ("ceiling_room3", "ceiling_room3_front", "ceiling_room3_hallway_beam"):
+        for key in ("ceiling_room3", "ceiling_room3_front"):
             slab = v[key]
             self.assertAlmostEqual(slab.length, 3.5)
             self.assertAlmostEqual(outer_hi[0]-slab.start[0], .13)
@@ -147,7 +147,7 @@ class GardenPartitionTests(unittest.TestCase):
                 self.assertAlmostEqual(outer_hi[0]-lo[0], .13)
                 self.assertAlmostEqual(hi[0]-middle_lo[0], .11)
 
-    def test_bathroom_ceiling_has_120mm_bearing_each_end_and_separate_schedule(self):
+    def test_bathroom_ceiling_has_120mm_bearing_and_shares_schedule_with_hallway(self):
         v = self.v
         _, middle_hi = self.bounds(v["wall_third_room_g"])
         stairway_lo, _ = self.bounds(v["wall_stairway_g"])
@@ -166,29 +166,47 @@ class GardenPartitionTests(unittest.TestCase):
         self.assertNotIn("ceiling_room3_hallway", v)
         self.assertNotIn("ceiling_front", v)
         rows = {row["location"]: row["slab"] for row in v["ceiling_schedule_rows"]}
-        self.assertEqual(rows["0.03 - Pokoj 3"], (v["ceiling_room3"], v["ceiling_room3_front"], v["ceiling_room3_hallway_beam"]))
-        self.assertEqual(rows["0.05 - Koupelna a chodba"], (v["ceiling_bathroom"], v["ceiling_bathroom_front"], v["ceiling_bathroom_hallway_beam"]))
+        self.assertEqual(rows["0.03"], (v["ceiling_room3"], v["ceiling_room3_front"]))
+        merged = rows["0.04, 0.05"]
+        self.assertEqual(merged, (v["ceiling_stairway"], v["ceiling_bathroom"], v["ceiling_bathroom_front"]))
+        self.assertTrue(all(abs(slab.length-2.5) < 1e-9 for slab in merged))
+        self.assertEqual(sum(len(slab.beams) for slab in merged), 17)
 
-    def test_chimney_side_beams_match_each_room_span_and_keep_chimney_clearance(self):
+    def test_upper_garden_ceilings_include_the_chimney_rows_in_one_specification(self):
         v = self.v
         self.assertNotIn("ceiling_hallway_beam", v)
-        for short, main in ((v["ceiling_room3_hallway_beam"], v["ceiling_room3"]),
-                            (v["ceiling_bathroom_hallway_beam"], v["ceiling_bathroom"])):
-            self.assertEqual(len(short.beams), v["HALLWAY_MIAKO_BEAM_COUNT"])
-            self.assertAlmostEqual(short.start[0], main.start[0])
-            self.assertAlmostEqual(short.end[0], main.end[0])
-            self.assertAlmostEqual(short.start[1], v["hallway_miako_beam_y"])
-            for beam in short.beams:
+        self.assertNotIn("ceiling_room3_hallway_beam", v)
+        self.assertNotIn("ceiling_bathroom_hallway_beam", v)
+        for main in (v["ceiling_room3"], v["ceiling_bathroom"]):
+            self.assertEqual(len(main.beams), 6)
+            self.assertEqual(main.structure[:4], ("beam", "space", "wide", "space"))
+            self.assertAlmostEqual(main.start[1], v["upper_ceiling_garden_y"])
+            self.assertAlmostEqual(min(y for x, y in main.footprint), 2.805)
+            for beam in main.beams:
                 lo, hi = self.bounds(beam)
                 self.assertAlmostEqual(lo[0], main.start[0])
                 self.assertAlmostEqual(hi[0], main.end[0])
-        hallway = v["ceiling_bathroom_hallway_beam"]
-        chimney_edge = v["CHIMNEY_CENTER"][0]-v["CHIMNEY_SIZE"]/2
-        block_bounds = [self.bounds(block) for block in hallway.blocks]
-        self.assertAlmostEqual(min(lo[0] for lo, hi in block_bounds), v["bathroom_ceiling_middle_face_x"])
-        self.assertAlmostEqual(chimney_edge-max(hi[0] for lo, hi in block_bounds), .05)
-        self.assertEqual(v["hallway_chimney_opening"].VoidsElements[0].RelatingBuildingElement, hallway.topping_element)
+        self.assertEqual(v["upper_chimney_opening"].VoidsElements[0].RelatingBuildingElement,
+                         v["ceiling_bathroom"].topping_element)
         self.assertFalse(any(row["location"] == "Pokoj 3 + Koupelna, zkrácený nosník" for row in v["ceiling_schedule_rows"]))
+
+    def test_upper_chimney_row_keeps_blocks_with_50mm_clearance_on_both_sides(self):
+        v = self.v
+        slab = v["ceiling_bathroom"]
+        xmin, _, xmax, _ = v["upper_chimney_clearance_region"].bounds
+        self.assertAlmostEqual(xmax-xmin, v["CHIMNEY_SIZE"]+.10)
+        self.assertAlmostEqual(xmin, v["CHIMNEY_CENTER"][0]-v["CHIMNEY_SIZE"]/2-.05)
+        self.assertAlmostEqual(xmax, v["CHIMNEY_CENTER"][0]+v["CHIMNEY_SIZE"]/2+.05)
+        bounds = [self.bounds(block) for block in slab.blocks if " Block 1." in block.Name]
+        left = [(lo, hi) for lo, hi in bounds if hi[0] <= xmin+1e-8]
+        right = [(lo, hi) for lo, hi in bounds if lo[0] >= xmax-1e-8]
+        self.assertTrue(left)
+        self.assertTrue(right)
+        self.assertEqual(len(left)+len(right), len(bounds))
+        self.assertAlmostEqual(max(hi[0] for lo, hi in left), xmin)
+        self.assertAlmostEqual(min(lo[0] for lo, hi in right), xmax)
+        self.assertAlmostEqual(min(lo[0] for lo, hi in left), v["bathroom_ceiling_middle_face_x"])
+        self.assertAlmostEqual(max(hi[0] for lo, hi in right), v["bathroom_ceiling_stairway_face_x"])
 
     def test_split_heb_and_concrete_have_100mm_bearing_on_every_support(self):
         v = self.v

@@ -3636,11 +3636,12 @@ def _notes_svg(
         int(available_text_width_mm / approximate_character_width_mm),
     )
 
-    normalised_items: list[list[str]] = []
+    normalised_items: list[tuple[list[str], bool]] = []
     for supplied_item in items:
         if not isinstance(supplied_item, dict):
             continue
-        text = str(supplied_item.get("text", ""))
+        is_heading = "heading" in supplied_item
+        text = str(supplied_item.get("heading" if is_heading else "text", ""))
         lines: list[str] = []
         for paragraph in text.splitlines() or [""]:
             lines.extend(
@@ -3652,7 +3653,7 @@ def _notes_svg(
                 )
                 or [""]
             )
-        normalised_items.append(lines)
+        normalised_items.append((lines, is_heading))
 
     u = units_per_mm
     title_height = 11.0 * layout_scale * u
@@ -3662,7 +3663,7 @@ def _notes_svg(
     item_gap = item_gap_mm * u
     body_height = (
         2 * padding
-        + sum(len(lines) * line_height for lines in normalised_items)
+        + sum(len(lines) * line_height for lines, _ in normalised_items)
         + max(0, len(normalised_items) - 1) * item_gap
     )
     height = title_height + body_height
@@ -3690,14 +3691,15 @@ def _notes_svg(
     ]
 
     item_y = title_bottom + padding
-    text_x = x + padding + bullet_indent
-    for lines in normalised_items:
+    for lines, is_heading in normalised_items:
         first_baseline = item_y + 0.8 * line_height
-        parts.append(
-            f'<text class="notes-bullet" x="{x + padding:.6g}" '
-            f'y="{first_baseline:.6g}" dominant-baseline="auto" '
-            f'style="font-size:{body_font_size:.6g}px">•</text>'
-        )
+        text_x = x + padding + (0 if is_heading else bullet_indent)
+        if not is_heading:
+            parts.append(
+                f'<text class="notes-bullet" x="{x + padding:.6g}" '
+                f'y="{first_baseline:.6g}" dominant-baseline="auto" '
+                f'style="font-size:{body_font_size:.6g}px">•</text>'
+            )
         tspans = "".join(
             (
                 f'<tspan x="{text_x:.6g}" '
@@ -3708,8 +3710,9 @@ def _notes_svg(
             for index, line in enumerate(lines)
         )
         parts.append(
-            f'<text class="notes-text" '
-            f'style="font-size:{body_font_size:.6g}px">{tspans}</text>'
+            f'<text class="notes-heading" style="font-weight:bold;font-size:{body_font_size:.6g}px">{tspans}</text>'
+            if is_heading else
+            f'<text class="notes-text" style="font-size:{body_font_size:.6g}px">{tspans}</text>'
         )
         item_y += len(lines) * line_height + item_gap
 
@@ -10238,12 +10241,12 @@ class Drawing:
 
     def add_notes(
         self,
-        notes: Sequence[str],
+        notes: Sequence[str | tuple[str, Sequence[str]]],
         *,
         title: str = "POZNÁMKY",
         layout_scale: Number | None = None,
     ) -> Drawing:
-        """Add an automatically wrapped bulleted notes section to the panel."""
+        """Add wrapped bullets, optionally grouped as ``(heading, notes)`` pairs."""
         if self.right_panel_width <= 0:
             raise ValueError(
                 "add_notes requires right_panel_width on the drawing"
@@ -10268,10 +10271,24 @@ class Drawing:
         if not supplied_notes:
             raise ValueError("notes must contain at least one note")
 
-        items = [
-            {"text": _name(note, f"note {index}")}
-            for index, note in enumerate(supplied_notes, start=1)
-        ]
+        items = []
+        for index, note in enumerate(supplied_notes, start=1):
+            if isinstance(note, tuple):
+                if len(note) != 2:
+                    raise ValueError("a note group must contain a heading and notes")
+                heading, group_notes = note
+                if isinstance(group_notes, (str, bytes)):
+                    raise TypeError("group notes must be a sequence of strings")
+                group_notes = list(group_notes)
+                if not group_notes:
+                    raise ValueError("a note group must contain at least one note")
+                items.append({"heading": _name(heading, f"note group {index} heading")})
+                items.extend(
+                    {"text": _name(text, f"note group {index} note {item_index}")}
+                    for item_index, text in enumerate(group_notes, start=1)
+                )
+            else:
+                items.append({"text": _name(note, f"note {index}")})
         table: dict[str, object] = {
             "kind": "notes",
             "title": title,
