@@ -3,6 +3,7 @@
 from pathlib import Path
 from math import floor
 import math
+import json
 import sys
 
 import ifcopenshell.api.pset
@@ -380,8 +381,15 @@ PDF_KANAL_FOLDER = PDFFolder("D1.5.", DIR_ZDRAVOTECHNICKE_INSTALACE)
 PDF_KANAL_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys suterénu"))
 PDF_KANAL_GROUND = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys 1.NP"))
 PDF_KANAL_UPPER = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys podkroví"))
+PDF_KANAL = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace"))
+PDF_VODA_GROUND = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys 1.NP"))
+PDF_VODA_UPPER = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys podkroví"))
+PDF_VODA_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys suterénu"))
+WATER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
+WATER_HOT_ROUTE_OFFSET = 0.10  # Hot water is drawn farther into the room than cold water.
+WATER_BASEMENT_RISER_OFFSET_Y = 0.50  # From the drawn bottom-right corner towards the garden.
+WATER_LINE_WIDTH = 0.30  # Printed millimetres.
 SEWER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
-SEWER_OUTLET_Y = -1.0  # Continue outside through the street wall.
 SEWER_LINE_WIDTH = 0.30  # Printed millimetres.
 SECTION_OUTLINE_WIDTH = 0.3
 HYDROIZOLACE_LINE_WIDTH = 0.4  # Printed millimetres; drawing-only waterproofing.
@@ -3087,7 +3095,7 @@ def sewer_plan_layout():
     shower_shift = max(basement_x0+clearance-shower_corner[0],
                        basement_y0+clearance-shower_corner[1])
     shower_drop = tuple(value+shower_shift for value in shower_corner)
-    outlet = (bathroom_run_x, SEWER_OUTLET_Y)
+    outlet = bathroom_corner
     return dict(
         upper_drop=upper_drop, roof_vent=roof_vent,
         bathroom_drop=bathroom_drop, bathroom_corner=bathroom_corner,
@@ -3114,7 +3122,7 @@ def sewer_plan_layout():
                                       (bathroom_run_x, min(toilet[1], basin[1])))),
         ),
         basement_routes=(
-            ("Basement collector to street", (bathroom_drop, bathroom_corner, outlet)),
+            ("Basement collector to down", (bathroom_drop, outlet)),
             ("Shower collector", (shower_drop, (shower_drop[0], bathroom_corner[1]), bathroom_corner)),
         ),
         # Route, segment index, nominal diameter, one-time text offset (metres).
@@ -3134,13 +3142,26 @@ def sewer_plan_layout():
         ),
         basement_pipe_labels=(
             ("Shower collector", 1, 50, (0, .14)),
-            ("Basement collector to street", 0, 100, (-.35, .05)),
-            ("Basement collector to street", 1, 160, (-.35, 0)),
+            ("Basement collector to down", 0, 100, (-.35, .05)),
         ),
     )
 
 
-def add_sewer_plan(name, storey, cut_height, room_floors, *, room_positions=None):
+def water_basement_layout():
+    """Shared basement/ground connection, aligned with the bathroom cold-water run."""
+    corner = (BATHROOM_RIGHT_X-WATER_WALL_CLEARANCE, BWT+WATER_WALL_CLEARANCE)
+    riser = (corner[0], corner[1]+WATER_BASEMENT_RISER_OFFSET_Y)
+    return corner, riser
+
+
+def water_riser_positions():
+    """Cold/hot risers shared by the ground and upper water plans."""
+    cold = (BATHROOM_RIGHT_X-WATER_WALL_CLEARANCE, BATHROOM_PARTITION_Y-WATER_WALL_CLEARANCE)
+    hot = (cold[0]-WATER_HOT_ROUTE_OFFSET, cold[1])
+    return cold, hot
+
+
+def add_plumbing_plan(name, storey, cut_height, room_floors, *, room_positions=None):
     """Bare-wall plan with room IDs, furniture labels, chimney and room legend."""
     drawing = house.add_drawing(
         name, x=HOUSE_WIDTH/2, y=HOUSE_DEPTH/2,
@@ -4928,12 +4949,247 @@ if "pohledy" in sys.argv:
     pohledy_sheet.render(PROJECT_DIR / "pohledy.svg", pdf=PDF_POHLEDY)
 
 
-# `kanal` creates all three plans; each kanal_* target can also run separately.
+# Schematic: horizontal layout is arbitrary; heights follow the model.
+if "kanal" in sys.argv or "kanal_schematic" in sys.argv:
+    sewer_schematic_datum = ground.elevation+GROUND_FLOOR_THICKNESS
+    sewer_schematic_roof_height = roof_tiles_top_z-sewer_schematic_datum
+    sewer_schematic_ground_ceiling = ceiling_storey.elevation-CEILING_PLASTER_THICKNESS-sewer_schematic_datum
+    sewer_schematic_upper_floor = UPPER_FINISHED_FLOOR_HEIGHT-sewer_schematic_datum
+    sewer_schematic_basement_floor = BASEMENT_FINISHED_FLOOR_HEIGHT-sewer_schematic_datum
+    sewer_schematic_basement_ceiling = BASEMENT_FINISHED_CEILING_Z-sewer_schematic_datum
+    sewer_schematic_levels = (
+        ("Suterén - hotová podlaha", sewer_schematic_basement_floor),
+        ("Suterén - hotový podhled", sewer_schematic_basement_ceiling),
+        ("Přízemí - hotová podlaha", 0.0),
+        ("Přízemí - hotový podhled", sewer_schematic_ground_ceiling),
+        ("Podkroví - hotová podlaha", sewer_schematic_upper_floor),
+        ("Podkroví - vodorovný sádrokarton", FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z-sewer_schematic_datum),
+        ("Střecha - horní líc krytiny", sewer_schematic_roof_height),
+    )
+    sewer_schematic_line_start, sewer_schematic_line_end = -1.0, 12.0
+    sewer_schematic_stack_x = (sewer_schematic_line_start+sewer_schematic_line_end)/2
+    sewer_schematic_stack_bottom = sewer_schematic_basement_ceiling-0.10
+    sewer_schematic_stack_top = sewer_schematic_roof_height+0.30
+    sewer_schematic_shower_x = sewer_schematic_stack_x+4.0
+    sewer_schematic_basement_slope = 0.03
+    sewer_schematic_merge_x = (sewer_schematic_stack_x+sewer_schematic_shower_x)/2
+    sewer_schematic_merge_z = (sewer_schematic_stack_bottom
+                               -(sewer_schematic_merge_x-sewer_schematic_stack_x)*sewer_schematic_basement_slope)
+    sewer_schematic_outlet_z = sewer_schematic_basement_floor-0.50
+    sewer_schematic_bottom = min(sewer_schematic_outlet_z, *(height for _, height in sewer_schematic_levels))
+    sewer_schematic_top = sewer_schematic_stack_top+0.60
+    sewer_schematic = house.add_drawing(
+        "kanal_schematic",
+        x=(sewer_schematic_line_start+sewer_schematic_line_end)/2,
+        y=(sewer_schematic_bottom+sewer_schematic_top)/2,
+        z=1.0,
+        radius=max((sewer_schematic_line_end-sewer_schematic_line_start)/2+0.5,
+                   (sewer_schematic_top-sewer_schematic_bottom)/2+0.7),
+        storeys=[], door_annotations=False, automatic_plan_annotations=False,
+    )
+    for label, height in sewer_schematic_levels:
+        sewer_schematic.add_line(
+            (sewer_schematic_line_start, height), (sewer_schematic_line_end, height),
+            color="black", line_width=0.1, name=label,
+        )
+    for label, height in (
+        ("Suterén", sewer_schematic_basement_floor),
+        ("Přízemí", 0.0),
+        ("Podkroví", sewer_schematic_upper_floor),
+        ("Střecha", sewer_schematic_roof_height),
+    ):
+        sewer_schematic.add_text(
+            (sewer_schematic_line_start, height+0.2), f"{label} {round(height*1000)} mm",
+            alignment="left", font_size=2.5, name=f"Schematic {label} height label",
+        )
+    sewer_schematic.add_line(
+        (sewer_schematic_stack_x, sewer_schematic_stack_bottom),
+        (sewer_schematic_stack_x, sewer_schematic_stack_top),
+        color="orange", line_width=SEWER_LINE_WIDTH, name="Schematic DN100 stack",
+    )
+    sewer_schematic.add_roof_vent(
+        x=sewer_schematic_stack_x, z=sewer_schematic_stack_top,
+        identifier="Odvětrání", name="Schematic roof vent",
+    )
+    sewer_schematic.add_text(
+        (sewer_schematic_stack_x-0.6, sewer_schematic_ground_ceiling/2),
+        "DN100", font_size=2.5, name="Schematic DN100 label",
+    )
+    sewer_schematic_branch_start_z = sewer_schematic_ground_ceiling-0.10
+    sewer_schematic_branch_slope = 0.03
+    sewer_schematic_branch_length = 4.0
+    sewer_schematic_fixture_z = sewer_schematic_upper_floor+0.65
+    sewer_schematic.add_line(
+        (sewer_schematic_stack_x, sewer_schematic_branch_start_z),
+        (sewer_schematic_stack_x+sewer_schematic_branch_length,
+         sewer_schematic_branch_start_z+sewer_schematic_branch_length*sewer_schematic_branch_slope),
+        color="orange", line_width=SEWER_LINE_WIDTH, name="Schematic 3 percent branch",
+    )
+    sewer_schematic.add_washing_machine_connection(
+        x=sewer_schematic_stack_x+3.0, z=sewer_schematic_fixture_z,
+        name="Schematic washing machine connection",
+    )
+    sewer_schematic.add_basin(
+        x=sewer_schematic_stack_x+4.0, z=sewer_schematic_fixture_z,
+        outlet_length=0.10, name="Schematic basin",
+    )
+    for distance, outlet_z, name in (
+        (3.0, sewer_schematic_fixture_z, "Washing machine branch connection"),
+        (4.0, sewer_schematic_fixture_z-0.10, "Basin branch connection"),
+    ):
+        fixture_x = sewer_schematic_stack_x+distance
+        sewer_schematic.add_line(
+            (fixture_x, sewer_schematic_branch_start_z+distance*sewer_schematic_branch_slope),
+            (fixture_x, outlet_z), color="orange", line_width=SEWER_LINE_WIDTH,
+            name=name,
+        )
+    sewer_schematic_left_start_z = sewer_schematic_upper_floor-0.10
+    sewer_schematic_left_slope = 0.03
+    sewer_schematic_left_length = 1.7
+    sewer_schematic.add_line(
+        (sewer_schematic_stack_x, sewer_schematic_left_start_z),
+        (sewer_schematic_stack_x-sewer_schematic_left_length,
+         sewer_schematic_left_start_z+sewer_schematic_left_length*sewer_schematic_left_slope),
+        color="orange", line_width=SEWER_LINE_WIDTH, name="Schematic left 3 percent branch",
+    )
+    sewer_schematic.add_toilet(
+        x=sewer_schematic_stack_x-0.5, z=sewer_schematic_upper_floor+0.20,
+        name="Schematic toilet",
+    )
+    # Preserve the connection height even where the kitchen symbols overlap.
+    sewer_schematic_dishwasher_z = sewer_schematic_upper_floor+0.65
+    sewer_schematic_dishwasher = sewer_schematic.add_washing_machine_connection(
+        x=sewer_schematic_stack_x-1.5, z=sewer_schematic_dishwasher_z,
+        identifier="Myčka", name="Schematic dishwasher connection",
+    )
+    sewer_schematic_sink_pipe_x = sewer_schematic_stack_x-1.7
+    sewer_schematic_sink_z = sewer_schematic_upper_floor+0.65
+    sewer_schematic_sink_symbol_shift = 0.25
+    sewer_schematic.add_sink(
+        x=sewer_schematic_sink_pipe_x-sewer_schematic_sink_symbol_shift,
+        z=sewer_schematic_sink_z, outlet_length=0, name="Schematic sink",
+    )
+    # The pipe and outlet stay fixed, meeting the shifted symbol's flat bottom.
+    sewer_schematic.add_line(
+        (sewer_schematic_sink_pipe_x, sewer_schematic_sink_z-0.10),
+        (sewer_schematic_sink_pipe_x, sewer_schematic_sink_z),
+        color="black", name="Schematic sink fixed outlet",
+    )
+    # Place the dishwasher caption beside its connector, clear of the sink bowl.
+    dishwasher_caption = house.model.by_guid(ifcopenshell.util.element.get_pset(
+        sewer_schematic_dishwasher, "BBIM_SanitarySymbol", "IdentifierAnnotation",
+    ))
+    dishwasher_caption_point = (sewer_schematic_stack_x-1.05, sewer_schematic_dishwasher_z+0.24+0.30)
+    dishwasher_caption_matrix = ifcopenshell.util.placement.get_local_placement(dishwasher_caption.ObjectPlacement)
+    dishwasher_caption_matrix[:2, 3] = dishwasher_caption_point
+    ifcopenshell.api.geometry.edit_object_placement(
+        house.model, product=dishwasher_caption, matrix=dishwasher_caption_matrix, is_si=True,
+    )
+    caption_appearance = ifcopenshell.util.element.get_pset(dishwasher_caption, "EPset_Annotation")
+    ifcopenshell.api.pset.edit_pset(
+        house.model, pset=house.model.by_id(caption_appearance["id"]),
+        properties={"Classes": caption_appearance["Classes"].replace("drawing-text-size-2p5", "drawing-text-size-2p2")},
+    )
+    caption_data = ifcopenshell.util.element.get_pset(dishwasher_caption, "BBIM_DrawingText")
+    ifcopenshell.api.pset.edit_pset(
+        house.model, pset=house.model.by_id(caption_data["id"]),
+        properties={"Point": json.dumps(dishwasher_caption_point), "FontSize": 2.2},
+    )
+    for distance, outlet_z, name in (
+        (0.5, sewer_schematic_upper_floor+0.20, "Toilet branch connection"),
+        (1.5, sewer_schematic_dishwasher_z, "Dishwasher branch connection"),
+        (1.7, sewer_schematic_sink_z-0.10, "Sink branch connection"),
+    ):
+        fixture_x = sewer_schematic_stack_x-distance
+        sewer_schematic.add_line(
+            (fixture_x, sewer_schematic_left_start_z+distance*sewer_schematic_left_slope),
+            (fixture_x, outlet_z), color="orange", line_width=SEWER_LINE_WIDTH,
+            name=name,
+        )
+    # Join both fixtures in the floor build-up, before the shared ceiling penetration.
+    sewer_schematic_ground_branch_z = -0.10
+    sewer_schematic_ground_branch_slope = 0.03
+    sewer_schematic.add_toilet(
+        x=sewer_schematic_stack_x-0.5, z=0.20, name="Schematic ground toilet",
+    )
+    sewer_schematic.add_basin(
+        x=sewer_schematic_stack_x+0.5, z=0.65,
+        outlet_length=0.10, name="Schematic ground basin",
+    )
+    for direction, outlet_z, name in (
+        (-1, 0.20, "Ground toilet"),
+        (1, 0.65-0.10, "Ground basin"),
+    ):
+        fixture_x = sewer_schematic_stack_x+direction*0.5
+        branch_z = sewer_schematic_ground_branch_z+0.5*sewer_schematic_ground_branch_slope
+        sewer_schematic.add_line(
+            (sewer_schematic_stack_x, sewer_schematic_ground_branch_z), (fixture_x, branch_z),
+            color="orange", line_width=SEWER_LINE_WIDTH, name=f"{name} horizontal branch",
+        )
+        sewer_schematic.add_line(
+            (fixture_x, branch_z), (fixture_x, outlet_z),
+            color="orange", line_width=SEWER_LINE_WIDTH, name=f"{name} vertical connection",
+        )
+    sewer_schematic_shower_z = 0.03
+    sewer_schematic_shower_width = 0.90
+    # Centre the tray and its drain at the specified horizontal offset.
+    sewer_schematic.add_shower(
+        x=sewer_schematic_shower_x+sewer_schematic_shower_width/2,
+        z=sewer_schematic_shower_z, width=sewer_schematic_shower_width,
+        name="Schematic ground shower",
+    )
+    sewer_schematic.add_line(
+        (sewer_schematic_shower_x, sewer_schematic_shower_z),
+        (sewer_schematic_shower_x, sewer_schematic_stack_bottom),
+        color="orange", line_width=SEWER_LINE_WIDTH, name="Ground shower down to basement",
+    )
+    for start_x, name in (
+        (sewer_schematic_stack_x, "WC and basin basement collector"),
+        (sewer_schematic_shower_x, "Shower basement collector"),
+    ):
+        sewer_schematic.add_line(
+            (start_x, sewer_schematic_stack_bottom),
+            (sewer_schematic_merge_x, sewer_schematic_merge_z),
+            color="orange", line_width=SEWER_LINE_WIDTH, name=name,
+        )
+    sewer_schematic.add_line(
+        (sewer_schematic_merge_x, sewer_schematic_merge_z),
+        (sewer_schematic_merge_x, sewer_schematic_outlet_z),
+        color="orange", line_width=SEWER_LINE_WIDTH, name="Combined basement outlet",
+    )
+    for name, diameter, point in (
+        ("Washing machine", 50, (sewer_schematic_stack_x+2.65, sewer_schematic_upper_floor+0.30)),
+        ("Basin", 50, (sewer_schematic_stack_x+3.65, sewer_schematic_upper_floor+0.30)),
+        ("Toilet", 100, (sewer_schematic_stack_x-0.5, sewer_schematic_left_start_z-0.45)),
+        ("Dishwasher", 50, (sewer_schematic_stack_x-1.0, sewer_schematic_upper_floor+0.05)),
+        ("Sink", 50, (sewer_schematic_stack_x-2.05, sewer_schematic_upper_floor+0.30)),
+        ("Ground toilet", 100, (sewer_schematic_stack_x-0.9, -0.20)),
+        ("Ground basin", 50, (sewer_schematic_stack_x+0.85, 0.30)),
+        ("Ground shower", 50, (sewer_schematic_shower_x-0.35, -0.20)),
+        ("WC and basin basement collector", 100,
+         ((sewer_schematic_stack_x+sewer_schematic_merge_x)/2, sewer_schematic_merge_z-0.25)),
+        ("Shower basement collector", 50,
+         ((sewer_schematic_shower_x+sewer_schematic_merge_x)/2, sewer_schematic_merge_z-0.25)),
+        ("Combined basement outlet", 160,
+         (sewer_schematic_merge_x+0.45, (sewer_schematic_merge_z+sewer_schematic_outlet_z)/2)),
+    ):
+        label = sewer_schematic.add_text(
+            point, f"DN{diameter}", font_size=2.2, name=f"Schematic {name} DN label",
+        )
+        appearance = ifcopenshell.util.element.get_pset(label, "EPset_Annotation")
+        ifcopenshell.api.pset.edit_pset(
+            house.model, pset=house.model.by_id(appearance["id"]),
+            properties={"Classes": appearance["Classes"]+" fill-bg"},
+        )
+    sewer_schematic.render(PROJECT_DIR / "kanal.svg", pdf=PDF_KANAL)
+
+
+# `kanal` creates the schematic and all three plans; targets also run separately.
 if {"kanal", "kanal_upper", "kanal_ground", "kanal_basement"}.intersection(sys.argv):
     sewer_layout = sewer_plan_layout()
 
 if "kanal" in sys.argv or "kanal_upper" in sys.argv:
-    kanal_upper = add_sewer_plan(
+    kanal_upper = add_plumbing_plan(
         "kanal_upper", upper, 1.20, upper_room_floors,
         room_positions={
             "1.01": (3.5, 7),
@@ -4947,7 +5203,7 @@ if "kanal" in sys.argv or "kanal_upper" in sys.argv:
     kanal_upper.render(PROJECT_DIR / "kanal_upper.svg", pdf=PDF_KANAL_UPPER)
 
 if "kanal" in sys.argv or "kanal_ground" in sys.argv:
-    kanal_ground = add_sewer_plan("kanal_ground", ground, 2.0, ground_room_floors)
+    kanal_ground = add_plumbing_plan("kanal_ground", ground, 2.0, ground_room_floors)
     add_sewer_routes(kanal_ground, sewer_layout["ground_routes"])
     add_sewer_pipe_labels(kanal_ground, sewer_layout["ground_routes"], sewer_layout["ground_pipe_labels"], at_start=True)
     # Riser arrows show continuation away from the circle, not water flow.
@@ -4957,11 +5213,141 @@ if "kanal" in sys.argv or "kanal_ground" in sys.argv:
     kanal_ground.render(PROJECT_DIR / "kanal_ground.svg", pdf=PDF_KANAL_GROUND)
 
 if "kanal" in sys.argv or "kanal_basement" in sys.argv:
-    kanal_basement = add_sewer_plan(
+    kanal_basement = add_plumbing_plan(
         "kanal_basement", basement, BASEMENT_FLOOR_THICKNESS+1.01, basement_room_floors,
     )
     add_sewer_routes(kanal_basement, sewer_layout["basement_routes"])
     add_sewer_pipe_labels(kanal_basement, sewer_layout["basement_routes"], sewer_layout["basement_pipe_labels"])
     add_sewer_floor_change(kanal_basement, sewer_layout["shower_drop"], "to up", "Shower from ground floor")
     add_sewer_floor_change(kanal_basement, sewer_layout["bathroom_drop"], "to up", "Bathroom from ground floor")
+    add_sewer_floor_change(kanal_basement, sewer_layout["outlet"], "to down", "Drain down")
+    outlet_x, outlet_y = sewer_layout["outlet"]
+    kanal_basement.add_text(
+        (outlet_x-0.6, outlet_y-0.2), "DN160", font_size=2.2,
+        name="kanal_basement Drain down DN160",
+    )
     kanal_basement.render(PROJECT_DIR / "kanal_basement.svg", pdf=PDF_KANAL_BASEMENT)
+
+
+if "voda" in sys.argv or "voda_basement" in sys.argv:
+    voda_basement = add_plumbing_plan(
+        "voda_basement", basement, BASEMENT_FLOOR_THICKNESS+1.01, basement_room_floors,
+    )
+    voda_basement.add_line_legend([
+        {"style": "solid", "color": "blue", "line_width": WATER_LINE_WIDTH,
+         "description": "studená"},
+    ])
+    water_basement_entry, water_basement_riser = water_basement_layout()
+    voda_basement.add_poly_line(
+        [water_basement_entry, water_basement_riser],
+        color="blue", line_width=WATER_LINE_WIDTH, name="Basement cold water route",
+    )
+    voda_basement.add_change_floor_symbol(
+        *water_basement_entry, "from down", color="black", line_width=WATER_LINE_WIDTH,
+        name="Basement water supply from below",
+    )
+    voda_basement.add_change_floor_symbol(
+        *water_basement_riser, "to up", color="black", line_width=WATER_LINE_WIDTH,
+        name="Basement water to ground floor",
+    )
+    voda_basement.render(PROJECT_DIR / "voda_basement.svg", pdf=PDF_VODA_BASEMENT)
+
+
+if "voda" in sys.argv or "voda_ground" in sys.argv:
+    voda_ground = add_plumbing_plan("voda_ground", ground, 2.0, ground_room_floors)
+    voda_ground.add_line_legend([
+        {"style": "solid", "color": "red", "line_width": WATER_LINE_WIDTH,
+         "description": "teplá"},
+        {"style": "solid", "color": "blue", "line_width": WATER_LINE_WIDTH,
+         "description": "studená"},
+    ])
+    water_bathroom_bottom_left = (BATHROOM_LEFT_X+WATER_WALL_CLEARANCE, BWT+WATER_WALL_CLEARANCE)
+    water_bathroom_bottom_right, water_ground_supply = water_basement_layout()
+    water_bathroom_top_right, hot_water_top_right = water_riser_positions()
+    voda_ground.add_poly_line(
+        [water_bathroom_bottom_left, water_bathroom_bottom_right, water_bathroom_top_right],
+        color="blue", line_width=WATER_LINE_WIDTH, name="Ground bathroom cold water route",
+    )
+    voda_ground.add_change_floor_symbol(
+        *water_ground_supply, "from down", color="black", line_width=WATER_LINE_WIDTH,
+        name="Ground water from basement",
+    )
+    voda_ground.add_change_floor_symbol(
+        *water_bathroom_top_right, "to up", color="black", line_width=WATER_LINE_WIDTH,
+        name="Ground water to upper floor",
+    )
+    hot_water_bottom_left = (water_bathroom_bottom_left[0]+WATER_HOT_ROUTE_OFFSET,
+                             water_bathroom_bottom_left[1]+WATER_HOT_ROUTE_OFFSET)
+    hot_water_bottom_right = (water_bathroom_bottom_right[0]-WATER_HOT_ROUTE_OFFSET,
+                              water_bathroom_bottom_right[1]+WATER_HOT_ROUTE_OFFSET)
+    voda_ground.add_poly_line(
+        [hot_water_bottom_left, hot_water_bottom_right, hot_water_top_right],
+        color="red", line_width=WATER_LINE_WIDTH, name="Ground bathroom hot water route",
+    )
+    voda_ground.add_change_floor_symbol(
+        *hot_water_top_right, "to up", color="black", line_width=WATER_LINE_WIDTH,
+        name="Ground hot water to upper floor",
+    )
+    voda_ground.render(PROJECT_DIR / "voda_ground.svg", pdf=PDF_VODA_GROUND)
+
+
+if "voda" in sys.argv or "voda_upper" in sys.argv:
+    voda_upper = add_plumbing_plan(
+        "voda_upper", upper, 1.20, upper_room_floors,
+        room_positions={
+            "1.01": (3.5, 7),
+            "1.04": ((upper_technical_left_x+upper_technical_right_x)/2, upper_toilet_end_front_y-0.20),
+        },
+    )
+    voda_upper.add_line_legend([
+        {"style": "solid", "color": "red", "line_width": WATER_LINE_WIDTH,
+         "description": "teplá"},
+        {"style": "solid", "color": "blue", "line_width": WATER_LINE_WIDTH,
+         "description": "studená"},
+    ])
+    water_upper_cold_riser, water_upper_hot_riser = water_riser_positions()
+    water_upper_basin = sewer_fixture_center(upper_hallway_basin)
+    water_upper_sink = sewer_fixture_center(kitchen_sink)
+    water_upper_dishwasher = sewer_fixture_center(kitchen_dishwasher)
+    water_upper_cold_kitchen_x = water_upper_sink[0]
+    water_upper_hot_kitchen_x = water_upper_cold_kitchen_x+WATER_HOT_ROUTE_OFFSET
+    water_upper_cold_basin_x = water_upper_basin[0]+WATER_HOT_ROUTE_OFFSET
+    water_upper_hot_basin_x = water_upper_basin[0]
+    water_upper_hot_branch_y = water_upper_hot_riser[1]+WATER_HOT_ROUTE_OFFSET
+    water_upper_routes = (
+        ("Cold water to basin", "blue", (
+            water_upper_cold_riser,
+            (water_upper_cold_basin_x, water_upper_cold_riser[1]),
+            (water_upper_cold_basin_x, water_upper_basin[1]),
+        )),
+        ("Hot water to basin", "red", (
+            water_upper_hot_riser,
+            (water_upper_hot_riser[0], water_upper_hot_branch_y),
+            (water_upper_hot_basin_x, water_upper_hot_branch_y),
+            (water_upper_hot_basin_x, water_upper_basin[1]),
+        )),
+        ("Cold water to sink", "blue", (
+            water_upper_cold_riser,
+            (water_upper_cold_kitchen_x, water_upper_cold_riser[1]),
+            (water_upper_cold_kitchen_x, water_upper_sink[1]),
+        )),
+        ("Hot water to sink", "red", (
+            (water_upper_hot_riser[0], water_upper_hot_branch_y),
+            (water_upper_hot_kitchen_x, water_upper_hot_branch_y),
+            (water_upper_hot_kitchen_x, water_upper_sink[1]+WATER_HOT_ROUTE_OFFSET),
+        )),
+        ("Cold water to dishwasher", "blue", (
+            (water_upper_cold_kitchen_x, water_upper_cold_riser[1]),
+            (water_upper_cold_kitchen_x, water_upper_dishwasher[1]),
+        )),
+    )
+    for name, color, points in water_upper_routes:
+        voda_upper.add_poly_line(
+            points, color=color, line_width=WATER_LINE_WIDTH, name=f"Upper {name}",
+        )
+    for name, point in (("cold", water_upper_cold_riser), ("hot", water_upper_hot_riser)):
+        voda_upper.add_change_floor_symbol(
+            *point, "from down", color="black", line_width=WATER_LINE_WIDTH,
+            name=f"Upper {name} water from ground floor",
+        )
+    voda_upper.render(PROJECT_DIR / "voda_upper.svg", pdf=PDF_VODA_UPPER)

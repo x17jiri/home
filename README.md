@@ -675,10 +675,43 @@ Run `python3 house2.py` to export `house2.ifc`. Run
 `python3 house2.py ground` to also render `projekt2/ground.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.1. Půdorys 1.NP.pdf`
 (A4 landscape, 1:100), matching the original project's PDF directory structure.
-Run `python3 house2.py kanal` for three drainage plans, or select
+Run `python3 house2.py kanal` for the drainage schematic and three plans, or select
 `kanal_basement`, `kanal_ground`, and `kanal_upper` individually. Their numbered
 PDFs use a separate `PDFFolder("D1.5.", ...)` in
 `projekt2/D1.5. Zdravotechnické Instalace`: basement 1, ground 2, upper 3.
+`python3 house2.py kanal_schematic` creates the schematic,
+`projekt2/kanal.svg` and `D1.5.4. Kanalizace.pdf`. Its black horizontal lines
+mark the finished floors and ceilings of the basement, ground floor and attic,
+plus the roof-tile top at the ridge. Floor and roof labels show millimetres
+relative to the finished ground floor; the attic ceiling line follows its
+horizontal plasterboard. The central orange DN100 stack starts 100 mm below
+the finished basement ceiling and ends 300 mm above the roof. An upward
+triangle and `Odvětrání` label mark the stack's top.
+A branch starts 100 mm below the finished ground-floor ceiling and rises to
+the right at 3%. Its washing-machine connector is 3.0 m from the stack, and
+its basin is 4.0 m away, measured horizontally. Both symbols sit 650 mm above
+the attic floor and connect vertically to the branch; the basin's 100 mm
+outlet stub completes its connection.
+A second 3% branch runs left from 100 mm below the finished attic floor:
+toilet at 0.5 m, dishwasher connector at 1.5 m, sink at 1.7 m. The dishwasher
+connector and sink bottom are both 650 mm above the attic floor. The sink
+graphic is offset 250 mm left of its pipe; its fixed outlet meets the flat
+bottom, preserving the 1.7 m pipe offset and all connection heights.
+The dishwasher caption is offset
+horizontally for readability. The five
+attic fixture connections carry nominal pipe sizes: DN100 for the toilet and
+DN50 for the washer, basin, dishwasher and sink. On the ground floor, 0.5 m
+branches connect a toilet to the left and a basin to the right of the stack,
+starting 100 mm below the finished ground floor and rising outward at 3%.
+They join before the shared stack penetrates the basement ceiling.
+Their symbol bottoms are 200 mm and 650 mm above the ground floor. The shower
+is centred 4.0 m right of the stack, starts 30 mm above the ground floor, and
+has a separate vertical drain to 100 mm below the finished basement ceiling.
+The new connections carry DN100 for the toilet and DN50 for basin and shower.
+Below the basement ceiling, the shared WC/basin stack and separate shower
+drop each start a collector 100 mm below the finished ceiling. Both collectors
+fall at 3% towards their midpoint, 2.0 m from each drop. At the junction they
+join a DN160 vertical outlet ending 500 mm below the finished basement floor.
 These plans show room IDs, furniture labels, the chimney symbol, orange drainage
 routes and black floor-change arrows, plus a room legend with names and areas.
 Facade cladding is excluded consistently at every level, so the contours follow
@@ -686,11 +719,11 @@ the bare walls without the detached outline beyond the omitted insulation.
 Only IDs are printed in the
 rooms (`add_room_annotation(show_area=False)`); there are no dimensions.
 `sewer_plan_layout()` shares the drop
-coordinates across floors; `SEWER_WALL_CLEARANCE` is 100 mm and
-`SEWER_OUTLET_Y` controls the basement outlet beyond the street wall.
+coordinates across floors; `SEWER_WALL_CLEARANCE` is 100 mm.
 The ground bathroom collector stops at the basin; its basement drop is halfway
 between basin and toilet. In the basement it runs to the street-side corner,
-meets the shower branch and continues outside. The upstairs toilet has a short
+meets the shower branch and ends in a DN160 `to down` symbol instead of
+continuing outside through the street wall. The upstairs toilet has a short
 branch to the kitchen/bathroom collector.
 The upstairs hallway basin and washer have branches to a collector 100 mm
 inside the west wall. It turns left 100 mm beyond the hallway's street end,
@@ -698,13 +731,41 @@ following that edge outside room 1.03,
 enters the upper bathroom and joins the same drop to the ground floor.
 Fixture branches are labelled DN100 for toilets and DN50 for other fixtures.
 Basement labels distinguish the DN50 shower branch, DN100 bathroom collector
-and DN160 street outlet. The upper toilet junction also has a `to up` arrow
+and DN160 downward outlet. The upper toilet junction also has a `to up` arrow
 for roof venting. Each `*_pipe_labels` list in `sewer_plan_layout()` contains
 the route, segment, diameter and editable text offset. Fixture labels are
 anchored beside their connection points; basement labels use segment midpoints.
 Riser arrows always point away from their circles. A connection received from
 above uses the up-right (`to up`) symbol: it shows continuation, not water flow.
 Routes are drawing annotations; they do not create physical pipes or openings.
+Run `python3 house2.py voda_ground` for the ground-floor water plan,
+`projekt2/voda_ground.svg` and
+`projekt2/D1.5. Zdravotechnické Instalace/D1.5.5. Vodovod - Půdorys 1.NP.pdf`.
+The blue cold-water route follows the bathroom's bottom and right walls,
+100 mm inside their room-facing surfaces, from bottom left via bottom right
+to top right. Black floor-change symbols mark the basement supply 500 mm along
+Y from the drawn bottom-right corner (`from down`) and continuation upstairs
+at top right (`to up`).
+The red hot-water route follows the same bottom and right walls, 100 mm farther
+into the room. Its top-right riser ends at the same Y as the cold-water riser,
+keeping their arrows separate. Hot water has only a `to up` symbol, with no
+basement supply symbol. The plan includes room labels, furniture, a room legend
+and a hot/cold-water line legend.
+Run `python3 house2.py voda_upper` for `projekt2/voda_upper.svg` and
+`projekt2/D1.5. Zdravotechnické Instalace/D1.5.6. Vodovod - Půdorys podkroví.pdf`.
+Both supplies are received from below at the shared `water_riser_positions()`
+coordinates. Red and blue branches run right then up to the hallway basin,
+and left then up to the kitchen sink. A cold-water-only branch runs down from
+the kitchen junction to the dishwasher. Routes follow the modelled fixture
+centres, with 100 mm separation between hot and cold lines.
+Run `python3 house2.py voda_basement` for `projekt2/voda_basement.svg` and
+`projekt2/D1.5. Zdravotechnické Instalace/D1.5.7. Vodovod - Půdorys suterénu.pdf`.
+The blue supply is received from below at the bottom-right corner of S.04,
+continues 500 mm along positive Y, then rises to the ground floor. The route
+aligns with the ground-floor cold-water line; `water_basement_layout()` shares
+the corner and riser coordinates between both drawings. The basement's thicker
+walls leave 70 mm between the route and their inner faces. `voda` generates
+all three floor plans.
 Run `python3 house2.py ceiling` for `projekt2/ceiling.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.2. Strop nad 1.NP.pdf`.
 The `ceiling` plan has thin solid wall outlines, red dash-dot beam axes,
