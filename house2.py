@@ -87,6 +87,12 @@ HEAT_PUMP_HEIGHT_ABOVE_BASEMENT_FLOOR = 0.60
 ROZVADEC_SIZE = (0.7, 0.3, 0.50)  # Width along X, depth, height.
 ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.20
 ROZVADEC_WALL_GAP = 0.05
+FAN_COIL_SIZE = (.90, .23, .30)
+FAN_COIL_DOOR_CLEARANCE = .05
+FAN_COIL_WINDOW_CLEARANCE = .05
+FAN_COIL_WALL_GAP = .01
+BATHROOM_FAN_COIL_SIZE = (.80, .12, .60)
+BATHROOM_FAN_COIL_DOOR_WALL_GAP = .10
 
 ZAKLADACI_MALTA = 0.02
 GROUND_WALL_BASE_COURSE_HEIGHT = ZAKLADACI_MALTA + 0.125
@@ -391,6 +397,7 @@ PDF_ELEKTRO_GROUND = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys 1.NP"))
 PDF_ELEKTRO_UPPER = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys podkroví"))
 PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
 ELECTRICAL_LINE_WIDTH = 0.30  # Printed millimetres, matching the reference electrical plans.
+ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH = 0.30  # Black riser symbols, matching sewer and water drawings.
 ELECTRICAL_LIGHT_OFFSETS = {}  # Optional room-specific offsets from the calculated centre.
 ELECTRICAL_ROOM_LABEL_OFFSETS = {"0.04": (.55, .40), "1.03": (-.60, .95), "1.01": (-.60, 0.0), "S.03": (.55, 0.0), "S.01": (.55, 0.0), "S.02": (.55, 0.0), "S.04": (.55, 0.0)}  # Keep IDs clear of wiring.
 ELECTRICAL_ENTRANCE_LIGHT_WALL_GAP = 0.25  # Outside the finished west facade.
@@ -400,11 +407,13 @@ ELECTRICAL_TRUNK_CHIMNEY_CLEARANCE = 0.55  # From the chimney's street-facing su
 ELECTRICAL_SOCKET_WALL_OFFSET = 0.08
 ELECTRICAL_SOCKET_CORNER_DISTANCE = 0.65
 ELECTRICAL_LIGHT_CIRCUIT_COLOR = "#f080f0"
+ELECTRICAL_FAN_COIL_CIRCUIT_COLOR = "#e6c200"
 ELECTRICAL_OUTPUT_PORT_CLOCKS = {
     "basement": 9.5, "upper": 12.0, "0.01_light": 10.7, "0.01_sockets": 11.3,
     "0.02_sockets": 11.9, "0.02_light": 12.5, "0.04_light": 1.1,
     "outside_light": 2.5, "stair_landing_light": 3.0,
     "0.05_sockets": 5.0, "0.05_light": 6.0, "0.03_sockets": 8.0, "0.03_light": 9.0,
+    "fan_coils": 9.0,
 }
 WATER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
 WATER_HOT_ROUTE_OFFSET = 0.10  # Hot water is drawn farther into the room than cold water.
@@ -1109,6 +1118,34 @@ def add_ground_room_annotations(drawing, *, include_legend=True):
         drawing.add_room_legend()
 
 
+# Fan coils face into their rooms, centred above the construction door openings.
+ground_fan_coils = []
+for room, door, wall, room_normal in (
+    (pokoj1, pokoj1_door, wall_garden_rooms_g, (0., 1.)),
+    (pokoj2, pokoj2_door, wall_garden_rooms_g, (0., 1.)),
+    (pokoj3, pokoj3_door, wall_third_room_top_g, (-1., 0.)),
+):
+    opening = door.FillsVoids[0].RelatingOpeningElement
+    opening_placement = ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
+    door_center = opening_placement[:2, 3]+opening_placement[:2, 0]*ROOM_DOOR_OPENING_WIDTH/2
+    tangent = (np.asarray(wall.end)-wall.start)/wall.length
+    wall_normal = np.array((-tangent[1], tangent[0]))
+    inward = np.asarray(room_normal)
+    face_offset = wall.body_offset+(wall.thickness if np.dot(wall_normal, inward)>0 else 0)
+    face = np.asarray(wall.start)+wall_normal*face_offset
+    wall_face_center = door_center+inward*np.dot(face-door_center, inward)
+    center = wall_face_center+inward*(FAN_COIL_WALL_GAP+FAN_COIL_SIZE[1]/2)
+    door_placement = ifcopenshell.util.placement.get_local_placement(door.ObjectPlacement)
+    bottom = float(door_placement[2, 3])+door.OverallHeight+FAN_COIL_DOOR_CLEARANCE-ground.elevation
+    if bottom+FAN_COIL_SIZE[2] > ground_floor_height-CEILING_PLASTER_THICKNESS:
+        raise ValueError(f"Fan coil above {room.room_id} door does not fit below the ceiling")
+    ground_fan_coils.append(ground.fan_coil(
+        f"Fan coil {room.room_id}", center=tuple(float(v) for v in center), size=FAN_COIL_SIZE,
+        start_height=bottom, rotation=math.degrees(math.atan2(inward[1], inward[0]))+90,
+        label="FCU",
+    ))
+ground_fan_coils = tuple(ground_fan_coils)
+
 # Hallway-facing cabinet beside the bathroom door, on the bathroom SDK wall.
 rozvadec = ground.furniture(
     "Rozvaděč", kind="USERDEFINED", size=ROZVADEC_SIZE, color="#ffffff",
@@ -1159,6 +1196,14 @@ bathroom_hydrobox = ground.furniture(
     "Hydro-\nbox", kind="USERDEFINED", size=HYDROBOX_SIZE, color="#ffffff",
     center=bathroom_hydrobox_center,
     start_height=GROUND_FLOOR_THICKNESS+0.03,
+)
+bathroom_fan_coil_center = (
+    BATHROOM_LEFT_X+FAN_COIL_WALL_GAP+BATHROOM_FAN_COIL_SIZE[1]/2,
+    BATHROOM_PARTITION_Y-BATHROOM_FAN_COIL_DOOR_WALL_GAP-BATHROOM_FAN_COIL_SIZE[0]/2,
+)
+bathroom_fan_coil = ground.fan_coil(
+    "Fan coil 0.05 console", center=bathroom_fan_coil_center, size=BATHROOM_FAN_COIL_SIZE,
+    start_height=GROUND_FLOOR_THICKNESS, rotation=90, form="console", label="FCU",
 )
 basement_water_meter = basement.furniture(
     "Vodo-\nměr", kind="USERDEFINED",
@@ -2396,6 +2441,28 @@ upper_room_windows = {
     upper_toilet_room.room_id: (),
 }
 
+# Garden-wall fan coil: centred on the house and above both window heads.
+upper_fan_coil_center = (
+    HOUSE_WIDTH/2,
+    wall_back_u.start[1]-wall_back_u.body_offset-wall_back_u.thickness-FAN_COIL_WALL_GAP-FAN_COIL_SIZE[1]/2,
+)
+upper_fan_coil_bottom = max(
+    float(ifcopenshell.util.placement.get_local_placement(window.ObjectPlacement)[2, 3])+window.OverallHeight
+    for window in windows_living_room_back
+)-upper.elevation+FAN_COIL_WINDOW_CLEARANCE
+upper_fan_coil_ceiling = min(
+    plane_height_at(*cut, x=x, y=y)
+    for cut in upper_partition_cuts
+    for x in (upper_fan_coil_center[0]-FAN_COIL_SIZE[0]/2, upper_fan_coil_center[0]+FAN_COIL_SIZE[0]/2)
+    for y in (upper_fan_coil_center[1]-FAN_COIL_SIZE[1]/2, upper_fan_coil_center[1]+FAN_COIL_SIZE[1]/2)
+)
+if upper.elevation+upper_fan_coil_bottom+FAN_COIL_SIZE[2] > upper_fan_coil_ceiling:
+    raise ValueError("Upper garden-wall fan coil does not fit below the ceiling")
+upper_fan_coil = upper.fan_coil(
+    "Fan coil 1.01 garden wall", center=upper_fan_coil_center, size=FAN_COIL_SIZE,
+    start_height=upper_fan_coil_bottom, rotation=0, label="FCU",
+)
+
 # Reuse the old house's technical-equipment sizes, with small wall gaps.
 upper_fixture_wall_gap = 0.05
 # Keep the upper washer fixed when the ground-floor bathroom partition moves.
@@ -3238,6 +3305,35 @@ def electrical_trunk_layout():
     return dict(down=down, up=up, routes=tuple(routes))
 
 
+def electrical_ground_fan_coil_layout():
+    """Shared circuit branching below the chimney to the four ground-floor FCUs."""
+    junction = (CHIMNEY_CENTER[0], CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-.30)
+    routes = [("feed", (electrical_board_ports()["fan_coils"], junction))]
+    for unit in (*ground_fan_coils, bathroom_fan_coil):
+        placement = ifcopenshell.util.placement.get_local_placement(unit.ObjectPlacement)
+        end = tuple(float(v) for v in placement[:2, 3])
+        room_id = unit.Name.split()[2]
+        if room_id in ("0.01", "0.02"):
+            # Approach the garden rooms outside the chimney's masonry.
+            side = -1 if room_id == "0.01" else 1
+            turn = (CHIMNEY_CENTER[0]+side*(CHIMNEY_SIZE/2+.10), junction[1])
+            points = (junction, turn, end)
+        else:
+            points = (junction, end)
+        routes.append((room_id, points))
+    return dict(junction=junction, routes=tuple(routes))
+
+
+def electrical_upper_fan_coil_layout():
+    """Receive the shared circuit, clear the chimney on the left, then run north."""
+    riser = electrical_ground_fan_coil_layout()["junction"]
+    clear_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-.10
+    placement = ifcopenshell.util.placement.get_local_placement(upper_fan_coil.ObjectPlacement)
+    # This vertical run meets the room-facing edge of the garden-wall casing.
+    end = (clear_x, float(placement[1, 3])-FAN_COIL_SIZE[1]/2)
+    return dict(riser=riser, route=(riser, (clear_x, riser[1]), end))
+
+
 def add_electrical_trunk_legend(drawing, extra_lines=()):
     drawing.add_line_legend([
         {"style": "solid", "color": "black", "line_width": ELECTRICAL_TRUNK_LINE_WIDTH,
@@ -3518,6 +3614,16 @@ def electrical_basement_s02_light_layout():
     )
 
 
+def electrical_basement_garden_socket_layout():
+    """Outside garden socket, following the S.02 wall closer than its light cable."""
+    left, bottom, _, _ = basement_rooms_by_id["S.02"].bounds
+    wall_x = left+.16
+    origin = electrical_trunk_layout()["down"]
+    corner = (wall_x, bottom+ELECTRICAL_SOCKET_WALL_OFFSET)
+    socket = (wall_x, float(basement_plan_max[1])+ELECTRICAL_SOCKET_WALL_OFFSET)
+    return dict(route=(origin, (wall_x, origin[1]), corner, socket), socket=socket)
+
+
 def electrical_basement_s04_light_layout():
     """Diagonal to the S.04 light, then down to the switch before the front wall."""
     _, front_y, _, _ = basement_rooms_by_id["S.04"].bounds
@@ -3709,7 +3815,7 @@ def add_ground_stair_lighting_routes(drawing, layout):
             name=f"{drawing.name} {name.capitalize()} stair light switch",
         )
     drawing.add_change_floor_symbol(
-        *layout["riser"], "to up", color="black", line_width=ELECTRICAL_LINE_WIDTH,
+        *layout["riser"], "to up", color="black", line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH,
         name=f"{drawing.name} Stair light to upper floor",
     )
 
@@ -4794,7 +4900,7 @@ if "upper" in sys.argv:
         (garden_right[1], HOUSE_WIDTH-BWT, "Upper garden window clearance to west wall"),
     ):
         drawing1.add_dimension(
-            (x0, garden_window_wall_y), (x1, garden_window_wall_y), offset=-0.4, name=name,
+            (x0, garden_window_wall_y), (x1, garden_window_wall_y), offset=-0.6, name=name,
         )
     front_x0, front_x1 = upper_window_x_bounds[window_living_room_front]
     street_window_wall_y = BWT
@@ -5972,7 +6078,7 @@ if "voda" in sys.argv or "voda_upper" in sys.argv:
 if "elektro" in sys.argv or "elektro_basement" in sys.argv:
     elektro_basement = add_electrical_plan(
         "elektro_basement", basement, BASEMENT_FLOOR_THICKNESS+1.01, basement_room_floors,
-        extra_symbols=(("d_socket", "Dvojitá zásuvka"), ("socket3f", "Zásuvka 380V, 3 fáze"),
+        extra_symbols=(("socket", "Zásuvka"), ("d_socket", "Dvojitá zásuvka"), ("socket3f", "Zásuvka 380V, 3 fáze"),
                        ("switch", "Vypínač")),
     )
     add_electrical_trunk_legend(elektro_basement, extra_lines=(
@@ -5983,7 +6089,7 @@ if "elektro" in sys.argv or "elektro_basement" in sys.argv:
     ))
     elektro_basement.add_change_floor_symbol(
         *electrical_trunk_layout()["down"], "from up", color="black",
-        line_width=ELECTRICAL_TRUNK_LINE_WIDTH, name="elektro_basement Cables from ground floor",
+        line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH, name="elektro_basement Cables from ground floor",
     )
     add_room_socket_routes(elektro_basement, "S.01-S.05", electrical_basement_socket_layout())
     add_room_electrical_routes(elektro_basement, "S.03", electrical_basement_garage_light_layout())
@@ -5991,6 +6097,15 @@ if "elektro" in sys.argv or "elektro_basement" in sys.argv:
     add_room_electrical_routes(elektro_basement, "S.02", electrical_basement_s02_light_layout())
     add_room_electrical_routes(elektro_basement, "S.04", electrical_basement_s04_light_layout())
     add_room_electrical_routes(elektro_basement, "S.05", electrical_basement_s05_light_layout())
+    garden_socket_layout = electrical_basement_garden_socket_layout()
+    elektro_basement.add_poly_line(
+        garden_socket_layout["route"], color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+        foreground=True, name="elektro_basement Garden outside socket feed",
+    )
+    elektro_basement.add_socket_symbol(
+        garden_socket_layout["socket"], "up", line_width=ELECTRICAL_LINE_WIDTH,
+        name="elektro_basement Garden outside single socket",
+    )
     for name, route, socket, direction in electrical_basement_three_phase_layout():
         elektro_basement.add_poly_line(
             route, color="red", line_width=ELECTRICAL_LINE_WIDTH,
@@ -6011,12 +6126,24 @@ if "elektro" in sys.argv or "elektro_ground" in sys.argv:
         {"color": ELECTRICAL_LIGHT_CIRCUIT_COLOR, "line_width": ELECTRICAL_LINE_WIDTH,
          "description": "Světelný okruh"},
         {"color": "blue", "line_width": ELECTRICAL_LINE_WIDTH, "description": "Zásuvkový okruh"},
+        {"color": ELECTRICAL_FAN_COIL_CIRCUIT_COLOR, "line_width": ELECTRICAL_LINE_WIDTH,
+         "description": "Okruh Fancoily"},
     ))
     add_room_electrical_routes(elektro_ground, "0.01", electrical_room01_layout())
     add_room_electrical_routes(elektro_ground, "0.02", electrical_room02_layout())
     add_room_electrical_routes(elektro_ground, "0.03", electrical_room03_layout())
     add_room_electrical_routes(elektro_ground, "0.04", electrical_room04_layout())
     add_room_electrical_routes(elektro_ground, "0.05", electrical_room05_layout())
+    for name, points in electrical_ground_fan_coil_layout()["routes"]:
+        elektro_ground.add_poly_line(
+            points, color=ELECTRICAL_FAN_COIL_CIRCUIT_COLOR, line_width=ELECTRICAL_LINE_WIDTH,
+            foreground=True, name=f"elektro_ground Fan coil circuit {name}",
+        )
+    elektro_ground.add_change_floor_symbol(
+        *electrical_ground_fan_coil_layout()["junction"], "to up",
+        color="black", line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH,
+        name="elektro_ground Fan coil circuit to upper floor",
+    )
     electrical_trunks = electrical_trunk_layout()
     for direction, points in electrical_trunks["routes"]:
         elektro_ground.add_poly_line(
@@ -6024,7 +6151,7 @@ if "elektro" in sys.argv or "elektro_ground" in sys.argv:
             name=f"elektro_ground Bundled cables to {direction}",
         )
         elektro_ground.add_change_floor_symbol(
-            *points[-1], f"to {direction}", color="black", line_width=ELECTRICAL_TRUNK_LINE_WIDTH,
+            *points[-1], f"to {direction}", color="black", line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH,
             name=f"elektro_ground Cable riser {direction}",
         )
     elektro_ground.add_stair_annotation(lower_stairs)
@@ -6050,10 +6177,22 @@ if "elektro" in sys.argv or "elektro_upper" in sys.argv:
          "description": "Světelný okruh"},
         {"color": "blue", "line_width": ELECTRICAL_LINE_WIDTH, "description": "Zásuvkový okruh"},
         {"color": "red", "line_width": ELECTRICAL_LINE_WIDTH, "description": "3-fázový okruh"},
+        {"color": ELECTRICAL_FAN_COIL_CIRCUIT_COLOR, "line_width": ELECTRICAL_LINE_WIDTH,
+         "description": "Okruh Fancoily"},
     ))
+    upper_fan_coil_layout = electrical_upper_fan_coil_layout()
+    elektro_upper.add_change_floor_symbol(
+        *upper_fan_coil_layout["riser"], "from down", color="black",
+        line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH, name="elektro_upper Fan coil circuit from ground floor",
+    )
+    elektro_upper.add_poly_line(
+        upper_fan_coil_layout["route"], color=ELECTRICAL_FAN_COIL_CIRCUIT_COLOR,
+        line_width=ELECTRICAL_LINE_WIDTH, foreground=True,
+        name="elektro_upper Fan coil circuit to garden unit",
+    )
     elektro_upper.add_change_floor_symbol(
         *electrical_trunk_layout()["up"], "from down", color="black",
-        line_width=ELECTRICAL_TRUNK_LINE_WIDTH, name="elektro_upper Cables from ground floor",
+        line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH, name="elektro_upper Cables from ground floor",
     )
     add_room_electrical_routes(elektro_upper, "1.03", electrical_upper_hallway_layout())
     add_room_electrical_routes(elektro_upper, "1.04", electrical_upper_toilet_layout())
@@ -6093,7 +6232,7 @@ if "elektro" in sys.argv or "elektro_upper" in sys.argv:
     elektro_upper.add_stair_landing_annotation(middle_stair_landing)
     stair_light_layout = electrical_stair_lighting_layout()
     elektro_upper.add_change_floor_symbol(
-        *stair_light_layout["riser"], "from down", color="black", line_width=ELECTRICAL_LINE_WIDTH,
+        *stair_light_layout["riser"], "from down", color="black", line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH,
         name="elektro_upper Stair light from ground floor",
     )
     elektro_upper.add_poly_line(

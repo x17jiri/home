@@ -788,6 +788,9 @@ at 12:00 and runs straight to the chimney centre's Y level, then rises. Its
 matching upper-floor receiving point is in the hallway in front of bathroom
 door 1.04. `electrical_trunk_layout()` shares the riser coordinates between floors.
 The solid 0.70 mm line is labelled `Sdružená trasa kabelů` in each plan's legend.
+All electrical floor-change symbols use black 0.30 mm strokes, matching sewer
+and water drawings, controlled
+by `ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH`, including bundle, stair and FCU risers.
 The basement has one shared blue socket circuit. From the incoming point it
 runs down/left at 45 degrees to the S.04 face of the S.03–S.04 wall, down to
 the front wall, then counter-clockwise along the front, west, garden and east
@@ -818,6 +821,12 @@ light. A switch is connected at its stem 200 mm after the upward turn, facing
 right so its circle stays clear of the cable. The S.02 label is shifted right
 to clear the vertical cable. `electrical_basement_s02_light_layout()` defines
 this branch.
+An additional blue socket feed follows the S.02 bottom-left approach and left
+wall 160 mm inside the room, 140 mm closer to the corner than its light cable.
+It continues up through the garden wall to a single socket outside, with
+the endpoint derived from the basement's outer wall bounds.
+`electrical_basement_garden_socket_layout()` defines this route; the basement
+symbol legend includes the single socket.
 The S.04 lighting cable runs diagonally from the incoming point to its light,
 then straight down to a switch 200 mm before the front wall. The switch faces
 left and connects at its stem; the S.04 label is shifted right to clear the
@@ -832,9 +841,21 @@ branch, with the entry position derived from the opening.
 upstairs bundle at 12:00. Outside lighting connects at 2:30 and the
 inside stair light at 3:00. Bathroom sockets/light connect at 5:00/6:00;
 room 0.03 sockets/light connect at 8:00/9:00. The order reserves positions for
-both black routes and all eleven planned ground-floor lighting/socket feeds;
+both black routes, all eleven planned ground-floor lighting/socket feeds,
+and the shared fan-coil circuit;
 only cables already specified are drawn. Room 0.01 and 0.02 feeds use these
 shared positions rather than crowding the cabinet's right side.
+A yellow circuit leaves the rozvaděč at 9 o'clock, reaches a junction 300 mm
+below the chimney's front face, then branches to all four ground-floor fan
+coils (0.01, 0.02, 0.03 and the bathroom console). The garden-room branches
+pass around the chimney's sides. `electrical_ground_fan_coil_layout()` derives
+the endpoints from the equipment placements; the line legend reads
+`Okruh Fancoily`, using `ELECTRICAL_FAN_COIL_CIRCUIT_COLOR`.
+At the junction a thin black floor-change arrow continues the circuit upstairs.
+The upper plan receives it at the same XY position, shifts 300 mm left to
+clear the chimney, then runs straight towards the garden wall to the FCU's
+room-facing edge. `electrical_upper_fan_coil_layout()` defines this route;
+the upper line legend also includes `Okruh Fancoily`.
 Room 0.01 has two branch cables from the rozvaděč, using straight segments.
 The magenta lighting route goes to a switch 200 mm left of the door opening,
 then to the room light. The blue socket feed enters the bottom-right corner
@@ -1831,6 +1852,46 @@ when the source library uses a corner or wall face as its origin. Pass
 parts such as the chairs in a dining-table asset. The original height is kept.
 If an asset is given `label="..."`, that text is also centred on its visible
 projection in elevation drawings.
+
+For a generic wall-mounted fan coil, use the native equipment helper:
+
+```python
+ground.fan_coil(
+    "FCU 1",
+    center=(3.0, 2.0),
+    size=(.90, .23, .30),  # Width, depth and height; generic sample dimensions.
+    start_height=GROUND_FLOOR_THICKNESS+2.10,  # Underside above the storey elevation.
+    rotation=0,
+    label="FCU",
+)
+```
+
+The white casing has a rounded side profile, a dark outlet with three louvres
+and a small indicator. Its back faces local +Y and the outlet faces -Y;
+`rotation` turns it counter-clockwise in plan. It is an `IfcUnitaryEquipment`
+with `ObjectType=WALL_MOUNTED_FAN_COIL`. The physical body stays at its actual
+mounting height while a separate footprint, outlet symbol and label remain
+visible below the normal plan cut, 20 mm above the local floor finish.
+These are generic dimensions and geometry.
+Run `python3 fan_coil_preview.py` to generate the isolated sample IFC, a Blender
+3D preview and a Bonsai plan PDF in `projekt2/fan_coil_preview/`.
+`house2.py` places three units in rooms 0.01, 0.02 and 0.03, centred over their
+door openings on the room-facing wall surfaces. The casing underside is
+50 mm above the door head, with a 10 mm wall gap; the outlets face into the
+rooms. `FAN_COIL_SIZE`, `FAN_COIL_DOOR_CLEARANCE` and `FAN_COIL_WALL_GAP` control
+these placements, and `ground_fan_coils` holds the instances.
+The upper living room has one more unit on the garden wall, centred at
+`HOUSE_WIDTH/2`, facing into the room. Its underside is 50 mm above the garden
+window heads, derived from the actual window placements and heights.
+`upper_fan_coil` holds this instance; `FAN_COIL_WINDOW_CLEARANCE` controls its
+head clearance, and the model checks that it fits below the ceiling.
+The ground bathroom has a radiator-style console (`form="console"`) behind
+its door, parallel to the room-3 wall and facing into the bathroom. Its feet
+rest on the finished floor. `BATHROOM_FAN_COIL_SIZE=(.80, .12, .60)` gives its
+generic width, depth and height; the cabinet is 10 mm from the shared wall
+and 100 mm from the door wall. The console has a top grille and the same
+light-blue FCU plan styling, with 30 mm clearance from the fully opened door's
+handle. `bathroom_fan_coil` holds this instance.
 
 For simple cylindrical objects, provide the centre of the circular footprint,
 its radius, and its vertical dimensions:

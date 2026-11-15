@@ -51,7 +51,7 @@ import ifcopenshell.util.selector
 import ifcopenshell.util.type
 from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
-from shapely.geometry import Polygon
+from shapely.geometry import Point as ShapelyPoint, Polygon
 from shapely.ops import unary_union
 from pdf_utils import markdown_to_pdf
 from drawing_sheet import DrawingSheet
@@ -20646,6 +20646,144 @@ class Storey:
                     products=[annotation],
                 )
         return annotation
+
+    def fan_coil(
+        self,
+        name: str,
+        *,
+        center: Point,
+        size: Sequence[Number] = (.90, .23, .30),
+        rotation: Number = 0,
+        start_height: Number = 2.10,
+        label: str = "FCU",
+        color: str = "#f5f5f2",
+        form: Literal["wall", "console"] = "wall",
+    ) -> ifcopenshell.entity_instance:
+        """Add a generic wall or radiator-style console fan coil and plan symbol.
+
+        ``size`` is local (width, depth, height), in metres; ``center`` is the
+        footprint centre. The outlet faces local -Y, the back is at +Y, and
+        ``rotation`` turns counter-clockwise in plan. ``start_height`` is the
+        casing underside above the storey elevation. The 3D casing remains at
+        its real height; its plan footprint and label sit 20 mm above the
+        local floor finish (or the storey datum where there is no floor).
+        Ordinary plans therefore also show equipment above the cut plane.
+        Dimensions describe a generic placeholder, not a manufacturer's unit.
+        ``form="console"`` adds feet and a top grille instead of the wall
+        unit's front outlet. Specify its size and floor-level start_height.
+        """
+        name, label = _name(name, "name"), _name(label, "label")
+        form = _enum(form, "form", {"WALL", "CONSOLE"}).lower()
+        center_x, center_y = _point(center, "center")
+        if isinstance(size, (str, bytes)):
+            raise TypeError("size must contain exactly three dimensions")
+        try:
+            width, depth, height = size
+        except (TypeError, ValueError) as error:
+            raise TypeError("size must contain exactly three dimensions") from error
+        width, depth, height = (_number(v, key) for v, key in
+                                ((width, "width"), (depth, "depth"), (height, "height")))
+        if min(width, depth, height) <= 0:
+            raise ValueError("size dimensions must be greater than zero")
+        rotation = _number(rotation, "rotation")
+        start_height = _number(start_height, "start_height")
+        if start_height < 0:
+            raise ValueError("start_height must be zero or greater")
+        _color(color, "color")
+        point = ShapelyPoint(center_x, center_y)
+        floor_levels = [floor.start_height+floor.thickness for floor in self.floor_layers
+                        if ifcopenshell.util.element.get_predefined_type(floor) == "FLOOR"
+                        and Polygon(floor.outline).covers(point)
+                        and floor.start_height+floor.thickness <= start_height]
+        plan_height = max(floor_levels, default=0)+.02
+        house, model = self.house, self.house.model
+        unit = ifcopenshell.api.root.create_entity(
+            model, ifc_class="IfcUnitaryEquipment", name=name, predefined_type="USERDEFINED",
+        )
+        unit.ObjectType = "FLOOR_MOUNTED_FAN_COIL" if form == "console" else "WALL_MOUNTED_FAN_COIL"
+        ifcopenshell.api.spatial.assign_container(model, products=[unit], relating_structure=self.element)
+        angle = radians(rotation)
+        placement = np.eye(4)
+        placement[:2, :2] = ((cos(angle), -sin(angle)), (sin(angle), cos(angle)))
+        placement[:3, 3] = (center_x, center_y, self.elevation+start_height)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=unit, matrix=placement, is_si=True)
+        builder = ShapeBuilder(model)
+
+        # Rounded side profile, extruded across the width of the casing.
+        lip = depth*.015
+        casing_lip = 0 if form == "console" else lip
+        radius = min(depth*.13, height*.10)
+        casing_bottom = height*.04 if form == "console" else 0
+        casing_top = height*.99 if form == "console" else height
+        profile_points = []
+        for cy, cz, first in (
+            (depth/2-radius, casing_top-radius, 0),
+            (-depth/2+casing_lip+radius, casing_top-radius, 90),
+            (-depth/2+casing_lip+radius, casing_bottom+radius, 180),
+            (depth/2-radius, casing_bottom+radius, 270),
+        ):
+            for degrees in np.linspace(first, first+90, 6):
+                theta = radians(float(degrees))
+                profile_points.append((cy+radius*cos(theta), cz+radius*sin(theta)))
+        casing = builder.extrude(
+            builder.profile(builder.polyline(profile_points, closed=True)), magnitude=width,
+            position=(-width/2, 0, 0), position_z_axis=(1., 0., 0.), position_x_axis=(0., 1., 0.),
+        )
+
+        def block(x, y, z, w, d, h):
+            return builder.extrude(builder.rectangle(size=(w, d)), magnitude=h, position=(x, y, z))
+
+        if form == "console":
+            grille = block(-width*.42, -depth*.25, casing_top, width*.84, depth*.50, height*.008)
+            slats = [block(float(x), -depth*.25, casing_top, width*.012, depth*.50, height*.01)
+                     for x in np.linspace(-width*.40, width*.388, 14)]
+            feet = [block(x, -depth*.35, 0, width*.08, depth*.70, casing_bottom)
+                    for x in (-width*.36, width*.28)]
+        else:
+            grille = block(-width*.42, -depth/2+lip*.20, height*.13,
+                           width*.84, lip, height*.25)
+            slats = [block(-width*.40, -depth/2, height*(.15+index*.075),
+                           width*.80, lip*.5, height*.018) for index in range(3)]
+            feet = []
+        indicator = block(width*.33, -depth/2+lip*.20, height*.62,
+                          width*.035, lip, height*.022)
+        solids = [casing, grille, *slats, indicator, *feet]
+        body = builder.get_representation(house._body_context, solids)
+        ifcopenshell.api.geometry.assign_representation(model, product=unit, representation=body)
+        for item, item_color in ((casing, color), (grille, "#323940"),
+                                 *((slat, color) for slat in slats), (indicator, "#55a480"),
+                                 *((foot, color) for foot in feet)):
+            style = house._surface_style("box", color=item_color, transparency=0)
+            ifcopenshell.api.style.assign_item_style(model, item=item, style=style)
+
+        # Independent plan representation: footprint, front outlet and louvres.
+        curves = [builder.rectangle(size=(width, depth), position=(-width/2, -depth/2))]
+        outlet_limits = (.25, .75) if form == "console" else (.13, .27)
+        for fraction in outlet_limits:
+            y = -depth/2+depth*fraction
+            curves.append(builder.polyline(((-width*.42, y), (width*.42, y))))
+        for x in np.linspace(-width*.35, width*.35, 14 if form == "console" else 6):
+            curves.append(builder.polyline(((float(x), -depth/2+depth*outlet_limits[0]),
+                                            (float(x), -depth/2+depth*outlet_limits[1]))))
+        plan = builder.get_representation(house._plan_body_context, curves)
+        plan = ifcopenshell.api.geometry.map_representation(model, representation=plan)
+        plan.Items[0].MappingTarget.LocalOrigin.Coordinates = (0., 0., plan_height-start_height)
+        ifcopenshell.api.geometry.assign_representation(model, product=unit, representation=plan)
+        annotation = self._add_furniture_label(
+            unit, name=name, text=label, placement=placement.copy(), width=width, depth=depth, height=height,
+        )
+        label_placement = ifcopenshell.util.placement.get_local_placement(annotation.ObjectPlacement)
+        label_placement[2, 3] = self.elevation+plan_height
+        ifcopenshell.api.geometry.edit_object_placement(
+            model, product=annotation, matrix=label_placement, is_si=True,
+        )
+        pset = ifcopenshell.api.pset.add_pset(model, product=unit, name="BBIM_FanCoil")
+        ifcopenshell.api.pset.edit_pset(model, pset=pset, properties={
+            "Width": width, "Depth": depth, "Height": height, "StartHeight": start_height,
+            "Rotation": rotation, "Label": label, "PlanSymbolHeight": plan_height,
+            "Form": form,
+        })
+        return unit
 
     def furniture(
         self,
