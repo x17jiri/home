@@ -640,7 +640,8 @@ Pokoj 3 has a 1.50 m front-wall window starting 1.26 m from the inside east
 wall face (`THIRD_ROOM_WINDOW_EAST_CLEARANCE`), leaving 0.50 m to the middle wall.
 Internal jamb dimensions sit closer to the windows than the room-width dimensions.
 The bathroom has a
-0.75 × 0.75 m front-wall window with a 250 mm gap to its right wall. All window tops are at
+0.75 × 0.75 m front-wall window with a 380 mm gap to the inside stairway-wall face
+(`BATHROOM_WINDOW_STAIRWAY_CLEARANCE`). All window tops are at
 `GROUND_WALL_BASE_COURSE_HEIGHT + 2.25 m`; bedroom sills use
 `GROUND_WALL_BASE_COURSE_HEIGHT + 0.875 m`. The west-window sill follows from
 its 0.75 m height. All window frames use white in 3D.

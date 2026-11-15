@@ -339,8 +339,9 @@ UPPER_WINDOW_TOP_HEIGHT = ZAKLADACI_MALTA+19*UPPER_MASONRY_COURSE_HEIGHT
 UPPER_WINDOW_HEIGHT = UPPER_WINDOW_TOP_HEIGHT-UPPER_WINDOW_SILL_HEIGHT
 BATHROOM_WINDOW_WIDTH = 0.75
 BATHROOM_WINDOW_HEIGHT = 0.75
+BATHROOM_WINDOW_STAIRWAY_CLEARANCE = 0.38  # Inside stairway wall face to the opening jamb.
 UPPER_BASIN_SIZE = (0.60, 0.5)
-BATHROOM_WINDOW_CENTER_X = BATHROOM_RIGHT_X-0.25-BATHROOM_WINDOW_WIDTH/2
+BATHROOM_WINDOW_CENTER_X = BATHROOM_RIGHT_X-BATHROOM_WINDOW_STAIRWAY_CLEARANCE-BATHROOM_WINDOW_WIDTH/2
 
 PROJECT_DIR = Path("projekt2")
 DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = PROJECT_DIR / "D1.1. Architektonicko Stavební Řešení"
@@ -3205,34 +3206,89 @@ if "basement" in sys.argv:
         if abs(position[0]-aa_cut.center[0]) < 0.4:
             position = (min(x1-0.45, position[0]+0.45), position[1])
         if room["identifier"] == "S.04":
-            position = (position[0], position[1]-1.0)
+            position = (position[0], position[1]-0.6)
+        elif room["identifier"] == "S.05":
+            position = (position[0]+0.45, position[1])
         drawing1.add_room_annotation(
             position, identifier=room["identifier"], description=room["name"], area=region.area,
         )
         inset = min(0.7, (x1-x0)/3, (y1-y0)/3)
-        width_y = y1-inset if room["identifier"] in ("S.01", "S.02", "S.05") else y0+inset
+        if room["identifier"] in ("S.01", "S.02"):
+            width_y = y1-min(1.0, (y1-y0)/3)
+        elif room["identifier"] == "S.05":
+            width_y = y0+inset
+        else:
+            width_y = y0+min(1.2, (y1-y0)/3)
         depth_x = x1+0.45 if room["identifier"] == "S.05" else x0+inset
-        drawing1.add_dimension(
+        if room["identifier"] == "S.02":
+            depth_x = x0+1.2
+        width_dimension = drawing1.add_dimension(
             start=(x0, width_y), end=(x1, width_y),
             name=f"{room['identifier']} clear width",
         )
+        if room["identifier"] == "S.04":
+            appearance = ifcopenshell.api.pset.add_pset(
+                house.model, product=width_dimension, name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                house.model, pset=appearance, properties={"Classes": "fill-bg"},
+            )
         drawing1.add_dimension(
             start=(depth_x, y0), end=(depth_x, y1),
             name=f"{room['identifier']} clear depth",
         )
     drawing1.add_room_legend()
+    basement_opening_widths = {}
     for opening, offset in (
         (basement_garage_door, 1.15),
         (basement_s01_s03_door, 1.0),
-        (basement_stairway_opening, 0.7),
+        (basement_stairway_opening, -1.0),
         (basement_garden_opening, 1.0),
-        (basement_storage_opening, 0.7),
+        (basement_storage_opening, -0.55),
         (garage_front_opening, +0.40),
         (basement_s05_front_door, -0.7),
     ):
-        drawing1.add_opening_dimension(
+        dimension = drawing1.add_opening_dimension(
             opening, offset=offset, finished_floor_height=BASEMENT_FLOOR_THICKNESS,
         )
+        basement_opening_widths[opening] = ifcopenshell.util.element.get_pset(
+            dimension, "BBIM_OpeningDimension", "Width",
+        )
+    # Dimension actual construction jambs from the clear faces of the adjacent room.
+    for opening, identifier, side, offset in (
+        (garage_front_opening, "S.03", "street", 0.4),
+        (basement_s05_front_door, "S.04", "street", 0.4),
+        (basement_s01_s03_door, "S.03", "garden", -0.4),
+        (basement_garden_opening, "S.05", "garden", -0.4),
+        (basement_garage_door, "S.03", "west", 1.0),
+        (basement_stairway_opening, "S.05", "east", -0.85),
+        (basement_storage_opening, "S.02", "east", -0.4),
+    ):
+        void = opening.FillsVoids[0].RelatingOpeningElement if opening.is_a("IfcDoor") else opening
+        placement = ifcopenshell.util.placement.get_local_placement(void.ObjectPlacement)
+        axis = 0 if side in ("street", "garden") else 1
+        jamb0, jamb1 = sorted(
+            float((placement @ np.array((x, 0., 0., 1.)))[axis])
+            for x in (0., basement_opening_widths[opening])
+        )
+        bounds = basement_rooms_by_id[identifier].bounds
+        face = bounds[{"street": 1, "garden": 3, "east": 0, "west": 2}[side]]
+        labels = ("east", "west") if axis == 0 else ("street", "garden")
+        for first, last, label in (
+            (bounds[axis], jamb0, labels[0]),
+            (jamb1, bounds[axis+2], labels[1]),
+        ):
+            start, end = ((first, face), (last, face)) if axis == 0 else ((face, first), (face, last))
+            dimension = drawing1.add_dimension(
+                start, end, offset=offset,
+                name=f"{identifier} {opening.Name} clearance to {label} wall",
+            )
+            appearance = ifcopenshell.api.pset.add_pset(
+                house.model, product=dimension, name="EPset_Annotation",
+            )
+            ifcopenshell.api.pset.edit_pset(
+                house.model, pset=appearance, properties={"Classes": "fill-bg"},
+            )
     drawing1.add_lintel(basement_garage_door, 1, direction="in")
     drawing1.add_lintel(basement_s01_s03_door, 1, direction="in")
     drawing1.add_lintel(basement_stairway_opening, 1, direction="in")
@@ -3497,7 +3553,7 @@ if "ground" in sys.argv:
     )
     # Resolve jambs from the actual openings, including the reversed back wall.
     room_window_x_bounds = {}
-    for window in (window_pokoj1, window_pokoj2, window_pokoj3):
+    for window in (window_pokoj1, window_pokoj2, window_pokoj3, window_koupelna):
         opening = window.FillsVoids[0].RelatingOpeningElement
         placement = ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
         room_window_x_bounds[window] = sorted(
@@ -3532,6 +3588,21 @@ if "ground" in sys.argv:
         drawing1.add_dimension(
             (x0, room3_opening_wall_y), (x1, room3_opening_wall_y), offset=0.4, name=name,
         )
+    bathroom_window_x0, bathroom_window_x1 = room_window_x_bounds[window_koupelna]
+    for x0, x1, name in (
+        (BATHROOM_LEFT_X, bathroom_window_x0, "Bathroom window to room 3 wall"),
+        (bathroom_window_x1, BATHROOM_RIGHT_X, "Bathroom window to stairway wall"),
+    ):
+        dimension = drawing1.add_dimension(
+            (x0, BWT), (x1, BWT), offset=0.4, name=name,
+        )
+        # Keep the values readable over the shower and hot-water tank labels.
+        appearance = ifcopenshell.api.pset.add_pset(
+            house.model, product=dimension, name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            house.model, pset=appearance, properties={"Classes": "fill-bg"},
+        )
     # Clear width and depth of Pokoj 3's narrowed garden-side end.
     drawing1.add_dimension(
         start=(BWT, THIRD_ROOM_STEP_Y+0.1),
@@ -3563,8 +3634,8 @@ if "ground" in sys.argv:
         name="Hallway clear depth",
     )
     drawing1.add_dimension(
-        start=(BATHROOM_LEFT_X, BWT+0.5),
-        end=(BATHROOM_RIGHT_X, BWT+0.5),
+        start=(BATHROOM_LEFT_X, BWT+1.0),
+        end=(BATHROOM_RIGHT_X, BWT+1.0),
         name="Bathroom clear width",
     )
 
@@ -3990,6 +4061,13 @@ if "upper" in sys.argv:
             window_area=window_area(*upper_room_windows[room.room_id]),
         )
     drawing1.add_room_legend()
+    # Keep numbers consistent with equal-width openings on the ground floor.
+    drawing1.add_lintel(living_room_door, 2, position="after", direction="in")
+    drawing1.add_lintel(living_room_opening, 6, direction="in")
+    drawing1.add_lintel(window_living_room_front, 4)
+    for index, window in enumerate(windows_living_room_back):
+        drawing1.add_lintel(window, 4, position="before" if index == 0 else "after")
+    drawing1.add_lintel_legend()
     drawing1.add_opening_dimension(
         living_room_door, offset=1.15, finished_floor_height=UPPER_FLOOR_THICKNESS,
     )
@@ -3998,17 +4076,17 @@ if "upper" in sys.argv:
     )
     drawing1.add_dimension(
         start=(BWT, living_room_back_face_y),
-        end=(BWT+LIVING_ROOM_OPENING_EAST_CLEARANCE, living_room_back_face_y), offset=0.6,
+        end=(BWT+LIVING_ROOM_OPENING_EAST_CLEARANCE, living_room_back_face_y), offset=1.0,
         name="Living-room wide opening clearance from east wall",
     )
     drawing1.add_dimension(
         start=(LIVING_ROOM_OPENING_END_X, living_room_back_face_y),
-        end=(living_room_door_opening_x, living_room_back_face_y), offset=0.6,
+        end=(living_room_door_opening_x, living_room_back_face_y), offset=1.0,
         name="VPC wall segment between living-room openings",
     )
     drawing1.add_dimension(
         start=(living_room_door_opening_x+ROOM_DOOR_OPENING_WIDTH, living_room_back_face_y),
-        end=(HOUSE_WIDTH-BWT, living_room_back_face_y), offset=0.6,
+        end=(HOUSE_WIDTH-BWT, living_room_back_face_y), offset=1.0,
         name="Living-room door opening clearance from west wall",
     )
     for window, offset in (
@@ -4034,7 +4112,7 @@ if "upper" in sys.argv:
             end=(HOUSE_WIDTH-BWT, STAIR_LOWER_START_Y), offset=0.35,
             name="Stairway clearance to west wall",
         )
-    drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-0.7)
+    drawing1.add_dimension(start=(0, 0), end=(HOUSE_WIDTH, 0), offset=-1.75)
     drawing1.add_dimension(start=(0, 0), end=(0, HOUSE_DEPTH), offset=0.7)
     drawing1.add_dimension(
         start=(BWT, HOUSE_DEPTH-BWT-0.95),
