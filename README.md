@@ -233,9 +233,17 @@ and `D1.1.14. Strop nad suterénem - podrobný plán.pdf`
 beams, perimeter insulation, dimensions, schedule, notes and AA/BB markers.
 Both targets can be generated in one command. The existing `ceiling` target
 remains the ceiling above 1.NP; other drawing PDF numbers are unchanged.
-The door between S.01 and S.03 is centred on their shared wall segment and
+The door between S.01 and S.03 starts 1.25 m from the inner east wall face and
 opens into S.01. It uses the other basement door's 900 mm leaf and 1000 mm
 construction opening, with opening dimensions and a lintel tag in the plan.
+The S.01–S.02 opening is 1.25 m from the inner garden wall face; the
+S.02–S.05 opening is 0.50 m from the inner west wall face. These clearances
+are measured to the nearest construction jamb.
+The S.04–S.05 opening starts 2.75 m from the inner front wall face, and the
+S.03–S.04 door starts 1.00 m from that face. All five positions follow their
+named `BASEMENT_Sxx_Sxx_*_CLEARANCE` settings in `house2.py`.
+The garage opening is 2.25 m wide (`GARAGE_FRONT_OPENING_WIDTH`), with
+0.50 m to the inner east wall face and 0.45 m to the inner west room wall.
 S.05 also has a front-wall door centred on that room, with the same leaf/opening
 widths, finished-floor sill and 250 mm masonry band below the ceiling.
 It opens inward. The water meter remains in S.04, 50 mm from its side wall.
@@ -402,8 +410,10 @@ course; the bathroom/hallway partition is non-load-bearing SDK without a base
 course or a ground-ceiling ring beam above it. Its room-facing surface and
 door opening position along X follow the same bathroom dimensions.
 A matching unfilled opening spans each bathroom side wall across the hallway,
-running `HALLWAY_OPENING_LENGTH = 1.25 m` from the garden-room wall towards
-the street. The bathroom's horizontal SDK partition keeps its own position.
+running 1.755 m from the garden-room wall towards the street, controlled by
+`HALLWAY_OPENING_LENGTH` and `THIRD_ROOM_OPENING_LENGTH`. Their street-side
+ends set the bathroom's horizontal SDK partition and room 3's return: the clear
+bathroom depth is 3.030 m and room 3's narrow section is 1.855 m deep.
 Both openings stop `HALLWAY_OPENING_TOP_GAP = 0.25 m` below the ceiling
 underside. The left wall continues above its opening and its basement wall
 and footing follow the full extended wall length. The hallway's
@@ -411,12 +421,17 @@ continuous floor extends through it into the stair approach, follows room
 3's stepped wall and excludes both stair-flight footprints. Its room area
 and legend update from that same outline. Floor build-up still reaches the
 bathroom partition and excludes the new solid side-wall segment below the opening.
-The bathroom uses a two-column layout read from garden to street:
-door/toilet, clear space/basin, shower/hot-water tank. The 900 mm door leaf
+The bathroom keeps the shower at the lower-left/street corner. Along the right
+wall, the WC, basin and hot-water tank are centred in consecutive 900, 800 and
+800 mm zones measured from the bathroom's inside garden partition towards the
+street. `BATHROOM_TOILET_ZONE_DEPTH`, `BATHROOM_BASIN_ZONE_DEPTH` and
+`BATHROOM_TUV_ZONE_DEPTH` control these zones. The 900 mm door leaf
 has a 1000 mm opening 125 mm from room 3's wall and swings into the
 bathroom. The WC and basin face inward from the stairway wall. The shower is
-900 × 900 mm. The bottom-right cell contains the 700 × 700 × 2000 mm
-hot-water tank swapped from upstairs, with a 50 mm gap from the front wall.
+900 × 900 mm. The 700 × 700 × 2000 mm hot-water tank sits at the centre of
+the third zone, 100 mm from the inner stairway wall face. The
+800 × 500 × 900 mm hydrobox is on the ground floor, centred under the bathroom
+window, with a 50 mm gap to the front wall and its 800 mm side parallel to it.
 The 600 × 550 × 900 mm water-meter box is in the basement, at its former
 ground-floor X/Y position and on the basement finished floor. Fixtures start at the
 finished floor, with the basin rim at 850 mm above it.
@@ -843,12 +858,11 @@ It faces into the hallway (-X, `rotation=-90`).
 its top remains 850 mm above the finished floor. The technical room's front end contains the
 1000 × 500 × 1500 mm recuperation unit against the front wall, centred in Technika.
 The toilet faces the garden and stands gardenward of the first west-purlin
-post; `upper_toilet_center` controls its placement. The 800 × 500 × 900 mm
-hydrobox swapped from downstairs stands beside the living-room wall, with
-a 50 mm wall gap, centred in Y between the recuperation unit and toilet.
+post; `upper_toilet_center` controls its placement. The hydrobox has moved
+to the ground-floor bathroom under the window.
 Equipment starts at the finished upper floor;
 `upper_fixture_wall_gap` controls its wall spacing (currently 50 mm).
-The Technika label sits between the recuperation unit and hydrobox; Zachod has
+The Technika label sits at the room's representative point; Zachod has
 its own label behind the toilet.
 When a plan cuts below a door's raised swing symbol, export lowers only
 the 2D symbol just beneath the cut. This keeps low upper-floor cuts from

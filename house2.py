@@ -49,12 +49,18 @@ STAIRWAY_WIDTH = 2.26  # Clear width beside the west exterior wall.
 STAIRWAY_WALL_X = HOUSE_WIDTH-BWT-STAIRWAY_WIDTH
 BATHROOM_LEFT_X = THIRD_ROOM_WALL_X
 BATHROOM_RIGHT_X = STAIRWAY_WALL_X-INNER_BWT
-HALLWAY_OPENING_LENGTH = 1.75  # From the garden-room wall towards the street.
+HALLWAY_OPENING_LENGTH = 1.755  # From the garden-room wall towards the street.
 STAIRWAY_OPENING_START_Y = GARDEN_ROOMS_WALL_Y-HALLWAY_OPENING_LENGTH
 STAIRWAY_OPENING_FRONT_Y = STAIRWAY_OPENING_START_Y
 BATHROOM_PARTITION_Y = STAIRWAY_OPENING_FRONT_Y-DRY_WALL_WIDTH
 BATHROOM_DEPTH = BATHROOM_PARTITION_Y-BWT
-THIRD_ROOM_OPENING_LENGTH = 1.75  # Room 3 to hallway; independent of the stairway opening.
+BATHROOM_TOILET_ZONE_DEPTH = 0.90
+BATHROOM_BASIN_ZONE_DEPTH = 0.80
+BATHROOM_TUV_ZONE_DEPTH = 0.80
+BATHROOM_TUV_STAIRWAY_CLEARANCE = 0.10
+BATHROOM_HYDROBOX_WALL_GAP = 0.05
+HYDROBOX_SIZE = (0.8, 0.5, 0.9)
+THIRD_ROOM_OPENING_LENGTH = 1.755  # Room 3 to hallway; independent of the stairway opening.
 THIRD_ROOM_OPENING_START_Y = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_OPENING_LENGTH
 THIRD_ROOM_STEP_Y = THIRD_ROOM_OPENING_START_Y-DRY_WALL_WIDTH  # Hallway face meets the opening end.
 THIRD_ROOM_NARROW_DEPTH = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_STEP_Y
@@ -139,8 +145,14 @@ BASEMENT_FLOOR_THICKNESS = CEMFLOW_AND_FINISH_THICKNESS
 BASEMENT_FINISHED_FLOOR_HEIGHT = BASEMENT_FLOOR_START+BASEMENT_FLOOR_THICKNESS
 BASEMENT_TO_GROUND_RISE = GROUND_FLOOR_THICKNESS-BASEMENT_FINISHED_FLOOR_HEIGHT
 BASEMENT_OPENING_WIDTH = 1.0
+BASEMENT_S01_S02_GARDEN_CLEARANCE = 1.25
+BASEMENT_S02_S05_WEST_CLEARANCE = 0.50
+BASEMENT_S01_S03_EAST_CLEARANCE = 1.25
+BASEMENT_S04_S05_FRONT_CLEARANCE = 2.75
+BASEMENT_S03_S04_FRONT_CLEARANCE = 1.00
 BASEMENT_OPENING_TOP_HEIGHT = BASEMENT_WALL_HEIGHT-0.25
-GARAGE_FRONT_OPENING_SIDE_CLEARANCE = 0.50
+GARAGE_FRONT_OPENING_SIDE_CLEARANCE = 0.50  # From the inner east wall face.
+GARAGE_FRONT_OPENING_WIDTH = 2.25
 GARAGE_FRONT_OPENING_TOP_HEIGHT = BASEMENT_WALL_HEIGHT-0.20
 BASEMENT_SLAB_BOTTOM_Z = BASEMENT_FLOOR_START-BASEMENT_SLAB_THICKNESS
 PERIMETER_BOTTOM_Z = BASEMENT_SLAB_BOTTOM_Z  # Top of the foundation footings.
@@ -861,38 +873,37 @@ basement_s05_front_door = wall_basement_front.add_door(
 
 basement_garage_door = wall_basement_s03_s04.add_door(
     name="Basement door S.03 - S.04",
-    at=wall_basement_s03_s04.start[1]+1.25,
+    at=basement_rooms_by_id["S.03"].bounds[1]+BASEMENT_S03_S04_FRONT_CLEARANCE-wall_basement_s03_s04.start[1],
     width=0.9, opening_width=BASEMENT_OPENING_WIDTH,
     height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
     operation="SINGLE_SWING_RIGHT",
 	reverse_swing=True
 )
 basement_s01_s03_start_x = max(basement_rooms_by_id["S.01"].bounds[0], basement_rooms_by_id["S.03"].bounds[0])
-basement_s01_s03_end_x = min(basement_rooms_by_id["S.01"].bounds[2], basement_rooms_by_id["S.03"].bounds[2])
 basement_s01_s03_door = wall_basement_garden_rooms.add_door(
     name="Basement door S.01 - S.03",
-    at=(basement_s01_s03_start_x+basement_s01_s03_end_x-BASEMENT_OPENING_WIDTH)/2-wall_basement_garden_rooms.start[0],
+    at=basement_s01_s03_start_x+BASEMENT_S01_S03_EAST_CLEARANCE-wall_basement_garden_rooms.start[0],
     width=0.9, opening_width=BASEMENT_OPENING_WIDTH,
     height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
     operation="SINGLE_SWING_LEFT",
 )
 basement_stairway_opening = wall_basement_s04_s05.add_opening(
     name="Basement opening S.04 - S.05",
-    at=basement_garden_wall_inner_y-1.0-BASEMENT_OPENING_WIDTH-wall_basement_s04_s05.start[1],
+    at=basement_rooms_by_id["S.05"].bounds[1]+BASEMENT_S04_S05_FRONT_CLEARANCE-wall_basement_s04_s05.start[1],
     width=BASEMENT_OPENING_WIDTH,
     height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
 )
 basement_stair_room_x0, _, basement_stair_room_x1, _ = basement_rooms_by_id["S.05"].bounds
 basement_garden_opening = wall_basement_garden_rooms.add_opening(
     name="Basement opening S.02 - S.05",
-    at=(basement_stair_room_x0+basement_stair_room_x1-BASEMENT_OPENING_WIDTH)/2-wall_basement_garden_rooms.start[0],
+    at=basement_stair_room_x1-BASEMENT_S02_S05_WEST_CLEARANCE-BASEMENT_OPENING_WIDTH-wall_basement_garden_rooms.start[0],
     width=BASEMENT_OPENING_WIDTH,
     height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
 )
 _, basement_garden_room_y0, _, basement_garden_room_y1 = basement_rooms_by_id["S.01"].bounds
 basement_storage_opening = wall_basement_s01_s02.add_opening(
     name="Basement opening S.01 - S.02",
-    at=(basement_garden_room_y0+basement_garden_room_y1-BASEMENT_OPENING_WIDTH)/2-wall_basement_s01_s02.start[1],
+    at=basement_garden_room_y1-BASEMENT_S01_S02_GARDEN_CLEARANCE-BASEMENT_OPENING_WIDTH-wall_basement_s01_s02.start[1],
     width=BASEMENT_OPENING_WIDTH,
     height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
 )
@@ -900,7 +911,7 @@ basement_garage_x0, _, basement_garage_x1, _ = basement_rooms_by_id["S.03"].boun
 garage_front_opening = wall_basement_front.add_opening(
     name="Garage front opening",
     at=basement_garage_x0+GARAGE_FRONT_OPENING_SIDE_CLEARANCE-wall_basement_front.start[0],
-    width=basement_garage_x1-basement_garage_x0-2*GARAGE_FRONT_OPENING_SIDE_CLEARANCE,
+    width=GARAGE_FRONT_OPENING_WIDTH,
     height=GARAGE_FRONT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
 )
 garage_front_door = wall_basement_front.add_garage_door(
@@ -1079,18 +1090,21 @@ rozvadec = ground.furniture(
     start_height=GROUND_FLOOR_THICKNESS+ROZVADEC_BOTTOM_ABOVE_FLOOR,
 )
 
-# Bathroom grid, garden to street: door/WC, clear space/basin, shower/services.
+# Right-hand fixtures occupy consecutive zones from the inside garden partition.
 bathroom_right_x = BATHROOM_RIGHT_X
-bathroom_row_depth = BATHROOM_DEPTH/3
+bathroom_toilet_center_y = BATHROOM_PARTITION_Y-BATHROOM_TOILET_ZONE_DEPTH/2
+bathroom_basin_center_y = BATHROOM_PARTITION_Y-BATHROOM_TOILET_ZONE_DEPTH-BATHROOM_BASIN_ZONE_DEPTH/2
+bathroom_tuv_center_y = (BATHROOM_PARTITION_Y-BATHROOM_TOILET_ZONE_DEPTH
+                         -BATHROOM_BASIN_ZONE_DEPTH-BATHROOM_TUV_ZONE_DEPTH/2)
 bathroom_toilet = ground.asset(
     "WC", asset="toilet_without_cistern",
-    center=(bathroom_right_x-0.53/2-0.2, BWT+2.5*bathroom_row_depth),
+    center=(bathroom_right_x-0.53/2-0.2, bathroom_toilet_center_y),
     start_height=GROUND_FLOOR_THICKNESS,
     rotation=-90,
 )
 bathroom_basin = ground.asset(
     "Umyvadlo", asset="basin_large",
-    center=(bathroom_right_x-0.55/2-0.1, BWT+1.5*bathroom_row_depth),
+    center=(bathroom_right_x-0.55/2-0.1, bathroom_basin_center_y),
     start_height=GROUND_FLOOR_THICKNESS+0.85-0.25,
     rotation=-90,
 )
@@ -1100,13 +1114,22 @@ bathroom_shower = ground.asset(
     start_height=GROUND_FLOOR_THICKNESS+0.03,
     rotation=180,
 )
-bathroom_services_center_x = bathroom_right_x-(bathroom_right_x-BATHROOM_LEFT_X)/4
+bathroom_services_center_x = bathroom_right_x-BATHROOM_TUV_STAIRWAY_CLEARANCE-0.7/2
 bathroom_water_heater = ground.furniture(
     "Zásobník\nTUV", kind="USERDEFINED",
     size=(0.7, 0.7, 2.0),
-    center=(bathroom_services_center_x, BWT+0.05+0.7/2),
+    center=(bathroom_services_center_x, bathroom_tuv_center_y),
     start_height=GROUND_FLOOR_THICKNESS+0.03,
     color="#ffffff",
+)
+bathroom_hydrobox_center = (
+    BATHROOM_WINDOW_CENTER_X,
+    BWT+BATHROOM_HYDROBOX_WALL_GAP+HYDROBOX_SIZE[1]/2,
+)
+bathroom_hydrobox = ground.furniture(
+    "Hydro-\nbox", kind="USERDEFINED", size=HYDROBOX_SIZE, color="#ffffff",
+    center=bathroom_hydrobox_center,
+    start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 basement_water_meter = basement.furniture(
     "Vodo-\nměr", kind="USERDEFINED",
@@ -2387,17 +2410,6 @@ upper_toilet = upper.asset(
     rotation=180,
     start_height=UPPER_FLOOR_THICKNESS,
 )
-upper_hydrobox_center = (
-    upper_technical_left_x+0.3,
-    (upper_recuperation_center[1]+0.5/2+upper_toilet_center[1]-0.53/2)/2,
-)
-upper_hydrobox = upper.furniture(
-    "Hydro-\nbox", kind="USERDEFINED", size=(0.8, 0.5, 0.9), color="#ffffff",
-    center=upper_hydrobox_center,
-    start_height=UPPER_FLOOR_THICKNESS,
-	rotation=90,
-)
-
 # Kitchen on the living-room side of the vertical SDK wall, toward the front.
 kitchen_wall_face_x = wall_living_room_side_u.start[0]-(
     wall_living_room_side_u.body_offset+wall_living_room_side_u.thickness
@@ -3208,15 +3220,18 @@ if "basement" in sys.argv:
         if room["identifier"] == "S.04":
             position = (position[0], position[1]-0.6)
         elif room["identifier"] == "S.05":
-            position = (position[0]+0.45, position[1])
+            position = (position[0]+0.45, position[1]-1.0)
         drawing1.add_room_annotation(
             position, identifier=room["identifier"], description=room["name"], area=region.area,
         )
         inset = min(0.7, (x1-x0)/3, (y1-y0)/3)
         if room["identifier"] in ("S.01", "S.02"):
-            width_y = y1-min(1.0, (y1-y0)/3)
+            width_inset = 1.15 if room["identifier"] == "S.01" else 1.0
+            width_y = y1-min(width_inset, (y1-y0)/3)
         elif room["identifier"] == "S.05":
             width_y = y0+inset
+        elif room["identifier"] == "S.03":
+            width_y = y0+min(0.9, (y1-y0)/3)
         else:
             width_y = y0+min(1.2, (y1-y0)/3)
         depth_x = x1+0.45 if room["identifier"] == "S.05" else x0+inset
@@ -3236,6 +3251,7 @@ if "basement" in sys.argv:
         drawing1.add_dimension(
             start=(depth_x, y0), end=(depth_x, y1),
             name=f"{room['identifier']} clear depth",
+			offset=0.7
         )
     drawing1.add_room_legend()
     basement_opening_widths = {}
@@ -3289,7 +3305,7 @@ if "basement" in sys.argv:
             ifcopenshell.api.pset.edit_pset(
                 house.model, pset=appearance, properties={"Classes": "fill-bg"},
             )
-    drawing1.add_lintel(basement_garage_door, 1, direction="in")
+    drawing1.add_lintel(basement_garage_door, 1, position="after", direction="in")
     drawing1.add_lintel(basement_s01_s03_door, 1, direction="in")
     drawing1.add_lintel(basement_stairway_opening, 1, direction="in")
     drawing1.add_lintel(basement_garden_opening, 1, direction="in")
@@ -3494,8 +3510,8 @@ if "ground" in sys.argv:
     drawing1.add_opening_dimension(
         pokoj2_door, offset=1.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
     )
-    drawing1.add_opening_dimension(
-        pokoj3_door, offset=-0.25, finished_floor_height=GROUND_FLOOR_THICKNESS,
+    room3_door_dimension = drawing1.add_opening_dimension(
+        pokoj3_door, offset=1.0, finished_floor_height=GROUND_FLOOR_THICKNESS,
     )
     drawing1.add_opening_dimension(
         bathroom_door, offset=0.4, finished_floor_height=GROUND_FLOOR_THICKNESS,
@@ -3608,11 +3624,18 @@ if "ground" in sys.argv:
         start=(BWT, THIRD_ROOM_STEP_Y+0.1),
         end=(THIRD_ROOM_NARROW_WALL_X-DRY_WALL_WIDTH, THIRD_ROOM_STEP_Y+0.1),
     )
-    drawing1.add_dimension(
+    room3_narrow_depth_dimension = drawing1.add_dimension(
         start=(THIRD_ROOM_NARROW_WALL_X-DRY_WALL_WIDTH, THIRD_ROOM_STEP_Y),
         end=(THIRD_ROOM_NARROW_WALL_X-DRY_WALL_WIDTH, GARDEN_ROOMS_WALL_Y),
-		offset=1.05
+        offset=1.5, name="Pokoj 3 narrow section depth",
     )
+    for dimension in (room3_door_dimension, room3_narrow_depth_dimension):
+        appearance = ifcopenshell.api.pset.add_pset(
+            house.model, product=dimension, name="EPset_Annotation",
+        )
+        ifcopenshell.api.pset.edit_pset(
+            house.model, pset=appearance, properties={"Classes": "fill-bg"},
+        )
     # hloubka tretiho pokoje
     drawing1.add_dimension(
         start=(BWT+0.5, BWT), end=(BWT+0.5, GARDEN_ROOMS_WALL_Y),
@@ -4049,9 +4072,6 @@ if "upper" in sys.argv:
         elif room == upper_hallway:
             position = (STAIR_LEFT_X+0.5,
                         (upper_toilet_end_back_y+LIVING_ROOM_WALL_FRONT_Y)/2)
-        elif room == upper_technical_room:
-            position = (upper_technical_center_x,
-                        (upper_recuperation_center[1]+0.25+upper_hydrobox_center[1]-0.5/2)/2)
         elif room == upper_toilet_room:
             position = ((upper_technical_left_x+upper_technical_right_x)/2,
                         (upper_toilet_center[1]-0.1))
