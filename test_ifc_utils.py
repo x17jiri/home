@@ -67,6 +67,8 @@ from ifc_utils import (
     _postprocess_note_overlays,
     _postprocess_cut_symbol_overlays,
     _postprocess_change_floor_symbol_overlays,
+    _postprocess_foreground_annotations,
+    _postprocess_electrical_symbol_overlays,
     _postprocess_dimension_overlays,
     _postprocess_floor_corner_overlays,
     _postprocess_elevation_wall_insulation_depth,
@@ -2059,6 +2061,77 @@ class DimensionOverlayTests(unittest.TestCase):
             path.write_text(source, encoding="utf-8")
             _postprocess_dimension_overlays(path)
             self.assertEqual(path.read_text(encoding="utf-8"), source)
+
+
+class ForegroundAnnotationTests(unittest.TestCase):
+    def test_all_electrical_symbol_parts_are_above_masks_and_cables(self):
+        source = ('<svg><g class="section">'
+                  '<path id="light-ring" class="light-symbol" d="M0 0L1 1"/>'
+                  '<line id="light-cross" class="light-symbol" x1="0" y1="1" x2="1" y2="0"/>'
+                  '<circle id="switch" class="switch-symbol" cx="2" cy="2" r="1"/>'
+                  '<polyline id="socket" class="socket-symbol" points="3,3 4,4"/>'
+                  '<polygon id="mask" class="door-overhead-mask" points="0,0 5,0 5,5"/>'
+                  '</g><g class="drawing-foreground-layer"><line id="cable" x1="0" '
+                  'y1="0" x2="5" y2="5"/></g></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"symbols.svg"
+            path.write_text(source)
+            _postprocess_electrical_symbol_overlays(path)
+            result = path.read_text()
+            root = ET.fromstring(result)
+            overlay = root.find('g[@class="electrical-symbol-overlays"]')
+            self.assertEqual(list(root)[-1], overlay)
+            self.assertEqual([e.get("id") for e in overlay], ["light-ring", "light-cross", "switch", "socket"])
+            for before, after in zip(list(ET.fromstring(source)[0])[:4], overlay):
+                self.assertEqual(before.attrib, after.attrib)
+                self.assertEqual(result.count(f'id="{after.get("id")}"'), 1)
+            self.assertLess(result.index('id="mask"'), result.index('id="light-ring"'))
+            self.assertLess(result.index('id="cable"'), result.index('id="light-ring"'))
+            _postprocess_electrical_symbol_overlays(path)
+            self.assertEqual(path.read_text(), result)
+            plain = '<svg><path id="wall" d="M0 0L1 1"/></svg>'
+            path.write_text(plain)
+            _postprocess_electrical_symbol_overlays(path)
+            self.assertEqual(path.read_text(), plain)
+
+    def test_cable_is_above_opening_masks_without_changing_its_geometry(self):
+        source = ('<svg><defs/>'
+                  '<g class="section"><line id="cable" class="drawing-foreground drawing-line" '
+                  'transform="translate(1,2)" x1="0" y1="0" x2="10" y2="10"/>'
+                  '<line id="ordinary" x1="0" y1="1" x2="10" y2="1"/>'
+                  '<polygon id="mask" class="door-overhead-mask" points="4,4 6,4 6,6 4,6"/>'
+                  '</g></svg>')
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"plan.svg"
+            path.write_text(source)
+            _postprocess_foreground_annotations(path)
+            result = path.read_text()
+            root = ET.fromstring(result)
+            overlay = root.find('g[@class="drawing-foreground-layer"]')
+            self.assertEqual(list(root)[-1], overlay)
+            self.assertEqual(overlay.find('line').attrib, ET.fromstring(source).find('.//line').attrib)
+            self.assertLess(result.index('id="mask"'), result.index('id="cable"'))
+            self.assertLess(result.index('id="ordinary"'), result.index('id="mask"'))
+            self.assertEqual(result.count('id="cable"'), 1)
+            _postprocess_foreground_annotations(path)
+            self.assertEqual(path.read_text(), result)
+            path.write_text(source.replace('drawing-foreground ', ''))
+            _postprocess_foreground_annotations(path)
+            self.assertEqual(path.read_text(), source.replace('drawing-foreground ', ''))
+
+    def test_foreground_opt_in_includes_the_route_and_its_endpoint_symbols(self):
+        house = House("Foreground")
+        drawing = house.add_drawing("Plan", 0, 0, 2, 5)
+        ordinary = drawing.add_poly_line([(0, 0), (1, 1)])
+        route = drawing.add_poly_line([(0, 0), (1, 1)], foreground=True, arrow_end=True, circle_start=True)
+        self.assertNotIn("drawing-foreground", ifcopenshell.util.element.get_pset(
+            ordinary, "EPset_Annotation", "Classes"))
+        self.assertTrue(ifcopenshell.util.element.get_pset(route, "BBIM_DrawingPolyLine", "Foreground"))
+        companion = next(a for a in house.model.by_type("IfcAnnotation")
+                         if ifcopenshell.util.element.get_pset(a, "BBIM_DrawingPolyLineSymbols", "Polyline") == route.GlobalId)
+        for annotation in (route, companion):
+            self.assertIn("drawing-foreground", ifcopenshell.util.element.get_pset(
+                annotation, "EPset_Annotation", "Classes"))
 
 
 class ChangeFloorSymbolTests(unittest.TestCase):

@@ -4553,6 +4553,63 @@ def _postprocess_cut_symbol_overlays(svg_path: Path) -> None:
     svg_path.write_text(updated[:closing] + overlay + updated[closing:], encoding="utf-8")
 
 
+def _postprocess_foreground_annotations(svg_path: Path) -> None:
+    """Keep explicitly marked native route primitives above model fills and opening masks."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if "drawing-foreground" not in svg or 'class="drawing-foreground-layer"' in svg:
+        return
+    elements: list[str] = []
+
+    def collect(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = re.search(r'\bclass="([^"]*)"', element)
+        if not classes or "drawing-foreground" not in classes[1].split():
+            return element
+        elements.append(element.strip())
+        return ""
+
+    updated = re.sub(
+        r"<(?:line|polyline|path|circle|ellipse|polygon)\b[^>]*"
+        r"(?:/>|>\s*</(?:line|polyline|path|circle|ellipse|polygon)>)",
+        collect, svg, flags=re.DOTALL,
+    )
+    closing = updated.rfind("</svg>")
+    if not elements or closing < 0:
+        return
+    overlay = ('  <g class="drawing-foreground-layer">\n'
+               + "\n".join(elements) + "\n  </g>\n")
+    svg_path.write_text(updated[:closing]+overlay+updated[closing:], encoding="utf-8")
+
+
+def _postprocess_electrical_symbol_overlays(svg_path: Path) -> None:
+    """Paint complete light, switch and socket symbols above model masks and cable routes."""
+    svg = svg_path.read_text(encoding="utf-8")
+    if 'class="electrical-symbol-overlays"' in svg:
+        return
+    symbol_classes = {"light-symbol", "switch-symbol", "socket-symbol"}
+    elements: list[str] = []
+
+    def collect(match: re.Match[str]) -> str:
+        element = match.group(0)
+        classes = re.search(r'\bclass="([^"]*)"', element)
+        if not classes or not symbol_classes.intersection(classes[1].split()):
+            return element
+        elements.append(element.strip())
+        return ""
+
+    updated = re.sub(
+        r"<(?:line|polyline|path|circle|ellipse|polygon)\b[^>]*"
+        r"(?:/>|>\s*</(?:line|polyline|path|circle|ellipse|polygon)>)",
+        collect, svg, flags=re.DOTALL,
+    )
+    closing = updated.rfind("</svg>")
+    if not elements or closing < 0:
+        return
+    overlay = ('  <g class="electrical-symbol-overlays">\n'
+               + "\n".join(elements) + "\n  </g>\n")
+    svg_path.write_text(updated[:closing]+overlay+updated[closing:], encoding="utf-8")
+
+
 def _postprocess_change_floor_symbol_overlays(svg_path: Path) -> None:
     """Move complete floor-change symbols above model geometry and masks."""
     svg = svg_path.read_text(encoding="utf-8")
@@ -6189,10 +6246,12 @@ def _render_existing_drawing(
             absolute_output,
             drawing_properties or {},
         )
+    _postprocess_foreground_annotations(absolute_output)
     _postprocess_change_floor_symbol_overlays(absolute_output)
     _postprocess_roof_batting_overlays(absolute_output)
     _postprocess_dimension_overlays(absolute_output)
     _postprocess_floor_corner_overlays(absolute_output)
+    _postprocess_electrical_symbol_overlays(absolute_output)
     _postprocess_drawing_line_colors(absolute_output)
     resolved_title = title if title is not None else Path(pdf if pdf is not None else output_path).stem
     scale = (drawing_properties or {}).get("Scale")
@@ -11580,6 +11639,7 @@ class Drawing:
         line_width: Number = 0.1,
         arrow_end: bool = False,
         circle_start: bool = False,
+        foreground: bool = False,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Draw a connected path through two or more 2D model points.
@@ -11595,7 +11655,8 @@ class Drawing:
         color and width but remain solid even for dashed routes. Returns the
         route LINEWORK annotation, suitable for add_line_legend(); endpoint
         symbols use one companion annotation in the same drawing, with no
-        physical 3D geometry.
+        physical 3D geometry. foreground=True keeps the path and its endpoint
+        symbols above model fills and opening masks in the rendered drawing.
         """
         if isinstance(points, (str, bytes)):
             raise TypeError("points must be a sequence of 2D points")
@@ -11610,6 +11671,8 @@ class Drawing:
             raise ValueError("consecutive points must be different")
         if not isinstance(arrow_end, bool) or not isinstance(circle_start, bool):
             raise TypeError("arrow_end and circle_start must be booleans")
+        if not isinstance(foreground, bool):
+            raise TypeError("foreground must be a boolean")
         style, color, classes = _drawing_line_appearance(style, color)
         line_width, width_class = _drawing_line_width(line_width)
         classes += f" {width_class}"
@@ -11650,18 +11713,23 @@ class Drawing:
         curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(path), None, False)
                   for path in paths]
         self._poly_line_count += 1
+        if foreground:
+            classes += " drawing-foreground"
         line = self._add_primitive_annotation(
             line_name or f"{self.name} Poly Line {self._poly_line_count}",
             "LINEWORK", placement, [model.createIfcGeometricCurveSet(curves)], classes,
             "BBIM_DrawingPolyLine", {"Points": json.dumps(points), "Style": style,
                                      "Color": color, "LineWidth": line_width,
-                                     "ArrowEnd": arrow_end, "CircleStart": circle_start},
+                                     "ArrowEnd": arrow_end, "CircleStart": circle_start,
+                                     "Foreground": foreground},
         )
         if symbols:
             symbol_curves = [model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(
                                  [(float(x), float(y)) for x, y in path]), None, False)
                              for path in symbols]
             _, _, solid_classes = _drawing_line_appearance("solid", color)
+            if foreground:
+                solid_classes += " drawing-foreground"
             self._add_primitive_annotation(
                 f"{line.Name} Endpoint Symbols", "LINEWORK", placement,
                 [model.createIfcGeometricCurveSet(symbol_curves)],

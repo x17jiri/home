@@ -773,7 +773,8 @@ Their SVGs are in `projekt2/`; PDFs use
 upper 2 and basement 3. Blue circle-with-X light symbols sit near room/area
 centroids, nudged to maintain 250 mm clearance from the room boundary where
 needed. Room IDs are offset from the lights, and the symbol legend uses
-the original electrical plans' `Světlo` sample.
+the original electrical plans' `Světlo` sample. All three electrical plans
+include a room legend with room IDs, names and areas above the electrical legends.
 `ELECTRICAL_LIGHT_OFFSETS` allows room-specific offsets. Room 1.01 has two lights,
 centred on its clear areas below and above the middle VPC wall. Room 1.02 has
 no light. The upper plan adds a separate
@@ -781,12 +782,168 @@ light centred over the middle stair landing, with both flights and the landing
 shown for context. The ground-floor plan adds an outside landing light 250 mm
 from the finished west facade, aligned in Y with the entrance opening's centre.
 The plans contain 5 basement, 6 ground-floor and 5 upper-floor lights.
-Two thick black routes leave the ground-floor rozvaděč and reach separate
-risers in front of the chimney: one to the basement and one to the upper floor.
-`electrical_trunk_layout()` shares their coordinates with receiving symbols
-on the other floors. The solid 0.70 mm line is labelled `Sdružená trasa kabelů`
-in each plan's line legend. Both routes run diagonally in a straight line from
-the board to their risers; connection positions are separated by 150 mm in X.
+Two thick black routes leave the ground-floor rozvaděč. The basement bundle
+runs diagonally to its riser in front of the chimney. The upstairs bundle leaves
+at 12:00 and runs straight to the chimney centre's Y level, then rises. Its
+matching upper-floor receiving point is in the hallway in front of bathroom
+door 1.04. `electrical_trunk_layout()` shares the riser coordinates between floors.
+The solid 0.70 mm line is labelled `Sdružená trasa kabelů` in each plan's legend.
+The basement has one shared blue socket circuit. From the incoming point it
+runs down/left at 45 degrees to the S.04 face of the S.03–S.04 wall, down to
+the front wall, then counter-clockwise along the front, west, garden and east
+walls. Ten double sockets serve two per room: S.04 on the dividing wall,
+S.05 on the front and west walls, S.02 on the west and garden walls, S.01 on
+the garden and east walls, and S.03 twice on the east wall.
+`electrical_basement_socket_layout()` defines this circuit.
+Two red three-phase branches also start at the incoming basement cable point:
+one runs horizontally through the S.03–S.04 wall to a socket inside S.03,
+and the other runs down through the front wall to a socket at the outside
+heat pump. Both use the red single-socket symbol and `Zásuvka 380V, 3 fáze`
+legend convention. `electrical_basement_three_phase_layout()` defines them.
+The S.03 light receives a magenta feed towards 8 o'clock (30 degrees down/left) from the incoming
+point to its face of the S.03–S.04 wall. It passes a switch 200 mm below the
+door opening, continues down to the front corner, turns left along the front
+wall and then up to the existing light. The cable meets the switch stem;
+the S.03 label is shifted right to clear the final vertical run.
+`electrical_basement_garage_light_layout()` defines this branch.
+The S.01 light feed runs diagonally to the room's bottom-right corner, inset
+300 mm from the right wall to clear the chimney, then left along the bottom
+wall and up to the existing light. A switch sits 200 mm right of the S.03
+door opening on the S.01 side; the cable connects to its stem. The S.01 label
+is shifted right to clear the vertical cable.
+`electrical_basement_s01_light_layout()` defines this branch.
+The S.02 light feed approaches the bottom-left corner along the right side of
+the chimney, then runs right along the bottom wall and up to the existing
+light. A switch is connected at its stem 200 mm after the upward turn, facing
+right so its circle stays clear of the cable. The S.02 label is shifted right
+to clear the vertical cable. `electrical_basement_s02_light_layout()` defines
+this branch.
+The S.04 lighting cable runs diagonally from the incoming point to its light,
+then straight down to a switch 200 mm before the front wall. The switch faces
+left and connects at its stem; the S.04 label is shifted right to clear the
+vertical wire. `electrical_basement_s04_light_layout()` defines this branch.
+The S.05 light feed runs at a shallow down/right angle through the S.04–S.05
+opening to the S.05 face of the dividing wall, then down along it and right
+to the existing light. A right-facing switch connects at its stem 200 mm
+before the final turn. `electrical_basement_s05_light_layout()` defines this
+branch, with the entry position derived from the opening.
+`electrical_board_ports()` assigns cabinet outputs using
+`ELECTRICAL_OUTPUT_PORT_CLOCKS`: the basement bundle starts at 9:30 and the
+upstairs bundle at 12:00. Outside lighting connects at 2:30 and the
+inside stair light at 3:00. Bathroom sockets/light connect at 5:00/6:00;
+room 0.03 sockets/light connect at 8:00/9:00. The order reserves positions for
+both black routes and all eleven planned ground-floor lighting/socket feeds;
+only cables already specified are drawn. Room 0.01 and 0.02 feeds use these
+shared positions rather than crowding the cabinet's right side.
+Room 0.01 has two branch cables from the rozvaděč, using straight segments.
+The magenta lighting route goes to a switch 200 mm left of the door opening,
+then to the room light. The blue socket feed enters the bottom-right corner
+and follows the room counter-clockwise, stopping 400 mm before the door's
+left jamb. Eight green double sockets normally sit 650 mm from the corners
+along the walls. The short bottom-right wall stub has no socket; that double
+socket is instead at the loop's end, 400 mm before the door's left jamb.
+`electrical_room01_layout()` contains the editable route
+and socket positions. The ground electrical plan's legends include both branch
+colours, the double socket and the switch.
+Room 0.02 mirrors that socket arrangement: a straight feed enters the bottom-left
+corner, then goes up the left wall, across the top, down the right wall and back
+along the bottom, ending 400 mm before the door's right jamb. Its eight double
+sockets include one at the loop end instead of on the short wall left of the
+door. The lighting cable goes straight to a normal-size switch 200 mm right of
+the door, then to the light; the lighting line meets the switch stem endpoint.
+Switches belong on the door's handle side so the open leaf does not hide them:
+left of 0.01's door and right of 0.02's door.
+`electrical_room02_layout()` defines its own
+positions; `add_room_electrical_routes()` draws either room's specification.
+Room 0.04 uses its own reserved lighting port. The cable runs directly from the
+rozvaděč to the hallway light, then from the light to the switch stem via a
+short wall approach, without a return to the board. The switch is 200 mm right of
+that door on the hallway side, facing down into 0.04; the room 0.02 switch
+remains on the opposite face. `electrical_room04_layout()` defines this route.
+The outside landing light uses its reserved output port, goes first to a switch
+200 mm below the entrance door on the inside west wall, then to the outside
+light. The inside stair light has a separate switch 400 mm below the first.
+Its cable goes from the board to that switch, along the west wall to the Y
+centre of the middle landing, then ends in a `to up` symbol. The upper plan
+receives it at the same XY position and connects to the existing landing light.
+It continues horizontally to the stairway wall, then follows the stair-side
+face to a second switch 250 mm beyond the upper flight's end. The cable joins
+the switch stem; the switch and lighting colour are included in the upper
+plan's legends. The shared layout exposes `upper_route` and `upper_switch`.
+`electrical_stair_lighting_layout()` shares the switch and continuation positions.
+The 0.04 room label is offset clear of these feeds using `ELECTRICAL_ROOM_LABEL_OFFSETS`.
+Upper room 1.03's lighting starts at the incoming bundled-cable point in front
+of door 1.04. Its feed goes up/right at 45 degrees to the VPC wall, then along
+the wall to the switch 200 mm right of the living-room door on its hallway face.
+The existing diagonal branches connect this switch to the 1.03 light and the
+light to the stairway-wall switch (400 mm above the stair-light switch).
+Both cables meet stem endpoints; a short wall approach keeps the door branch
+clear of the switch circle. `electrical_upper_hallway_layout()` defines the
+feed, branches and switches. The 1.03 label is offset clear of both branches.
+Its socket feed uses a 30-degree up/right approach from the receiving point,
+then runs along the VPC wall 100 mm below the lighting route, turns down at
+the west-wall corner and ends by the washing machine. Two double sockets
+branch into the room at the basin and washing-machine positions.
+Room 1.04 receives its lighting feed from the same bundled-cable point. It runs
+first towards the living-room wall, then along the wall to its existing switch
+near the top-left corner (200 mm below the top wall). The diagonal switch-to-light
+segment is retained. The cable connects at the switch stem, with the symbol
+facing into the room. `electrical_upper_toilet_layout()` defines this branch.
+Room 1.01's lighting feed runs diagonally from the shared receiving point to
+a switch 200 mm left of the living-room door on the living-room face, then
+300 mm left, up and left to the garden-side light. From that light, the cable
+runs left to the street-side light's X position, then straight down to it.
+Both light positions are unchanged. `electrical_upper_living_light_layout()`
+shares the light positions between the cable and symbols; the 1.01 label is
+offset left to stay clear of the wiring.
+The first 1.01 socket circuit serves only the garden-side area above the VPC
+wall. Its feed rises up/right at 60 degrees from the receiving point, then
+runs counter-clockwise around that area's walls, ending 400 mm before the
+large opening. Each of the four corners has a double socket on both adjoining
+walls. `electrical_upper_living_garden_socket_layout()` defines this circuit.
+The second 1.01 socket circuit enters the living-room side of the kitchen
+partition below its return, follows it down, crosses the front wall, then
+turns up the east wall to the VPC wall. Nine double sockets serve the
+dishwasher, fridge, five evenly spaced front-wall positions and the final
+corner before the VPC, with one more 2 m below that corner socket.
+`electrical_upper_living_street_socket_layout()` defines
+the route; appliance socket positions follow the furniture.
+The cooker has a separate red three-phase circuit, matching the old house's
+electrical drawing. From the receiving point it rises up/left at 45 degrees
+by 200 mm on each axis, turns left towards the chimney, then down to Sporák.
+A red single-socket symbol and the legend entry `Zásuvka 380V, 3 fáze` identify
+the connection. `electrical_upper_cooker_layout()` defines the route and keeps
+its vertical run 140 mm apart from the blue kitchen socket circuit.
+Room 1.02 has a blue socket feed from the shared receiving point, diagonally to
+the inside face of room 1.04's right wall, then straight down along that wall's
+alignment to the front wall. The endpoint has a double socket opening left,
+rotated 90 degrees counter-clockwise from its original upward orientation.
+`electrical_upper_technical_socket_layout()` defines the route, and the upper
+legends include the socket symbol and socket-circuit colour.
+Bathroom 0.05 has a socket feed to its top-right corner, then down the right
+wall, across the bottom and up the left wall, ending 400 mm below the door wall.
+Four double sockets serve the basin, TUV, hydrobox and loop end before the door;
+the last sits on the left wall instead of the narrow top-left wall stub.
+Equipment socket positions follow the model, with offsets to clear labels.
+Its lighting cable goes first to a switch 200 mm right of the door on the
+bathroom side, then to the light. `electrical_room05_layout()` defines both routes.
+Room 0.03 receives its socket feed at the top-right corner of the wide section,
+then runs clockwise down the right wall, across the bottom, up the left wall,
+across the top and down the narrow section's right wall, stopping above its door.
+Ten double sockets cover both sides of the five corners visited by this route;
+a short branch along the shoulder supplies the second socket at its starting
+corner. The lower-right bottom-wall socket stays clear of the street window.
+The lighting feed goes to a switch on the short wall below the door, then to
+the light. `electrical_room03_layout()` defines the routes and socket positions.
+All switch cables connect to the outer end of the green stem, rather than the
+small circle. Short approach/departure segments keep the cable from crossing
+the circle, including the hallway, bathroom and entrance/stair switches.
+Electrical branch routes use `add_poly_line(foreground=True)` so the native
+SVG/PDF renderer paints them above white door/opening masks. This preserves
+continuous cable lines across openings without changing their coordinates.
+All native light, switch and socket symbols are painted in a final electrical
+symbol layer above model geometry, opening masks and cable routes, so complete
+symbols remain visible in every electrical plan.
 Run `python3 house2.py ceiling` for `projekt2/ceiling.svg` and
 `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.2. Strop nad 1.NP.pdf`.
 The `ceiling` plan has thin solid wall outlines, red dash-dot beam axes,

@@ -128,7 +128,7 @@ STREET_BACKGROUND_WALL_WEST_EXTENT = 1.0
 STREET_BACKGROUND_TERRAIN_BELOW_STAIRS = 0.05
 CEILING_THICKNESS = 0.21
 CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height dimensions.
-BASEMENT_CEILING_INSULATION_THICKNESS = 0.08
+BASEMENT_CEILING_INSULATION_THICKNESS = 0.10
 BASEMENT_CEILING_WOOD_THICKNESS = 0.02
 BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_INSULATION_THICKNESS+BASEMENT_CEILING_WOOD_THICKNESS
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
@@ -392,10 +392,20 @@ PDF_ELEKTRO_UPPER = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys podkrov�
 PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
 ELECTRICAL_LINE_WIDTH = 0.30  # Printed millimetres, matching the reference electrical plans.
 ELECTRICAL_LIGHT_OFFSETS = {}  # Optional room-specific offsets from the calculated centre.
+ELECTRICAL_ROOM_LABEL_OFFSETS = {"0.04": (.55, .40), "1.03": (-.60, .95), "1.01": (-.60, 0.0), "S.03": (.55, 0.0), "S.01": (.55, 0.0), "S.02": (.55, 0.0), "S.04": (.55, 0.0)}  # Keep IDs clear of wiring.
 ELECTRICAL_ENTRANCE_LIGHT_WALL_GAP = 0.25  # Outside the finished west facade.
 ELECTRICAL_TRUNK_LINE_WIDTH = 0.70  # Printed millimetres: bundled cable routes.
 ELECTRICAL_TRUNK_SEPARATION = 0.15
 ELECTRICAL_TRUNK_CHIMNEY_CLEARANCE = 0.55  # From the chimney's street-facing surface.
+ELECTRICAL_SOCKET_WALL_OFFSET = 0.08
+ELECTRICAL_SOCKET_CORNER_DISTANCE = 0.65
+ELECTRICAL_LIGHT_CIRCUIT_COLOR = "#f080f0"
+ELECTRICAL_OUTPUT_PORT_CLOCKS = {
+    "basement": 9.5, "upper": 12.0, "0.01_light": 10.7, "0.01_sockets": 11.3,
+    "0.02_sockets": 11.9, "0.02_light": 12.5, "0.04_light": 1.1,
+    "outside_light": 2.5, "stair_landing_light": 3.0,
+    "0.05_sockets": 5.0, "0.05_light": 6.0, "0.03_sockets": 8.0, "0.03_light": 9.0,
+}
 WATER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
 WATER_HOT_ROUTE_OFFSET = 0.10  # Hot water is drawn farther into the room than cold water.
 WATER_BASEMENT_RISER_OFFSET_Y = 0.50  # From the drawn bottom-right corner towards the garden.
@@ -3201,24 +3211,550 @@ def add_plumbing_plan(name, storey, cut_height, room_floors, *, room_positions=N
     return drawing
 
 
-def electrical_trunk_layout():
-    """Two separated routes from the distribution board to the chimney-front risers."""
+def electrical_board_ports():
+    """Clock-positioned outputs on the cabinet perimeter."""
     board_x, board_y = sewer_fixture_center(rozvadec)
+    half_width, half_depth = ROZVADEC_SIZE[0]/2, ROZVADEC_SIZE[1]/2
+    ports = {}
+    for name, clock in ELECTRICAL_OUTPUT_PORT_CLOCKS.items():
+        angle = math.radians(90-30*clock)
+        dx, dy = math.cos(angle), math.sin(angle)
+        distance = min(half_width/abs(dx) if abs(dx)>1e-9 else math.inf,
+                       half_depth/abs(dy) if abs(dy)>1e-9 else math.inf)
+        ports[name] = (board_x+distance*dx, board_y+distance*dy)
+    return ports
+
+
+def electrical_trunk_layout():
+    """Basement bundle beside the chimney; upper bundle in front of the upper bathroom door."""
+    ports = electrical_board_ports()
     front_y = CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-ELECTRICAL_TRUNK_CHIMNEY_CLEARANCE
     half_gap = ELECTRICAL_TRUNK_SEPARATION/2
     down = (CHIMNEY_CENTER[0]-half_gap, front_y)
-    up = (CHIMNEY_CENTER[0]+half_gap, front_y+ELECTRICAL_TRUNK_SEPARATION)
+    up = (ports["upper"][0], CHIMNEY_CENTER[1])
     routes = []
-    for name, start_x, end in (("down", board_x-half_gap, down), ("up", board_x+half_gap, up)):
-        routes.append((name, ((start_x, board_y+ROZVADEC_SIZE[1]/2), end)))
+    for name, port, end in (("down", "basement", down), ("up", "upper", up)):
+        routes.append((name, (ports[port], end)))
     return dict(down=down, up=up, routes=tuple(routes))
 
 
-def add_electrical_trunk_legend(drawing):
+def add_electrical_trunk_legend(drawing, extra_lines=()):
     drawing.add_line_legend([
         {"style": "solid", "color": "black", "line_width": ELECTRICAL_TRUNK_LINE_WIDTH,
          "description": "Sdružená trasa kabelů"},
+        *extra_lines,
     ])
+
+
+def electrical_room01_layout():
+    """Room 0.01 branches, with an open counter-clockwise socket route."""
+    x0, y0, x1, y1 = Polygon(pokoj1.outline).bounds
+    left, bottom = x0+ELECTRICAL_SOCKET_WALL_OFFSET, y0+ELECTRICAL_SOCKET_WALL_OFFSET
+    right, top = x1-ELECTRICAL_SOCKET_WALL_OFFSET, y1-ELECTRICAL_SOCKET_WALL_OFFSET
+    opening = pokoj1_door.FillsVoids[0].RelatingOpeningElement
+    door_left = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])
+    door_right = door_left+ROOM_DOOR_OPENING_WIDTH
+    ports = electrical_board_ports()
+    switch = (door_left-.20, bottom)
+    light = electrical_room_centres((pokoj1,))[0][pokoj1.room_id]
+    socket_entry = ((door_right+x1)/2, bottom)
+    socket_end = (door_left-.40, bottom)
+    setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
+    return dict(
+        lighting=(ports["0.01_light"], switch, light),
+        switch=switch,
+        socket_feed=(ports["0.01_sockets"], socket_entry),
+        socket_perimeter=(socket_entry, (right, bottom), (right, top), (left, top),
+                          (left, bottom), socket_end),
+        sockets=(
+            ("bottom-right right wall", (right, y0+setback), "left", .1125),
+            ("top-right right wall", (right, y1-setback), "left", .1125),
+            ("top-right top wall", (x1-setback, top), "down", .1125),
+            ("top-left top wall", (x0+setback, top), "down", .1125),
+            ("top-left left wall", (left, y1-setback), "right", .1125),
+            ("bottom-left left wall", (left, y0+setback), "right", .1125),
+            ("bottom-left bottom wall", (x0+setback, bottom), "up", .1125),
+            ("loop end before door", socket_end, "up", .1125),
+        ),
+    )
+
+
+def electrical_room02_layout():
+    """Mirror the socket perimeter; keep the switch clear of the open door on its right."""
+    x0, y0, x1, y1 = Polygon(pokoj2.outline).bounds
+    left, bottom = x0+ELECTRICAL_SOCKET_WALL_OFFSET, y0+ELECTRICAL_SOCKET_WALL_OFFSET
+    right, top = x1-ELECTRICAL_SOCKET_WALL_OFFSET, y1-ELECTRICAL_SOCKET_WALL_OFFSET
+    opening = pokoj2_door.FillsVoids[0].RelatingOpeningElement
+    door_left = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])
+    door_right = door_left+ROOM_DOOR_OPENING_WIDTH
+    ports = electrical_board_ports()
+    switch = (door_right+.20, bottom)
+    switch_radius = .075
+    light = electrical_room_centres((pokoj2,))[0][pokoj2.room_id]
+    socket_entry, socket_end = (left, bottom), (door_right+.40, bottom)
+    setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
+    return dict(
+        lighting=(ports["0.02_light"], switch, light),
+        switch=switch, switch_radius=switch_radius,
+        socket_feed=(ports["0.02_sockets"], socket_entry),
+        socket_perimeter=(socket_entry, (left, top), (right, top), (right, bottom), socket_end),
+        sockets=(
+            ("bottom-left left wall", (left, y0+setback), "right", .1125),
+            ("top-left left wall", (left, y1-setback), "right", .1125),
+            ("top-left top wall", (x0+setback, top), "down", .1125),
+            ("top-right top wall", (x1-setback, top), "down", .1125),
+            ("top-right right wall", (right, y1-setback), "left", .1125),
+            ("bottom-right right wall", (right, y0+setback), "left", .1125),
+            ("bottom-right bottom wall", (x1-setback, bottom), "up", .1125),
+            ("loop end before door", socket_end, "up", .1125),
+        ),
+    )
+
+
+def electrical_room03_layout():
+    """Clockwise sockets from the wide section; light switched below the narrow-side door."""
+    x0, y0, _, y1 = Polygon(pokoj3.outline).bounds
+    wide_x = THIRD_ROOM_WALL_X-INNER_BWT
+    narrow_x = THIRD_ROOM_NARROW_WALL_X-DRY_WALL_WIDTH
+    left, bottom = x0+ELECTRICAL_SOCKET_WALL_OFFSET, y0+ELECTRICAL_SOCKET_WALL_OFFSET
+    wide_right = wide_x-ELECTRICAL_SOCKET_WALL_OFFSET
+    narrow_right = narrow_x-ELECTRICAL_SOCKET_WALL_OFFSET
+    wide_top = THIRD_ROOM_STEP_Y-ELECTRICAL_SOCKET_WALL_OFFSET
+    top = y1-ELECTRICAL_SOCKET_WALL_OFFSET
+    opening = pokoj3_door.FillsVoids[0].RelatingOpeningElement
+    door_bottom = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[1, 3])
+    door_top = door_bottom+ROOM_DOOR_OPENING_WIDTH
+    ports = electrical_board_ports()
+    switch = (narrow_right, (wall_third_room_top_g.start[1]+door_bottom)/2)
+    light = electrical_room_centres((pokoj3,))[0][pokoj3.room_id]
+    socket_entry = (wide_right, wide_top)
+    socket_end = (narrow_right, (door_top+y1)/2)
+    setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
+    # A short shoulder-side branch supplies the second socket at the starting corner.
+    shoulder_socket = ((narrow_x+wide_x)/2, wide_top)
+    return dict(
+        lighting=(ports["0.03_light"], switch, light),
+        switch=switch, switch_direction="left",
+        socket_feed=(ports["0.03_sockets"], socket_entry),
+        socket_perimeter=(shoulder_socket, socket_entry, (wide_right, bottom), (left, bottom),
+                          (left, top), (narrow_right, top), socket_end),
+        sockets=(
+            ("wide top-right shoulder wall", shoulder_socket, "down", .1125),
+            ("wide top-right right wall", (wide_right, THIRD_ROOM_STEP_Y-setback), "left", .1125),
+            ("bottom-right right wall", (wide_right, y0+setback), "left", .1125),
+            ("bottom-right bottom wall", (wide_x-.25, bottom), "up", .1125),
+            ("bottom-left bottom wall", (x0+setback, bottom), "up", .1125),
+            ("bottom-left left wall", (left, y0+setback), "right", .1125),
+            ("top-left left wall", (left, y1-setback), "right", .1125),
+            ("top-left top wall", (x0+setback, top), "down", .1125),
+            ("narrow top-right top wall", (narrow_x-.75, top), "down", .1125),
+            ("loop end above door", socket_end, "left", .1125),
+        ),
+    )
+
+
+def electrical_room04_layout():
+    """Board to hall light first, then to the hall-side switch beside room 0.02."""
+    port = electrical_board_ports()["0.04_light"]
+    opening = pokoj2_door.FillsVoids[0].RelatingOpeningElement
+    door_right = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])+ROOM_DOOR_OPENING_WIDTH
+    wall_y = wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset-ELECTRICAL_SOCKET_WALL_OFFSET
+    switch = (door_right+.20, wall_y)
+    switch_approach = (switch[0]+.30, switch[1])
+    light = electrical_room_centres((chodba,))[0][chodba.room_id]
+    return dict(
+        lighting=(port, light, switch_approach, switch),
+        switch=switch, switch_direction="down",
+    )
+
+
+def electrical_room05_layout():
+    """Bathroom perimeter sockets and a light switched beside the door's right jamb."""
+    x0, y0, x1, y1 = Polygon(koupelna.outline).bounds
+    left, bottom = x0+ELECTRICAL_SOCKET_WALL_OFFSET, y0+ELECTRICAL_SOCKET_WALL_OFFSET
+    right, top = x1-ELECTRICAL_SOCKET_WALL_OFFSET, y1-ELECTRICAL_SOCKET_WALL_OFFSET
+    ports = electrical_board_ports()
+    opening = bathroom_door.FillsVoids[0].RelatingOpeningElement
+    door_right = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])+ROOM_DOOR_OPENING_WIDTH
+    switch = (door_right+.20, top)
+    light_departure = (switch[0]+.30, switch[1])
+    light = electrical_room_centres((koupelna,))[0][koupelna.room_id]
+    basin = sewer_fixture_center(bathroom_basin)
+    tuv = sewer_fixture_center(bathroom_water_heater)
+    hydrobox = sewer_fixture_center(bathroom_hydrobox)
+    socket_entry, socket_end = (right, top), (left, y1-.40)
+    hydrobox_socket_x = min(right-.15, hydrobox[0]+HYDROBOX_SIZE[0]/2+.15)
+    return dict(
+        lighting=(ports["0.05_light"], switch, light_departure, light),
+        switch=switch, switch_direction="down",
+        socket_feed=(ports["0.05_sockets"], socket_entry),
+        socket_perimeter=(socket_entry, (right, bottom), (left, bottom), socket_end),
+        sockets=(
+            ("basin", (right, basin[1]), "left", .1125),
+            ("TUV", (right, tuv[1]-.25), "left", .1125),
+            ("hydrobox", (hydrobox_socket_x, bottom), "up", .1125),
+            ("loop end before door", socket_end, "right", .1125),
+        ),
+    )
+
+
+def electrical_stair_lighting_layout():
+    """Entrance-side switches and a shared ground/upper stair-light continuation."""
+    ports = electrical_board_ports()
+    opening = entrance_door.FillsVoids[0].RelatingOpeningElement
+    door_bottom = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[1, 3])
+    west_inner_x = wall_west_g.start[0]-(wall_west_g.body_offset+wall_west_g.thickness)
+    wall_x = west_inner_x-ELECTRICAL_SOCKET_WALL_OFFSET
+    outside_switch = (wall_x, door_bottom-.20)
+    inside_switch = (wall_x, outside_switch[1]-.40)
+    outside_approach = (wall_x, outside_switch[1]+.20)
+    inside_approach = (wall_x, inside_switch[1]+.20)
+    landing_y = (STAIR_LANDING_START_Y+STAIR_LANDING_END_Y)/2
+    riser = (wall_x, landing_y)
+    outside_light = (
+        HOUSE_WIDTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS+ELECTRICAL_ENTRANCE_LIGHT_WALL_GAP,
+        door_bottom+ENTRANCE_OPENING_WIDTH/2,
+    )
+    landing_light = ((STAIR_LEFT_X+STAIR_RIGHT_X)/2, landing_y)
+    upper_wall_x = STAIR_LEFT_X+ELECTRICAL_SOCKET_WALL_OFFSET
+    upper_switch = (upper_wall_x, STAIR_UPPER_END_Y+.25)
+    return dict(
+        outside_switch=outside_switch, inside_switch=inside_switch,
+        outside_light=outside_light, landing_light=landing_light, riser=riser,
+        upper_switch=upper_switch,
+        upper_route=(riser, landing_light, (upper_wall_x, landing_y), upper_switch),
+        outside_route=(ports["outside_light"], outside_approach, outside_switch, outside_light),
+        inside_route=(ports["stair_landing_light"], inside_approach, inside_switch, riser),
+    )
+
+
+def electrical_basement_socket_layout():
+    """One shared socket circuit, down the S.04 divider then counter-clockwise."""
+    rooms = {identifier: region.bounds for identifier, region in basement_rooms_by_id.items()}
+    offset = ELECTRICAL_SOCKET_WALL_OFFSET
+    setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
+    x0, y0, _, y1 = rooms["S.04"]
+    divider_x, front_y = x0+offset, y0+offset
+    east_x = rooms["S.03"][0]+offset
+    west_x = rooms["S.05"][2]-offset
+    garden_y = rooms["S.01"][3]-offset
+    origin = electrical_trunk_layout()["down"]
+    entry = (divider_x, origin[1]-(origin[0]-divider_x))
+    end = (east_x, rooms["S.03"][1]+setback)
+    sockets = [
+        ("S.04 divider front", (divider_x, y0+setback), "right", .1125),
+        ("S.04 divider garden", (divider_x, min(y1-setback, entry[1]-.25)), "right", .1125),
+    ]
+    for identifier, wall in (("S.05", "front"), ("S.05", "west"),
+                             ("S.02", "west"), ("S.02", "garden"),
+                             ("S.01", "garden"), ("S.01", "east")):
+        x0, y0, x1, y1 = rooms[identifier]
+        point, direction = {
+            "front": (((x0+x1)/2, front_y), "up"),
+            "west": ((west_x, (y0+y1)/2), "left"),
+            "garden": (((x0+x1)/2, garden_y), "down"),
+            "east": ((east_x, (y0+y1)/2), "right"),
+        }[wall]
+        sockets.append((f"{identifier} {wall} wall", point, direction, .1125))
+    x0, y0, x1, y1 = rooms["S.03"]
+    for index, fraction in enumerate((1/3, 2/3), 1):
+        sockets.append((f"S.03 east wall {index}", (east_x, y0+(y1-y0)*fraction), "right", .1125))
+    return dict(
+        socket_feed=(origin, entry),
+        socket_perimeter=(entry, (divider_x, front_y), (west_x, front_y),
+                          (west_x, garden_y), (east_x, garden_y), end),
+        sockets=tuple(sockets),
+    )
+
+
+def electrical_basement_garage_light_layout():
+    """8-o'clock garage feed, switch below the S.04 door, then via the front wall."""
+    _, front_y, divider_x, _ = basement_rooms_by_id["S.03"].bounds
+    wall_x = divider_x-ELECTRICAL_SOCKET_WALL_OFFSET
+    front_y += ELECTRICAL_SOCKET_WALL_OFFSET
+    origin = electrical_trunk_layout()["down"]
+    entry = (wall_x, origin[1]-(origin[0]-wall_x)*math.tan(math.radians(30)))
+    opening = basement_garage_door.FillsVoids[0].RelatingOpeningElement
+    door_bottom = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[1, 3])
+    switch = (wall_x, door_bottom-.20)
+    garage_floor = next(room for room in basement_room_floors if room.room_id == "S.03")
+    light = electrical_room_centres((garage_floor,))[0]["S.03"]
+    return dict(
+        lighting=(origin, entry, switch, (wall_x, front_y), (light[0], front_y), light),
+        switch=switch, switch_direction="left",
+    )
+
+
+def electrical_basement_s01_light_layout():
+    """Diagonal S.01 feed, then along the door wall and up to the existing light."""
+    _, bottom, right, _ = basement_rooms_by_id["S.01"].bounds
+    bottom += ELECTRICAL_SOCKET_WALL_OFFSET
+    # Inset the corner approach so the straight diagonal clears the chimney.
+    corner = (right-.30, bottom)
+    opening = basement_s01_s03_door.FillsVoids[0].RelatingOpeningElement
+    door_right = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])+BASEMENT_OPENING_WIDTH
+    switch = (door_right+.20, bottom)
+    room = next(room for room in basement_room_floors if room.room_id == "S.01")
+    light = electrical_room_centres((room,))[0]["S.01"]
+    return dict(
+        lighting=(electrical_trunk_layout()["down"], corner, switch, (light[0], bottom), light),
+        switch=switch, switch_direction="up",
+    )
+
+
+def electrical_basement_s02_light_layout():
+    """S.02 feed via its bottom-left corner, right along the wall, then up."""
+    left, bottom, _, _ = basement_rooms_by_id["S.02"].bounds
+    bottom += ELECTRICAL_SOCKET_WALL_OFFSET
+    corner = (left+.30, bottom)
+    origin = electrical_trunk_layout()["down"]
+    room = next(room for room in basement_room_floors if room.room_id == "S.02")
+    light = electrical_room_centres((room,))[0]["S.02"]
+    switch = (light[0], bottom+.20)
+    return dict(
+        # Approach beside the chimney instead of crossing its masonry.
+        lighting=(origin, (corner[0], origin[1]), corner, (light[0], bottom), switch, light),
+        switch=switch, switch_direction="right",
+    )
+
+
+def electrical_basement_s04_light_layout():
+    """Diagonal to the S.04 light, then down to the switch before the front wall."""
+    _, front_y, _, _ = basement_rooms_by_id["S.04"].bounds
+    room = next(room for room in basement_room_floors if room.room_id == "S.04")
+    light = electrical_room_centres((room,))[0]["S.04"]
+    switch = (light[0], front_y+.20)
+    return dict(
+        lighting=(electrical_trunk_layout()["down"], light, switch),
+        switch=switch, switch_direction="left",
+    )
+
+
+def electrical_basement_s05_light_layout():
+    """Shallow diagonal through the S.04 opening, down the wall, then right."""
+    left, _, _, _ = basement_rooms_by_id["S.05"].bounds
+    wall_x = left+ELECTRICAL_SOCKET_WALL_OFFSET
+    opening_bottom = float(ifcopenshell.util.placement.get_local_placement(
+        basement_stairway_opening.ObjectPlacement,
+    )[1, 3])
+    entry = (wall_x, opening_bottom+ELECTRICAL_SOCKET_WALL_OFFSET)
+    room = next(room for room in basement_room_floors if room.room_id == "S.05")
+    light = electrical_room_centres((room,))[0]["S.05"]
+    switch = (wall_x, light[1]+.20)
+    return dict(
+        lighting=(electrical_trunk_layout()["down"], entry, switch, (wall_x, light[1]), light),
+        switch=switch, switch_direction="right",
+    )
+
+
+def electrical_basement_three_phase_layout():
+    """Red branches from the basement receiving point to the garage and heat pump."""
+    origin = electrical_trunk_layout()["down"]
+    garage = (basement_rooms_by_id["S.03"].bounds[2]-ELECTRICAL_SOCKET_WALL_OFFSET, origin[1])
+    pump = sewer_fixture_center(heat_pump)
+    # The down-facing socket's semicircle sits at the heat pump's centre Y.
+    pump_socket = (origin[0], pump[1]+.225+.1125)
+    return (
+        ("Garage", (origin, garage), garage, "left"),
+        ("Heat pump", (origin, pump_socket), pump_socket, "down"),
+    )
+
+
+def electrical_upper_living_light_layout():
+    """Diagonal feed to the switch, then orthogonal runs to both living-room lights."""
+    opening = living_room_door.FillsVoids[0].RelatingOpeningElement
+    door_left = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])
+    switch = (door_left-.20, living_room_back_face_y+ELECTRICAL_SOCKET_WALL_OFFSET)
+    lights = []
+    for name, region in (
+        ("garden-side", living_room_outline.intersection(box(0, living_room_back_face_y, HOUSE_WIDTH, HOUSE_DEPTH))),
+        ("street-side", living_room_outline.intersection(box(0, 0, HOUSE_WIDTH, living_room_right_wall_front_y))),
+    ):
+        centre = electrical_region_centre(region)
+        lights.append((name, (centre.x, centre.y)))
+    upper_light, lower_light = lights[0][1], lights[1][1]
+    switch_jog = (switch[0]-.30, switch[1])
+    upper_turn = (switch_jog[0], upper_light[1])
+    lower_branch = (upper_light, (lower_light[0], upper_light[1]), lower_light)
+    return dict(
+        lighting=(electrical_trunk_layout()["up"], switch, switch_jog, upper_turn, upper_light),
+        lighting_branches=(("lower light", lower_branch),),
+        switch=switch, switch_direction="up", lights=tuple(lights),
+    )
+
+
+def electrical_upper_living_garden_socket_layout():
+    """First 1.01 socket circuit: 60-degree feed and an open garden-side perimeter."""
+    region = living_room_outline.intersection(box(0, living_room_back_face_y, HOUSE_WIDTH, HOUSE_DEPTH))
+    x0, y0, x1, y1 = region.bounds
+    left, bottom = x0+ELECTRICAL_SOCKET_WALL_OFFSET, y0+ELECTRICAL_SOCKET_WALL_OFFSET
+    right, top = x1-ELECTRICAL_SOCKET_WALL_OFFSET, y1-ELECTRICAL_SOCKET_WALL_OFFSET
+    origin = electrical_trunk_layout()["up"]
+    entry = (origin[0]+(bottom-origin[1])/math.tan(math.radians(60)), bottom)
+    opening_left = float(ifcopenshell.util.placement.get_local_placement(living_room_opening.ObjectPlacement)[0, 3])
+    end = (opening_left-.40, bottom)
+    setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
+    return dict(
+        socket_feed=(origin, entry),
+        socket_perimeter=(entry, (right, bottom), (right, top), (left, top), (left, bottom), end),
+        sockets=(
+            ("garden bottom-right bottom wall", (x1-setback, bottom), "up", .1125),
+            ("garden bottom-right right wall", (right, y0+setback), "left", .1125),
+            ("garden top-right right wall", (right, y1-setback), "left", .1125),
+            ("garden top-right top wall", (x1-setback, top), "down", .1125),
+            ("garden top-left top wall", (x0+setback, top), "down", .1125),
+            ("garden top-left left wall", (left, y1-setback), "right", .1125),
+            ("garden bottom-left left wall", (left, y0+setback), "right", .1125),
+            ("garden bottom-left bottom wall", (x0+setback, bottom), "up", .1125),
+        ),
+    )
+
+
+def electrical_upper_living_street_socket_layout():
+    """Second 1.01 socket circuit along the kitchen, front and east walls."""
+    offset = ELECTRICAL_SOCKET_WALL_OFFSET
+    left, bottom = BWT+offset, BWT+offset
+    right = kitchen_wall_face_x-offset
+    wall_entry = (right, living_room_return_front_y-.20)
+    end = (left, living_room_right_wall_front_y-offset)
+    dishwasher = sewer_fixture_center(kitchen_dishwasher)
+    fridge = sewer_fixture_center(kitchen_fridge)
+    setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
+    front_start, front_end = BWT+setback, kitchen_wall_face_x-setback
+    return dict(
+        socket_feed=(electrical_trunk_layout()["up"], wall_entry),
+        socket_perimeter=(wall_entry, (right, bottom), (left, bottom), end),
+        sockets=(
+            ("dishwasher", (right, dishwasher[1]), "left", .1125),
+            ("fridge", (right, fridge[1]), "left", .1125),
+            *((f"front wall {index+1}", (float(x), bottom), "up", .1125)
+              for index, x in enumerate(np.linspace(front_start, front_end, 5))),
+            ("corner before VPC", (left, living_room_right_wall_front_y-setback), "right", .1125),
+            ("east wall below corner", (left, living_room_right_wall_front_y-setback-2.0), "right", .1125),
+        ),
+    )
+
+
+def electrical_upper_cooker_layout():
+    """Separate three-phase cooker feed, using the old house's red convention."""
+    origin = electrical_trunk_layout()["up"]
+    diagonal = (origin[0]-.20, origin[1]+.20)
+    cooker = sewer_fixture_center(kitchen_cooker)
+    socket = (kitchen_wall_face_x-ELECTRICAL_SOCKET_WALL_OFFSET-.14, cooker[1])
+    return dict(route=(origin, diagonal, (socket[0], diagonal[1]), socket), socket=socket)
+
+
+def electrical_upper_hallway_layout():
+    """Approach the VPC wall at 45 degrees; retain the diagonal light/switch branches."""
+    origin = electrical_trunk_layout()["up"]
+    stairs_switch = electrical_stair_lighting_layout()["upper_switch"]
+    switch = (stairs_switch[0], stairs_switch[1]+.40)
+    light = electrical_room_centres((upper_hallway,))[0][upper_hallway.room_id]
+    opening = living_room_door.FillsVoids[0].RelatingOpeningElement
+    door_right = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])+ROOM_DOOR_OPENING_WIDTH
+    door_switch = (door_right+.20, living_room_right_wall_front_y-ELECTRICAL_SOCKET_WALL_OFFSET)
+    door_approach = (door_switch[0]+.30, door_switch[1])
+    wall_rise = door_switch[1]-origin[1]
+    wall_entry = (origin[0]+wall_rise, door_switch[1])
+    socket_wall_y = door_switch[1]-.10
+    socket_wall_entry = (origin[0]+(socket_wall_y-origin[1])/math.tan(math.radians(30)), socket_wall_y)
+    west_inner_x = wall_west_u.start[0]-(wall_west_u.body_offset+wall_west_u.thickness)
+    socket_wall_x = west_inner_x-ELECTRICAL_SOCKET_WALL_OFFSET
+    basin = sewer_fixture_center(upper_hallway_basin)
+    washer = sewer_fixture_center(upper_washing_machine)
+    socket_end = (socket_wall_x, min(basin[1], washer[1]))
+    return dict(
+        lighting=(origin, wall_entry, door_switch), switch=switch, switch_direction="right",
+        lighting_branches=(("stair switch", (light, switch)),
+                           ("living-room door switch", (light, door_approach, door_switch))),
+        extra_switches=(("living-room door", door_switch, "down"),),
+        socket_feed=(origin, socket_wall_entry, (socket_wall_x, socket_wall_y), socket_end),
+        sockets=(("basin", (socket_wall_x, basin[1]), "left", .1125),
+                 ("washing machine", (socket_wall_x, washer[1]), "left", .1125)),
+    )
+
+
+def electrical_upper_toilet_layout():
+    """Upper bathroom lighting via a switch near its top-left corner."""
+    x0, _, _, y1 = Polygon(upper_toilet_room.outline).bounds
+    switch = (x0+ELECTRICAL_SOCKET_WALL_OFFSET, y1-.20)
+    light = electrical_room_centres((upper_toilet_room,))[0][upper_toilet_room.room_id]
+    origin = electrical_trunk_layout()["up"]
+    wall_entry = (switch[0], origin[1])
+    return dict(
+        lighting=(origin, wall_entry, switch, light),
+        switch=switch, switch_direction="right",
+    )
+
+
+def electrical_upper_technical_socket_layout():
+    """Double 1.02 socket via the inside face of room 1.04's right wall."""
+    _, front_y, _, _ = Polygon(upper_technical_room.outline).bounds
+    _, _, right_x, top_y = Polygon(upper_toilet_room.outline).bounds
+    wall_x = right_x-ELECTRICAL_SOCKET_WALL_OFFSET
+    wall_entry = (wall_x, top_y-.20)
+    socket = (wall_x, front_y+ELECTRICAL_SOCKET_WALL_OFFSET)
+    return dict(route=(electrical_trunk_layout()["up"], wall_entry, socket), socket=socket)
+
+
+def add_ground_stair_lighting_routes(drawing, layout):
+    for name in ("outside", "inside"):
+        drawing.add_poly_line(
+            layout[f"{name}_route"], color=ELECTRICAL_LIGHT_CIRCUIT_COLOR,
+            line_width=ELECTRICAL_LINE_WIDTH, foreground=True,
+            name=f"{drawing.name} {name.capitalize()} stair light cable",
+        )
+        drawing.add_switch_symbol(
+            layout[f"{name}_switch"], "left", line_width=ELECTRICAL_LINE_WIDTH,
+            name=f"{drawing.name} {name.capitalize()} stair light switch",
+        )
+    drawing.add_change_floor_symbol(
+        *layout["riser"], "to up", color="black", line_width=ELECTRICAL_LINE_WIDTH,
+        name=f"{drawing.name} Stair light to upper floor",
+    )
+
+
+def add_room_electrical_routes(drawing, identifier, layout):
+    prefix = f"{drawing.name} Room {identifier}"
+    drawing.add_poly_line(
+        layout["lighting"], color=ELECTRICAL_LIGHT_CIRCUIT_COLOR, line_width=ELECTRICAL_LINE_WIDTH,
+        foreground=True,
+        name=f"{prefix} light cable",
+    )
+    for name, points in layout.get("lighting_branches", ()):
+        drawing.add_poly_line(
+            points, color=ELECTRICAL_LIGHT_CIRCUIT_COLOR, line_width=ELECTRICAL_LINE_WIDTH,
+            foreground=True, name=f"{prefix} {name} cable",
+        )
+    drawing.add_switch_symbol(
+        layout["switch"], layout.get("switch_direction", "up"), radius=layout.get("switch_radius", .075),
+        line_width=ELECTRICAL_LINE_WIDTH,
+        name=f"{prefix} light switch",
+    )
+    for name, point, direction in layout.get("extra_switches", ()):
+        drawing.add_switch_symbol(
+            point, direction, line_width=ELECTRICAL_LINE_WIDTH,
+            name=f"{prefix} {name} light switch",
+        )
+    add_room_socket_routes(drawing, identifier, layout)
+
+
+def add_room_socket_routes(drawing, identifier, layout):
+    prefix = f"{drawing.name} Room {identifier}"
+    for name, key in (("socket feed", "socket_feed"), ("socket perimeter", "socket_perimeter")):
+        points = layout.get(key)
+        if points is None:
+            continue
+        drawing.add_poly_line(
+            points, color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+            foreground=True,
+            name=f"{prefix} {name}",
+        )
+    for name, point, direction, radius in layout.get("sockets", ()):
+        drawing.add_socket_symbol(
+            point, direction, double=True, radius=radius, line_width=ELECTRICAL_LINE_WIDTH,
+            name=f"{prefix} double socket {name}",
+        )
 
 
 def electrical_region_centre(region, offset=(0.0, 0.0)):
@@ -3242,21 +3778,22 @@ def electrical_room_centres(room_floors):
         centre = electrical_region_centre(region, ELECTRICAL_LIGHT_OFFSETS.get(room.room_id, (0.0, 0.0)))
         centres[room.room_id] = (centre.x, centre.y)
         # Keep the room ID clear of its light symbol, including small rooms.
+        label_dx, label_dy = ELECTRICAL_ROOM_LABEL_OFFSETS.get(room.room_id, (0.0, 0.0))
         for dx, dy in ((0, -.40), (0, .40), (.40, 0), (-.40, 0)):
-            label = Point(centre.x+dx, centre.y+dy)
+            label = Point(centre.x+dx+label_dx, centre.y+dy+label_dy)
             if region.contains(label):
                 labels[room.room_id] = (label.x, label.y)
                 break
     return centres, labels
 
 
-def add_electrical_plan(name, storey, cut_height, room_floors, *, skip_lights=()):
+def add_electrical_plan(name, storey, cut_height, room_floors, *, skip_lights=(), extra_symbols=()):
     centres, labels = electrical_room_centres(room_floors)
     drawing = add_plumbing_plan(
         name, storey, cut_height, room_floors, room_positions=labels,
-        include_room_legend=False,
+        include_room_legend=True,
     )
-    drawing.add_symbol_legend([("light", "Světlo")])
+    drawing.add_symbol_legend([("light", "Světlo"), *extra_symbols])
     for identifier, centre in centres.items():
         if identifier in skip_lights:
             continue
@@ -5435,17 +5972,51 @@ if "voda" in sys.argv or "voda_upper" in sys.argv:
 if "elektro" in sys.argv or "elektro_basement" in sys.argv:
     elektro_basement = add_electrical_plan(
         "elektro_basement", basement, BASEMENT_FLOOR_THICKNESS+1.01, basement_room_floors,
+        extra_symbols=(("d_socket", "Dvojitá zásuvka"), ("socket3f", "Zásuvka 380V, 3 fáze"),
+                       ("switch", "Vypínač")),
     )
-    add_electrical_trunk_legend(elektro_basement)
+    add_electrical_trunk_legend(elektro_basement, extra_lines=(
+        {"color": "blue", "line_width": ELECTRICAL_LINE_WIDTH, "description": "Zásuvkový okruh"},
+        {"color": "red", "line_width": ELECTRICAL_LINE_WIDTH, "description": "3-fázový okruh"},
+        {"color": ELECTRICAL_LIGHT_CIRCUIT_COLOR, "line_width": ELECTRICAL_LINE_WIDTH,
+         "description": "Světelný okruh"},
+    ))
     elektro_basement.add_change_floor_symbol(
         *electrical_trunk_layout()["down"], "from up", color="black",
         line_width=ELECTRICAL_TRUNK_LINE_WIDTH, name="elektro_basement Cables from ground floor",
     )
+    add_room_socket_routes(elektro_basement, "S.01-S.05", electrical_basement_socket_layout())
+    add_room_electrical_routes(elektro_basement, "S.03", electrical_basement_garage_light_layout())
+    add_room_electrical_routes(elektro_basement, "S.01", electrical_basement_s01_light_layout())
+    add_room_electrical_routes(elektro_basement, "S.02", electrical_basement_s02_light_layout())
+    add_room_electrical_routes(elektro_basement, "S.04", electrical_basement_s04_light_layout())
+    add_room_electrical_routes(elektro_basement, "S.05", electrical_basement_s05_light_layout())
+    for name, route, socket, direction in electrical_basement_three_phase_layout():
+        elektro_basement.add_poly_line(
+            route, color="red", line_width=ELECTRICAL_LINE_WIDTH,
+            foreground=True, name=f"elektro_basement {name} three-phase cable",
+        )
+        elektro_basement.add_socket_symbol(
+            socket, direction, color="red", line_width=ELECTRICAL_LINE_WIDTH,
+            name=f"elektro_basement {name} 380V socket",
+        )
     elektro_basement.render(PROJECT_DIR / "elektro_basement.svg", pdf=PDF_ELEKTRO_BASEMENT)
 
 if "elektro" in sys.argv or "elektro_ground" in sys.argv:
-    elektro_ground = add_electrical_plan("elektro_ground", ground, 2.0, ground_room_floors)
-    add_electrical_trunk_legend(elektro_ground)
+    elektro_ground = add_electrical_plan(
+        "elektro_ground", ground, 2.0, ground_room_floors,
+        extra_symbols=(("d_socket", "Dvojitá zásuvka"), ("switch", "Vypínač")),
+    )
+    add_electrical_trunk_legend(elektro_ground, extra_lines=(
+        {"color": ELECTRICAL_LIGHT_CIRCUIT_COLOR, "line_width": ELECTRICAL_LINE_WIDTH,
+         "description": "Světelný okruh"},
+        {"color": "blue", "line_width": ELECTRICAL_LINE_WIDTH, "description": "Zásuvkový okruh"},
+    ))
+    add_room_electrical_routes(elektro_ground, "0.01", electrical_room01_layout())
+    add_room_electrical_routes(elektro_ground, "0.02", electrical_room02_layout())
+    add_room_electrical_routes(elektro_ground, "0.03", electrical_room03_layout())
+    add_room_electrical_routes(elektro_ground, "0.04", electrical_room04_layout())
+    add_room_electrical_routes(elektro_ground, "0.05", electrical_room05_layout())
     electrical_trunks = electrical_trunk_layout()
     for direction, points in electrical_trunks["routes"]:
         elektro_ground.add_poly_line(
@@ -5459,9 +6030,10 @@ if "elektro" in sys.argv or "elektro_ground" in sys.argv:
     elektro_ground.add_stair_annotation(lower_stairs)
     elektro_ground.add_stair_annotation(upper_stairs)
     elektro_ground.add_stair_landing_annotation(middle_stair_landing)
+    stair_light_layout = electrical_stair_lighting_layout()
+    add_ground_stair_lighting_routes(elektro_ground, stair_light_layout)
     elektro_ground.add_light_symbol(
-        (HOUSE_WIDTH+FACADE_INSULATION_THICKNESS+FACADE_THICKNESS+ELECTRICAL_ENTRANCE_LIGHT_WALL_GAP,
-         wall_west_g.start[1]+ENTRANCE_OPENING_AT+ENTRANCE_OPENING_WIDTH/2),
+        stair_light_layout["outside_light"],
         color="blue", line_width=ELECTRICAL_LINE_WIDTH,
         name="elektro_ground Outside entrance landing light",
     )
@@ -5470,19 +6042,47 @@ if "elektro" in sys.argv or "elektro_ground" in sys.argv:
 if "elektro" in sys.argv or "elektro_upper" in sys.argv:
     elektro_upper = add_electrical_plan(
         "elektro_upper", upper, 1.20, upper_room_floors, skip_lights=("1.01", "1.02"),
+        extra_symbols=(("switch", "Vypínač"), ("d_socket", "Dvojitá zásuvka"),
+                       ("socket3f", "Zásuvka 380V, 3 fáze")),
     )
-    add_electrical_trunk_legend(elektro_upper)
+    add_electrical_trunk_legend(elektro_upper, extra_lines=(
+        {"color": ELECTRICAL_LIGHT_CIRCUIT_COLOR, "line_width": ELECTRICAL_LINE_WIDTH,
+         "description": "Světelný okruh"},
+        {"color": "blue", "line_width": ELECTRICAL_LINE_WIDTH, "description": "Zásuvkový okruh"},
+        {"color": "red", "line_width": ELECTRICAL_LINE_WIDTH, "description": "3-fázový okruh"},
+    ))
     elektro_upper.add_change_floor_symbol(
         *electrical_trunk_layout()["up"], "from down", color="black",
         line_width=ELECTRICAL_TRUNK_LINE_WIDTH, name="elektro_upper Cables from ground floor",
     )
-    for name, region in (
-        ("street-side", living_room_outline.intersection(box(0, 0, HOUSE_WIDTH, living_room_right_wall_front_y))),
-        ("garden-side", living_room_outline.intersection(box(0, living_room_back_face_y, HOUSE_WIDTH, HOUSE_DEPTH))),
-    ):
-        centre = electrical_region_centre(region)
+    add_room_electrical_routes(elektro_upper, "1.03", electrical_upper_hallway_layout())
+    add_room_electrical_routes(elektro_upper, "1.04", electrical_upper_toilet_layout())
+    living_light_layout = electrical_upper_living_light_layout()
+    add_room_electrical_routes(elektro_upper, "1.01", {
+        **living_light_layout, **electrical_upper_living_garden_socket_layout(),
+    })
+    add_room_socket_routes(elektro_upper, "1.01 street-side", electrical_upper_living_street_socket_layout())
+    cooker_layout = electrical_upper_cooker_layout()
+    elektro_upper.add_poly_line(
+        cooker_layout["route"], color="red", line_width=ELECTRICAL_LINE_WIDTH,
+        foreground=True, name="elektro_upper Cooker three-phase cable",
+    )
+    elektro_upper.add_socket_symbol(
+        cooker_layout["socket"], "left", color="red", line_width=ELECTRICAL_LINE_WIDTH,
+        name="elektro_upper Cooker 380V socket",
+    )
+    technical_socket_layout = electrical_upper_technical_socket_layout()
+    elektro_upper.add_poly_line(
+        technical_socket_layout["route"], color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+        foreground=True, name="elektro_upper Room 1.02 socket feed",
+    )
+    elektro_upper.add_socket_symbol(
+        technical_socket_layout["socket"], "left", double=True, line_width=ELECTRICAL_LINE_WIDTH,
+        name="elektro_upper Room 1.02 socket",
+    )
+    for name, point in living_light_layout["lights"]:
         elektro_upper.add_light_symbol(
-            (centre.x, centre.y), color="blue", line_width=ELECTRICAL_LINE_WIDTH,
+            point, color="blue", line_width=ELECTRICAL_LINE_WIDTH,
             name=f"elektro_upper Living room {name} light",
         )
     elektro_upper.include_element(stair_railing)
@@ -5491,8 +6091,22 @@ if "elektro" in sys.argv or "elektro_upper" in sys.argv:
     elektro_upper.add_stair_annotation(lower_stairs)
     elektro_upper.add_stair_annotation(upper_stairs)
     elektro_upper.add_stair_landing_annotation(middle_stair_landing)
+    stair_light_layout = electrical_stair_lighting_layout()
+    elektro_upper.add_change_floor_symbol(
+        *stair_light_layout["riser"], "from down", color="black", line_width=ELECTRICAL_LINE_WIDTH,
+        name="elektro_upper Stair light from ground floor",
+    )
+    elektro_upper.add_poly_line(
+        stair_light_layout["upper_route"],
+        color=ELECTRICAL_LIGHT_CIRCUIT_COLOR, line_width=ELECTRICAL_LINE_WIDTH, foreground=True,
+        name="elektro_upper Stair landing light cable",
+    )
+    elektro_upper.add_switch_symbol(
+        stair_light_layout["upper_switch"], "right", line_width=ELECTRICAL_LINE_WIDTH,
+        name="elektro_upper Stair landing light switch",
+    )
     elektro_upper.add_light_symbol(
-        ((STAIR_LEFT_X+STAIR_RIGHT_X)/2, (STAIR_LANDING_START_Y+STAIR_LANDING_END_Y)/2),
+        stair_light_layout["landing_light"],
         color="blue", line_width=ELECTRICAL_LINE_WIDTH,
         name="elektro_upper Middle stair landing light",
     )
