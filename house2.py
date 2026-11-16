@@ -16,6 +16,7 @@ import ifcopenshell.api.style
 import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
+import ifcopenshell.util.representation
 import numpy as np
 from shapely.geometry import Point, Polygon, box
 from shapely.ops import nearest_points, unary_union
@@ -23,6 +24,7 @@ from shapely.ops import nearest_points, unary_union
 from ifc_utils import CutDefinition, DrawingSheet, House, offset_plane, plane_height_at, window_area
 from materials import resolve_timber_grade
 from pdf_utils import PDFFolder
+from steel_profiles import heb_profile, heb_section
 
 
 HOUSE_WIDTH = 8.74
@@ -173,7 +175,6 @@ CEILING_BEAM_LENGTH_STEP = 0.25
 CEILING_LAYOUT_TOLERANCE = 0.07  # Total width mismatch, not the gap at each side.
 CEILING_STRIP_WIDTHS = {"beam": 0.16, "wide": 0.455, "narrow": 0.33, "space": 0.005}
 CEILING_BEAM_SPACING_OUTSIDE_OFFSETS = (1.0, 1.5)  # Alternate beyond the exterior wall faces.
-BASEMENT_STAIR_OPENING_LENGTH = 3.0  # Clear depth from the inside face of the street wall.
 UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_MASONRY_COURSE_HEIGHT = 0.125
 UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
@@ -232,7 +233,7 @@ ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
 ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
 ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
-CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.125
+CHIMNEY_BASEMENT_WALL_CLEARANCE = 0.03
 CHIMNEY_FOOTING_OVERHANG = 0.20
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 1.25
@@ -408,11 +409,12 @@ ELECTRICAL_SOCKET_WALL_OFFSET = 0.08
 ELECTRICAL_SOCKET_CORNER_DISTANCE = 0.65
 ELECTRICAL_LIGHT_CIRCUIT_COLOR = "#f080f0"
 ELECTRICAL_FAN_COIL_CIRCUIT_COLOR = "#e6c200"
+ELECTRICAL_BONDING_COLOR = "#80f080"  # Match the old house's bonding/earthing detail.
 ELECTRICAL_OUTPUT_PORT_CLOCKS = {
-    "basement": 9.5, "upper": 12.0, "0.01_light": 10.7, "0.01_sockets": 11.3,
-    "0.02_sockets": 11.9, "0.02_light": 12.5, "0.04_light": 1.1,
+    "basement": 9.5, "upper": 12.0, "0.01_light": 9.95, "0.01_sockets": 10.35,
+    "0.02_sockets": 11.0, "0.02_light": 13.1, "0.04_light": 13.75,
     "outside_light": 2.5, "stair_landing_light": 3.0,
-    "0.05_sockets": 5.0, "0.05_light": 6.0, "0.03_sockets": 8.0, "0.03_light": 9.0,
+    "0.05_sockets": 5.0, "0.05_light": 6.0, "0.03_sockets": 8.3, "0.03_light": 8.65,
     "fan_coils": 9.0,
 }
 WATER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
@@ -427,17 +429,17 @@ HYDROIZOLACE_LINE_WIDTH = 0.4  # Printed millimetres; drawing-only waterproofing
 RAFTERS_MIDPOINT = CHIMNEY_CENTER[1]-0.04
 4.79
 RAFTER_Y_POSITIONS = (
-	-0.12,
-	4.29-0.67-2.75,
-	4.29-0.67-1.75,
-	4.29-0.67-1.0,
-	4.29-0.67,
-	4.29,
-	5.29,
-	5.29+0.84,
-	5.29+0.84+1.0,
-	5.29+0.84+2.0,
-	9.12
+	0.35,
+	1.35,
+	2.16,
+	2.83,
+	3.83,
+	4.50, ##
+	5.50, ##
+	5.5+0.67,
+	5.5+0.67+1,
+	5.5+0.67+1+0.67,
+	8.64
 )
 found_chimney_space = False
 for i in range(1, len(RAFTER_Y_POSITIONS)):
@@ -588,6 +590,44 @@ def add_ceiling_beam_plan(drawing, slab, *, wall_bounds, bearing_offset=-0.3):
             start=tuple(dimension_start), end=tuple(dimension_end),
             name=f"{slab.Name} {label}",
         )
+
+
+def add_stairway_edge_heb(storey, name, *, left_face, right_face, front_y, bearing):
+    """Create a native HEB180 at the ceiling bottom with wall-derived bearings."""
+    section = heb_section(180)
+    axis_y = front_y+section.width/2
+    axis_z = storey.elevation+section.height/2
+    beam = storey.beam(
+        name,
+        start=(left_face-bearing, axis_y, axis_z),
+        end=(right_face+bearing, axis_y, axis_z),
+        size=(section.width, section.height), material="Structural steel", color="#666666",
+    )
+    beam.ObjectType = section.name
+    body = ifcopenshell.util.representation.get_representation(beam, "Model", "Body", "MODEL_VIEW")
+    old_profile = body.Items[0].SweptArea
+    body.Items[0].SweptArea = heb_profile(storey.house.model, section)
+    ifcopenshell.util.element.remove_deep2(storey.house.model, old_profile)
+    return beam
+
+
+def add_stairway_edge_heb_plan(drawing, beam, *, front_wall_y, dimension_x):
+    """Identify the stair-opening HEB and dimension its front flange edge."""
+    x0, y = beam.start[:2]
+    x1 = beam.end[0]
+    front_y = y-beam.width/2
+    drawing.add_rectangle(
+        (x0, front_y), (x1, y+beam.width/2),
+        name=f"{beam.Name} Plan outline",
+    )
+    drawing.add_text(
+        ((x0+x1)/2, y), "HEB180", font_size=1.5,
+        name=f"{beam.Name} Plan label",
+    )
+    drawing.add_dimension(
+        (dimension_x, front_wall_y), (dimension_x, front_y),
+        name=f"{beam.Name} Front edge distance from front wall",
+    )
 
 
 def add_chimney_footing(chimney):
@@ -1558,12 +1598,8 @@ ceiling_bathroom_end_x = bathroom_ceiling_stairway_face_x+BATHROOM_CEILING_BEARI
 BATHROOM_CEILING_BEAM_LENGTH = ceiling_bathroom_end_x-ceiling_bathroom_start_x
 
 
-# One garden-side ceiling per room, with a local first-row chimney opening.
-UPPER_CHIMNEY_BEAM_CLEARANCE = 0.03
-UPPER_CHIMNEY_BLOCK_CLEARANCE = 0.05
-upper_ceiling_garden_y = (
-    CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2+UPPER_CHIMNEY_BEAM_CLEARANCE+CEILING_STRIP_WIDTHS["beam"]
-)
+# Garden-side sections start flush with the garden-room wall's street face.
+upper_ceiling_garden_y = wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset
 ceiling_room3 = ceiling_storey.miako_slab(
     "Ceiling - 0.03 Pokoj 3",
     start=(ceiling_room3_start_x, upper_ceiling_garden_y),
@@ -1582,13 +1618,18 @@ ceiling_room3 = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
+# Remove the chimney-side beam/bay after aligning the complete garden layout.
+# Advancing its start by the omitted width preserves every following row.
+upper_bathroom_omitted_garden_width = (
+    CEILING_STRIP_WIDTHS["beam"]+2*CEILING_STRIP_WIDTHS["space"]+CEILING_STRIP_WIDTHS["wide"]
+)
+upper_bathroom_garden_y = upper_ceiling_garden_y-upper_bathroom_omitted_garden_width
 ceiling_bathroom = ceiling_storey.miako_slab(
     "Ceiling - 0.05 Koupelna a chodba",
-    start=(ceiling_bathroom_start_x, upper_ceiling_garden_y),
-    end=(ceiling_bathroom_end_x, upper_ceiling_garden_y),
+    start=(ceiling_bathroom_start_x, upper_bathroom_garden_y),
+    end=(ceiling_bathroom_end_x, upper_bathroom_garden_y),
     direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street; first beam/bay and following rows in one slab.
-        "beam", "space", "wide", "space",
+    structure=[  # Garden to street, beginning at the aligned original second beam.
         "beam", "beam",
 		"space", "wide", "space", "beam",
 		"space", "wide", "space", "beam",
@@ -1599,17 +1640,6 @@ ceiling_bathroom = ceiling_storey.miako_slab(
     block_end_offset=BATHROOM_CEILING_BEARING,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
-
-upper_chimney_first_bay_width = (
-    CEILING_STRIP_WIDTHS["beam"]+2*CEILING_STRIP_WIDTHS["space"]+CEILING_STRIP_WIDTHS["wide"]
-)
-upper_chimney_clearance_region = box(
-    CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-UPPER_CHIMNEY_BLOCK_CLEARANCE,
-    upper_ceiling_garden_y-upper_chimney_first_bay_width,
-    CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2+UPPER_CHIMNEY_BLOCK_CLEARANCE,
-    upper_ceiling_garden_y-CEILING_STRIP_WIDTHS["beam"],
-)
-upper_chimney_opening = trim_first_miako_block_row(ceiling_bathroom, upper_chimney_clearance_region)
 
 FRONT_CEILING_WALL_OVERLAP = 0.04
 ceiling_front_girder_edge_y = min(
@@ -1653,8 +1683,9 @@ ceiling_bathroom_front = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-STAIRWAY_CEILING_GARDEN_WALL_CLEARANCE = -0.005
-# Preserve the main layout's Y position after removing the separate beam strip.
+STAIRWAY_CEILING_GARDEN_WALL_CLEARANCE = 0.0
+# Start flush with the garden-room wall's street-side face. The basement's
+# 30 mm overlap on its thicker wall gives the same Y alignment below.
 ceiling_stairway_start_y = (
     wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset
     -STAIRWAY_CEILING_GARDEN_WALL_CLEARANCE
@@ -1680,7 +1711,7 @@ ceiling_stairway = ceiling_storey.miako_slab(
     structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
 		"beam", "space", "wide", "space",
 		"beam", "space", "wide", "space",
-		"beam", "beam", "beam", "beam"
+		"beam", "space", "beam",
     ],
     block_length=0.25,
     block_start_offset=STAIRWAY_CEILING_STAIRWAY_BEARING,
@@ -1746,12 +1777,10 @@ BASEMENT_S03_BEAM_LENGTH = 3.50
 BASEMENT_S03_EAST_BEARING = 0.16
 BASEMENT_S04_BEAM_LENGTH = 2.50
 BASEMENT_S04_MIDDLE_BEARING = 0.15
-BASEMENT_CHIMNEY_BEAM_CLEARANCE = 0.03
-BASEMENT_CHIMNEY_BLOCK_CLEARANCE = 0.05
-basement_ceiling_garden_y = (
-    CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2+BASEMENT_CHIMNEY_BEAM_CLEARANCE
-    +CEILING_STRIP_WIDTHS["beam"]
-)
+BASEMENT_CEILING_GARDEN_WALL_OVERLAP = 0.03
+# The garden edge of each first beam extends this far into the supporting
+# wall from its street-side face. The chimney does not control this alignment.
+basement_ceiling_garden_y = basement_s03_y1+BASEMENT_CEILING_GARDEN_WALL_OVERLAP
 basement_s03_ceiling_start_x = basement_s03_x0-BASEMENT_S03_EAST_BEARING
 basement_s03_ceiling_end_x = basement_s03_ceiling_start_x+BASEMENT_S03_BEAM_LENGTH
 basement_s04_ceiling_start_x = basement_s04_x0-BASEMENT_S04_MIDDLE_BEARING
@@ -1781,13 +1810,17 @@ basement_ceiling_s03 = basement_ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
+# Omit the former first beam and wide block bay without moving later rows.
+basement_s04_omitted_garden_width = (
+    CEILING_STRIP_WIDTHS["beam"]+2*CEILING_STRIP_WIDTHS["space"]+CEILING_STRIP_WIDTHS["wide"]
+)
+basement_s04_ceiling_garden_y = basement_ceiling_garden_y-basement_s04_omitted_garden_width
 basement_ceiling_s04 = basement_ceiling_storey.miako_slab(
     "Basement ceiling - S.04",
-    start=(basement_s04_ceiling_start_x, basement_ceiling_garden_y),
-    end=(basement_s04_ceiling_end_x, basement_ceiling_garden_y),
+    start=(basement_s04_ceiling_start_x, basement_s04_ceiling_garden_y),
+    end=(basement_s04_ceiling_end_x, basement_s04_ceiling_garden_y),
     direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street. Keep the first beam and first wide bay.
-        "beam", "space", "wide", "space",
+    structure=[  # Garden to street, beginning at the original second beam.
         # Edit or append the remaining rows here; there is no HEB split.
         "beam",
         "space", "wide", "space", "beam",
@@ -1805,27 +1838,35 @@ basement_ceiling_s04 = basement_ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-basement_stair_opening_end_y = basement_s05_y0+BASEMENT_STAIR_OPENING_LENGTH
-if not 0 < BASEMENT_STAIR_OPENING_LENGTH < basement_s05_y1-basement_s05_y0:
-    raise ValueError("BASEMENT_STAIR_OPENING_LENGTH must leave a ceiling at the garden end of S.05")
-basement_s05_ceiling_shift_y = max(
-    0.0, basement_stair_opening_end_y-min(point[1] for point in ceiling_stairway.footprint),
-)
+basement_s05_ceiling_shift_y = basement_ceiling_garden_y-ceiling_stairway.start[1]
 basement_ceiling_s05 = add_basement_ceiling_copy(
     ceiling_stairway, "Basement ceiling - S.05", "S.05", shift_y=basement_s05_ceiling_shift_y,
 )
 
-# The same bounded chimney opening leaves full block rows on both sides.
-basement_chimney_first_bay_width = (
-    CEILING_STRIP_WIDTHS["beam"]+2*CEILING_STRIP_WIDTHS["space"]+CEILING_STRIP_WIDTHS["wide"]
+# The front flange edge is referenced to the ground-floor inside wall face.
+# Keep the user's MIAKO layout independent of this added steel member.
+STAIRWAY_HEB_FRONT_WALL_DISTANCE = 3.0
+STAIRWAY_HEB_BEARING = 0.10
+ground_front_wall_inner_y = wall_front_g.start[1]+wall_front_g.body_offset+wall_front_g.thickness
+basement_s05_heb_front_y = ground_front_wall_inner_y+STAIRWAY_HEB_FRONT_WALL_DISTANCE
+basement_s05_edge_heb = add_stairway_edge_heb(
+    basement_ceiling_storey,
+    "Basement ceiling - S.05 stair-opening HEB180",
+    left_face=basement_s05_x0, right_face=basement_s05_x1,
+    front_y=basement_s05_heb_front_y, bearing=STAIRWAY_HEB_BEARING,
 )
-basement_chimney_clearance_region = box(
-    CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-BASEMENT_CHIMNEY_BLOCK_CLEARANCE,
-    basement_ceiling_garden_y-basement_chimney_first_bay_width,
-    CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2+BASEMENT_CHIMNEY_BLOCK_CLEARANCE,
-    basement_ceiling_garden_y-CEILING_STRIP_WIDTHS["beam"],
+ceiling_stairway_edge_heb = add_stairway_edge_heb(
+    ceiling_storey, "Ceiling - Schodiště stair-opening HEB180",
+    left_face=stairway_ceiling_stairway_face_x, right_face=stairway_ceiling_west_face_x,
+    front_y=basement_s05_heb_front_y, bearing=STAIRWAY_HEB_BEARING,
 )
-basement_chimney_opening = trim_first_miako_block_row(basement_ceiling_s04, basement_chimney_clearance_region)
+
+basement_stair_opening_end_y = min(
+    basement_s05_heb_front_y, min(point[1] for point in basement_ceiling_s05.footprint),
+)
+basement_stair_opening_length = basement_stair_opening_end_y-basement_s05_y0
+if not 0 < basement_stair_opening_length < basement_s05_y1-basement_s05_y0:
+    raise ValueError("S.05 ceiling must leave a stair opening and cover the garden end of the room")
 
 basement_ceilings_by_room = {
     "S.01": (basement_ceiling_s01,),
@@ -1837,14 +1878,13 @@ basement_ceilings_by_room = {
 basement_ceiling_slabs = tuple(slab for slabs in basement_ceilings_by_room.values() for slab in slabs)
 basement_ceiling_coverage_by_room = {
     identifier: unary_union([
-        Polygon(slab.footprint).difference(basement_chimney_clearance_region)
-        if slab == basement_ceiling_s04 else Polygon(slab.footprint)
+        Polygon(slab.footprint)
         for slab in slabs
     ])
     for identifier, slabs in basement_ceilings_by_room.items()
 }
 # Finish only the clear room areas beneath the existing ceiling footprints,
-# retaining the stair opening, chimney notch and unfinished street-side areas.
+# retaining the stair opening and omitted garden/street-side areas.
 basement_ceiling_insulation = []
 basement_ceiling_wood = []
 for identifier, coverage in basement_ceiling_coverage_by_room.items():
@@ -1904,7 +1944,10 @@ ceiling_wall_bounds = (
 )
 
 ceiling_plan_min, ceiling_plan_max = (0., 0.), (HOUSE_WIDTH, HOUSE_DEPTH)
-ceiling_stair_opening_end_y = min(point[1] for point in ceiling_stairway.footprint)
+ceiling_stair_opening_end_y = min(
+    ceiling_stairway_edge_heb.start[1]-ceiling_stairway_edge_heb.width/2,
+    min(point[1] for point in ceiling_stairway.footprint),
+)
 ceiling_schedule_rows = [
     {"location": "0.01, 0.02", "slab": ceiling_garden_rooms},
     {"location": "0.03", "slab": (ceiling_room3, ceiling_room3_front)},
@@ -1932,9 +1975,13 @@ def add_ceiling_beam_spacing_dimensions(drawing, slab, *, side):
     # Aligned room-3/bathroom rows share one outside spacing chain.
     counterpart = {ceiling_bathroom: ceiling_room3,
                    ceiling_bathroom_front: ceiling_room3_front}.get(slab)
-    if counterpart is not None and len(slab.beams) == len(counterpart.beams):
-        if all(math.isclose(first[0][1], second[0][1], abs_tol=1e-9)
-               for first, second in zip(slab.beam_centerlines, counterpart.beam_centerlines)):
+    if counterpart is not None:
+        rows = [start[1] for start, end in slab.beam_centerlines]
+        other_rows = [start[1] for start, end in counterpart.beam_centerlines]
+        # The bathroom can omit its first bay while sharing all later spacings.
+        if any(all(math.isclose(first, second, rel_tol=0, abs_tol=1e-9)
+                   for first, second in zip(rows, other_rows[offset:offset+len(rows)]))
+               for offset in range(len(other_rows)-len(rows)+1)):
             return
     endpoint = 0 if side == "left" else 1
     lines = slab.beam_centerlines
@@ -3278,6 +3325,25 @@ def add_plumbing_plan(name, storey, cut_height, room_floors, *, room_positions=N
     return drawing
 
 
+def bathroom_grounding_layout():
+    """Align the shower bonding detail with a FeZn lead at the shared wall footing."""
+    wall = wall_basement_s03_s04
+    tangent = (np.asarray(wall.end)-wall.start)/wall.length
+    normal = np.array((-tangent[1], tangent[0]))
+    centreline = np.asarray(wall.start)+normal*(wall.body_offset+wall.thickness/2)
+    shared_x = float(centreline[0])
+    ring_y = float(basement_plan_min[1]+BASEMENT_WALL_THICKNESS/2)
+    footing_front_y = float(basement_plan_min[1]-(FOUNDATION_FOOTING_WIDTH-BASEMENT_WALL_THICKNESS)/2)
+    end = (shared_x, footing_front_y-GROUNDING_LEAD_LENGTH)
+    shower = sewer_fixture_center(bathroom_shower)
+    return dict(
+        bonding_route=(shower, (shared_x, shower[1]), end),
+        footing_lead=((shared_x, ring_y), end),
+        bonding_label=(shared_x+.50, end[1]+.20),
+        footing_label=(shared_x-.55, end[1]-.20),
+    )
+
+
 def electrical_board_ports():
     """Clock-positioned outputs on the cabinet perimeter."""
     board_x, board_y = sewer_fixture_center(rozvadec)
@@ -3306,22 +3372,29 @@ def electrical_trunk_layout():
 
 
 def electrical_ground_fan_coil_layout():
-    """Shared circuit branching below the chimney to the four ground-floor FCUs."""
-    junction = (CHIMNEY_CENTER[0], CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-.30)
-    routes = [("feed", (electrical_board_ports()["fan_coils"], junction))]
-    for unit in (*ground_fan_coils, bathroom_fan_coil):
+    """Horizontal feed and room-3 run, with bathroom and garden-room branches."""
+    port = electrical_board_ports()["fan_coils"]
+    junction = (CHIMNEY_CENTER[0], port[1])
+
+    def center(unit):
         placement = ifcopenshell.util.placement.get_local_placement(unit.ObjectPlacement)
-        end = tuple(float(v) for v in placement[:2, 3])
-        room_id = unit.Name.split()[2]
-        if room_id in ("0.01", "0.02"):
-            # Approach the garden rooms outside the chimney's masonry.
-            side = -1 if room_id == "0.01" else 1
-            turn = (CHIMNEY_CENTER[0]+side*(CHIMNEY_SIZE/2+.10), junction[1])
-            points = (junction, turn, end)
-        else:
-            points = (junction, end)
-        routes.append((room_id, points))
-    return dict(junction=junction, routes=tuple(routes))
+        return tuple(float(v) for v in placement[:2, 3])
+
+    room1, room2, room3 = (center(unit) for unit in ground_fan_coils)
+    bathroom = center(bathroom_fan_coil)
+    bathroom_connection = (bathroom[0], bathroom[1]+.15)
+    branch = (THIRD_ROOM_NARROW_WALL_X+ELECTRICAL_SOCKET_WALL_OFFSET, junction[1])
+    # Keep the final vertical leg outside the casing, then meet it at mid-height.
+    room3_connection = (room3[0]-FAN_COIL_SIZE[1]/2, room3[1])
+    room3_wall_run_x = room3_connection[0]-.10
+    return dict(junction=junction, routes=(
+        ("feed", (port, junction)),
+        ("0.05", (junction, (junction[0], bathroom_connection[1]), bathroom_connection)),
+        ("0.03", (junction, branch, (room3_wall_run_x, junction[1]),
+                  (room3_wall_run_x, room3_connection[1]), room3_connection)),
+        ("0.01", (branch, (branch[0], room1[1]), room1)),
+        ("0.02", (room1, room2)),
+    ))
 
 
 def electrical_upper_fan_coil_layout():
@@ -3353,13 +3426,21 @@ def electrical_room01_layout():
     ports = electrical_board_ports()
     switch = (door_left-.20, bottom)
     light = electrical_room_centres((pokoj1,))[0][pokoj1.room_id]
+    light_port = ports["0.01_light"]
+    # Retain the existing horizontal run below the chimney, referenced to the cabinet corner.
+    cabinet_left = sewer_fixture_center(rozvadec)[0]-ROZVADEC_SIZE[0]/2
+    chimney_turn = (CHIMNEY_CENTER[0], light_port[1]+cabinet_left-CHIMNEY_CENTER[0])
+    light_wall_x = THIRD_ROOM_NARROW_WALL_X+2*ELECTRICAL_SOCKET_WALL_OFFSET
     socket_entry = ((door_right+x1)/2, bottom)
     socket_end = (door_left-.40, bottom)
+    socket_wall_y = wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset-.11
     setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
     return dict(
-        lighting=(ports["0.01_light"], switch, light),
+        lighting=(light_port, (light_port[0], chimney_turn[1]), chimney_turn, (light_wall_x, chimney_turn[1]),
+                  (light_wall_x, switch[1]), switch, light),
         switch=switch,
-        socket_feed=(ports["0.01_sockets"], socket_entry),
+        socket_feed=(ports["0.01_sockets"], (ports["0.01_sockets"][0], socket_wall_y),
+                     (socket_entry[0], socket_wall_y), socket_entry),
         socket_perimeter=(socket_entry, (right, bottom), (right, top), (left, top),
                           (left, bottom), socket_end),
         sockets=(
@@ -3387,12 +3468,15 @@ def electrical_room02_layout():
     switch = (door_right+.20, bottom)
     switch_radius = .075
     light = electrical_room_centres((pokoj2,))[0][pokoj2.room_id]
+    light_port = ports["0.02_light"]
     socket_entry, socket_end = (left, bottom), (door_right+.40, bottom)
+    socket_wall_y = wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset-.05
     setback = ELECTRICAL_SOCKET_CORNER_DISTANCE
     return dict(
-        lighting=(ports["0.02_light"], switch, light),
+        lighting=(light_port, (light_port[0], switch[1]), switch, light),
         switch=switch, switch_radius=switch_radius,
-        socket_feed=(ports["0.02_sockets"], socket_entry),
+        socket_feed=(ports["0.02_sockets"], (ports["0.02_sockets"][0], socket_wall_y),
+                     (socket_entry[0], socket_wall_y), socket_entry),
         socket_perimeter=(socket_entry, (left, top), (right, top), (right, bottom), socket_end),
         sockets=(
             ("bottom-left left wall", (left, y0+setback), "right", .1125),
@@ -3429,9 +3513,10 @@ def electrical_room03_layout():
     # A short shoulder-side branch supplies the second socket at the starting corner.
     shoulder_socket = ((narrow_x+wide_x)/2, wide_top)
     return dict(
-        lighting=(ports["0.03_light"], switch, light),
+        lighting=(ports["0.03_light"], (switch[0], ports["0.03_light"][1]), switch,
+                  (switch[0], light[1]), light),
         switch=switch, switch_direction="left",
-        socket_feed=(ports["0.03_sockets"], socket_entry),
+        socket_feed=(ports["0.03_sockets"], (socket_entry[0], ports["0.03_sockets"][1]), socket_entry),
         socket_perimeter=(shoulder_socket, socket_entry, (wide_right, bottom), (left, bottom),
                           (left, top), (narrow_right, top), socket_end),
         sockets=(
@@ -3450,16 +3535,17 @@ def electrical_room03_layout():
 
 
 def electrical_room04_layout():
-    """Board to hall light first, then to the hall-side switch beside room 0.02."""
+    """Vertical feed to the garden-room wall, then via the existing hall switch."""
     port = electrical_board_ports()["0.04_light"]
     opening = pokoj2_door.FillsVoids[0].RelatingOpeningElement
     door_right = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])+ROOM_DOOR_OPENING_WIDTH
     wall_y = wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset-ELECTRICAL_SOCKET_WALL_OFFSET
     switch = (door_right+.20, wall_y)
-    switch_approach = (switch[0]+.30, switch[1])
+    switch_departure = (switch[0]+.30, switch[1])
     light = electrical_room_centres((chodba,))[0][chodba.room_id]
     return dict(
-        lighting=(port, light, switch_approach, switch),
+        lighting=(port, (port[0], wall_y), switch, switch_departure,
+                  (switch_departure[0], light[1]), light),
         switch=switch, switch_direction="down",
     )
 
@@ -3473,15 +3559,16 @@ def electrical_room05_layout():
     opening = bathroom_door.FillsVoids[0].RelatingOpeningElement
     door_right = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])+ROOM_DOOR_OPENING_WIDTH
     switch = (door_right+.20, top)
-    light_departure = (switch[0]+.30, switch[1])
     light = electrical_room_centres((koupelna,))[0][koupelna.room_id]
+    light_wall_entry = (ports["0.05_light"][0], top)
+    light_turn = (light[0], top)
     basin = sewer_fixture_center(bathroom_basin)
     tuv = sewer_fixture_center(bathroom_water_heater)
     hydrobox = sewer_fixture_center(bathroom_hydrobox)
-    socket_entry, socket_end = (right, top), (left, y1-.40)
+    socket_entry, socket_end = (right, top), (left, y1-.55)
     hydrobox_socket_x = min(right-.15, hydrobox[0]+HYDROBOX_SIZE[0]/2+.15)
     return dict(
-        lighting=(ports["0.05_light"], switch, light_departure, light),
+        lighting=(ports["0.05_light"], light_wall_entry, switch, light_turn, light),
         switch=switch, switch_direction="down",
         socket_feed=(ports["0.05_sockets"], socket_entry),
         socket_perimeter=(socket_entry, (right, bottom), (left, bottom), socket_end),
@@ -3503,7 +3590,7 @@ def electrical_stair_lighting_layout():
     wall_x = west_inner_x-ELECTRICAL_SOCKET_WALL_OFFSET
     outside_switch = (wall_x, door_bottom-.20)
     inside_switch = (wall_x, outside_switch[1]-.40)
-    outside_approach = (wall_x, outside_switch[1]+.20)
+    outside_approach = (wall_x, ports["outside_light"][1])
     inside_approach = (wall_x, inside_switch[1]+.20)
     landing_y = (STAIR_LANDING_START_Y+STAIR_LANDING_END_Y)/2
     riser = (wall_x, landing_y)
@@ -3519,7 +3606,8 @@ def electrical_stair_lighting_layout():
         outside_light=outside_light, landing_light=landing_light, riser=riser,
         upper_switch=upper_switch,
         upper_route=(riser, landing_light, (upper_wall_x, landing_y), upper_switch),
-        outside_route=(ports["outside_light"], outside_approach, outside_switch, outside_light),
+        outside_route=(ports["outside_light"], outside_approach, outside_switch,
+                       (wall_x, outside_light[1]), outside_light),
         inside_route=(ports["stair_landing_light"], inside_approach, inside_switch, riser),
     )
 
@@ -4132,20 +4220,33 @@ if "found" in sys.argv or "foundation" in sys.argv:
             corner, tuple(value+sign*diagonal_offset for value, sign in zip(corner, signs)),
             style="dashed", color="red", name=f"FeZn corner lead {index}",
         )
-    # Resolve the actual entrance opening, rather than assuming it is on the
-    # street wall. It currently sits in the west exterior wall.
-    entrance_opening = entrance_door.FillsVoids[0].RelatingOpeningElement
-    host_element = entrance_opening.VoidsElements[0].RelatingBuildingElement
-    entrance_host = next(w for w in ground.walls if w.id() == host_element.id())
-    entrance_tangent = (np.asarray(entrance_host.end)-entrance_host.start)/entrance_host.length
-    entrance_normal = np.array((-entrance_tangent[1], entrance_tangent[0]))
-    entrance_placement = ifcopenshell.util.placement.get_local_placement(entrance_opening.ObjectPlacement)
-    entrance_reference = (entrance_placement @ np.array((ENTRANCE_OPENING_WIDTH/2, 0, 0, 1)))[:2]
-    entrance_grounding_start = entrance_reference+entrance_normal*(entrance_host.body_offset+entrance_host.thickness/2)
-    entrance_grounding_end = entrance_grounding_start-entrance_normal*(BASEMENT_WALL_THICKNESS/2+GROUNDING_LEAD_LENGTH)
+    # Align both side exits with the centreline of the garden-room divider.
+    divider = wall_basement_garden_rooms
+    divider_tangent = (np.asarray(divider.end)-divider.start)/divider.length
+    divider_normal = np.array((-divider_tangent[1], divider_tangent[0]))
+    divider_centre = (np.asarray(divider.start)+np.asarray(divider.end))/2
+    divider_centre += divider_normal*(divider.body_offset+divider.thickness/2)
+    lead_offset = BASEMENT_WALL_THICKNESS/2+GROUNDING_LEAD_LENGTH
+    for side, x, sign in (("east", grounding_min[0], -1), ("west", grounding_max[0], 1)):
+        drawing1.add_line(
+            (float(x), float(divider_centre[1])),
+            (float(x+sign*lead_offset), float(divider_centre[1])),
+            style="dashed", color="red", name=f"FeZn {side} garden-room wall lead",
+        )
+    garden_mid_x = float((grounding_min[0]+grounding_max[0])/2)
     drawing1.add_line(
-        tuple(float(v) for v in entrance_grounding_start), tuple(float(v) for v in entrance_grounding_end),
-        style="dashed", color="red", name="FeZn entrance lead",
+        (garden_mid_x, float(grounding_max[1])),
+        (garden_mid_x, float(grounding_max[1]+lead_offset)),
+        style="dashed", color="red", name="FeZn garden-wall centre lead",
+    )
+    bathroom_grounding = bathroom_grounding_layout()
+    drawing1.add_poly_line(
+        bathroom_grounding["footing_lead"], style="dashed", color="red",
+        name="FeZn bathroom lead at room-3 wall",
+    )
+    drawing1.add_text(
+        bathroom_grounding["footing_label"], "FeZn – koupelna", font_size=2, color="red",
+        name="Foundation bathroom FeZn lead label",
     )
     drawing1.add_line_legend([
         {"style": "solid", "color": "black", "description": "Obrys základových pasů"},
@@ -4519,6 +4620,10 @@ if "ceiling" in sys.argv:
                 name=f"{slab.Name} {label}",
             )
     add_purlin_support_girder_plan(drawing1)
+    add_stairway_edge_heb_plan(
+        drawing1, ceiling_stairway_edge_heb,
+        front_wall_y=ground_front_wall_inner_y, dimension_x=stairway_ceiling_stairway_face_x+.25,
+    )
     drawing1.add_miako_beam_schedule(ceiling_schedule_rows)
     add_ground_room_annotations(drawing1, include_legend=False)
     drawing1.add_chimney_annotation(chimney)
@@ -4548,6 +4653,10 @@ if "ceiling2" in sys.argv:
                                  else "right" if slab == ceiling_stairway else "left"),
         )
     add_stairway_ceiling_bearing_dimensions(drawing1)
+    add_stairway_edge_heb_plan(
+        drawing1, ceiling_stairway_edge_heb,
+        front_wall_y=ground_front_wall_inner_y, dimension_x=stairway_ceiling_stairway_face_x+.25,
+    )
     add_purlin_support_girder_plan(drawing1)
     drawing1.add_dimension(
         start=tuple(ceiling_plan_min),
@@ -4600,12 +4709,13 @@ if "ceiling2" in sys.argv:
         end=(ceiling_stairway.end[0], ceiling_stairway_street_y),
         offset=-0.35,
     )
-    ceiling_stair_opening_dimension_x = (ceiling_wall_bounds[-1][0]+ceiling_wall_bounds[-1][2])/2
-    drawing1.add_dimension(
-        start=(ceiling_stair_opening_dimension_x, BWT),
-        end=(ceiling_stair_opening_dimension_x, ceiling_stair_opening_end_y),
-        name="Ground stairwell clear ceiling opening",
-    )
+    if abs(ceiling_stair_opening_end_y-basement_s05_heb_front_y) > 1e-9:
+        ceiling_stair_opening_dimension_x = (ceiling_wall_bounds[-1][0]+ceiling_wall_bounds[-1][2])/2
+        drawing1.add_dimension(
+            start=(ceiling_stair_opening_dimension_x, ground_front_wall_inner_y),
+            end=(ceiling_stair_opening_dimension_x, ceiling_stair_opening_end_y),
+            name="Ground stairwell clear ceiling opening",
+        )
     drawing1.add_miako_beam_schedule(ceiling_schedule_rows)
     drawing1.add_notes([
         f"Pokoje 1 a 2: společný strop, 14 nosníků {ceiling_garden_rooms.length*1000:.0f} mm ve směru Y, 13 širokých vložkových řad.",
@@ -4616,7 +4726,8 @@ if "ceiling2" in sys.argv:
         "Uložení nosníků je nutné upravit podle stěn v 1.NP.",
         f"Pod sloupky vaznic: dělené HEB{PURLIN_SUPPORT_GIRDER_HEB} v průvlacích {PURLIN_SUPPORT_GIRDER_SIZE[0]*1000:.0f} × {PURLIN_SUPPORT_GIRDER_SIZE[1]*1000:.0f} mm; uložení {PURLIN_SUPPORT_GIRDER_BEARING*1000:.0f} mm na všech stěnách.",
         f"Otvor schodiště: {(ceiling_stair_opening_end_y-BWT)*1000:.0f} mm od vnitřního líce uliční stěny.",
-        "Detail otvoru pro komín zatím není řešen.",
+        f"Schodiště: skladba jako S.05, bez přesahu na zahradní příčnou stěnu; HEB180 s uložením {STAIRWAY_HEB_BEARING*1000:.0f} mm.",
+        "0.03: zahradní část bez přesahu na příčnou stěnu; 0.05: první nosník a řada vložek vynechány kvůli komínu.",
     ])
     drawing1.add_chimney_annotation(chimney)
     add_purlin_support_planning_markers(drawing1)
@@ -4642,6 +4753,9 @@ if "basement_ceiling" in sys.argv:
                 drawing1, slab, wall_bounds=basement_rooms_by_id[identifier].bounds,
                 bearing_offset=-0.65 if identifier == "S.04" else -0.3,
             )
+    add_stairway_edge_heb_plan(
+        drawing1, basement_s05_edge_heb, front_wall_y=basement_s05_y0, dimension_x=basement_s05_x0+.25,
+    )
     drawing1.add_miako_beam_schedule(basement_ceiling_schedule_rows)
     for room in basement_rooms:
         region = room["region"]
@@ -4681,6 +4795,9 @@ if "basement_ceiling2" in sys.argv:
     drawing1.add_miako_beam_dimensions(basement_ceiling_s03, side="start", offset=0.7)
     drawing1.add_miako_beam_dimensions(basement_ceiling_s04, side="end", offset=0.45)
     drawing1.add_miako_beam_dimensions(basement_ceiling_s05, side="end", offset=0.65)
+    add_stairway_edge_heb_plan(
+        drawing1, basement_s05_edge_heb, front_wall_y=basement_s05_y0, dimension_x=basement_s05_x0+.25,
+    )
     drawing1.add_dimension(
         start=tuple(basement_plan_min),
         end=(float(basement_plan_max[0]), float(basement_plan_min[1])), offset=-1.0,
@@ -4711,21 +4828,24 @@ if "basement_ceiling2" in sys.argv:
         end=(basement_ceiling_s05.end[0], basement_s05_ceiling_street_y),
         offset=-0.35,
     )
-    basement_stair_opening_dimension_x = (basement_s05_x0+basement_s05_x1)/2
-    drawing1.add_dimension(
-        start=(basement_stair_opening_dimension_x, basement_s05_y0),
-        end=(basement_stair_opening_dimension_x, basement_stair_opening_end_y),
-        name="S.05 clear ceiling opening from inside street wall",
-    )
+    if abs(basement_stair_opening_end_y-basement_s05_heb_front_y) > 1e-9:
+        # The HEB edge dimension already gives the opening when it is nearer.
+        basement_stair_opening_dimension_x = (basement_s05_x0+basement_s05_x1)/2
+        drawing1.add_dimension(
+            start=(basement_stair_opening_dimension_x, basement_s05_y0),
+            end=(basement_stair_opening_dimension_x, basement_stair_opening_end_y),
+            name="S.05 clear ceiling opening from inside street wall",
+        )
     drawing1.add_miako_beam_schedule(basement_ceiling_schedule_rows)
     drawing1.add_notes([
         f"Uložení nosníků min. {CEILING_BEAM_BEARING*1000:.0f} mm na obou koncích; délky po 250 mm.",
         "S.01/S.02: 7 nosníků 3750 mm, 6 širokých řad, mezery 5 mm, vystředěno nad místnostmi.",
         "S.03/S.04: samostatné průběžné skladby bez dělení u HEB; další řady se doplní k ulici.",
-        f"S.05: skladba 0.04 posunuta k zahradě o {basement_s05_ceiling_shift_y*1000:.0f} mm kvůli otvoru.",
-        f"Otvor nad S.05: {BASEMENT_STAIR_OPENING_LENGTH*1000:.0f} mm od vnitřního líce uliční stěny.",
+        f"S.03/S.05: první nosník zasahuje {BASEMENT_CEILING_GARDEN_WALL_OVERLAP*1000:.0f} mm na zahradní příčnou stěnu.",
+        f"Otvor nad S.05: {basement_stair_opening_length*1000:.0f} mm od vnitřního líce uliční stěny.",
+        f"S.05 HEB180: přední hrana {STAIRWAY_HEB_FRONT_WALL_DISTANCE*1000:.0f} mm od líce uliční stěny 1.NP, {(basement_s05_heb_front_y-basement_s05_y0)*1000:.0f} mm v suterénu; uložení {STAIRWAY_HEB_BEARING*1000:.0f} mm.",
         "Styk protilehlých nosníků na společných stěnách zatím není řešen.",
-        "S.04: zachován výřez vložek a nadbetonávky před komínem.",
+        "S.04: první nosník a první řada vložek vynechány kvůli komínu; ostatní řady beze změny polohy.",
     ])
     drawing1.add_chimney_annotation(chimney)
     add_house_cut_symbols(drawing1)
@@ -6128,7 +6248,20 @@ if "elektro" in sys.argv or "elektro_ground" in sys.argv:
         {"color": "blue", "line_width": ELECTRICAL_LINE_WIDTH, "description": "Zásuvkový okruh"},
         {"color": ELECTRICAL_FAN_COIL_CIRCUIT_COLOR, "line_width": ELECTRICAL_LINE_WIDTH,
          "description": "Okruh Fancoily"},
+        {"color": ELECTRICAL_BONDING_COLOR, "style": "dashed", "line_width": ELECTRICAL_LINE_WIDTH,
+         "description": "Pospojování a uzemnění"},
     ))
+    bathroom_grounding = bathroom_grounding_layout()
+    elektro_ground.add_poly_line(
+        bathroom_grounding["bonding_route"], style="dashed", color=ELECTRICAL_BONDING_COLOR,
+        line_width=ELECTRICAL_LINE_WIDTH, foreground=True,
+        name="elektro_ground Shower bonding to FeZn foundations",
+    )
+    elektro_ground.add_text(
+        bathroom_grounding["bonding_label"], "Připojení\nk FeZn\nv základech",
+        font_size=2, color=ELECTRICAL_BONDING_COLOR,
+        name="elektro_ground Shower FeZn connection label",
+    )
     add_room_electrical_routes(elektro_ground, "0.01", electrical_room01_layout())
     add_room_electrical_routes(elektro_ground, "0.02", electrical_room02_layout())
     add_room_electrical_routes(elektro_ground, "0.03", electrical_room03_layout())

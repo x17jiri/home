@@ -106,9 +106,15 @@ room width, leaving 20 mm at each side. End bearings are equal: currently
 S.03 and S.04 each have one independent `basement_ceiling_storey.miako_slab()`
 specification: `basement_ceiling_s03` and `basement_ceiling_s04`. Edit their
 literal `structure=[...]` lists directly. Both run from garden to street,
-with their garden edge fixed by `basement_ceiling_garden_y`. Keep the first
-four entries (`beam, space, wide, space`) for the existing chimney-side
-beam and block bay; edit or append the remaining rows freely. Appending
+with their original garden edge fixed by `basement_ceiling_garden_y`, derived from
+the supporting wall's street-side face plus
+`BASEMENT_CEILING_GARDEN_WALL_OVERLAP = 0.03 m`. The full layouts move with
+this edge, preserving their beam/block spacing. S.04 omits the original first
+beam and wide block row to clear the chimney. Its start is offset 625 mm
+towards the street by `basement_s04_omitted_garden_width`, and those four
+entries (`beam, space, wide, space`) are removed from its structure list.
+Every remaining beam and block keeps its previous position. Edit or append
+the remaining rows freely. Appending
 `space, wide, space, beam` adds one wide bay and beam, extending the ceiling
 625 mm towards the street. No HEB position or upstairs row list limits
 these basement layouts.
@@ -117,24 +123,34 @@ The number and placement of later rows follow each independent list.
 `BASEMENT_S03_BEAM_LENGTH` / `BASEMENT_S03_EAST_BEARING`
 set the 3500 mm S.03 span with 160/140 mm bearing.
 `BASEMENT_S04_BEAM_LENGTH` / `BASEMENT_S04_MIDDLE_BEARING` set the 2500 mm
-S.04 span with 150 mm bearing at each end. S.04's first block row alone is
-cut only between the chimney's left face minus 50 mm and its right face
-plus 50 mm. Blocks continue on both sides of the opening; a matching bounded
-opening cuts the single concrete cover. `trim_first_miako_block_row()` handles
-this same operation upstairs and downstairs. Later block rows use the full
-clear room width. The first beam is not cut.
+S.04 span with 150 mm bearing at each end. S.04's concrete cover and ceiling
+finishes follow the shortened footprint, leaving the omitted garden-side bay
+open across its full width. Its nine remaining beams and later full-width
+block rows keep their positions; no chimney trim is needed downstairs.
 
-S.05 reuses the six-beam upstairs 0.04 stairway pattern and its 2500 mm
-spans. Its 140/160 mm basement bearings fit the existing walls. The layout
-shifts 30 mm towards the garden so its street edge remains exactly 3000 mm
-from the basement street wall's inside face. `BASEMENT_STAIR_OPENING_LENGTH`
-controls this opening, and `basement_s05_ceiling_shift_y` records the shift.
+S.05 reuses the upstairs 0.04 stairway pattern and its 2500 mm
+spans. Its 140/160 mm basement bearings fit the existing walls. Its first beam
+uses the same 30 mm wall overlap as S.03;
+`basement_s05_ceiling_shift_y` records the shift from the upstairs pattern.
+The stair opening follows the nearer of the MIAKO street edge and the HEB
+front flange edge: currently 2970 mm
+from the basement street wall's inside face, stored in
+`basement_stair_opening_length`.
 Only S.05 uses `add_basement_ceiling_copy()`; S.01–S.04 have their own
 explicit structure lists.
 
+S.05 also has a separate native I-section `basement_s05_edge_heb` (HEB180)
+at its street edge, with 100 mm bearing on both supporting walls. Its front
+flange edge is controlled by `STAIRWAY_HEB_FRONT_WALL_DISTANCE = 3.0 m`
+from the ground-floor front wall's inside face: currently 2970 mm from the
+basement wall's inside face. Its bottom aligns with the structural ceiling
+bottom. Both ceiling plans label the HEB and dimension that front edge.
+Adding the HEB leaves the editable MIAKO layout unchanged. The HEB is
+separate from the MIAKO beam counts.
+
 There are five basement slab assemblies, grouped into five room schedules;
 beam counts follow their editable structures. `basement_ceiling_coverage_by_room` combines
-those assemblies and removes the chimney notch for finish coverage.
+those assemblies for finish coverage.
 The basement ceiling bottom is Z = −0.210 m and its top is Z = 0.
 With the current settings:
 
@@ -287,10 +303,17 @@ line-legend entries. Both plans show overall dimensions and wall/footing thickne
 `foundation` is also accepted as an alias for `found`.
 The foundation plan includes a red dashed `Zemnící pásovina FeZn 30/35`
 ring through the four exterior wall centrelines. Each corner has a diagonal
-lead extending `GROUNDING_LEAD_LENGTH = 1.0 m` beyond the masonry corner;
-a perpendicular lead also exits below the entrance-opening centre. The
-entrance lead follows the actual door host and position. These are drawing
+lead extending `GROUNDING_LEAD_LENGTH = 1.0 m` beyond the masonry corner.
+Perpendicular leads exit on both sides at the garden-room dividing wall's
+centreline and at the middle of the garden exterior wall, extending 1 m
+beyond the masonry face. These positions follow the wall geometry. These are drawing
 annotations, rather than 3D grounding hardware.
+An additional red dashed lead leaves the front footing at the centreline of
+the wall shared by room 0.03 and the bathroom, extending 1 m beyond the footing
+edge and labelled `FeZn – koupelna`. `bathroom_grounding_layout()` aligns it
+with the ground electrical plan's shower-bonding route. That plan uses the old
+house's green dashed `Pospojování a uzemnění` style and three-line caption
+`Připojení / k FeZn / v základech` outside the front wall.
 
 Run `python3 house2.py aa bb` for the two full-height sections, from the
 footings through the roof. AA cuts at `X = HOUSE_WIDTH/2 + 0.1` and looks
@@ -522,7 +545,14 @@ room geometry and explicit structure list.
 The upstairs layouts supply S.05's reused stairway pattern; S.03/S.04 are independently editable.
 The stairway ceiling keeps its own editable beam/block pattern and 2500 mm
 span. Its garden edge follows the transverse wall's street face through
-`STAIRWAY_CEILING_GARDEN_WALL_CLEARANCE` (negative values give overlap).
+`STAIRWAY_CEILING_GARDEN_WALL_CLEARANCE = 0.0`: no overlap. This matches S.05's
+30 mm overlap on the basement wall, which is 30 mm thicker on each side.
+Both levels use the same four-beam/two-wide-bay layout and the same HEB180
+front-edge alignment. `ceiling_stairway_edge_heb` spans between this level's
+wall faces with `STAIRWAY_HEB_BEARING = 0.10 m` at each end. Its front flange
+edge is 3000 mm from the ground-floor front wall's inside face, leaving the
+same 130 mm gap to the last MIAKO beam as in S.05. Both ceiling plans label
+the HEB inside its outline and dimension that front edge.
 Layouts keep directly editable `structure` lists, so
 later basement edits do not propagate upstairs. Edit `GARDEN_CEILING_STRUCTURE`,
 `ceiling_room3`, `ceiling_room3_front`, `ceiling_bathroom`, `ceiling_bathroom_front` and
@@ -541,9 +571,10 @@ end (`BATHROOM_CEILING_BEARING`), giving a 2500 mm span with the current
 wall positions. All endpoints follow the physical supporting wall faces.
 Opposing beam ends leave 10 mm clear on the 240 mm middle wall, and block
 offsets stop the ceramic bays at each wall's room-facing surface.
-The split retains the previous main and street-side row patterns and Y
-positions. Each of the four slabs has its own editable `structure` list.
-The chimney-side beam and block bay are included in each main specification.
+Each of the four slabs has its own editable `structure` list. Garden-side
+sections align flush with the garden-room wall's street face; the bathroom
+omits its chimney-side beam and first block row. The HEB supports and
+street-side sections retain their positions.
 Street-side rows start at `BWT-FRONT_CEILING_WALL_OVERLAP` (40 mm overlap).
 Both plans dimension the split spans and bearings, share one spacing chain
 for aligned room-3/bathroom rows. Room 0.03 has its own schedule row;
@@ -562,23 +593,21 @@ tops at `UPPER_FLOOR_START` and bottoms at `ground_floor_height`.
 Both ceiling plans show each girder's outline, HEB label, length and end
 bearings; the MIAKO rows around them remain independently editable.
 
-`ceiling_room3` and `ceiling_bathroom` each combine the former chimney-side
-strip and following main rows into one MIAKO ceiling with an explicit
-`structure` list. Each current list has six beams; the street-side assemblies
-remain separate across the HEB girders. The main ceilings start at
-`upper_ceiling_garden_y`, using `UPPER_CHIMNEY_BEAM_CLEARANCE = 0.03 m`.
+`ceiling_room3` and `ceiling_bathroom` each use one garden-side MIAKO ceiling
+with an explicit `structure` list. The room-3 section has six beams and
+starts at `upper_ceiling_garden_y`, derived from the garden-room wall's
+street face with zero overlap. The bathroom omits the first beam and wide
+block row: its five-beam layout starts 625 mm further towards the street,
+at `upper_bathroom_garden_y`. All remaining rows retain their positions
+within the aligned layout. The street-side assemblies remain separate
+across the unchanged HEB girders.
 Beam lengths and wall bearings remain 3500 mm with 130/110 mm for room 0.03,
 and 2500 mm with 120/120 mm for room 0.05.
 
-In room 0.05's first block bay, `upper_chimney_clearance_region` spans only
-from the chimney's left face minus `UPPER_CHIMNEY_BLOCK_CLEARANCE = 0.05 m`
-to its right face plus the same clearance. `trim_first_miako_block_row()`
-removes wholly excluded blocks, trims the crossing block occurrences and
-cuts a matching opening in the continuous concrete cover. Blocks on both
-sides remain, and all beams retain their full lengths. Basement S.04 uses
-the same helper and 50 mm side clearances. Its insulation and wood layers
-also have physical openings matching the bounded chimney hole; their IFC
-floor-layer areas record the remaining net area.
+The bathroom's concrete cover follows the shortened footprint, leaving
+the omitted first bay open across its full width to clear the chimney,
+as in basement S.04. Later block rows use the complete clear span without
+a local chimney trim.
 Both ceiling plans now dimension the complete main layouts and schedule
 them with their corresponding street-side assemblies.
 Both ground-floor ceiling plans place beam-spacing chains outside the
@@ -838,18 +867,26 @@ before the final turn. `electrical_basement_s05_light_layout()` defines this
 branch, with the entry position derived from the opening.
 `electrical_board_ports()` assigns cabinet outputs using
 `ELECTRICAL_OUTPUT_PORT_CLOCKS`: the basement bundle starts at 9:30 and the
-upstairs bundle at 12:00. Outside lighting connects at 2:30 and the
-inside stair light at 3:00. Bathroom sockets/light connect at 5:00/6:00;
-room 0.03 sockets/light connect at 8:00/9:00. The order reserves positions for
+upstairs bundle at 12:00. Outside lighting connects at 2:30 and the inside
+stair light at 3:00. The room-1 light feed uses the former room-1 socket
+position, with both garden-room socket feeds shifted right towards the bundle.
+Bathroom sockets/light connect at 5:00/6:00;
+room 0.03 sockets/light connect near the bottom of the cabinet's left edge,
+with the light feed just above the sockets. The order reserves positions for
 both black routes, all eleven planned ground-floor lighting/socket feeds,
 and the shared fan-coil circuit;
 only cables already specified are drawn. Room 0.01 and 0.02 feeds use these
 shared positions rather than crowding the cabinet's right side.
-A yellow circuit leaves the rozvaděč at 9 o'clock, reaches a junction 300 mm
-below the chimney's front face, then branches to all four ground-floor fan
-coils (0.01, 0.02, 0.03 and the bathroom console). The garden-room branches
-pass around the chimney's sides. `electrical_ground_fan_coil_layout()` derives
-the endpoints from the equipment placements; the line legend reads
+A yellow circuit starts on the rozvaděč's left edge above the room-3 light
+feed and runs horizontally below the chimney to the upstairs riser junction.
+Its bathroom branch runs down, then left to a connection 150 mm above the
+console's centre, clear of the lowered socket. The room-3 branch continues
+100 mm beyond that FCU's room-facing edge, turns up alongside the casing,
+then connects to its side at mid-height. Before the room-3
+door, a branch turns up along the hallway face of the wall, then connects to
+room 0.01; a horizontal cable links that unit to room 0.02.
+`electrical_ground_fan_coil_layout()` derives the routes from the equipment
+and wall positions; the line legend reads
 `Okruh Fancoily`, using `ELECTRICAL_FAN_COIL_CIRCUIT_COLOR`.
 At the junction a thin black floor-change arrow continues the circuit upstairs.
 The upper plan receives it at the same XY position, shifts 300 mm left to
@@ -857,8 +894,14 @@ clear the chimney, then runs straight towards the garden wall to the FCU's
 room-facing edge. `electrical_upper_fan_coil_layout()` defines this route;
 the upper line legend also includes `Okruh Fancoily`.
 Room 0.01 has two branch cables from the rozvaděč, using straight segments.
-The magenta lighting route goes to a switch 200 mm left of the door opening,
-then to the room light. The blue socket feed enters the bottom-right corner
+The magenta lighting route starts at the former room-1 socket position and runs
+straight up, then left along the existing run below the chimney to the hallway side of the room-3
+drywall, then up into room 0.01 and left to the existing switch 200 mm left
+of its door. The original diagonal from switch to light is retained.
+The blue socket feed runs up from the cabinet, left
+along the garden-room wall and up to its existing bottom-right loop entry.
+Its vertical segment is left of room 0.02's feed, with its horizontal segment
+60 mm farther below the wall. The circuit enters the bottom-right corner
 and follows the room counter-clockwise, stopping 400 mm before the door's
 left jamb. Eight green double sockets normally sit 650 mm from the corners
 along the walls. The short bottom-right wall stub has no socket; that double
@@ -866,24 +909,32 @@ socket is instead at the loop's end, 400 mm before the door's left jamb.
 `electrical_room01_layout()` contains the editable route
 and socket positions. The ground electrical plan's legends include both branch
 colours, the double socket and the switch.
-Room 0.02 mirrors that socket arrangement: a straight feed enters the bottom-left
-corner, then goes up the left wall, across the top, down the right wall and back
+Room 0.02's socket feed runs up parallel to the lighting feeds, turns left
+50 mm before the garden-room wall, then up into the existing bottom-left loop
+entry. The loop goes up the left wall, across the top, down the right wall and back
 along the bottom, ending 400 mm before the door's right jamb. Its eight double
 sockets include one at the loop end instead of on the short wall left of the
-door. The lighting cable goes straight to a normal-size switch 200 mm right of
-the door, then to the light; the lighting line meets the switch stem endpoint.
+door. The lighting feed starts just right of the thick upper-floor bundle on
+the cabinet's top edge, runs straight up parallel to it, then right to the existing
+switch 200 mm right of the door. The diagonal switch-to-light segment is
+retained, with the line connected to the switch stem endpoint.
 Switches belong on the door's handle side so the open leaf does not hide them:
 left of 0.01's door and right of 0.02's door.
 `electrical_room02_layout()` defines its own
 positions; `add_room_electrical_routes()` draws either room's specification.
-Room 0.04 uses its own reserved lighting port. The cable runs directly from the
-rozvaděč to the hallway light, then from the light to the switch stem via a
-short wall approach, without a return to the board. The switch is 200 mm right of
-that door on the hallway side, facing down into 0.04; the room 0.02 switch
-remains on the opposite face. `electrical_room04_layout()` defines this route.
-The outside landing light uses its reserved output port, goes first to a switch
-200 mm below the entrance door on the inside west wall, then to the outside
-light. The inside stair light has a separate switch 400 mm below the first.
+Room 0.04 takes the former 0.02 vertical-feed position, to the right of the
+repositioned room-2 feed. It runs up to the garden-rooms wall, then right to
+the existing switch. A 300 mm continuation along the wall clears the switch
+circle before turning down to the light's Y position, then left to the light.
+The switch is 200 mm right of the room-2 door on the hallway side, facing down
+into 0.04, and connects at its stem. Both switch and light retain their positions.
+`electrical_room04_layout()` defines this route.
+The outside landing light uses its reserved output port, runs horizontally
+to the inside west wall, then up through the existing switch connection
+200 mm below the entrance door. It continues up to the outside light's Y
+position, then right to the light. The switch joins at its stem, with its
+position and direction retained. The inside stair light has a separate switch
+400 mm below the first.
 Its cable goes from the board to that switch, along the west wall to the Y
 centre of the middle landing, then ends in a `to up` symbol. The upper plan
 receives it at the same XY position and connects to the existing landing light.
@@ -942,20 +993,28 @@ rotated 90 degrees counter-clockwise from its original upward orientation.
 `electrical_upper_technical_socket_layout()` defines the route, and the upper
 legends include the socket symbol and socket-circuit colour.
 Bathroom 0.05 has a socket feed to its top-right corner, then down the right
-wall, across the bottom and up the left wall, ending 400 mm below the door wall.
+wall, across the bottom and up the left wall, ending 550 mm below the door wall.
 Four double sockets serve the basin, TUV, hydrobox and loop end before the door;
-the last sits on the left wall instead of the narrow top-left wall stub.
+the last sits on the left wall instead of the narrow top-left wall stub,
+150 mm lower than its former position and below the yellow FCU cable.
 Equipment socket positions follow the model, with offsets to clear labels.
-Its lighting cable goes first to a switch 200 mm right of the door on the
-bathroom side, then to the light. `electrical_room05_layout()` defines both routes.
-Room 0.03 receives its socket feed at the top-right corner of the wide section,
-then runs clockwise down the right wall, across the bottom, up the left wall,
+Its lighting cable runs down from the rozvaděč, then left along the door wall,
+connecting to the existing switch 200 mm right of the door on the bathroom
+side. It continues left to the light's X position, then straight down to the
+light. The switch position and direction are retained, with the wire joining
+its stem. `electrical_room05_layout()` defines both routes.
+Room 0.03's socket feed starts near the bottom of the rozvaděč's left edge,
+runs left along the wall, then down to the existing top-right corner of the
+wide section. The loop runs clockwise down the right wall, across the bottom, up the left wall,
 across the top and down the narrow section's right wall, stopping above its door.
 Ten double sockets cover both sides of the five corners visited by this route;
 a short branch along the shoulder supplies the second socket at its starting
 corner. The lower-right bottom-wall socket stays clear of the street window.
-The lighting feed goes to a switch on the short wall below the door, then to
-the light. `electrical_room03_layout()` defines the routes and socket positions.
+Its lighting feed starts a little higher on the cabinet's left edge, runs
+horizontally behind the room door, then down through the existing switch
+connection and left at the light's Y position to the light. The switch position
+and direction, socket loop and all sockets are retained.
+`electrical_room03_layout()` defines the routes and socket positions.
 All switch cables connect to the outer end of the green stem, rather than the
 small circle. Short approach/departure segments keep the cable from crossing
 the circle, including the hallway, bathroom and entrance/stair switches.
