@@ -475,6 +475,12 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+.cut.layer-material-ztracenebedneni250 {
+    fill: url(#ztracene-bedneni-green) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
 .cut.layer-material-tepelnakrocejovaizolace,
 .cut.material-tepelnakrocejovaizolace {
     fill: url(#thermal-impact-insulation) !important;

@@ -41,6 +41,12 @@
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.15" />
     <line x1="0.5" y1="0.375" x2="0.5" y2="0.625" style="stroke:black; stroke-width:0.08" />
 </pattern>
+<!-- The 250 mm lost-formwork type uses the same hatch over the drywall tint. -->
+<pattern id="ztracene-bedneni-green" width="1" height="1" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+    <rect width="1" height="1" fill="#dfefcf" />
+    <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.15" />
+    <line x1="0.5" y1="0.375" x2="0.5" y2="0.625" style="stroke:black; stroke-width:0.08" />
+</pattern>
 <!-- Same line/dash hatch as lost formwork, with the opposite diagonal. -->
 <pattern id="base-plate" width="1" height="1" patternTransform="rotate(-45 0 0)" patternUnits="userSpaceOnUse">
     <rect width="1" height="1" fill="white" />

@@ -43,6 +43,41 @@ class GardenPartitionTests(unittest.TestCase):
                          [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Brick"])
         self.assertIn("partition wall - VPC 115 mm", ifcopenshell.util.element.get_type(wall).Name)
 
+    def test_upper_stairway_wall_split_joins_the_front_ring_beam(self):
+        v = self.v
+        masonry = v["wall_kitchen_stairway_u"]
+        drywall = v["wall_technical_stairway_u"]
+        mlo, mhi = self.bounds(masonry)
+        dlo, dhi = self.bounds(drywall)
+        self.assertAlmostEqual(mhi[0]-mlo[0], .24)
+        self.assertAlmostEqual(dhi[0]-dlo[0], .10)
+        self.assertAlmostEqual(mhi[0], v["STAIR_LEFT_X"])
+        self.assertAlmostEqual(dhi[0], v["STAIR_LEFT_X"])
+        self.assertAlmostEqual(mlo[1], v["BWT"])
+        self.assertAlmostEqual(mhi[1], v["upper_technical_cross_front_y"])
+        self.assertAlmostEqual(dlo[1], mhi[1])
+        self.assertTrue(ifcopenshell.util.element.get_pset(masonry, "Pset_WallCommon", "LoadBearing"))
+        self.assertFalse(ifcopenshell.util.element.get_pset(drywall, "Pset_WallCommon", "LoadBearing"))
+        rings = v["upper_ring_beams"]
+        self.assertEqual({beam.source_wall for beam in rings},
+                         {*v["upper_exterior_walls"], masonry})
+        new_rings = [beam for beam in rings if beam.source_wall == masonry]
+        self.assertEqual(len(new_rings), 1)
+        ring = new_rings[0]
+        rlo, rhi = self.bounds(ring)
+        self.assertAlmostEqual(rhi[0]-rlo[0], .24)
+        self.assertAlmostEqual(rhi[2]-rlo[2], v["UPPER_RING_BEAM_HEIGHT"])
+        np.testing.assert_allclose(rlo[:2], mlo[:2])
+        np.testing.assert_allclose(rhi[:2], mhi[:2])
+        self.assertTrue(ifcopenshell.util.element.get_pset(ring, "BBIM_RingBeam", "ReplacesWallBand"))
+        front_bounds = [self.bounds(beam) for beam in rings if beam.source_wall == v["wall_front_u"]]
+        self.assertTrue(any(
+            abs(hi[1]-rlo[1]) < 1e-9
+            and min(hi[0], rhi[0])-max(lo[0], rlo[0]) > 1e-9
+            and min(hi[2], rhi[2])-max(lo[2], rlo[2]) > 1e-9
+            for lo, hi in front_bounds
+        ))
+
     def test_only_the_ground_partition_ring_beam_is_removed(self):
         v = self.v
         ground_hosts = {beam.source_wall for beam in v["ground_ring_beams"]}
@@ -52,15 +87,77 @@ class GardenPartitionTests(unittest.TestCase):
         self.assertTrue(any(beam.source_wall == basement_host for beam in v["basement_ring_beams"]))
         self.assertTrue(ifcopenshell.util.element.get_pset(basement_host, "Pset_WallCommon", "LoadBearing"))
 
-    def test_basement_support_keeps_its_original_width_and_endpoints(self):
+    def test_basement_support_uses_250mm_type_and_keeps_its_endpoints(self):
         v = self.v
         wall = v["wall_basement_s01_s02"]
         np.testing.assert_allclose(wall.start, (v["HOUSE_WIDTH"]/2, v["GARDEN_ROOMS_WALL_Y"]+v["INNER_BWT"]))
         np.testing.assert_allclose(wall.end, (v["HOUSE_WIDTH"]/2, v["HOUSE_DEPTH"]-v["BWT"]))
         lo, hi = self.bounds(wall)
-        self.assertAlmostEqual(hi[0]-lo[0], .30)
+        self.assertAlmostEqual(hi[0]-lo[0], .25)
         self.assertAlmostEqual(lo[2], v["BASEMENT_FLOOR_START"])
         self.assertAlmostEqual(hi[2], v["BASEMENT_WALL_TOP_Z"])
+
+    def test_basement_front_and_internal_walls_use_250mm_green_type(self):
+        v = self.v
+        exterior_300 = {v["wall_east_g"], v["wall_west_g"], v["wall_back_g"]}
+        self.assertEqual(len(v["basement_rooms"]), 5)
+        for wall in v["basement_walls"]:
+            thick = wall.source_wall in exterior_300
+            expected_type = v["basement_wall_type"] if thick else v["basement_thin_wall_type"]
+            self.assertEqual(ifcopenshell.util.element.get_type(wall), expected_type)
+            self.assertAlmostEqual(wall.thickness, .30 if thick else .25)
+            material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
+            self.assertEqual(material.MaterialLayers[0].Material.Name,
+                             "ztracene bedneni" if thick else "ztracene bedneni 250")
+            tangent = (np.asarray(wall.source_wall.end)-wall.source_wall.start)/wall.source_wall.length
+            normal = np.array((-tangent[1], tangent[0]))
+            old_centre = np.asarray(wall.source_wall.start)+normal*(wall.source_wall.body_offset+wall.source_wall.thickness/2)
+            new_centre = v["wall_body_centreline_point"](wall)
+            self.assertAlmostEqual(float((new_centre-old_centre)@normal), 0)
+
+    def test_basement_beam_grid_uses_configured_distance_from_garden_wall_centre(self):
+        v = self.v
+        wall_lo, wall_hi = self.bounds(v["wall_basement_garden_rooms"])
+        wall_y = (wall_lo[1]+wall_hi[1])/2
+        row_centres = {}
+        for key in ("basement_ceiling_s03", "basement_ceiling_s04", "basement_ceiling_s05"):
+            row_centres[key] = []
+            for shell in v[key].beam_shells:
+                lo, hi = self.bounds(shell)
+                row_centres[key].append((lo[1]+hi[1])/2)
+        self.assertAlmostEqual(wall_y-row_centres["basement_ceiling_s03"][0], v["BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE"])
+        self.assertAlmostEqual(wall_y-row_centres["basement_ceiling_s05"][0], v["BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE"])
+        self.assertAlmostEqual(row_centres["basement_ceiling_s04"][0], row_centres["basement_ceiling_s03"][1])
+        self.assertAlmostEqual(row_centres["basement_ceiling_s04"][0], row_centres["basement_ceiling_s05"][1])
+        _, first_hi = self.bounds(v["basement_ceiling_s04"].beam_shells[0])
+        chimney_lo, _ = self.bounds(v["chimney"])
+        self.assertGreaterEqual(chimney_lo[1]-first_hi[1], 0)
+
+    def test_chimney_has_70mm_clearance_from_250mm_wall_using_centreline_offset(self):
+        v = self.v
+        wall_lo, wall_hi = self.bounds(v["wall_basement_garden_rooms"])
+        _, chimney_hi = self.bounds(v["chimney"])
+        self.assertAlmostEqual((wall_lo[1]+wall_hi[1])/2-chimney_hi[1], .125+.07)
+        self.assertAlmostEqual(wall_lo[1]-chimney_hi[1], .07)
+
+    def test_basement_room3_and_room5_internal_bearings_are_125mm(self):
+        v = self.v
+        room3, room4 = v["basement_ceiling_s03"], v["basement_ceiling_s04"]
+        r3 = v["basement_rooms_by_id"]["S.03"].bounds
+        r5 = v["basement_rooms_by_id"]["S.05"].bounds
+        for beam in room3.beam_shells:
+            lo, hi = self.bounds(beam)
+            self.assertAlmostEqual(hi[0]-r3[2], .125)
+            self.assertAlmostEqual(r3[0]-lo[0], .15)
+            self.assertLessEqual(hi[0], room4.start[0]+1e-9)
+        self.assertAlmostEqual(room3.length, 3.5)
+        for slab in (v["basement_ceiling_s05"], v["basement_ceiling_s05_front"]):
+            self.assertAlmostEqual(slab.length, 2.5)
+            for beam in slab.beam_shells:
+                lo, hi = self.bounds(beam)
+                self.assertAlmostEqual(r5[0]-lo[0], .125)
+                self.assertAlmostEqual(hi[0]-r5[2], .15)
+                self.assertGreaterEqual(lo[0], room4.end[0]-1e-9)
 
     def test_room_floor_boundaries_follow_new_partition_faces(self):
         v = self.v
@@ -112,7 +209,7 @@ class GardenPartitionTests(unittest.TestCase):
         slab = v["ceiling_stairway"]
         row = next(row for row in v["ceiling_schedule_rows"] if row["location"] == "0.04, 0.05")
         self.assertIn(slab, row["slab"])
-        self.assertAlmostEqual(slab.start[1], v["GARDEN_ROOMS_WALL_Y"]-v["STAIRWAY_CEILING_GARDEN_WALL_CLEARANCE"])
+        self.assertAlmostEqual(slab.start[1], v["upper_ceiling_garden_y"])
 
     def test_stairway_ceiling_bearings_and_blocks_follow_physical_wall_faces(self):
         v = self.v
@@ -172,23 +269,37 @@ class GardenPartitionTests(unittest.TestCase):
         self.assertTrue(all(abs(slab.length-2.5) < 1e-9 for slab in merged))
         self.assertEqual(sum(len(slab.beams) for slab in merged), 14)
 
-    def test_upper_garden_ceilings_align_to_wall_and_omit_bathroom_first_bay(self):
+    def test_upper_garden_ceilings_share_basement_grid_and_omit_bathroom_first_bay(self):
         v = self.v
         self.assertNotIn("ceiling_hallway_beam", v)
         self.assertNotIn("ceiling_room3_hallway_beam", v)
         self.assertNotIn("ceiling_bathroom_hallway_beam", v)
         room3, bathroom = v["ceiling_room3"], v["ceiling_bathroom"]
-        wall_lo, _ = self.bounds(v["wall_garden_rooms_g"])
+        wall_lo, wall_hi = self.bounds(v["wall_garden_rooms_g"])
         self.assertEqual(len(room3.beams), 6)
         self.assertEqual(len(bathroom.beams), 5)
-        self.assertAlmostEqual(room3.start[1], wall_lo[1])
-        self.assertAlmostEqual(room3.start[1]-bathroom.start[1], .625)
+        wall_center_y = (wall_lo[1]+wall_hi[1])/2
+        for upper_key, basement_key in (
+            ("ceiling_room3", "basement_ceiling_s03"),
+            ("ceiling_stairway", "basement_ceiling_s05"),
+        ):
+            first_lo, first_hi = self.bounds(v[upper_key].beam_shells[0])
+            first_center = (first_lo[1]+first_hi[1])/2
+            self.assertAlmostEqual(wall_center_y-first_center,
+                                   v["BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE"])
+            lower_lo, lower_hi = self.bounds(v[basement_key].beam_shells[0])
+            self.assertAlmostEqual(first_center, (lower_lo[1]+lower_hi[1])/2)
+        self.assertAlmostEqual(room3.start[1]-bathroom.start[1], .500)
+        upper_lo, upper_hi = self.bounds(bathroom.beam_shells[0])
+        lower_lo, lower_hi = self.bounds(v["basement_ceiling_s04"].beam_shells[0])
+        np.testing.assert_allclose(upper_lo[1], lower_lo[1])
+        np.testing.assert_allclose(upper_hi[1], lower_hi[1])
         np.testing.assert_allclose(
             [start[1] for start, end in bathroom.beam_centerlines],
             [start[1] for start, end in room3.beam_centerlines[1:]],
         )
         for main in (room3, bathroom):
-            self.assertAlmostEqual(min(y for x, y in main.footprint), 2.77)
+            self.assertAlmostEqual(min(y for x, y in main.footprint), 2.88)
             for beam in main.beams:
                 lo, hi = self.bounds(beam)
                 self.assertAlmostEqual(lo[0], main.start[0])
