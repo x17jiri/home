@@ -330,12 +330,14 @@ descending entrance, so there is no full-height wooden guard wall across it.
 The hallway floor continues beneath the retained ground-to-upper stairs to
 the street edge of the ceiling above S.05 (`basement_stair_opening_end_y`).
 Both insulation and floor build-up follow that edge. The remaining opening
-towards the front wall is closed by `ground_stair_opening_board`, a 100 mm
+towards the front wall is closed by `ground_stair_opening_board`, a 50 mm
 timber board with its top flush with the finished ground floor. A second board,
-`basement_stair_opening_board`, retains its original underside level and
-20 mm timber thickness (`BASEMENT_STAIR_OPENING_BOARD_THICKNESS`), independent
-of the regular basement plasterboard lining. CC centers
+`basement_stair_opening_board`, is 12.5 mm plasterboard with its underside
+level with the regular basement lining. CC centers
 200 mm of drawing-only rockwool batting in the clear space between the boards.
+This leaves a 105 mm air gap on each side of the insulation, calculated by
+`GROUND_STAIR_OPENING_AIR_GAP_THICKNESS`. Skladba 7 records this complete
+detail on all section sheets; its SK7 marker appears only in CC.
 The normal basement ceiling insulation stops at the opening's garden edge.
 `GROUND_STAIR_OPENING_BOARD_THICKNESS` and
 `GROUND_STAIR_OPENING_INSULATION_THICKNESS` control this detail. CC also labels

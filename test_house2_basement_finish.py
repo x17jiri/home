@@ -24,7 +24,7 @@ class BasementCeilingFinishTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         source = Path(__file__).with_name("house2.py")
-        with patch.object(sys, "argv", [str(source), "aa", "bb", "basement_ceiling", "basement_ceiling2"]), \
+        with patch.object(sys, "argv", [str(source), "aa", "bb", "cc", "basement_ceiling", "basement_ceiling2"]), \
              patch.object(House, "write"), patch.object(Drawing, "render"), \
              patch.object(DrawingSheet, "render"), redirect_stdout(StringIO()):
             cls.v = runpy.run_path(str(source))
@@ -68,16 +68,38 @@ class BasementCeilingFinishTests(unittest.TestCase):
                 self.assertEqual(element.get_container(obj), v["basement_ceiling_storey"].element)
                 self.assertFalse(element.get_pset(obj, "Pset_SlabCommon", "LoadBearing"))
 
-    def test_stair_opening_retains_its_separate_timber_board(self):
+    def test_stair_opening_has_50mm_floor_and_level_12_5mm_plasterboard(self):
         v = self.v
         board = v["basement_stair_opening_board"]
         lo, hi = self.bounds(board)
-        self.assertEqual(element.get_material(board).Name, "Wood")
-        self.assertAlmostEqual(hi[2]-lo[2], .02)
+        self.assertEqual(element.get_material(board).Name, "Gypsum plasterboard")
+        self.assertAlmostEqual(hi[2]-lo[2], .0125)
         self.assertAlmostEqual(hi[2], v["BASEMENT_WALL_TOP_Z"]-.10)
-        self.assertAlmostEqual(lo[2], v["BASEMENT_WALL_TOP_Z"]-.12)
+        self.assertAlmostEqual(lo[2], v["BASEMENT_FINISHED_CEILING_Z"])
         self.assertNotIn(board, v["basement_ceiling_plasterboard"])
-        self.assertAlmostEqual(v["ground_stair_opening_board"].thickness, .10)
+        upper = v["ground_stair_opening_board"]
+        upper_lo, upper_hi = self.bounds(upper)
+        self.assertEqual(element.get_material(upper).Name, "Wood")
+        self.assertAlmostEqual(upper_hi[2]-upper_lo[2], .05)
+        self.assertAlmostEqual(upper_hi[2], v["ground"].elevation+v["GROUND_FLOOR_THICKNESS"])
+        gap = (upper_lo[2]-hi[2]-v["GROUND_STAIR_OPENING_INSULATION_THICKNESS"])/2
+        self.assertAlmostEqual(gap, .105)
+        self.assertAlmostEqual(gap, v["GROUND_STAIR_OPENING_AIR_GAP_THICKNESS"])
+
+    def test_sk7_is_shared_in_the_list_and_marked_only_on_cc(self):
+        v = self.v
+        self.assertEqual(v["CONSTRUCTION_ASSEMBLIES"][7]["layers"], (
+            "Dřevo | 50 mm", "Vzduchová mezera | 105 mm", "Minerální vata | 200 mm",
+            "Vzduchová mezera | 105 mm", "Sádrokarton | 12.5 mm",
+        ))
+        markers = [e for e in v["house"].model.by_type("IfcAnnotation")
+                   if element.get_pset(e, "BBIM_HexagonMarker", "Identifier") == "SK7"]
+        self.assertEqual(len(markers), 1)
+        marker, = markers
+        self.assertEqual(marker.Name, "cc Skladba 7 marker")
+        placement = ifcopenshell.util.placement.get_local_placement(marker.ObjectPlacement)
+        self.assertAlmostEqual(placement[2, 3]-element.get_pset(marker, "BBIM_HexagonMarker", "LineLength"),
+                               v["BASEMENT_FINISHED_CEILING_Z"]-.1)
 
     def test_sk3_lists_the_regular_build_up_and_crosses_the_plasterboard(self):
         v = self.v

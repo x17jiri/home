@@ -106,7 +106,7 @@ ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.625
 CEMFLOW_AND_FINISH_THICKNESS = 0.07
 GROUND_FLOOR_INSULATION_THICKNESS = 0.08
 GROUND_FLOOR_THICKNESS = GROUND_FLOOR_INSULATION_THICKNESS+CEMFLOW_AND_FINISH_THICKNESS
-PERIMETER_TOP_HEIGHT = 0.0#GROUND_FLOOR_THICKNESS
+PERIMETER_TOP_HEIGHT = -0.21#GROUND_FLOOR_THICKNESS
 GROUND_FINISHED_FLOOR_ELEVATION = 417.9  # Metres above sea level.
 # Corner terrain elevations above sea level: X=0 east, X=HOUSE_WIDTH west;
 # Y=0 street, Y=HOUSE_DEPTH garden.
@@ -142,8 +142,8 @@ CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height d
 BASEMENT_CEILING_INSULATION_THICKNESS = 0.10
 BASEMENT_CEILING_PLASTERBOARD_THICKNESS = 0.0125
 BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_INSULATION_THICKNESS+BASEMENT_CEILING_PLASTERBOARD_THICKNESS
-BASEMENT_STAIR_OPENING_BOARD_THICKNESS = 0.02  # Retain the separate timber detail under the stairs.
-GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.10
+BASEMENT_STAIR_OPENING_BOARD_THICKNESS = BASEMENT_CEILING_PLASTERBOARD_THICKNESS
+GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.05
 GROUND_STAIR_OPENING_INSULATION_THICKNESS = 0.20  # Drawing-only rockwool in CC.
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
 CEILING_ROOM3_SPLIT_Y = BWT+3.0
@@ -158,6 +158,14 @@ FOUNDATION_STREET_STEP_DROP = 0.50
 GROUNDING_LEAD_LENGTH = 1.0  # Length beyond the outside masonry face/corner.
 BASEMENT_WALL_TOP_Z = -CEILING_THICKNESS  # Ground-floor layers start at Z = 0.
 BASEMENT_FINISHED_CEILING_Z = BASEMENT_WALL_TOP_Z-BASEMENT_CEILING_FINISH_THICKNESS
+# Equal air spaces above and below the centred insulation in the stair opening.
+GROUND_STAIR_OPENING_AIR_GAP_THICKNESS = (
+    GROUND_FLOOR_THICKNESS-GROUND_STAIR_OPENING_BOARD_THICKNESS
+    -BASEMENT_FINISHED_CEILING_Z-BASEMENT_STAIR_OPENING_BOARD_THICKNESS
+    -GROUND_STAIR_OPENING_INSULATION_THICKNESS
+)/2
+if GROUND_STAIR_OPENING_AIR_GAP_THICKNESS < 0:
+    raise ValueError("Stair-opening insulation does not fit between floor and ceiling boards")
 BASEMENT_FLOOR_START = BASEMENT_WALL_TOP_Z-BASEMENT_WALL_HEIGHT
 BASEMENT_FLOOR_THICKNESS = CEMFLOW_AND_FINISH_THICKNESS
 BASEMENT_FINISHED_FLOOR_HEIGHT = BASEMENT_FLOOR_START+BASEMENT_FLOOR_THICKNESS
@@ -292,22 +300,22 @@ CONSTRUCTION_ASSEMBLIES = {
         f"Pojistná hydroizolace | {UNDERLAY_THICKNESS*1000:g} mm",
         f"MDF záklop | {MDF_THICKNESS*1000:g} mm",
         f"Krokve {RAFTER_SIZE[0]*1000:g}×{RAFTER_SIZE[1]*1000:g} | {RAFTER_HEIGHT*1000:g} mm",
-        f"Mezikrokevní izolace | {RAFTER_HEIGHT*1000:g} mm",
-        f"Podkrokevní izolace | {THERMAL_INSULATION_UNDER_RAFTERS*1000:g} mm",
+        f"Mezikrokevní minerální vata | {RAFTER_HEIGHT*1000:g} mm",
+        f"Podkrokevní minerální vata | {THERMAL_INSULATION_UNDER_RAFTERS*1000:g} mm",
         f"OSB záklop | {VAPOUR_BARRIER_THICKNESS*1000:g} mm",
         "Pojistná parobrzda | 1 mm",
         f"Laťový rošt {INSTALLATION_SPACE_THICKNESS*1000:g}×60 | {INSTALLATION_SPACE_THICKNESS*1000:g} mm",
         f"2×SDK podhled | {GYPSUM_PLASTERBOARD_THICKNESS*1000:g} mm",
     )},
     2: {"title": "Podlaha podkroví a strop nad 1.NP", "layers": (
-        "Finální povrch | 10 mm",
+        "Finální povrch podlahy | 10 mm",
         f"Cementový potěr | {(CEMFLOW_AND_FINISH_THICKNESS-.01)*1000:g} mm",
         f"Kročejová minerální vata | {(UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS)*1000:g} mm",
         f"Stropní konstrukce MIAKO | {CEILING_THICKNESS*1000:g} mm",
         f"Omítka | {CEILING_PLASTER_THICKNESS*1000:g} mm",
     )},
     3: {"title": "Podlaha 1.NP a strop nad suterénem", "layers": (
-        "Finální povrch | 10 mm",
+        "Finální povrch podlahy | 10 mm",
         f"Cementový potěr | {(CEMFLOW_AND_FINISH_THICKNESS-.01)*1000:g} mm",
         "Kročejová minerální vata | 30 mm",
         f"Podlahový polystyren | {(GROUND_FLOOR_INSULATION_THICKNESS-.03)*1000:g} mm",
@@ -315,8 +323,32 @@ CONSTRUCTION_ASSEMBLIES = {
         f"Minerální vata | {BASEMENT_CEILING_INSULATION_THICKNESS*1000:g} mm",
         f"Sádrokarton | {BASEMENT_CEILING_PLASTERBOARD_THICKNESS*1000:g} mm",
     )},
+    4: {"title": "Podlaha suterénu", "layers": (
+        f"Cementový potěr | {(BASEMENT_FLOOR_THICKNESS-.005)*1000:g} mm",
+        "Hydroizolace | 5 mm",
+        f"Železobetonová deska | {BASEMENT_SLAB_THICKNESS*1000:g} mm",
+    )},
+    5: {"title": "Obvodové zdi", "layers": (
+        f"Finální vrstva fasády | {FACADE_THICKNESS*1000:g} mm",
+        f"Fasádní minerální vata | {FACADE_INSULATION_THICKNESS*1000:g} mm",
+        f"VPC cihla | {BWT*1000:g} mm",
+        "Vnitřní omítka | 10 mm",
+    )},
+    6: {"title": "Obvodové zdi sklepa", "layers": (
+        f"Finální vrstva fasády | {FACADE_THICKNESS*1000:g} mm",
+        f"Perimetrický polystyren | {EXTERIOR_XPS_INSULATION_THICKNESS*1000:g} mm",
+        f"Ztracené bednění | {BASEMENT_THIN_WALL_THICKNESS*1000:g}/{BASEMENT_WALL_THICKNESS*1000:g} mm",
+        "Bez vnitřní omítky | 0 mm",
+    )},
+    7: {"title": "Podlaha pod schody", "layers": (
+        f"Dřevo | {GROUND_STAIR_OPENING_BOARD_THICKNESS*1000:g} mm",
+        f"Minerální vata | {GROUND_STAIR_OPENING_INSULATION_THICKNESS*1000:g} mm",
+        f"Sádrokarton | {BASEMENT_STAIR_OPENING_BOARD_THICKNESS*1000:g} mm",
+    )},
 }
-SECTION_CONSTRUCTION_ASSEMBLY_IDS = {"aa": (1, 2, 3), "bb": (1, 2, 3), "cc": (1, 2, 3)}
+SECTION_CONSTRUCTION_ASSEMBLY_IDS = {
+    "aa": (1, 2, 3, 4, 5, 6), "bb": (1, 2, 3, 4, 5, 6), "cc": (1, 2, 3, 4, 5, 6, 7),
+}
 STAIR_LOWER_FLIGHT_WIDTH = 1.15
 STAIR_UPPER_FLIGHT_WIDTH = 1.0
 STAIR_LANDING_LENGTH = 1.05
@@ -2195,11 +2227,11 @@ if ground_stair_opening_region is not None:
     s05_floor = next(floor for floor in basement_room_floors if floor.room_id == "S.05")
     lower_board_region = Polygon(s05_floor.outline).intersection(ground_stair_opening_region)
     basement_stair_opening_board = basement_ceiling_storey.floor_layer(
-        "Basement ceiling wood - S.05 stair opening",
+        "Basement ceiling plasterboard - S.05 stair opening",
         outline=tuple(lower_board_region.exterior.coords)[:-1],
         thickness=BASEMENT_STAIR_OPENING_BOARD_THICKNESS,
-        start_height=-BASEMENT_CEILING_INSULATION_THICKNESS-BASEMENT_STAIR_OPENING_BOARD_THICKNESS,
-        buildup_material="Wood", color="#C8B090",
+        start_height=BASEMENT_FINISHED_CEILING_Z-basement_ceiling_storey.elevation,
+        buildup_material="Gypsum plasterboard", color="#E8E5DE",
     )
 basement_ceiling_finishes = (
     *basement_ceiling_insulation, *basement_ceiling_plasterboard,
@@ -5764,7 +5796,7 @@ def add_aa_elevation_marks(drawing):
         (FOUNDATION_FOOTING_BOTTOM_Z, False, "Foundation footing bottom level"),
         (min(z for _, z in FOUNDATION_HEIGHT_MAP.steps), False, "Lowered foundation footing bottom level"),
     ):
-        x0, x1 = (HOUSE_WIDTH+1.25, HOUSE_WIDTH+1.85) if west_side else (-1.0, -0.4)
+        x0, x1 = (HOUSE_WIDTH+.4, HOUSE_WIDTH+1.0) if west_side else (-1.0, -0.4)
         drawing.add_elevation_dimension(
             x0=x0, x1=x1, z0=datum_z, z1=z, side="left" if west_side else "right", name=label,
         )
@@ -5901,7 +5933,7 @@ def add_house_section(cut, name, pdf):
     drawing.add_material_legend([
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("diagonal1", f"Příčka - VPC Cihla {GARDEN_PARTITION_THICKNESS*1000:g} mm"),
-        ("liapor-brick", "Zakládací řada - Ytong Statik Plus"),
+        ("liapor-brick", "Zakládací řada - Ytong Start"),
         ("ztracene-bedneni", "Ztracené bednění 300 mm"),
         ("ztracene-bedneni-green", "Ztracené bednění 250 mm"),
         ("base-plate", "Základová deska"),
@@ -5921,6 +5953,63 @@ def add_house_section(cut, name, pdf):
         ("ring_beam", "Železobetonový věnec"),
     ], line_width=0.10)
     for identifier in SECTION_CONSTRUCTION_ASSEMBLY_IDS[name]:
+        if identifier == 7:
+            if name != "cc" or ground_stair_opening_board is None:
+                raise ValueError("SK7 requires CC's under-stairs floor detail")
+            _, front_y, _, back_y = ground_stair_opening_region.bounds
+            marker_z = ground.elevation+GROUND_FLOOR_THICKNESS+.5
+            drawing.add_hexagon_marker(
+                (drawing.x, (front_y+back_y)/2, marker_z), f"SK{identifier}",
+                line_length=marker_z-BASEMENT_FINISHED_CEILING_Z+.1,
+                name=f"{name} Skladba {identifier} marker",
+            )
+            continue
+        if identifier in (5, 6):
+            basement_wall = identifier == 6
+            axis = 0 if name == "aa" else 1
+            if name == "aa":
+                walls = ((wall_basement_east, wall_basement_west) if basement_wall
+                         else (wall_east_g, wall_west_g))
+            else:
+                walls = ((wall_basement_front, wall_basement_back) if basement_wall
+                         else (wall_front_g, wall_back_g))
+            # Select the page's right side, accounting for each cut's view direction.
+            camera_x = np.cross((0, 0, 1), -np.asarray(drawing.direction))
+            walls = (max(walls, key=lambda wall: float(wall_body_centreline_point(wall)@camera_x[:2])),)
+            insulation = EXTERIOR_XPS_INSULATION_THICKNESS if basement_wall else FACADE_INSULATION_THICKNESS
+            plaster = 0 if basement_wall else .01
+            for wall in walls:
+                tangent = (np.asarray(wall.end)-wall.start)/wall.length
+                inward = np.array((-tangent[1], tangent[0]))
+                outer_face = (np.asarray(wall.start)+inward*wall.body_offset)[axis]
+                marker_coordinate = outer_face-inward[axis]*(insulation+FACADE_THICKNESS+.6)
+                end_coordinate = outer_face+inward[axis]*(wall.thickness+plaster+.1)
+                # Keep SK6 just below the lining, above BB's garage opening
+                # and clear of the underground part of the facade.
+                marker_z = (BASEMENT_FINISHED_CEILING_Z-.05 if basement_wall
+                            else ground.elevation+(1.5 if name == "aa" else .95))
+                center = ((marker_coordinate, drawing.y, marker_z) if axis == 0
+                          else (drawing.x, marker_coordinate, marker_z))
+                target = ((end_coordinate, drawing.y, marker_z) if axis == 0
+                          else (drawing.x, end_coordinate, marker_z))
+                delta = np.asarray(target)-center
+                drawing.add_hexagon_marker(
+                    center, f"SK{identifier}",
+                    rotation=math.degrees(math.atan2(float(delta@camera_x), -delta[2])),
+                    line_length=float(np.linalg.norm(delta)),
+                    name=f"{name} Skladba {identifier} {wall.Name} marker",
+                )
+            continue
+        if identifier == 4:
+            marker_z = BASEMENT_FINISHED_FLOOR_HEIGHT+.6
+            center = ((2.0, drawing.y, marker_z) if name == "aa"
+                      else (drawing.x, HOUSE_DEPTH-1.8, marker_z))
+            drawing.add_hexagon_marker(
+                center, f"SK{identifier}",
+                line_length=marker_z-BASEMENT_SLAB_BOTTOM_Z+.1,
+                name=f"{name} Skladba {identifier} marker",
+            )
+            continue
         if identifier == 3:
             marker_z = ground.elevation+GROUND_FLOOR_THICKNESS+.6
             center = ((2.0, drawing.y, marker_z) if name == "aa"
