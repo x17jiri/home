@@ -1219,14 +1219,19 @@ plasterboard. The exterior gable walls keep their separate underside cuts.
 Cuts use the same plain white fill as the other 240 mm VPC walls.
 The removed returns' ring-beam bands are not extended
 through this new wall; the wall-plate ring beams remain on the perimeter.
-The vertical SDK partition turns towards the chimney before the middle
-VPC wall. `LIVING_ROOM_PARTITION_RETURN_CLEARANCE = 0.70 m` is the clear
-distance from the return's garden face to the VPC wall's street face.
-The next vertical section's living-room face aligns with the chimney's
-east face. Separate short pieces stop and resume at the chimney's front
-and back faces, keeping drywall out of its masonry. The return has mitred
-corners, and the room floors follow the new step. The upper plan dimensions
-the actual clearance from the stair arrival to the living-room wall.
+The horizontal SDK wall runs from the chimney-side partition to the stairway
+VPC wall. `LIVING_ROOM_PARTITION_RETURN_CLEARANCE = 1.50 m` is the clear
+distance from its garden face to the middle VPC wall's street face, making
+the experimental 800 mm streetward move permanent. The chimney-side vertical
+SDK extends down to this wall, with its living-room face aligned to the
+chimney's east face. The horizontal wall joins both it and the stairway
+masonry. The upper plan dimensions the clearance to the middle VPC wall.
+A new 100 mm vertical SDK (`wall_upper_bathroom_side_u`) joins the relocated
+horizontal wall to the street face of the middle VPC wall. Its right face is
+150 mm left of the living-room door's construction jamb, controlled by
+`UPPER_BATHROOM_PARTITION_DOOR_CLEARANCE`. The upper plan dimensions its clear
+distance to the chimney (925 mm), to the chimney-side vertical SDK (1225 mm),
+and the chimney's clearance to the horizontal SDK (1025 mm).
 Behind the chimney, one straight diagonal SDK wall meets the VPC opening's
 garden-side jamb, replacing the stepped corner. Its living-room face runs
 from the chimney's east/garden corner to that jamb. The 100 mm wall is cut
@@ -1261,42 +1266,29 @@ the top is at 19 courses, or 2.395 m. With 95 mm of floor layers, these are
 `UPPER_WINDOW_SILL_HEIGHT` and `UPPER_WINDOW_TOP_HEIGHT` hold storey-relative
 coordinates. All have opening dimensions in the upper plan, and
 `upper_room_windows` supplies their combined area to the room legend.
-`upper_room_floors` contains the living room/kitchen (`1.01`), Zachod (`1.02`)
+`upper_room_floors` contains the living room/kitchen (`1.01`), Koupelna (`1.02`)
 and hallway (`1.03`), in room-number order. The former technical area is
 included in the kitchen's floor polygon and area, with no separate room label
 or table row. Plumbing label positions and electrical annotations use each
 room object's `room_id`, so the bathroom number is defined at its floor layer.
-`UPPER_TECHNICAL_CROSS_Y` positions the
-100 mm SDK wall between the kitchen extension and the toilet, with its outer/street face
-aligned to the west purlin post's street face. The opposite wall and its door
-follow this alignment while retaining the bathroom's clear depth.
-`UPPER_TOILET_DEPTH = 1.15 m` sets the toilet's clear depth
-from this wall's garden face to the new horizontal end partition's street
-face. The kitchen-side vertical partition ends at the bathroom's street face,
-opening the former technical area into the kitchen. The stair-side partition
-continues to the front wall and replaces the former technical-area railing.
-It has two sections sharing the stair-side face at `STAIR_LEFT_X`:
-`wall_kitchen_stairway_u` is 240 mm load-bearing VPC from the front wall to
-the bathroom's street face; `wall_technical_stairway_u` is 100 mm drywall
-along the bathroom. The kitchen and bathroom polygons follow their respective
-inside faces, `upper_kitchen_right_x` and `upper_technical_right_x`.
-`upper_ring_beam_walls` includes the new VPC section alongside the exterior
+The bathroom is being rebuilt in stages. Its four former SDK enclosure walls
+and door have been removed, including the vertical partition on the kitchen
+side. The new bathroom floor is the enclosure around the chimney: it follows
+the SDK faces and diagonal wall, excludes the chimney itself, and includes
+the small recess beside the wide VPC opening. The living room/kitchen fills
+the area of the removed enclosure; the hallway follows the new side wall
+and continues through the living-room door threshold. Room polygons meet
+without gaps or overlaps, excluding walls and the stair opening. Room labels
+and areas use these polygons. Existing fixture and service reference coordinates
+(`UPPER_TECHNICAL_CROSS_Y`, `UPPER_TOILET_DEPTH`, `upper_technical_left_x`
+and `upper_technical_right_x`) remain available for the following steps.
+`wall_kitchen_stairway_u` is continuous 240 mm load-bearing VPC from the front
+wall to the relocated horizontal SDK at `living_room_return_y`, with its
+stair-side face at `STAIR_LEFT_X`. `upper_ring_beam_walls` includes it alongside the exterior
 walls, inserting the same reinforced 240 mm-high concrete band at the existing
 upper ring-beam level. The masonry is removed within that band.
-The hallway occupies the area behind the toilet and follows the living-room
-return around the chimney.
-The end partition hosts a 700 mm hinged door in an 800 mm opening. It opens
-outwards into the hallway, with the hinge on the opening's right side.
-`UPPER_TOILET_DOOR_SIDE_CLEARANCE = 0.05 m` locates the opening from the
-vertical living-room wall's toilet face. `UPPER_TOILET_DOOR_WIDTH` and
-`UPPER_TOILET_DOOR_OPENING_WIDTH` control its size. The 700 mm leaf is retained
-as requested. Its manual
-size label uses the standard position inside the outward swing symbol.
-The toilet floor stops at the end wall's inside face, retaining its clear
-area; the hallway floor continues through the doorway threshold. Both
-exclude wall material, and the hallway also excludes the chimney footprint.
-The upper plan dimensions the clear toilet width and depth, both gaps beside
-the west post, and the stair-exit clearance to the new end wall.
+Dimensions to the removed bathroom walls and the former door annotation have
+been removed from the upper plan.
 `UPPER_BEARING_WALL_THICKNESS = 0.24` sets the full-width VPC wall.
 Its front/back faces also locate the adjoining SDK, room floors, basin
 clearance and wall-section dimensions.
@@ -1348,7 +1340,8 @@ post; `upper_toilet_center` controls its placement. The hydrobox has moved
 to the ground-floor bathroom under the window.
 Equipment starts at the finished upper floor;
 `upper_fixture_wall_gap` controls its wall spacing (currently 50 mm).
-Zachod has its own label behind the toilet.
+The Koupelna label follows the new room polygon independently of the retained
+toilet position, using `upper_bathroom_label_position`.
 When a plan cuts below a door's raised swing symbol, export lowers only
 the 2D symbol just beneath the cut. This keeps low upper-floor cuts from
 hiding the bathroom door, without changing its 3D position or floor levels.

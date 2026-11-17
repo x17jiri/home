@@ -11,6 +11,8 @@ from unittest.mock import patch
 import ifcopenshell.geom
 import ifcopenshell.util.element
 import numpy as np
+from shapely.geometry import Point, Polygon, box
+from shapely.ops import unary_union
 
 from ifc_utils import Drawing, House
 
@@ -43,21 +45,15 @@ class GardenPartitionTests(unittest.TestCase):
                          [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Brick"])
         self.assertIn("partition wall - VPC 115 mm", ifcopenshell.util.element.get_type(wall).Name)
 
-    def test_upper_stairway_wall_split_joins_the_front_ring_beam(self):
+    def test_upper_stairway_masonry_reaches_the_chimney_return_and_ring_beam(self):
         v = self.v
         masonry = v["wall_kitchen_stairway_u"]
-        drywall = v["wall_technical_stairway_u"]
         mlo, mhi = self.bounds(masonry)
-        dlo, dhi = self.bounds(drywall)
         self.assertAlmostEqual(mhi[0]-mlo[0], .24)
-        self.assertAlmostEqual(dhi[0]-dlo[0], .10)
         self.assertAlmostEqual(mhi[0], v["STAIR_LEFT_X"])
-        self.assertAlmostEqual(dhi[0], v["STAIR_LEFT_X"])
         self.assertAlmostEqual(mlo[1], v["BWT"])
-        self.assertAlmostEqual(mhi[1], v["upper_technical_cross_front_y"])
-        self.assertAlmostEqual(dlo[1], mhi[1])
+        self.assertAlmostEqual(mhi[1], v["living_room_return_back_y"])
         self.assertTrue(ifcopenshell.util.element.get_pset(masonry, "Pset_WallCommon", "LoadBearing"))
-        self.assertFalse(ifcopenshell.util.element.get_pset(drywall, "Pset_WallCommon", "LoadBearing"))
         rings = v["upper_ring_beams"]
         self.assertEqual({beam.source_wall for beam in rings},
                          {*v["upper_exterior_walls"], masonry})
@@ -77,6 +73,86 @@ class GardenPartitionTests(unittest.TestCase):
             and min(hi[2], rhi[2])-max(lo[2], rlo[2]) > 1e-9
             for lo, hi in front_bounds
         ))
+
+    def test_removed_upper_bathroom_walls_and_door_leave_a_connected_drywall_return(self):
+        v = self.v
+        removed = {"Living room - side partition", "Technika - stairway partition",
+                   "Toilet - end partition", "Technika - toilet cross partition", "Upper toilet door"}
+        self.assertFalse(removed.intersection(e.Name for e in v["house"].model.by_type("IfcElement")))
+        horizontal = v["wall_living_room_return_u"]
+        chimney_wall = v["wall_living_room_chimney_front_u"]
+        masonry = v["wall_kitchen_stairway_u"]
+        np.testing.assert_allclose(horizontal.start, (v["STAIR_LEFT_X"], 3.575))
+        np.testing.assert_allclose(horizontal.end, (v["living_room_chimney_wall_x"], 3.575))
+        np.testing.assert_allclose(chimney_wall.start, horizontal.end)
+        self.assertAlmostEqual(masonry.end[1], v["living_room_return_back_y"])
+        connections = [{c.RelatingElement, c.RelatedElement}
+                       for c in v["house"].model.by_type("IfcRelConnectsPathElements")]
+        self.assertIn({horizontal, chimney_wall}, connections)
+        self.assertIn({horizontal, masonry}, connections)
+        _, return_hi = self.bounds(horizontal)
+        chimney_lo, _ = self.bounds(v["chimney"])
+        self.assertAlmostEqual(chimney_lo[1]-return_hi[1], 1.025)
+        self.assertAlmostEqual(v["living_room_right_wall_front_y"]-return_hi[1], 1.5)
+
+    def test_upper_bathroom_side_wall_has_150mm_jamb_gap_and_joins_both_walls(self):
+        v = self.v
+        wall = v["wall_upper_bathroom_side_u"]
+        lo, hi = self.bounds(wall)
+        self.assertAlmostEqual(hi[0]-lo[0], .10)
+        self.assertAlmostEqual(v["living_room_door_opening_x"]-hi[0], .15)
+        self.assertAlmostEqual(lo[1], v["living_room_return_back_y"])
+        self.assertAlmostEqual(hi[1], v["living_room_right_wall_front_y"])
+        chimney_lo, chimney_hi = self.bounds(v["chimney"])
+        _, parallel_hi = self.bounds(v["wall_living_room_chimney_front_u"])
+        _, horizontal_hi = self.bounds(v["wall_living_room_return_u"])
+        self.assertAlmostEqual(lo[0]-chimney_hi[0], .925)
+        self.assertAlmostEqual(lo[0]-parallel_hi[0], 1.225)
+        self.assertAlmostEqual(chimney_lo[1]-horizontal_hi[1], 1.025)
+        connections = [{c.RelatingElement, c.RelatedElement}
+                       for c in v["house"].model.by_type("IfcRelConnectsPathElements")]
+        self.assertIn({wall, v["wall_living_room_return_u"]}, connections)
+        self.assertIn({wall, v["wall_living_room_back_u"]}, connections)
+
+    def test_upper_room_polygons_follow_the_new_bathroom_without_gaps_or_overlaps(self):
+        v = self.v
+        living, bathroom, hallway = (v[k] for k in
+                                    ("living_room_outline", "upper_toilet_outline", "upper_hallway_outline"))
+        for region in (living, bathroom, hallway):
+            self.assertTrue(region.is_valid)
+            self.assertEqual(len(region.interiors), 0)
+        for a, b in ((living, bathroom), (living, hallway), (bathroom, hallway)):
+            self.assertLess(a.intersection(b).area, 1e-9)
+        self.assertTrue(bathroom.contains(Point(*v["upper_bathroom_label_position"])))
+        self.assertTrue(bathroom.contains(Point(5., 4.5)))
+        self.assertTrue(living.contains(Point(5.5, 3.1)))  # Former WC is now kitchen floor.
+        self.assertTrue(hallway.contains(Point(5.85, 4.5)))
+        self.assertTrue(hallway.covers(v["upper_living_door_threshold"]))
+        self.assertEqual(v["upper_toilet_room"].Name, "Koupelna")
+
+        chimney = box(v["CHIMNEY_CENTER"][0]-.2, v["CHIMNEY_CENTER"][1]-.2,
+                      v["CHIMNEY_CENTER"][0]+.2, v["CHIMNEY_CENTER"][1]+.2)
+        walls = unary_union((
+            v["upper_bearing_wall_region"], chimney,
+            box(v["upper_kitchen_right_x"], v["BWT"], v["STAIR_LEFT_X"], v["living_room_return_back_y"]),
+            box(v["living_room_chimney_face_x"], v["living_room_return_front_y"],
+                v["STAIR_LEFT_X"], v["living_room_return_back_y"]),
+            box(v["living_room_chimney_face_x"], v["living_room_return_back_y"],
+                v["upper_hallway_living_wall_x"], v["CHIMNEY_CENTER"][1]-.2),
+            box(v["upper_bathroom_side_wall_left_x"], v["living_room_return_back_y"],
+                v["upper_bathroom_side_wall_right_x"], v["living_room_right_wall_front_y"]),
+            Polygon((tuple(v["living_room_diagonal_start"]), tuple(v["living_room_diagonal_end"]),
+                     (v["LIVING_ROOM_OPENING_END_X"], v["living_room_diagonal_hall_end_y"]),
+                     (v["living_room_diagonal_hall_x"](v["living_room_diagonal_start"][1]),
+                      v["living_room_diagonal_start"][1]))),
+        ))
+        stair_void = box(v["STAIR_LEFT_X"], v["BWT"], v["HOUSE_WIDTH"]-v["BWT"], v["STAIR_UPPER_END_Y"])
+        expected = box(v["BWT"], v["BWT"], v["HOUSE_WIDTH"]-v["BWT"],
+                       v["HOUSE_DEPTH"]-v["BWT"]).difference(walls).difference(stair_void)
+        self.assertLess(unary_union((living, bathroom, hallway)).symmetric_difference(expected).area, 1e-9)
+        for room, polygon in ((v["living_room"], living), (v["upper_toilet_room"], bathroom),
+                              (v["upper_hallway"], hallway)):
+            self.assertAlmostEqual(room.area, polygon.area)
 
     def test_only_the_ground_partition_ring_beam_is_removed(self):
         v = self.v
