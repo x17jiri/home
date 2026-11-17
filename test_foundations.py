@@ -8,7 +8,7 @@ import ifcopenshell.util.element
 import ifcopenshell.util.shape
 import numpy as np
 
-from foundations import FoundationHeightMap, FoundationSpec, build_foundations
+from foundations import FoundationHeightMap, FoundationSpec, build_foundations, step_strip_footings
 from ifc_utils import House
 
 
@@ -64,6 +64,42 @@ class FoundationProfileTests(unittest.TestCase):
         # supported ground wall is thinner (175 rather than 240 mm).
         p = self.vertices(footers[0])
         self.assertAlmostEqual((p[:, 1].min()+p[:, 1].max())/2, .24/2)
+
+    def test_existing_footers_step_without_changing_their_footprints_or_source_walls(self):
+        house, sources, options = self.fixture()
+        storey = options["footer_storey"]
+        footers = storey.add_strip_footings_from(
+            sources[0].storey, width=.7, height=.5, start_height=0,
+        )
+        before = [self.vertices(f) for f in footers]
+        walls_before = [self.vertices(w) for w in sources]
+        materials = [ifcopenshell.util.element.get_material(f) for f in footers]
+        volumes = [self.volume(f) for f in footers]
+        profile = FoundationHeightMap(((0, -3.5), (1.5, -3)))
+        step_strip_footings(storey, footers, height_map=profile)
+        self.assertEqual(len(house.model.by_type("IfcFooting")), len(footers))
+        for index, (footer, old) in enumerate(zip(footers, before)):
+            vertices = self.vertices(footer)
+            np.testing.assert_allclose(vertices[:, :2].min(0), old[:, :2].min(0))
+            np.testing.assert_allclose(vertices[:, :2].max(0), old[:, :2].max(0))
+            self.assertAlmostEqual(vertices[:, 2].min(), -3.5)
+            self.assertEqual(ifcopenshell.util.element.get_material(footer), materials[index])
+            data = ifcopenshell.util.element.get_pset(footer, "BBIM_StripFooting")
+            self.assertAlmostEqual(data["MinimumBottomZ"], -3.5)
+            self.assertAlmostEqual(data["Height"], .5)
+            if index == 0:
+                self.assertAlmostEqual(vertices[:, 2].max(), -3)
+                self.assertAlmostEqual(self.volume(footer), volumes[index])
+            else:
+                self.assertAlmostEqual(vertices[:, 2].max(), -2.5)
+                self.assertAlmostEqual(self.volume(footer), volumes[index]+.7*.5**2/2)
+                for y, z in ((1.5, -3.5), (2, -3)):
+                    self.assertTrue(np.any(np.isclose(vertices[:, 1], y) & np.isclose(vertices[:, 2], z)))
+            np.testing.assert_allclose(self.vertices(sources[index]), walls_before[index])
+        # Reapplying a profile also uses the persisted global footprint.
+        stepped_volumes = [self.volume(f) for f in footers]
+        step_strip_footings(storey, footers, height_map=profile)
+        np.testing.assert_allclose([self.volume(f) for f in footers], stepped_volumes)
 
     def test_per_wall_dimensions_override_defaults_and_change_the_correct_geometry(self):
         _, sources, options = self.fixture()

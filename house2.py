@@ -22,6 +22,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import nearest_points, unary_union
 
 from ifc_utils import CutDefinition, DrawingSheet, House, offset_plane, plane_height_at, window_area
+from foundations import FoundationHeightMap, step_strip_footings
 from materials import resolve_timber_grade
 from pdf_utils import PDFFolder
 from steel_profiles import heb_profile, heb_section
@@ -151,6 +152,8 @@ BASEMENT_THIN_WALL_THICKNESS = 0.25  # Front wall and all internal basement wall
 BASEMENT_SLAB_THICKNESS = 0.15
 FOUNDATION_FOOTING_WIDTH = 0.74
 FOUNDATION_FOOTING_HEIGHT = 0.50
+FOUNDATION_STREET_STEP_Y = 1.50
+FOUNDATION_STREET_STEP_DROP = 0.50
 GROUNDING_LEAD_LENGTH = 1.0  # Length beyond the outside masonry face/corner.
 BASEMENT_WALL_TOP_Z = -CEILING_THICKNESS  # Ground-floor layers start at Z = 0.
 BASEMENT_FINISHED_CEILING_Z = BASEMENT_WALL_TOP_Z-BASEMENT_CEILING_FINISH_THICKNESS
@@ -1090,6 +1093,34 @@ foundation_footings = foundation.add_strip_footings_from(
     basement, width=FOUNDATION_FOOTING_WIDTH, height=FOUNDATION_FOOTING_HEIGHT,
     start_height=0, material="Concrete", color="#969696",
 )
+FOUNDATION_HEIGHT_MAP = FoundationHeightMap((
+    (0.0, FOUNDATION_FOOTING_BOTTOM_Z-FOUNDATION_STREET_STEP_DROP),
+    (FOUNDATION_STREET_STEP_Y, FOUNDATION_FOOTING_BOTTOM_Z),
+))
+step_strip_footings(foundation, foundation_footings, height_map=FOUNDATION_HEIGHT_MAP)
+front_footing = next(
+    footing for footing in foundation_footings
+    if ifcopenshell.util.element.get_pset(footing, "BBIM_StripFooting", "SourceWall")
+       == wall_basement_front.GlobalId
+)
+front_footing_top_z = ifcopenshell.util.element.get_pset(front_footing, "BBIM_StripFooting", "TopZ")
+foundation_front_wall = foundation.wall(
+    wall_basement_front.start, wall_basement_front.end,
+    wall_type=basement_thin_wall_type,
+    start_height=front_footing_top_z-foundation.elevation,
+    height=BASEMENT_SLAB_BOTTOM_Z-front_footing_top_z,
+)
+foundation_front_wall.Name = "Foundation wall below basement front wall"
+for pset_name, properties in (
+    ("Pset_WallCommon", {"LoadBearing": True}),
+    ("BBIM_FoundationWall", {
+        "SourceWall": wall_basement_front.GlobalId,
+        "BottomZ": front_footing_top_z, "TopZ": BASEMENT_SLAB_BOTTOM_Z,
+        "Thickness": wall_basement_front.thickness,
+    }),
+):
+    pset = ifcopenshell.api.pset.add_pset(house.model, product=foundation_front_wall, name=pset_name)
+    ifcopenshell.api.pset.edit_pset(house.model, pset=pset, properties=properties)
 print(
     "Foundation footing bottom below ground-floor finished floor: "
     f"{ground.elevation+GROUND_FLOOR_THICKNESS-FOUNDATION_FOOTING_BOTTOM_Z:.3f} m"
@@ -3203,7 +3234,10 @@ def add_perimeter_insulation(drawing):
             dx, dy = wall.end[0]-wall.start[0], wall.end[1]-wall.start[1]
             if abs((dx*drawing.direction[0]+dy*drawing.direction[1])/wall.length) < 1-1e-9:
                 continue
-            endpoints = dict(start_z=PERIMETER_BOTTOM_Z, end_z=PERIMETER_TOP_HEIGHT)
+            endpoints = dict(
+                start_z=front_footing_top_z if wall == wall_basement_front else PERIMETER_BOTTOM_Z,
+                end_z=PERIMETER_TOP_HEIGHT,
+            )
         elif math.isclose(wall.start[1], wall.end[1], abs_tol=1e-9):
             endpoints = dict(start_x=float(basement_plan_min[0])-EXTERIOR_XPS_INSULATION_THICKNESS,
                              end_x=float(basement_plan_max[0])+EXTERIOR_XPS_INSULATION_THICKNESS)
@@ -3246,11 +3280,12 @@ def add_house_facades():
             )
 
         basement_wall = next(w for w in basement_walls if w.source_wall == ground_wall)
+        perimeter_bottom_z = front_footing_top_z if basement_wall == wall_basement_front else PERIMETER_BOTTOM_Z
         perimeter.append(house.add_facade_layer(
             basement_wall, name=f"{side} facade - grey perimeter",
             material="Perimeter facade finish", color="#d9d9d9",
-            start_height=PERIMETER_BOTTOM_Z-basement.elevation,
-            height=PERIMETER_TOP_HEIGHT-PERIMETER_BOTTOM_Z,
+            start_height=perimeter_bottom_z-basement.elevation,
+            height=PERIMETER_TOP_HEIGHT-perimeter_bottom_z,
             cuts=(), **panel_options(basement_wall, basement_wall, EXTERIOR_XPS_INSULATION_THICKNESS),
         ))
         face_midpoint = (np.asarray(ground_wall.start)+ground_wall.end)/2
@@ -4430,6 +4465,9 @@ if "found" in sys.argv or "foundation" in sys.argv:
     )]
     for footing in foundation_footings:
         properties = ifcopenshell.util.element.get_pset(footing, "BBIM_StripFooting")
+        if "Footprint" in properties:
+            footing_polygons.append(Polygon(json.loads(properties["Footprint"])))
+            continue
         length, width = properties["Length"], properties["Width"]
         placement = ifcopenshell.util.placement.get_local_placement(footing.ObjectPlacement)
         corners = ((0, -width/2), (length, -width/2), (length, width/2), (0, width/2))
@@ -5616,6 +5654,8 @@ def add_section_ground(drawing):
     wall_start, wall_end = float(basement_plan_min[axis]), float(basement_plan_max[axis])
     left, right = wall_start-SECTION_SOIL_EXTENT, wall_end+SECTION_SOIL_EXTENT
     bottom = FOUNDATION_FOOTING_BOTTOM_Z-SECTION_SOIL_DEPTH
+    if drawing.name in ("bb", "cc") and axis == 1:
+        bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.bottom_profile(wall_start, wall_end))-SECTION_SOIL_DEPTH
     ground_region = Polygon(((left, bottom), (right, bottom), (right, last),
                              (length, last), (0, first), (left, first)))
     finish = EXTERIOR_XPS_INSULATION_THICKNESS+FACADE_THICKNESS
@@ -5623,12 +5663,20 @@ def add_section_ground(drawing):
     interior = box(inner_left, BASEMENT_SLAB_BOTTOM_Z, inner_right, max(first, last)+1)
     gravel_regions = []
     for face, outward, terrain_z in ((inner_left, -1, first), (inner_right, 1, last)):
-        if terrain_z <= BASEMENT_SLAB_BOTTOM_Z:
+        gravel_bottom_z = BASEMENT_SLAB_BOTTOM_Z
+        if drawing.name in ("bb", "cc") and axis == 1 and outward == -1:
+            # Follow the lowered street footing's top; the garden side retains its
+            # existing backfill depth. Use the same profile as the IFC footers.
+            gravel_bottom_z = (
+                FOUNDATION_HEIGHT_MAP.bottom_profile(wall_start, wall_end)[0][1]
+                +FOUNDATION_FOOTING_HEIGHT
+            )
+        if terrain_z <= gravel_bottom_z:
             continue
-        top_width = SECTION_GRAVEL_BOTTOM_WIDTH+(terrain_z-BASEMENT_SLAB_BOTTOM_Z)*SECTION_GRAVEL_SLOPE
+        top_width = SECTION_GRAVEL_BOTTOM_WIDTH+(terrain_z-gravel_bottom_z)*SECTION_GRAVEL_SLOPE
         gravel_regions.append(Polygon((
-            (face, BASEMENT_SLAB_BOTTOM_Z),
-            (face+outward*SECTION_GRAVEL_BOTTOM_WIDTH, BASEMENT_SLAB_BOTTOM_Z),
+            (face, gravel_bottom_z),
+            (face+outward*SECTION_GRAVEL_BOTTOM_WIDTH, gravel_bottom_z),
             (face+outward*top_width, terrain_z), (face, terrain_z),
         )).intersection(ground_region))
     soil = ground_region.difference(unary_union((interior, *gravel_regions)))
@@ -5690,6 +5738,8 @@ def add_house_section(cut, name, pdf):
     """Create a complete vertical section using the same cut as its plan markers."""
     section_top = max(roof_tiles_top_z, chimney.storey.elevation+chimney.end_height)
     section_bottom = FOUNDATION_FOOTING_BOTTOM_Z-SECTION_SOIL_DEPTH
+    if name in ("bb", "cc"):
+        section_bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.steps)-SECTION_SOIL_DEPTH
     drawing = cut.add_drawing(
         house, name, z=(section_bottom+section_top)/2,
         radius=max(6.5, (section_top-section_bottom)/2+.5),

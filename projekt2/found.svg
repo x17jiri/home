@@ -28,7 +28,7 @@ a:hover { cursor: pointer; }
 .IfcRailing.projection { fill: none !important; stroke-width: 0.10 !important; }
 .target-view-ELEVATIONVIEW .IfcRailing.material-Wood.surface,
 .target-view-SECTIONVIEW .IfcRailing.material-Wood.surface {
-    fill: url(#railing-boards) !important;
+    fill: url(#railing-boards-transparent) !important;
 }
 .IfcFurniture.projection,
 .IfcFurniture.cut {
@@ -288,8 +288,8 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .IfcBeam.material-Structuralsteel.cut,
 .IfcBuildingElementPart.material-Structuralsteel.cut {
-    fill: #666 !important;
-    stroke: black !important;
+    fill: #aa00aa !important;
+    stroke: #aa00aa !important;
     stroke-width: 0.04 !important;
 }
 
@@ -1356,6 +1356,9 @@ tspan.door-dimension {
     <rect width="1.2" height="1000" fill="white" />
     <path d="M 0.6 0 V 1000" fill="none" stroke="#555" stroke-width="0.06" />
 </pattern>
+<pattern id="railing-boards-transparent" width="1.2" height="1000" patternUnits="userSpaceOnUse">
+    <path d="M 0.6 0 V 1000" fill="none" stroke="#555" stroke-width="0.06" />
+</pattern>
 
 <pattern id="roof-tiles" width="1" height="1" patternUnits="userSpaceOnUse" data-tile-width-mm="300" data-course-mm="320" data-line-width-mm="0.06">
     <rect width="1" height="1" fill="#e46b55" />
@@ -1452,75 +1455,172 @@ tspan.door-dimension {
     <use ns0:href="#stone-wall-outlines" opacity="0.2" />
 </pattern>
 </defs>    <g ifc:name="Elevation found" class="section target-view-PLANVIEW scale-100" ifc:plane="[[1.000000,0.000000,0.000000,0.000000],[0.000000,1.000000,0.000000,0.000000],[0.000000,0.000000,1.000000,-2.980000],[0.000000,0.000000,0.000000,1.000000]]" ifc:matrix3="[[10.000000,0.000000,21.300001],[0.000000,10.000000,109.949999],[0.000000,0.000000,1.000000]]">
-        <g id="product-ac6d056d-e4d6-43e5-b793-8f2ee8f1b74a" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 1" ifc:guid="2iRGLjvDP3vRUJZoxeyRTA">
-            <path d="M111.44999850889835,112.44999848654662 L18.550000585375166,112.44999848654662"/>
-            <path d="M111.44999850889835,105.04999865194951 L111.44999850889835,112.44999848654662"/>
-            <path d="M18.550000585375169,105.04999865194951 L111.44999850889835,105.04999865194951"/>
-            <path d="M18.550000585375169,112.44999848654662 L18.550000585375169,105.04999865194951"/>
+        <g id="product-955fa6b0-6ec2-4654-9387-8eabd3079302" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 1" ifc:guid="2LNwQmRi96L9E7ZglJ1vC2">
+            <path d="M18.550000585375169,112.44999848654662 L111.44999850889835,112.44999848654662"/>
+            <path d="M18.550000585375169,105.04999865194951 L18.550000585375169,112.44999848654662"/>
+            <path d="M111.44999850889835,105.04999865194951 L18.550000585375166,105.04999865194951"/>
+            <path d="M111.44999850889835,112.44999848654662 L111.44999850889835,105.04999865194951"/>
         </g>
-        <g id="product-c78e8914-5f3b-4313-a984-27a0fc9df6bf" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 2" ifc:guid="37ZeaKNpj34wc49w3ydVQ$">
-            <path d="M111.1999985144863,19.950000554082749 L111.1999985144863,110.0499985401908"/>
-            <path d="M103.79999867988919,19.950000554082749 L111.1999985144863,19.950000554082749"/>
-            <path d="M103.79999867988919,110.0499985401908 L103.79999867988919,19.950000554082749"/>
-            <path d="M111.1999985144863,110.0499985401908 L103.79999867988919,110.0499985401908"/>
+        <g id="product-bc512865-4be8-41d1-8045-3f0f6addb092" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 2" ifc:guid="2yKIXbI_X1qO15FmzgtR2I">
+            <path d="M111.19999851448631,19.950000554082749 L103.7999986798892,19.950000554082749"/>
+            <path d="M103.7999986798892,19.950000554082749 L103.7999986798892,94.9499988777021"/>
+            <path d="M103.7999986798892,94.9499988777021 L111.19999851448631,94.9499988777021"/>
+            <path d="M111.19999851448631,19.950000554082749 L111.19999851448631,94.9499988777021"/>
+            <path d="M111.1999985144863,110.0499985401908 L111.1999985144863,94.9499988777021"/>
+            <path d="M103.7999986798892,110.0499985401908 L111.1999985144863,110.0499985401908"/>
+            <path d="M103.7999986798892,94.9499988777021 L103.7999986798892,110.0499985401908"/>
         </g>
-        <g id="product-cd764bdd-977d-44bb-aa1b-50d301a72d58" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 3" ifc:guid="3DTalTbtr4kweRKDC1forO">
-            <path d="M18.800000579787252,17.550000607726901 L111.1999985144863,17.550000607726915"/>
-            <path d="M18.800000579787252,24.950000442324011 L18.800000579787252,17.550000607726901"/>
-            <path d="M111.1999985144863,24.950000442324026 L18.800000579787252,24.950000442324011"/>
-            <path d="M111.1999985144863,17.550000607726915 L111.1999985144863,24.950000442324026"/>
+        <g id="product-5d1b49f8-f8a8-47cc-8564-e822c2038790" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 3" ifc:guid="1T6qdu_AX7p8Law2B20uUG">
+            <path d="M18.800000579787252,17.550000607726901 L18.800000579787252,24.950000442324011"/>
+            <path d="M18.800000579787252,24.950000442324011 L111.1999985144863,24.950000442324011"/>
+            <path d="M111.1999985144863,24.950000442324011 L111.1999985144863,17.550000607726915"/>
+            <path d="M111.1999985144863,17.550000607726915 L18.800000579787252,17.550000607726901"/>
         </g>
-        <g id="product-07134881-0661-4155-830e-4bf20aee424f" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 4" ifc:guid="074qY11c51LOCEI$8Axa9F">
-            <path d="M18.800000579787238,110.04999854019078 L18.800000579787234,19.950000554082735"/>
-            <path d="M26.200000414384348,110.04999854019078 L18.800000579787238,110.04999854019078"/>
-            <path d="M26.200000414384345,19.950000554082735 L26.200000414384348,110.04999854019078"/>
-            <path d="M18.800000579787234,19.950000554082735 L26.200000414384345,19.950000554082735"/>
+        <g id="product-ba0de020-cb98-4111-8def-c6fb39c8ada2" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 4" ifc:guid="2w3U0WovX14OtlnlivoAsY">
+            <path d="M26.200000414384348,19.950000554082735 L18.800000579787234,19.950000554082735"/>
+            <path d="M18.800000579787234,19.950000554082735 L18.800000579787234,94.9499988777021"/>
+            <path d="M18.800000579787234,94.9499988777021 L26.200000414384348,94.9499988777021"/>
+            <path d="M26.200000414384348,19.950000554082735 L26.200000414384348,94.9499988777021"/>
+            <path d="M18.800000579787238,94.9499988777021 L18.800000579787238,110.04999854019078"/>
+            <path d="M26.200000414384348,110.04999854019078 L26.200000414384348,94.9499988777021"/>
+            <path d="M18.800000579787238,110.04999854019078 L26.200000414384348,110.04999854019078"/>
         </g>
-        <g id="product-6a410718-c326-4182-b753-67aa327bb32b" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 5" ifc:guid="1gGGSOmoP1WhTJPweoUxCh">
-            <path d="M108.79999856813049,61.199999632073386 L21.200000526143057,61.199999632073386"/>
-            <path d="M108.79999856813049,53.799999797476275 L108.79999856813049,61.199999632073386"/>
-            <path d="M21.200000526143054,53.799999797476275 L108.79999856813049,53.799999797476275"/>
-            <path d="M21.200000526143054,61.199999632073386 L21.200000526143054,53.799999797476275"/>
+        <g id="product-27f6d9f5-c46b-41a9-a78a-d9b0fb0f8ba0" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 5" ifc:guid="0dzjdrn6j1gQUAsR3x3ukW">
+            <path d="M108.79999856813049,61.199999632073386 L108.79999856813049,53.799999797476275"/>
+            <path d="M108.79999856813049,53.799999797476275 L21.200000526143057,53.799999797476275"/>
+            <path d="M21.200000526143054,53.799999797476275 L21.200000526143054,61.199999632073386"/>
+            <path d="M21.200000526143054,61.199999632073386 L108.79999856813049,61.199999632073386"/>
         </g>
-        <g id="product-eea11910-b43b-4297-bc4c-e82fd40b4273" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 6" ifc:guid="3keHaGj3j2bxnCw2$K2q9p">
-            <path d="M68.699999464435322,20.000000552965133 L68.699999464435322,58.749999686835153"/>
-            <path d="M61.299999629838211,20.000000552965133 L68.699999464435322,20.000000552965133"/>
-            <path d="M61.299999629838211,58.749999686835153 L61.299999629838211,20.000000552965133"/>
-            <path d="M68.699999464435322,58.749999686835153 L61.299999629838211,58.749999686835153"/>
+        <g id="product-f9aefe9f-2ee9-4a73-a4ee-049f9d15182d" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 6" ifc:guid="3vhlwVBkbASwJk19_T5HWj">
+            <path d="M68.699999464435322,20.000000552965133 L61.299999629838211,20.000000552965133"/>
+            <path d="M61.299999629838211,20.000000552965133 L61.299999629838211,58.749999686835153"/>
+            <path d="M61.299999629838211,58.749999686835153 L68.699999464435322,58.749999686835153"/>
+            <path d="M68.699999464435322,58.749999686835153 L68.699999464435322,20.000000552965133"/>
         </g>
-        <g id="product-ada47968-b2aa-4909-aaff-48335e012944" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 7" ifc:guid="2jf7beigf92Qh$I3DU0Ib4">
-            <path d="M61.199999632073386,56.199999743832095 L61.199999632073386,110.0499985401908"/>
-            <path d="M53.799999797476275,56.199999743832095 L61.199999632073386,56.199999743832095"/>
-            <path d="M53.799999797476275,110.0499985401908 L53.799999797476275,56.199999743832095"/>
-            <path d="M61.199999632073386,110.0499985401908 L53.799999797476275,110.0499985401908"/>
+        <g id="product-46bf74c4-a365-4605-b9e5-12c855537a76" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 7" ifc:guid="16ltJ4esL61Rdb4iXLKtfs">
+            <path d="M61.199999632073386,56.199999743832095 L53.799999797476275,56.199999743832095"/>
+            <path d="M53.799999797476275,56.199999743832095 L53.799999797476275,94.9499988777021"/>
+            <path d="M53.799999797476275,94.9499988777021 L61.199999632073386,94.9499988777021"/>
+            <path d="M61.199999632073386,56.199999743832095 L61.199999632073386,94.9499988777021"/>
+            <path d="M61.199999632073386,110.0499985401908 L61.199999632073386,94.9499988777021"/>
+            <path d="M53.799999797476275,110.0499985401908 L61.199999632073386,110.0499985401908"/>
+            <path d="M53.799999797476275,94.9499988777021 L53.799999797476275,110.0499985401908"/>
         </g>
-        <g id="product-b36462d7-bfd9-419c-881b-637b76a33591" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 8" ifc:guid="2pP6BNlzb1d8WROtjsepMH">
-            <path d="M86.199999073279841,56.199999743832095 L86.199999073279841,110.0499985401908"/>
-            <path d="M78.79999923868273,56.199999743832095 L86.199999073279841,56.199999743832095"/>
-            <path d="M78.79999923868273,110.0499985401908 L78.79999923868273,56.199999743832095"/>
-            <path d="M86.199999073279841,110.0499985401908 L78.79999923868273,110.0499985401908"/>
+        <g id="product-42354764-d318-48fa-a0cf-f1d7dea1cb01" class="IfcFooting material-Concrete projection" ifc:name="Strip footing 8" ifc:guid="12DKTaqnX8_g3FyTVUeSi1">
+            <path d="M86.199999073279841,56.199999743832095 L78.79999923868273,56.199999743832095"/>
+            <path d="M78.79999923868273,56.199999743832095 L78.79999923868273,94.9499988777021"/>
+            <path d="M78.79999923868273,94.9499988777021 L86.199999073279841,94.9499988777021"/>
+            <path d="M86.199999073279841,56.199999743832095 L86.199999073279841,94.9499988777021"/>
+            <path d="M86.199999073279841,110.0499985401908 L86.199999073279841,94.9499988777021"/>
+            <path d="M78.79999923868273,110.0499985401908 L86.199999073279841,110.0499985401908"/>
+            <path d="M78.79999923868273,94.9499988777021 L78.79999923868273,110.0499985401908"/>
         </g>
-        <g id="product-f1bb7908-58a9-4a65-bc79-dfc71e85be09" class="IfcFooting material-Concrete projection" ifc:name="Chimney pad footing" ifc:guid="3nkta8MAbAPRnvtySUXRu9">
+        <g id="product-eaa156b9-0e11-4fff-9369-5776bba026ff" class="IfcFooting material-Concrete projection" ifc:name="Chimney pad footing" ifc:guid="3geLQv3X5F$vDfLtQxe2R$">
             <path d="M60.999999636543734,65.449999537078497 L68.9999994577298,65.449999537078497"/>
             <path d="M68.9999994577298,65.449999537078497 L68.9999994577298,57.449999715892417"/>
             <path d="M68.9999994577298,57.449999715892417 L60.999999636543734,57.449999715892417"/>
             <path d="M60.999999636543734,57.449999715892417 L60.999999636543734,65.449999537078497"/>
         </g>
-    <g ifc:guid="2iRGLjvDP3vRUJZoxeyRTA" ifc:name="Strip footing 1" class="IfcFooting material-Concrete cut"><path d="M65.0,112.44999885559082 L111.45000457763672,112.44999885559082 L111.45000457763672,108.75 L111.45000457763672,105.05000114440918 L65.0,105.05000114440918 L18.550000190734863,105.05000114440918 L18.550000190734863,108.75 L18.550000190734863,112.44999885559082 Z"/></g><g ifc:guid="37ZeaKNpj34wc49w3ydVQ$" ifc:name="Strip footing 2" class="IfcFooting material-Concrete cut"><path d="M111.19999885559082,65.0 L111.20000839233398,19.94999885559082 L107.50000953674316,19.94999885559082 L103.80001068115234,19.94999885559082 L103.80000114440918,64.99999523162842 L103.80000114440918,110.0499963760376 L107.5,110.05000114440918 L111.19999885559082,110.05000114440918 Z"/></g><g ifc:guid="3DTalTbtr4kweRKDC1forO" ifc:name="Strip footing 3" class="IfcFooting material-Concrete cut"><path d="M65.0,17.55000114440918 L18.80000114440918,17.550010681152344 L18.80000114440918,21.250009536743164 L18.80000114440918,24.950008392333984 L65.0,24.950008392333984 L111.19999885559082,24.94999885559082 L111.19999885559082,21.25 L111.19999885559082,17.55000114440918 Z"/></g><g ifc:guid="074qY11c51LOCEI$8Axa9F" ifc:name="Strip footing 4" class="IfcFooting material-Concrete cut"><path d="M18.80000591278076,65.0 L18.80000591278076,110.05000114440918 L22.500009536743164,110.05000114440918 L26.200008392333984,110.05000114440918 L26.200003623962402,65.0 L26.20000123977661,19.94999885559082 L22.5,19.94999885559082 L18.80000114440918,19.94999885559082 Z"/></g><g ifc:guid="1gGGSOmoP1WhTJPweoUxCh" ifc:name="Strip footing 5" class="IfcFooting material-Concrete cut"><path d="M65.0,61.19999885559082 L108.80000114440918,61.19999885559082 L108.80000114440918,57.5 L108.80000114440918,53.80000114440918 L65.0,53.80000114440918 L21.19999885559082,53.80000114440918 L21.19999885559082,57.5 L21.19999885559082,61.19999885559082 Z"/></g><g ifc:guid="2jf7beigf92Qh$I3DU0Ib4" ifc:name="Strip footing 7" class="IfcFooting material-Concrete cut"><path d="M61.20000123977661,83.12499761581421 L61.2000036239624,56.19999885559082 L57.50000476837158,56.19999885559082 L53.80000352859497,56.19999408721924 L53.80000114440918,83.12499761581421 L53.80000114440918,110.0499963760376 L57.5,110.05000114440918 L61.19999885559082,110.05000114440918 Z"/></g><g ifc:guid="3keHaGj3j2bxnCw2$K2q9p" ifc:name="Strip footing 6" class="IfcFooting material-Concrete cut"><path d="M68.7000036239624,39.375 L68.7000036239624,20.0 L65.00000476837158,20.0 L61.30000114440918,20.0 L61.30000114440918,39.375 L61.30000114440918,58.75 L65.0,58.75 L68.69999885559082,58.75 Z"/></g><g ifc:guid="2pP6BNlzb1d8WROtjsepMH" ifc:name="Strip footing 8" class="IfcFooting material-Concrete cut"><path d="M86.2000036239624,83.12499761581421 L86.2000036239624,56.19999885559082 L82.50000476837158,56.19999885559082 L78.80000591278076,56.19999408721924 L78.80000114440918,83.12499761581421 L78.80000114440918,110.0499963760376 L82.5,110.05000114440918 L86.19999885559082,110.05000114440918 Z"/></g><g ifc:guid="3nkta8MAbAPRnvtySUXRu9" ifc:name="Chimney pad footing" class="IfcFooting material-Concrete cut"><path d="M60.999999046325684,57.44999885559082 L60.999999046325684,61.44999980926514 L60.999999046325684,65.45000076293945 L65.0,65.45000076293945 L69.00000095367432,65.45000076293945 L69.00000095367432,61.44999980926514 L69.00000095367432,57.44999885559082 L65.0,57.44999885559082 Z"/></g></g>
+    <g ifc:guid="1T6qdu_AX7p8Law2B20uUG" ifc:name="Strip footing 3" class="IfcFooting material-Concrete cut"><path d="M111.19999885559082,17.55000114440918 L65.0,17.55000114440918 L18.80000114440918,17.55000114440918 L18.80000114440918,21.25 L18.80000114440918,24.94999885559082 L65.0,24.94999885559082 L111.19999885559082,24.94999885559082 L111.19999885559082,21.25 Z"/></g><g ifc:guid="0dzjdrn6j1gQUAsR3x3ukW" ifc:name="Strip footing 5" class="IfcFooting material-Concrete cut"><path d="M21.19999885559082,61.19999885559082 L65.0,61.19999885559082 L108.80000114440918,61.19999885559082 L108.80000114440918,57.5 L108.80000114440918,53.80000114440918 L65.0,53.80000114440918 L21.19999885559082,53.80000114440918 L21.19999885559082,57.5 Z"/></g><g ifc:guid="3vhlwVBkbASwJk19_T5HWj" ifc:name="Strip footing 6" class="IfcFooting material-Concrete cut"><path d="M68.69999885559082,58.75 L68.69999885559082,39.375 L68.69999885559082,20.0 L65.0,20.0 L61.30000114440918,20.0 L61.30000114440918,39.375 L61.30000114440918,58.75 L65.0,58.75 Z"/></g><g ifc:guid="12DKTaqnX8_g3FyTVUeSi1" ifc:name="Strip footing 8" class="IfcFooting material-Concrete cut"><path d="M86.19999885559082,56.19999885559082 L86.19999885559082,73.07499885559082"/><path d="M86.19999885559082,73.07499885559082 L86.19999885559082,92.44999885559082"/><path d="M86.19999885559082,92.44999885559082 L86.19999885559082,94.94999885559082"/><path d="M86.19999885559082,94.94999885559082 L84.34999942779541,94.94999885559082"/><path d="M78.80000114440918,73.07499885559082 L78.80000114440918,56.19999885559082"/><path d="M78.80000114440918,56.19999885559082 L82.5,56.19999885559082"/><path d="M86.19999885559082,56.19999885559082 L82.5,56.19999885559082"/><path d="M78.80000114440918,73.07499885559082 L78.80000114440918,92.44999885559082"/><path d="M78.80000114440918,92.44999885559082 L78.80000114440918,94.94999885559082"/><path d="M78.80000114440918,94.94999885559082 L84.34999942779541,94.94999885559082"/></g><g ifc:guid="3geLQv3X5F$vDfLtQxe2R$" ifc:name="Chimney pad footing" class="IfcFooting material-Concrete cut"><path d="M60.999999046325684,57.44999885559082 L60.999999046325684,61.44999980926514 L60.999999046325684,65.45000076293945 L65.0,65.45000076293945 L69.00000095367432,65.45000076293945 L69.00000095367432,61.44999980926514 L69.00000095367432,57.44999885559082 L65.0,57.44999885559082 Z"/></g></g>
   <defs/>
   
   
-  <line class="GlobalId-3OdJazq5j4_RtN48WlatU4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="86.19999694824219" x2="103.80000305175781" y1="105.05000305175781" y2="105.05000305175781"/>
-  <line class="GlobalId-3OdJazq5j4_RtN48WlatU4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="103.80000305175781" y1="105.05000305175781" y2="61.19999694824219"/>
-  <line class="GlobalId-3OdJazq5j4_RtN48WlatU4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="86.19999694824219" y1="61.19999694824219" y2="61.19999694824219"/>
-  <line class="GlobalId-3OdJazq5j4_RtN48WlatU4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="86.19999694824219" x2="86.19999694824219" y1="61.19999694824219" y2="105.05000305175781"/>
-  <line class="GlobalId-32Di$7zkL9fvezItK6K_0U IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.30000305175781" x2="61.30000305175781" y1="53.80000305175781" y2="24.94999885559082"/>
-  <line class="GlobalId-32Di$7zkL9fvezItK6K_0U IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.30000305175781" x2="26.200000762939453" y1="24.94999885559082" y2="24.94999885559082"/>
-  <line class="GlobalId-32Di$7zkL9fvezItK6K_0U IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="26.200000762939453" y1="24.94999885559082" y2="53.80000305175781"/>
-  <line class="GlobalId-32Di$7zkL9fvezItK6K_0U IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="61.30000305175781" y1="53.80000305175781" y2="53.80000305175781"/>
-  <path class="GlobalId-25cwV_Nmf01vQwN4zsNMZV IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 65,21.25 L 65,9.75000381"/>
-  <path class="GlobalId-3x01IDW2n3gROzG3t0A6n$ IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 107.5,57.5 L 119,57.5"/>
-  <path class="GlobalId-2oMlflK_v5b9CGpWWH63jO IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,57.5 L 11.0000038,57.5"/>
+  
+  <path class="GlobalId-0Au_NGHmX61P1W$qX5tT8h IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,21.25 L 13.9289331,12.6789284"/>
+  
+  
+  
+  
+  
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.549999237060547" x2="18.549999237060547" y1="112.44999694824219" y2="105.05000305175781"/>
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.549999237060547" x2="18.80000114440918" y1="105.05000305175781" y2="105.05000305175781"/>
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.80000114440918" x2="18.80000114440918" y1="105.05000305175781" y2="17.55000114440918"/>
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.80000114440918" x2="111.20001220703125" y1="17.55000114440918" y2="17.55000114440918"/>
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.20001220703125" x2="111.20001220703125" y1="17.55000114440918" y2="105.05000305175781"/>
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.20001220703125" x2="111.45000457763672" y1="105.05000305175781" y2="105.05000305175781"/>
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.45000457763672" x2="111.45000457763672" y1="105.05000305175781" y2="112.44999694824219"/>
+  <line class="GlobalId-1fMM2Qo_v7awk$HFpKMWEl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.45000457763672" x2="18.549999237060547" y1="112.44999694824219" y2="112.44999694824219"/>
+  <path class="GlobalId-2QEznQojv5FOK32bCujqRQ IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 107.5,108.75 L 116.071075,117.071068"/>
+  <path class="GlobalId-39MAxo5nn4LwRscb6KdDKt IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 107.5,21.25 L 116.071075,12.6789284"/>
+  <line class="GlobalId-3uGMzshoj5GeaW64BGiCD4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.19999694824219" x2="78.80000305175781" y1="105.05000305175781" y2="105.05000305175781"/>
+  <line class="GlobalId-3uGMzshoj5GeaW64BGiCD4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="78.80000305175781" x2="78.80000305175781" y1="105.05000305175781" y2="61.19999694824219"/>
+  <line class="GlobalId-3uGMzshoj5GeaW64BGiCD4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="78.80000305175781" x2="69.0" y1="61.19999694824219" y2="61.19999694824219"/>
+  <line class="GlobalId-3uGMzshoj5GeaW64BGiCD4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="69.0" x2="69.0" y1="61.19999694824219" y2="65.44999694824219"/>
+  <line class="GlobalId-3uGMzshoj5GeaW64BGiCD4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="69.0" x2="61.19999694824219" y1="65.44999694824219" y2="65.44999694824219"/>
+  <line class="GlobalId-3uGMzshoj5GeaW64BGiCD4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.19999694824219" x2="61.19999694824219" y1="65.44999694824219" y2="105.05000305175781"/>
+  
+  <path class="GlobalId-1njUnitdT2cfO0zQo1IkWf IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,108.75 L 13.9289331,117.071068"/>
+  <path class="GlobalId-1pAB1AeBn4TepsJj_Km8a4 IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 57.5,108.75 L 57.5,122.449997"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="108.69999694824219" x2="21.30000114440918" y1="109.94999694824219" y2="109.94999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="21.30000114440918" y1="109.94999694824219" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="56.30000305175781" y1="107.55000305175781" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="56.30000305175781" x2="56.30000305175781" y1="107.55000305175781" y2="58.69999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="56.30000305175781" x2="23.69999885559082" y1="58.69999694824219" y2="58.69999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="23.69999885559082" y1="58.69999694824219" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="21.30000114440918" y1="107.55000305175781" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="21.30000114440918" y1="107.55000305175781" y2="20.05000114440918"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="108.69999694824219" y1="20.05000114440918" y2="20.05000114440918"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="108.69999694824219" x2="108.69999694824219" y1="20.05000114440918" y2="109.94999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="58.69999694824219" x2="81.30000305175781" y1="107.55000305175781" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="81.30000305175781" x2="81.30000305175781" y1="107.55000305175781" y2="58.69999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="81.30000305175781" x2="58.69999694824219" y1="58.69999694824219" y2="58.69999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="58.69999694824219" x2="58.69999694824219" y1="58.69999694824219" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="83.69999694824219" x2="106.30000305175781" y1="107.55000305175781" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="106.30000305175781" y1="107.55000305175781" y2="58.69999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="83.69999694824219" y1="58.69999694824219" y2="58.69999694824219"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="83.69999694824219" x2="83.69999694824219" y1="58.69999694824219" y2="107.55000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="106.30000305175781" y1="56.30000305175781" y2="22.44999885559082"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="23.69999885559082" y1="22.44999885559082" y2="22.44999885559082"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="23.69999885559082" y1="22.44999885559082" y2="56.30000305175781"/>
+  <line class="GlobalId-22sWzT0oX4l85aIWdmxmrh IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="106.30000305175781" y1="56.30000305175781" y2="56.30000305175781"/>
+  
+  
+  <path class="GlobalId-2jSR6lLMP7Bvcdboa1D9DU IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-008000 drawing-line-width-0p15" d="M 63,63.4499969 L 67,63.4499969 L 67,59.4499969 L 63,59.4499969 L 63,63.4499969"/>
+  
+  
+  
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="21.0" x2="21.0" y1="110.0" y2="19.7499942779541"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="21.0" x2="109.00000762939453" y1="19.7499942779541" y2="19.7499942779541"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="109.00000762939453" x2="109.00000762939453" y1="19.7499942779541" y2="110.0"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="109.00000762939453" x2="21.0" y1="110.0" y2="110.0"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="63.75" y1="56.25" y2="56.25"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="63.75" x2="63.75" y1="56.25" y2="22.749996185302734"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="63.75" x2="24.0" y1="22.749996185302734" y2="22.749996185302734"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="24.0" y1="22.749996185302734" y2="56.25"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="56.25" y1="107.5" y2="107.5"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="56.25" x2="56.25" y1="107.5" y2="58.75"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="56.25" x2="24.0" y1="58.75" y2="58.75"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="24.0" y1="58.75" y2="107.5"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="58.75" x2="81.25" y1="107.5" y2="107.5"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="81.25" x2="81.25" y1="107.5" y2="58.75"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="81.25" x2="58.75" y1="58.75" y2="58.75"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="58.75" x2="58.75" y1="58.75" y2="107.5"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="83.75" x2="106.0" y1="107.5" y2="107.5"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="106.0" y1="107.5" y2="58.75"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="83.75" y1="58.75" y2="58.75"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="83.75" x2="83.75" y1="58.75" y2="107.5"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="66.25" y1="22.749996185302734" y2="22.749996185302734"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="66.25" x2="66.25" y1="22.749996185302734" y2="56.25"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="66.25" x2="106.0" y1="56.25" y2="56.25"/>
+  <line class="GlobalId-2IF1Rk5MD40e0WsWBfoQcp IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="106.0" y1="56.25" y2="22.749996185302734"/>
+  
+  
+  <line class="GlobalId-3NQebeafDF$Ptlp0ONc9QR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="53.80000305175781" x2="53.80000305175781" y1="105.05000305175781" y2="61.19999694824219"/>
+  <line class="GlobalId-3NQebeafDF$Ptlp0ONc9QR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="53.80000305175781" x2="26.200000762939453" y1="61.19999694824219" y2="61.19999694824219"/>
+  <line class="GlobalId-3NQebeafDF$Ptlp0ONc9QR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="26.200000762939453" y1="61.19999694824219" y2="105.05000305175781"/>
+  <line class="GlobalId-3NQebeafDF$Ptlp0ONc9QR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="53.80000305175781" y1="105.05000305175781" y2="105.05000305175781"/>
+  <line class="GlobalId-2z9jnVbhjFTwy6Gqm6B8TV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="86.19999694824219" x2="103.80000305175781" y1="105.05000305175781" y2="105.05000305175781"/>
+  <line class="GlobalId-2z9jnVbhjFTwy6Gqm6B8TV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="103.80000305175781" y1="105.05000305175781" y2="61.19999694824219"/>
+  <line class="GlobalId-2z9jnVbhjFTwy6Gqm6B8TV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="86.19999694824219" y1="61.19999694824219" y2="61.19999694824219"/>
+  <line class="GlobalId-2z9jnVbhjFTwy6Gqm6B8TV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="86.19999694824219" x2="86.19999694824219" y1="61.19999694824219" y2="105.05000305175781"/>
+  
+  
+  <line class="GlobalId-2BNMGtELXAqQkgxMwecO6J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.30000305175781" x2="61.30000305175781" y1="53.80000305175781" y2="24.94999885559082"/>
+  <line class="GlobalId-2BNMGtELXAqQkgxMwecO6J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.30000305175781" x2="26.200000762939453" y1="24.94999885559082" y2="24.94999885559082"/>
+  <line class="GlobalId-2BNMGtELXAqQkgxMwecO6J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="26.200000762939453" y1="24.94999885559082" y2="53.80000305175781"/>
+  <line class="GlobalId-2BNMGtELXAqQkgxMwecO6J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="61.30000305175781" y1="53.80000305175781" y2="53.80000305175781"/>
+  <path class="GlobalId-0El65Lq_r5Jf3ILadNorlF IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 107.5,57.5 L 119,57.5"/>
+  <path class="GlobalId-2XSBH8gfTA9BhdGlSI5lIr IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,57.5 L 11.0000038,57.5"/>
   
   
   
@@ -1530,133 +1630,70 @@ tspan.door-dimension {
   
   
   
-  <path class="GlobalId-01SAy$mDf9d8wg3B_qpb7A IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,21.25 L 13.9289331,12.6789284"/>
   
   
   
   
   
-  <path class="GlobalId-3G5C_FFuH3l9agQRiydPwp IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 107.5,21.25 L 116.071075,12.6789284"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.549999237060547" x2="18.549999237060547" y1="112.44999694824219" y2="105.05000305175781"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.549999237060547" x2="18.80000114440918" y1="105.05000305175781" y2="105.05000305175781"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.80000114440918" x2="18.80000114440918" y1="105.05000305175781" y2="17.55000114440918"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="18.80000114440918" x2="111.20001220703125" y1="17.55000114440918" y2="17.55000114440918"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.20001220703125" x2="111.20001220703125" y1="17.55000114440918" y2="105.05000305175781"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.20001220703125" x2="111.45000457763672" y1="105.05000305175781" y2="105.05000305175781"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.45000457763672" x2="111.45000457763672" y1="105.05000305175781" y2="112.44999694824219"/>
-  <line class="GlobalId-1Ekmexp7P0LOYRthzKJTOe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="111.45000457763672" x2="18.549999237060547" y1="112.44999694824219" y2="112.44999694824219"/>
-  <line class="GlobalId-39HNZltRDDTevQWJf_XBKk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.19999694824219" x2="78.80000305175781" y1="105.05000305175781" y2="105.05000305175781"/>
-  <line class="GlobalId-39HNZltRDDTevQWJf_XBKk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="78.80000305175781" x2="78.80000305175781" y1="105.05000305175781" y2="61.19999694824219"/>
-  <line class="GlobalId-39HNZltRDDTevQWJf_XBKk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="78.80000305175781" x2="69.0" y1="61.19999694824219" y2="61.19999694824219"/>
-  <line class="GlobalId-39HNZltRDDTevQWJf_XBKk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="69.0" x2="69.0" y1="61.19999694824219" y2="65.44999694824219"/>
-  <line class="GlobalId-39HNZltRDDTevQWJf_XBKk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="69.0" x2="61.19999694824219" y1="65.44999694824219" y2="65.44999694824219"/>
-  <line class="GlobalId-39HNZltRDDTevQWJf_XBKk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="61.19999694824219" x2="61.19999694824219" y1="65.44999694824219" y2="105.05000305175781"/>
-  <line class="GlobalId-1GyjUAk5b1Yw5V_iTW5D3C IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="68.69999694824219" y1="24.94999885559082" y2="24.94999885559082"/>
-  <line class="GlobalId-1GyjUAk5b1Yw5V_iTW5D3C IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="68.69999694824219" x2="68.69999694824219" y1="24.94999885559082" y2="53.80000305175781"/>
-  <line class="GlobalId-1GyjUAk5b1Yw5V_iTW5D3C IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="68.69999694824219" x2="103.80000305175781" y1="53.80000305175781" y2="53.80000305175781"/>
-  <line class="GlobalId-1GyjUAk5b1Yw5V_iTW5D3C IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="103.80000305175781" y1="53.80000305175781" y2="24.94999885559082"/>
-  <path class="GlobalId-1eFi2aBOTEPA6WaKU0WlwV IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,108.75 L 13.9289331,117.071068"/>
   
   
-  <path class="GlobalId-1sgI3miuz0RQJQuKg$Vin7 IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 107.5,108.75 L 116.071075,117.071068"/>
-  <path class="GlobalId-28QVaihRv9Fxgj1RfqxYV7 IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 57.5,108.75 L 57.5,122.449997"/>
+  <line class="GlobalId-0yU2iASvX2Q9MFcW$LTPOd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="68.69999694824219" y1="24.94999885559082" y2="24.94999885559082"/>
+  <line class="GlobalId-0yU2iASvX2Q9MFcW$LTPOd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="68.69999694824219" x2="68.69999694824219" y1="24.94999885559082" y2="53.80000305175781"/>
+  <line class="GlobalId-0yU2iASvX2Q9MFcW$LTPOd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="68.69999694824219" x2="103.80000305175781" y1="53.80000305175781" y2="53.80000305175781"/>
+  <line class="GlobalId-0yU2iASvX2Q9MFcW$LTPOd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="103.80000305175781" x2="103.80000305175781" y1="53.80000305175781" y2="24.94999885559082"/>
+  <path class="GlobalId-0a15jfPu1FeAt1TyCAFaGC IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,108.75 L 107.5,108.75 L 107.5,21.25 L 22.5,21.25 L 22.5,108.75"/>
   
   
   
-  
-  <path class="GlobalId-1_eW7siEv3Igz3idj5HJzB IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 22.5,108.75 L 107.5,108.75 L 107.5,21.25 L 22.5,21.25 L 22.5,108.75"/>
-  
+  <path class="GlobalId-2EWDAXVM9FxuNBGRdiVPjK IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff0000 drawing-line-width-0p1" d="M 65,21.25 L 65,9.75000381"/>
   
   
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="108.69999694824219" x2="21.30000114440918" y1="109.94999694824219" y2="109.94999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="21.30000114440918" y1="109.94999694824219" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="56.30000305175781" y1="107.55000305175781" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="56.30000305175781" x2="56.30000305175781" y1="107.55000305175781" y2="58.69999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="56.30000305175781" x2="23.69999885559082" y1="58.69999694824219" y2="58.69999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="23.69999885559082" y1="58.69999694824219" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="21.30000114440918" y1="107.55000305175781" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="21.30000114440918" y1="107.55000305175781" y2="20.05000114440918"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="21.30000114440918" x2="108.69999694824219" y1="20.05000114440918" y2="20.05000114440918"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="108.69999694824219" x2="108.69999694824219" y1="20.05000114440918" y2="109.94999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="58.69999694824219" x2="81.30000305175781" y1="107.55000305175781" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="81.30000305175781" x2="81.30000305175781" y1="107.55000305175781" y2="58.69999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="81.30000305175781" x2="58.69999694824219" y1="58.69999694824219" y2="58.69999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="58.69999694824219" x2="58.69999694824219" y1="58.69999694824219" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="83.69999694824219" x2="106.30000305175781" y1="107.55000305175781" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="106.30000305175781" y1="107.55000305175781" y2="58.69999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="83.69999694824219" y1="58.69999694824219" y2="58.69999694824219"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="83.69999694824219" x2="83.69999694824219" y1="58.69999694824219" y2="107.55000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="106.30000305175781" y1="56.30000305175781" y2="22.44999885559082"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="106.30000305175781" x2="23.69999885559082" y1="22.44999885559082" y2="22.44999885559082"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="23.69999885559082" y1="22.44999885559082" y2="56.30000305175781"/>
-  <line class="GlobalId-2MKCY2XtH5aABDTYgdp1NA IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed drawing-line-color-0000ff" x1="23.69999885559082" x2="106.30000305175781" y1="56.30000305175781" y2="56.30000305175781"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="21.0" x2="21.0" y1="110.0" y2="19.7499942779541"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="21.0" x2="109.00000762939453" y1="19.7499942779541" y2="19.7499942779541"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="109.00000762939453" x2="109.00000762939453" y1="19.7499942779541" y2="110.0"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="109.00000762939453" x2="21.0" y1="110.0" y2="110.0"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="63.75" y1="56.25" y2="56.25"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="63.75" x2="63.75" y1="56.25" y2="22.749996185302734"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="63.75" x2="24.0" y1="22.749996185302734" y2="22.749996185302734"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="24.0" y1="22.749996185302734" y2="56.25"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="56.25" y1="107.5" y2="107.5"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="56.25" x2="56.25" y1="107.5" y2="58.75"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="56.25" x2="24.0" y1="58.75" y2="58.75"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="24.0" x2="24.0" y1="58.75" y2="107.5"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="58.75" x2="81.25" y1="107.5" y2="107.5"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="81.25" x2="81.25" y1="107.5" y2="58.75"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="81.25" x2="58.75" y1="58.75" y2="58.75"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="58.75" x2="58.75" y1="58.75" y2="107.5"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="83.75" x2="106.0" y1="107.5" y2="107.5"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="106.0" y1="107.5" y2="58.75"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="83.75" y1="58.75" y2="58.75"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="83.75" x2="83.75" y1="58.75" y2="107.5"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="66.25" y1="22.749996185302734" y2="22.749996185302734"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="66.25" x2="66.25" y1="22.749996185302734" y2="56.25"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="66.25" x2="106.0" y1="56.25" y2="56.25"/>
-  <line class="GlobalId-3pm6D21A954uksUxC1CBRW IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline dashed" x1="106.0" x2="106.0" y1="56.25" y2="22.749996185302734"/>
-  
-  
-  <path class="GlobalId-03q3weqx9DFxRptRYf2cEn IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-008000 drawing-line-width-0p15" d="M 63,63.4499969 L 67,63.4499969 L 67,59.4499969 L 63,59.4499969 L 63,63.4499969"/>
-  
-  
-  
-  <line class="GlobalId-1hjbFzMEr1hBqjXCWMtpq2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="53.80000305175781" x2="53.80000305175781" y1="105.05000305175781" y2="61.19999694824219"/>
-  <line class="GlobalId-1hjbFzMEr1hBqjXCWMtpq2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="53.80000305175781" x2="26.200000762939453" y1="61.19999694824219" y2="61.19999694824219"/>
-  <line class="GlobalId-1hjbFzMEr1hBqjXCWMtpq2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="26.200000762939453" y1="61.19999694824219" y2="105.05000305175781"/>
-  <line class="GlobalId-1hjbFzMEr1hBqjXCWMtpq2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p15" x1="26.200000762939453" x2="53.80000305175781" y1="105.05000305175781" y2="105.05000305175781"/>
   
   
   
   
   <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(52.0, 124.44999694824219) rotate(-0.0)">
-    <tspan class="GlobalId-1gFn_CUBL5KP1o5PZmSutV IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2 drawing-text-color-ff0000" dy="0em" x="0" y="0">FeZn – koupelna</tspan>
+    <tspan class="GlobalId-27$ziHjjHEnhyV8LG9DCJE IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2 drawing-text-color-ff0000" dy="0em" x="0" y="0">FeZn – koupelna</tspan>
   </text>
   <g class="cut-symbol-overlays">
-<line class="GlobalId-217XCdHLL1JOrblLRGLR4W IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="1.3000011444091797" x2="1.3000011444091797" y1="61.499996185302734" y2="67.0"/>
-<line class="GlobalId-217XCdHLL1JOrblLRGLR4W IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="0.5000019073486328" x2="1.3000011444091797" y1="65.5" y2="67.0"/>
-<line class="GlobalId-217XCdHLL1JOrblLRGLR4W IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="1.3000011444091797" x2="2.1000003814697266" y1="67.0" y2="65.5"/>
-<line class="GlobalId-1PElb8JkfEx9DZjfanvK2y IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="62.999996185302734" x2="68.5" y1="5.05000114440918" y2="5.05000114440918"/>
-<line class="GlobalId-1PElb8JkfEx9DZjfanvK2y IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="67.0" x2="68.5" y1="5.850000381469727" y2="5.05000114440918"/>
-<line class="GlobalId-1PElb8JkfEx9DZjfanvK2y IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="68.5" x2="67.0" y1="5.05000114440918" y2="4.250001907348633"/>
-<line class="GlobalId-0ctryhsuX1wxX60O1I7zKv IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="62.999996185302734" x2="68.5" y1="124.94999694824219" y2="124.94999694824219"/>
-<line class="GlobalId-0ctryhsuX1wxX60O1I7zKv IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="67.0" x2="68.5" y1="125.75" y2="124.94999694824219"/>
-<line class="GlobalId-0ctryhsuX1wxX60O1I7zKv IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="68.5" x2="67.0" y1="124.94999694824219" y2="124.1500015258789"/>
-<line class="GlobalId-1dvtCLBYL819fhWJQeqeli IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="117.70000457763672" x2="117.70000457763672" y1="61.499996185302734" y2="67.0"/>
-<line class="GlobalId-1dvtCLBYL819fhWJQeqeli IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="116.90000915527344" x2="117.70000457763672" y1="65.5" y2="67.0"/>
-<line class="GlobalId-1dvtCLBYL819fhWJQeqeli IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="117.70000457763672" x2="118.5" y1="67.0" y2="65.5"/>
-<line class="GlobalId-1AHYhsfMX618TAcSZMkx0h IfcAnnotation PredefinedType-LINEWORK cut-symbol-line" x1="68.5" x2="68.5" y1="124.94999694824219" y2="5.05000114440918"/>
-<line class="GlobalId-3fNPLur6L4mfn9_CjSTw12 IfcAnnotation PredefinedType-LINEWORK cut-symbol-line" x1="1.3000011444091797" x2="117.70000457763672" y1="67.0" y2="67.0"/>
-<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 3.0500030517578125) rotate(-0.0)">
-    <tspan class="GlobalId-09yIxeOpjE4BTrJnKLB2Q9 IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">B</tspan>
+<line class="GlobalId-1Lp$KEEnDDieYotbUKNxpH IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="46.900001525878906" x2="52.39999771118164" y1="124.94999694824219" y2="124.94999694824219"/>
+<line class="GlobalId-1Lp$KEEnDDieYotbUKNxpH IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="50.900001525878906" x2="52.39999771118164" y1="125.75" y2="124.94999694824219"/>
+<line class="GlobalId-1Lp$KEEnDDieYotbUKNxpH IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="52.39999771118164" x2="50.900001525878906" y1="124.94999694824219" y2="124.1500015258789"/>
+<line class="GlobalId-0mQrT0lQj09RBP$xL8RiOC IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="46.900001525878906" x2="52.39999771118164" y1="5.05000114440918" y2="5.05000114440918"/>
+<line class="GlobalId-0mQrT0lQj09RBP$xL8RiOC IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="50.900001525878906" x2="52.39999771118164" y1="5.850000381469727" y2="5.05000114440918"/>
+<line class="GlobalId-0mQrT0lQj09RBP$xL8RiOC IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="52.39999771118164" x2="50.900001525878906" y1="5.05000114440918" y2="4.250001907348633"/>
+<line class="GlobalId-2nT1qjVqf2Tw_YbZE7y6XE IfcAnnotation PredefinedType-LINEWORK cut-symbol-line" x1="52.39999771118164" x2="52.39999771118164" y1="124.94999694824219" y2="5.05000114440918"/>
+<line class="GlobalId-1aztxzdXDCugs5v5UKAOrA IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="104.0999984741211" x2="98.60000610351562" y1="124.94999694824219" y2="124.94999694824219"/>
+<line class="GlobalId-1aztxzdXDCugs5v5UKAOrA IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="100.10000610351562" x2="98.60000610351562" y1="125.75" y2="124.94999694824219"/>
+<line class="GlobalId-1aztxzdXDCugs5v5UKAOrA IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="98.60000610351562" x2="100.10000610351562" y1="124.94999694824219" y2="124.1500015258789"/>
+<line class="GlobalId-1seRhsvWj0ZudlYGwE1Vep IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="104.0999984741211" x2="98.60000610351562" y1="5.05000114440918" y2="5.05000114440918"/>
+<line class="GlobalId-1seRhsvWj0ZudlYGwE1Vep IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="100.10000610351562" x2="98.60000610351562" y1="5.850000381469727" y2="5.05000114440918"/>
+<line class="GlobalId-1seRhsvWj0ZudlYGwE1Vep IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="98.60000610351562" x2="100.10000610351562" y1="5.05000114440918" y2="4.250001907348633"/>
+<line class="GlobalId-0fncz92dj3_P5hURP6nzlQ IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="1.3000011444091797" x2="1.3000011444091797" y1="57.749996185302734" y2="63.25"/>
+<line class="GlobalId-0fncz92dj3_P5hURP6nzlQ IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="0.5000019073486328" x2="1.3000011444091797" y1="61.749996185302734" y2="63.25"/>
+<line class="GlobalId-0fncz92dj3_P5hURP6nzlQ IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="1.3000011444091797" x2="2.1000003814697266" y1="63.25" y2="61.749996185302734"/>
+<line class="GlobalId-1JJmlluGT0r9WljBvRWufk IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="117.70000457763672" x2="117.70000457763672" y1="57.749996185302734" y2="63.25"/>
+<line class="GlobalId-1JJmlluGT0r9WljBvRWufk IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="116.90000915527344" x2="117.70000457763672" y1="61.749996185302734" y2="63.25"/>
+<line class="GlobalId-1JJmlluGT0r9WljBvRWufk IfcAnnotation PredefinedType-LINEWORK cut-symbol-arrow" x1="117.70000457763672" x2="118.5" y1="63.25" y2="61.749996185302734"/>
+<line class="GlobalId-1U_0udOPz2m95IpXMjqVJz IfcAnnotation PredefinedType-LINEWORK cut-symbol-line" x1="98.60000610351562" x2="98.60000610351562" y1="124.94999694824219" y2="5.05000114440918"/>
+<line class="GlobalId-3lJwvwN_P8jAClI8Y7oI5q IfcAnnotation PredefinedType-LINEWORK cut-symbol-line" x1="1.3000011444091797" x2="117.70000457763672" y1="63.25" y2="63.25"/>
+<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(102.0999984741211, 3.0500030517578125) rotate(-0.0)">
+    <tspan class="GlobalId-2uBI0_oXj26wYTUY13mQRm IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">C</tspan>
   </text>
-<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 122.94999694824219) rotate(-0.0)">
-    <tspan class="GlobalId-2LlJBn2OnD489hgLumO$8Q IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">B</tspan>
+<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(48.900001525878906, 122.94999694824219) rotate(-0.0)">
+    <tspan class="GlobalId-0m20pgNzD5n8mA8RYLMKG7 IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">B</tspan>
   </text>
-<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(3.299999237060547, 63.5) rotate(-0.0)">
-    <tspan class="GlobalId-0JKOCuV_57WwJkNj6KHnmE IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">A</tspan>
+<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(48.900001525878906, 3.0500030517578125) rotate(-0.0)">
+    <tspan class="GlobalId-23cgG0jWPAEh6o9$TMrp0j IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">B</tspan>
   </text>
-<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(119.70000457763672, 63.5) rotate(-0.0)">
-    <tspan class="GlobalId-1Z_jbYkMbCVeYbnk_893k4 IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">A</tspan>
+<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(102.0999984741211, 122.94999694824219) rotate(-0.0)">
+    <tspan class="GlobalId-3sOMv_jSj8ReO3vJWH$ieP IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">C</tspan>
+  </text>
+<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(3.299999237060547, 59.75) rotate(-0.0)">
+    <tspan class="GlobalId-2wt$qCfJn4CeYsLSWgAFII IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">A</tspan>
+  </text>
+<text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(119.70000457763672, 59.75) rotate(-0.0)">
+    <tspan class="GlobalId-0PHkjgv0zFtgPc8KzQjQ0K IfcAnnotation PredefinedType-TEXT cut-symbol-text" dy="0em" x="0" y="0">A</tspan>
   </text>
   </g>
   <g class="right-side-panel">
@@ -1695,21 +1732,21 @@ tspan.door-dimension {
     </g>
   </g>
   <g class="dimension-overlays">
-<line class="GlobalId-0JIUX$1D93A89f13iHydhO IfcAnnotation PredefinedType-DIMENSION" x1="11.550002098083496" x2="11.550002098083496" y1="112.44999694824219" y2="17.55000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.5500020981, 64.9999990463) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">9490</tspan>
-  </text>
-<line class="GlobalId-1GdsoPibz0zOv4gBfRRHtx IfcAnnotation PredefinedType-DIMENSION" x1="117.44999694824219" x2="117.44999694824219" y1="112.44999694824219" y2="105.05000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(116.449996948, 108.75) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">740</tspan>
-  </text>
-<line class="GlobalId-1CYlWidaT0Kwi$a_8szdar IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="18.549999237060547" x2="18.549999237060547" y1="112.44999694824219" y2="120.44999694824219"/>
-<line class="GlobalId-1CYlWidaT0Kwi$a_8szdar IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="111.45000457763672" x2="111.45000457763672" y1="112.44999694824219" y2="120.44999694824219"/>
-<line class="GlobalId-0EmGIVFbD21g73vMJZro37 IfcAnnotation PredefinedType-DIMENSION" x1="18.549999237060547" x2="111.45000457763672" y1="119.44999694824219" y2="119.44999694824219"/>
+<line class="GlobalId-2PmFOZcrn93OQz8FYJmIOZ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="18.549999237060547" x2="18.549999237060547" y1="112.44999694824219" y2="120.44999694824219"/>
+<line class="GlobalId-2PmFOZcrn93OQz8FYJmIOZ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="111.45000457763672" x2="111.45000457763672" y1="112.44999694824219" y2="120.44999694824219"/>
+<line class="GlobalId-1NMGwWKAPE8xMWcVZe78zR IfcAnnotation PredefinedType-DIMENSION" x1="18.549999237060547" x2="111.45000457763672" y1="119.44999694824219" y2="119.44999694824219"/>
 <text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(65.0000019073, 118.449996948) rotate(0.0)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">9290</tspan>
   </text>
-<line class="GlobalId-0bYtSHEPj2EeMlf1VPSW49 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="18.549999237060547" x2="10.550003051757812" y1="112.44999694824219" y2="112.44999694824219"/>
-<line class="GlobalId-0bYtSHEPj2EeMlf1VPSW49 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="18.549999237060547" x2="10.550003051757812" y1="17.55000114440918" y2="17.55000114440918"/>
+<line class="GlobalId-1TWTlm83v0ePn21yqm5czW IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="18.549999237060547" x2="10.550003051757812" y1="112.44999694824219" y2="112.44999694824219"/>
+<line class="GlobalId-1TWTlm83v0ePn21yqm5czW IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="18.549999237060547" x2="10.550003051757812" y1="17.55000114440918" y2="17.55000114440918"/>
+<line class="GlobalId-0uqY6fvtzCsuvnw1yATRyy IfcAnnotation PredefinedType-DIMENSION" x1="11.550002098083496" x2="11.550002098083496" y1="112.44999694824219" y2="17.55000114440918"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.5500020981, 64.9999990463) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">9490</tspan>
+  </text>
+<line class="GlobalId-2jwypK_Cr9RflKZ3Ksuywb IfcAnnotation PredefinedType-DIMENSION" x1="117.44999694824219" x2="117.44999694824219" y1="112.44999694824219" y2="105.05000305175781"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(116.449996948, 108.75) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">740</tspan>
+  </text>
   </g>
 </g></svg>

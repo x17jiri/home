@@ -14,6 +14,7 @@ import ifcopenshell.api.root
 import ifcopenshell.api.spatial
 import ifcopenshell.api.style
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 import ifcopenshell.util.representation
 from ifcopenshell.util.shape_builder import ShapeBuilder
 import numpy as np
@@ -283,6 +284,86 @@ def build_foundations(
         })
         footers.append(footer)
     return tuple(walls), tuple(footers)
+
+
+def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeightMap):
+    """Apply stepped tops and 1:1 undersides to existing strip footings only.
+
+    Retain each footing's full XY footprint, material and source wall. Unlike
+    ``build_foundations``, this does not create or extend foundation walls.
+    One footing can contain several height bands, without adding end returns
+    at the steps. ``Footprint`` metadata records the global XY outline.
+    """
+    if not isinstance(height_map, FoundationHeightMap):
+        raise TypeError("height_map must be a FoundationHeightMap")
+    model = storey.house.model
+    jobs = []
+    for footer in footings:
+        if not footer.is_a("IfcFooting") or footer.file is not model:
+            raise ValueError("footings must be IfcFooting elements from this house")
+        data = ifcopenshell.util.element.get_pset(footer, "BBIM_StripFooting")
+        placement = ifcopenshell.util.placement.get_local_placement(footer.ObjectPlacement)
+        length, width, height = data["Length"], data["Width"], data["Height"]
+        if "Footprint" in data:
+            polygon = Polygon(json.loads(data["Footprint"]))
+        else:
+            polygon = Polygon([
+                tuple((placement @ np.array((x, y, 0, 1)))[:2])
+                for x, y in ((0, -width/2), (length, -width/2),
+                             (length, width/2), (0, width/2))
+            ])
+        x0, y0, x1, y1 = polygon.bounds
+        bands = []
+        for lo, hi, bottom in height_map.bands(y0, y1):
+            part = polygon.intersection(box(x0-1, lo, x1+1, hi))
+            if part.area > 1e-10:
+                bands.append((part, bottom, height_map.bottom_profile(lo, hi)))
+        jobs.append((footer, data, polygon, height, bands,
+                     ifcopenshell.util.element.get_styles(footer)))
+
+    builder = ShapeBuilder(model)
+    for footer, data, polygon, height, bands, styles in jobs:
+        solids = []
+        for part, bottom, profile in bands:
+            solid = _footer_solid(model, builder, part, bottom, height, profile)
+            operands = ((solid.FirstOperand, solid.SecondOperand)
+                        if solid.is_a("IfcBooleanResult") else (solid,))
+            for operand in operands:
+                builder.translate(operand, (0, 0, bottom))
+            solids.append(solid)
+        # The new profiles use global coordinates, including Z. Keep the
+        # native axis in that same frame for consumers of the IFC model.
+        old_representations = tuple(footer.Representation.Representations)
+        for representation in old_representations:
+            ifcopenshell.api.geometry.unassign_representation(model, product=footer, representation=representation)
+        ifcopenshell.api.geometry.edit_object_placement(model, product=footer, matrix=np.eye(4), is_si=True)
+        body = builder.get_representation(storey.house._body_context, solids)
+        ifcopenshell.api.geometry.assign_representation(model, product=footer, representation=body)
+        if styles:
+            ifcopenshell.api.style.assign_representation_styles(model, shape_representation=body, styles=styles)
+        # Preserve the source strip axis, rather than deriving it from a
+        # clipped band or adding another extension at the height change.
+        source = model.by_guid(data["SourceWall"])
+        source_placement = ifcopenshell.util.placement.get_local_placement(source.ObjectPlacement)
+        tangent = source_placement[:2, 0]
+        centre = np.asarray(polygon.centroid.coords[0])
+        axis = ifcopenshell.api.geometry.add_axis_representation(
+            model, context=storey.house._axis_context,
+            axis=[tuple(map(float, centre-tangent*data["Length"]/2)),
+                  tuple(map(float, centre+tangent*data["Length"]/2))],
+        )
+        ifcopenshell.api.geometry.assign_representation(model, product=footer, representation=axis)
+        for representation in old_representations:
+            ifcopenshell.api.geometry.remove_representation(model, representation=representation)
+        bottom = min(z for _, _, profile in bands for _, z in profile)
+        ifcopenshell.api.pset.edit_pset(model, pset=model.by_id(data["id"]), properties={
+            "Footprint": json.dumps(tuple(polygon.exterior.coords)[:-1]),
+            "HeightMap": json.dumps(height_map.steps),
+            "MinimumBottomZ": bottom,
+            "TopZ": max(b+height for _, b, _ in bands),
+            "StartHeight": bottom-storey.elevation,
+            "BottomProfile": json.dumps(height_map.bottom_profile(polygon.bounds[1], polygon.bounds[3])),
+        })
 
 
 def _footer_solid(model, builder, polygon, bottom, height, bottom_profile):
