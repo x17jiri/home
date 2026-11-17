@@ -141,7 +141,7 @@ CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height d
 BASEMENT_CEILING_INSULATION_THICKNESS = 0.10
 BASEMENT_CEILING_WOOD_THICKNESS = 0.02
 BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_INSULATION_THICKNESS+BASEMENT_CEILING_WOOD_THICKNESS
-GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.03
+GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.10
 GROUND_STAIR_OPENING_INSULATION_THICKNESS = 0.20  # Drawing-only rockwool in CC.
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
 CEILING_ROOM3_SPLIT_Y = BWT+3.0
@@ -307,6 +307,12 @@ CHIMNEY_CENTER = (
     HOUSE_WIDTH/2.0,
     BASEMENT_GARDEN_WALL_CENTER_Y-CHIMNEY_BASEMENT_WALL_CENTER_OFFSET-CHIMNEY_SIZE/2,
 )
+chimney_ceiling_opening_region = box(
+    CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-CHIMNEY_CEILING_INFILL_CLEARANCE,
+    CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-CHIMNEY_CEILING_INFILL_CLEARANCE,
+    CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2+CHIMNEY_CEILING_INFILL_CLEARANCE,
+    CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2+CHIMNEY_CEILING_INFILL_CLEARANCE,
+)
 print("CHIMNEY_CENTER =", CHIMNEY_CENTER)
 for purlin_index, purlin_x in enumerate(PURLIN_X_POSITIONS, 1):
     purlin_chimney_clearance = abs(purlin_x-CHIMNEY_CENTER[0])-(PURLIN_SIZE[0]+CHIMNEY_SIZE)/2
@@ -465,8 +471,8 @@ for i in range(1, len(RAFTER_Y_POSITIONS)):
 #assert(found_chimney_space)
 
 aa_cut = CutDefinition(
-    start=(-2.0, HOUSE_DEPTH/2-0.2),
-    end=(HOUSE_WIDTH+0.9, HOUSE_DEPTH/2-0.2),
+    start=(-2.0, CHIMNEY_CENTER[1]-0.18),
+    end=(HOUSE_WIDTH+0.9, CHIMNEY_CENTER[1]-0.18),
     identifier="A", direction=-1,  # Look towards -Y.
 )
 bb_cut = CutDefinition(
@@ -549,7 +555,7 @@ def add_purlin_support_girder_plan(drawing):
 
 
 def add_ceiling_beam_plan(drawing, slab, *, wall_bounds, bearing_offset=-0.3, dimension_offset=0.0):
-    """Show beam axes, spacing, outer-beam wall offsets and bearing at both ends."""
+    """Show beam axes and dimensions; return an axis for use in line legends."""
     for index, (start, end) in enumerate(slab.beam_centerlines, 1):
         axis = drawing.add_line(
             start, end, style="dash-dot", color="red", line_width=0.08,
@@ -608,6 +614,7 @@ def add_ceiling_beam_plan(drawing, slab, *, wall_bounds, bearing_offset=-0.3, di
             name=f"{slab.Name} {label}",
 			offset=dimension_offset,
         )
+    return axis
 
 
 def wall_body_centreline_point(wall):
@@ -1629,11 +1636,7 @@ def add_chimney_ceiling_infill(slab, garden_wall):
         slab.start[0]+slab.block_start_offset, first_beam_y,
         slab.end[0]-slab.block_end_offset, wall_face_y,
     )
-    half_opening = CHIMNEY_SIZE/2+CHIMNEY_CEILING_INFILL_CLEARANCE
-    opening_region = box(
-        CHIMNEY_CENTER[0]-half_opening, CHIMNEY_CENTER[1]-half_opening,
-        CHIMNEY_CENTER[0]+half_opening, CHIMNEY_CENTER[1]+half_opening,
-    )
+    opening_region = chimney_ceiling_opening_region
     # Bonsai's slab-joining pass unions every inner loop as a solid polygon.
     # Treat this local infill as a concrete part so its opening is preserved.
     infill = ifcopenshell.api.root.create_entity(
@@ -1844,7 +1847,7 @@ ceiling_stairway = ceiling_storey.miako_slab(
         # Edit or append the remaining rows here; there is no HEB split.
         "beam",
         "space", "narrow", "space", "beam",
-        "space", "wide", "space", "beam",
+        "space", "narrow", "space", "beam",
     ],
     block_length=0.25,
     block_start_offset=STAIRWAY_CEILING_STAIRWAY_BEARING,
@@ -2103,6 +2106,22 @@ for floor in basement_room_floors:
     ))
 basement_ceiling_insulation = tuple(basement_ceiling_insulation)
 basement_ceiling_wood = tuple(basement_ceiling_wood)
+# Continue the concrete infill's chimney opening through the finishes on both
+# sides of the slab, including both materials in the ground-floor build-up.
+for layer in (chodba, *(part for part in (*basement_ceiling_insulation, *basement_ceiling_wood)
+                       if "S.04." in part.Name)):
+    add_horizontal_opening(
+        layer, f"{layer.Name} Chimney opening", chimney_ceiling_opening_region,
+        bottom_z=layer.storey.elevation+layer.start_height-0.01,
+        height=layer.thickness+0.02,
+    )
+    net_area = Polygon(layer.outline).difference(chimney_ceiling_opening_region).area
+    object.__setattr__(layer, "area", net_area)
+    ifcopenshell.api.pset.edit_pset(
+        house.model,
+        pset=house.model.by_id(ifcopenshell.util.element.get_pset(layer, "BBIM_FloorLayer")["id"]),
+        properties={"Area": net_area},
+    )
 basement_stair_opening_board = None
 if ground_stair_opening_region is not None:
     s05_floor = next(floor for floor in basement_room_floors if floor.room_id == "S.05")
@@ -2119,11 +2138,10 @@ basement_ceiling_finishes = (
     *((basement_stair_opening_board,) if basement_stair_opening_board is not None else ()),
 )
 basement_ceiling_schedule_rows = [
-    {"location": "S.01", "slab": basement_ceiling_s01},
-    {"location": "S.02", "slab": basement_ceiling_s02},
+    {"location": "S.01, S.02", "slab": (basement_ceiling_s01, basement_ceiling_s02)},
     {"location": "S.03", "slab": basement_ceilings_by_room["S.03"]},
-    {"location": "S.04", "slab": basement_ceilings_by_room["S.04"]},
-    {"location": "S.05", "slab": basement_ceilings_by_room["S.05"]},
+    {"location": "S.04, S.05", "slab": (*basement_ceilings_by_room["S.04"],
+                                        *basement_ceilings_by_room["S.05"])},
 ]
 
 
@@ -2169,11 +2187,11 @@ def add_ceiling_spacing_dimension(drawing, start, end, *, side, index, name):
 
 
 def add_ceiling_beam_spacing_dimensions(drawing, slab, *, side):
-    """Dimension consecutive beam centres in each complete slab layout."""
+    """Dimension beam centres outside the plan or around the slab's centre."""
     # Aligned room-3/bathroom rows share one outside spacing chain.
     counterpart = {ceiling_bathroom: ceiling_room3,
                    ceiling_bathroom_front: ceiling_room3_front}.get(slab)
-    if counterpart is not None:
+    if counterpart is not None and side != "center":
         rows = [start[1] for start, end in slab.beam_centerlines]
         other_rows = [start[1] for start, end in counterpart.beam_centerlines]
         # The bathroom can omit its first bay while sharing all later spacings.
@@ -2184,6 +2202,13 @@ def add_ceiling_beam_spacing_dimensions(drawing, slab, *, side):
     endpoint = 0 if side == "left" else 1
     lines = slab.beam_centerlines
     for index, (first, second) in enumerate(zip(lines, lines[1:]), 1):
+        if side == "center":
+            drawing.add_dimension(
+                tuple(np.mean(first, axis=0)), tuple(np.mean(second, axis=0)),
+                offset=(-0.25 if index % 2 else 0.25),
+                name=f"{slab.Name} Beam Center Distance {index}",
+            )
+            continue
         add_ceiling_spacing_dimension(
             drawing, first[endpoint], second[endpoint], side=side, index=index-1,
             name=f"{slab.Name} Beam Center Distance {index}",
@@ -4294,17 +4319,11 @@ if "basement" in sys.argv:
         depth_x = x1+0.45 if room["identifier"] == "S.05" else x0+inset
         if room["identifier"] == "S.02":
             depth_x = x0+1.2
-        width_dimension = drawing1.add_dimension(
+        drawing1.add_dimension(
             start=(x0, width_y), end=(x1, width_y),
             name=f"{room['identifier']} clear width",
+            highlight=room["identifier"] == "S.04",
         )
-        if room["identifier"] == "S.04":
-            appearance = ifcopenshell.api.pset.add_pset(
-                house.model, product=width_dimension, name="EPset_Annotation",
-            )
-            ifcopenshell.api.pset.edit_pset(
-                house.model, pset=appearance, properties={"Classes": "fill-bg"},
-            )
         drawing1.add_dimension(
             start=(depth_x, y0), end=(depth_x, y1),
             name=f"{room['identifier']} clear depth",
@@ -4352,15 +4371,10 @@ if "basement" in sys.argv:
             (jamb1, bounds[axis+2], labels[1]),
         ):
             start, end = ((first, face), (last, face)) if axis == 0 else ((face, first), (face, last))
-            dimension = drawing1.add_dimension(
+            drawing1.add_dimension(
                 start, end, offset=offset,
                 name=f"{identifier} {opening.Name} clearance to {label} wall",
-            )
-            appearance = ifcopenshell.api.pset.add_pset(
-                house.model, product=dimension, name="EPset_Annotation",
-            )
-            ifcopenshell.api.pset.edit_pset(
-                house.model, pset=appearance, properties={"Classes": "fill-bg"},
+                highlight=True,
             )
     drawing1.add_lintel(basement_garage_door, 1, position="after", direction="in")
     drawing1.add_lintel(basement_s01_s03_door, 1, direction="in")
@@ -4590,8 +4604,9 @@ if "ground" in sys.argv:
     drawing1.add_opening_dimension(
         pokoj2_door, offset=1.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
     )
-    room3_door_dimension = drawing1.add_opening_dimension(
+    drawing1.add_opening_dimension(
         pokoj3_door, offset=1.0, finished_floor_height=GROUND_FLOOR_THICKNESS,
+        highlight=True,
     )
     drawing1.add_opening_dimension(
         bathroom_door, offset=0.4, finished_floor_height=GROUND_FLOOR_THICKNESS,
@@ -4664,17 +4679,11 @@ if "ground" in sys.argv:
         (garden_left_x1, garden_right_x0, "Garden window opening gap"),
         (garden_right_x1, HOUSE_WIDTH-BWT, "Pokoj 2 window to west wall"),
     ):
-        dimension = drawing1.add_dimension(
+        # The centred gap label crosses the partition hatch.
+        drawing1.add_dimension(
             (x0, garden_opening_wall_y), (x1, garden_opening_wall_y), offset=-0.4, name=name,
+            highlight=name == "Garden window opening gap",
         )
-        if name == "Garden window opening gap":
-            # The centred label crosses the partition hatch.
-            appearance = ifcopenshell.api.pset.add_pset(
-                house.model, product=dimension, name="EPset_Annotation",
-            )
-            ifcopenshell.api.pset.edit_pset(
-                house.model, pset=appearance, properties={"Classes": "fill-bg"},
-            )
     room3_window_x0, room3_window_x1 = room_window_x_bounds[window_pokoj3]
     room3_opening_wall_y = BWT
     for x0, x1, name in (
@@ -4689,33 +4698,22 @@ if "ground" in sys.argv:
         (BATHROOM_LEFT_X, bathroom_window_x0, "Bathroom window to room 3 wall"),
         (bathroom_window_x1, BATHROOM_RIGHT_X, "Bathroom window to stairway wall"),
     ):
-        dimension = drawing1.add_dimension(
-            (x0, BWT), (x1, BWT), offset=0.4, name=name,
-        )
         # Keep the values readable over the shower and hot-water tank labels.
-        appearance = ifcopenshell.api.pset.add_pset(
-            house.model, product=dimension, name="EPset_Annotation",
-        )
-        ifcopenshell.api.pset.edit_pset(
-            house.model, pset=appearance, properties={"Classes": "fill-bg"},
+        drawing1.add_dimension(
+            (x0, BWT), (x1, BWT), offset=0.4, name=name,
+            highlight=True,
         )
     # Clear width and depth of Pokoj 3's narrowed garden-side end.
     drawing1.add_dimension(
         start=(BWT, THIRD_ROOM_STEP_Y+0.1),
         end=(THIRD_ROOM_NARROW_WALL_X-DRY_WALL_WIDTH, THIRD_ROOM_STEP_Y+0.1),
     )
-    room3_narrow_depth_dimension = drawing1.add_dimension(
+    drawing1.add_dimension(
         start=(THIRD_ROOM_NARROW_WALL_X-DRY_WALL_WIDTH, THIRD_ROOM_STEP_Y),
         end=(THIRD_ROOM_NARROW_WALL_X-DRY_WALL_WIDTH, GARDEN_ROOMS_WALL_Y),
         offset=1.5, name="Pokoj 3 narrow section depth",
+        highlight=True,
     )
-    for dimension in (room3_door_dimension, room3_narrow_depth_dimension):
-        appearance = ifcopenshell.api.pset.add_pset(
-            house.model, product=dimension, name="EPset_Annotation",
-        )
-        ifcopenshell.api.pset.edit_pset(
-            house.model, pset=appearance, properties={"Classes": "fill-bg"},
-        )
     # hloubka tretiho pokoje
     drawing1.add_dimension(
         start=(BWT+0.5, BWT), end=(BWT+0.5, GARDEN_ROOMS_WALL_Y),
@@ -4785,9 +4783,9 @@ if "ceiling" in sys.argv:
         radius=7, storeys=[], right_panel_width=60,
         door_annotations=False, automatic_plan_annotations=False,
     )
-    drawing1.add_material_legend([
-        ("purlin-support-footprint", "Uložení sloupku krovu"),
-    ], title="Symboly")
+    drawing1.add_symbol_legend([
+        ("purlin_post", "Uložení sloupku krovu"),
+    ])
     drawing1.add_wall_outlines(
         ground_load_bearing_walls, style="solid", color="black",
         name="Ground-floor ceiling load-bearing wall outlines",
@@ -4805,8 +4803,11 @@ if "ceiling" in sys.argv:
                 drawing1.house.model, pset=drawing1.house.model.by_id(appearance["id"]),
                 properties={"Classes": appearance["Classes"]+" ceiling-beam-axis"},
             )
+            if slab == ceiling_garden_rooms and index == 1:
+                drawing1.add_line_legend([(axis, "Nosník MIAKO")])
         add_ceiling_beam_spacing_dimensions(
             drawing1, slab, side=("garden" if slab == ceiling_garden_rooms
+                                 else "center" if slab == ceiling_bathroom
                                  else "right" if slab == ceiling_stairway else "left"),
         )
         # Room wall-offset dimensions still reference the inner wall faces.
@@ -4996,11 +4997,13 @@ if "basement_ceiling" in sys.argv:
             if slab == basement_ceiling_s05_front:
                 # Its garden-side reference is the HEB, rather than the room wall.
                 wall_bounds[3] = basement_s05_heb_front_y
-            add_ceiling_beam_plan(
+            axis = add_ceiling_beam_plan(
                 drawing1, slab, wall_bounds=wall_bounds,
                 bearing_offset=-0.65 if identifier == "S.04" else -0.3,
 				dimension_offset=dimension_offset,
             )
+            if slab == basement_ceiling_s01:
+                drawing1.add_line_legend([(axis, "Nosník MIAKO")])
     add_stairway_edge_heb_plan(
         drawing1, basement_s05_edge_heb, front_wall_y=basement_s05_y0, dimension_x=basement_s05_x0+.25,
     )
@@ -5773,8 +5776,8 @@ def add_house_section(cut, name, pdf):
             name="Ground finished floor to plastered ceiling",
         )
         drawing.add_dimension(
-            start=(roof_ridge_x, UPPER_FINISHED_FLOOR_HEIGHT),
-            end=(roof_ridge_x, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z),
+            start=(roof_ridge_x-0.5, UPPER_FINISHED_FLOOR_HEIGHT),
+            end=(roof_ridge_x-0.5, FLAT_GYPSUM_PLASTERBOARD_BOTTOM_Z),
             name="Upper finished floor to horizontal plasterboard underside",
         )
         for x, y, offset, label in (
@@ -5789,6 +5792,7 @@ def add_house_section(cut, name, pdf):
             drawing.add_dimension(
                 start=(x, UPPER_FINISHED_FLOOR_HEIGHT), end=(x, ceiling_z),
                 offset=offset, name=label,
+                highlight=label == "Lowest ceiling clearance at west edge of upper stair exit",
             )
     drawing.add_material_legend([
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
@@ -5799,7 +5803,7 @@ def add_house_section(cut, name, pdf):
         ("base-plate", "Základová deska"),
         ("earth-section", "Rostlý terén"),
         ("gravel", "Zhutněná zemina"),
-        ("reinforced-concrete", "Železobetonový věnec"),
+        *([("reinforced-concrete", "Železobetonový věnec")] if name == "aa" else []),
         ("wood-solid", "Dřevo"),
         ("drywall-diagonal1", "Sádrokarton"),
         ("thermal-impact-insulation", "Podlahová a stropní izolace"),
@@ -5809,6 +5813,11 @@ def add_house_section(cut, name, pdf):
         ("vapour-barrier-solid", "OSB záklop + parobrzda"),
     ])
     drawing.add_line_legend([(waterproofing, "Hydroizolace")])
+    if name in ("bb", "cc"):
+        drawing.add_symbol_legend([
+            ("heb", "Nosník HEB"),
+            ("ring_beam", "Železobetonový věnec"),
+        ], line_width=0.10)
     drawing.render(PROJECT_DIR / f"{name}.svg", pdf=pdf)
     return drawing
 

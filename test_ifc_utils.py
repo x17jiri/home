@@ -1921,6 +1921,54 @@ class FloorCornerTests(unittest.TestCase):
             self.assertEqual(path.read_text(encoding="utf-8"), source)
 
 
+class DimensionHighlightTests(unittest.TestCase):
+    def setUp(self):
+        self.house = House("Highlighted dimensions")
+        self.storey = self.house.storey("Ground", elevation=0)
+        self.plan = self.house.add_drawing("Plan", 0, 0, 1.5, 5, storeys=[self.storey])
+        self.section = self.house.add_drawing(
+            "Section", 0, 0, 1.5, 5, storeys=[self.storey],
+            view="elevation", direction=(1, 0, 0),
+        )
+
+    def test_highlight_is_opt_in_and_persists_for_plans_and_sections(self):
+        for drawing in (self.plan, self.section):
+            for suffix, options in (("default", {}), ("off", {"highlight": False}),
+                                    ("on", {"highlight": True})):
+                dimension = drawing.add_dimension(
+                    (0, 0), (0, 2), offset=.3, name=f"{drawing.name} {suffix}", **options,
+                )
+                classes = ifcopenshell.util.element.get_pset(dimension, "EPset_Annotation", "Classes")
+                self.assertEqual(classes, "fill-bg" if suffix == "on" else None)
+                props = ifcopenshell.util.element.get_pset(dimension, "BBIM_DimensionSource")
+                self.assertEqual(props["Length"], 2.)
+                self.assertEqual(props["Offset"], .3)
+                extension = next(o for o in self.house.model.by_type("IfcAnnotation")
+                                 if o.Name == dimension.Name+" Extension Lines")
+                self.assertEqual(ifcopenshell.util.element.get_pset(extension, "EPset_Annotation", "Classes"),
+                                 "dimension-extension fine")
+        reopened = ifcopenshell.file.from_string(self.house.model.to_string())
+        for drawing in (self.plan, self.section):
+            dimension = next(o for o in reopened.by_type("IfcAnnotation") if o.Name == drawing.name+" on")
+            self.assertEqual(ifcopenshell.util.element.get_pset(dimension, "EPset_Annotation", "Classes"), "fill-bg")
+
+    def test_invalid_highlight_does_not_create_annotations(self):
+        before = set(self.house.model.by_type("IfcAnnotation"))
+        for value in (None, "yes", 0, 1):
+            with self.subTest(value=value), self.assertRaisesRegex(TypeError, "highlight must be a boolean"):
+                self.plan.add_dimension((0, 0), (0, 2), highlight=value)
+            self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+            self.assertEqual(self.plan._dimension_count, 0)
+
+    def test_opening_dimensions_forward_highlight(self):
+        wall = self.storey.wall((0, 0), (4, 0), thickness=.24, height=3)
+        opening = wall.add_opening(at=1, width=1, height=2)
+        dimension = self.plan.add_opening_dimension(opening, finished_floor_height=0, highlight=True)
+        self.assertEqual(ifcopenshell.util.element.get_pset(dimension, "EPset_Annotation", "Classes"), "fill-bg")
+        self.assertEqual(dimension.Description, "2000 (0)")
+        self.assertEqual(ifcopenshell.util.element.get_pset(dimension, "BBIM_OpeningDimension", "Width"), 1.)
+
+
 class DimensionOverlayTests(unittest.TestCase):
     def test_reversed_dimensions_keep_text_upright_and_width_before_height(self):
         cases = (
@@ -3149,6 +3197,56 @@ class SymbolLegendTests(unittest.TestCase):
             self.assertIn("drawing-line-color-008000", sample.get("class"))
             self.assertEqual([e.get("d").count(" L") for e in sample], [1, 64, 2])
             self.assertIn("Vypínač", path.read_text(encoding="utf-8"))
+
+    def test_heb_legend_has_a_filled_i_section_and_supports_color_override(self):
+        for color, expected in ((None, None), ("blue", "#0000ff")):
+            with self.subTest(color=color), TemporaryDirectory() as directory:
+                drawing = self.house.add_drawing(f"Section {color}", 0, 0, 2, 5, right_panel_width=60)
+                drawing.add_symbol_legend([("heb", "Nosník HEB")], color=color, line_width=.04)
+                props = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+                path = Path(directory) / "heb.svg"
+                path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" '
+                                'height="160mm" viewBox="0 0 160 160"><g id="geometry"/></svg>', encoding="utf-8")
+                _postprocess_right_panel(path, props)
+                root = ET.parse(path).getroot()
+                sample = next(e for e in root.iter() if e.get("data-symbol") == "heb")
+                self.assertEqual(len(sample), 1)
+                outline = sample[0]
+                self.assertTrue(outline.get("d").endswith(" Z"))
+                if expected is None:
+                    self.assertTrue({"IfcBeam", "material-Structuralsteel", "cut"}.issubset(sample.get("class").split()))
+                    self.assertNotIn("fill:", outline.get("style", ""))
+                    self.assertNotIn("drawing-line-color-", sample.get("class"))
+                else:
+                    self.assertIn(f"fill:{expected} !important", outline.get("style"))
+                    self.assertIn(f"drawing-line-color-{expected[1:]}", sample.get("class"))
+                coordinates = np.array([float(v) for v in re.findall(r"[-+]?(?:\d*\.)?\d+", outline.get("d"))]).reshape(-1, 2)
+                area = abs(np.dot(coordinates[:-1, 0], coordinates[1:, 1])
+                           -np.dot(coordinates[1:, 0], coordinates[:-1, 1]))/2
+                rectangle_area = np.prod(coordinates.max(0)-coordinates.min(0))
+                self.assertGreater(area/rectangle_area, .1)
+                self.assertLess(area/rectangle_area, .3)
+                self.assertIn("Nosník HEB", path.read_text(encoding="utf-8"))
+
+    def test_ring_beam_legend_has_four_dots_connected_without_a_background(self):
+        self.drawing.add_symbol_legend([("ring_beam", "Železobetonový věnec")])
+        props = ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ring.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" '
+                            'height="160mm" viewBox="0 0 160 160"><g id="geometry"/></svg>', encoding="utf-8")
+            _postprocess_right_panel(path, props)
+            root = ET.parse(path).getroot()
+            sample = next(e for e in root.iter() if e.get("data-symbol") == "ring_beam")
+            self.assertIn("drawing-line-color-000000", sample.get("class"))
+            lines = [e for e in sample if e.tag.endswith("}path")]
+            dots = [e for e in sample if e.tag.endswith("}circle")]
+            self.assertEqual(len(lines), 1)
+            self.assertEqual(len(dots), 4)
+            self.assertTrue(lines[0].get("d").endswith(" Z"))
+            self.assertNotIn("fill:", lines[0].get("style", ""))
+            self.assertFalse(any(e.tag.endswith("}rect") for e in sample))
+            self.assertTrue(all(e.get("style") == "fill:#000000;stroke:none" for e in dots))
 
     def test_invalid_symbol_legends_leave_tables_unchanged(self):
         for items in ([], None, "socket", ["socket"], [("socket",)], [("unknown", "Bad")],

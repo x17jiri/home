@@ -66,17 +66,43 @@ class BasementCeilingFinishTests(unittest.TestCase):
                 self.assertEqual(element.get_container(obj), v["basement_ceiling_storey"].element)
                 self.assertFalse(element.get_pset(obj, "Pset_SlabCommon", "LoadBearing"))
 
-    def test_finish_uses_floor_polygons_except_beneath_the_stair_opening(self):
+    def test_finish_uses_floor_polygons_except_at_stairs_and_chimney(self):
         v = self.v
         for floor in v["basement_room_floors"]:
             expected = self.footprint(floor)
             if floor.room_id == "S.05" and v["ground_stair_opening_region"] is not None:
                 expected = expected.difference(v["ground_stair_opening_region"])
+            if floor.room_id == "S.04":
+                expected = expected.difference(v["chimney_ceiling_opening_region"])
             for layers in (v["basement_ceiling_insulation"], v["basement_ceiling_wood"]):
                 finish = next(part for part in layers if f"{floor.room_id}." in part.Name)
                 actual = self.footprint(finish)
                 self.assertLess(actual.symmetric_difference(expected).area, 1e-9)
                 self.assertAlmostEqual(finish.area, expected.area)
+
+    def test_chimney_opening_continues_through_both_sides_of_the_slab(self):
+        v = self.v
+        cx, cy = v["CHIMNEY_CENTER"]
+        half = v["CHIMNEY_SIZE"]/2 + .03
+        opening_region = box(cx-half, cy-half, cx+half, cy+half)
+        self.assertTrue(v["chimney_ceiling_opening_region"].equals(opening_region))
+        layers = [v["chodba"], *(part for part in (*v["basement_ceiling_insulation"],
+                                                 *v["basement_ceiling_wood"])
+                                if "S.04." in part.Name)]
+        self.assertEqual(len(layers), 3)
+        for layer in layers:
+            expected = Polygon(layer.outline).difference(opening_region)
+            self.assertLess(self.footprint(layer).symmetric_difference(expected).area, 1e-9)
+            self.assertAlmostEqual(layer.area, expected.area)
+            self.assertAlmostEqual(element.get_pset(layer, "BBIM_FloorLayer", "Area"), expected.area)
+            self.assertEqual(len(layer.HasOpenings), 1)
+            opening = layer.HasOpenings[0].RelatedOpeningElement
+            lo, hi = self.bounds(opening)
+            np.testing.assert_allclose(lo[:2], (cx-half, cy-half))
+            np.testing.assert_allclose(hi[:2], (cx+half, cy+half))
+            layer_lo, layer_hi = self.bounds(layer)
+            self.assertLess(lo[2], layer_lo[2])
+            self.assertGreater(hi[2], layer_hi[2])
 
     def test_aa_and_bb_measure_to_wood_without_an_extra_plaster_allowance(self):
         v = self.v

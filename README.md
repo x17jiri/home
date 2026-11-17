@@ -330,7 +330,7 @@ descending entrance, so there is no full-height wooden guard wall across it.
 The hallway floor continues beneath the retained ground-to-upper stairs to
 the street edge of the ceiling above S.05 (`basement_stair_opening_end_y`).
 Both insulation and floor build-up follow that edge. The remaining opening
-towards the front wall is closed by `ground_stair_opening_board`, a 30 mm
+towards the front wall is closed by `ground_stair_opening_board`, a 100 mm
 timber board with its top flush with the finished ground floor. A second board,
 `basement_stair_opening_board`, closes the underside at the same height and
 20 mm thickness as the adjoining basement ceiling wood lining. CC centers
@@ -2227,6 +2227,12 @@ Switch entries do not advance corner offsets and use the route's line width.
 
 For other drawings with a right panel of at least 40 mm, symbol legends can use
 `drawing.add_symbol_legend([("socket", "Zásuvka"), ("d_socket", "Dvojitá zásuvka"), ("light", "Světlo"), ("switch", "Vypínač")])`.
+The `heb` symbol draws a filled I-section from the HEB180 dimensions and shares
+the `Structuralsteel` cut classes in `plan.css`, so its fill and outline colors
+follow the section cuts. An explicit legend color overrides this style.
+House 2's BB and CC symbol legends include it as `Nosník HEB`, followed by
+`ring_beam` as `Železobetonový věnec`: four black dots joined by an unfilled
+rectangle. The ring-beam entry is omitted from those sections' material legends.
 They reuse symbol geometry, add no objects to the plan, and stack with other
 legends. Optional `title`, `color` and `line_width` control their appearance;
 omitting `color` uses green ordinary sockets/switches, red `socket3f` and blue lights, while an explicit color
@@ -2756,6 +2762,10 @@ the header is included in the paper-fit check. Print the PDF at actual size /
 100%, not "fit to page".
 
 ### Finding dimensions in the source
+
+Use `drawing.add_dimension(..., highlight=True)` for a white background behind
+overlapping dimension text. It defaults to `False` and also works with
+`add_opening_dimension(..., highlight=True)` for opening captions.
 
 Every drawing render writes a UTF-8, tab-separated index beside the SVG,
 for example `projekt2/basement.dimensions.tsv`. Search by the exact value

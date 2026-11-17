@@ -3165,6 +3165,18 @@ def _material_legend_svg(
                 paths = _light_symbol_paths(.15)
             elif pattern == "switch":
                 paths = _switch_symbol_paths(.225, .075)
+            elif pattern == "heb":
+                section = heb_section(180)
+                w, h, web, flange = section.width/2, section.height/2, section.web/2, section.flange
+                paths = [[(-w, -h), (w, -h), (w, -h+flange), (web, -h+flange),
+                          (web, h-flange), (w, h-flange), (w, h), (-w, h),
+                          (-w, h-flange), (-web, h-flange), (-web, -h+flange),
+                          (-w, -h+flange), (-w, -h)]]
+            elif pattern == "ring_beam":
+                paths = [[(-.1, -.1), (.1, -.1), (.1, .1), (-.1, .1), (-.1, -.1)]]
+            elif pattern == "purlin_post":
+                paths = [[(-.1, -.1), (.1, -.1), (.1, .1), (-.1, .1), (-.1, -.1)],
+                         [(-.1, -.1), (.1, .1)], [(-.1, .1), (.1, -.1)]]
             else:
                 paths = _socket_symbol_paths(.225, .1125, pattern == "d_socket")
             sample_points = [point for path in paths for point in path]
@@ -3180,7 +3192,23 @@ def _material_legend_svg(
             for path in paths:
                 d = "M" + " L".join(f"{origin_x + px * sample_scale:.6g},{origin_y - py * sample_scale:.6g}"
                                      for px, py in path)
-                parts.append(f'<path d="{d}"/>')
+                fill_style = ""
+                if pattern in {"heb", "ring_beam"} or (pattern == "purlin_post" and path is paths[0]):
+                    d += " Z"
+                if pattern == "heb":
+                    color_match = re.search(r"drawing-line-color-([0-9a-fA-F]{6})\b", classes)
+                    if color_match:
+                        fill_style = f' style="fill:#{color_match[1]} !important"'
+                parts.append(f'<path d="{d}"{fill_style}/>')
+            if pattern == "ring_beam":
+                color_match = re.search(r"drawing-line-color-([0-9a-fA-F]{6})\b", classes)
+                dot_color = f"#{color_match[1]}" if color_match else "black"
+                for px, py in paths[0][:-1]:
+                    parts.append(
+                        f'<circle cx="{origin_x + px * sample_scale:.6g}" '
+                        f'cy="{origin_y - py * sample_scale:.6g}" '
+                        f'r="{.4*layout_scale*u:.6g}" style="fill:{dot_color};stroke:none"/>'
+                    )
             parts.append('</g>')
         elif is_line_legend:
             # Reuse the source annotation's exact CSS classes, so sample
@@ -10086,18 +10114,21 @@ class Drawing:
 
     def add_symbol_legend(
         self,
-        items: Sequence[tuple[Literal["socket", "d_socket", "socket3f", "light", "switch"], str]],
+        items: Sequence[tuple[Literal["socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post"], str]],
         *,
         title: str = "LEGENDA SYMBOLŮ",
         color: str | None = None,
         line_width: Number = 0.3,
     ) -> Drawing:
-        """Add electrical symbol samples to the panel, without plan geometry.
+        """Add symbol samples to the panel, without model geometry.
 
         Items are (symbol, description) pairs; supported symbols are socket
-        and d_socket (green), socket3f (red), switch (green), or light (blue).
-        Samples share the native symbol
-        geometry; color overrides all default colors when supplied. The line
+        and d_socket (green), socket3f (red), switch (green), light (blue),
+        a filled HEB section (matching the steel cut style), or ring_beam
+        (four black reinforcement dots joined by an unfilled rectangle).
+        The purlin_post symbol is a green square with crossed diagonals.
+        Samples use shared electrical geometry or HEB section dimensions;
+        color overrides all default colors when supplied. The line
         width is in printed millimetres. Tables persist in IFC and
         stack in call order with line and material legends.
         """
@@ -10123,12 +10154,15 @@ class Drawing:
             except (TypeError, ValueError) as error:
                 raise TypeError(f"item {index} must contain a symbol and description") from error
             symbol = _name(symbol, f"item {index} symbol")
-            if symbol not in {"socket", "d_socket", "socket3f", "light", "switch"}:
-                raise ValueError(f"item {index} symbol must be socket, d_socket, socket3f, light or switch")
+            if symbol not in {"socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post"}:
+                raise ValueError(f"item {index} symbol must be socket, d_socket, socket3f, light, switch, heb, ring_beam or purlin_post")
             description = _name(description, f"item {index} description")
             item = {"symbol": symbol, "description": description}
-            if symbol in {"light", "socket3f"} and color is None:
-                _, _, symbol_classes = _drawing_line_appearance("solid", "blue" if symbol == "light" else "red")
+            if symbol == "heb" and color is None:
+                item["classes"] = f"IfcBeam material-Structuralsteel cut {width_class}"
+            elif symbol in {"light", "socket3f", "ring_beam", "purlin_post"} and color is None:
+                symbol_color = {"light": "blue", "socket3f": "red", "ring_beam": "black", "purlin_post": "#2e7d32"}[symbol]
+                _, _, symbol_classes = _drawing_line_appearance("solid", symbol_color)
                 item["classes"] = f"IfcAnnotation PredefinedType-LINEWORK {symbol_classes} {width_class}"
             normalised_items.append(item)
         self._right_panel_tables.append({
@@ -11936,6 +11970,7 @@ class Drawing:
         end: Point,
         *,
         offset: Number = 0,
+        highlight: bool = False,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add one linear dimension scoped only to this drawing.
@@ -11948,12 +11983,16 @@ class Drawing:
         metres; Bonsai displays the measured value in millimetres.  A non-zero
         offset adds extension lines from the measured points to 1 mm beyond
         the dimension line at 1:100.
+        ``highlight=True`` adds a white background behind the dimension text
+        to keep it readable over overlapping geometry.
         The caller's source location and original inputs are saved on the
         annotation for the dimension index produced by render().
         """
         start_x, start_y = _point(start, "start")
         end_x, end_y = _point(end, "end")
         offset = _number(offset, "offset")
+        if not isinstance(highlight, bool):
+            raise TypeError("highlight must be a boolean")
         delta_x = end_x - start_x
         delta_y = end_y - start_y
         length = hypot(delta_x, delta_y)
@@ -12049,6 +12088,9 @@ class Drawing:
             product=dimension,
             name="BBIM_Dimension",
         )
+        if highlight:
+            appearance = ifcopenshell.api.pset.add_pset(model, product=dimension, name="EPset_Annotation")
+            ifcopenshell.api.pset.edit_pset(model, pset=appearance, properties={"Classes": "fill-bg"})
         unit_choices = (
             "Feet and Inches - Fractional",
             "Feet - Decimal",
@@ -12188,6 +12230,7 @@ class Drawing:
         *,
         offset: Number = 0,
         finished_floor_height: Number | None = None,
+        highlight: bool = False,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Dimension a wall opening: width above, clear height (sill) below.
@@ -12202,6 +12245,7 @@ class Drawing:
         e.g. GROUND_FLOOR_THICKNESS. When omitted, all FLOOR layers in that
         storey must have a common top elevation. ``offset`` has the same
         signed, wall-start-to-end convention as add_dimension().
+        ``highlight=True`` adds the same text background as add_dimension().
         """
         self._require_plan_view("add_opening_dimension")
         if not isinstance(opening, ifcopenshell.entity_instance) or not any(
@@ -12250,6 +12294,7 @@ class Drawing:
         points = [wall_placement @ np.array((x, 0.0, 0.0, 1.0)) for x in (start, end)]
         dimension = self.add_dimension(
             tuple(points[0][:2]), tuple(points[1][:2]), offset=offset,
+            highlight=highlight,
             name=annotation_name or f"{self.name} {product.Name or 'Opening'} Dimension",
         )
         # Bonsai natively renders Description below the dimension's measured
