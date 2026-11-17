@@ -225,6 +225,37 @@ class DrawingSheetTests(unittest.TestCase):
             self.render(sheet, pdf=pdf)
         export.assert_called_once_with(self.output, pdf, paper="A3", orientation="portrait", margin=0, inkscape="inkscape")
 
+    def test_assembly_grid_keeps_global_ids_and_wraps_into_borderless_rows(self):
+        self.sources = source(200, 150)
+        sheet = DrawingSheet(paper="A3", orientation="portrait")
+        sheet.add(self.first, x=.5, y=.25, crop=False)
+        assemblies = {i: {"title": "Střešní plášť", "layers": ["MDF záklop | 15 mm"]}
+                      for i in (1, 3, 5, 7, 9, 11, 13, 42)}
+        sheet.add_construction_assemblies(assemblies)
+        self.render(sheet)
+        root = ET.parse(self.output).getroot()
+        grid = root.find(f"{{{SVG}}}g[@class='construction-assemblies']")
+        self.assertEqual(grid.get("data-columns"), "7")
+        cells = grid.findall(f"{{{SVG}}}g")
+        self.assertEqual([int(c.get("data-assembly-id")) for c in cells], list(assemblies))
+        self.assertEqual(cells[-1][0].text, "Skladba 42")
+        self.assertEqual(cells[0][0].get("font-weight"), "bold")
+        self.assertGreater(float(cells[-1][0].get("y")), float(cells[0][-1].get("y")))
+        self.assertFalse(grid.findall(f".//{{{SVG}}}rect"))
+        self.assertEqual(sum(e.text == "•" for e in grid.iter()), 8)
+        drawing = root.find(f"{{{SVG}}}g[@id='sheet-drawing-1']/{{{SVG}}}svg")
+        self.assertEqual((drawing.get("width"), drawing.get("height")), ("200", "150"))
+
+    def test_assembly_grid_overflow_does_not_overwrite_the_previous_sheet(self):
+        self.sources = source()
+        self.output.write_text("Original sheet")
+        sheet = DrawingSheet(paper="A3", orientation="portrait")
+        sheet.add(self.first, x=.5, y=.25, crop=False)
+        sheet.add_construction_assemblies({1: {"title": "Too tall", "layers": ["Layer | 1 mm"]*100}})
+        with self.assertRaisesRegex(ValueError, "bottom margin"):
+            self.render(sheet)
+        self.assertEqual(self.output.read_text(), "Original sheet")
+
     def test_configuration_and_inputs_are_validated(self):
         sheet = DrawingSheet()
         for kwargs in ({"x": -.1, "y": .5}, {"x": 1.1, "y": .5}, {"x": True, "y": .5},

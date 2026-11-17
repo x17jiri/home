@@ -218,13 +218,13 @@ are retained. These beams belong to the corresponding ceiling
 storeys, so hiding a ceiling hides its ring beams as well.
 
 The basement ceiling has 100 mm of insulation directly beneath its structural
-underside, followed by a 20 mm wood lining. Both layers belong to `Basement
+underside, followed by a 12.5 mm plasterboard lining. Both layers belong to `Basement
 ceiling` and directly reuse each `basement_room_floors` layer's `outline`.
 They cover the room polygons, including areas outside the MIAKO layout,
 except for the S.05 stair opening closed by the separate timber board.
 The omitted chimney-side MIAKO bay does not trim these finishes.
-`BASEMENT_CEILING_INSULATION_THICKNESS` and `BASEMENT_CEILING_WOOD_THICKNESS`
-control the layers; `BASEMENT_FINISHED_CEILING_Z` is the resulting wood
+`BASEMENT_CEILING_INSULATION_THICKNESS` and `BASEMENT_CEILING_PLASTERBOARD_THICKNESS`
+control the layers; `BASEMENT_FINISHED_CEILING_Z` is the resulting plasterboard
 underside. Insulation uses the floor-insulation material and the same
 `thermal-impact-insulation` cut hatch. The detailed structural ceiling plan
 excludes these finish layers so the MIAKO layout remains visible.
@@ -242,12 +242,12 @@ legend. It follows the foundation slab's top beneath the basement walls,
 then rises along both exterior wall faces to `PERIMETER_TOP_HEIGHT`, behind
 the perimeter XPS. `HYDROIZOLACE_LINE_WIDTH = 0.7` sets its printed width in
 millimetres; the `hydroizolace` CSS class uses 4 mm dashes and 1.5 mm gaps.
-AA, BB and CC dimension the basement clear height to the wood underside,
+AA, BB and CC dimension the basement clear height to the plasterboard underside,
 subtracting the configured ceiling finish without an additional plaster
 allowance. The height follows the configured floor and ceiling finishes.
 BB and CC place their basement and ground-floor clear-height dimensions 500 mm from
 the respective garden wall's inside face. The basement dimension ends at the
-wood lining underside; the ground-floor dimension allows 15 mm for plaster.
+plasterboard lining underside; the ground-floor dimension allows 15 mm for plaster.
 AA's ground-floor clear height still allows 15 mm for plaster, controlled
 by `CEILING_PLASTER_THICKNESS`.
 AA also uses `add_aa_elevation_marks()` for nine signed level marks, in
@@ -332,8 +332,9 @@ the street edge of the ceiling above S.05 (`basement_stair_opening_end_y`).
 Both insulation and floor build-up follow that edge. The remaining opening
 towards the front wall is closed by `ground_stair_opening_board`, a 100 mm
 timber board with its top flush with the finished ground floor. A second board,
-`basement_stair_opening_board`, closes the underside at the same height and
-20 mm thickness as the adjoining basement ceiling wood lining. CC centers
+`basement_stair_opening_board`, retains its original underside level and
+20 mm timber thickness (`BASEMENT_STAIR_OPENING_BOARD_THICKNESS`), independent
+of the regular basement plasterboard lining. CC centers
 200 mm of drawing-only rockwool batting in the clear space between the boards.
 The normal basement ceiling insulation stops at the opening's garden edge.
 `GROUND_STAIR_OPENING_BOARD_THICKNESS` and

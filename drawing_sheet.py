@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from textwrap import wrap
 from typing import TYPE_CHECKING
 import xml.etree.ElementTree as ET
 
@@ -190,6 +191,89 @@ class DrawingSheet:
         if self.padding < 0:
             raise ValueError("padding must not be negative")
         self._drawings = []
+        self._construction_assemblies = None
+
+    def add_construction_assemblies(self, assemblies, *, columns=7, y=.53):
+        """Add a borderless, numbered assembly grid below the drawings.
+
+        ``assemblies`` maps global positive integer IDs to ``title`` and a
+        sequence of layer descriptions. IDs are retained, never renumbered.
+        ``y`` is the grid heading's top as a fraction of the page height.
+        Rows grow to fit wrapped bullet lists; overflow rejects the export.
+        """
+        from ifc_utils import _name, _number
+        if isinstance(columns, bool) or not isinstance(columns, int) or columns < 1:
+            raise ValueError("columns must be a positive integer")
+        y = _number(y, "y")
+        if not 0 <= y < 1:
+            raise ValueError("y must be between zero and one")
+        entries = []
+        for identifier, assembly in assemblies.items():
+            if isinstance(identifier, bool) or not isinstance(identifier, int) or identifier < 1:
+                raise ValueError("assembly IDs must be positive integers")
+            title = _name(assembly["title"], "assembly title")
+            if isinstance(assembly["layers"], (str, bytes)):
+                raise TypeError("assembly layers must be a sequence of descriptions")
+            layers = tuple(_name(layer, "assembly layer") for layer in assembly["layers"])
+            if not layers:
+                raise ValueError("assemblies must contain at least one layer")
+            entries.append((identifier, title, layers))
+        if not entries:
+            raise ValueError("assemblies must contain at least one entry")
+        self._construction_assemblies = (entries, columns, y)
+        return self
+
+    def _assembly_grid(self):
+        if self._construction_assemblies is None:
+            return None
+        entries, columns, y = self._construction_assemblies
+        cell_width = (self.width-2*self.margin)/columns
+        font_size, line_height = 2.5, 3.6
+        characters = int((cell_width-5)/(font_size*.55))
+        if characters < 8:
+            raise ValueError("assembly columns are too narrow")
+        top = y*self.height
+        group = ET.Element(f"{{{_SVG}}}g", {
+            "class": "construction-assemblies", "data-columns": str(columns),
+            "style": "font-family:DejaVu Sans,sans-serif;fill:black;stroke:none",
+        })
+
+        def text(parent, x, y, value, size=font_size, bold=False, anchor="start"):
+            node = ET.SubElement(parent, f"{{{_SVG}}}text", {
+                "x": f"{x:g}", "y": f"{y:g}", "font-size": f"{size:g}",
+                "font-weight": "bold" if bold else "normal", "text-anchor": anchor,
+            })
+            node.text = value
+
+        text(group, self.width/2, top+4, "Skladby konstrukcí", size=4, bold=True, anchor="middle")
+        row_y = top+14
+        for start in range(0, len(entries), columns):
+            row_bottom = row_y
+            for column, (identifier, title, layers) in enumerate(entries[start:start+columns]):
+                cell = ET.SubElement(group, f"{{{_SVG}}}g", {
+                    "class": "construction-assembly", "data-assembly-id": str(identifier),
+                })
+                x = self.margin+column*cell_width+1
+                cursor = row_y
+                text(cell, x, cursor, f"Skladba {identifier}", bold=True)
+                for line in wrap(title, width=characters):
+                    cursor += line_height
+                    text(cell, x, cursor, line, bold=True)
+                cursor += 1
+                for layer in layers:
+                    # Keep a thickness and its unit together when a narrow
+                    # column requires wrapping the description.
+                    lines = wrap(layer.replace(" mm", "\u00a0mm"), width=characters)
+                    for index, line in enumerate(lines):
+                        cursor += line_height
+                        if index == 0:
+                            text(cell, x, cursor, "•")
+                        text(cell, x+2.5, cursor, line)
+                row_bottom = max(row_bottom, cursor+2)
+            row_y = row_bottom+8
+        if row_bottom > self.height-self.margin:
+            raise ValueError("construction assembly rows cross the sheet's bottom margin")
+        return group
 
     def add(self, drawing, *, x, y, title=None, tables=True, crop=True):
         from ifc_utils import Drawing, _name, _number
@@ -225,6 +309,7 @@ class DrawingSheet:
             "viewBox": f"0 0 {self.width:g} {self.height:g}",
         })
         ET.SubElement(sheet, f"{{{_SVG}}}rect", {"width": f"{self.width:g}", "height": f"{self.height:g}", "fill": "white"})
+        assembly_grid = self._assembly_grid()
         with TemporaryDirectory(prefix="drawing-sheet-") as directory:
             directory = Path(directory)
             models = {}
@@ -262,6 +347,8 @@ class DrawingSheet:
                 root.set("x", f"{x:.12g}")
                 root.set("y", f"{y:.12g}")
                 sheet.append(_namespace(root, index, path.parent))
+            if assembly_grid is not None:
+                sheet.append(assembly_grid)
             with NamedTemporaryFile(suffix=".svg", dir=output.parent, delete=False) as temporary:
                 temporary_path = Path(temporary.name)
             try:

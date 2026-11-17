@@ -140,8 +140,9 @@ STREET_BACKGROUND_TERRAIN_BELOW_STAIRS = 0.05
 CEILING_THICKNESS = 0.21
 CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height dimensions.
 BASEMENT_CEILING_INSULATION_THICKNESS = 0.10
-BASEMENT_CEILING_WOOD_THICKNESS = 0.02
-BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_INSULATION_THICKNESS+BASEMENT_CEILING_WOOD_THICKNESS
+BASEMENT_CEILING_PLASTERBOARD_THICKNESS = 0.0125
+BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_INSULATION_THICKNESS+BASEMENT_CEILING_PLASTERBOARD_THICKNESS
+BASEMENT_STAIR_OPENING_BOARD_THICKNESS = 0.02  # Retain the separate timber detail under the stairs.
 GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.10
 GROUND_STAIR_OPENING_INSULATION_THICKNESS = 0.20  # Drawing-only rockwool in CC.
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
@@ -280,6 +281,42 @@ UNDERLAY_BOTTOM = MDF_BOTTOM+MDF_THICKNESS
 COUNTER_BATTEN_BOTTOM = UNDERLAY_BOTTOM+UNDERLAY_THICKNESS
 TILE_BATTEN_BOTTOM = COUNTER_BATTEN_BOTTOM+COUNTER_BATTEN_SIZE[1]
 ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM+TILE_BATTEN_SIZE[1]
+# Global IDs are shared by all section sheets; each cut selects its own marks.
+# Dimensions follow the model; the separate 1 mm membrane is specified only
+# here because the IFC currently combines the OSB and vapour-barrier geometry.
+CONSTRUCTION_ASSEMBLIES = {
+    1: {"title": "Střešní plášť", "layers": (
+        f"Střešní taška | {ROOF_TILE_THICKNESS*1000:g} mm",
+        f"Latě {TILE_BATTEN_SIZE[1]*1000:g}×{TILE_BATTEN_SIZE[0]*1000:g} | {TILE_BATTEN_SIZE[1]*1000:g} mm",
+        f"Kontralatě {COUNTER_BATTEN_SIZE[1]*1000:g}×{COUNTER_BATTEN_SIZE[0]*1000:g} | {COUNTER_BATTEN_SIZE[1]*1000:g} mm",
+        f"Pojistná hydroizolace | {UNDERLAY_THICKNESS*1000:g} mm",
+        f"MDF záklop | {MDF_THICKNESS*1000:g} mm",
+        f"Krokve {RAFTER_SIZE[0]*1000:g}×{RAFTER_SIZE[1]*1000:g} | {RAFTER_HEIGHT*1000:g} mm",
+        f"Mezikrokevní izolace | {RAFTER_HEIGHT*1000:g} mm",
+        f"Podkrokevní izolace | {THERMAL_INSULATION_UNDER_RAFTERS*1000:g} mm",
+        f"OSB záklop | {VAPOUR_BARRIER_THICKNESS*1000:g} mm",
+        "Pojistná parobrzda | 1 mm",
+        f"Laťový rošt {INSTALLATION_SPACE_THICKNESS*1000:g}×60 | {INSTALLATION_SPACE_THICKNESS*1000:g} mm",
+        f"2×SDK podhled | {GYPSUM_PLASTERBOARD_THICKNESS*1000:g} mm",
+    )},
+    2: {"title": "Podlaha podkroví a strop nad 1.NP", "layers": (
+        "Finální povrch | 10 mm",
+        f"Cementový potěr | {(CEMFLOW_AND_FINISH_THICKNESS-.01)*1000:g} mm",
+        f"Kročejová minerální vata | {(UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS)*1000:g} mm",
+        f"Stropní konstrukce MIAKO | {CEILING_THICKNESS*1000:g} mm",
+        f"Omítka | {CEILING_PLASTER_THICKNESS*1000:g} mm",
+    )},
+    3: {"title": "Podlaha 1.NP a strop nad suterénem", "layers": (
+        "Finální povrch | 10 mm",
+        f"Cementový potěr | {(CEMFLOW_AND_FINISH_THICKNESS-.01)*1000:g} mm",
+        "Kročejová minerální vata | 30 mm",
+        f"Podlahový polystyren | {(GROUND_FLOOR_INSULATION_THICKNESS-.03)*1000:g} mm",
+        f"Stropní konstrukce MIAKO | {CEILING_THICKNESS*1000:g} mm",
+        f"Minerální vata | {BASEMENT_CEILING_INSULATION_THICKNESS*1000:g} mm",
+        f"Sádrokarton | {BASEMENT_CEILING_PLASTERBOARD_THICKNESS*1000:g} mm",
+    )},
+}
+SECTION_CONSTRUCTION_ASSEMBLY_IDS = {"aa": (1, 2, 3), "bb": (1, 2, 3), "cc": (1, 2, 3)}
 STAIR_LOWER_FLIGHT_WIDTH = 1.15
 STAIR_UPPER_FLIGHT_WIDTH = 1.0
 STAIR_LANDING_LENGTH = 1.05
@@ -2117,7 +2154,7 @@ if basement_stair_opening_length > 1e-9:
 # Reuse the floor polygons so finishes follow the actual room wall faces,
 # except for the stair opening closed by the separate ground-floor board.
 basement_ceiling_insulation = []
-basement_ceiling_wood = []
+basement_ceiling_plasterboard = []
 for floor in basement_room_floors:
     finish_region = Polygon(floor.outline)
     if floor.room_id == "S.05" and ground_stair_opening_region is not None:
@@ -2129,17 +2166,17 @@ for floor in basement_room_floors:
         start_height=-BASEMENT_CEILING_INSULATION_THICKNESS,
         buildup_material=FLOOR_INSULATION_MATERIAL, color="#ffff80",
     ))
-    basement_ceiling_wood.append(basement_ceiling_storey.floor_layer(
-        f"Basement ceiling wood - {floor.room_id}.1",
-        outline=finish_outline, thickness=BASEMENT_CEILING_WOOD_THICKNESS,
+    basement_ceiling_plasterboard.append(basement_ceiling_storey.floor_layer(
+        f"Basement ceiling plasterboard - {floor.room_id}.1",
+        outline=finish_outline, thickness=BASEMENT_CEILING_PLASTERBOARD_THICKNESS,
         start_height=-BASEMENT_CEILING_FINISH_THICKNESS,
-        buildup_material="Wood", color="#C8B090",
+        buildup_material="Gypsum plasterboard", color="#E8E5DE",
     ))
 basement_ceiling_insulation = tuple(basement_ceiling_insulation)
-basement_ceiling_wood = tuple(basement_ceiling_wood)
+basement_ceiling_plasterboard = tuple(basement_ceiling_plasterboard)
 # Continue the concrete infill's chimney opening through the finishes on both
 # sides of the slab, including both materials in the ground-floor build-up.
-for layer in (chodba, *(part for part in (*basement_ceiling_insulation, *basement_ceiling_wood)
+for layer in (chodba, *(part for part in (*basement_ceiling_insulation, *basement_ceiling_plasterboard)
                        if "S.04." in part.Name)):
     add_horizontal_opening(
         layer, f"{layer.Name} Chimney opening", chimney_ceiling_opening_region,
@@ -2160,12 +2197,12 @@ if ground_stair_opening_region is not None:
     basement_stair_opening_board = basement_ceiling_storey.floor_layer(
         "Basement ceiling wood - S.05 stair opening",
         outline=tuple(lower_board_region.exterior.coords)[:-1],
-        thickness=BASEMENT_CEILING_WOOD_THICKNESS,
-        start_height=-BASEMENT_CEILING_FINISH_THICKNESS,
+        thickness=BASEMENT_STAIR_OPENING_BOARD_THICKNESS,
+        start_height=-BASEMENT_CEILING_INSULATION_THICKNESS-BASEMENT_STAIR_OPENING_BOARD_THICKNESS,
         buildup_material="Wood", color="#C8B090",
     )
 basement_ceiling_finishes = (
-    *basement_ceiling_insulation, *basement_ceiling_wood,
+    *basement_ceiling_insulation, *basement_ceiling_plasterboard,
     *((basement_stair_opening_board,) if basement_stair_opening_board is not None else ()),
 )
 basement_ceiling_schedule_rows = [
@@ -5721,7 +5758,7 @@ def add_aa_elevation_marks(drawing):
         (UPPER_FINISHED_FLOOR_HEIGHT, False, "Upper finished floor level"),
         (roof_tiles_lowest_z, False, "Lowest roof tile level"),
         (roof_tiles_top_z, False, "Roof ridge level"),
-        (BASEMENT_FINISHED_CEILING_Z, True, "Basement wood ceiling underside level"),
+        (BASEMENT_FINISHED_CEILING_Z, True, "Basement plasterboard ceiling underside level"),
         (BASEMENT_FINISHED_FLOOR_HEIGHT, False, "Basement finished floor level"),
         (BASEMENT_SLAB_BOTTOM_Z, True, "Foundation slab bottom level"),
         (FOUNDATION_FOOTING_BOTTOM_Z, False, "Foundation footing bottom level"),
@@ -5793,7 +5830,7 @@ def add_house_section(cut, name, pdf):
     drawing.add_dimension(
         start=(basement_height_dimension_x, BASEMENT_FINISHED_FLOOR_HEIGHT),
         end=(basement_height_dimension_x, BASEMENT_FINISHED_CEILING_Z),
-        name="Basement finished floor to wood ceiling",
+        name="Basement finished floor to plasterboard ceiling",
     )
     if name in ("bb", "cc"):
         add_bb_roof_batting(drawing, include_ceiling=name != "cc")
@@ -5824,6 +5861,19 @@ def add_house_section(cut, name, pdf):
     if name == "aa":
         add_aa_roof_batting(drawing)
         add_aa_elevation_marks(drawing)
+        # AA looks toward -Y, so the west slope is on the page's left.
+        # Match the old house: a 1 m angular arc just above the roof covering.
+        angle_x = HOUSE_WIDTH-2.2
+        angle_z = plane_height_at(
+            *offset_plane(*roof_west.points, offset=ROOF_TILE_BOTTOM), x=angle_x, y=drawing.y,
+        )+.2
+        slope = (plane_height_at(*roof_west.points, x=angle_x+1, y=drawing.y)
+                 -plane_height_at(*roof_west.points, x=angle_x, y=drawing.y))
+        drawing.add_angle(
+            vertex=(angle_x, angle_z), start=(angle_x+1, angle_z),
+            end=(angle_x+1, angle_z+slope), radius=1.0,
+            name="AA roof pitch on left slope",
+        )
         drawing.add_dimension(
             start=(BWT+0.4, ground.elevation+GROUND_FLOOR_THICKNESS),
             end=(BWT+0.4, ceiling_storey.elevation-CEILING_PLASTER_THICKNESS),
@@ -5857,7 +5907,6 @@ def add_house_section(cut, name, pdf):
         ("base-plate", "Základová deska"),
         ("earth-section", "Rostlý terén"),
         ("gravel", "Zhutněná zemina"),
-        *([("reinforced-concrete", "Železobetonový věnec")] if name == "aa" else []),
         ("wood-solid", "Dřevo"),
         ("drywall-diagonal1", "Sádrokarton"),
         ("thermal-impact-insulation", "Podlahová a stropní izolace"),
@@ -5867,12 +5916,71 @@ def add_house_section(cut, name, pdf):
         ("vapour-barrier-solid", "OSB záklop + parobrzda"),
     ])
     drawing.add_line_legend([(waterproofing, "Hydroizolace")])
-    if name in ("bb", "cc"):
-        drawing.add_symbol_legend([
-            ("heb", "Nosník HEB"),
-            ("ring_beam", "Železobetonový věnec"),
-        ], line_width=0.10)
-    drawing.render(PROJECT_DIR / f"{name}.svg", pdf=pdf)
+    drawing.add_symbol_legend([
+        *([("heb", "Nosník HEB")] if name in ("bb", "cc") else []),
+        ("ring_beam", "Železobetonový věnec"),
+    ], line_width=0.10)
+    for identifier in SECTION_CONSTRUCTION_ASSEMBLY_IDS[name]:
+        if identifier == 3:
+            marker_z = ground.elevation+GROUND_FLOOR_THICKNESS+.6
+            center = ((2.0, drawing.y, marker_z) if name == "aa"
+                      else (drawing.x, HOUSE_DEPTH-1.8, marker_z))
+            drawing.add_hexagon_marker(
+                center, f"SK{identifier}",
+                line_length=marker_z-BASEMENT_FINISHED_CEILING_Z+.1,
+                name=f"{name} Skladba {identifier} marker",
+            )
+            continue
+        if identifier == 2:
+            marker_z = UPPER_FINISHED_FLOOR_HEIGHT+.6
+            center = ((2.0, drawing.y, marker_z) if name == "aa"
+                      else (drawing.x, HOUSE_DEPTH-1.8, marker_z))
+            drawing.add_hexagon_marker(
+                center, f"SK{identifier}",
+                line_length=marker_z-(ceiling_storey.elevation-CEILING_PLASTER_THICKNESS)+.1,
+                name=f"{name} Skladba {identifier} marker",
+            )
+            continue
+        if identifier != 1:
+            raise ValueError(f"No section marker position defined for Skladba {identifier}")
+        if name == "aa":
+            x, y = 1.0, drawing.y
+            anchor_x = x
+            marker_x = x-.35
+        else:
+            x, y = drawing.x, HOUSE_DEPTH-.1
+            anchor_x = y
+            marker_x = HOUSE_DEPTH+.5
+        plane = roof_east if x <= roof_ridge_x else roof_west
+        anchor_z = plane_height_at(
+            *offset_plane(*plane.points, offset=ROOF_TILE_BOTTOM+ROOF_TILE_THICKNESS), x=x, y=y,
+        )
+        marker_z = anchor_z+.5
+        center = ((marker_x, y, marker_z) if name == "aa"
+                  else (x, marker_x, marker_z))
+        target = ((anchor_x, y, anchor_z) if name == "aa"
+                  else (x, anchor_x, anchor_z))
+        delta = np.asarray(target)-center
+        camera_x = np.cross((0, 0, 1), -np.asarray(drawing.direction))
+        line_length = float(np.linalg.norm(delta))+.1
+        if name == "aa":
+            # Keep the marker and direction; extend through the model's full
+            # stack, ending 100 mm past the plasterboard underside.
+            ceiling_plane = offset_plane(*plane.points, offset=GYPSUM_PLASTERBOARD_BOTTOM)
+            ceiling_at_center = plane_height_at(*ceiling_plane, x=center[0], y=center[1])
+            ceiling_at_target = plane_height_at(*ceiling_plane, x=target[0], y=target[1])
+            ratio = (center[2]-ceiling_at_center)/(ceiling_at_target-ceiling_at_center-delta[2])
+            line_length = float(np.linalg.norm(delta))*ratio+.1
+        drawing.add_hexagon_marker(
+            center, f"SK{identifier}",
+            rotation=math.degrees(math.atan2(float(delta@camera_x), -delta[2])),
+            line_length=line_length,
+            name=f"{name} Skladba {identifier} marker",
+        )
+    section_sheet = DrawingSheet(paper="A3", orientation="portrait")
+    section_sheet.add(drawing, x=.5, y=.25, title=pdf.stem, crop=False)
+    section_sheet.add_construction_assemblies(CONSTRUCTION_ASSEMBLIES, columns=7)
+    section_sheet.render(PROJECT_DIR / f"{name}.svg", pdf=pdf)
     return drawing
 
 
