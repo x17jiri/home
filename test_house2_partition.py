@@ -327,7 +327,7 @@ class GardenPartitionTests(unittest.TestCase):
                                            if " Block 1." not in block.Name)})
         self.assertEqual(bathroom_rows, room3_rows)
 
-    def test_split_heb_and_concrete_have_100mm_bearing_on_every_support(self):
+    def test_bare_split_hebs_have_100mm_bearings_and_are_centered_in_the_ceiling(self):
         v = self.v
         _, east_hi = self.bounds(v["wall_east_g"])
         middle_lo, middle_hi = self.bounds(v["wall_third_room_g"])
@@ -338,14 +338,15 @@ class GardenPartitionTests(unittest.TestCase):
         for girder in girders:
             left, right = ((east_hi[0], middle_lo[0]) if girder.Name.endswith("0.03")
                            else (middle_hi[0], stairway_lo[0]))
-            for element in (girder, girder.steel):
-                lo, hi = self.bounds(element)
-                self.assertAlmostEqual(left-lo[0], .10)
-                self.assertAlmostEqual(hi[0]-right, .10)
+            lo, hi = self.bounds(girder)
+            self.assertAlmostEqual(left-lo[0], .10)
+            self.assertAlmostEqual(hi[0]-right, .10)
             self.assertAlmostEqual(girder.length, right-left+.20)
             lo, hi = self.bounds(girder)
-            self.assertAlmostEqual(lo[2], v["ground_floor_height"])
-            self.assertAlmostEqual(hi[2], v["UPPER_FLOOR_START"])
+            self.assertAlmostEqual(lo[2], v["ground_floor_height"]+.015)
+            self.assertAlmostEqual(hi[2], v["UPPER_FLOOR_START"]-.015)
+            self.assertEqual(ifcopenshell.util.element.get_material(girder).Name, "Structural steel")
+            self.assertEqual(girder.ObjectType, "HEB180")
         for y in rows:
             left, right = sorted((girder for girder in girders if girder.start[1] == y), key=lambda girder: girder.start[0])
             self.assertAlmostEqual(right.start[0]-left.end[0], .04)

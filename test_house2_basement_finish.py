@@ -66,15 +66,17 @@ class BasementCeilingFinishTests(unittest.TestCase):
                 self.assertEqual(element.get_container(obj), v["basement_ceiling_storey"].element)
                 self.assertFalse(element.get_pset(obj, "Pset_SlabCommon", "LoadBearing"))
 
-    def test_finish_uses_the_same_polygons_as_the_basement_floors(self):
+    def test_finish_uses_floor_polygons_except_beneath_the_stair_opening(self):
         v = self.v
         for floor in v["basement_room_floors"]:
             expected = self.footprint(floor)
+            if floor.room_id == "S.05" and v["ground_stair_opening_region"] is not None:
+                expected = expected.difference(v["ground_stair_opening_region"])
             for layers in (v["basement_ceiling_insulation"], v["basement_ceiling_wood"]):
                 finish = next(part for part in layers if f"{floor.room_id}." in part.Name)
                 actual = self.footprint(finish)
                 self.assertLess(actual.symmetric_difference(expected).area, 1e-9)
-                self.assertAlmostEqual(finish.area, floor.area)
+                self.assertAlmostEqual(finish.area, expected.area)
 
     def test_aa_and_bb_measure_to_wood_without_an_extra_plaster_allowance(self):
         v = self.v

@@ -280,8 +280,8 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .IfcBeam.material-Structuralsteel.cut,
 .IfcBuildingElementPart.material-Structuralsteel.cut {
-    fill: #666 !important;
-    stroke: black !important;
+    fill: #aa00aa !important;
+    stroke: #aa00aa !important;
     stroke-width: 0.04 !important;
 }
 

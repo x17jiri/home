@@ -33,7 +33,6 @@ BWT = 0.24
 INNER_BWT = 0.24
 GARDEN_PARTITION_THICKNESS = 0.115
 DRY_WALL_WIDTH = 0.10
-WOODEN_WALL_THICKNESS = 0.06
 FACADE_INSULATION_THICKNESS = 0.20
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.10
 FACADE_THICKNESS = 0.005
@@ -64,7 +63,8 @@ BATHROOM_TUV_STAIRWAY_CLEARANCE = 0.10
 BATHROOM_HYDROBOX_WALL_GAP = 0.05
 HYDROBOX_SIZE = (0.8, 0.5, 0.9)
 RECUPERATION_SIZE = (1.0, 0.5, 1.5)
-RECUPERATION_STAIR_END_CLEARANCE = 0.10
+RECUPERATION_STAIR_END_CLEARANCE = 0.5
+RECUPERATION_BATHROOM_WALL_CLEARANCE = 0.05
 THIRD_ROOM_OPENING_LENGTH = 1.755  # Room 3 to hallway; independent of the stairway opening.
 THIRD_ROOM_OPENING_START_Y = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_OPENING_LENGTH
 THIRD_ROOM_STEP_Y = THIRD_ROOM_OPENING_START_Y-DRY_WALL_WIDTH  # Hallway face meets the opening end.
@@ -89,7 +89,7 @@ HEAT_PUMP_SIZE = (1.2, 0.5, 1.5)
 HEAT_PUMP_GARAGE_GAP = 0.50
 HEAT_PUMP_HEIGHT_ABOVE_BASEMENT_FLOOR = 0.60
 ROZVADEC_SIZE = (0.7, 0.3, 0.50)  # Width along X, depth, height.
-ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.20
+ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.60
 ROZVADEC_WALL_GAP = 0.05
 FAN_COIL_SIZE = (.90, .23, .30)
 FAN_COIL_DOOR_CLEARANCE = .05
@@ -141,6 +141,8 @@ CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height d
 BASEMENT_CEILING_INSULATION_THICKNESS = 0.10
 BASEMENT_CEILING_WOOD_THICKNESS = 0.02
 BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_INSULATION_THICKNESS+BASEMENT_CEILING_WOOD_THICKNESS
+GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.03
+GROUND_STAIR_OPENING_INSULATION_THICKNESS = 0.20  # Drawing-only rockwool in CC.
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
 CEILING_ROOM3_SPLIT_Y = BWT+3.0
 BASEMENT_WALL_HEIGHT = ZAKLADACI_MALTA + 2.35 # 7*25 + 3*20 = 235cm
@@ -199,7 +201,6 @@ PURLIN_X_POSITIONS = (
 PURLIN_CENTER_HEIGHT = 3.75  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
 PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]/2
 PURLIN_SUPPORT_SIZE = (0.16, 0.16)
-PURLIN_SUPPORT_GIRDER_SIZE = (0.21, 0.21)  # Concrete width/height; top flush with ceiling.
 PURLIN_SUPPORT_GIRDER_HEB = 180
 PURLIN_SUPPORT_GIRDER_BEARING = 0.10
 # Centre the remaining posts between the facing masonry surfaces.
@@ -238,6 +239,7 @@ ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
 ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
 ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
+CHIMNEY_CEILING_INFILL_CLEARANCE = 0.03
 # From the wall centreline to the chimney's garden face: half wall + clear gap.
 CHIMNEY_BASEMENT_WALL_CENTER_OFFSET = 0.125 + 0.07
 CHIMNEY_FOOTING_OVERHANG = 0.20
@@ -388,6 +390,7 @@ PDF_BB = Path(PDF_FOLDER.add_pdf("Řez BB"))
 PDF_BASEMENT_CEILING = Path(PDF_FOLDER.add_pdf("Strop nad suterénem"))
 PDF_BASEMENT_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad suterénem - podrobný plán"))
 PDF_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad 1.NP - podrobný plán"))
+PDF_CC = Path(PDF_FOLDER.add_pdf("Řez CC"))
 DIR_ZDRAVOTECHNICKE_INSTALACE = PROJECT_DIR / "D1.5. Zdravotechnické Instalace"
 PDF_KANAL_FOLDER = PDFFolder("D1.5.", DIR_ZDRAVOTECHNICKE_INSTALACE)
 PDF_KANAL_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys suterénu"))
@@ -427,6 +430,7 @@ WATER_HOT_ROUTE_OFFSET = 0.10  # Hot water is drawn farther into the room than c
 WATER_BASEMENT_RISER_OFFSET_Y = 0.50  # From the drawn bottom-right corner towards the garden.
 WATER_LINE_WIDTH = 0.30  # Printed millimetres.
 SEWER_WALL_CLEARANCE = 0.10  # Plan centreline distance from the room-facing wall surface.
+DISHWASHER_PIPE_POST_CLEARANCE = 0.05  # Shared water/sewer route left of the west post.
 SEWER_LINE_WIDTH = 0.30  # Printed millimetres.
 SECTION_OUTLINE_WIDTH = 0.3
 HYDROIZOLACE_LINE_WIDTH = 0.4  # Printed millimetres; drawing-only waterproofing.
@@ -460,19 +464,24 @@ for i in range(1, len(RAFTER_Y_POSITIONS)):
 #assert(found_chimney_space)
 
 aa_cut = CutDefinition(
-    start=(HOUSE_WIDTH/2+0.35, -1.5),
-    end=(HOUSE_WIDTH/2+0.35, HOUSE_DEPTH+1.5),
-    identifier="A", direction=-1,  # Look towards +X.
-)
-bb_cut = CutDefinition(
     start=(-2.0, HOUSE_DEPTH/2-0.2),
     end=(HOUSE_WIDTH+0.9, HOUSE_DEPTH/2-0.2),
-    identifier="B", direction=-1,  # Look towards -Y.
+    identifier="A", direction=-1,  # Look towards -Y.
+)
+bb_cut = CutDefinition(
+    start=(PURLIN_X_POSITIONS[0], -1.5),
+    end=(PURLIN_X_POSITIONS[0], HOUSE_DEPTH+1.5),
+    identifier="B", direction=-1,  # Look towards +X.
+)
+cc_cut = CutDefinition(
+    start=(HOUSE_WIDTH-1.01, -1.5),
+    end=(HOUSE_WIDTH-1.01, HOUSE_DEPTH+1.5),
+    identifier="C", direction=1,  # Look towards -X.
 )
 roof_xx_cut = CutDefinition(
     start=(-2, 4.0),
     end=(HOUSE_WIDTH+1, 4.0),
-    identifier="X", direction=-1,  # Fixed Y; independent of BB. Look towards -Y.
+    identifier="X", direction=-1,  # Fixed Y; independent of AA. Look towards -Y.
 )
 roof_yy_cut = CutDefinition(
     start=(HOUSE_WIDTH/2, -1.3),
@@ -482,9 +491,10 @@ roof_yy_cut = CutDefinition(
 
 
 def add_house_cut_symbols(drawing):
-    """Keep the AA/BB markers identical across the house plans."""
+    """Keep the AA/BB/CC markers identical across the house plans."""
     aa_cut.add_symbol(drawing)
     bb_cut.add_symbol(drawing)
+    cc_cut.add_symbol(drawing)
 
 
 def add_purlin_support_planning_markers(drawing):
@@ -504,7 +514,7 @@ def add_purlin_support_planning_markers(drawing):
 
 
 def add_purlin_support_girder_plan(drawing):
-    """Outline the embedded-HEB girders and dimension their span, bearings and position."""
+    """Outline the bare HEBs and dimension their span, bearings and position."""
     front_wall_inner_y = wall_front_g.start[1]+wall_front_g.body_offset+wall_front_g.thickness
     for girder in purlin_support_girders:
         x0, y = girder.start[:2]
@@ -518,7 +528,7 @@ def add_purlin_support_girder_plan(drawing):
         )
         drawing.add_text(
             (x0+(x1-x0)*0.18, y),
-            f"{girder.heb_section.name}",
+            girder.ObjectType,
             font_size=1.5, name=f"{girder.Name} Plan label",
         )
         drawing.add_dimension((x0, y), (x1, y), offset=-0.7, name=f"{girder.Name} Length")
@@ -605,17 +615,14 @@ def wall_body_centreline_point(wall):
     return np.asarray(wall.start)+normal*(wall.body_offset+wall.thickness/2)
 
 
-def add_stairway_edge_heb(storey, name, *, left_face, right_face, front_y, bearing, end_bearing=None):
-    """Create a native HEB180 at the ceiling bottom with wall-derived bearings."""
-    section = heb_section(180)
-    axis_y = front_y+section.width/2
-    axis_z = storey.elevation+section.height/2
-    if end_bearing is None:
-        end_bearing = bearing
+def add_ceiling_heb(storey, name, *, start_x, end_x, axis_y, heb=180):
+    """Create an unwrapped steel HEB centred in the structural ceiling depth."""
+    section = heb_section(heb)
+    axis_z = storey.elevation+CEILING_THICKNESS/2
     beam = storey.beam(
         name,
-        start=(left_face-bearing, axis_y, axis_z),
-        end=(right_face+end_bearing, axis_y, axis_z),
+        start=(start_x, axis_y, axis_z),
+        end=(end_x, axis_y, axis_z),
         size=(section.width, section.height), material="Structural steel", color="#666666",
     )
     beam.ObjectType = section.name
@@ -624,6 +631,17 @@ def add_stairway_edge_heb(storey, name, *, left_face, right_face, front_y, beari
     body.Items[0].SweptArea = heb_profile(storey.house.model, section)
     ifcopenshell.util.element.remove_deep2(storey.house.model, old_profile)
     return beam
+
+
+def add_stairway_edge_heb(storey, name, *, left_face, right_face, front_y, bearing, end_bearing=None):
+    """Place a centred HEB180 at the stair edge with wall-derived bearings."""
+    section = heb_section(180)
+    if end_bearing is None:
+        end_bearing = bearing
+    return add_ceiling_heb(
+        storey, name, start_x=left_face-bearing, end_x=right_face+end_bearing,
+        axis_y=front_y+section.width/2,
+    )
 
 
 def add_stairway_edge_heb_plan(drawing, beam, *, front_wall_y, dimension_x):
@@ -719,9 +737,6 @@ upper_bearing_wall_type = house.wall_type(
 )
 dry_wall = house.wall_type(
     f"drywall - {DRY_WALL_WIDTH*1000:g} mm", layers=[("SDK", DRY_WALL_WIDTH)], color="#dfefcf",
-)
-wooden_wall = house.wall_type(
-    "drevena stena", layers=[("drevena stena", WOODEN_WALL_THICKNESS)], color="#fff2cc",
 )
 basement_wall_type = house.wall_type(
     f"Basement wall - ztracene bedneni {BASEMENT_WALL_THICKNESS*1000:g} mm",
@@ -1109,7 +1124,7 @@ pokoj3 = ground.floor_layer(
     ),
     **floor_layer_settings,
 )
-# Follow the bathroom partition and extend the stair approach to the first tread.
+# Follow the bathroom partition; extend under the stairs after defining S.05's ceiling.
 hallway_front_y = BATHROOM_PARTITION_Y+DRY_WALL_WIDTH
 hallway_outline = box(
     THIRD_ROOM_WALL_X, hallway_front_y, HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y,
@@ -1125,25 +1140,6 @@ for wall_start_y, wall_end_y in (
         hallway_outline = hallway_outline.difference(box(
             BATHROOM_RIGHT_X, wall_start_y, STAIRWAY_WALL_X, wall_end_y,
         ))
-hallway_outline = hallway_outline.union(box(
-    STAIR_LEFT_X, min(STAIR_LOWER_START_Y, STAIR_UPPER_END_Y),
-    STAIR_RIGHT_X, hallway_front_y,
-))
-# Stop at each flight's footprint; the upper flight's underside stays outside
-# the hallway, even though there is headroom beneath its upper treads.
-for center_x, end_y, width in (
-    (STAIR_LOWER_CENTER_X, STAIR_LOWER_START_Y, STAIR_LOWER_FLIGHT_WIDTH),
-    (STAIR_UPPER_CENTER_X, STAIR_UPPER_END_Y, STAIR_UPPER_FLIGHT_WIDTH),
-):
-    hallway_outline = hallway_outline.difference(box(
-        center_x-width/2, STAIR_LANDING_END_Y,
-        center_x+width/2, end_y,
-    ))
-chodba = ground.floor_layer(
-    "Chodba", room_id="0.04",
-    outline=tuple(hallway_outline.exterior.coords)[:-1],
-    **floor_layer_settings,
-)
 koupelna = ground.floor_layer(
     "Koupelna", room_id="0.05",
     outline=(
@@ -1152,7 +1148,6 @@ koupelna = ground.floor_layer(
     ),
     **floor_layer_settings,
 )
-ground_room_floors = (pokoj1, pokoj2, pokoj3, (chodba, 0.3, -0.2), koupelna)
 
 # The back wall runs toward decreasing X: `at` is measured from its right end.
 window_pokoj1 = wall_back_g.add_window(
@@ -1183,13 +1178,6 @@ window_koupelna = wall_front_g.add_window(
     sill_height=GROUND_WINDOW_TOP_HEIGHT-BATHROOM_WINDOW_HEIGHT,
     height=GROUND_WINDOW_TOP_HEIGHT,
 )
-ground_room_windows = {
-    pokoj1.room_id: (window_pokoj1,),
-    pokoj2.room_id: (window_pokoj2,),
-    pokoj3.room_id: (window_pokoj3,),
-    chodba.room_id: (),
-    koupelna.room_id: (window_koupelna,),
-}
 
 
 def add_ground_room_annotations(drawing, *, include_legend=True):
@@ -1393,16 +1381,6 @@ stair_landing_gap_railing = ground.railing(
     ),
     height=STAIR_RAILING_HEIGHT, color="#C8B090",
 )
-# Match the former railing's outer envelope, including its end posts.
-wall_stairwell_wood_g = ground.wall(
-    (STAIR_LEFT_X, STAIR_LOWER_START_Y+STAIR_RAILING_INSET),
-    (STAIR_LEFT_X+1.2, STAIR_LOWER_START_Y+STAIR_RAILING_INSET),
-    wall_type=wooden_wall, start_height=GROUND_FLOOR_THICKNESS,
-    height=ground_floor_height-CEILING_PLASTER_THICKNESS-GROUND_FLOOR_THICKNESS,
-)
-wall_stairwell_wood_g.Name = "Dřevěná stěna u schodiště"
-common = ifcopenshell.api.pset.add_pset(house.model, product=wall_stairwell_wood_g, name="Pset_WallCommon")
-ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": False})
 upper_stair_exit_railing = upper.railing(
     "Upper stair exit - west wall railing",
     path=(
@@ -1509,8 +1487,7 @@ if (basement_stair_width <= 0
     raise ValueError("basement stairs do not fit inside the clear stairway room")
 basement_upper_center_x = basement_stair_left_x+basement_stair_width/2
 basement_lower_center_x = basement_stair_right_x-basement_stair_width/2
-# The full-height wooden wall guards the former descending entrance.
-# The ceiling itself remains open for a future stair.
+# Keep the reserved basement stair coordinates separate from the existing stairs.
 print(f"Basement to ground finished-floor rise: {BASEMENT_TO_GROUND_RISE:.3f} m; "
       "basement stairs omitted, ceiling opening retained for future installation")
 
@@ -1639,6 +1616,63 @@ def trim_first_miako_block_row(slab, region):
     )
 
 
+def add_chimney_ceiling_infill(slab, garden_wall):
+    """Fill the omitted garden bay, leaving a through-opening around the stack."""
+    first_beam_y = slab.beam_centerlines[0][0][1]+CEILING_STRIP_WIDTHS["beam"]/2
+    wall_face_y = float(wall_body_centreline_point(garden_wall)[1])-garden_wall.thickness/2
+    if wall_face_y <= first_beam_y:
+        raise ValueError(f"{slab.Name}: no garden-side gap for concrete infill")
+    # The beam ends bear inside the walls; the infill stops at their room faces,
+    # using the same clear span as the ceramic blocks.
+    region = box(
+        slab.start[0]+slab.block_start_offset, first_beam_y,
+        slab.end[0]-slab.block_end_offset, wall_face_y,
+    )
+    half_opening = CHIMNEY_SIZE/2+CHIMNEY_CEILING_INFILL_CLEARANCE
+    opening_region = box(
+        CHIMNEY_CENTER[0]-half_opening, CHIMNEY_CENTER[1]-half_opening,
+        CHIMNEY_CENTER[0]+half_opening, CHIMNEY_CENTER[1]+half_opening,
+    )
+    # Bonsai's slab-joining pass unions every inner loop as a solid polygon.
+    # Treat this local infill as a concrete part so its opening is preserved.
+    infill = ifcopenshell.api.root.create_entity(
+        house.model, ifc_class="IfcBuildingElementPart", predefined_type="USERDEFINED",
+        name=f"{slab.Name} Concrete infill around chimney",
+    )
+    infill.ObjectType = "Cast-in-place ceiling infill"
+    ifcopenshell.api.spatial.assign_container(house.model, products=[infill], relating_structure=slab.storey.element)
+    placement = np.eye(4)
+    placement[2, 3] = slab.storey.elevation
+    ifcopenshell.api.geometry.edit_object_placement(house.model, product=infill, matrix=placement, is_si=True)
+    body = ifcopenshell.api.geometry.add_slab_representation(
+        house.model, context=house._body_context, depth=CEILING_THICKNESS,
+        polyline=tuple(region.exterior.coords)[:-1],
+    )
+    solid = body.Items[0]
+    inner_curve = house.model.createIfcIndexedPolyCurve(
+        house.model.createIfcCartesianPointList2D(tuple(opening_region.exterior.coords)), None, False,
+    )
+    solid.SweptArea = house.model.createIfcArbitraryProfileDefWithVoids(
+        "AREA", None, solid.SweptArea.OuterCurve, (inner_curve,),
+    )
+    ifcopenshell.api.geometry.assign_representation(house.model, product=infill, representation=body)
+    ifcopenshell.api.material.assign_material(
+        house.model, products=[infill], type="IfcMaterial",
+        material=ifcopenshell.util.element.get_material(slab.topping_element),
+    )
+    ifcopenshell.api.style.assign_representation_styles(
+        house.model, shape_representation=body,
+        styles=[house._surface_style("slab", color="#b8b8b8", transparency=0)],
+    )
+    properties = ifcopenshell.api.pset.add_pset(house.model, product=infill, name="BBIM_CeilingInfill")
+    ifcopenshell.api.pset.edit_pset(house.model, pset=properties, properties={
+        "SourceSlab": slab.GlobalId, "GardenWall": garden_wall.GlobalId,
+        "ChimneyClearance": CHIMNEY_CEILING_INFILL_CLEARANCE,
+        "NetArea": region.difference(opening_region).area,
+    })
+    return infill
+
+
 # Define the upstairs layouts before the basement copies of their garden-side parts.
 # One ceiling across both garden rooms, with beams spanning along Y between
 # the transverse bearing wall and garden wall, independently of the partition.
@@ -1746,7 +1780,7 @@ ceiling_bathroom = ceiling_storey.miako_slab(
 FRONT_CEILING_WALL_OVERLAP = 0.04
 ceiling_front_girder_edge_y = min(
     y for positions in PURLIN_SUPPORT_Y_POSITIONS for y in positions
-)-PURLIN_SUPPORT_GIRDER_SIZE[0]/2
+)-heb_section(PURLIN_SUPPORT_GIRDER_HEB).width/2
 ceiling_room3_front = ceiling_storey.miako_slab(
     "Ceiling - 0.03 Pokoj 3 u ulice",
     start=(ceiling_room3_start_x, BWT-FRONT_CEILING_WALL_OVERLAP),
@@ -2007,26 +2041,81 @@ basement_ceilings_by_room = {
     "S.05": (basement_ceiling_s05, basement_ceiling_s05_front),
 }
 basement_ceiling_slabs = tuple(slab for slabs in basement_ceilings_by_room.values() for slab in slabs)
+# Both floor materials continue beneath the flights only as far as the
+# supporting basement ceiling, keeping the reserved stair opening uncovered.
+hallway_outline = hallway_outline.union(box(
+    STAIR_LEFT_X, basement_stair_opening_end_y, STAIR_RIGHT_X, hallway_front_y,
+))
+chodba = ground.floor_layer(
+    "Chodba", room_id="0.04",
+    outline=tuple(hallway_outline.exterior.coords)[:-1],
+    **floor_layer_settings,
+)
+ground_room_floors = (pokoj1, pokoj2, pokoj3, (chodba, 0.3, -0.2), koupelna)
+ground_room_windows = {
+    pokoj1.room_id: (window_pokoj1,),
+    pokoj2.room_id: (window_pokoj2,),
+    pokoj3.room_id: (window_pokoj3,),
+    chodba.room_id: (),
+    koupelna.room_id: (window_koupelna,),
+}
+basement_ceiling_s04_chimney_infill = add_chimney_ceiling_infill(
+    basement_ceiling_s04, wall_basement_garden_rooms,
+)
+ceiling_bathroom_chimney_infill = add_chimney_ceiling_infill(
+    ceiling_bathroom, wall_garden_rooms_g,
+)
+ground_stair_opening_region = None
+ground_stair_opening_board = None
+if basement_stair_opening_length > 1e-9:
+    ground_stair_opening_region = box(
+        STAIR_LEFT_X, ground_front_wall_inner_y, STAIR_RIGHT_X, basement_stair_opening_end_y,
+    )
+    ground_stair_opening_board = ground.floor_layer(
+        "Timber board over basement stair opening",
+        outline=tuple(ground_stair_opening_region.exterior.coords)[:-1],
+        thickness=GROUND_STAIR_OPENING_BOARD_THICKNESS,
+        start_height=GROUND_FLOOR_THICKNESS-GROUND_STAIR_OPENING_BOARD_THICKNESS,
+        buildup_material="Wood", color="#f4d35e", load_bearing=True,
+    )
 # Reuse the floor polygons so finishes follow the actual room wall faces,
-# independently of the editable MIAKO beam layouts and their coverage.
+# except for the stair opening closed by the separate ground-floor board.
 basement_ceiling_insulation = []
 basement_ceiling_wood = []
 for floor in basement_room_floors:
+    finish_region = Polygon(floor.outline)
+    if floor.room_id == "S.05" and ground_stair_opening_region is not None:
+        finish_region = finish_region.difference(ground_stair_opening_region)
+    finish_outline = tuple(finish_region.exterior.coords)[:-1]
     basement_ceiling_insulation.append(basement_ceiling_storey.floor_layer(
         f"Basement ceiling insulation - {floor.room_id}.1",
-        outline=floor.outline, thickness=BASEMENT_CEILING_INSULATION_THICKNESS,
+        outline=finish_outline, thickness=BASEMENT_CEILING_INSULATION_THICKNESS,
         start_height=-BASEMENT_CEILING_INSULATION_THICKNESS,
         buildup_material=FLOOR_INSULATION_MATERIAL, color="#ffff80",
     ))
     basement_ceiling_wood.append(basement_ceiling_storey.floor_layer(
         f"Basement ceiling wood - {floor.room_id}.1",
-        outline=floor.outline, thickness=BASEMENT_CEILING_WOOD_THICKNESS,
+        outline=finish_outline, thickness=BASEMENT_CEILING_WOOD_THICKNESS,
         start_height=-BASEMENT_CEILING_FINISH_THICKNESS,
         buildup_material="Wood", color="#C8B090",
     ))
 basement_ceiling_insulation = tuple(basement_ceiling_insulation)
 basement_ceiling_wood = tuple(basement_ceiling_wood)
-basement_ceiling_finishes = (*basement_ceiling_insulation, *basement_ceiling_wood)
+basement_stair_opening_board = None
+if ground_stair_opening_region is not None:
+    s05_floor = next(floor for floor in basement_room_floors if floor.room_id == "S.05")
+    lower_board_region = Polygon(s05_floor.outline).intersection(ground_stair_opening_region)
+    basement_stair_opening_board = basement_ceiling_storey.floor_layer(
+        "Basement ceiling wood - S.05 stair opening",
+        outline=tuple(lower_board_region.exterior.coords)[:-1],
+        thickness=BASEMENT_CEILING_WOOD_THICKNESS,
+        start_height=-BASEMENT_CEILING_FINISH_THICKNESS,
+        buildup_material="Wood", color="#C8B090",
+    )
+basement_ceiling_finishes = (
+    *basement_ceiling_insulation, *basement_ceiling_wood,
+    *((basement_stair_opening_board,) if basement_stair_opening_board is not None else ()),
+)
 basement_ceiling_schedule_rows = [
     {"location": "S.01", "slab": basement_ceiling_s01},
     {"location": "S.02", "slab": basement_ceiling_s02},
@@ -2165,8 +2254,7 @@ purlin_supports = tuple(
     for support_index, y in enumerate(positions, 1)
 )
 
-# Each post row has separate HEB girders on either side of the middle wall.
-purlin_girder_z = UPPER_FLOOR_START-PURLIN_SUPPORT_GIRDER_SIZE[1]/2
+# Each post row has bare, vertically centred HEBs on either side of the middle wall.
 purlin_support_girders = []
 purlin_support_girder_wall_faces = {}
 for index, y in enumerate(sorted({post.start[1] for post in purlin_supports}), 1):
@@ -2174,11 +2262,11 @@ for index, y in enumerate(sorted({post.start[1] for post in purlin_supports}), 1
         ("0.03", room3_ceiling_east_face_x, room3_ceiling_middle_face_x),
         ("0.05", bathroom_ceiling_middle_face_x, bathroom_ceiling_stairway_face_x),
     ):
-        girder = ceiling_storey.girder(
+        girder = add_ceiling_heb(
+            ceiling_storey,
             f"Průvlak pod sloupky vaznic {index} - {room}",
-            start=(left_face-PURLIN_SUPPORT_GIRDER_BEARING, y, purlin_girder_z),
-            end=(right_face+PURLIN_SUPPORT_GIRDER_BEARING, y, purlin_girder_z),
-            width=PURLIN_SUPPORT_GIRDER_SIZE[0], height=PURLIN_SUPPORT_GIRDER_SIZE[1],
+            start_x=left_face-PURLIN_SUPPORT_GIRDER_BEARING,
+            end_x=right_face+PURLIN_SUPPORT_GIRDER_BEARING, axis_y=y,
             heb=PURLIN_SUPPORT_GIRDER_HEB,
         )
         purlin_support_girders.append(girder)
@@ -2468,7 +2556,7 @@ upper_toilet_door = wall_toilet_end_u.add_door(
     height=UPPER_DOOR_TOP_HEIGHT,
     clear_height=UPPER_DOOR_CLEAR_HEIGHT,
     sill_height=UPPER_FLOOR_THICKNESS,
-    operation="SINGLE_SWING_LEFT",  # Opens north into the hallway, outside 1.04.
+    operation="SINGLE_SWING_LEFT",  # Opens north into the hallway, outside the bathroom.
 )
 living_room_door = wall_living_room_back_u.add_door(
     name="Living room door",
@@ -2552,7 +2640,7 @@ upper_toilet_outline = box(
     upper_technical_right_x, upper_toilet_end_front_y,
 )
 upper_toilet_room = upper.floor_layer(
-    "Zachod", room_id="1.04", outline=tuple(upper_toilet_outline.exterior.coords)[:-1],
+    "Zachod", room_id="1.02", outline=tuple(upper_toilet_outline.exterior.coords)[:-1],
     **upper_floor_layer_settings,
 )
 upper_hallway_outline = Polygon((
@@ -2581,7 +2669,7 @@ upper_hallway = upper.floor_layer(
     "Chodba", room_id="1.03", outline=tuple(upper_hallway_outline.exterior.coords)[:-1],
     **upper_floor_layer_settings,
 )
-upper_room_floors = (living_room, upper_hallway, upper_toilet_room)
+upper_room_floors = (living_room, upper_toilet_room, upper_hallway)
 upper_room_windows = {
     living_room.room_id: (window_living_room_front, *windows_living_room_back),
     upper_hallway.room_id: (),
@@ -2620,7 +2708,7 @@ upper_washing_machine = upper.furniture(
     center=(HOUSE_WIDTH-BWT-0.3-upper_fixture_wall_gap-0.35,
             max(STAIR_UPPER_END_Y+upper_hallway_right_depth/4,
                 upper_fixture_front_reference_y+upper_fixture_wall_gap+0.35)),
-    start_height=UPPER_FLOOR_THICKNESS,
+    start_height=UPPER_FLOOR_THICKNESS+0.03,
 )
 # Return the basin to the gardenward half of the hallway beside the washer.
 upper_basin_center_x = HOUSE_WIDTH-BWT-0.4-upper_fixture_wall_gap-UPPER_BASIN_SIZE[1]/2
@@ -2634,9 +2722,12 @@ upper_hallway_basin = upper.asset(
     start_height=UPPER_FLOOR_THICKNESS+0.85-0.25,
     rotation=-90,  # Front towards -X, facing into the hallway from the west wall.
 )
-# Turn the unit along the higher flight, below its garden end.
+# Turn the unit along the higher flight, 50 mm from the bathroom wall.
+recuperation_bathroom_wall_face_x = (
+    float(wall_body_centreline_point(wall_stairway_g)[0])+wall_stairway_g.thickness/2
+)
 ground_recuperation_center = (
-    STAIR_UPPER_CENTER_X,
+    recuperation_bathroom_wall_face_x+RECUPERATION_BATHROOM_WALL_CLEARANCE+RECUPERATION_SIZE[1]/2,
     upper_stairs.end[1]-RECUPERATION_STAIR_END_CLEARANCE-RECUPERATION_SIZE[0]/2,
 )
 upper_toilet_center = (
@@ -2647,7 +2738,7 @@ ground_recuperation = ground.furniture(
     "Rekuperace", kind="USERDEFINED", size=RECUPERATION_SIZE, color="#ffff00",
     center=ground_recuperation_center,
     rotation=90,
-    start_height=GROUND_FLOOR_THICKNESS,
+    start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 upper_toilet = upper.asset(
     "Upper bathroom WC", asset="toilet_without_cistern",
@@ -3308,11 +3399,18 @@ def sewer_fixture_center(fixture):
     return tuple(float(v) for v in (points.min(axis=0)+points.max(axis=0))/2)
 
 
+def dishwasher_plan_connection():
+    """Keep the connection inside the appliance and clear of the purlin post."""
+    x, y = sewer_fixture_center(kitchen_dishwasher)
+    post_left = max(PURLIN_X_POSITIONS)-PURLIN_SUPPORT_SIZE[0]/2
+    return min(x, post_left-DISHWASHER_PIPE_POST_CLEARANCE), y
+
+
 def sewer_plan_layout():
     """Shared floor-change coordinates keep the three drainage plans aligned."""
     clearance = SEWER_WALL_CLEARANCE
     sink = sewer_fixture_center(kitchen_sink)
-    dishwasher = sewer_fixture_center(kitchen_dishwasher)
+    dishwasher = dishwasher_plan_connection()
     upstairs_toilet = sewer_fixture_center(upper_toilet)
     upstairs_basin = sewer_fixture_center(upper_hallway_basin)
     washing_machine = sewer_fixture_center(upper_washing_machine)
@@ -3344,9 +3442,9 @@ def sewer_plan_layout():
         shower_drop=shower_drop, outlet=outlet,
         upper_routes=(
             ("Kitchen sink branch", (sink, (kitchen_run_x, sink[1]))),
-            ("Dishwasher branch", (dishwasher, (kitchen_run_x, dishwasher[1]))),
-            ("Kitchen vertical run", ((kitchen_run_x, max(sink[1], dishwasher[1], bathroom_street_y)),
-                                      (kitchen_run_x, min(sink[1], dishwasher[1], bathroom_street_y)))),
+            ("Dishwasher branch", (dishwasher, (dishwasher[0], bathroom_street_y))),
+            ("Kitchen vertical run", ((kitchen_run_x, max(sink[1], bathroom_street_y)),
+                                      (kitchen_run_x, min(sink[1], bathroom_street_y)))),
             ("Kitchen to bathroom", ((kitchen_run_x, bathroom_street_y), upper_drop)),
             ("Upper toilet branch", (upstairs_toilet, roof_vent)),
             ("Upper hallway basin branch", (upstairs_basin, (west_run_x, upstairs_basin[1]))),
@@ -3372,7 +3470,7 @@ def sewer_plan_layout():
         # from the segment midpoint. All offsets are editable for clarity.
         upper_pipe_labels=(
             ("Kitchen sink branch", 0, 50, (0, .20)),
-            ("Dishwasher branch", 0, 50, (0, .20)),
+            ("Dishwasher branch", 0, 50, (.20, .10)),
             ("Upper toilet branch", 0, 100, (0, .20)),
             ("Upper hallway basin branch", 0, 50, (0, .20)),
             ("Upper washing machine branch", 0, 50, (0, .20)),
@@ -3661,7 +3759,7 @@ def electrical_room04_layout():
 
 
 def electrical_room05_layout():
-    """Bathroom perimeter sockets and a light switched beside the door's right jamb."""
+    """Bathroom sockets, two stair-facing branches, and the existing switched light."""
     x0, y0, x1, y1 = Polygon(koupelna.outline).bounds
     left, bottom = x0+ELECTRICAL_SOCKET_WALL_OFFSET, y0+ELECTRICAL_SOCKET_WALL_OFFSET
     right, top = x1-ELECTRICAL_SOCKET_WALL_OFFSET, y1-ELECTRICAL_SOCKET_WALL_OFFSET
@@ -3672,21 +3770,31 @@ def electrical_room05_layout():
     light = electrical_room_centres((koupelna,))[0][koupelna.room_id]
     light_wall_entry = (ports["0.05_light"][0], top)
     light_turn = (light[0], top)
+    toilet = sewer_fixture_center(bathroom_toilet)
     basin = sewer_fixture_center(bathroom_basin)
     tuv = sewer_fixture_center(bathroom_water_heater)
     hydrobox = sewer_fixture_center(bathroom_hydrobox)
     socket_entry, socket_end = (right, top), (left, y1-.55)
     hydrobox_socket_x = min(right-.15, hydrobox[0]+HYDROBOX_SIZE[0]/2+.15)
+    stairway_socket_x = wall_stairway_g.start[0]-wall_stairway_g.body_offset+ELECTRICAL_SOCKET_WALL_OFFSET
+    recuperation_upper = (stairway_socket_x, (toilet[1]+basin[1])/2)
+    recuperation_lower = (stairway_socket_x, (basin[1]+tuv[1])/2)
     return dict(
         lighting=(ports["0.05_light"], light_wall_entry, switch, light_turn, light),
         switch=switch, switch_direction="down",
         socket_feed=(ports["0.05_sockets"], socket_entry),
         socket_perimeter=(socket_entry, (right, bottom), (left, bottom), socket_end),
+        socket_branches=(
+            ("recuperation upper", ((right, recuperation_upper[1]), recuperation_upper)),
+            ("recuperation lower", ((right, recuperation_lower[1]), recuperation_lower)),
+        ),
         sockets=(
             ("basin", (right, basin[1]), "left", .1125),
             ("TUV", (right, tuv[1]-.25), "left", .1125),
             ("hydrobox", (hydrobox_socket_x, bottom), "up", .1125),
             ("loop end before door", socket_end, "right", .1125),
+            ("recuperation between toilet and basin", recuperation_upper, "right", .1125),
+            ("recuperation between basin and TUV", recuperation_lower, "right", .1125),
         ),
     )
 
@@ -3952,19 +4060,20 @@ def electrical_upper_cooker_layout():
 
 
 def electrical_upper_hallway_layout():
-    """Approach the VPC wall at 45 degrees; retain the diagonal light/switch branches."""
+    """Keep sockets nearest the VPC wall, with lighting on the lower track."""
     origin = electrical_trunk_layout()["up"]
     stairs_switch = electrical_stair_lighting_layout()["upper_switch"]
     switch = (stairs_switch[0], stairs_switch[1]+.40)
     light = electrical_room_centres((upper_hallway,))[0][upper_hallway.room_id]
     opening = living_room_door.FillsVoids[0].RelatingOpeningElement
     door_right = float(ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)[0, 3])+ROOM_DOOR_OPENING_WIDTH
-    door_switch = (door_right+.20, living_room_right_wall_front_y-ELECTRICAL_SOCKET_WALL_OFFSET)
+    socket_wall_y = living_room_right_wall_front_y-ELECTRICAL_SOCKET_WALL_OFFSET
+    light_wall_y = socket_wall_y-.10
+    door_switch = (door_right+.20, light_wall_y)
     door_approach = (door_switch[0]+.30, door_switch[1])
     wall_rise = door_switch[1]-origin[1]
-    wall_entry = (origin[0]+wall_rise, door_switch[1])
-    socket_wall_y = door_switch[1]-.10
-    socket_wall_entry = (origin[0]+(socket_wall_y-origin[1])/math.tan(math.radians(30)), socket_wall_y)
+    wall_entry = (origin[0]+wall_rise/math.tan(math.radians(30)), light_wall_y)
+    socket_wall_entry = (origin[0]+socket_wall_y-origin[1], socket_wall_y)
     west_inner_x = wall_west_u.start[0]-(wall_west_u.body_offset+wall_west_u.thickness)
     socket_wall_x = west_inner_x-ELECTRICAL_SOCKET_WALL_OFFSET
     basin = sewer_fixture_center(upper_hallway_basin)
@@ -3972,8 +4081,9 @@ def electrical_upper_hallway_layout():
     socket_end = (socket_wall_x, min(basin[1], washer[1]))
     return dict(
         lighting=(origin, wall_entry, door_switch), switch=switch, switch_direction="right",
-        lighting_branches=(("stair switch", (light, switch)),
-                           ("living-room door switch", (light, door_approach, door_switch))),
+        lighting_branches=(("stair switch", (light, (switch[0], light[1]), switch)),
+                           ("living-room door switch", (light, (door_approach[0], light[1]),
+                                                       door_approach, door_switch))),
         extra_switches=(("living-room door", door_switch, "down"),),
         socket_feed=(origin, socket_wall_entry, (socket_wall_x, socket_wall_y), socket_end),
         sockets=(("basin", (socket_wall_x, basin[1]), "left", .1125),
@@ -3982,28 +4092,20 @@ def electrical_upper_hallway_layout():
 
 
 def electrical_upper_toilet_layout():
-    """Upper bathroom lighting via a switch near its top-left corner."""
+    """Drop, approach the bathroom wall at 45 degrees, then follow it down."""
     x0, _, _, y1 = Polygon(upper_toilet_room.outline).bounds
     switch = (x0+ELECTRICAL_SOCKET_WALL_OFFSET, y1-.20)
     light = electrical_room_centres((upper_toilet_room,))[0][upper_toilet_room.room_id]
     origin = electrical_trunk_layout()["up"]
-    wall_entry = (switch[0], origin[1])
+    diagonal_run = abs(origin[0]-switch[0])
+    wall_entry_y = min(living_room_return_front_y-ELECTRICAL_SOCKET_WALL_OFFSET,
+                       origin[1]-.20-diagonal_run)
+    diagonal_start = (origin[0], wall_entry_y+diagonal_run)
+    wall_entry = (switch[0], wall_entry_y)
     return dict(
-        lighting=(origin, wall_entry, switch, light),
+        lighting=(origin, diagonal_start, wall_entry, switch, light),
         switch=switch, switch_direction="right",
     )
-
-
-def electrical_upper_kitchen_extension_socket_layout():
-    """Kitchen-extension socket along room 1.04's extended stair-side wall."""
-    _, _, right_x, top_y = Polygon(upper_toilet_room.outline).bounds
-    wall_x = right_x-ELECTRICAL_SOCKET_WALL_OFFSET
-    lower_wall_x = kitchen_lower_wall_face_x-ELECTRICAL_SOCKET_WALL_OFFSET
-    turn_y = upper_technical_cross_front_y-ELECTRICAL_SOCKET_WALL_OFFSET
-    wall_entry = (wall_x, top_y-.20)
-    socket = (lower_wall_x, BWT+ELECTRICAL_SOCKET_WALL_OFFSET)
-    return dict(route=(electrical_trunk_layout()["up"], wall_entry,
-                       (wall_x, turn_y), (lower_wall_x, turn_y), socket), socket=socket)
 
 
 def add_ground_stair_lighting_routes(drawing, layout):
@@ -4058,6 +4160,11 @@ def add_room_socket_routes(drawing, identifier, layout):
             points, color="blue", line_width=ELECTRICAL_LINE_WIDTH,
             foreground=True,
             name=f"{prefix} {name}",
+        )
+    for name, points in layout.get("socket_branches", ()):
+        drawing.add_poly_line(
+            points, color="blue", line_width=ELECTRICAL_LINE_WIDTH, foreground=True,
+            name=f"{prefix} {name} socket branch",
         )
     for name, point, direction, radius in layout.get("sockets", ()):
         drawing.add_socket_symbol(
@@ -4162,8 +4269,8 @@ if "basement" in sys.argv:
         region = room["region"]
         x0, y0, x1, y1 = region.bounds
         position = region.representative_point().coords[0]
-        # Keep the centre room's symbol clear of the AA section line.
-        if abs(position[0]-aa_cut.center[0]) < 0.4:
+        # Keep the centre room's symbol clear of the BB section line.
+        if abs(position[0]-bb_cut.center[0]) < 0.4:
             position = (min(x1-0.45, position[0]+0.45), position[1])
         if room["identifier"] == "S.04":
             position = (position[0], position[1]-0.6)
@@ -4420,7 +4527,6 @@ if "ground" in sys.argv:
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         ("diagonal1", f"Příčka - VPC Cihla {GARDEN_PARTITION_THICKNESS*1000:g} mm"),
         ("drywall-diagonal1", f"Příčka - SDK {DRY_WALL_WIDTH*1000:g} mm"),
-        ("wooden-wall", "Dřevěná stěna"),
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
     add_facade_insulation(drawing1)
@@ -4684,6 +4790,7 @@ if "ceiling" in sys.argv:
         ground_load_bearing_walls, style="solid", color="black",
         name="Ground-floor ceiling load-bearing wall outlines",
     )
+    drawing1.include_element(ceiling_bathroom_chimney_infill)
     # Deliberate copy of the basement diagram: this level will be edited independently.
     for slab, wall_bounds in zip(ceiling_slabs, ceiling_wall_bounds):
         for index, (start, end) in enumerate(slab.beam_centerlines, 1):
@@ -4772,7 +4879,7 @@ if "ceiling2" in sys.argv:
     add_facade_insulation(drawing1)
     drawing1.add_material_legend([
         ("rockwool-wave", f"Fasádní izolace {FACADE_INSULATION_THICKNESS*1000:.0f} mm"),
-        ("reinforced-concrete", "Železobetonový věnec"),
+        ("reinforced-concrete", "Železobetonový věnec a dobetonávka"),
         ("purlin-support-footprint", "Uložení sloupku krovu"),
     ])
     for slab in ceiling_slabs:
@@ -4852,11 +4959,12 @@ if "ceiling2" in sys.argv:
         f"0.03: nosníky {ROOM3_CEILING_BEAM_LENGTH*1000:.0f} mm; uložení obvod {ROOM3_CEILING_EAST_BEARING*1000:.0f} mm / střed {ROOM3_CEILING_MIDDLE_BEARING*1000:.0f} mm.",
         f"0.05: nosníky {BATHROOM_CEILING_BEAM_LENGTH*1000:.0f} mm; uložení {BATHROOM_CEILING_BEARING*1000:.0f} mm na obou koncích.",
         "Uložení nosníků je nutné upravit podle stěn v 1.NP.",
-        f"Pod sloupky vaznic: dělené HEB{PURLIN_SUPPORT_GIRDER_HEB} v průvlacích {PURLIN_SUPPORT_GIRDER_SIZE[0]*1000:.0f} × {PURLIN_SUPPORT_GIRDER_SIZE[1]*1000:.0f} mm; uložení {PURLIN_SUPPORT_GIRDER_BEARING*1000:.0f} mm na všech stěnách.",
+        f"Pod sloupky vaznic: dělené HEB{PURLIN_SUPPORT_GIRDER_HEB} bez obetonování, výškově vystředěné ve stropě; uložení {PURLIN_SUPPORT_GIRDER_BEARING*1000:.0f} mm na všech stěnách.",
         f"Otvor schodiště: {(ceiling_stair_opening_end_y-BWT)*1000:.0f} mm od vnitřního líce uliční stěny.",
         f"Schodiště: HEB180 s uložením {STAIRWAY_HEB_BEARING*1000:.0f} mm.",
         f"0.03/0.04/0.05: společná osnova se suterénem; osa prvního nosníku {BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE*1000:.0f} mm od osy zahradní příčné stěny.",
         "0.05: první nosník a úzká řada vložek vynechány kvůli komínu, stejně jako v S.04.",
+        f"0.05: mezera k zahradní příčné stěně vyplněna betonem; odstup od komínu {CHIMNEY_CEILING_INFILL_CLEARANCE*1000:g} mm po celém obvodu.",
     ])
     drawing1.add_chimney_annotation(chimney)
     add_purlin_support_planning_markers(drawing1)
@@ -4866,7 +4974,7 @@ if "ceiling2" in sys.argv:
 if "basement_ceiling" in sys.argv:
     drawing1 = house.add_drawing(
         "basement_ceiling", x=HOUSE_WIDTH/2, y=HOUSE_DEPTH/2,
-        # This is an annotation-only diagram; keep its Z=0 linework below the camera.
+        # Keep diagram linework and the concrete infill below the camera.
         z=0.1, radius=7, storeys=[], right_panel_width=60,
         door_annotations=False, automatic_plan_annotations=False,
     )
@@ -4876,6 +4984,7 @@ if "basement_ceiling" in sys.argv:
         style="solid", color="black",
         name="Basement ceiling load-bearing wall outlines",
     )
+    drawing1.include_element(basement_ceiling_s04_chimney_infill)
     for identifier, slabs in basement_ceilings_by_room.items():
         for slab in slabs:
             wall_bounds = list(basement_rooms_by_id[identifier].bounds)
@@ -4926,7 +5035,7 @@ if "basement_ceiling2" in sys.argv:
     drawing1.add_material_legend([
         ("ztracene-bedneni", f"Ztracené bednění {BASEMENT_WALL_THICKNESS*1000:.0f} mm"),
         ("ztracene-bedneni-green", f"Ztracené bednění {BASEMENT_THIN_WALL_THICKNESS*1000:.0f} mm"),
-        ("reinforced-concrete", "Železobetonový věnec"),
+        ("reinforced-concrete", "Železobetonový věnec a dobetonávka"),
         ("perimeter-polystyrene", f"Perimetrická izolace {EXTERIOR_XPS_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
     drawing1.add_miako_beam_dimensions(basement_ceiling_s01, side="end", offset=0.7)
@@ -4993,6 +5102,7 @@ if "basement_ceiling2" in sys.argv:
         f"S.05 HEB180: přední hrana {STAIRWAY_HEB_FRONT_WALL_DISTANCE*1000:.0f} mm od líce uliční stěny 1.NP, {(basement_s05_heb_front_y-basement_s05_y0)*1000:.0f} mm v suterénu; uložení {(basement_s05_x0-basement_s05_edge_heb.start[0])*1000:.0f}/{(basement_s05_edge_heb.end[0]-basement_s05_x1)*1000:.0f} mm.",
         "Styk protilehlých nosníků na společných stěnách zatím není řešen.",
         "S.04: první nosník a první řada vložek vynechány kvůli komínu; ostatní řady beze změny polohy.",
+        f"S.04: mezera k zahradní příčné stěně vyplněna betonem; odstup od komínu {CHIMNEY_CEILING_INFILL_CLEARANCE*1000:g} mm po celém obvodu.",
     ])
     drawing1.add_chimney_annotation(chimney)
     add_house_cut_symbols(drawing1)
@@ -5408,8 +5518,8 @@ if "roof" in sys.argv:
     roof_sheet.render(PROJECT_DIR / "roof.svg", pdf=PDF_ROOF)
 
 
-def aa_roof_batting_bands(x):
-    """Return the two horizontal insulation bands at the AA section's X."""
+def bb_roof_batting_bands(x):
+    """Return the two horizontal insulation bands at the BB section's X."""
     plane = roof_east if x <= roof_ridge_x else roof_west
     rafter_center_z = plane_height_at(
         *offset_plane(*plane.points, offset=RAFTER_Z_OFFSET+RAFTER_HEIGHT/2), x=x, y=0,
@@ -5421,18 +5531,20 @@ def aa_roof_batting_bands(x):
     )
 
 
-def add_aa_roof_batting(drawing):
-    """Overlay uninterrupted insulation across the rafters and projected purlins."""
-    for label, center_z, thickness in aa_roof_batting_bands(drawing.x):
+def add_bb_roof_batting(drawing, *, include_ceiling=True):
+    """Overlay roof insulation, optionally omitting the concealed flat ceiling."""
+    for label, center_z, thickness in bb_roof_batting_bands(drawing.x):
+        if label == "horizontal ceiling insulation" and not include_ceiling:
+            continue
         drawing.add_batting(
             (drawing.x, -FACADE_INSULATION_THICKNESS, center_z),
             (drawing.x, HOUSE_DEPTH+FACADE_INSULATION_THICKNESS, center_z),
-            thickness=thickness, name=f"AA {label}",
+            thickness=thickness, name=f"{drawing.name.upper()} {label}",
             classes="roof-batting roof-batting-overlay",
         )
 
 
-def add_bb_roof_batting(drawing):
+def add_aa_roof_batting(drawing):
     """Draw the two roof-insulation layers in the section plane."""
     clearance = 0.01
     purlin_overlap = 0.10  # Batting overlap above the purlin bottom, in metres.
@@ -5451,7 +5563,7 @@ def add_bb_roof_batting(drawing):
         drawing.add_batting(
             point(wall_plate_x+inward*clearance, offset),
             point(roof_ridge_x-inward*(half_x+clearance), offset),
-            thickness=RAFTER_HEIGHT, name=f"BB {side} between-rafter insulation",
+            thickness=RAFTER_HEIGHT, name=f"AA {side} between-rafter insulation",
             classes="roof-batting roof-batting-overlay",
         )
 
@@ -5471,7 +5583,7 @@ def add_bb_roof_batting(drawing):
             end = point(start[0]+fraction*(end[0]-start[0]), offset)
         drawing.add_batting(
             start, end, thickness=thickness,
-            name=f"BB {side} under-rafter insulation", classes="roof-batting roof-batting-overlay",
+            name=f"AA {side} under-rafter insulation", classes="roof-batting roof-batting-overlay",
         )
 
     center_z = FLAT_VAPOUR_BARRIER_TOP_Z+THERMAL_INSULATION_UNDER_RAFTERS/2
@@ -5479,7 +5591,7 @@ def add_bb_roof_batting(drawing):
         (PURLIN_X_POSITIONS[0]+PURLIN_SIZE[0]/2+clearance, drawing.y, center_z),
         (PURLIN_X_POSITIONS[1]-PURLIN_SIZE[0]/2-clearance, drawing.y, center_z),
         thickness=THERMAL_INSULATION_UNDER_RAFTERS,
-        name="BB horizontal ceiling insulation", classes="roof-batting roof-batting-overlay",
+        name="AA horizontal ceiling insulation", classes="roof-batting roof-batting-overlay",
     )
 
 
@@ -5548,7 +5660,7 @@ def add_section_waterproofing(drawing):
     return line
 
 
-def add_bb_elevation_marks(drawing):
+def add_aa_elevation_marks(drawing):
     """Mark section levels relative to the finished ground floor, in millimetres."""
     datum_z = ground.elevation+GROUND_FLOOR_THICKNESS
     # Use opposite sides for close levels to keep their arrows and labels apart.
@@ -5603,8 +5715,8 @@ def add_house_section(cut, name, pdf):
                 x=section_x, y=cut.center[1],
             )
             insulation_top = min(upper_wall.storey.elevation+upper_wall.end_height, roof_bottom_z)
-            if name == "aa":
-                _, center_z, thickness = aa_roof_batting_bands(section_x)[0]
+            if name in ("bb", "cc"):
+                _, center_z, thickness = bb_roof_batting_bands(section_x)[0]
                 insulation_top = center_z-thickness/2
         drawing.add_wall_insulation(
             wall, thickness=FACADE_INSULATION_THICKNESS, material="rockwool",
@@ -5612,25 +5724,58 @@ def add_house_section(cut, name, pdf):
         )
     add_perimeter_insulation(drawing)
     waterproofing = add_section_waterproofing(drawing)
-    basement_height_dimension_x = ((basement_ceiling_garden_y+min(point[1] for point in basement_ceiling_s04.footprint))/2
-                                   if name == "aa" else BWT+0.4)
+    drawing.add_furniture_label(rozvadec)
+    basement_height_dimension_x = BWT+0.4
+    if name in ("bb", "cc"):
+        basement_height_dimension_x = (
+            float(wall_body_centreline_point(wall_basement_back)[1])-wall_basement_back.thickness/2-0.5
+        )
     drawing.add_dimension(
         start=(basement_height_dimension_x, BASEMENT_FINISHED_FLOOR_HEIGHT),
         end=(basement_height_dimension_x, BASEMENT_FINISHED_CEILING_Z),
         name="Basement finished floor to wood ceiling",
     )
-    if name == "aa":
-        add_aa_roof_batting(drawing)
+    if name in ("bb", "cc"):
+        add_bb_roof_batting(drawing, include_ceiling=name != "cc")
         for furniture in (
             kamna, kitchen_cooker, kitchen_sink, kitchen_dishwasher, kitchen_fridge,
-            kitchen_front_counter, bathroom_shower, basement_water_meter,
+            kitchen_front_counter, bathroom_shower, basement_water_meter, heat_pump,
         ):
             drawing.add_furniture_label(furniture)
-    if name == "bb":
-        for furniture in (kamna, kitchen_cooker, upper_washing_machine, basement_water_meter, kitchen_front_counter):
+        ground_height_dimension_y = (
+            float(wall_body_centreline_point(wall_back_g)[1])-wall_back_g.thickness/2-0.5
+        )
+        drawing.add_dimension(
+            start=(ground_height_dimension_y, ground.elevation+GROUND_FLOOR_THICKNESS),
+            end=(ground_height_dimension_y, ceiling_storey.elevation-CEILING_PLASTER_THICKNESS),
+            name="Ground finished floor to plastered ceiling",
+        )
+    if name == "cc":
+        for furniture in (upper_washing_machine, ground_recuperation):
             drawing.add_furniture_label(furniture)
-        add_bb_roof_batting(drawing)
-        add_bb_elevation_marks(drawing)
+        if ground_stair_opening_board is not None:
+            _, front_y, _, back_y = ground_stair_opening_region.bounds
+            upper_board_bottom_z = ground_stair_opening_board.storey.elevation+ground_stair_opening_board.start_height
+            lower_board_top_z = (
+                basement_stair_opening_board.storey.elevation+basement_stair_opening_board.start_height
+                +basement_stair_opening_board.thickness
+            )
+            insulation_center_z = (upper_board_bottom_z+lower_board_top_z)/2
+            drawing.add_batting(
+                (drawing.x, front_y, insulation_center_z),
+                (drawing.x, back_y, insulation_center_z),
+                thickness=GROUND_STAIR_OPENING_INSULATION_THICKNESS,
+                name="CC rockwool below stair-opening timber board",
+                classes="roof-batting roof-batting-overlay",
+            )
+    if name == "aa":
+        for furniture in (
+            kamna, kitchen_cooker, upper_washing_machine, basement_water_meter,
+            kitchen_front_counter, ground_recuperation,
+        ):
+            drawing.add_furniture_label(furniture)
+        add_aa_roof_batting(drawing)
+        add_aa_elevation_marks(drawing)
         drawing.add_dimension(
             start=(BWT+0.4, ground.elevation+GROUND_FLOOR_THICKNESS),
             end=(BWT+0.4, ceiling_storey.elevation-CEILING_PLASTER_THICKNESS),
@@ -5666,7 +5811,6 @@ def add_house_section(cut, name, pdf):
         ("reinforced-concrete", "Železobetonový věnec"),
         ("wood-solid", "Dřevo"),
         ("drywall-diagonal1", "Sádrokarton"),
-        ("wooden-wall", "Dřevěná stěna"),
         ("thermal-impact-insulation", "Podlahová a stropní izolace"),
         ("rockwool-wave", "Minerální vata"),
         ("perimeter-polystyrene", "Perimetrická izolace"),
@@ -5678,7 +5822,7 @@ def add_house_section(cut, name, pdf):
     return drawing
 
 
-for name, cut, pdf in (("aa", aa_cut, PDF_AA), ("bb", bb_cut, PDF_BB)):
+for name, cut, pdf in (("aa", aa_cut, PDF_AA), ("bb", bb_cut, PDF_BB), ("cc", cc_cut, PDF_CC)):
     if name in sys.argv:
         add_house_section(cut, name, pdf)
 
@@ -6049,9 +6193,11 @@ if "kanal" in sys.argv or "kanal_schematic" in sys.argv:
         name="Schematic toilet",
     )
     # Preserve the connection height even where the kitchen symbols overlap.
+    sewer_schematic_dishwasher_distance = 1.0
+    sewer_schematic_dishwasher_x = sewer_schematic_stack_x-sewer_schematic_dishwasher_distance
     sewer_schematic_dishwasher_z = sewer_schematic_upper_floor+0.65
     sewer_schematic_dishwasher = sewer_schematic.add_washing_machine_connection(
-        x=sewer_schematic_stack_x-1.5, z=sewer_schematic_dishwasher_z,
+        x=sewer_schematic_dishwasher_x, z=sewer_schematic_dishwasher_z,
         identifier="Myčka", name="Schematic dishwasher connection",
     )
     sewer_schematic_sink_pipe_x = sewer_schematic_stack_x-1.7
@@ -6071,7 +6217,7 @@ if "kanal" in sys.argv or "kanal_schematic" in sys.argv:
     dishwasher_caption = house.model.by_guid(ifcopenshell.util.element.get_pset(
         sewer_schematic_dishwasher, "BBIM_SanitarySymbol", "IdentifierAnnotation",
     ))
-    dishwasher_caption_point = (sewer_schematic_stack_x-1.05, sewer_schematic_dishwasher_z+0.24+0.30)
+    dishwasher_caption_point = (sewer_schematic_dishwasher_x+0.45, sewer_schematic_dishwasher_z+0.24+0.30)
     dishwasher_caption_matrix = ifcopenshell.util.placement.get_local_placement(dishwasher_caption.ObjectPlacement)
     dishwasher_caption_matrix[:2, 3] = dishwasher_caption_point
     ifcopenshell.api.geometry.edit_object_placement(
@@ -6089,7 +6235,7 @@ if "kanal" in sys.argv or "kanal_schematic" in sys.argv:
     )
     for distance, outlet_z, name in (
         (0.5, sewer_schematic_upper_floor+0.20, "Toilet branch connection"),
-        (1.5, sewer_schematic_dishwasher_z, "Dishwasher branch connection"),
+        (sewer_schematic_dishwasher_distance, sewer_schematic_dishwasher_z, "Dishwasher branch connection"),
         (1.7, sewer_schematic_sink_z-0.10, "Sink branch connection"),
     ):
         fixture_x = sewer_schematic_stack_x-distance
@@ -6153,7 +6299,7 @@ if "kanal" in sys.argv or "kanal_schematic" in sys.argv:
         ("Washing machine", 50, (sewer_schematic_stack_x+2.65, sewer_schematic_upper_floor+0.30)),
         ("Basin", 50, (sewer_schematic_stack_x+3.65, sewer_schematic_upper_floor+0.30)),
         ("Toilet", 100, (sewer_schematic_stack_x-0.5, sewer_schematic_left_start_z-0.45)),
-        ("Dishwasher", 50, (sewer_schematic_stack_x-1.0, sewer_schematic_upper_floor+0.05)),
+        ("Dishwasher", 50, (sewer_schematic_dishwasher_x-0.25, sewer_schematic_upper_floor+0.05)),
         ("Sink", 50, (sewer_schematic_stack_x-2.05, sewer_schematic_upper_floor+0.30)),
         ("Ground toilet", 100, (sewer_schematic_stack_x-0.9, -0.20)),
         ("Ground basin", 50, (sewer_schematic_stack_x+0.85, 0.30)),
@@ -6184,8 +6330,8 @@ if "kanal" in sys.argv or "kanal_upper" in sys.argv:
     kanal_upper = add_plumbing_plan(
         "kanal_upper", upper, 1.20, upper_room_floors,
         room_positions={
-            "1.01": (3.5, 7),
-            "1.04": ((upper_technical_left_x+upper_technical_right_x)/2, upper_toilet_end_front_y-0.20),
+            living_room.room_id: (3.5, 7),
+            upper_toilet_room.room_id: ((upper_technical_left_x+upper_technical_right_x)/2, upper_toilet_end_front_y-0.20),
         },
     )
     add_sewer_routes(kanal_upper, sewer_layout["upper_routes"])
@@ -6287,8 +6433,8 @@ if "voda" in sys.argv or "voda_upper" in sys.argv:
     voda_upper = add_plumbing_plan(
         "voda_upper", upper, 1.20, upper_room_floors,
         room_positions={
-            "1.01": (3.5, 7),
-            "1.04": ((upper_technical_left_x+upper_technical_right_x)/2, upper_toilet_end_front_y-0.20),
+            living_room.room_id: (3.5, 7),
+            upper_toilet_room.room_id: ((upper_technical_left_x+upper_technical_right_x)/2, upper_toilet_end_front_y-0.20),
         },
     )
     voda_upper.add_line_legend([
@@ -6300,7 +6446,7 @@ if "voda" in sys.argv or "voda_upper" in sys.argv:
     water_upper_cold_riser, water_upper_hot_riser = water_riser_positions()
     water_upper_basin = sewer_fixture_center(upper_hallway_basin)
     water_upper_sink = sewer_fixture_center(kitchen_sink)
-    water_upper_dishwasher = sewer_fixture_center(kitchen_dishwasher)
+    water_upper_dishwasher = dishwasher_plan_connection()
     water_upper_cold_kitchen_x = water_upper_sink[0]
     water_upper_hot_kitchen_x = water_upper_cold_kitchen_x+WATER_HOT_ROUTE_OFFSET
     water_upper_cold_basin_x = water_upper_basin[0]+WATER_HOT_ROUTE_OFFSET
@@ -6329,8 +6475,7 @@ if "voda" in sys.argv or "voda_upper" in sys.argv:
             (water_upper_hot_kitchen_x, water_upper_sink[1]+WATER_HOT_ROUTE_OFFSET),
         )),
         ("Cold water to dishwasher", "blue", (
-            (water_upper_cold_kitchen_x, water_upper_cold_riser[1]),
-            (water_upper_cold_kitchen_x, water_upper_dishwasher[1]),
+            (water_upper_dishwasher[0], water_upper_cold_riser[1]),
             water_upper_dishwasher,
         )),
     )
@@ -6452,7 +6597,7 @@ if "elektro" in sys.argv or "elektro_ground" in sys.argv:
 
 if "elektro" in sys.argv or "elektro_upper" in sys.argv:
     elektro_upper = add_electrical_plan(
-        "elektro_upper", upper, 1.20, upper_room_floors, skip_lights=("1.01",),
+        "elektro_upper", upper, 1.20, upper_room_floors, skip_lights=(living_room.room_id,),
         extra_symbols=(("switch", "Vypínač"), ("d_socket", "Dvojitá zásuvka"),
                        ("socket3f", "Zásuvka 380V, 3 fáze")),
     )
@@ -6478,13 +6623,13 @@ if "elektro" in sys.argv or "elektro_upper" in sys.argv:
         *electrical_trunk_layout()["up"], "from down", color="black",
         line_width=ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH, name="elektro_upper Cables from ground floor",
     )
-    add_room_electrical_routes(elektro_upper, "1.03", electrical_upper_hallway_layout())
-    add_room_electrical_routes(elektro_upper, "1.04", electrical_upper_toilet_layout())
+    add_room_electrical_routes(elektro_upper, upper_hallway.room_id, electrical_upper_hallway_layout())
+    add_room_electrical_routes(elektro_upper, upper_toilet_room.room_id, electrical_upper_toilet_layout())
     living_light_layout = electrical_upper_living_light_layout()
-    add_room_electrical_routes(elektro_upper, "1.01", {
+    add_room_electrical_routes(elektro_upper, living_room.room_id, {
         **living_light_layout, **electrical_upper_living_garden_socket_layout(),
     })
-    add_room_socket_routes(elektro_upper, "1.01 street-side", electrical_upper_living_street_socket_layout())
+    add_room_socket_routes(elektro_upper, f"{living_room.room_id} street-side", electrical_upper_living_street_socket_layout())
     cooker_layout = electrical_upper_cooker_layout()
     elektro_upper.add_poly_line(
         cooker_layout["route"], color="red", line_width=ELECTRICAL_LINE_WIDTH,
@@ -6493,15 +6638,6 @@ if "elektro" in sys.argv or "elektro_upper" in sys.argv:
     elektro_upper.add_socket_symbol(
         cooker_layout["socket"], "left", color="red", line_width=ELECTRICAL_LINE_WIDTH,
         name="elektro_upper Cooker 380V socket",
-    )
-    kitchen_extension_socket_layout = electrical_upper_kitchen_extension_socket_layout()
-    elektro_upper.add_poly_line(
-        kitchen_extension_socket_layout["route"], color="blue", line_width=ELECTRICAL_LINE_WIDTH,
-        foreground=True, name="elektro_upper Kitchen extension socket feed",
-    )
-    elektro_upper.add_socket_symbol(
-        kitchen_extension_socket_layout["socket"], "left", double=True, line_width=ELECTRICAL_LINE_WIDTH,
-        name="elektro_upper Kitchen extension socket",
     )
     for name, point in living_light_layout["lights"]:
         elektro_upper.add_light_symbol(

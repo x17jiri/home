@@ -143,10 +143,13 @@ set the 3500 mm S.03 span from its middle-wall face with 125 mm bearing;
 the opposite outside-wall bearing is 150 mm.
 `BASEMENT_S04_BEAM_LENGTH` / `BASEMENT_S04_MIDDLE_CENTER_BEARING` set the 2500 mm
 S.04 span. The centre bearing is 0 mm, so the beam ends meet both supporting
-wall centres, giving actual 125 mm bearings at each end. S.04's concrete cover
-follows the shortened footprint, leaving the omitted garden-side bay
-open across its full width. Its eight remaining beams and later full-width
-block rows keep their positions; no chimney trim is needed downstairs.
+wall centres, giving actual 125 mm bearings at each end. S.04's MIAKO concrete
+cover follows the shortened footprint. A separate full-depth concrete infill,
+`basement_ceiling_s04_chimney_infill`, fills the gap from the first remaining
+beam to the street face of the garden-room wall. Its X edges stop at the
+room-facing wall surfaces, using the same clear span as the ceramic blocks,
+and it has a through-opening 30 mm clear of every chimney face.
+The remaining beams and full-width block rows keep their positions.
 
 S.05 has its own editable `basement_ceiling_storey.miako_slab()` specification,
 `basement_ceiling_s05`, with a literal garden-to-street `structure` list.
@@ -188,8 +191,8 @@ ground-floor wall's inside face and 2755 mm from the basement wall's.
 The S.05 street section follows the garden part's beam grid independently
 of the HEB position. Rows before an `axis` marker can extend further towards
 the garden without shifting the rows after that marker.
-Its bottom aligns with the structural ceiling
-bottom. Both ceiling plans label the HEB and dimension that front edge.
+Its steel is centred vertically in the structural ceiling, leaving 15 mm
+above and below the profile. Both ceiling plans label the HEB and dimension that front edge.
 Adding the HEB leaves the editable MIAKO layout unchanged. The HEB is
 separate from the MIAKO beam counts.
 
@@ -214,11 +217,12 @@ basement support, endpoints, strip footing and basement-ceiling ring beam
 are retained. These beams belong to the corresponding ceiling
 storeys, so hiding a ceiling hides its ring beams as well.
 
-The basement ceiling has 80 mm of insulation directly beneath its structural
+The basement ceiling has 100 mm of insulation directly beneath its structural
 underside, followed by a 20 mm wood lining. Both layers belong to `Basement
 ceiling` and directly reuse each `basement_room_floors` layer's `outline`.
-They cover the full room polygons, including areas outside the MIAKO layout,
-and no longer inherit its stair opening or omitted chimney-side bay.
+They cover the room polygons, including areas outside the MIAKO layout,
+except for the S.05 stair opening closed by the separate timber board.
+The omitted chimney-side MIAKO bay does not trim these finishes.
 `BASEMENT_CEILING_INSULATION_THICKNESS` and `BASEMENT_CEILING_WOOD_THICKNESS`
 control the layers; `BASEMENT_FINISHED_CEILING_Z` is the resulting wood
 underside. Insulation uses the floor-insulation material and the same
@@ -238,14 +242,15 @@ legend. It follows the foundation slab's top beneath the basement walls,
 then rises along both exterior wall faces to `PERIMETER_TOP_HEIGHT`, behind
 the perimeter XPS. `HYDROIZOLACE_LINE_WIDTH = 0.7` sets its printed width in
 millimetres; the `hydroizolace` CSS class uses 4 mm dashes and 1.5 mm gaps.
-AA and BB dimension the basement clear height to the wood underside,
+AA, BB and CC dimension the basement clear height to the wood underside,
 subtracting the configured ceiling finish without an additional plaster
-allowance. At the current 80 + 20 mm finish settings this is 2200 mm above
-the finished basement floor. AA's dimension is positioned below the remaining
-garden-side ceiling.
-BB's ground-floor clear height still allows 15 mm for plaster, controlled
+allowance. The height follows the configured floor and ceiling finishes.
+BB and CC place their basement and ground-floor clear-height dimensions 500 mm from
+the respective garden wall's inside face. The basement dimension ends at the
+wood lining underside; the ground-floor dimension allows 15 mm for plaster.
+AA's ground-floor clear height still allows 15 mm for plaster, controlled
 by `CEILING_PLASTER_THICKNESS`.
-BB also uses `add_bb_elevation_marks()` for nine signed level marks, in
+AA also uses `add_aa_elevation_marks()` for nine signed level marks, in
 millimetres relative to the finished ground floor (`±0`). They cover the
 finished floors, the ground-floor plastered ceiling and basement wood
 underside, lowest roof-tile edge, ridge, and slab
@@ -318,15 +323,21 @@ openings. Both use the same 300 mm stone side walls up to elevation 416.0 m,
 controlled by `GARAGE_RETAINING_WALL_WIDTH` and `GARAGE_RETAINING_WALL_TOP_ELEVATION`.
 The basement stairs, landing, railings and stair annotations are omitted.
 Their layout coordinates and the existing ceiling opening remain reserved for
-future installation. A continuous 60 mm non-load-bearing wooden wall covers the
-former descending stair entrance and the adjacent 240 mm flight gap, extending
-from the finished floor to the plastered ceiling. `wall_stairwell_wood_g` replaces
-the earlier tall railing and keeps its outer envelope. Its material is
-`drevena stena`: `wooden-wall` cuts use the drywall diagonal hatch over light
-yellow (`#fff2cc`), while projected surfaces use the vertical `railing-boards`
-pattern. The ground and AA/BB legends call it `Dřevěná stěna`.
-The hallway floor reaches the first tread
-of the retained ground-to-upper stairs. The bathroom SDK's hallway face aligns
+future installation. The floor below the existing stairs closes the former
+descending entrance, so there is no full-height wooden guard wall across it.
+The hallway floor continues beneath the retained ground-to-upper stairs to
+the street edge of the ceiling above S.05 (`basement_stair_opening_end_y`).
+Both insulation and floor build-up follow that edge. The remaining opening
+towards the front wall is closed by `ground_stair_opening_board`, a 30 mm
+timber board with its top flush with the finished ground floor. A second board,
+`basement_stair_opening_board`, closes the underside at the same height and
+20 mm thickness as the adjoining basement ceiling wood lining. CC centers
+200 mm of drawing-only rockwool batting in the clear space between the boards.
+The normal basement ceiling insulation stops at the opening's garden edge.
+`GROUND_STAIR_OPENING_BOARD_THICKNESS` and
+`GROUND_STAIR_OPENING_INSULATION_THICKNESS` control this detail. CC also labels
+the washing machine and ground-floor recuperation unit.
+The bathroom SDK's hallway face aligns
 with the front edge of the opening in the 240 mm stairway wall; the concrete
 ceiling grid stays fixed independently of this partition movement.
 
@@ -362,13 +373,20 @@ house's green dashed `Pospojování a uzemnění` style and three-line caption
 `Připojení / k FeZn / v základech` outside the front wall.
 
 Run `python3 house2.py aa bb` for the two full-height sections, from the
-footings through the roof. AA cuts at `X = HOUSE_WIDTH/2 + 0.1` and looks
-towards +X; BB cuts at `Y = HOUSE_DEPTH/2` and looks towards -Y. Their shared
+footings through the roof. AA cuts at `Y = HOUSE_DEPTH/2 - 0.2` and looks
+towards -Y; BB cuts at `X = HOUSE_WIDTH/2 + 0.35` and looks towards +X. Their shared
 `CutDefinition` instances also place matching symbols on the ground, upper,
 ceiling, roof, basement and foundation plans. PDFs are
 `D1.1.11. Řez AA.pdf` (`PDF_AA`) and `D1.1.12. Řez BB.pdf` (`PDF_BB`)
 in the architectural folder, with SVGs in `projekt2/aa.svg` and
 `projekt2/bb.svg`. Regenerate the corresponding plans to update their symbols.
+
+Run `python3 house2.py cc` for the additional longitudinal section at `cc_cut`,
+currently `X = HOUSE_WIDTH - 1.0`, looking towards -X. It shares BB's dimensions,
+labels and cut-rafter insulation, but omits the horizontal ceiling batting near
+the ridge because the roof hides it in this view. The outputs are
+`projekt2/cc.svg` and `D1.1.16. Řez CC.pdf` (`PDF_CC`). Its C markers are included
+when the corresponding plans are next regenerated.
 
 All exterior finishes belong to the separate `Facades` visibility storey.
 `add_house_facades()` adds a grey perimeter band from `PERIMETER_BOTTOM_Z`
@@ -487,7 +505,7 @@ Both openings stop `HALLWAY_OPENING_TOP_GAP = 0.25 m` below the ceiling
 underside. The left wall continues above its opening and its basement wall
 and footing follow the full extended wall length. The hallway's
 continuous floor extends through it into the stair approach, follows room
-3's stepped wall and excludes both stair-flight footprints. Its room area
+3's stepped wall and continues beneath both flights up to the S.05 ceiling edge. Its room area
 and legend update from that same outline. Floor build-up still reaches the
 bathroom partition and excludes the new solid side-wall segment below the opening.
 The bathroom keeps the shower at the lower-left/street corner. Along the right
@@ -629,16 +647,20 @@ Both plans dimension the split spans and bearings, share one spacing chain
 for aligned room-3/bathroom rows. Room 0.03 has its own schedule row;
 rooms 0.04 and 0.05 share one row combining their 2500 mm beams.
 The basement S.03/S.04 layouts have independent specifications, as described above.
-`purlin_support_girders` adds two separate 210 × 210 mm concrete girders
-containing HEB180 at each distinct Y coordinate of the timber posts.
+`purlin_support_girders` adds two separate bare HEB180 steel beams at each
+distinct Y coordinate of the timber posts, without concrete wrapping.
 The room-3 span runs between the east wall and the middle wall; the bathroom
-span runs between the middle wall and the stairway wall. Both the steel
-and concrete have `PURLIN_SUPPORT_GIRDER_BEARING = 0.10 m` on every support.
+span runs between the middle wall and the stairway wall.
+`PURLIN_SUPPORT_GIRDER_BEARING = 0.10 m` sets every support bearing.
 At the current wall positions, the spans are X = 0.140…3.600 m (3460 mm)
 and X = 3.640…6.100 m (2460 mm), leaving 40 mm between opposing ends
-on the 240 mm middle wall. They belong to the `Ceiling` storey, with their
-tops at `UPPER_FLOOR_START` and bottoms at `ground_floor_height`.
-`PURLIN_SUPPORT_GIRDER_*` sets the section, size and common bearing.
+on the 240 mm middle wall. They belong to the `Ceiling` storey. All four
+ceiling HEBs, including the ground-floor and basement stair-opening beams,
+use `add_ceiling_heb()` to centre the steel in the 210 mm MIAKO depth, leaving
+15 mm above and below the 180 mm profile. The stair-opening beams rise 15 mm;
+the formerly wrapped steel retains its existing centre height.
+`PURLIN_SUPPORT_GIRDER_HEB` sets the profile and `PURLIN_SUPPORT_GIRDER_BEARING`
+sets the common bearing. Plan outlines use the bare 180 mm steel width.
 Both ceiling plans show each girder's outline, HEB label, length and end
 bearings; the MIAKO rows around them remain independently editable.
 
@@ -655,10 +677,17 @@ across the unchanged HEB girders.
 Beam lengths and wall bearings remain 3500 mm with 130/110 mm for room 0.03,
 and 2500 mm with 120/120 mm for room 0.05.
 
-The bathroom's concrete cover follows the shortened footprint, leaving
-the omitted first bay open across its full width to clear the chimney,
-as in basement S.04. Later block rows use the complete clear span without
-a local chimney trim.
+The bathroom's MIAKO concrete cover follows the shortened footprint.
+`ceiling_bathroom_chimney_infill` fills the omitted garden-side gap with
+full-depth concrete, as in basement S.04. Both infills use
+`add_chimney_ceiling_infill()` and `CHIMNEY_CEILING_INFILL_CLEARANCE = 0.03`;
+their wall and beam boundaries follow the current geometry, and each chimney
+opening is 460 × 460 mm for the current 400 mm stack. They appear in both the
+beam diagrams and detailed ceiling plans. Later block rows retain their full
+clear span and their positions.
+Each infill is an `IfcBuildingElementPart` with a void in its extruded profile,
+avoiding Bonsai's slab-joining pass that fills inner loops. `BBIM_CeilingInfill`
+records its source slab, garden wall, chimney clearance and net concrete area.
 Both ceiling plans now dimension the complete main layouts and schedule
 them with their corresponding street-side assemblies.
 Both ground-floor ceiling plans place beam-spacing chains outside the
@@ -728,9 +757,7 @@ sets the slope and seats posts and balusters on the actual treads. The shared
 onto the middle landing for the short railing across the flight gap.
 `STAIR_RAILING_HEIGHT = 1.0` controls the vertical handrail height.
 The middle landing has a normal-height railing across the calculated flight gap.
-At ground-floor level, `wall_stairwell_wood_g` continues across the former
-stair entrance and reaches the plastered ceiling (2.625 m above finished floor).
-Another guards the 1.24 m edge from the upper stair arrival to the west wall.
+A separate railing guards the edge from the upper stair arrival to the west wall.
 The ground-floor railings are explicitly included in the
 upper-floor plan; it is visible in both floor drawings and the 3D model.
 The living-room layout is retained. The relocated stairs are to its right
@@ -785,7 +812,7 @@ its basin is 4.0 m away, measured horizontally. Both symbols sit 650 mm above
 the attic floor and connect vertically to the branch; the basin's 100 mm
 outlet stub completes its connection.
 A second 3% branch runs left from 100 mm below the finished attic floor:
-toilet at 0.5 m, dishwasher connector at 1.5 m, sink at 1.7 m. The dishwasher
+toilet at 0.5 m, dishwasher connector at 1.0 m, sink at 1.7 m. The dishwasher
 connector and sink bottom are both 650 mm above the attic floor. The sink
 graphic is offset 250 mm left of its pipe; its fixed outlet meets the flat
 bottom, preserving the 1.7 m pipe offset and all connection heights.
@@ -817,6 +844,12 @@ between basin and toilet. In the basement it runs to the street-side corner,
 meets the shower branch and ends in a DN160 `to down` symbol instead of
 continuing outside through the street wall. The upstairs toilet has a short
 branch to the kitchen/bathroom collector.
+The dishwasher's DN50 branch runs straight gardenward through the bathroom's
+street-side wall to that collector. Its connection is offset inside the
+appliance to pass 50 mm left of the west purlin post, controlled by
+`DISHWASHER_PIPE_POST_CLEARANCE` and `dishwasher_plan_connection()`. The
+sink's kitchen collector stops at its bathroom junction without an unused
+extension towards the dishwasher.
 The upstairs hallway basin and washer have branches to a collector 100 mm
 inside the west wall. It turns left 100 mm beyond the hallway's street end,
 following that edge outside room 1.03,
@@ -847,8 +880,9 @@ Run `python3 house2.py voda_upper` for `projekt2/voda_upper.svg` and
 `projekt2/D1.5. Zdravotechnické Instalace/D1.5.6. Vodovod - Půdorys podkroví.pdf`.
 Both supplies are received from below at the shared `water_riser_positions()`
 coordinates. Red and blue branches run right then up to the hallway basin,
-and left then up to the kitchen sink. A cold-water-only branch runs down from
-the kitchen junction to the dishwasher. Routes follow the modelled fixture
+and left then up to the kitchen sink. A cold-water-only branch runs directly
+from that shared horizontal supply through the bathroom's street-side wall,
+using the same post-clearing connection as its sewer branch. Routes follow the modelled fixture
 centres, with 100 mm separation between hot and cold lines.
 Run `python3 house2.py voda_basement` for `projekt2/voda_basement.svg` and
 `projekt2/D1.5. Zdravotechnické Instalace/D1.5.7. Vodovod - Půdorys suterénu.pdf`.
@@ -878,7 +912,7 @@ Two thick black routes leave the ground-floor rozvaděč. The basement bundle
 runs diagonally to its riser in front of the chimney. The upstairs bundle leaves
 at 12:00 and runs straight to the chimney centre's Y level, then rises. Its
 matching upper-floor receiving point is in the hallway in front of bathroom
-door 1.04. `electrical_trunk_layout()` shares the riser coordinates between floors.
+door 1.02. `electrical_trunk_layout()` shares the riser coordinates between floors.
 The solid 0.70 mm line is labelled `Sdružená trasa kabelů` in each plan's legend.
 All electrical floor-change symbols use black 0.30 mm strokes, matching sewer
 and water drawings, controlled
@@ -1008,19 +1042,21 @@ plan's legends. The shared layout exposes `upper_route` and `upper_switch`.
 `electrical_stair_lighting_layout()` shares the switch and continuation positions.
 The 0.04 room label is offset clear of these feeds using `ELECTRICAL_ROOM_LABEL_OFFSETS`.
 Upper room 1.03's lighting starts at the incoming bundled-cable point in front
-of door 1.04. Its feed goes up/right at 45 degrees to the VPC wall, then along
+of door 1.02. Its feed goes up/right at 30 degrees to the VPC wall, then along
 the wall to the switch 200 mm right of the living-room door on its hallway face.
-The existing diagonal branches connect this switch to the 1.03 light and the
-light to the stairway-wall switch (400 mm above the stair-light switch).
+The wire continues 300 mm horizontally past the living-room-door switch,
+then turns down and left to the 1.03 light. From the light it runs left,
+then down to the stairway-wall switch (400 mm above the stair-light switch).
 Both cables meet stem endpoints; a short wall approach keeps the door branch
 clear of the switch circle. `electrical_upper_hallway_layout()` defines the
 feed, branches and switches. The 1.03 label is offset clear of both branches.
-Its socket feed uses a 30-degree up/right approach from the receiving point,
-then runs along the VPC wall 100 mm below the lighting route, turns down at
+Its socket feed uses a 45-degree up/right approach from the receiving point,
+then runs along the VPC wall 100 mm closer to the wall than the lighting route, turns down at
 the west-wall corner and ends by the washing machine. Two double sockets
 branch into the room at the basin and washing-machine positions.
-Room 1.04 receives its lighting feed from the same bundled-cable point. It runs
-first towards the living-room wall, then along the wall to its existing switch
+Room 1.02 receives its lighting feed from the same bundled-cable point. It runs
+straight down a short distance, then down-left at 45 degrees to the bathroom/
+living-room wall, followed by a vertical run to its existing switch
 near the top-left corner (200 mm below the top wall). The diagonal switch-to-light
 segment is retained. The cable connects at the switch stem, with the symbol
 facing into the room. `electrical_upper_toilet_layout()` defines this branch.
@@ -1049,18 +1085,19 @@ by 200 mm on each axis, turns left towards the chimney, then down to Sporák.
 A red single-socket symbol and the legend entry `Zásuvka 380V, 3 fáze` identify
 the connection. `electrical_upper_cooker_layout()` defines the route and keeps
 its vertical run 140 mm apart from the blue kitchen socket circuit.
-The kitchen extension has a blue socket feed from the shared receiving point, diagonally to
-the inside face of room 1.04's right wall, then straight down along that wall's
-alignment to the front wall. The endpoint has a double socket opening left,
-rotated 90 degrees counter-clockwise from its original upward orientation.
-`electrical_upper_kitchen_extension_socket_layout()` defines the route, and the upper
-legends include the socket symbol and socket-circuit colour.
+The kitchen extension shares room 1.01's street-side socket circuit.
 Bathroom 0.05 has a socket feed to its top-right corner, then down the right
 wall, across the bottom and up the left wall, ending 550 mm below the door wall.
 Four double sockets serve the basin, TUV, hydrobox and loop end before the door;
 the last sits on the left wall instead of the narrow top-left wall stub,
 150 mm lower than its former position and below the yellow FCU cable.
 Equipment socket positions follow the model, with offsets to clear labels.
+Two additional double sockets face right into the stairway for the recuperation
+unit, halfway between the toilet and basin and between the basin and TUV.
+Short branches from the same bathroom circuit cross the wall to socket anchors
+80 mm beyond its stair-side face. Their symbols face 180 degrees opposite
+the basin/TUV sockets. `socket_branches` in `electrical_room05_layout()` defines
+these connections.
 Its lighting cable runs down from the rozvaděč, then left along the door wall,
 connecting to the existing switch 200 mm right of the door on the bathroom
 side. It continues left to the light's X position, then straight down to the
@@ -1177,9 +1214,11 @@ the top is at 19 courses, or 2.395 m. With 95 mm of floor layers, these are
 `UPPER_WINDOW_SILL_HEIGHT` and `UPPER_WINDOW_TOP_HEIGHT` hold storey-relative
 coordinates. All have opening dimensions in the upper plan, and
 `upper_room_windows` supplies their combined area to the room legend.
-`upper_room_floors` contains the living room/kitchen (`1.01`), hallway (`1.03`)
-and Zachod (`1.04`). The former room 1.02 is included in the kitchen's floor
-polygon and area, with no separate room label or table row.
+`upper_room_floors` contains the living room/kitchen (`1.01`), Zachod (`1.02`)
+and hallway (`1.03`), in room-number order. The former technical area is
+included in the kitchen's floor polygon and area, with no separate room label
+or table row. Plumbing label positions and electrical annotations use each
+room object's `room_id`, so the bathroom number is defined at its floor layer.
 `UPPER_TECHNICAL_CROSS_Y` positions the
 100 mm SDK wall between the kitchen extension and the toilet, with its outer/street face
 aligned to the west purlin post's street face. The opposite wall and its door
@@ -1251,10 +1290,12 @@ It faces into the hallway (-X, `rotation=-90`).
 `UPPER_BASIN_SIZE` controls its plan size;
 its top remains 850 mm above the finished floor. The
 1000 × 500 × 1500 mm recuperation unit is on the ground floor under the higher
-stair flight. `ground_recuperation_center` centres it across that flight;
-its 1000 mm side runs along Y, ending 100 mm before the stair arrival.
-`RECUPERATION_SIZE` and `RECUPERATION_STAIR_END_CLEARANCE` configure it.
-Its base is at the ground finished floor.
+stair flight. `ground_recuperation_center` places it 50 mm from the stair-side
+face of the bathroom wall, controlled by `RECUPERATION_BATHROOM_WALL_CLEARANCE`.
+Its 1000 mm side runs along Y; `RECUPERATION_STAIR_END_CLEARANCE` keeps its
+garden end 500 mm before the stair arrival. `RECUPERATION_SIZE` controls its
+dimensions. Its base is 30 mm above the ground finished floor. AA includes its
+label, and AA, BB and CC include the `Rozvaděč` label.
 The toilet faces the garden and stands gardenward of the first west-purlin
 post; `upper_toilet_center` controls its placement. The hydrobox has moved
 to the ground-floor bathroom under the window.
@@ -1397,7 +1438,7 @@ Run `python3 house2.py roof` for the roof framing plan (`projekt2/roof.svg`)
 and `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.4. Krov.pdf`.
 The roof PDF is an A3 portrait sheet: the framing plan with its schedule above
 and sections XX and YY below, all at 1:100. `roof_xx_cut` is fixed at `Y = 4.00 m`,
-looking toward −Y; it does not depend on BB's position. `roof_yy_cut` runs along
+looking toward −Y; it does not depend on AA's position. `roof_yy_cut` runs along
 the ridge at `X = HOUSE_WIDTH/2`, looking toward +X, perpendicular to XX.
 Their X/Y markers appear only in the roof plan. Both sections use
 `add_roof_framing_section()` and share `roof_framing_elements` and
@@ -1419,9 +1460,9 @@ below the purlin underside (post top). XX dimensions the connector drop from
 the connector underside; YY dimensions the purlin drop from the purlin underside.
 Both brace types retain their 45° slope.
 `ROOF_TIMBER_MATERIAL` supplies C22 for every row of the shared roof schedule.
-AA adds two uninterrupted 200 mm drawing-only batting bands: through the cut
+BB adds two uninterrupted 200 mm drawing-only batting bands: through the cut
 rafters and above the horizontal vapour barrier. Both extend to the outer
-faces of the façade insulation and overlay the timber. AA's façade batting
+faces of the façade insulation and overlay the timber. BB's façade batting
 continues up to the underside of the upper band to close the insulation outline.
 `COLLAR_TIE_SIZE = (0.05, 0.15)` sets paired collar ties, one on each side
 of every rafter pair. Their bottom is at the purlin top; their ends are cut
@@ -3017,8 +3058,8 @@ stove = ground.furniture("Kamna", ...)
 elevation.add_furniture_label(stove)
 ```
 
-In `house2.py`, AA selects the stove, cooker, sink, dishwasher, fridge, both
-kitchen counters, shower and basement water meter. Labels follow their visible
+In `house2.py`, BB selects the stove, cooker, sink, dishwasher, fridge,
+front kitchen counter, shower and basement water meter. Labels follow their visible
 objects and use the shared light-blue furniture text style.
 
 Axis-aligned exterior elevations can have a drawing-only terrain overlay:
