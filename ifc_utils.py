@@ -55,6 +55,10 @@ from shapely.geometry import Point as ShapelyPoint, Polygon
 from shapely.ops import unary_union
 from pdf_utils import markdown_to_pdf
 from drawing_sheet import DrawingSheet
+from drawing_title_block import (
+    TITLE_BLOCK_EDGE, TITLE_BLOCK_GAP, TITLE_BLOCK_HEIGHT, TITLE_BLOCK_WIDTH,
+    drawing_scale, load_title_block, title_block_svg,
+)
 from section_outlines import add_section_outlines
 from ring_beam_seams import remove_projected_ring_beam_seams
 from roof_tile_patterns import add_roof_tile_patterns
@@ -3191,7 +3195,7 @@ def _material_legend_svg(
                           (web, h-flange), (w, h-flange), (w, h), (-w, h),
                           (-w, h-flange), (-web, h-flange), (-web, -h+flange),
                           (-w, -h+flange), (-w, -h)]]
-            elif pattern == "ring_beam":
+            elif pattern in {"ring_beam", "timber_post_section"}:
                 paths = [[(-.1, -.1), (.1, -.1), (.1, .1), (-.1, .1), (-.1, -.1)]]
             elif pattern == "purlin_post":
                 paths = [[(-.1, -.1), (.1, -.1), (.1, .1), (-.1, .1), (-.1, -.1)],
@@ -3214,9 +3218,9 @@ def _material_legend_svg(
                 d = "M" + " L".join(f"{origin_x + px * sample_scale:.6g},{origin_y - py * sample_scale:.6g}"
                                      for px, py in path)
                 fill_style = ""
-                if pattern in {"heb", "ring_beam"} or (pattern == "purlin_post" and path is paths[0]):
+                if pattern in {"heb", "ring_beam", "timber_post_section"} or (pattern == "purlin_post" and path is paths[0]):
                     d += " Z"
-                if pattern == "heb":
+                if pattern in {"heb", "timber_post_section"}:
                     color_match = re.search(r"drawing-line-color-([0-9a-fA-F]{6})\b", classes)
                     if color_match:
                         fill_style = f' style="fill:#{color_match[1]} !important"'
@@ -4262,6 +4266,10 @@ def _postprocess_right_panel(
         1.0,
         max(0.0, (panel_width_mm - 10.0) / 90.0),
     )
+    if drawing_properties.get("RightPanelTextScale") is not None:
+        legend_scale = _number(drawing_properties["RightPanelTextScale"], "right_panel_text_scale")
+        if not 0 < legend_scale <= 1:
+            raise ValueError("right_panel_text_scale must be greater than zero and at most one")
 
     table_y = view_y + vertical_margin
     table_parts = []
@@ -6012,8 +6020,10 @@ def _postprocess_drawing_title(svg_path: Path, title: str) -> None:
     )
 
 
-def _drawing_pdf_sheet(svg: str, *, width: float, height: float, margin: float) -> str:
-    """Centre a finished SVG on a physical sheet, preserving its drawing scale."""
+def _drawing_pdf_sheet(svg: str, *, width: float, height: float, margin: float,
+                       title_block: Mapping[str, str] | None = None,
+                       filename: str = "", paper: str = "A4") -> str:
+    """Place a finished SVG and optional title block without changing drawing scale."""
     root, drawing_width, drawing_height, _ = _drawing_svg_frame(svg)
     available_width, available_height = width - 2 * margin, height - 2 * margin
     if drawing_width > available_width + 1e-6 or drawing_height > available_height + 1e-6:
@@ -6026,6 +6036,18 @@ def _drawing_pdf_sheet(svg: str, *, width: float, height: float, margin: float) 
     # viewport dimensions (not mm lengths), retaining its original viewBox.
     replacements = {"width": drawing_width, "height": drawing_height,
                     "x": (width - drawing_width) / 2, "y": (height - drawing_height) / 2}
+    footer = ""
+    if title_block is not None:
+        block_x = width-TITLE_BLOCK_EDGE-TITLE_BLOCK_WIDTH
+        block_y = height-TITLE_BLOCK_EDGE-TITLE_BLOCK_HEIGHT
+        if block_x < TITLE_BLOCK_EDGE or block_y < TITLE_BLOCK_EDGE:
+            raise ValueError("The drawing title block does not fit on this paper")
+        # Leave a right-hand column on compact plans. Full-page composed sheets
+        # retain their coordinates; their lower-right corner is left clear.
+        if drawing_width+TITLE_BLOCK_EDGE+TITLE_BLOCK_GAP <= block_x:
+            replacements["x"] = TITLE_BLOCK_EDGE
+        footer = title_block_svg(title_block, filename=filename, scale=drawing_scale(svg),
+                                 paper=paper, x=block_x, y=block_y)
     inner_root = root[0]
     for name, value in replacements.items():
         pattern = rf'\b{name}="[^"]*"'
@@ -6039,7 +6061,7 @@ def _drawing_pdf_sheet(svg: str, *, width: float, height: float, margin: float) 
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:g}mm" '
         f'height="{height:g}mm" viewBox="0 0 {width:g} {height:g}">'
         f'<rect width="{width:g}" height="{height:g}" fill="white"/>'
-        f'{inner_svg}</svg>'
+        f'{inner_svg}{footer}</svg>'
     )
 
 
@@ -6054,8 +6076,10 @@ def _export_drawing_pdf(
 ) -> None:
     pdf_path, width, height, margin = _drawing_pdf_options(pdf, paper, orientation, margin)
     assert pdf_path is not None
-    sheet = _drawing_pdf_sheet(svg_path.read_text(encoding="utf-8"),
-                               width=width, height=height, margin=margin)
+    sheet = _drawing_pdf_sheet(
+        svg_path.read_text(encoding="utf-8"), width=width, height=height, margin=margin,
+        title_block=load_title_block(svg_path), filename=pdf_path.name, paper=paper,
+    )
     inkscape_command = shutil.which(str(inkscape))
     if inkscape_command is None:
         raise FileNotFoundError(f"Inkscape executable not found: {inkscape}")
@@ -8560,6 +8584,7 @@ class House:
         door_annotation_offset: Number = 0,
         doors_closed: bool = False,
         right_panel_width: Number = 0,
+        right_panel_text_scale: Number | None = None,
         projected_wood_color: str | None = None,
         model_line_width: Number | None = None,
         section_outline_width: Number | None = None,
@@ -8605,6 +8630,8 @@ class House:
         :meth:`Drawing.add_room_legend`, or
         :meth:`Drawing.add_lintel_legend` to add optional legends, or
         :meth:`Drawing.add_timber_schedule` for a measured roof-member table.
+        ``right_panel_text_scale`` optionally fixes the table text/sample scale
+        between zero and one, allowing wider tables without enlarging their text.
         ``projected_wood_color`` optionally overrides the fill of projected
         wooden beams in this plan only; cut wood and other drawings are not
         affected.
@@ -8649,6 +8676,7 @@ class House:
             door_annotation_offset=door_annotation_offset,
             doors_closed=doors_closed,
             right_panel_width=right_panel_width,
+            right_panel_text_scale=right_panel_text_scale,
             projected_wood_color=projected_wood_color,
             model_line_width=model_line_width,
             section_outline_width=section_outline_width,
@@ -8838,6 +8866,7 @@ class Drawing:
         door_annotation_offset: Number,
         doors_closed: bool,
         right_panel_width: Number,
+        right_panel_text_scale: Number | None = None,
         projected_wood_color: str | None,
         model_line_width: Number | None,
         section_outline_width: Number | None = None,
@@ -8981,6 +9010,11 @@ class Drawing:
         )
         if self.right_panel_width < 0:
             raise ValueError("right_panel_width must not be negative")
+        self.right_panel_text_scale = (
+            None if right_panel_text_scale is None else _number(right_panel_text_scale, "right_panel_text_scale")
+        )
+        if self.right_panel_text_scale is not None and not 0 < self.right_panel_text_scale <= 1:
+            raise ValueError("right_panel_text_scale must be greater than zero and at most one")
         self._right_panel_tables: list[dict[str, object]] = []
         self._room_annotations: list[dict[str, object]] = []
         self._includes_all_storeys = storeys is None
@@ -9151,6 +9185,8 @@ class Drawing:
             # Persist the rule for drawings rendered directly in Bonsai, too.
             "Exclude": "IfcElement, BBIM_DrawingVisibility.ShowInDrawings=FALSE",
         }
+        if self.right_panel_text_scale is not None:
+            drawing_properties["RightPanelTextScale"] = self.right_panel_text_scale
         if self.surface_fills or self.view == "elevation":
             drawing_properties["Metadata"] = "GlobalId"
         if self.projected_wood_color is not None:
@@ -10141,7 +10177,7 @@ class Drawing:
 
     def add_symbol_legend(
         self,
-        items: Sequence[tuple[Literal["socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post", "ventilation_extract", "ventilation_supply"], str]],
+        items: Sequence[tuple[Literal["socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post", "timber_post_section", "ventilation_extract", "ventilation_supply"], str]],
         *,
         title: str = "LEGENDA SYMBOLŮ",
         color: str | None = None,
@@ -10154,6 +10190,7 @@ class Drawing:
         a filled HEB section (matching the steel cut style), or ring_beam
         (four black reinforcement dots joined by an unfilled rectangle).
         The purlin_post symbol is a green square with crossed diagonals.
+        timber_post_section is a plain square using the wood cut's fill and outline.
         ventilation_extract is red with four arrows pointing into a dot;
         ventilation_supply is blue with four arrows pointing away from it.
         Samples use shared electrical geometry or HEB section dimensions;
@@ -10183,12 +10220,13 @@ class Drawing:
             except (TypeError, ValueError) as error:
                 raise TypeError(f"item {index} must contain a symbol and description") from error
             symbol = _name(symbol, f"item {index} symbol")
-            if symbol not in {"socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post", "ventilation_extract", "ventilation_supply"}:
+            if symbol not in {"socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post", "timber_post_section", "ventilation_extract", "ventilation_supply"}:
                 raise ValueError(f"item {index} has an unsupported symbol: {symbol}")
             description = _name(description, f"item {index} description")
             item = {"symbol": symbol, "description": description}
-            if symbol == "heb" and color is None:
-                item["classes"] = f"IfcBeam material-Structuralsteel cut {width_class}"
+            if symbol in {"heb", "timber_post_section"} and color is None:
+                material = "Wood" if symbol == "timber_post_section" else "Structuralsteel"
+                item["classes"] = f"IfcBeam material-{material} cut {width_class}"
             elif symbol in {"light", "socket3f", "ring_beam", "purlin_post", "ventilation_extract", "ventilation_supply"} and color is None:
                 symbol_color = {"light": "blue", "socket3f": "red", "ring_beam": "black", "purlin_post": "#2e7d32",
                                 "ventilation_extract": "red", "ventilation_supply": "blue"}[symbol]
@@ -15549,6 +15587,9 @@ class Drawing:
         ``pdf`` is an output path or None. PDFs default to A4 landscape with
         10 mm margins, centring the completed drawing without changing its
         scale. Oversized drawings raise ValueError rather than being shrunk.
+        A title_block.json beside the output SVG adds a project title block
+        to the PDF; compact plans move left to leave space for it, using a
+        5 mm left margin. The SVG's own geometry and layout remain unchanged.
         A compact title is added to SVG, PNG and PDF. If omitted, use the PDF
         filename stem (or SVG filename stem when pdf=None). The title adds a
         10 mm header without rescaling geometry and appends the drawing scale,
