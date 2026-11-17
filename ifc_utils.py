@@ -2251,6 +2251,10 @@ def _postprocess_drawing_line_colors(svg_path: Path) -> None:
                       f"{{ stroke: #{color} !important; }}"
                       for color in colors)
     rules += "\n" + "\n".join(
+        f".PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-{color} "
+        f"{{ fill: #{color} !important; stroke: none !important; }}" for color in colors
+    )
+    rules += "\n" + "\n".join(
         f".drawing-text-color-{color}, .drawing-text-color-{color} tspan "
         f"{{ fill: #{color} !important; stroke: none !important; }}" for color in text_colors
     )
@@ -3071,6 +3075,21 @@ def _switch_symbol_paths(branch_length: float, radius: float) -> list[list[Point
     return [[(0, 0), (0, branch_length)], circle, [lever_start, lever_end, tip]]
 
 
+def _ventilation_symbol_paths(inward: bool) -> list[list[Point]]:
+    """Filled centre dot and four cardinal arrows, for supply or extraction."""
+    circle = [(.035*cos(i*2*pi/32), .035*sin(i*2*pi/32)) for i in range(32)]
+    circle.append(circle[0])
+    paths = [circle]
+    for direction in ((1., 0.), (0., 1.), (-1., 0.), (0., -1.)):
+        axis = np.array(direction)
+        normal = np.array((-axis[1], axis[0]))
+        tip = axis*(.065 if inward else .21)
+        base = axis*(.14 if inward else .135)
+        paths.append([tuple(tip), tuple(base+.05*normal), tuple(base-.05*normal), tuple(tip)])
+        paths.append([tuple(base), tuple(axis*(.21 if inward else .065))])
+    return paths
+
+
 def _material_legend_svg(
     table: Mapping[str, object],
     *,
@@ -3177,6 +3196,8 @@ def _material_legend_svg(
             elif pattern == "purlin_post":
                 paths = [[(-.1, -.1), (.1, -.1), (.1, .1), (-.1, .1), (-.1, -.1)],
                          [(-.1, -.1), (.1, .1)], [(-.1, .1), (.1, -.1)]]
+            elif pattern in {"ventilation_extract", "ventilation_supply"}:
+                paths = _ventilation_symbol_paths(pattern == "ventilation_extract")
             else:
                 paths = _socket_symbol_paths(.225, .1125, pattern == "d_socket")
             sample_points = [point for path in paths for point in path]
@@ -3199,6 +3220,11 @@ def _material_legend_svg(
                     color_match = re.search(r"drawing-line-color-([0-9a-fA-F]{6})\b", classes)
                     if color_match:
                         fill_style = f' style="fill:#{color_match[1]} !important"'
+                if pattern in {"ventilation_extract", "ventilation_supply"} and path[0] == path[-1]:
+                    d += " Z"
+                    color_match = re.search(r"drawing-line-color-([0-9a-fA-F]{6})\b", classes)
+                    fill_color = f"#{color_match[1]}" if color_match else "black"
+                    fill_style = f' style="fill:{fill_color} !important;stroke:none !important"'
                 parts.append(f'<path d="{d}"{fill_style}/>')
             if pattern == "ring_beam":
                 color_match = re.search(r"drawing-line-color-([0-9a-fA-F]{6})\b", classes)
@@ -8917,6 +8943,7 @@ class Drawing:
         self._change_floor_symbol_count = 0
         self._socket_symbol_count = 0
         self._light_symbol_count = 0
+        self._ventilation_symbol_count = 0
         self._switch_symbol_count = 0
         self._hexagon_marker_count = 0
         self._note_count = 0
@@ -10114,7 +10141,7 @@ class Drawing:
 
     def add_symbol_legend(
         self,
-        items: Sequence[tuple[Literal["socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post"], str]],
+        items: Sequence[tuple[Literal["socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post", "ventilation_extract", "ventilation_supply"], str]],
         *,
         title: str = "LEGENDA SYMBOLŮ",
         color: str | None = None,
@@ -10127,6 +10154,8 @@ class Drawing:
         a filled HEB section (matching the steel cut style), or ring_beam
         (four black reinforcement dots joined by an unfilled rectangle).
         The purlin_post symbol is a green square with crossed diagonals.
+        ventilation_extract is red with four arrows pointing into a dot;
+        ventilation_supply is blue with four arrows pointing away from it.
         Samples use shared electrical geometry or HEB section dimensions;
         color overrides all default colors when supplied. The line
         width is in printed millimetres. Tables persist in IFC and
@@ -10154,14 +10183,15 @@ class Drawing:
             except (TypeError, ValueError) as error:
                 raise TypeError(f"item {index} must contain a symbol and description") from error
             symbol = _name(symbol, f"item {index} symbol")
-            if symbol not in {"socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post"}:
-                raise ValueError(f"item {index} symbol must be socket, d_socket, socket3f, light, switch, heb, ring_beam or purlin_post")
+            if symbol not in {"socket", "d_socket", "socket3f", "light", "switch", "heb", "ring_beam", "purlin_post", "ventilation_extract", "ventilation_supply"}:
+                raise ValueError(f"item {index} has an unsupported symbol: {symbol}")
             description = _name(description, f"item {index} description")
             item = {"symbol": symbol, "description": description}
             if symbol == "heb" and color is None:
                 item["classes"] = f"IfcBeam material-Structuralsteel cut {width_class}"
-            elif symbol in {"light", "socket3f", "ring_beam", "purlin_post"} and color is None:
-                symbol_color = {"light": "blue", "socket3f": "red", "ring_beam": "black", "purlin_post": "#2e7d32"}[symbol]
+            elif symbol in {"light", "socket3f", "ring_beam", "purlin_post", "ventilation_extract", "ventilation_supply"} and color is None:
+                symbol_color = {"light": "blue", "socket3f": "red", "ring_beam": "black", "purlin_post": "#2e7d32",
+                                "ventilation_extract": "red", "ventilation_supply": "blue"}[symbol]
                 _, _, symbol_classes = _drawing_line_appearance("solid", symbol_color)
                 item["classes"] = f"IfcAnnotation PredefinedType-LINEWORK {symbol_classes} {width_class}"
             normalised_items.append(item)
@@ -11026,6 +11056,56 @@ class Drawing:
             {"Center": json.dumps(center), "Radius": radius, "Color": color, "LineWidth": line_width},
         )
 
+    def add_ventilation_symbol(
+        self,
+        center: Point,
+        flow: Literal["supply", "extract"] = "supply",
+        *,
+        radius: Number = .21,
+        color: str | None = None,
+        line_width: Number = .20,
+        name: str | None = None,
+    ) -> ifcopenshell.entity_instance:
+        """Draw the ventilation legend's dot and four arrows at a plan point.
+
+        Supply arrows point out in blue; extraction arrows point in in red.
+        Radius is the overall symbol radius in metres. Geometry is native
+        drawing annotation only; the return value contains the arrow stems.
+        """
+        self._require_plan_view("add_ventilation_symbol")
+        center = _point(center, "center")
+        flow = _enum(flow, "flow", {"SUPPLY", "EXTRACT"}).lower()
+        radius = _number(radius, "radius")
+        if radius <= 0:
+            raise ValueError("radius must be greater than zero")
+        _, color, classes = _drawing_line_appearance(
+            "solid", color if color is not None else "blue" if flow == "supply" else "red",
+        )
+        line_width, width_class = _drawing_line_width(line_width)
+        symbol_name = _name(name, "name") if name is not None else None
+        placement = self._annotation_frame(center, "add_ventilation_symbol")
+        model = self.house.model
+        fills, stems = [], []
+        for path in _ventilation_symbol_paths(flow == "extract"):
+            points = [(float(x*radius/.21), float(y*radius/.21)) for x, y in path]
+            curve = model.createIfcIndexedPolyCurve(model.createIfcCartesianPointList2D(points), None, False)
+            if path[0] == path[-1]:
+                fills.append(model.createIfcAnnotationFillArea(curve, None))
+            else:
+                stems.append(curve)
+        self._ventilation_symbol_count += 1
+        symbol_name = symbol_name or f"{self.name} Ventilation Symbol {self._ventilation_symbol_count}"
+        properties = {"Center": json.dumps(center), "Flow": flow, "Radius": radius,
+                      "Color": color, "LineWidth": line_width}
+        self._add_primitive_annotation(
+            f"{symbol_name} Filled Parts", "FILLAREA", placement, fills,
+            f"{classes} ventilation-symbol-fill drawing-foreground", "BBIM_VentilationSymbolFill", properties,
+        )
+        return self._add_primitive_annotation(
+            symbol_name, "LINEWORK", placement, [model.createIfcGeometricCurveSet(stems)],
+            f"{classes} {width_class} drawing-foreground", "BBIM_VentilationSymbol", properties,
+        )
+
     def add_drainage_stack(
         self,
         center: Point,
@@ -11433,12 +11513,15 @@ class Drawing:
         self, outline: Sequence[Point], *, pattern: str | None = None,
         color: str = "black", name: str | None = None,
         background: bool = False,
+        filled: bool = False,
     ) -> ifcopenshell.entity_instance:
         """Draw a closed polygon in add_line() coordinates, optionally hatched.
 
         ``pattern`` is an ID from drawings/assets/patterns.svg; ``color``
         controls the outline. The polygon is scoped to this drawing.
         ``background=True`` paints it behind model geometry and terrain.
+        ``filled=True`` emits a native fill area without a hatch, suitable
+        for a solid colour and opacity supplied by the drawing stylesheet.
         """
         points = tuple(_point(point, "outline point") for point in outline)
         if len(points) > 1 and points[0] == points[-1]:
@@ -11450,6 +11533,8 @@ class Drawing:
         polygon_name = _name(name, "name") if name is not None else None
         if not isinstance(background, bool):
             raise TypeError("background must be a boolean")
+        if not isinstance(filled, bool):
+            raise TypeError("filled must be a boolean")
         if background:
             classes += " drawing-background"
         if pattern is not None:
@@ -11467,11 +11552,12 @@ class Drawing:
         self._polygon_count += 1
         return self._add_primitive_annotation(
             polygon_name or f"{self.name} Polygon {self._polygon_count}",
-            "FILLAREA" if pattern is not None else "LINEWORK", placement,
-            [model.createIfcAnnotationFillArea(curve, None)] if pattern is not None
+            "FILLAREA" if pattern is not None or filled else "LINEWORK", placement,
+            [model.createIfcAnnotationFillArea(curve, None)] if pattern is not None or filled
             else [model.createIfcGeometricCurveSet([curve])],
             classes, "BBIM_DrawingPolygon",
-            {"Outline": json.dumps(points), "Pattern": pattern, "Color": color, "Background": background},
+            {"Outline": json.dumps(points), "Pattern": pattern, "Color": color, "Background": background,
+             "Filled": filled},
         )
 
     def add_text(
@@ -20701,6 +20787,7 @@ class Storey:
         rotation: Number = 0,
         start_height: Number = 2.10,
         label: str = "FCU",
+        label_rotation: Number | None = None,
         color: str = "#f5f5f2",
         form: Literal["wall", "console"] = "wall",
     ) -> ifcopenshell.entity_instance:
@@ -20713,6 +20800,9 @@ class Storey:
         its real height; its plan footprint and label sit 20 mm above the
         local floor finish (or the storey datum where there is no floor).
         Ordinary plans therefore also show equipment above the cut plane.
+        Plan labels sit toward the wall, clear of the outlet symbol.
+        ``label_rotation`` overrides their absolute plan angle in degrees
+        counter-clockwise from global X, without rotating the casing.
         Dimensions describe a generic placeholder, not a manufacturer's unit.
         ``form="console"`` adds feet and a top grille instead of the wall
         unit's front outlet. Specify its size and floor-level start_height.
@@ -20731,6 +20821,8 @@ class Storey:
         if min(width, depth, height) <= 0:
             raise ValueError("size dimensions must be greater than zero")
         rotation = _number(rotation, "rotation")
+        if label_rotation is not None:
+            label_rotation = _number(label_rotation, "label_rotation")
         start_height = _number(start_height, "start_height")
         if start_height < 0:
             raise ValueError("start_height must be zero or greater")
@@ -20803,7 +20895,8 @@ class Storey:
 
         # Independent plan representation: footprint, front outlet and louvres.
         curves = [builder.rectangle(size=(width, depth), position=(-width/2, -depth/2))]
-        outlet_limits = (.25, .75) if form == "console" else (.13, .27)
+        # Keep grille linework near the edge, away from the FCU label.
+        outlet_limits = (.13, .27)
         for fraction in outlet_limits:
             y = -depth/2+depth*fraction
             curves.append(builder.polyline(((-width*.42, y), (width*.42, y))))
@@ -20818,6 +20911,11 @@ class Storey:
             unit, name=name, text=label, placement=placement.copy(), width=width, depth=depth, height=height,
         )
         label_placement = ifcopenshell.util.placement.get_local_placement(annotation.ObjectPlacement)
+        label_placement[:2, 3] += placement[:2, 1]*depth*.15
+        if label_rotation is not None:
+            label_angle = radians(label_rotation)
+            label_placement[:2, :2] = ((cos(label_angle), -sin(label_angle)),
+                                       (sin(label_angle), cos(label_angle)))
         label_placement[2, 3] = self.elevation+plan_height
         ifcopenshell.api.geometry.edit_object_placement(
             model, product=annotation, matrix=label_placement, is_si=True,

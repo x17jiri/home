@@ -899,6 +899,46 @@ aligns with the ground-floor cold-water line; `water_basement_layout()` shares
 the corner and riser coordinates between both drawings. The basement's thicker
 walls leave 70 mm between the route and their inner faces. `voda` generates
 all three floor plans.
+Run `python3 house2.py vetrani_ground` for the ground-floor
+ventilation plan, `projekt2/vetrani_ground.svg` and
+`projekt2/D1.6. Řízené Větrání/D1.6.1. Řízené větrání - Půdorys 1.NP.pdf`.
+Its symbol legend has a red dot with four inward arrows (`ventilation_extract`,
+Odvod vzduchu) and a blue dot with four outward arrows (`ventilation_supply`,
+Přívod vzduchu). Both are supported by `Drawing.add_symbol_legend()`.
+Rooms 0.01 and 0.02 have blue supply terminals 400 mm from the inside faces
+of the garden wall and their shared partition, each labelled `+40`.
+`Drawing.add_ventilation_symbol()` reuses the legend geometry in the plan.
+Room 0.03 has a `+40` supply in its top-right (narrow-part) corner; the
+bathroom has a red `-60` extraction in its top-left corner, clear of the FCU.
+Run `python3 house2.py vetrani_upper` for `projekt2/vetrani_upper.svg` and
+`projekt2/D1.6. Řízené Větrání/D1.6.2. Řízené větrání - Půdorys podkroví.pdf`.
+The upper plan has two `-40` extractions along the front wall, three `+40`
+supplies on the garden side of the middle VPC wall, `-60` above the washing
+machine and `-40` in the bathroom. The combined design totals are 240 supply
+and 240 extraction (ground: 120/60; upper: 120/180).
+`vetrani` generates both ventilation plans.
+
+Run `python3 house2.py vytapeni_ground` for the ground-floor
+heating plan, `projekt2/vytapeni_ground.svg` and
+`projekt2/D1.7. Vytápění/D1.7.1. Vytápění - Půdorys 1.NP.pdf`.
+It starts with the same bare-wall service plan, room labels and room legend,
+including the existing fan coils and other furniture.
+The outdoor heat pump is explicitly included from the basement storey.
+Fan coils, the heat pump, hydrobox and TUV have bright orange outlines and labels
+in this drawing, using a generated stylesheet based on `plan.css`.
+Four broad red arrows (40% opacity) follow smooth Bezier curves from the
+hydrobox to the FCUs. They show schematic connectivity, with tips stopping
+120 mm before each casing. `add_ground_heating_connections()` sets their
+control points; these drawing annotations do not add physical pipework.
+Two matching arrows connect the heat pump to the hydrobox and the hydrobox
+to TUV, with the latter bowing toward the stairway before returning to the tank.
+Run `python3 house2.py vytapeni_upper` for `projekt2/vytapeni_upper.svg` and
+`projekt2/D1.7. Vytápění/D1.7.2. Vytápění - Půdorys podkroví.pdf`.
+The upper FCU is orange above the living-room door. A schematic arrow starts
+at the downstairs hydrobox's XY position. An orange dashed outline labelled
+`Hydrobox (1.NP)` shows the projected equipment at the arrow's start without
+adding another physical unit upstairs. `vytapeni` generates both heating plans.
+
 Run `python3 house2.py elektro` for all three electrical plans, or select
 `elektro_ground`, `elektro_upper`, and `elektro_basement` individually.
 Their SVGs are in `projekt2/`; PDFs use
@@ -994,8 +1034,8 @@ and wall positions; the line legend reads
 `Okruh Fancoily`, using `ELECTRICAL_FAN_COIL_CIRCUIT_COLOR`.
 At the junction a thin black floor-change arrow continues the circuit upstairs.
 The upper plan receives it at the same XY position, shifts 300 mm left to
-clear the chimney, then runs straight towards the garden wall to the FCU's
-room-facing edge. `electrical_upper_fan_coil_layout()` defines this route;
+clear the chimney, then turns along the middle wall to the FCU above the
+living-room door. `electrical_upper_fan_coil_layout()` defines this route;
 the upper line legend also includes `Okruh Fancoily`.
 Room 0.01 has two branch cables from the rozvaděč, using straight segments.
 The magenta lighting route starts at the former room-1 socket position and runs
@@ -2062,26 +2102,30 @@ and a small indicator. Its back faces local +Y and the outlet faces -Y;
 with `ObjectType=WALL_MOUNTED_FAN_COIL`. The physical body stays at its actual
 mounting height while a separate footprint, outlet symbol and label remain
 visible below the normal plan cut, 20 mm above the local floor finish.
+Plan labels are offset toward the wall by 15% of the casing depth to clear
+the outlet lines. `label_rotation` can set their absolute plan angle;
+the room-0.03 label uses 90° so its top faces left on the drawing.
 These are generic dimensions and geometry.
 Run `python3 fan_coil_preview.py` to generate the isolated sample IFC, a Blender
 3D preview and a Bonsai plan PDF in `projekt2/fan_coil_preview/`.
 `house2.py` places three units in rooms 0.01, 0.02 and 0.03, centred over their
 door openings on the room-facing wall surfaces. The casing underside is
 50 mm above the door head, with a 10 mm wall gap; the outlets face into the
-rooms. `FAN_COIL_SIZE`, `FAN_COIL_DOOR_CLEARANCE` and `FAN_COIL_WALL_GAP` control
+rooms. `FAN_COIL_SIZE=(.90, .35, .30)` leaves room for the plan labels.
+`FAN_COIL_SIZE`, `FAN_COIL_DOOR_CLEARANCE` and `FAN_COIL_WALL_GAP` control
 these placements, and `ground_fan_coils` holds the instances.
-The upper living room has one more unit on the garden wall, centred at
-`HOUSE_WIDTH/2`, facing into the room. Its underside is 50 mm above the garden
-window heads, derived from the actual window placements and heights.
-`upper_fan_coil` holds this instance; `FAN_COIL_WINDOW_CLEARANCE` controls its
-head clearance, and the model checks that it fits below the ceiling.
+The upper living room has one more unit centred above its door in the middle
+VPC wall, facing into the room. Its underside is 50 mm above the door head,
+derived from the actual door placement and height. `upper_fan_coil` holds
+this instance; `FAN_COIL_DOOR_CLEARANCE` controls its head clearance, and the
+model checks that it fits below the sloping ceiling.
 The ground bathroom has a radiator-style console (`form="console"`) behind
 its door, parallel to the room-3 wall and facing into the bathroom. Its feet
-rest on the finished floor. `BATHROOM_FAN_COIL_SIZE=(.80, .12, .60)` gives its
+rest on the finished floor. `BATHROOM_FAN_COIL_SIZE=(.80, .30, .60)` gives its
 generic width, depth and height; the cabinet is 10 mm from the shared wall
 and 100 mm from the door wall. The console has a top grille and the same
-light-blue FCU plan styling, with 30 mm clearance from the fully opened door's
-handle. `bathroom_fan_coil` holds this instance.
+light-blue FCU plan styling. Its plan grille is drawn near the casing edge
+to leave the central label clear. `bathroom_fan_coil` holds this instance.
 
 For simple cylindrical objects, provide the centre of the circular footprint,
 its radius, and its vertical dimensions:

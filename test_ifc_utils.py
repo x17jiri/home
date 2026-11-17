@@ -3248,6 +3248,36 @@ class SymbolLegendTests(unittest.TestCase):
             self.assertFalse(any(e.tag.endswith("}rect") for e in sample))
             self.assertTrue(all(e.get("style") == "fill:#000000;stroke:none" for e in dots))
 
+    def test_ventilation_legend_has_filled_dots_and_opposite_arrow_directions(self):
+        self.drawing.add_symbol_legend([
+            ("ventilation_extract", "Odvod vzduchu"),
+            ("ventilation_supply", "Přívod vzduchu"),
+        ])
+        props = ifcopenshell.util.element.get_pset(self.drawing.element, "EPset_Drawing")
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"ventilation.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="160mm" '
+                            'height="160mm" viewBox="0 0 160 160"/>', encoding="utf-8")
+            _postprocess_right_panel(path, props)
+            _postprocess_drawing_line_colors(path)
+            samples = [e for e in ET.parse(path).getroot().iter()
+                       if "symbol-legend-sample" in e.get("class", "").split()]
+            for sample, color, inward in zip(samples, ("ff0000", "0000ff"), (True, False)):
+                self.assertIn(f"drawing-line-color-{color}", sample.get("class"))
+                self.assertEqual(len(sample), 9)  # Centre, four heads and four stems.
+                filled = [e for e in sample if e.get("d").endswith(" Z")]
+                self.assertEqual(len(filled), 5)
+                self.assertTrue(all(f"fill:#{color} !important" in e.get("style") for e in filled))
+                def coordinates(curve):
+                    return np.array([float(n) for n in re.findall(r"[-+]?(?:\d*\.)?\d+", curve.get("d"))]).reshape(-1, 2)
+                circle = coordinates(sample[0])
+                centre = (circle.min(axis=0)+circle.max(axis=0))/2
+                for head in list(sample)[1::2]:
+                    triangle = coordinates(head)
+                    tip_radius = np.linalg.norm(triangle[0]-centre)
+                    base_radius = np.linalg.norm((triangle[1]+triangle[2])/2-centre)
+                    self.assertEqual(tip_radius < base_radius, inward)
+
     def test_invalid_symbol_legends_leave_tables_unchanged(self):
         for items in ([], None, "socket", ["socket"], [("socket",)], [("unknown", "Bad")],
                       [("socket", "")], [("socket", "Valid"), ("unknown", "Bad")]):

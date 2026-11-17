@@ -5,6 +5,7 @@ from math import floor
 import math
 import json
 import sys
+from uuid import UUID
 
 import ifcopenshell.api.pset
 import ifcopenshell.api.feature
@@ -92,11 +93,10 @@ HEAT_PUMP_HEIGHT_ABOVE_BASEMENT_FLOOR = 0.60
 ROZVADEC_SIZE = (0.7, 0.3, 0.50)  # Width along X, depth, height.
 ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.60
 ROZVADEC_WALL_GAP = 0.05
-FAN_COIL_SIZE = (.90, .23, .30)
+FAN_COIL_SIZE = (.90, .35, .30)  # Deeper casing leaves room for the plan label.
 FAN_COIL_DOOR_CLEARANCE = .05
-FAN_COIL_WINDOW_CLEARANCE = .05
 FAN_COIL_WALL_GAP = .01
-BATHROOM_FAN_COIL_SIZE = (.80, .12, .60)
+BATHROOM_FAN_COIL_SIZE = (.80, .30, .60)
 BATHROOM_FAN_COIL_DOOR_WALL_GAP = .10
 
 ZAKLADACI_MALTA = 0.02
@@ -484,6 +484,14 @@ PDF_ELEKTRO_FOLDER = PDFFolder("D1.4.", DIR_ELEKTRO)
 PDF_ELEKTRO_GROUND = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys 1.NP"))
 PDF_ELEKTRO_UPPER = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys podkroví"))
 PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
+DIR_VYTAPENI = PROJECT_DIR / "D1.7. Vytápění"
+PDF_VYTAPENI_FOLDER = PDFFolder("D1.7.", DIR_VYTAPENI)
+PDF_VYTAPENI_GROUND = Path(PDF_VYTAPENI_FOLDER.add_pdf("Vytápění - Půdorys 1.NP"))
+PDF_VYTAPENI_UPPER = Path(PDF_VYTAPENI_FOLDER.add_pdf("Vytápění - Půdorys podkroví"))
+DIR_VETRANI = PROJECT_DIR / "D1.6. Řízené Větrání"
+PDF_VETRANI_FOLDER = PDFFolder("D1.6.", DIR_VETRANI)
+PDF_VETRANI_GROUND = Path(PDF_VETRANI_FOLDER.add_pdf("Řízené větrání - Půdorys 1.NP"))
+PDF_VETRANI_UPPER = Path(PDF_VETRANI_FOLDER.add_pdf("Řízené větrání - Půdorys podkroví"))
 ELECTRICAL_LINE_WIDTH = 0.30  # Printed millimetres, matching the reference electrical plans.
 ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH = 0.30  # Black riser symbols, matching sewer and water drawings.
 ELECTRICAL_LIGHT_OFFSETS = {}  # Optional room-specific offsets from the calculated centre.
@@ -1335,6 +1343,7 @@ for room, door, wall, room_normal in (
     ground_fan_coils.append(ground.fan_coil(
         f"Fan coil {room.room_id}", center=tuple(float(v) for v in center), size=FAN_COIL_SIZE,
         start_height=bottom, rotation=math.degrees(math.atan2(inward[1], inward[0]))+90,
+        label_rotation=90 if room == pokoj3 else None,
         label="FCU",
     ))
 ground_fan_coils = tuple(ground_fan_coils)
@@ -2803,15 +2812,15 @@ upper_room_windows = {
     upper_toilet_room.room_id: (),
 }
 
-# Garden-wall fan coil: centred on the house and above both window heads.
+# Living-room fan coil: centred above the door, facing into the room.
 upper_fan_coil_center = (
-    HOUSE_WIDTH/2,
-    wall_back_u.start[1]-wall_back_u.body_offset-wall_back_u.thickness-FAN_COIL_WALL_GAP-FAN_COIL_SIZE[1]/2,
+    living_room_door_opening_x+ROOM_DOOR_OPENING_WIDTH/2,
+    living_room_back_face_y+FAN_COIL_WALL_GAP+FAN_COIL_SIZE[1]/2,
 )
-upper_fan_coil_bottom = max(
-    float(ifcopenshell.util.placement.get_local_placement(window.ObjectPlacement)[2, 3])+window.OverallHeight
-    for window in windows_living_room_back
-)-upper.elevation+FAN_COIL_WINDOW_CLEARANCE
+upper_fan_coil_bottom = (
+    float(ifcopenshell.util.placement.get_local_placement(living_room_door.ObjectPlacement)[2, 3])
+    +living_room_door.OverallHeight+FAN_COIL_DOOR_CLEARANCE-upper.elevation
+)
 upper_fan_coil_ceiling = min(
     plane_height_at(*cut, x=x, y=y)
     for cut in upper_partition_cuts
@@ -2819,10 +2828,10 @@ upper_fan_coil_ceiling = min(
     for y in (upper_fan_coil_center[1]-FAN_COIL_SIZE[1]/2, upper_fan_coil_center[1]+FAN_COIL_SIZE[1]/2)
 )
 if upper.elevation+upper_fan_coil_bottom+FAN_COIL_SIZE[2] > upper_fan_coil_ceiling:
-    raise ValueError("Upper garden-wall fan coil does not fit below the ceiling")
+    raise ValueError("Upper living-room door fan coil does not fit below the ceiling")
 upper_fan_coil = upper.fan_coil(
-    "Fan coil 1.01 garden wall", center=upper_fan_coil_center, size=FAN_COIL_SIZE,
-    start_height=upper_fan_coil_bottom, rotation=0, label="FCU",
+    "Fan coil 1.01 above door", center=upper_fan_coil_center, size=FAN_COIL_SIZE,
+    start_height=upper_fan_coil_bottom, rotation=180, label="FCU",
 )
 
 # Reuse the old house's technical-equipment sizes, with small wall gaps.
@@ -3516,6 +3525,18 @@ rainwater_storey.element.Description = "Roof gutters without downpipes"
 roof_gutters = add_roof_gutters()
 
 
+# Temporary experiment: translate only the horizontal drywall return toward
+# the street. Keep neighbouring walls, floor outlines and layout references.
+living_room_return_experiment_placement = ifcopenshell.util.placement.get_local_placement(
+    wall_living_room_return_u.ObjectPlacement,
+)
+living_room_return_experiment_placement[1, 3] -= .80
+ifcopenshell.api.geometry.edit_object_placement(
+    house.model, product=wall_living_room_return_u,
+    matrix=living_room_return_experiment_placement, is_si=True,
+)
+
+
 house.write("house2.ifc")
 
 
@@ -3664,6 +3685,113 @@ def add_plumbing_plan(name, storey, cut_height, room_floors, *, room_positions=N
     return drawing
 
 
+def heating_plan_stylesheet(drawing, equipment):
+    """Reuse the architectural styles with orange equipment and red arrows."""
+    equipment_selectors = [
+        f"#product-{UUID(hex=ifcopenshell.guid.expand(unit.GlobalId))}"
+        for unit in equipment
+    ]
+    label_selectors = [
+        f'.furniture-label[class~="GlobalId-{annotation.GlobalId}"]'
+        for unit in equipment
+        for relation in unit.ReferencedBy
+        if relation.is_a("IfcRelAssignsToProduct")
+        for annotation in relation.RelatedObjects
+        if annotation.is_a("IfcAnnotation")
+    ]
+    stylesheet = PROJECT_DIR / "cache" / f"{drawing.name}.css"
+    stylesheet.parent.mkdir(parents=True, exist_ok=True)
+    stylesheet.write_text(
+        (Path(__file__).resolve().parent / "bonsai_scripts/assets/plan.css").read_text()
+        + "\n/* Heating equipment emphasis, limited to this drawing. */\n"
+        + ",\n".join(equipment_selectors)
+        + " { stroke: #ff8000 !important; stroke-width: 0.25 !important; }\n"
+        + ",\n".join(label_selectors)
+        + " { fill: #ff8000 !important; }\n"
+        + ".PredefinedType-FILLAREA.heating-connection-arrow { "
+          "fill: #e82030 !important; stroke: none !important; opacity: 0.40; }\n",
+        encoding="utf-8",
+    )
+    return stylesheet
+
+
+def add_heating_connection_arrow(drawing, start, control1, control2, end, *, name):
+    """Broad translucent arrow following a cubic Bezier, in plan metres.
+
+    The sampled filled outline is native drawing geometry, so it survives
+    IFC/Bonsai export without adding a physical pipe to the model.
+    """
+    start, control1, control2, end = (np.asarray(point, dtype=float)
+                                    for point in (start, control1, control2, end))
+    t = np.linspace(0, 1, 121)[:, None]
+    curve = ((1-t)**3*start + 3*(1-t)**2*t*control1
+             + 3*(1-t)*t**2*control2 + t**3*end)
+    distances = np.linalg.norm(np.diff(curve, axis=0), axis=1)
+    remaining = np.r_[np.cumsum(distances[::-1])[::-1], 0.]
+    # At 1:100: 1.8 mm shaft, 5 mm wide / 4.5 mm long filled head.
+    base_index = np.flatnonzero(remaining >= .45)[-1]
+    shaft = curve[:base_index+1]
+    tangents = np.gradient(shaft, axis=0)
+    normals = np.column_stack((-tangents[:, 1], tangents[:, 0]))
+    normals /= np.linalg.norm(normals, axis=1)[:, None]
+    outline = np.vstack((shaft+.09*normals,
+                         shaft[-1]+.25*normals[-1], end,
+                         shaft[-1]-.25*normals[-1],
+                         (shaft-.09*normals)[::-1]))
+    arrow = drawing.add_polygon(
+        [tuple(point) for point in outline], color="red", filled=True, name=name,
+    )
+    appearance = ifcopenshell.util.element.get_pset(arrow, "EPset_Annotation")
+    ifcopenshell.api.pset.edit_pset(
+        house.model, pset=house.model.by_id(appearance["id"]),
+        properties={"Classes": appearance["Classes"]+" heating-connection-arrow drawing-foreground"},
+    )
+    return arrow
+
+
+def add_ground_heating_connections(drawing):
+    """Show connectivity from the hydrobox, without prescribing pipe routes."""
+    start = np.array(sewer_fixture_center(bathroom_hydrobox))+(0., HYDROBOX_SIZE[1]/2+.05)
+    for unit, control_offset, approach_offset in (
+        (ground_fan_coils[0], (.2, 1.), (-1., -.6)),
+        (ground_fan_coils[1], (1.4, 1.5), (1.3, -.6)),
+        (ground_fan_coils[2], (-1.3, .35), (-1.5, -.7)),
+        (bathroom_fan_coil, (-1.2, 1.1), (0., -.6)),
+    ):
+        placement = ifcopenshell.util.placement.get_local_placement(unit.ObjectPlacement)
+        depth = ifcopenshell.util.element.get_pset(unit, "BBIM_FanCoil", "Depth")
+        # Garden-room tips sit below the units; room 3 approaches the front
+        # face. The console uses its bottom end. Keep 120 mm off each casing.
+        end_side = 1 if unit in ground_fan_coils[:2] else -1
+        end = placement[:2, 3]+end_side*placement[:2, 1]*(depth/2+.12)
+        if unit == bathroom_fan_coil:
+            width = ifcopenshell.util.element.get_pset(unit, "BBIM_FanCoil", "Width")
+            end = placement[:2, 3]-placement[:2, 0]*(width/2+.12)
+        add_heating_connection_arrow(
+            drawing, start, start+control_offset, end+approach_offset, end,
+            name=f"Hydrobox connection to {unit.Name}",
+        )
+
+    hydrobox = np.array(sewer_fixture_center(bathroom_hydrobox))
+    pump = np.array(sewer_fixture_center(heat_pump))
+    pump_start = pump+(HEAT_PUMP_SIZE[0]/2+.05, 0.)
+    hydrobox_inlet = hydrobox+(0., -HYDROBOX_SIZE[1]/2-.12)
+    add_heating_connection_arrow(
+        drawing, pump_start, pump_start+(.45, -.05),
+        hydrobox_inlet+(-.1, -.5), hydrobox_inlet,
+        name="Heat pump connection to hydrobox",
+    )
+
+    tuv = np.array(sewer_fixture_center(bathroom_water_heater))
+    tuv_start = hydrobox+(HYDROBOX_SIZE[0]/2+.05, 0.)
+    tuv_end = tuv+(.7/2+.12, 0.)
+    # Bow into the stairway, then return left toward the tank's right edge.
+    add_heating_connection_arrow(
+        drawing, tuv_start, tuv_start+(1.3, 0.), tuv_end+(1.3, 0.), tuv_end,
+        name="Hydrobox connection to TUV via stairway side",
+    )
+
+
 def bathroom_grounding_layout():
     """Align the shower bonding detail with a FeZn lead at the shared wall footing."""
     wall = wall_basement_s03_s04
@@ -3737,13 +3865,12 @@ def electrical_ground_fan_coil_layout():
 
 
 def electrical_upper_fan_coil_layout():
-    """Receive the shared circuit, clear the chimney on the left, then run north."""
+    """Receive the shared circuit, clear the chimney, and meet the door unit."""
     riser = electrical_ground_fan_coil_layout()["junction"]
     clear_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-.10
     placement = ifcopenshell.util.placement.get_local_placement(upper_fan_coil.ObjectPlacement)
-    # This vertical run meets the room-facing edge of the garden-wall casing.
-    end = (clear_x, float(placement[1, 3])-FAN_COIL_SIZE[1]/2)
-    return dict(riser=riser, route=(riser, (clear_x, riser[1]), end))
+    end = tuple(placement[:2, 3]-placement[:2, 1]*FAN_COIL_SIZE[1]/2)
+    return dict(riser=riser, route=(riser, (clear_x, riser[1]), (clear_x, end[1]), end))
 
 
 def add_electrical_trunk_legend(drawing, extra_lines=()):
@@ -6571,6 +6698,139 @@ if "kanal" in sys.argv or "kanal_schematic" in sys.argv:
             properties={"Classes": appearance["Classes"]+" fill-bg"},
         )
     sewer_schematic.render(PROJECT_DIR / "kanal.svg", pdf=PDF_KANAL)
+
+
+if "vetrani" in sys.argv or "vetrani_ground" in sys.argv:
+    vetrani_ground = add_plumbing_plan("vetrani_ground", ground, 2.0, ground_room_floors)
+    for room in (pokoj1, pokoj2):
+        x0, _, x1, garden_y = Polygon(room.outline).bounds
+        west_of_center = (x0+x1)/2 < HOUSE_WIDTH/2
+        position = (x1-.40 if west_of_center else x0+.40, garden_y-.40)
+        vetrani_ground.add_ventilation_symbol(
+            position, "supply", name=f"Supply air {room.room_id}",
+        )
+        vetrani_ground.add_text(
+            (position[0]+(-.38 if west_of_center else .38), position[1]), "+40",
+            color="blue", font_size=2.5, alignment="right" if west_of_center else "left",
+            name=f"Supply air {room.room_id} flow label",
+        )
+    room3_top_y = max(y for _, y in pokoj3.outline)
+    room3_top_right_x = max(x for x, y in pokoj3.outline if abs(y-room3_top_y) < 1e-8)
+    for room, position, flow, label, color, label_side in (
+        (pokoj3, (room3_top_right_x-.40, room3_top_y-.40), "supply", "+40", "blue", -1),
+        # Keep the extraction symbol clear of the console behind the door.
+        (koupelna, (BATHROOM_LEFT_X+.55, BATHROOM_PARTITION_Y-.40), "extract", "-60", "red", 1),
+    ):
+        vetrani_ground.add_ventilation_symbol(
+            position, flow, name=f"{flow.title()} air {room.room_id}",
+        )
+        vetrani_ground.add_text(
+            (position[0]+label_side*.38, position[1]), label,
+            color=color, font_size=2.5, alignment="right" if label_side < 0 else "left",
+            name=f"{flow.title()} air {room.room_id} flow label",
+        )
+    vetrani_ground.add_symbol_legend([
+        ("ventilation_extract", "Odvod vzduchu"),
+        ("ventilation_supply", "Přívod vzduchu"),
+    ], line_width=.20)
+    vetrani_ground.render(PROJECT_DIR / "vetrani_ground.svg", pdf=PDF_VETRANI_GROUND)
+
+
+if "vetrani" in sys.argv or "vetrani_upper" in sys.argv:
+    vetrani_upper = add_plumbing_plan(
+        "vetrani_upper", upper, 1.20, upper_room_floors,
+        room_positions={
+            living_room.room_id: (3.5, 7),
+            upper_toilet_room.room_id: ((upper_technical_left_x+upper_technical_right_x)/2,
+                                        upper_toilet_end_front_y-.20),
+            upper_hallway.room_id: (STAIR_LEFT_X+.45, STAIR_UPPER_END_Y+.30),
+        },
+    )
+    upper_ventilation_terminals = []
+    # Two extractions over the kitchen/front-wall area.
+    for index, fraction in enumerate((1/3, 2/3), 1):
+        position = (BWT+(STAIR_LEFT_X-BWT)*fraction, BWT+.45)
+        upper_ventilation_terminals.append((
+            f"Front extraction {index}", position, -40, (position[0], position[1]+.38), "center",
+        ))
+    # Three supplies on the garden side of the middle VPC wall.
+    for index, fraction in enumerate((1/6, 1/2, 5/6), 1):
+        position = (BWT+(HOUSE_WIDTH-2*BWT)*fraction, living_room_back_face_y+.40)
+        upper_ventilation_terminals.append((
+            f"Garden living-room supply {index}", position, 40, (position[0], position[1]+.38), "center",
+        ))
+    washer = np.array(sewer_fixture_center(upper_washing_machine))
+    # Above the washer in plan, offset left to clear the basin beside it.
+    washer_extract = tuple(washer+(-.65, .60))
+    bathroom_extract = (upper_toilet_outline.bounds[0]+.24, upper_toilet_outline.centroid.y)
+    upper_ventilation_terminals.extend((
+        ("Washing-machine extraction", washer_extract, -60,
+         (washer_extract[0]-.38, washer_extract[1]), "right"),
+        ("Bathroom extraction", bathroom_extract, -40,
+         (upper_toilet_outline.bounds[2]-.08, bathroom_extract[1]), "right"),
+    ))
+    for name, position, airflow, label_position, alignment in upper_ventilation_terminals:
+        flow = "supply" if airflow > 0 else "extract"
+        color = "blue" if airflow > 0 else "red"
+        vetrani_upper.add_ventilation_symbol(position, flow, name=name)
+        vetrani_upper.add_text(
+            label_position, f"{airflow:+d}", color=color, font_size=2.5,
+            alignment=alignment, name=f"{name} flow label",
+        )
+    vetrani_upper.add_symbol_legend([
+        ("ventilation_extract", "Odvod vzduchu"),
+        ("ventilation_supply", "Přívod vzduchu"),
+    ], line_width=.20)
+    vetrani_upper.render(PROJECT_DIR / "vetrani_upper.svg", pdf=PDF_VETRANI_UPPER)
+
+
+if "vytapeni" in sys.argv or "vytapeni_ground" in sys.argv:
+    vytapeni_ground = add_plumbing_plan("vytapeni_ground", ground, 2.0, ground_room_floors)
+    vytapeni_ground.include_element(heat_pump)
+    add_ground_heating_connections(vytapeni_ground)
+    heating_equipment = (*ground_fan_coils, bathroom_fan_coil, heat_pump,
+                         bathroom_hydrobox, bathroom_water_heater)
+    vytapeni_ground.render(
+        PROJECT_DIR / "vytapeni_ground.svg", pdf=PDF_VYTAPENI_GROUND,
+        stylesheet=heating_plan_stylesheet(vytapeni_ground, heating_equipment),
+    )
+
+
+if "vytapeni" in sys.argv or "vytapeni_upper" in sys.argv:
+    vytapeni_upper = add_plumbing_plan(
+        "vytapeni_upper", upper, 1.20, upper_room_floors,
+        room_positions={
+            living_room.room_id: (3.5, 7),
+            upper_toilet_room.room_id: ((upper_technical_left_x+upper_technical_right_x)/2,
+                                        upper_toilet_end_front_y-.20),
+        },
+    )
+    # Dashed projection of the downstairs hydrobox, without another 3D unit.
+    hydrobox = np.array(sewer_fixture_center(bathroom_hydrobox))
+    half_width, half_depth = HYDROBOX_SIZE[0]/2, HYDROBOX_SIZE[1]/2
+    hydrobox_outline = [tuple(hydrobox+offset) for offset in (
+        (-half_width, -half_depth), (half_width, -half_depth),
+        (half_width, half_depth), (-half_width, half_depth),
+        (-half_width, -half_depth),
+    )]
+    vytapeni_upper.add_poly_line(
+        hydrobox_outline, style="dashed", color="#ff8000", line_width=.25,
+        foreground=True, name="Ground hydrobox dashed projection on upper plan",
+    )
+    vytapeni_upper.add_text(
+        tuple(hydrobox), "Hydrobox\n(1.NP)", font_size=1.7, color="#ff8000",
+        name="Ground hydrobox projection label on upper plan",
+    )
+    start = hydrobox+(0., HYDROBOX_SIZE[1]/2+.05)
+    end = np.array(upper_fan_coil_center)-(0., FAN_COIL_SIZE[1]/2+.12)
+    add_heating_connection_arrow(
+        vytapeni_upper, start, start+(1.6, .8), end+(.8, -.8), end,
+        name="Ground hydrobox connection to upper FCU",
+    )
+    vytapeni_upper.render(
+        PROJECT_DIR / "vytapeni_upper.svg", pdf=PDF_VYTAPENI_UPPER,
+        stylesheet=heating_plan_stylesheet(vytapeni_upper, (upper_fan_coil,)),
+    )
 
 
 # `kanal` creates the schematic and all three plans; targets also run separately.
