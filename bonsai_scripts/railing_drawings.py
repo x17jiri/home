@@ -1,4 +1,4 @@
-"""Use railing drawing bodies for both native lines and visible-surface fills."""
+"""Use railing drawing geometry consistently for lines and surface visibility."""
 
 import ifcopenshell.util.element
 import ifcopenshell.util.representation
@@ -8,7 +8,8 @@ def activate_railing_drawing_bodies(tool, drawing):
     """Switch only the temporary Blender meshes, retaining the physical IFC body.
 
     The SVG serializer already selects target-view representations. Bonsai's
-    surface-fill raycasts also need those meshes rather than the model posts.
+    surface-fill raycasts also need drawing geometry rather than model posts.
+    Wire-only elevation guards have no faces and therefore do not hide objects.
     """
     from bonsai.core.geometry import switch_representation
 

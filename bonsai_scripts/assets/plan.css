@@ -20,7 +20,7 @@ a:hover { cursor: pointer; }
 .IfcRailing.projection { fill: none !important; stroke-width: 0.10 !important; }
 .target-view-ELEVATIONVIEW .IfcRailing.material-Wood.surface,
 .target-view-SECTIONVIEW .IfcRailing.material-Wood.surface {
-    fill: url(#railing-boards) !important;
+    fill: url(#railing-boards-transparent) !important;
 }
 .IfcFurniture.projection,
 .IfcFurniture.cut {

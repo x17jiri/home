@@ -159,6 +159,7 @@ BASEMENT_FLOOR_THICKNESS = CEMFLOW_AND_FINISH_THICKNESS
 BASEMENT_FINISHED_FLOOR_HEIGHT = BASEMENT_FLOOR_START+BASEMENT_FLOOR_THICKNESS
 BASEMENT_TO_GROUND_RISE = GROUND_FLOOR_THICKNESS-BASEMENT_FINISHED_FLOOR_HEIGHT
 BASEMENT_OPENING_WIDTH = 1.0
+BASEMENT_FRONT_DOOR_GARAGE_WALL_CLEARANCE = 0.75  # From the S.04 face of the garage divider to the opening.
 BASEMENT_S01_S02_DIVIDER_CLEARANCE = 1.00
 BASEMENT_S02_S05_WEST_CLEARANCE = 0.50
 BASEMENT_S01_S03_MIDDLE_CLEARANCE = 1.00
@@ -1015,7 +1016,7 @@ basement_s04_x0, _, basement_s04_x1, _ = basement_rooms_by_id["S.04"].bounds
 basement_s05_x0, _, basement_s05_x1, _ = basement_rooms_by_id["S.05"].bounds
 basement_s05_front_door = wall_basement_front.add_door(
     name="Basement front door S.05",
-    at=basement_s04_x1-0.25-BASEMENT_OPENING_WIDTH-wall_basement_front.start[0],
+    at=basement_s04_x0+BASEMENT_FRONT_DOOR_GARAGE_WALL_CLEARANCE-wall_basement_front.start[0],
     width=0.9, opening_width=BASEMENT_OPENING_WIDTH,
     height=BASEMENT_OPENING_TOP_HEIGHT, sill_height=BASEMENT_FLOOR_THICKNESS,
     operation="SINGLE_SWING_RIGHT",
@@ -1978,15 +1979,16 @@ basement_ceiling_s05 = basement_ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-# Align the garden-side flange edge with the upper stair flight's arrival.
-# Keep the user's MIAKO layout independent of this added steel member.
+# Position the two stair-edge HEBs independently; leave MIAKO layouts unchanged.
 STAIRWAY_HEB_BEARING = 0.10
+STAIRWAY_HEB_FRONT_WALL_DISTANCE = 3.00  # Clear distance from ground-floor wall to steel front face.
 BASEMENT_S05_HEB_MIDDLE_BEARING = 0.12
 BASEMENT_S05_HEB_WEST_BEARING = 0.15
 ground_front_wall_inner_y = wall_front_g.start[1]+wall_front_g.body_offset+wall_front_g.thickness
-STAIRWAY_HEB_GARDEN_Y = upper_stairs.end[1]
-basement_s05_heb_front_y = STAIRWAY_HEB_GARDEN_Y-heb_section(180).width
-STAIRWAY_HEB_FRONT_WALL_DISTANCE = basement_s05_heb_front_y-ground_front_wall_inner_y
+BASEMENT_S05_HEB_GARDEN_Y = upper_stairs.end[1]
+basement_s05_heb_front_y = BASEMENT_S05_HEB_GARDEN_Y-heb_section(180).width
+BASEMENT_S05_HEB_FRONT_WALL_DISTANCE = basement_s05_heb_front_y-ground_front_wall_inner_y
+ceiling_stairway_heb_front_y = ground_front_wall_inner_y+STAIRWAY_HEB_FRONT_WALL_DISTANCE
 basement_s05_edge_heb = add_stairway_edge_heb(
     basement_ceiling_storey,
     "Basement ceiling - S.05 stair-opening HEB180",
@@ -1997,7 +1999,7 @@ basement_s05_edge_heb = add_stairway_edge_heb(
 ceiling_stairway_edge_heb = add_stairway_edge_heb(
     ceiling_storey, "Ceiling - Schodiště stair-opening HEB180",
     left_face=stairway_ceiling_stairway_face_x, right_face=stairway_ceiling_west_face_x,
-    front_y=basement_s05_heb_front_y, bearing=STAIRWAY_HEB_BEARING,
+    front_y=ceiling_stairway_heb_front_y, bearing=STAIRWAY_HEB_BEARING,
 )
 
 # Continue the beam grid as though a wide bay occupied the gap containing the HEB.
@@ -4944,7 +4946,7 @@ if "ceiling2" in sys.argv:
         end=(ceiling_stairway.end[0], ceiling_stairway_street_y),
         offset=-0.35,
     )
-    if abs(ceiling_stair_opening_end_y-basement_s05_heb_front_y) > 1e-9:
+    if abs(ceiling_stair_opening_end_y-ceiling_stairway_heb_front_y) > 1e-9:
         ceiling_stair_opening_dimension_x = (ceiling_wall_bounds[-1][0]+ceiling_wall_bounds[-1][2])/2
         drawing1.add_dimension(
             start=(ceiling_stair_opening_dimension_x, ground_front_wall_inner_y),
@@ -5099,7 +5101,7 @@ if "basement_ceiling2" in sys.argv:
          if basement_stair_opening_length > 1e-9
          else "S.05: uliční část dosahuje k čelní stěně; u stěny není volný otvor."),
         f"S.05 uliční část: počet nosníků {len(basement_ceiling_s05_front.beams)}, širokých řad {basement_ceiling_s05_front.structure.count('wide')}; samostatně upravitelná skladba.",
-        f"S.05 HEB180: přední hrana {STAIRWAY_HEB_FRONT_WALL_DISTANCE*1000:.0f} mm od líce uliční stěny 1.NP, {(basement_s05_heb_front_y-basement_s05_y0)*1000:.0f} mm v suterénu; uložení {(basement_s05_x0-basement_s05_edge_heb.start[0])*1000:.0f}/{(basement_s05_edge_heb.end[0]-basement_s05_x1)*1000:.0f} mm.",
+        f"S.05 HEB180: přední hrana {BASEMENT_S05_HEB_FRONT_WALL_DISTANCE*1000:.0f} mm od líce uliční stěny 1.NP, {(basement_s05_heb_front_y-basement_s05_y0)*1000:.0f} mm v suterénu; uložení {(basement_s05_x0-basement_s05_edge_heb.start[0])*1000:.0f}/{(basement_s05_edge_heb.end[0]-basement_s05_x1)*1000:.0f} mm.",
         "Styk protilehlých nosníků na společných stěnách zatím není řešen.",
         "S.04: první nosník a první řada vložek vynechány kvůli komínu; ostatní řady beze změny polohy.",
         f"S.04: mezera k zahradní příčné stěně vyplněna betonem; odstup od komínu {CHIMNEY_CEILING_INFILL_CLEARANCE*1000:g} mm po celém obvodu.",
@@ -5724,7 +5726,8 @@ def add_house_section(cut, name, pdf):
         )
     add_perimeter_insulation(drawing)
     waterproofing = add_section_waterproofing(drawing)
-    drawing.add_furniture_label(rozvadec)
+    for label_spec in house._furniture_label_specs:
+        drawing.add_furniture_label(label_spec.product)
     basement_height_dimension_x = BWT+0.4
     if name in ("bb", "cc"):
         basement_height_dimension_x = (
@@ -5737,11 +5740,6 @@ def add_house_section(cut, name, pdf):
     )
     if name in ("bb", "cc"):
         add_bb_roof_batting(drawing, include_ceiling=name != "cc")
-        for furniture in (
-            kamna, kitchen_cooker, kitchen_sink, kitchen_dishwasher, kitchen_fridge,
-            kitchen_front_counter, bathroom_shower, basement_water_meter, heat_pump,
-        ):
-            drawing.add_furniture_label(furniture)
         ground_height_dimension_y = (
             float(wall_body_centreline_point(wall_back_g)[1])-wall_back_g.thickness/2-0.5
         )
@@ -5751,8 +5749,6 @@ def add_house_section(cut, name, pdf):
             name="Ground finished floor to plastered ceiling",
         )
     if name == "cc":
-        for furniture in (upper_washing_machine, ground_recuperation):
-            drawing.add_furniture_label(furniture)
         if ground_stair_opening_board is not None:
             _, front_y, _, back_y = ground_stair_opening_region.bounds
             upper_board_bottom_z = ground_stair_opening_board.storey.elevation+ground_stair_opening_board.start_height
@@ -5769,11 +5765,6 @@ def add_house_section(cut, name, pdf):
                 classes="roof-batting roof-batting-overlay",
             )
     if name == "aa":
-        for furniture in (
-            kamna, kitchen_cooker, upper_washing_machine, basement_water_meter,
-            kitchen_front_counter, ground_recuperation,
-        ):
-            drawing.add_furniture_label(furniture)
         add_aa_roof_batting(drawing)
         add_aa_elevation_marks(drawing)
         drawing.add_dimension(

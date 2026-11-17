@@ -185,7 +185,7 @@ at its street edge. `BASEMENT_S05_HEB_MIDDLE_BEARING = 0.12 m` and
 `BASEMENT_S05_HEB_WEST_BEARING = 0.15 m` derive its endpoints from the actual
 wall faces, giving a current 2495 mm length. Its garden
 flange edge follows the actual upper stair flight's arrival through
-`STAIRWAY_HEB_GARDEN_Y = upper_stairs.end[1]`. The front edge is one HEB
+`BASEMENT_S05_HEB_GARDEN_Y = upper_stairs.end[1]`. The front edge is one HEB
 flange width (180 mm) towards the street: currently 2760 mm from the
 ground-floor wall's inside face and 2755 mm from the basement wall's.
 The S.05 street section follows the garden part's beam grid independently
@@ -311,7 +311,9 @@ the S.03–S.04 door starts 1.00 m from the inner front wall face. All five posi
 named `BASEMENT_Sxx_Sxx_*_CLEARANCE` settings in `house2.py`.
 The garage opening is 2.30 m wide (`GARAGE_FRONT_OPENING_WIDTH`), with
 0.45 m to the inner east wall face and 0.475 m to the inner west room wall.
-S.05 also has a front-wall door centred on that room, with the same leaf/opening
+S.04 also has a front-wall door with its nearest opening jamb 750 mm from the
+garage dividing wall's S.04 face (`BASEMENT_FRONT_DOOR_GARAGE_WALL_CLEARANCE`),
+with the same leaf/opening
 widths, finished-floor sill and 250 mm masonry band below the ceiling.
 It opens inward. The water meter remains in S.04, 50 mm from its side wall.
 The exterior heat pump retains its configured position. The street elevation
@@ -614,11 +616,13 @@ span. Its first beam centre shares the basement's
 `BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE` offset from the transverse
 wall centreline, currently 215 mm. `ceiling_stairway_start_y` uses
 `upper_ceiling_garden_y`, also shared by the room-3 garden section.
-Both levels have their own editable beam/block layouts and share the HEB180
-alignment. `ceiling_stairway_edge_heb` spans between this level's
-wall faces with `STAIRWAY_HEB_BEARING = 0.10 m` at each end. Its garden flange
-edge aligns with the end of the upper stair flight; its front edge is
-2760 mm from the ground-floor front wall's inside face. Both ceiling plans label
+Both levels have their own editable beam/block layouts and independent HEB180
+positions. `ceiling_stairway_edge_heb` spans between this level's
+wall faces with `STAIRWAY_HEB_BEARING = 0.10 m` at each end. Its front flange
+edge is 3000 mm from the ground-floor front wall's inside face, controlled by
+`STAIRWAY_HEB_FRONT_WALL_DISTANCE`. The basement HEB retains its alignment with
+the stair arrival. The upper HEB's MIAKO overlaps remain visible for later
+layout adjustment. Both ceiling plans label
 the HEB inside its outline and dimension that front edge.
 Layouts keep directly editable `structure` lists, so
 later basement edits do not propagate upstairs. Edit `GARDEN_CEILING_STRUCTURE`,
@@ -1692,16 +1696,16 @@ at no more than 120 mm centres. Override these with `post_size`,
 leaves only the handrail and posts. Corners share a post and a mitered
 handrail; repeat the first point to close a path. The returned element is a
 single `IfcRailing`, with geometry, material and a `BBIM_Railing` property set.
-Railings have separate plan, elevation and section representations: a handrail
-and a continuous panel replace individual vertical infill members. The panel
-follows the stair pitch line, leaving a 50 mm gap above it and below the handrail
-(reduced proportionally for very low railings). Its thickness follows the baluster
-width. Cut panels have a white fill and thin outline; projected panels use a
-vertical board-joint pattern. Full posts and balusters remain in the normal
-`MODEL_VIEW` body for 3D viewing. Railings with `infill="none"` retain their open
-handrail/post design in drawings too.
-The unattended Bonsai exporter also activates these drawing meshes for its
-surface-fill raycasts, so the board pattern and occlusion match the linework.
+Railings have separate plan, elevation and section representations. Plans use
+a handrail and continuous panel, leaving a 50 mm gap above the pitch line and
+below the handrail (reduced proportionally for very low railings). Elevations
+and sections use wire linework for the handrail, panel boundaries and vertical
+joints, spaced by `baluster_spacing`. These representations have no faces, so
+the exporter retains outlines of equipment behind them. Full posts and balusters
+remain in the normal `MODEL_VIEW` body for 3D viewing. Railings with
+`infill="none"` retain their open handrail/post design in drawings too.
+The unattended Bonsai exporter activates the corresponding drawing geometry
+for visibility calculations as well as native linework generation.
 
 `add_house_railings()` adds the open-side guards for both indoor flights,
 the entrance flight and landing, and the gallery on either side of the
@@ -3058,9 +3062,9 @@ stove = ground.furniture("Kamna", ...)
 elevation.add_furniture_label(stove)
 ```
 
-In `house2.py`, BB selects the stove, cooker, sink, dishwasher, fridge,
-front kitchen counter, shower and basement water meter. Labels follow their visible
-objects and use the shared light-blue furniture text style.
+In `house2.py`, AA, BB and CC request every registered furniture and equipment
+label. The exporter retains labels for objects with visible geometry, faces them
+towards the section camera and uses the shared light-blue furniture text style.
 
 Axis-aligned exterior elevations can have a drawing-only terrain overlay:
 

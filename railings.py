@@ -239,6 +239,40 @@ def create_railing(storey, name, *, path, height=1.0, post_spacing=.9,
             ifcopenshell.api.style.assign_representation_styles(model, shape_representation=panel, styles=[style])
         drawing_items = (body.Items[0], *panel.Items)
         model.remove(panel)
+    # Wire-only elevation geometry cannot hide the equipment behind a guard.
+    # Keep the solid panel for plans and the physical members for 3D viewing.
+    wire_curves = []
+
+    def wire_line(coordinates):
+        coordinates = [tuple(float(value) for value in p) for p in coordinates]
+        if len(coordinates) >= 2:
+            wire_curves.append(model.createIfcPolyline([
+                model.createIfcCartesianPoint(p) for p in coordinates
+            ]))
+
+    for corner in range(4):
+        wire_line(rail_vertices[corner::4])
+    if not closed:
+        for ring in (rail_vertices[:4], rail_vertices[-4:]):
+            wire_line([*ring, ring[0]])
+    if infill == "vertical":
+        wire_line([p+np.array((0, 0, panel_gap)) for p in points])
+        wire_line([p+np.array((0, 0, height-rail_h-panel_gap)) for p in points])
+        for i, length in enumerate(lengths):
+            divisions = max(1, ceil(float(length)/baluster_spacing))
+            for j in range(divisions):
+                p = points[i]+deltas[i]*(j/divisions)
+                wire_line((p+np.array((0, 0, panel_gap)),
+                           p+np.array((0, 0, height-rail_h-panel_gap))))
+        if not closed:
+            p = points[-1]
+            wire_line((p+np.array((0, 0, panel_gap)),
+                       p+np.array((0, 0, height-rail_h-panel_gap))))
+    else:
+        for p, i, adjacent in posts.values():
+            bottom = float(support_height(tuple(p))) if support_height is not None else float(p[2])
+            wire_line(((*p[:2], bottom), p+np.array((0, 0, height-rail_h))))
+    wire_items = (model.createIfcGeometricCurveSet(wire_curves),)
     for context_type, target_view in (("Plan", "PLAN_VIEW"), ("Model", "ELEVATION_VIEW"),
                                       ("Model", "SECTION_VIEW")):
         context = ifcopenshell.util.representation.get_context(model, context_type, "Body", target_view)
@@ -248,7 +282,9 @@ def create_railing(storey, name, *, path, height=1.0, post_spacing=.9,
                 parent=house._body_context.ParentContext,
             )
         representation = model.createIfcShapeRepresentation(
-            context, "Body", body.RepresentationType, drawing_items,
+            context, "Body",
+            body.RepresentationType if target_view == "PLAN_VIEW" else "GeometricCurveSet",
+            drawing_items if target_view == "PLAN_VIEW" else wire_items,
         )
         ifcopenshell.api.geometry.assign_representation(model, product=element, representation=representation)
     if material not in house._materials:
@@ -264,6 +300,7 @@ def create_railing(storey, name, *, path, height=1.0, post_spacing=.9,
         "PostCount": len(post_positions), "BalusterCount": len(baluster_positions),
         "DrawingPanelGap": panel_gap if infill == "vertical" else None,
         "DrawingPanelThickness": panel_thickness if infill == "vertical" else None,
+        "ProjectionWireframe": True,
     })
     return Railing(element, storey, path=tuple(tuple(p) for p in points), height=height,
                    post_positions=post_positions, baluster_positions=tuple(baluster_positions))

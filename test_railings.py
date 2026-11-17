@@ -31,7 +31,7 @@ class RailingTests(unittest.TestCase):
         self.house = House("Railing tests")
         self.storey = self.house.storey("Upper", elevation=3)
 
-    def test_drawings_use_panel_without_posts_and_keep_full_model_body(self):
+    def test_plan_uses_panel_and_projections_use_non_occluding_wires(self):
         railing = self.storey.railing("Plan", path=[(2, 1, 3), (2, 3, 4), (3, 3, 4)])
         plan = ifcopenshell.util.representation.get_representation(railing, "Plan", "Body", "PLAN_VIEW")
         body = ifcopenshell.util.representation.get_representation(railing, "Model", "Body", "MODEL_VIEW")
@@ -48,7 +48,18 @@ class RailingTests(unittest.TestCase):
                                    (3.05, 3.05, 3.91, 3.91))
         for target in ("ELEVATION_VIEW", "SECTION_VIEW"):
             elevation = ifcopenshell.util.representation.get_representation(railing, "Model", "Body", target)
-            self.assertEqual(elevation.Items, plan.Items)
+            self.assertEqual(elevation.RepresentationType, "GeometricCurveSet")
+            curves = elevation.Items[0].Elements
+            self.assertTrue(curves)
+            self.assertTrue(all(curve.is_a("IfcPolyline") for curve in curves))
+            vertical = [curve for curve in curves if len(curve.Points) == 2
+                        and tuple(curve.Points[0].Coordinates[:2]) == tuple(curve.Points[1].Coordinates[:2])]
+            self.assertGreater(len(vertical), 10)
+            wire_settings = ifcopenshell.geom.settings()
+            wire_settings.set("dimensionality", ifcopenshell.ifcopenshell_wrapper.CURVES_SURFACES_AND_SOLIDS)
+            wire_shape = ifcopenshell.geom.create_shape(wire_settings, railing, elevation)
+            self.assertEqual(len(wire_shape.geometry.faces), 0)
+            self.assertGreater(len(wire_shape.geometry.edges), 0)
         _, triangles = mesh(railing, plan)
         edges = Counter(tuple(sorted(edge)) for a, b, c in triangles
                         for edge in ((a, b), (b, c), (c, a)))

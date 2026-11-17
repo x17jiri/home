@@ -266,6 +266,9 @@
     <rect width="1.2" height="1000" fill="white" />
     <path d="M 0.6 0 V 1000" fill="none" stroke="#555" stroke-width="0.06" />
 </pattern>
+<pattern id="railing-boards-transparent" width="1.2" height="1000" patternUnits="userSpaceOnUse">
+    <path d="M 0.6 0 V 1000" fill="none" stroke="#555" stroke-width="0.06" />
+</pattern>
 <!-- One roof-local tile repeat. The render pass projects each roof separately
      and bakes a fixed paper-width outline for matching SVG/PNG/PDF output. -->
 <pattern id="roof-tiles" width="1" height="1" patternUnits="userSpaceOnUse" data-tile-width-mm="300" data-course-mm="320" data-line-width-mm="0.06">
