@@ -100,6 +100,14 @@ class FoundationProfileTests(unittest.TestCase):
         stepped_volumes = [self.volume(f) for f in footers]
         step_strip_footings(storey, footers, height_map=profile)
         np.testing.assert_allclose([self.volume(f) for f in footers], stepped_volumes)
+        # Viewers must be able to select a geometry interpreter for every
+        # persisted body, including forward/reverse strips with clipped bands.
+        reopened = ifcopenshell.file.from_string(house.model.to_string())
+        for footer, expected_volume in zip(footers, stepped_volumes):
+            persisted = reopened.by_guid(footer.GlobalId)
+            body = ifcopenshell.util.representation.get_representation(persisted, "Model", "Body", "MODEL_VIEW")
+            self.assertIn(body.RepresentationType, ("SweptSolid", "CSG"))
+            self.assertAlmostEqual(self.volume(persisted), expected_volume)
 
     def test_per_wall_dimensions_override_defaults_and_change_the_correct_geometry(self):
         _, sources, options = self.fixture()

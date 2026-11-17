@@ -107,7 +107,7 @@ CEMFLOW_AND_FINISH_THICKNESS = 0.07
 GROUND_FLOOR_INSULATION_THICKNESS = 0.08
 GROUND_FLOOR_THICKNESS = GROUND_FLOOR_INSULATION_THICKNESS+CEMFLOW_AND_FINISH_THICKNESS
 PERIMETER_TOP_HEIGHT = 0.0#GROUND_FLOOR_THICKNESS
-GROUND_FINISHED_FLOOR_ELEVATION = 417.8  # Metres above sea level.
+GROUND_FINISHED_FLOOR_ELEVATION = 417.9  # Metres above sea level.
 # Corner terrain elevations above sea level: X=0 east, X=HOUSE_WIDTH west;
 # Y=0 street, Y=HOUSE_DEPTH garden.
 TERRAIN_STREET_EAST_ELEVATION = 415.8
@@ -5653,9 +5653,7 @@ def add_section_ground(drawing):
     first, last = earth_to_z(first), earth_to_z(last)
     wall_start, wall_end = float(basement_plan_min[axis]), float(basement_plan_max[axis])
     left, right = wall_start-SECTION_SOIL_EXTENT, wall_end+SECTION_SOIL_EXTENT
-    bottom = FOUNDATION_FOOTING_BOTTOM_Z-SECTION_SOIL_DEPTH
-    if drawing.name in ("bb", "cc") and axis == 1:
-        bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.bottom_profile(wall_start, wall_end))-SECTION_SOIL_DEPTH
+    bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.steps)-SECTION_SOIL_DEPTH
     ground_region = Polygon(((left, bottom), (right, bottom), (right, last),
                              (length, last), (0, first), (left, first)))
     finish = EXTERIOR_XPS_INSULATION_THICKNESS+FACADE_THICKNESS
@@ -5727,6 +5725,7 @@ def add_aa_elevation_marks(drawing):
         (BASEMENT_FINISHED_FLOOR_HEIGHT, False, "Basement finished floor level"),
         (BASEMENT_SLAB_BOTTOM_Z, True, "Foundation slab bottom level"),
         (FOUNDATION_FOOTING_BOTTOM_Z, False, "Foundation footing bottom level"),
+        (min(z for _, z in FOUNDATION_HEIGHT_MAP.steps), False, "Lowered foundation footing bottom level"),
     ):
         x0, x1 = (HOUSE_WIDTH+1.25, HOUSE_WIDTH+1.85) if west_side else (-1.0, -0.4)
         drawing.add_elevation_dimension(
@@ -5737,9 +5736,7 @@ def add_aa_elevation_marks(drawing):
 def add_house_section(cut, name, pdf):
     """Create a complete vertical section using the same cut as its plan markers."""
     section_top = max(roof_tiles_top_z, chimney.storey.elevation+chimney.end_height)
-    section_bottom = FOUNDATION_FOOTING_BOTTOM_Z-SECTION_SOIL_DEPTH
-    if name in ("bb", "cc"):
-        section_bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.steps)-SECTION_SOIL_DEPTH
+    section_bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.steps)-SECTION_SOIL_DEPTH
     drawing = cut.add_drawing(
         house, name, z=(section_bottom+section_top)/2,
         radius=max(6.5, (section_top-section_bottom)/2+.5),
@@ -5749,6 +5746,13 @@ def add_house_section(cut, name, pdf):
         hide_projected_ring_beam_seams=True,
     )
     add_section_ground(drawing)
+    if name == "aa":
+        # The buried street wall and its finish are behind AA's cut plane;
+        # their opaque projections would mask soil between the cut footings.
+        drawing.exclude_element(foundation_front_wall)
+        for facade in perimeter_facades:
+            if facade.wall == wall_basement_front:
+                drawing.exclude_element(facade)
     # Batting is drawing-only. Add it only where this section crosses an
     # exterior wall, and let the wall helper leave gaps at openings.
     view_x, view_y, _ = cut.view_direction

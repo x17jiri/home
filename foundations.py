@@ -331,6 +331,13 @@ def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeigh
             for operand in operands:
                 builder.translate(operand, (0, 0, bottom))
             solids.append(solid)
+        if len(solids) > 1:
+            # A body mixing extrusions and Boolean results has no valid
+            # inferred RepresentationType, and some viewers drop its bands.
+            # Join the touching bands into one explicitly typed CSG solid.
+            solids = ifcopenshell.api.geometry.add_boolean(
+                model, first_item=solids[0], second_items=solids[1:], operator="UNION",
+            )
         # The new profiles use global coordinates, including Z. Keep the
         # native axis in that same frame for consumers of the IFC model.
         old_representations = tuple(footer.Representation.Representations)
