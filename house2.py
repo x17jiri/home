@@ -30,25 +30,25 @@ from steel_profiles import heb_profile, heb_section
 
 
 HOUSE_WIDTH = 8.74
-HOUSE_DEPTH = 9.0-0.125
+HOUSE_DEPTH = 8.99
 BWT = 0.24
-FRONT_WALL_THICKNESS = 0.20
-BACK_WALL_THICKNESS = 0.20
+FRONT_WALL_THICKNESS = 0.24
+BACK_WALL_THICKNESS = 0.24
 UPPER_FRONT_WALL_THICKNESS = 0.175
 UPPER_BACK_WALL_THICKNESS = 0.175
 INNER_BWT = 0.24
 MID_WALL_THICKNESS = 0.30
-GARDEN_ROOMS_WALL_THICKNESS = 0.20
+GARDEN_ROOMS_WALL_THICKNESS = 0.30
 GARDEN_PARTITION_THICKNESS = 0.30
 DRY_WALL_WIDTH = 0.10
 FACADE_INSULATION_THICKNESS = 0.20
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.10
 FACADE_THICKNESS = 0.005
-GARDEN_ROOMS_WALL_CENTER_Y = 5.25
+GARDEN_ROOMS_WALL_CENTER_Y = 5.37
 GARDEN_ROOMS_WALL_Y = GARDEN_ROOMS_WALL_CENTER_Y-GARDEN_ROOMS_WALL_THICKNESS/2
-GARDEN_ROOMS_DEPTH = 3.375-0.03
+GARDEN_ROOMS_DEPTH = 3.375+0.6
 ROOM_DOOR_OPENING_WIDTH = 1.0
-GARDEN_DOOR_CENTER_CLEARANCE = 0.25  # Each construction opening stops this far from the centreline.
+GARDEN_DOOR_CENTER_CLEARANCE = 0.30  # Each construction opening stops this far from the centreline.
 THIRD_ROOM_DRYWALL_DOOR_CLEARANCE = 0.05  # Hallway face to the near jamb of the Pokoj 1 opening.
 THIRD_ROOM_NARROW_WALL_X = (
     HOUSE_WIDTH/2-GARDEN_DOOR_CENTER_CLEARANCE-ROOM_DOOR_OPENING_WIDTH-THIRD_ROOM_DRYWALL_DOOR_CLEARANCE
@@ -851,18 +851,18 @@ upper_front_wall_type = (upper_back_wall_type
                             layers=[("Brick", UPPER_FRONT_WALL_THICKNESS), "axis"],
                         ))
 garden_rooms_wall_type = house.wall_type(
-    f"Load bearing wall - VPC {GARDEN_ROOMS_WALL_THICKNESS*1000:g} mm",
-    layers=[("Brick", GARDEN_ROOMS_WALL_THICKNESS), "axis"],
+    f"Load bearing wall - Ytong Klasik {GARDEN_ROOMS_WALL_THICKNESS*1000:g} mm",
+    layers=[("Ytong Klasik", GARDEN_ROOMS_WALL_THICKNESS), "axis"],
 )
 mid_wall_type = house.wall_type(
     f"Load bearing wall - Ytong Klasik {MID_WALL_THICKNESS*1000:g} mm",
     layers=[("Ytong Klasik", MID_WALL_THICKNESS), "axis"],
 )
 garden_partition_wall = house.wall_type(
-    f"Partition wall - Ytong Klasik {GARDEN_PARTITION_THICKNESS*1000:g} mm",
+    f"Load bearing wall - Ytong Klasik {GARDEN_PARTITION_THICKNESS*1000:g} mm",
     layers=[("Ytong Klasik", GARDEN_PARTITION_THICKNESS)],  # Centred between rooms.
 )
-partition_wall = garden_partition_wall  # Shared Ytong Klasik partition type.
+partition_wall = garden_partition_wall  # Legacy alias for the garden-room wall type.
 upper_bearing_wall_type = house.wall_type(
     f"Upper load bearing wall - Ytong Klasik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm",
     layers=[("Ytong Klasik", UPPER_BEARING_WALL_THICKNESS)],  # Centred over the wall below.
@@ -897,6 +897,8 @@ wall_back_g = ground.wall(
 wall_east_g = ground.wall(
     (0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height,
 )
+for wall in (wall_front_g, wall_back_g, wall_east_g, wall_west_g):
+    wall.Description = f"VPC Cihla {wall.thickness*1000:g} mm (20-2,0)"
 wall_garden_rooms_g = ground.wall(
     (BWT, GARDEN_ROOMS_WALL_Y), (HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y),
     wall_type=garden_rooms_wall_type, height=ground_floor_height,
@@ -1001,7 +1003,7 @@ bathroom_door = wall_bathroom_partition_g.add_door(
 )
 ground_load_bearing_walls = (
     wall_front_g, wall_west_g, wall_back_g, wall_east_g, wall_garden_rooms_g, wall_third_room_g,
-    wall_stairway_g,
+    wall_stairway_g, wall_garden_partition_g,
 )
 # Apply the base course to all ground-floor masonry walls.
 # Add subsequent ground-floor walls above this common finishing pass.
@@ -4839,10 +4841,8 @@ if "ground" in sys.argv:
     for post in stair_landing_posts:
         drawing1.include_element(post)
     drawing1.add_material_legend([
-        ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
-        ("brick", f"Nosná zeď - VPC Cihla {BACK_WALL_THICKNESS*1000:g} mm"),
+        ("solid-white", f"Nosná zeď - VPC Cihla {BACK_WALL_THICKNESS*1000:g} mm (20-2,0)"),
         ("ytong-klasik", f"Nosná zeď - Ytong Klasik {MID_WALL_THICKNESS*1000:g} mm"),
-        ("ytong-klasik", f"Příčka - Ytong Klasik {GARDEN_PARTITION_THICKNESS*1000:g} mm"),
         ("drywall-diagonal1", f"Příčka - SDK {DRY_WALL_WIDTH*1000:g} mm"),
         ("rockwool-wave", f"Fasádní izolace"),
     ])
@@ -4905,6 +4905,20 @@ if "ground" in sys.argv:
     drawing1.add_opening_dimension(
         pokoj2_door, offset=1.5, finished_floor_height=GROUND_FLOOR_THICKNESS,
     )
+    garden_door_wall_y = (wall_garden_rooms_g.start[1]+wall_garden_rooms_g.body_offset
+                          +wall_garden_rooms_g.thickness)
+    for door, outside_face_x, local_jamb_x, name in (
+        (pokoj1_door, BWT, 0., "Pokoj 1 door opening to east outside wall"),
+        (pokoj2_door, HOUSE_WIDTH-BWT, ROOM_DOOR_OPENING_WIDTH,
+         "Pokoj 2 door opening to west outside wall"),
+    ):
+        opening = door.FillsVoids[0].RelatingOpeningElement
+        placement = ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
+        jamb_x = float((placement @ np.array((local_jamb_x, 0., 0., 1.)))[0])
+        x0, x1 = sorted((outside_face_x, jamb_x))
+        drawing1.add_dimension(
+            (x0, garden_door_wall_y), (x1, garden_door_wall_y), offset=.4, name=name,
+        )
     drawing1.add_opening_dimension(
         pokoj3_door, offset=1.0, finished_floor_height=GROUND_FLOOR_THICKNESS,
         highlight=True,
@@ -6137,9 +6151,9 @@ def add_house_section(cut, name, pdf):
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
         *[("brick", f"Nosná zeď - VPC Cihla {thickness*1000:g} mm")
           for thickness in sorted({FRONT_WALL_THICKNESS, BACK_WALL_THICKNESS,
-                                   UPPER_FRONT_WALL_THICKNESS, UPPER_BACK_WALL_THICKNESS})],
+                                   UPPER_FRONT_WALL_THICKNESS, UPPER_BACK_WALL_THICKNESS})
+          if thickness != BWT],
         ("ytong-klasik", f"Nosná zeď - Ytong Klasik {MID_WALL_THICKNESS*1000:g} mm"),
-        ("ytong-klasik", f"Příčka - Ytong Klasik {GARDEN_PARTITION_THICKNESS*1000:g} mm"),
         ("drywall-diagonal1", "Sádrokarton"),
         ("liapor-brick", "Zakládací řada - Ytong Start"),
         ("ztracene-bedneni", "Ztracené bednění 300 mm"),

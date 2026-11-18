@@ -211,8 +211,9 @@ With the current settings:
 
 Ring beams occupy the 210 mm ceiling bands above all basement walls and
 all ground-floor load-bearing walls. Their widths and centrelines follow
-the physical wall bodies. The 300 mm Ytong Klasik partition between Pokoj 1 and 2
-has no ground-floor ceiling ring beam. Its existing 300 mm load-bearing
+the physical wall bodies. The 300 mm load-bearing Ytong Klasik wall between
+Pokoj 1 and 2 has a centred ground-floor ceiling ring beam. Its existing
+250 mm load-bearing
 basement support, endpoints, strip footing and basement-ceiling ring beam
 are retained. These beams belong to the corresponding ceiling
 storeys, so hiding a ceiling hides its ring beams as well.
@@ -476,14 +477,17 @@ use `earth_to_z()`; no earth line or hatch is added in this view.
 
 It starts with a ground-floor storey at Z = 0, enclosing the
 `HOUSE_WIDTH × HOUSE_DEPTH` footprint. The ground-floor front and back walls use
-200 mm VPC (`FRONT_WALL_THICKNESS` / `BACK_WALL_THICKNESS`); upstairs they remain
+240 mm VPC (`FRONT_WALL_THICKNESS` / `BACK_WALL_THICKNESS`), described as
+`VPC Cihla 240 mm (20-2,0)` in the ground material legend; upstairs they remain
 175 mm VPC (`UPPER_FRONT_WALL_THICKNESS` / `UPPER_BACK_WALL_THICKNESS`). Both
-thicknesses use the paired diagonal `brick` hatch; east and west remain 240 mm VPC.
+175 mm walls use the paired diagonal `brick` hatch; 240 mm VPC uses plain white.
+East and west remain 240 mm VPC. All four ground-floor outer walls use
+the `(20-2,0)` specification and share one material-legend entry.
 On both above-ground floors, east and west walls span the full house depth;
 front and back walls fit between their inner faces. The exterior footprint,
 opening positions and basement supports stay fixed when changing these joints.
-The ground-floor transverse garden-room divider uses 200 mm VPC
-(`GARDEN_ROOMS_WALL_THICKNESS`), with the same `brick` hatch as the 175 mm walls.
+The ground-floor transverse garden-room divider uses 300 mm Ytong Klasik
+(`GARDEN_ROOMS_WALL_THICKNESS`), with the orange paired-diagonal hatch.
 The wall directly above it uses 300 mm Ytong Klasik, with the orange
 paired-diagonal hatch. Both retain the shared `GARDEN_ROOMS_WALL_CENTER_Y`.
 Its centreline and the back wall's outside face retain their positions;
@@ -570,7 +574,7 @@ has seven risers and six 300 mm treads, with the rise calculated at its new foot
 The outer railing continues around the landing's street edge. The ground plan
 shows the stair symbols, uphill walking arrow and combined stair notes.
 
-A centred 300 mm non-load-bearing Ytong Klasik partition along Y splits the garden
+A centred 300 mm load-bearing Ytong Klasik wall along Y splits the garden
 section into equal rooms. Their clear width follows
 `(HOUSE_WIDTH-2*BWT-GARDEN_PARTITION_THICKNESS)/2`; their clear depth is
 `GARDEN_ROOMS_DEPTH`. Its cut hatch uses the orange `ytong-klasik` pattern.
@@ -581,11 +585,13 @@ keep their physical centres aligned at `GARDEN_ROOMS_WALL_CENTER_Y`.
 uses 300 mm Ytong Klasik and the basement divider remains 250 mm formwork.
 Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
 openings through the garden-room dividing wall. Their nearest opening edges
-are each 250 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
-`GARDEN_DOOR_CENTER_CLEARANCE`, leaving 500 mm between openings. The centred
-300 mm Ytong Klasik partition has 100 mm clear between each face and the nearest opening.
+are each 300 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
+`GARDEN_DOOR_CENTER_CLEARANCE`, leaving 600 mm between openings. The centred
+300 mm Ytong Klasik wall has 150 mm clear between each face and the nearest opening.
+Dimensions on the garden-room wall show the distances from the outer opening
+jambs to the inside faces of the east and west exterior walls.
 `rozvadec` is a white 360 × 150 × 500 mm cabinet on the hallway face of
-the 500 mm pier, centred at `HOUSE_WIDTH/2`. `ROZVADEC_SIZE` stores width,
+the 600 mm pier, centred at `HOUSE_WIDTH/2`. `ROZVADEC_SIZE` stores width,
 depth and height; `ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.20` sets its mounting level
 above the finished ground floor, and `ROZVADEC_WALL_GAP = 0.01` clears the wall.
 Pokoj 3 also has a 900 mm inward-opening door in a 1000 mm construction

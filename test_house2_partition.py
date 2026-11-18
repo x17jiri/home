@@ -32,26 +32,26 @@ class GardenPartitionTests(unittest.TestCase):
         vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
         return vertices.min(axis=0), vertices.max(axis=0)
 
-    def test_ground_wall_is_centred_300mm_ytong_partition(self):
+    def test_garden_room_wall_is_centred_300mm_load_bearing_ytong(self):
         v = self.v
         wall = v["wall_garden_partition_g"]
         lo, hi = self.bounds(wall)
         self.assertAlmostEqual(hi[0]-lo[0], .30)
         self.assertAlmostEqual((hi[0]+lo[0])/2, v["HOUSE_WIDTH"]/2)
-        self.assertFalse(ifcopenshell.util.element.get_pset(wall, "Pset_WallCommon", "LoadBearing"))
+        self.assertTrue(ifcopenshell.util.element.get_pset(wall, "Pset_WallCommon", "LoadBearing"))
         material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
         self.assertEqual([layer.Material.Name for layer in material.MaterialLayers],
                          [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Ytong Klasik"])
-        self.assertIn("partition wall - Ytong Klasik 300 mm", ifcopenshell.util.element.get_type(wall).Name)
+        self.assertIn("load bearing wall - Ytong Klasik 300 mm", ifcopenshell.util.element.get_type(wall).Name)
         room1 = Polygon(v["pokoj1"].outline)
         room2 = Polygon(v["pokoj2"].outline)
         self.assertAlmostEqual(room1.bounds[2], lo[0])
         self.assertAlmostEqual(room2.bounds[0], hi[0])
         self.assertAlmostEqual(room1.area, room2.area)
 
-    def test_garden_dividers_are_centred_200mm_vpc_below_300mm_ytong(self):
+    def test_garden_dividers_are_aligned_300mm_ytong_on_both_floors(self):
         v = self.v
-        for wall, thickness in ((v["wall_back_g"], .20), (v["wall_back_u"], .175)):
+        for wall, thickness in ((v["wall_back_g"], .24), (v["wall_back_u"], .175)):
             lo, hi = self.bounds(wall)
             self.assertAlmostEqual(hi[1]-lo[1], thickness)
             self.assertAlmostEqual(hi[1], v["HOUSE_DEPTH"])
@@ -59,12 +59,12 @@ class GardenPartitionTests(unittest.TestCase):
             self.assertEqual(material.MaterialLayers[-1].Material.Name, "Brick")
         wall = v["wall_garden_rooms_g"]
         lo, hi = self.bounds(wall)
-        self.assertAlmostEqual(hi[1]-lo[1], .20)
+        self.assertAlmostEqual(hi[1]-lo[1], .30)
         basement_lo, basement_hi = self.bounds(v["wall_basement_garden_rooms"])
         self.assertAlmostEqual((lo[1]+hi[1])/2, (basement_lo[1]+basement_hi[1])/2)
         material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
         self.assertEqual([layer.Material.Name for layer in material.MaterialLayers],
-                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Brick"])
+                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Ytong Klasik"])
         upper_wall = v["wall_living_room_back_u"]
         upper_lo, upper_hi = self.bounds(upper_wall)
         self.assertAlmostEqual(upper_hi[1]-upper_lo[1], .30)
@@ -76,7 +76,7 @@ class GardenPartitionTests(unittest.TestCase):
         for room in (v["pokoj1"], v["pokoj2"]):
             bounds = Polygon(room.outline).bounds
             self.assertAlmostEqual(bounds[1], hi[1])
-            self.assertAlmostEqual(bounds[3], v["HOUSE_DEPTH"]-.20)
+            self.assertAlmostEqual(bounds[3], v["HOUSE_DEPTH"]-.24)
 
     def test_ground_mid_walls_are_300mm_ytong_on_the_original_centrelines(self):
         v = self.v
@@ -108,19 +108,21 @@ class GardenPartitionTests(unittest.TestCase):
             post_lo, _ = self.bounds(post)
             self.assertGreaterEqual(post_lo[0]+1e-9, right_hi[0])
 
-    def test_ground_front_wall_is_200mm_and_upper_front_stays_175mm(self):
+    def test_ground_front_back_walls_are_240mm_with_specification_and_upper_stays_175mm(self):
         v = self.v
-        for wall, thickness in ((v["wall_front_g"], .20), (v["wall_front_u"], .175)):
+        for wall, thickness in ((v["wall_front_g"], .24), (v["wall_front_u"], .175)):
             lo, hi = self.bounds(wall)
             self.assertAlmostEqual(lo[1], 0)
             self.assertAlmostEqual(hi[1], thickness)
             material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
             self.assertEqual(material.MaterialLayers[-1].Material.Name, "Brick")
         for room in (v["pokoj3"], v["koupelna"]):
-            self.assertAlmostEqual(Polygon(room.outline).bounds[1], .20)
+            self.assertAlmostEqual(Polygon(room.outline).bounds[1], .24)
         self.assertAlmostEqual(v["living_room_outline"].bounds[1], .175)
         landing_lo, _ = self.bounds(v["middle_stair_landing"])
-        self.assertAlmostEqual(landing_lo[1], .20)
+        self.assertAlmostEqual(landing_lo[1], .24)
+        for wall in (v["wall_front_g"], v["wall_back_g"], v["wall_east_g"], v["wall_west_g"]):
+            self.assertEqual(wall.Description, "VPC Cihla 240 mm (20-2,0)")
         for wall in (v["wall_east_g"], v["wall_west_g"]):
             lo, hi = self.bounds(wall)
             self.assertAlmostEqual(lo[1], 0)
@@ -223,11 +225,20 @@ class GardenPartitionTests(unittest.TestCase):
         else:
             self.fail("The restored sink must fit within the kitchen floor")
 
-    def test_only_the_ground_partition_ring_beam_is_removed(self):
+    def test_garden_room_load_bearing_wall_has_a_centred_ring_beam(self):
         v = self.v
         ground_hosts = {beam.source_wall for beam in v["ground_ring_beams"]}
-        self.assertNotIn(v["wall_garden_partition_g"], ground_hosts)
+        wall = v["wall_garden_partition_g"]
+        self.assertIn(wall, ground_hosts)
         self.assertEqual(ground_hosts, set(v["ground_load_bearing_walls"]))
+        rings = [beam for beam in v["ground_ring_beams"] if beam.source_wall == wall]
+        self.assertEqual(len(rings), 1)
+        lo, hi = self.bounds(rings[0])
+        self.assertAlmostEqual(hi[0]-lo[0], .30)
+        self.assertAlmostEqual((hi[0]+lo[0])/2, v["HOUSE_WIDTH"]/2)
+        self.assertAlmostEqual(lo[1], wall.start[1])
+        self.assertAlmostEqual(hi[1], wall.end[1])
+        self.assertAlmostEqual(hi[2]-lo[2], v["CEILING_THICKNESS"])
         basement_host = v["wall_basement_s01_s02"]
         self.assertTrue(any(beam.source_wall == basement_host for beam in v["basement_ring_beams"]))
         self.assertTrue(ifcopenshell.util.element.get_pset(basement_host, "Pset_WallCommon", "LoadBearing"))
