@@ -211,7 +211,7 @@ With the current settings:
 
 Ring beams occupy the 210 mm ceiling bands above all basement walls and
 all ground-floor load-bearing walls. Their widths and centrelines follow
-the physical wall bodies. The 115 mm VPC partition between Pokoj 1 and 2
+the physical wall bodies. The 300 mm Ytong Klasik partition between Pokoj 1 and 2
 has no ground-floor ceiling ring beam. Its existing 300 mm load-bearing
 basement support, endpoints, strip footing and basement-ceiling ring beam
 are retained. These beams belong to the corresponding ceiling
@@ -343,7 +343,7 @@ The normal basement ceiling insulation stops at the opening's garden edge.
 `GROUND_STAIR_OPENING_INSULATION_THICKNESS` control this detail. CC also labels
 the washing machine and ground-floor recuperation unit.
 The bathroom SDK's hallway face aligns
-with the front edge of the opening in the 240 mm stairway wall; the concrete
+with the front edge of the opening in the 300 mm Ytong stairway wall; the concrete
 ceiling grid stays fixed independently of this partition movement.
 
 The basement plan labels the five clear rooms `S.01`–`S.05` and includes a
@@ -474,14 +474,37 @@ outline, then falls to `EAST_VIEW_STONE_WALL_RIGHT_ELEVATION` (417.8 m) at the
 right end. The bottom extends 100 mm below the footings. All profile heights
 use `earth_to_z()`; no earth line or hatch is added in this view.
 
-It starts with a ground-floor storey at Z = 0 and four 240 mm VPC
-outer walls enclosing the `HOUSE_WIDTH × HOUSE_DEPTH` footprint. A 240 mm VPC
-load-bearing wall along X separates the garden rooms, with clear depth
-`GARDEN_ROOMS_DEPTH`; the street-side area uses the remaining space.
-A 240 mm VPC load-bearing wall separates room 3 from the bathroom.
+It starts with a ground-floor storey at Z = 0, enclosing the
+`HOUSE_WIDTH × HOUSE_DEPTH` footprint. The ground-floor front and back walls use
+200 mm VPC (`FRONT_WALL_THICKNESS` / `BACK_WALL_THICKNESS`); upstairs they remain
+175 mm VPC (`UPPER_FRONT_WALL_THICKNESS` / `UPPER_BACK_WALL_THICKNESS`). Both
+thicknesses use the paired diagonal `brick` hatch; east and west remain 240 mm VPC.
+On both above-ground floors, east and west walls span the full house depth;
+front and back walls fit between their inner faces. The exterior footprint,
+opening positions and basement supports stay fixed when changing these joints.
+The ground-floor transverse garden-room divider uses 200 mm VPC
+(`GARDEN_ROOMS_WALL_THICKNESS`), with the same `brick` hatch as the 175 mm walls.
+The wall directly above it uses 300 mm Ytong Klasik, with the orange
+paired-diagonal hatch. Both retain the shared `GARDEN_ROOMS_WALL_CENTER_Y`.
+Its centreline and the back wall's outside face retain their positions;
+the room polygons, dimensions and ceiling bearings use the new inside faces.
+The room polygons measure the clear garden-room depth from the actual wall faces.
+Basement supports and foundation footings keep their previous geometry,
+independently of these above-ground thicknesses.
+The purlin posts and stair-edge HEB keep their positions. Floors and
+front-wall fixtures follow the new inside face; the stair-edge HEB is now
+3065 mm clear of that face.
+The two ground-floor walls on either side of the bathroom use 300 mm Ytong
+Klasik (`MID_WALL_THICKNESS`). Their original
+centrelines remain fixed at X = 3.620 m and 6.130 m. Room polygons, wall-side
+fixtures and ceiling bearings follow the new faces. Other upper-floor VPC walls
+retain their original positions and thicknesses. The adjacent stair flight
+and landing edge follow the wider ground wall; the 1150/1000 mm flight widths
+remain fixed and the remaining gap is 80 mm. Landing posts clear both levels'
+walls, while the basement walls and foundation footings retain their geometry.
 Two 100 mm SDK partitions define room 3's narrowed garden-side end, without
 a Liapor base course or a ground-ceiling ring beam above them.
-Pokoj 3 keeps `THIRD_ROOM_WIDTH = 3.47 m` clear below its garden-side end;
+Pokoj 3 has `THIRD_ROOM_WIDTH = 3.230 m` clear below its garden-side end;
 the top `THIRD_ROOM_NARROW_DEPTH` is only
 `THIRD_ROOM_NARROW_WIDTH` wide, currently 2.735 m. Its hallway-facing SDK
 surface is 50 mm clear of the near jamb of the Pokoj 1 opening, controlled
@@ -492,12 +515,12 @@ two side-wall openings. Its room-facing surface is `THIRD_ROOM_STEP_Y`;
 the recess depth follows this position independently of the bathroom partition.
 The floor polygons and dimensions follow the step. Its 1.50 m street window
 starts 1.26 m from the inside face of the east wall.
-The stairs occupy the west/right side, enclosed by a 240 mm VPC wall from
-the front wall to the garden-room wall, with `STAIRWAY_WIDTH = 2.26 m`
+The stairs occupy the west/right side, enclosed by the 300 mm Ytong wall from
+the front wall to the garden-room wall, with `STAIRWAY_WIDTH = 2.230 m`
 clear beside the west exterior wall. The bathroom sits to their
 left, next to room 3. A 100 mm SDK partition splits that area into hallway at
 the garden end and bathroom at the front. `BATHROOM_DEPTH` is the
-clear bathroom depth. The stairway wall is load-bearing VPC with a Liapor base
+clear bathroom depth. The stairway wall is load-bearing Ytong with a Liapor base
 course; the bathroom/hallway partition is non-load-bearing SDK without a base
 course or a ground-ceiling ring beam above it. Its room-facing surface and
 door opening position along X follow the same bathroom dimensions.
@@ -547,18 +570,20 @@ has seven risers and six 300 mm treads, with the rise calculated at its new foot
 The outer railing continues around the landing's street edge. The ground plan
 shows the stair symbols, uphill walking arrow and combined stair notes.
 
-A centred 115 mm non-load-bearing VPC partition along Y splits the garden
+A centred 300 mm non-load-bearing Ytong Klasik partition along Y splits the garden
 section into equal rooms. Their clear width follows
 `(HOUSE_WIDTH-2*BWT-GARDEN_PARTITION_THICKNESS)/2`; their clear depth is
-`GARDEN_ROOMS_DEPTH`. Its cut hatch uses `diagonal1` on white.
-The common masonry finishing pass retains the Liapor base below the VPC.
-The 240 mm transverse divider and its corresponding basement and upper-floor
-walls follow `GARDEN_ROOMS_DEPTH`, keeping their physical centres aligned.
+`GARDEN_ROOMS_DEPTH`. Its cut hatch uses the orange `ytong-klasik` pattern.
+The common masonry finishing pass retains the Liapor base below the Ytong.
+The transverse divider and its corresponding basement and upper-floor walls
+keep their physical centres aligned at `GARDEN_ROOMS_WALL_CENTER_Y`.
+`GARDEN_ROOMS_DEPTH` remains the beam-sizing reference. The upper middle wall
+uses 300 mm Ytong Klasik and the basement divider remains 250 mm formwork.
 Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
 openings through the garden-room dividing wall. Their nearest opening edges
 are each 250 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
 `GARDEN_DOOR_CENTER_CLEARANCE`, leaving 500 mm between openings. The centred
-115 mm VPC partition has 192.5 mm clear between each face and the nearest opening.
+300 mm Ytong Klasik partition has 100 mm clear between each face and the nearest opening.
 `rozvadec` is a white 360 × 150 × 500 mm cabinet on the hallway face of
 the 500 mm pier, centred at `HOUSE_WIDTH/2`. `ROZVADEC_SIZE` stores width,
 depth and height; `ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.20` sets its mounting level
@@ -608,7 +633,7 @@ editable list with 13 `wide` block bays and a 5 mm `space` at every
 beam–block junction (26 spaces). The 8285 mm layout is centred across both
 rooms, overlapping each outside wall's inner face by 12.5 mm. Beam length
 rounds the room depth plus minimum end bearings up to the next 250 mm:
-currently 3750 mm, centred along Y with 182.5 mm bearing at each end.
+currently 3750 mm, centred along Y with 165 mm bearing at each end.
 Blocks stop at the supporting wall faces. The partition between the rooms
 has no ring beam or ceiling bearing role.
 `GARDEN_CEILING_*` constants derive the span, width and centring from the
@@ -633,17 +658,17 @@ later basement edits do not propagate upstairs. Edit `GARDEN_CEILING_STRUCTURE`,
 `ceiling_stairway` directly. `ceiling_wall_bounds` holds this level's actual
 inner wall faces for dimensions. The upper ceiling's beam geometry and its
 two drawing blocks are deliberately copied, not generated by a shared
-per-floor layout function. The ground-floor walls are thinner than their
-basement counterparts. `CEILING_ROOM3_SPLIT_Y`
+per-floor layout function. Dimensions use each level's actual wall thickness.
+`CEILING_ROOM3_SPLIT_Y`
 now remains only as the old bathroom reference used by upstairs fixtures.
 Rooms 0.03 and 0.05 have separate spans on either side of their middle
 load-bearing wall. `ceiling_room3` and `ceiling_room3_front` use 3500 mm
-beams with 130 mm east/outside-wall bearing; the remaining 110 mm bears
+beams with 130 mm east/outside-wall bearing; the remaining 140 mm bears
 on the middle wall. `ROOM3_CEILING_*` configures this span and its bearings.
 `ceiling_bathroom` and `ceiling_bathroom_front` have 120 mm bearing at each
-end (`BATHROOM_CEILING_BEARING`), giving a 2500 mm span with the current
+end (`BATHROOM_CEILING_BEARING`), giving a 2450 mm span with the current
 wall positions. All endpoints follow the physical supporting wall faces.
-Opposing beam ends leave 10 mm clear on the 240 mm middle wall, and block
+Opposing beam ends leave 40 mm clear on the 300 mm middle wall, and block
 offsets stop the ceramic bays at each wall's room-facing surface.
 Each of the four slabs has its own editable `structure` list. Garden-side
 sections use the shared basement wall-centre-to-beam-centre grid; the bathroom
@@ -652,16 +677,16 @@ street-side sections retain their positions.
 Street-side rows start at `BWT-FRONT_CEILING_WALL_OVERLAP` (40 mm overlap).
 Both plans dimension the split spans and bearings, share one spacing chain
 for aligned room-3/bathroom rows. Room 0.03 has its own schedule row;
-rooms 0.04 and 0.05 share one row combining their 2500 mm beams.
+rooms 0.04 and 0.05 have separate rows for their 2500 mm and 2450 mm beams.
 The basement S.03/S.04 layouts have independent specifications, as described above.
 `purlin_support_girders` adds two separate bare HEB180 steel beams at each
 distinct Y coordinate of the timber posts, without concrete wrapping.
 The room-3 span runs between the east wall and the middle wall; the bathroom
 span runs between the middle wall and the stairway wall.
 `PURLIN_SUPPORT_GIRDER_BEARING = 0.10 m` sets every support bearing.
-At the current wall positions, the spans are X = 0.140…3.600 m (3460 mm)
-and X = 3.640…6.100 m (2460 mm), leaving 40 mm between opposing ends
-on the 240 mm middle wall. They belong to the `Ceiling` storey. All four
+At the current wall positions, the spans are X = 0.140…3.570 m (3430 mm)
+and X = 3.670…6.080 m (2410 mm), leaving 100 mm between opposing ends
+on the 300 mm middle wall. They belong to the `Ceiling` storey. All four
 ceiling HEBs, including the ground-floor and basement stair-opening beams,
 use `add_ceiling_heb()` to centre the steel in the 210 mm MIAKO depth, leaving
 15 mm above and below the 180 mm profile. The stair-opening beams rise 15 mm;
@@ -1210,13 +1235,13 @@ garden-side living area.
 `LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - living_room_back_face_y` is the
 clear depth of the back/garden-side strip.
 The former horizontal SDK and two 1.25 m VPC returns are replaced by one
-240 mm load-bearing VPC wall across the full inside house width.
+300 mm load-bearing Ytong Klasik wall across the full inside house width.
 Its centre follows the actual centre of the ground-floor garden-room divider.
 Its sloped top is 50 mm below the rafter tops, measured perpendicular to the
 roof slope (`UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE`). It is capped
 horizontally at `purlin_bottom_z`; unlike the SDK, it is not capped at the
 plasterboard. The exterior gable walls keep their separate underside cuts.
-Cuts use the same plain white fill as the other 240 mm VPC walls.
+Cuts use the orange paired-diagonal `ytong-klasik` hatch.
 The removed returns' ring-beam bands are not extended
 through this new wall; the wall-plate ring beams remain on the perimeter.
 The vertical SDK partition turns towards the chimney before the middle
@@ -1297,7 +1322,7 @@ area; the hallway floor continues through the doorway threshold. Both
 exclude wall material, and the hallway also excludes the chimney footprint.
 The upper plan dimensions the clear toilet width and depth, both gaps beside
 the west post, and the stair-exit clearance to the new end wall.
-`UPPER_BEARING_WALL_THICKNESS = 0.24` sets the full-width VPC wall.
+`UPPER_BEARING_WALL_THICKNESS = 0.30` sets the full-width Ytong Klasik wall.
 Its front/back faces also locate the adjoining SDK, room floors, basin
 clearance and wall-section dimensions.
 The floor outlines follow the new wall faces, fill the removed step, and

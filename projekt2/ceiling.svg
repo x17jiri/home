@@ -1,6 +1,9 @@
 <svg xmlns:ns0="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:100" height="150mm" id="root" version="1.1" viewBox="0 0 200 150" width="200mm" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink"><text class="drawing-title" x="100" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D1.1.2. Strop nad 1.NP 1:100</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">.drawing-line-color-000000, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-000000 { stroke: #000000 !important; }
 .drawing-line-color-2e7d32, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-2e7d32 { stroke: #2e7d32 !important; }
 .drawing-line-color-ff0000, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-ff0000 { stroke: #ff0000 !important; }
+.PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-000000 { fill: #000000 !important; stroke: none !important; }
+.PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-2e7d32 { fill: #2e7d32 !important; stroke: none !important; }
+.PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-ff0000 { fill: #ff0000 !important; stroke: none !important; }
 .drawing-text-color-000000, .drawing-text-color-000000 tspan { fill: #000000 !important; stroke: none !important; }
 .PredefinedType-FILLAREA.drawing-fill-pattern-earth-section { fill: url(#earth-section) !important; }
 .drawing-text-size-1p5, .drawing-text-size-1p5 tspan { font-size: 1.5px !important; }
@@ -1454,81 +1457,83 @@ tspan.door-dimension {
     <rect width="12" height="18" fill="white" />
     <use ns0:href="#stone-wall-outlines" opacity="0.2" />
 </pattern>
-</defs>    <g ifc:name="Elevation ceiling" class="section target-view-PLANVIEW scale-100" ifc:plane="[[1.000000,0.000000,0.000000,0.000000],[0.000000,1.000000,0.000000,0.000000],[0.000000,0.000000,1.000000,3.080000],[0.000000,0.000000,0.000000,1.000000]]" ifc:matrix3="[[10.000000,0.000000,26.300000],[0.000000,10.000000,114.949998],[0.000000,0.000000,1.000000]]">
-        <g id="product-38956584-8fec-4582-910f-cac1b70f89a9" class="IfcBuildingElementPart material-Concretetopping projection" ifc:name="Ceiling - 0.05 Koupelna a chodba Concrete infill around chimney" ifc:guid="0ubMM4Z_n5Wf4Foi6t3ucf">
-            <path d="M72.299999383969052,68.749999463317749 L72.299999383969052,64.149999566135747"/>
-            <path d="M72.299999383969052,64.149999566135747 L67.699999486787064,64.149999566135747"/>
-            <path d="M67.699999486787064,64.149999566135747 L67.699999486787064,68.749999463317749"/>
-            <path d="M67.699999486787064,68.749999463317749 L72.299999383969052,68.749999463317749"/>
-            <path d="M63.699999576194031,68.849999461082561 L86.299999071044667,68.849999461082561"/>
-            <path d="M63.699999576194031,63.699999576194031 L63.699999576194031,68.849999461082561"/>
-            <path d="M86.299999071044667,63.699999576194031 L63.699999576194031,63.699999576194031"/>
-            <path d="M86.299999071044667,68.849999461082561 L86.299999071044667,63.699999576194031"/>
+</defs>    <g ifc:name="Elevation ceiling" class="section target-view-PLANVIEW scale-100" ifc:plane="[[1.000000,0.000000,0.000000,0.000000],[0.000000,1.000000,0.000000,0.000000],[0.000000,0.000000,1.000000,3.080000],[0.000000,0.000000,0.000000,1.000000]]" ifc:matrix3="[[10.000000,0.000000,26.250000],[0.000000,10.000000,114.999998],[0.000000,0.000000,1.000000]]">
+        <g id="product-051686ff-df64-4e6b-a653-e57d79cb1f15" class="IfcBuildingElementPart material-Concretetopping projection" ifc:name="Ceiling - 0.05 Koupelna a chodba Concrete infill around chimney" ifc:guid="055eR$tsHEQwPJvNrvonyL">
+            <path d="M72.299999383969052,68.699999464435336 L72.299999383969052,64.099999567253334"/>
+            <path d="M72.299999383969052,64.099999567253334 L67.69999948678705,64.099999567253334"/>
+            <path d="M67.69999948678705,64.099999567253334 L67.69999948678705,68.699999464435336"/>
+            <path d="M67.69999948678705,68.699999464435336 L72.299999383969052,68.699999464435336"/>
+            <path d="M63.949999570606096,68.799999462200148 L86.049999076632602,68.799999462200148"/>
+            <path d="M63.949999570606096,63.949999570606103 L63.949999570606096,68.799999462200148"/>
+            <path d="M86.049999076632602,63.949999570606103 L63.949999570606096,63.949999570606103"/>
+            <path d="M86.049999076632602,68.799999462200148 L86.049999076632602,63.949999570606103"/>
         </g>
-        <g id="product-c0c6d4aa-f8ad-466f-9ce6-1ce29b878ec0" class="IfcChimney material-Chimney projection" ifc:name="Main chimney" ifc:guid="30njIg_Ar6Rvpc7EARXux0">
-            <path d="M70.970941231101861,66.210683855788304 L70.999999413026316,66.449999514726741"/>
-            <path d="M70.885455441239785,65.985276353070347 L70.970941231101861,66.210683855788304"/>
-            <path d="M70.748510166818633,65.786876871307896 L70.885455441239785,65.985276353070347"/>
-            <path d="M70.568064169411969,65.627015667228221 L70.748510166818633,65.786876871307896"/>
-            <path d="M70.354604314494551,65.51498329294057 L70.568064169411969,65.627015667228221"/>
-            <path d="M70.120536112939163,65.457290662817456 L70.354604314494551,65.51498329294057"/>
-            <path d="M69.879462757816938,65.457290662817471 L70.120536112939163,65.457290662817456"/>
-            <path d="M69.64539455626155,65.51498329294057 L69.879462757816938,65.457290662817471"/>
-            <path d="M69.431934701344133,65.627015667228221 L69.64539455626155,65.51498329294057"/>
-            <path d="M69.251488703937468,65.786876871307896 L69.431934701344133,65.627015667228221"/>
-            <path d="M69.114543429516331,65.985276353070347 L69.251488703937468,65.786876871307896"/>
-            <path d="M69.029057639654241,66.210683855788318 L69.114543429516331,65.985276353070347"/>
-            <path d="M68.9999994577298,66.449999514726741 L69.029057639654241,66.210683855788318"/>
-            <path d="M69.029057639654241,66.689315173665179 L68.9999994577298,66.449999514726741"/>
-            <path d="M69.114543429516331,66.91472267638315 L69.029057639654241,66.689315173665179"/>
-            <path d="M69.251488703937468,67.113122158145586 L69.114543429516331,66.91472267638315"/>
-            <path d="M69.431934701344133,67.272983362225276 L69.251488703937468,67.113122158145586"/>
-            <path d="M69.64539455626155,67.385015736512912 L69.431934701344133,67.272983362225276"/>
-            <path d="M69.879462757816938,67.442708366636026 L69.64539455626155,67.385015736512912"/>
-            <path d="M70.120536112939178,67.442708366636026 L69.879462757816938,67.442708366636026"/>
-            <path d="M70.354604314494551,67.385015736512912 L70.120536112939178,67.442708366636026"/>
-            <path d="M70.568064169411983,67.272983362225276 L70.354604314494551,67.385015736512912"/>
-            <path d="M70.748510166818647,67.113122158145586 L70.568064169411983,67.272983362225276"/>
-            <path d="M70.885455441239785,66.91472267638315 L70.748510166818647,67.113122158145586"/>
-            <path d="M70.970941231101861,66.689315173665179 L70.885455441239785,66.91472267638315"/>
-            <path d="M70.999999413026316,66.449999514726741 L70.970941231101861,66.689315173665179"/>
-            <path d="M67.999999480081541,68.449999470023272 L71.999999390674574,68.449999470023272"/>
-            <path d="M71.999999390674574,68.449999470023272 L71.999999390674574,64.449999559430225"/>
-            <path d="M71.999999390674574,64.449999559430225 L67.999999480081541,64.449999559430225"/>
-            <path d="M67.999999480081541,64.449999559430225 L67.999999480081541,68.449999470023272"/>
+        <g id="product-2f3eeb02-829a-4b80-bf07-5a6ce519fa05" class="IfcChimney material-Chimney projection" ifc:name="Main chimney" ifc:guid="0lFki2WffBWBy7Mcpb6Ve5">
+            <path d="M70.970941231101861,66.160683856905891 L70.999999413026316,66.399999515844343"/>
+            <path d="M70.885455441239785,65.935276354187934 L70.970941231101861,66.160683856905891"/>
+            <path d="M70.748510166818633,65.736876872425483 L70.885455441239785,65.935276354187934"/>
+            <path d="M70.568064169411969,65.577015668345808 L70.748510166818633,65.736876872425483"/>
+            <path d="M70.354604314494551,65.464983294058158 L70.568064169411969,65.577015668345808"/>
+            <path d="M70.120536112939163,65.407290663935044 L70.354604314494551,65.464983294058158"/>
+            <path d="M69.879462757816938,65.407290663935058 L70.120536112939163,65.407290663935044"/>
+            <path d="M69.64539455626155,65.464983294058158 L69.879462757816938,65.407290663935058"/>
+            <path d="M69.431934701344133,65.577015668345808 L69.64539455626155,65.464983294058158"/>
+            <path d="M69.251488703937468,65.736876872425483 L69.431934701344133,65.577015668345808"/>
+            <path d="M69.114543429516331,65.935276354187934 L69.251488703937468,65.736876872425483"/>
+            <path d="M69.029057639654241,66.160683856905905 L69.114543429516331,65.935276354187934"/>
+            <path d="M68.9999994577298,66.399999515844343 L69.029057639654241,66.160683856905905"/>
+            <path d="M69.029057639654241,66.639315174782766 L68.9999994577298,66.399999515844343"/>
+            <path d="M69.114543429516331,66.864722677500737 L69.029057639654241,66.639315174782766"/>
+            <path d="M69.251488703937468,67.063122159263173 L69.114543429516331,66.864722677500737"/>
+            <path d="M69.431934701344133,67.222983363342877 L69.251488703937468,67.063122159263173"/>
+            <path d="M69.64539455626155,67.335015737630499 L69.431934701344133,67.222983363342877"/>
+            <path d="M69.879462757816938,67.392708367753613 L69.64539455626155,67.335015737630499"/>
+            <path d="M70.120536112939178,67.392708367753613 L69.879462757816938,67.392708367753613"/>
+            <path d="M70.354604314494551,67.335015737630499 L70.120536112939178,67.392708367753613"/>
+            <path d="M70.568064169411983,67.222983363342877 L70.354604314494551,67.335015737630499"/>
+            <path d="M70.748510166818647,67.063122159263173 L70.568064169411983,67.222983363342877"/>
+            <path d="M70.885455441239785,66.864722677500737 L70.748510166818647,67.063122159263173"/>
+            <path d="M70.970941231101861,66.639315174782766 L70.885455441239785,66.864722677500737"/>
+            <path d="M70.999999413026316,66.399999515844343 L70.970941231101861,66.639315174782766"/>
+            <path d="M67.999999480081541,68.399999471140859 L71.999999390674574,68.399999471140859"/>
+            <path d="M71.999999390674574,68.399999471140859 L71.999999390674574,64.399999560547826"/>
+            <path d="M71.999999390674574,64.399999560547826 L67.999999480081541,64.399999560547826"/>
+            <path d="M67.999999480081541,64.399999560547826 L67.999999480081541,68.399999471140859"/>
         </g>
-    <g ifc:guid="30njIg_Ar6Rvpc7EARXux0" ifc:name="Main chimney" class="IfcChimney material-Chimney cut"><path/><path d="M68.00000190734863,64.45000171661377 L68.00000190734863,66.54719829559326 L68.00000190734863,68.4499979019165 L70.09719848632812,68.4499979019165 L71.99999809265137,68.4499979019165 L71.99999809265137,66.35280132293701 L71.99999809265137,64.45000171661377 L69.90280151367188,64.45000171661377 Z M70.99999904632568,66.44999980926514 L70.96008777618408,66.65063858032227 L70.92388153076172,66.83268547058105 L70.810227394104,67.00277805328369 L70.707106590271,67.15710639953613 L70.53701400756836,67.27076053619385 L70.38268566131592,67.37388134002686 L70.1820421218872,67.41378784179688 L70.0,67.44999885559082 L69.79936122894287,67.41008758544922 L69.61731433868408,67.37388134002686 L69.44722175598145,67.26022720336914 L69.292893409729,67.15710639953613 L69.17923927307129,66.9870138168335 L69.07611846923828,66.83268547058105 L69.03621196746826,66.63204193115234 L69.00000095367432,66.44999980926514 L69.03991222381592,66.24936103820801 L69.07611846923828,66.06731414794922 L69.189772605896,65.89722156524658 L69.292893409729,65.74289321899414 L69.46298599243164,65.62923908233643 L69.61731433868408,65.52611827850342 L69.8179578781128,65.4862117767334 L70.0,65.45000076293945 L70.20063877105713,65.48991203308105 L70.38268566131592,65.52611827850342 L70.55277824401855,65.63977241516113 L70.707106590271,65.74289321899414 L70.82076072692871,65.91298580169678 L70.92388153076172,66.06731414794922 L70.96378803253174,66.26795768737793 Z"/></g></g>
+    <g ifc:guid="0lFki2WffBWBy7Mcpb6Ve5" ifc:name="Main chimney" class="IfcChimney material-Chimney cut"><path/><path d="M68.00000190734863,64.40000057220459 L68.00000190734863,66.49777889251709 L68.00000190734863,68.39999675750732 L70.09778022766113,68.39999675750732 L71.99999809265137,68.39999675750732 L71.99999809265137,66.30221843719482 L71.99999809265137,64.40000057220459 L69.90221977233887,64.40000057220459 Z M70.99999904632568,66.39999866485596 L70.96007823944092,66.60069465637207 L70.92388153076172,66.78268432617188 L70.81019401550293,66.95282459259033 L70.707106590271,67.10710525512695 L70.53696632385254,67.22079277038574 L70.38268566131592,67.32388019561768 L70.18198490142822,67.36380100250244 L70.0,67.39999771118164 L69.79930400848389,67.36007690429688 L69.61731433868408,67.32388019561768 L69.44717407226562,67.21019268035889 L69.292893409729,67.10710525512695 L69.17920589447021,66.9369649887085 L69.07611846923828,66.78268432617188 L69.03619766235352,66.58198356628418 L69.00000095367432,66.39999866485596 L69.03992176055908,66.19930267333984 L69.07611846923828,66.01731300354004 L69.18980598449707,65.84717273712158 L69.292893409729,65.69289207458496 L69.46303367614746,65.57920455932617 L69.61731433868408,65.47611713409424 L69.81801509857178,65.43619632720947 L70.0,65.39999961853027 L70.20069599151611,65.43992042541504 L70.38268566131592,65.47611713409424 L70.55282592773438,65.58980464935303 L70.707106590271,65.69289207458496 L70.82079410552979,65.86303234100342 L70.92388153076172,66.01731300354004 L70.96380233764648,66.21801376342773 Z"/></g></g>
   <defs/>
-  <line class="GlobalId-1JmDlj0q58KQj8EBpBpYJN IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="81.80000305175781" x2="83.4000015258789" y1="88.3499984741211" y2="88.3499984741211"/>
-  <line class="GlobalId-1JmDlj0q58KQj8EBpBpYJN IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="83.4000015258789" x2="83.4000015258789" y1="88.3499984741211" y2="86.74999237060547"/>
-  <line class="GlobalId-1JmDlj0q58KQj8EBpBpYJN IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="83.4000015258789" x2="81.80000305175781" y1="86.74999237060547" y2="86.74999237060547"/>
-  <line class="GlobalId-1JmDlj0q58KQj8EBpBpYJN IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="81.80000305175781" x2="81.80000305175781" y1="86.74999237060547" y2="88.3499984741211"/>
-  <path class="GlobalId-0RYYW$lfT3pfLYUrzriJ2A IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 35.625,63.125 L 35.625,25.625"/>
+  <path class="GlobalId-0wg3Fz4TP9MOz7ghuw$O5c IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,91.6500015 L 87.25,91.6500015"/>
+  <path class="GlobalId-1LmscSurn6_8gSF5uyeuC6 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,91.6500015 L 62.3499985,91.6500015"/>
   
   
+  <path class="GlobalId-1_pky4ZDLAg8hLMUDpg7r9 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,80.8499985 L 62.3499985,80.8499985"/>
   
   
+  <path class="GlobalId-1m7wMNKNX7VQiPYSa4pXKP IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 66.875,62.6000023 L 66.875,25.1000023"/>
   
   
   
   
-  <path class="GlobalId-1LCAMgxOrCzOHfhbzJv$aA IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 85.625,63.125 L 85.625,25.625"/>
   
   
-  <line class="GlobalId-0pehRgDLP7LfDMNlAchLLM IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="56.599998474121094" x2="58.20000076293945" y1="86.75" y2="88.3499984741211"/>
-  <path class="GlobalId-3yLv1QHt19_ANATBmndaBB IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,90.9499969 L 62.3999977,90.9499969"/>
+  <line class="GlobalId-0ocBiZBT1A_xz$XbcUu07S IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="81.84999084472656" x2="83.44999694824219" y1="86.80000305175781" y2="88.4000015258789"/>
+  <path class="GlobalId-1$YrtHQ8j84xN8kDJqf1NU IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,104.5 L 62.3499985,104.5"/>
+  <path class="GlobalId-3zkW3pccvF$ec4nf25OcOn IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,64.5999985 L 62.3499985,64.5999985"/>
   
   
+  <line class="GlobalId-14L7tMWiT6MhcWxNL1U8n6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="81.84999084472656" x2="83.44999694824219" y1="88.4000015258789" y2="88.4000015258789"/>
+  <line class="GlobalId-14L7tMWiT6MhcWxNL1U8n6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="83.44999694824219" x2="83.44999694824219" y1="88.4000015258789" y2="86.80000305175781"/>
+  <line class="GlobalId-14L7tMWiT6MhcWxNL1U8n6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="83.44999694824219" x2="81.84999084472656" y1="86.80000305175781" y2="86.80000305175781"/>
+  <line class="GlobalId-14L7tMWiT6MhcWxNL1U8n6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="81.84999084472656" x2="81.84999084472656" y1="86.80000305175781" y2="88.4000015258789"/>
   
   
+  <path class="GlobalId-0btZO9_P9EHOXMJyYvfMKN IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 110.625,62.6000023 L 110.625,25.1000023"/>
+  <path class="GlobalId-3amHDH0o59WhB4B6uhPUmT IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 35.625,62.6000023 L 35.625,25.1000023"/>
   
   
   
   
-  <line class="GlobalId-0Yu0O0QQz4FAcCSkz0Xtp8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="56.599998474121094" x2="58.20000076293945" y1="88.3499984741211" y2="88.3499984741211"/>
-  <line class="GlobalId-0Yu0O0QQz4FAcCSkz0Xtp8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="58.20000076293945" x2="58.20000076293945" y1="88.3499984741211" y2="86.74999237060547"/>
-  <line class="GlobalId-0Yu0O0QQz4FAcCSkz0Xtp8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="58.20000076293945" x2="56.599998474121094" y1="86.74999237060547" y2="86.74999237060547"/>
-  <line class="GlobalId-0Yu0O0QQz4FAcCSkz0Xtp8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="56.599998474121094" x2="56.599998474121094" y1="86.74999237060547" y2="88.3499984741211"/>
+  <path class="GlobalId-2DIdXiLXb8zfuZzCOWBCIH IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6499939,79.5999985 L 112.649994,79.5999985"/>
   
   
   
@@ -1537,202 +1542,140 @@ tspan.door-dimension {
   
   
   
-  <path class="GlobalId-35OhNnpC11yA2vV4txDDit IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,97.5500031 L 87.5,97.5500031"/>
-  <path class="GlobalId-0t00EHq$b1PQG7WOUC3pV8 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,69.6499939 L 62.3999977,69.6499939"/>
-  <path class="GlobalId-264bhh$IDFYgJSqx0CujA5 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 54.375,63.125 L 54.375,25.625"/>
   
   
   
   
-  <path class="GlobalId-0Qgh0N8H5ADwnJx6m7MmbX IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,71.3000031 L 87.5,71.3000031"/>
   
   
   
   
   
   
-  <line class="GlobalId-1swxXRkk15WhO_bYwQNHcO IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="45.3125" x2="52.8125" y1="44.375" y2="44.375"/>
   
   
   
   
+  <path class="GlobalId-0WINx1k9X0vA3sus0XF8$5 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,109.5 L 87.25,109.5"/>
+  <path class="GlobalId-3ozSrXR01BjAN815Qc7o2R IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,109.5 L 62.3499985,109.5"/>
+  <path class="GlobalId-3ueYxOiVb3bPwxDYPBRHaO IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 41.875,62.6000023 L 41.875,25.1000023"/>
   
   
-  <path class="GlobalId-0WhjxXAkXB_8mcgDEVBWYI IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 98.125,63.125 L 98.125,25.625"/>
-  <path class="GlobalId-1Y9s9B$R9BVfnhim5b4rVd IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6000061,74.6499939 L 112.600006,74.6499939"/>
   
   
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="71.0" x2="70.98078918457031" y1="66.44999694824219" y2="66.25491333007812"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.98078918457031" x2="70.92388153076172" y1="66.25491333007812" y2="66.06731414794922"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.92388153076172" x2="70.83146667480469" y1="66.06731414794922" y2="65.89442443847656"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.83146667480469" x2="70.70710754394531" y1="65.89442443847656" y2="65.74288940429688"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.70710754394531" x2="70.55557250976562" y1="65.74288940429688" y2="65.6185302734375"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.55557250976562" x2="70.38268280029297" y1="65.6185302734375" y2="65.52611541748047"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.38268280029297" x2="70.1950912475586" y1="65.52611541748047" y2="65.4692153930664"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.1950912475586" x2="70.0" y1="65.4692153930664" y2="65.44999694824219"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.0" x2="69.8049087524414" y1="65.44999694824219" y2="65.4692153930664"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.8049087524414" x2="69.61731719970703" y1="65.4692153930664" y2="65.52611541748047"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.61731719970703" x2="69.44442749023438" y1="65.52611541748047" y2="65.6185302734375"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.44442749023438" x2="69.29289245605469" y1="65.6185302734375" y2="65.74288940429688"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.29289245605469" x2="69.16853332519531" y1="65.74288940429688" y2="65.89442443847656"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.16853332519531" x2="69.07611846923828" y1="65.89442443847656" y2="66.06731414794922"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.07611846923828" x2="69.01921081542969" y1="66.06731414794922" y2="66.25491333007812"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.01921081542969" x2="69.0" y1="66.25491333007812" y2="66.44999694824219"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.0" x2="69.01921081542969" y1="66.44999694824219" y2="66.64508819580078"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.01921081542969" x2="69.07611846923828" y1="66.64508819580078" y2="66.83268737792969"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.07611846923828" x2="69.16853332519531" y1="66.83268737792969" y2="67.00556945800781"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.16853332519531" x2="69.29289245605469" y1="67.00556945800781" y2="67.1571044921875"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.29289245605469" x2="69.44442749023438" y1="67.1571044921875" y2="67.2814712524414"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.44442749023438" x2="69.61731719970703" y1="67.2814712524414" y2="67.3738784790039"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.61731719970703" x2="69.8049087524414" y1="67.3738784790039" y2="67.4307861328125"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.8049087524414" x2="70.0" y1="67.4307861328125" y2="67.44999694824219"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.0" x2="70.1950912475586" y1="67.44999694824219" y2="67.4307861328125"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.1950912475586" x2="70.38268280029297" y1="67.4307861328125" y2="67.3738784790039"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.38268280029297" x2="70.55557250976562" y1="67.3738784790039" y2="67.2814712524414"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.55557250976562" x2="70.70710754394531" y1="67.2814712524414" y2="67.1571044921875"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.70710754394531" x2="70.83146667480469" y1="67.1571044921875" y2="67.00556945800781"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.83146667480469" x2="70.92388153076172" y1="67.00556945800781" y2="66.83268737792969"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.92388153076172" x2="70.98078918457031" y1="66.83268737792969" y2="66.64508819580078"/>
-  <line class="GlobalId-0Nq0nlDKT7ofeVDcdrCLKR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.98078918457031" x2="71.0" y1="66.64508819580078" y2="66.44999694824219"/>
-  <path class="GlobalId-2ya$xWrvbEz9$8MhRBDGnT IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,92.5500031 L 62.3999977,92.5500031"/>
   
   
+  <path class="GlobalId-00upuEZ5z6J9HHxrfLXBoQ IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,71.25 L 87.25,71.25"/>
   
   
   
   
   
   
+  <path class="GlobalId-0hMw7J2XD3UBom$8_ljGeG IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6499939,74.5999985 L 112.649994,74.5999985"/>
   
   
-  <line class="GlobalId-1YJqTk0Z94uO2cjNHreMrV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="81.80000305175781" x2="83.4000015258789" y1="88.3499984741211" y2="86.74999237060547"/>
+  <path class="GlobalId-2zWVMLOeTCluFzHDsclU_t IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 85.625,62.6000023 L 85.625,25.1000023"/>
+  <line class="GlobalId-2yEJC1J$vAcu1nm2ROEyaE IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="56.54999542236328" x2="58.150001525878906" y1="86.80000305175781" y2="88.4000015258789"/>
   
   
-  <path class="GlobalId-0_n4ZaY0LCOOR0V2WOYElR IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,80.9000015 L 87.5,80.9000015"/>
   
   
   
   
+  <line class="GlobalId-2PMRCTplf33voIEB5E2nhz IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="56.54999542236328" x2="58.150001525878906" y1="88.4000015258789" y2="88.4000015258789"/>
+  <line class="GlobalId-2PMRCTplf33voIEB5E2nhz IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="58.150001525878906" x2="58.150001525878906" y1="88.4000015258789" y2="86.80000305175781"/>
+  <line class="GlobalId-2PMRCTplf33voIEB5E2nhz IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="58.150001525878906" x2="56.54999542236328" y1="86.80000305175781" y2="86.80000305175781"/>
+  <line class="GlobalId-2PMRCTplf33voIEB5E2nhz IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32" x1="56.54999542236328" x2="56.54999542236328" y1="86.80000305175781" y2="88.4000015258789"/>
   
   
-  <path class="GlobalId-3rkJDfmwnCkxXE2UMcIxXC IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 104.375,63.125 L 104.375,25.625"/>
   
   
   
   
   
   
+  <path class="GlobalId-25zEQhajD9Ue9S55LHgh7X IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 60.625,62.6000023 L 60.625,25.1000023"/>
   
   
+  <line class="GlobalId-14UcmsZi55axqg3z1dAonY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="81.84999084472656" x2="83.44999694824219" y1="88.4000015258789" y2="86.80000305175781"/>
   
   
-  <path class="GlobalId-3KJG4HVZr29fsoFcXhDbrO IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,82.5500031 L 62.3999977,82.5500031"/>
   
   
   
   
-  <path class="GlobalId-1sRNy$9C59Zgftm6JSngZs IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 73.125,63.125 L 73.125,25.625"/>
-  <line class="GlobalId-0WAgYkUnn0ChyZbpSwusvy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="87.70000457763672" x2="112.30000305175781" y1="82.55000305175781" y2="82.55000305175781"/>
-  <line class="GlobalId-0WAgYkUnn0ChyZbpSwusvy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="112.30000305175781" x2="112.30000305175781" y1="82.55000305175781" y2="80.75"/>
-  <line class="GlobalId-0WAgYkUnn0ChyZbpSwusvy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="112.30000305175781" x2="87.70000457763672" y1="80.75" y2="80.75"/>
-  <line class="GlobalId-0WAgYkUnn0ChyZbpSwusvy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="87.70000457763672" x2="87.70000457763672" y1="80.75" y2="82.55000305175781"/>
+  <path class="GlobalId-3MffUOSRrETB1d2cwqdl0T IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 104.375,62.6000023 L 104.375,25.1000023"/>
   
   
   
   
-  <line class="GlobalId-2ZBEQWOrfEj9sYb8y0fTlv IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="36.25" x2="43.75" y1="97.39999389648438" y2="97.39999389648438"/>
+  <line class="GlobalId-202DsMOrP4kha_Dv8KOV$w IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="56.54999542236328" x2="58.150001525878906" y1="88.4000015258789" y2="86.80000305175781"/>
   
   
   
   
   
   
+  <path class="GlobalId-1zsrz_9Rb9$h8iySEZFZqE IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,93.25 L 62.3499985,93.25"/>
+  <path class="GlobalId-2CpAvXu3zAM9nVTvobo0iX IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,74.5999985 L 62.3499985,74.5999985"/>
   
   
-  <path class="GlobalId-1cVnqthpf6VfnnXuvYEcqQ IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,69.6499939 L 87.5,69.6499939"/>
   
   
   
   
-  <path class="GlobalId-0wCPvYpX97VwfRXj3HR4X9 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 29.375,63.125 L 29.375,25.625"/>
+  <path class="GlobalId-2Mczxpjhz4w872Z80kzXgN IfcAnnotation PredefinedType-FILLAREA chimney-flue-fill" d="M 69.16852951049805 65.84442615509033 L 69.07611846923828 66.01731300354004 L 69.01921272277832 66.20491027832031 L 69.00000095367432 66.39999866485596 L 69.01921272277832 66.5950870513916 L 69.07611846923828 66.78268432617188 L 69.16852951049805 66.95557117462158 L 69.292893409729 67.10710525512695 L 70.707106590271 65.69289207458496 L 70.55557250976562 65.568528175354 L 70.38268566131592 65.47611713409424 L 70.19508838653564 65.41921138763428 L 70.0 65.39999961853027 L 69.80491161346436 65.41921138763428 L 69.61731433868408 65.47611713409424 L 69.44442749023438 65.568528175354 L 69.292893409729 65.69289207458496 L 69.16852951049805 65.84442615509033"/>
   
   
   
   
-  <path class="GlobalId-0zVwcQCf592Q5LJS043LSB IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,84.1999969 L 62.3999977,84.1999969"/>
   
   
+  <line class="GlobalId-3lzzi3QunDbfZn$SF29bS6 IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="87.21250915527344" x2="94.71250915527344" y1="43.85000228881836" y2="43.85000228881836"/>
   
   
   
   
-  <path class="GlobalId-1ZMANEd_n7$e_4BOH6esBa IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 91.875,63.125 L 91.875,25.625"/>
   
   
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="113.69999694824219" x2="26.30000114440918" y1="114.94999694824219" y2="114.94999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.30000114440918" x2="26.30000114440918" y1="114.94999694824219" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.30000114440918" x2="61.30000305175781" y1="112.55000305175781" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="61.30000305175781" x2="61.30000305175781" y1="112.55000305175781" y2="63.69999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="61.30000305175781" x2="28.69999885559082" y1="63.69999694824219" y2="63.69999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.69999885559082" x2="28.69999885559082" y1="63.69999694824219" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.69999885559082" x2="26.30000114440918" y1="112.55000305175781" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.30000114440918" x2="26.30000114440918" y1="112.55000305175781" y2="25.05000114440918"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.30000114440918" x2="113.69999694824219" y1="25.05000114440918" y2="25.05000114440918"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="113.69999694824219" x2="113.69999694824219" y1="25.05000114440918" y2="114.94999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="63.69999694824219" x2="86.30000305175781" y1="112.55000305175781" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="86.30000305175781" x2="86.30000305175781" y1="112.55000305175781" y2="63.69999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="86.30000305175781" x2="63.69999694824219" y1="63.69999694824219" y2="63.69999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="63.69999694824219" x2="63.69999694824219" y1="63.69999694824219" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="88.69999694824219" x2="111.30000305175781" y1="112.55000305175781" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.30000305175781" x2="111.30000305175781" y1="112.55000305175781" y2="63.69999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.30000305175781" x2="88.69999694824219" y1="63.69999694824219" y2="63.69999694824219"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="88.69999694824219" x2="88.69999694824219" y1="63.69999694824219" y2="112.55000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.30000305175781" x2="111.30000305175781" y1="61.30000305175781" y2="27.44999885559082"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.30000305175781" x2="28.69999885559082" y1="27.44999885559082" y2="27.44999885559082"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.69999885559082" x2="28.69999885559082" y1="27.44999885559082" y2="61.30000305175781"/>
-  <line class="GlobalId-3rU6K7OVPFsuXUyOKwx3Lv IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.69999885559082" x2="111.30000305175781" y1="61.30000305175781" y2="61.30000305175781"/>
-  <path class="GlobalId-2CJQylxXrAWfIeNbBdgX_1 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,97.5500031 L 62.3999977,97.5500031"/>
-  <line class="GlobalId-1W1BrjY7jErOhreTccnaXr IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="66.25" x2="73.75" y1="97.39999389648438" y2="97.39999389648438"/>
-  <path class="GlobalId-2Re$7$lHL0dvSPZBDqpk7n IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,103.800003 L 87.5,103.800003"/>
   
   
-  <path class="GlobalId-1aru4XqzvCVeF0ChlTOQYD IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,64.6499939 L 62.3999977,64.6499939"/>
-  <path class="GlobalId-106Ki1C5n6x8j5TdGqSGWi IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,74.6499939 L 87.5,74.6499939"/>
-  <path class="GlobalId-09Y4j12Zr7xeRAPIOd58rO IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 48.125,63.125 L 48.125,25.625"/>
+  <path class="GlobalId-1Wqz7VOsjEwf0_buoEji2u IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,69.5999985 L 87.25,69.5999985"/>
+  <path class="GlobalId-0XKQ3raRv4m8TSzqmNepQg IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 29.375,62.6000023 L 29.375,25.1000023"/>
   
   
-  <line class="GlobalId-36E1xefXP9HAguFzxvhRq$ IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="109.25" x2="116.75" y1="93.85000610351562" y2="93.85000610351562"/>
-  <line class="GlobalId-34NTcSaG967PO0po6X8iBH IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="87.1875" x2="94.6875" y1="44.375" y2="44.375"/>
   
   
   
   
   
   
+  <path class="GlobalId-1qOFVkInD4Ve5URIdHozO2 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6499939,69.5999985 L 112.649994,69.5999985"/>
+  <path class="GlobalId-3dx8IISHn1Cx6BGEbSalfN IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,84.1500015 L 62.3499985,84.1500015"/>
   
   
-  <path class="GlobalId-0cJf3HROr60xb5hexhdexs IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6000061,69.6499939 L 112.600006,69.6499939"/>
   
   
+  <path class="GlobalId-3Bb78QqL56ZRpGoB92bnon IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 79.375,62.6000023 L 79.375,25.1000023"/>
   
   
   
   
-  <path class="GlobalId-3hx_HuyEHE2wEjAyozNbRD IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,90.9499969 L 87.5,90.9499969"/>
-  <path class="GlobalId-1IJMTPfHzA7AZbvg0DkNgF IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,84.0999985 L 87.5,84.0999985"/>
-  <path class="GlobalId-3Qzmypac52KATHYhx$1VIM IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 66.875,63.125 L 66.875,25.625"/>
+  <line class="GlobalId-05h05ArDj7dfTMzEw4xBdF IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="36.04999923706055" x2="43.54999923706055" y1="97.875" y2="97.875"/>
+  <path class="GlobalId-25ufQWI9fFR8azAABM_5bc IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,104.5 L 87.25,104.5"/>
   
   
   
   
+  <line class="GlobalId-1T4n39dKL1yR9Ey8z0_Lhh IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="45.287498474121094" x2="52.787498474121094" y1="43.85000228881836" y2="43.85000228881836"/>
+  <path class="GlobalId-1HYL1u0YX429Xx9FwQn1tb IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,74.5999985 L 87.25,74.5999985"/>
+  <path class="GlobalId-07YmTZV_r48QFe3WXa9qSM IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 48.125,62.6000023 L 48.125,25.1000023"/>
   
   
   
   
-  <line class="GlobalId-1fRRPEc5D6pvugP3UkAb4J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="27.700000762939453" x2="62.30000305175781" y1="88.44999694824219" y2="88.44999694824219"/>
-  <line class="GlobalId-1fRRPEc5D6pvugP3UkAb4J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="62.30000305175781" x2="62.30000305175781" y1="88.44999694824219" y2="86.6500015258789"/>
-  <line class="GlobalId-1fRRPEc5D6pvugP3UkAb4J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="62.30000305175781" x2="27.700000762939453" y1="86.6500015258789" y2="86.6500015258789"/>
-  <line class="GlobalId-1fRRPEc5D6pvugP3UkAb4J IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="27.700000762939453" x2="27.700000762939453" y1="86.6500015258789" y2="88.44999694824219"/>
+  <path class="GlobalId-0o9Fe1HTb0wA__Gd4M6I54 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 98.125,62.6000023 L 98.125,25.1000023"/>
   
   
   
@@ -1745,16 +1688,41 @@ tspan.door-dimension {
   
   
   
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="113.75" x2="26.25" y1="115.0" y2="115.0"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.25" x2="26.25" y1="115.0" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.25" x2="60.95000457763672" y1="113.25" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="60.95000457763672" x2="60.95000457763672" y1="113.25" y2="63.95000076293945"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="60.95000457763672" x2="28.64999771118164" y1="63.95000076293945" y2="63.95000076293945"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.64999771118164" x2="28.64999771118164" y1="63.95000076293945" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.64999771118164" x2="26.25" y1="113.25" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.25" x2="26.25" y1="113.25" y2="25.0"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="26.25" x2="113.75" y1="25.0" y2="25.0"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="113.75" x2="113.75" y1="25.0" y2="115.0"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="63.95000076293945" x2="86.04999542236328" y1="113.25" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="86.04999542236328" x2="86.04999542236328" y1="113.25" y2="63.95000076293945"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="86.04999542236328" x2="63.95000076293945" y1="63.95000076293945" y2="63.95000076293945"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="63.95000076293945" x2="63.95000076293945" y1="63.95000076293945" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="89.05000305175781" x2="111.35000610351562" y1="113.25" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.35000610351562" x2="111.35000610351562" y1="113.25" y2="63.95000076293945"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.35000610351562" x2="89.05000305175781" y1="63.95000076293945" y2="63.95000076293945"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="89.05000305175781" x2="89.05000305175781" y1="63.95000076293945" y2="113.25"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.35000610351562" x2="111.35000610351562" y1="60.94999694824219" y2="26.750001907348633"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="111.35000610351562" x2="28.64999771118164" y1="26.750001907348633" y2="26.750001907348633"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.64999771118164" x2="28.64999771118164" y1="26.750001907348633" y2="60.94999694824219"/>
+  <line class="GlobalId-3vBNN$i898fuBsyVMzq$Z0 IfcAnnotation PredefinedType-LINEWORK load-bearing-wall-outline solid drawing-line-color-000000" x1="28.64999771118164" x2="111.35000610351562" y1="60.94999694824219" y2="60.94999694824219"/>
+  <path class="GlobalId-394bi6Sz59Ww7LqK4S9ODz IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,98.25 L 87.25,98.25"/>
   
   
-  <path class="GlobalId-0hSQKn6_vEbew83nex03wf IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6000061,64.6499939 L 112.600006,64.6499939"/>
+  <path class="GlobalId-0nHsZJOnz4rOviC9zwISWD IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,98.25 L 62.3499985,98.25"/>
+  <path class="GlobalId-0WagjLfHfAKxmFySIlmLgX IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,69.5999985 L 62.3499985,69.5999985"/>
+  <path class="GlobalId-0L2hmHpWHCEPQ61Qy4JFTb IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,80.8499985 L 87.25,80.8499985"/>
+  <path class="GlobalId-0bPfCcLHX9mRq_65b64uKK IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 54.375,62.6000023 L 54.375,25.1000023"/>
   
   
   
   
   
   
-  <path class="GlobalId-3Y71_GXKj62R4MEKdjrVHQ IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,80.9000015 L 62.3999977,80.9000015"/>
   
   
   
@@ -1763,24 +1731,48 @@ tspan.door-dimension {
   
   
   
-  <line class="GlobalId-2nXDqmLrn0K8xmpsig7FY4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="62.70000457763672" x2="87.30000305175781" y1="88.44999694824219" y2="88.44999694824219"/>
-  <line class="GlobalId-2nXDqmLrn0K8xmpsig7FY4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="87.30000305175781" x2="87.30000305175781" y1="88.44999694824219" y2="86.6500015258789"/>
-  <line class="GlobalId-2nXDqmLrn0K8xmpsig7FY4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="87.30000305175781" x2="62.70000457763672" y1="86.6500015258789" y2="86.6500015258789"/>
-  <line class="GlobalId-2nXDqmLrn0K8xmpsig7FY4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="62.70000457763672" x2="62.70000457763672" y1="86.6500015258789" y2="88.44999694824219"/>
-  <path class="GlobalId-1kosHqYYDEV8fU2Fmkr$RG IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,108.800003 L 87.5,108.800003"/>
   
   
-  <path class="GlobalId-0AMhPorBnExOPEXlH$02$B IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,108.800003 L 62.3999977,108.800003"/>
   
   
-  <path class="GlobalId-3uHjNfLZLAnx4cNmc65m7Q IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,73 L 87.5,73"/>
   
   
-  <path class="GlobalId-2ix68pffD2Pfn4cFFF4xMQ IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 41.875,63.125 L 41.875,25.625"/>
   
   
   
   
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="71.0" x2="70.98078918457031" y1="66.4000015258789" y2="66.20491027832031"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.98078918457031" x2="70.92388153076172" y1="66.20491027832031" y2="66.0173110961914"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.92388153076172" x2="70.83146667480469" y1="66.0173110961914" y2="65.84442901611328"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.83146667480469" x2="70.70710754394531" y1="65.84442901611328" y2="65.6928939819336"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.70710754394531" x2="70.55557250976562" y1="65.6928939819336" y2="65.56852722167969"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.55557250976562" x2="70.38268280029297" y1="65.56852722167969" y2="65.47611999511719"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.38268280029297" x2="70.1950912475586" y1="65.47611999511719" y2="65.4192123413086"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.1950912475586" x2="70.0" y1="65.4192123413086" y2="65.4000015258789"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.0" x2="69.8049087524414" y1="65.4000015258789" y2="65.4192123413086"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.8049087524414" x2="69.61731719970703" y1="65.4192123413086" y2="65.47611999511719"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.61731719970703" x2="69.44442749023438" y1="65.47611999511719" y2="65.56852722167969"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.44442749023438" x2="69.29289245605469" y1="65.56852722167969" y2="65.6928939819336"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.29289245605469" x2="69.16853332519531" y1="65.6928939819336" y2="65.84442901611328"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.16853332519531" x2="69.07611846923828" y1="65.84442901611328" y2="66.0173110961914"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.07611846923828" x2="69.01921081542969" y1="66.0173110961914" y2="66.20491027832031"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.01921081542969" x2="69.0" y1="66.20491027832031" y2="66.4000015258789"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.0" x2="69.01921081542969" y1="66.4000015258789" y2="66.59508514404297"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.01921081542969" x2="69.07611846923828" y1="66.59508514404297" y2="66.78268432617188"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.07611846923828" x2="69.16853332519531" y1="66.78268432617188" y2="66.95557403564453"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.16853332519531" x2="69.29289245605469" y1="66.95557403564453" y2="67.10710144042969"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.29289245605469" x2="69.44442749023438" y1="67.10710144042969" y2="67.2314682006836"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.44442749023438" x2="69.61731719970703" y1="67.2314682006836" y2="67.32388305664062"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.61731719970703" x2="69.8049087524414" y1="67.32388305664062" y2="67.38078308105469"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="69.8049087524414" x2="70.0" y1="67.38078308105469" y2="67.39999389648438"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.0" x2="70.1950912475586" y1="67.39999389648438" y2="67.38078308105469"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.1950912475586" x2="70.38268280029297" y1="67.38078308105469" y2="67.32388305664062"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.38268280029297" x2="70.55557250976562" y1="67.32388305664062" y2="67.2314682006836"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.55557250976562" x2="70.70710754394531" y1="67.2314682006836" y2="67.10710144042969"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.70710754394531" x2="70.83146667480469" y1="67.10710144042969" y2="66.95557403564453"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.83146667480469" x2="70.92388153076172" y1="66.95557403564453" y2="66.78268432617188"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.92388153076172" x2="70.98078918457031" y1="66.78268432617188" y2="66.59508514404297"/>
+  <line class="GlobalId-0sUI1l4q95ouL5VJIUVly1 IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="70.98078918457031" x2="71.0" y1="66.59508514404297" y2="66.4000015258789"/>
   
   
   
@@ -1789,15 +1781,20 @@ tspan.door-dimension {
   
   
   
+  <line class="GlobalId-3dZynW$uPB4f27FoRHgAsW IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="66.25" x2="73.75" y1="97.875" y2="97.875"/>
+  <path class="GlobalId-2Ccq3OvpnDUeNpSFHLKIjO IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,84.0499954 L 87.25,84.0499954"/>
   
   
   
   
   
   
-  <path class="GlobalId-1GnSpCCYb9vuJLs1fhPYEO IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,103.800003 L 62.3999977,103.800003"/>
   
   
+  <line class="GlobalId-0GLd$OKnj94f3xuTOCGWvo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="27.64999771118164" x2="61.95000076293945" y1="88.5" y2="88.5"/>
+  <line class="GlobalId-0GLd$OKnj94f3xuTOCGWvo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="61.95000076293945" x2="61.95000076293945" y1="88.5" y2="86.69999694824219"/>
+  <line class="GlobalId-0GLd$OKnj94f3xuTOCGWvo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="61.95000076293945" x2="27.64999771118164" y1="86.69999694824219" y2="86.69999694824219"/>
+  <line class="GlobalId-0GLd$OKnj94f3xuTOCGWvo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="27.64999771118164" x2="27.64999771118164" y1="86.69999694824219" y2="88.5"/>
   
   
   
@@ -1806,88 +1803,94 @@ tspan.door-dimension {
   
   
   
-  <path class="GlobalId-3BY9ggA1P9rAavaZe2lPxy IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 110.625,63.125 L 110.625,25.625"/>
   
   
   
   
   
   
-  <path class="GlobalId-0YF$JKFWr70B8L5zJNLC8F IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6000061,79.6500015 L 112.600006,79.6500015"/>
+  <path class="GlobalId-11GfaAjdj8F8cv7Idv$xu_ IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 91.875,62.6000023 L 91.875,25.1000023"/>
   
   
   
   
+  <path class="GlobalId-1OljB0w054UQKd_1MBuibY IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 87.6499939,64.5999985 L 112.649994,64.5999985"/>
+  <path class="GlobalId-2hmZBCWbn9_fobgbxaT0Dy IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.3500023,82.5 L 62.3499985,82.5"/>
   
   
   
   
+  <path class="GlobalId-3rh3bTKs18wv5MOuRDy8Sa IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 73.125,62.6000023 L 73.125,25.1000023"/>
+  <line class="GlobalId-3MQy36NTP9wOhhGdWrZhxo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="88.05000305175781" x2="112.3499984741211" y1="82.60000610351562" y2="82.60000610351562"/>
+  <line class="GlobalId-3MQy36NTP9wOhhGdWrZhxo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="112.3499984741211" x2="112.3499984741211" y1="82.60000610351562" y2="80.80000305175781"/>
+  <line class="GlobalId-3MQy36NTP9wOhhGdWrZhxo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="112.3499984741211" x2="88.05000305175781" y1="80.80000305175781" y2="80.80000305175781"/>
+  <line class="GlobalId-3MQy36NTP9wOhhGdWrZhxo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="88.05000305175781" x2="88.05000305175781" y1="80.80000305175781" y2="82.60000610351562"/>
+  <line class="GlobalId-3lHF8AKw13F8hfx8bp$A$U IfcAnnotation PredefinedType-LINEWORK room-annotation-separator" x1="109.44999694824219" x2="116.94999694824219" y1="93.95000457763672" y2="93.95000457763672"/>
+  <path class="GlobalId-2SiqzbucXAPQV3cYEosdf_ IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,93.25 L 87.25,93.25"/>
+  <path class="GlobalId-2TPCF_PZD7x8mfS1WY5x5h IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,82.4499969 L 87.25,82.4499969"/>
   
   
   
   
-  <path class="GlobalId-2uc9KMzGT52hEmQ8pQM7_R IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 79.375,63.125 L 79.375,25.625"/>
   
   
-  <line class="GlobalId-2t8L8c5mj9SRWV9YAIKPJl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="56.599998474121094" x2="58.20000076293945" y1="88.3499984741211" y2="86.74999237060547"/>
   
   
+  <line class="GlobalId-37u7TvQJD7L9bEzahcoYCx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="62.95000076293945" x2="87.05000305175781" y1="88.5" y2="88.5"/>
+  <line class="GlobalId-37u7TvQJD7L9bEzahcoYCx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="87.05000305175781" x2="87.05000305175781" y1="88.5" y2="86.69999694824219"/>
+  <line class="GlobalId-37u7TvQJD7L9bEzahcoYCx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="87.05000305175781" x2="62.95000076293945" y1="86.69999694824219" y2="86.69999694824219"/>
+  <line class="GlobalId-37u7TvQJD7L9bEzahcoYCx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="62.95000076293945" x2="62.95000076293945" y1="86.69999694824219" y2="88.5"/>
   
   
   
   
   
   
-  <path class="GlobalId-3vpPiVl9f0LvhKZ3zR1UZX IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,92.5500031 L 87.5,92.5500031"/>
-  <path class="GlobalId-31cRd7FI1AmQrpggMgHumT IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 27.4000015,74.6499939 L 62.3999977,74.6499939"/>
-  <path class="GlobalId-0sqwzqBDL6Og4Qoy$sdnKR IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.5,82.5 L 87.5,82.5"/>
+  <path class="GlobalId-0YpE7xt9b4aAZKxm_IFg06 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 62.75,72.9499969 L 87.25,72.9499969"/>
   
   
-  <path class="GlobalId-3U8SGca8fDQhCS$vPwHSK2 IfcAnnotation PredefinedType-LINEWORK drawing-line dash-dot drawing-line-color-ff0000 drawing-line-width-0p08 ceiling-beam-axis" d="M 60.625,63.125 L 60.625,25.625"/>
-  <line class="GlobalId-1qLqAfKbT0ff0Cd4HND7gX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-2e7d32 drawing-line-width-0p1" x1="81.80000305175781" x2="83.4000015258789" y1="86.75" y2="88.3499984741211"/>
-  <path class="GlobalId-1NP9h2o9T7aBUDDMsc4iiI IfcAnnotation PredefinedType-FILLAREA chimney-flue-fill" d="M 69.16852951049805 65.89442729949951 L 69.07611846923828 66.06731414794922 L 69.01921272277832 66.25491142272949 L 69.00000095367432 66.44999980926514 L 69.01921272277832 66.64508819580078 L 69.07611846923828 66.83268547058105 L 69.16852951049805 67.00557231903076 L 69.292893409729 67.15710639953613 L 70.707106590271 65.74289321899414 L 70.55557250976562 65.61852931976318 L 70.38268566131592 65.52611827850342 L 70.19508838653564 65.46921253204346 L 70.0 65.45000076293945 L 69.80491161346436 65.46921253204346 L 69.61731433868408 65.52611827850342 L 69.44442749023438 65.61852931976318 L 69.292893409729 65.74289321899414 L 69.16852951049805 65.89442729949951"/>
   
   
   
   
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(90.9375, 42.57499694824219) rotate(-0.0)">
-    <tspan class="GlobalId-1wNXOsPpT0kvZ3s4CbPh5z IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.02</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(90.96250915527344, 45.349998474121094) rotate(-0.0)">
+    <tspan class="GlobalId-0JHLyUZ0X48BHpoqP3kgv7 IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">13,95 m²</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(40.0, 95.59999084472656) rotate(-0.0)">
-    <tspan class="GlobalId-3q2srKP$XCLRvP4zVTS4qV IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.03</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(39.79999923706055, 99.375) rotate(-0.0)">
+    <tspan class="GlobalId-3hH67eBpDAqwBPjVp$wNt$ IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">15,01 m²</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(33.928001403808594, 87.55000305175781) rotate(-0.0)">
-    <tspan class="GlobalId-0dRBi3zyr5u8lUKpTWfWZ$ IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-1p5 drawing-text-color-000000" dy="0em" x="0" y="0">HEB180</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(49.037498474121094, 45.349998474121094) rotate(-0.0)">
+    <tspan class="GlobalId-1FyYGocSb8svjFC19EZDE0 IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">13,95 m²</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(67.12799835205078, 87.55000305175781) rotate(-0.0)">
-    <tspan class="GlobalId-0tgSUnekz5mgAMS8PmOzjV IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-1p5 drawing-text-color-000000" dy="0em" x="0" y="0">HEB180</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(39.79999923706055, 96.07499694824219) rotate(-0.0)">
+    <tspan class="GlobalId-3EiXr7GzvB4RUwMIVzu86H IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.03</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(49.0625, 45.875) rotate(-0.0)">
-    <tspan class="GlobalId-1aYmynnJ5CtxnOwKzQM5bC IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">13,79 m²</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(90.96250915527344, 42.04999923706055) rotate(-0.0)">
+    <tspan class="GlobalId-1ACrQPx_j0sv24LdJBMYN_ IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.02</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(49.0625, 42.57499694824219) rotate(-0.0)">
-    <tspan class="GlobalId-3eCSNc2tL2aeSR$OpzaKPH IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.01</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(113.19999694824219, 92.1500015258789) rotate(-0.0)">
+    <tspan class="GlobalId-0VSq08u1X3AfIb2FYVtCL5 IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.04</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 95.59999084472656) rotate(-0.0)">
-    <tspan class="GlobalId-3Y2fDwPkn5KQpc116ZaT$1 IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.05</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(49.037498474121094, 42.04999923706055) rotate(-0.0)">
+    <tspan class="GlobalId-3r$W6gNl99nfE1WQekMdRF IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.01</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 98.89999389648438) rotate(-0.0)">
-    <tspan class="GlobalId-2iZzqT8R5FDByTLsf0C_AM IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">6,85 m²</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 99.375) rotate(-0.0)">
+    <tspan class="GlobalId-3fF0ydbEX0DOyHPp3TuK08 IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">6,80 m²</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(40.0, 98.89999389648438) rotate(-0.0)">
-    <tspan class="GlobalId-2cXDj2crbDaPIsYMf4NKpV IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">14,94 m²</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(113.19999694824219, 95.44999694824219) rotate(-0.0)">
+    <tspan class="GlobalId-0UMNWLiArAkAryX1XR3eEz IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">13,54 m²</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(113.0, 95.3499984741211) rotate(-0.0)">
-    <tspan class="GlobalId-0q60sJ5oDE8eWJRd3URH4B IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">13,66 m²</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 96.07499694824219) rotate(-0.0)">
+    <tspan class="GlobalId-3l7MDTlpj72utE8T3msMVJ IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.05</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(90.9375, 45.875) rotate(-0.0)">
-    <tspan class="GlobalId-31A8VqpEf6z8n3K5AZCv2G IfcAnnotation PredefinedType-TEXT room-annotation room-area" dy="0em" x="0" y="0">13,79 m²</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(100.20000457763672, 81.69999694824219) rotate(-0.0)">
+    <tspan class="GlobalId-0BD4NTjcvA59_Dev6tvlCo IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-1p5 drawing-text-color-000000" dy="0em" x="0" y="0">HEB180</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(100.0, 81.6500015258789) rotate(-0.0)">
-    <tspan class="GlobalId-3RLnr8$5j2j9$hfXTJSO7z IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-1p5 drawing-text-color-000000" dy="0em" x="0" y="0">HEB180</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(67.28799438476562, 87.60000610351562) rotate(-0.0)">
+    <tspan class="GlobalId-0IQwx$wAbFCAP2$Et1njdy IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-1p5 drawing-text-color-000000" dy="0em" x="0" y="0">HEB180</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(113.0, 92.05000305175781) rotate(-0.0)">
-    <tspan class="GlobalId-3I4dInFg11CuAe0liTsFsP IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">0.04</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(33.82400131225586, 87.60000610351562) rotate(-0.0)">
+    <tspan class="GlobalId-0kZbQ45E51o9u1Z3EXCK5P IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-1p5 drawing-text-color-000000" dy="0em" x="0" y="0">HEB180</tspan>
   </text>
   <g class="right-side-panel">
     <rect class="right-side-panel-background" x="140" y="0" width="60" height="140"/>
@@ -1913,12 +1916,12 @@ tspan.door-dimension {
     <text class="material-legend-description" style="font-size:2.44444px"><tspan x="153.111" y="34.0833" style="font-size:2.44444px">Nosník MIAKO</tspan></text>
     </g>
     <g class="right-panel-table miako-beam-schedule">
-    <rect class="right-panel-table-outline" x="142" y="41.6667" width="56" height="23.8889"/>
+    <rect class="right-panel-table-outline" x="142" y="41.6667" width="56" height="28.3333"/>
     <text class="right-panel-table-title" x="170" y="44.7222" text-anchor="middle" dominant-baseline="middle" style="font-size:2.77778px">SPECIFIKACE MIAKO NOSNÍKŮ</text>
     <line class="right-panel-table-grid" x1="142" y1="47.7778" x2="198" y2="47.7778"/>
     <line class="right-panel-table-grid" x1="142" y1="52.2222" x2="198" y2="52.2222"/>
-    <line class="right-panel-table-grid" x1="172.8" y1="47.7778" x2="172.8" y2="65.5556"/>
-    <line class="right-panel-table-grid" x1="186.8" y1="47.7778" x2="186.8" y2="65.5556"/>
+    <line class="right-panel-table-grid" x1="172.8" y1="47.7778" x2="172.8" y2="70"/>
+    <line class="right-panel-table-grid" x1="186.8" y1="47.7778" x2="186.8" y2="70"/>
     <text class="miako-beam-schedule-heading" x="157.4" y="50" text-anchor="middle" dominant-baseline="middle" style="font-size:1.55556px">UMÍSTĚNÍ</text>
     <text class="miako-beam-schedule-heading" x="179.8" y="50" text-anchor="middle" dominant-baseline="middle" style="font-size:1.55556px">DÉLKA</text>
     <text class="miako-beam-schedule-heading" x="192.4" y="50" text-anchor="middle" dominant-baseline="middle" style="font-size:1.55556px">POČET</text>
@@ -1930,363 +1933,367 @@ tspan.door-dimension {
     <text class="miako-beam-schedule-text" x="179.8" y="58.8889" text-anchor="middle" dominant-baseline="middle" style="font-size:1.88889px">3500</text>
     <text class="miako-beam-schedule-text" x="192.4" y="58.8889" text-anchor="middle" dominant-baseline="middle" style="font-size:1.88889px">11</text>
     <line class="right-panel-table-grid" x1="142" y1="61.1111" x2="198" y2="61.1111"/>
-    <text class="miako-beam-schedule-text" x="142.833" y="63.3333" text-anchor="start" dominant-baseline="middle" style="font-size:1.88889px">0.04, 0.05</text>
+    <text class="miako-beam-schedule-text" x="142.833" y="63.3333" text-anchor="start" dominant-baseline="middle" style="font-size:1.88889px">0.04</text>
     <text class="miako-beam-schedule-text" x="179.8" y="63.3333" text-anchor="middle" dominant-baseline="middle" style="font-size:1.88889px">2500</text>
-    <text class="miako-beam-schedule-text" x="192.4" y="63.3333" text-anchor="middle" dominant-baseline="middle" style="font-size:1.88889px">16</text>
+    <text class="miako-beam-schedule-text" x="192.4" y="63.3333" text-anchor="middle" dominant-baseline="middle" style="font-size:1.88889px">4</text>
+    <line class="right-panel-table-grid" x1="142" y1="65.5556" x2="198" y2="65.5556"/>
+    <text class="miako-beam-schedule-text" x="142.833" y="67.7778" text-anchor="start" dominant-baseline="middle" style="font-size:1.88889px">0.05</text>
+    <text class="miako-beam-schedule-text" x="179.8" y="67.7778" text-anchor="middle" dominant-baseline="middle" style="font-size:1.88889px">2450</text>
+    <text class="miako-beam-schedule-text" x="192.4" y="67.7778" text-anchor="middle" dominant-baseline="middle" style="font-size:1.88889px">12</text>
     </g>
   </g>
   <g class="dimension-overlays">
-<line class="GlobalId-2vl03qowz69BeT$F72y955 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="108.80000305175781" y2="108.80000305175781"/>
-<line class="GlobalId-2vl03qowz69BeT$F72y955 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="103.80000305175781" y2="103.80000305175781"/>
-<line class="GlobalId-3bo8_mh912wR1QUYybsZeO IfcAnnotation PredefinedType-DIMENSION" x1="110.625" x2="111.30000305175781" y1="40.375" y2="40.375"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(110.962501526, 39.375) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">68</tspan>
+<line class="GlobalId-0PcerSOEr9EwEfN9IaHhif IfcAnnotation PredefinedType-DIMENSION" x1="48.85000228881836" x2="48.85000228881836" y1="84.1500015258789" y2="113.25"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.8500022888, 98.7000007629) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">2910</tspan>
   </text>
-<line class="GlobalId-0TRr0I5Mj1IgtmUqMdUXB8 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="73.0" y2="73.0"/>
-<line class="GlobalId-0TRr0I5Mj1IgtmUqMdUXB8 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="74.64999389648438" y2="74.64999389648438"/>
-<line class="GlobalId-0$wtGTJDv9ceFpu$XbrnnY IfcAnnotation PredefinedType-DIMENSION" x1="66.875" x2="73.125" y1="15.05000114440918" y2="15.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 14.05000114440918) rotate(0.0)">
+<line class="GlobalId-1bNbAMApTEwghOYVjuSaNm IfcAnnotation PredefinedType-DIMENSION" x1="48.85000228881836" x2="48.85000228881836" y1="113.25" y2="109.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.8500022888, 111.375) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">375</tspan>
+  </text>
+<line class="GlobalId-0IOqaBWZn8YxLJbY9otQYL IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="27.35000228881836" y1="109.5" y2="113.5"/>
+<line class="GlobalId-0IOqaBWZn8YxLJbY9otQYL IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.64999771118164" x2="28.64999771118164" y1="109.5" y2="113.5"/>
+<line class="GlobalId-1lIbl$HjPEJuUH5zVhIVbw IfcAnnotation PredefinedType-DIMENSION" x1="91.875" x2="98.125" y1="15.0" y2="15.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(95.0, 14.0) rotate(0.0)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
   </text>
-<line class="GlobalId-3FJhqOGvrCNx$KeRd_bDUQ IfcAnnotation PredefinedType-DIMENSION" x1="87.60000610351562" x2="88.69999694824219" y1="67.6500015258789" y2="67.6500015258789"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(88.1500015259, 66.6500015259) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">110</tspan>
+<line class="GlobalId-2cAr_i$Q90kgzOe8e6SS1H IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.75" x2="62.75" y1="69.5999984741211" y2="77.0999984741211"/>
+<line class="GlobalId-2cAr_i$Q90kgzOe8e6SS1H IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="63.95000076293945" x2="63.95000076293945" y1="69.5999984741211" y2="77.0999984741211"/>
+<line class="GlobalId-0lvkOD5an2leeQkM8r4i6q IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="29.375" x2="29.375" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-0lvkOD5an2leeQkM8r4i6q IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="35.625" x2="35.625" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-2v6zdKvIT5sQeSxB3G4$P_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="26.750001907348633" y2="26.750001907348633"/>
+<line class="GlobalId-2v6zdKvIT5sQeSxB3G4$P_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="25.10000228881836" y2="25.10000228881836"/>
+<line class="GlobalId-3JSYwzjiT0cx3$vyzlEWXr IfcAnnotation PredefinedType-DIMENSION" x1="66.875" x2="73.125" y1="15.0" y2="15.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 14.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
   </text>
-<line class="GlobalId-0SgjRFZ71Fge$FB$wVyX3M IfcAnnotation PredefinedType-DIMENSION" x1="11.30000114440918" x2="11.30000114440918" y1="92.55000305175781" y2="90.94999694824219"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.3000011444, 91.75) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">160</tspan>
+<line class="GlobalId-1jQbY4Maf1_AeFsLw9RS8f IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="113.25" y2="109.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 111.375) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">375</tspan>
   </text>
-<line class="GlobalId-2pqiMv07P3geP0uoXTEoN1 IfcAnnotation PredefinedType-DIMENSION" x1="48.900001525878906" x2="48.900001525878906" y1="84.19999694824219" y2="112.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.9000015259, 98.375) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">2835</tspan>
+<line class="GlobalId-3FvuhKRmf7SfJSgatsDCya IfcAnnotation PredefinedType-DIMENSION" x1="72.5" x2="72.5" y1="72.94999694824219" y2="74.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(71.5, 73.7749977112) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
   </text>
-<line class="GlobalId-0YabqmekXBrPsx1O8iOIEp IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="60.625" x2="60.625" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-0YabqmekXBrPsx1O8iOIEp IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="66.875" x2="66.875" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-3PlpIeZpbDDRJzU$4VC47_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="82.55000305175781" y2="82.55000305175781"/>
-<line class="GlobalId-3PlpIeZpbDDRJzU$4VC47_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="84.19999694824219" y2="84.19999694824219"/>
-<line class="GlobalId-3$3U3G1gDEOBv2FtN6XF1v IfcAnnotation PredefinedType-DIMENSION" x1="104.0999984741211" x2="104.0999984741211" y1="79.6500015258789" y2="112.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(103.099998474, 96.1000022888) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">3290</tspan>
+<line class="GlobalId-21ny2U_mb4C8ohW60HHuyp IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="54.375" x2="54.375" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-21ny2U_mb4C8ohW60HHuyp IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="60.625" x2="60.625" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-1pTt_qQWT3lxsLJhhIj7fB IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="80.8499984741211" y2="80.8499984741211"/>
+<line class="GlobalId-1pTt_qQWT3lxsLJhhIj7fB IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="82.5" y2="82.5"/>
+<line class="GlobalId-1GmCmGx3LC$uoDqBnr6Dwc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.75" x2="62.75" y1="109.5" y2="117.0"/>
+<line class="GlobalId-1GmCmGx3LC$uoDqBnr6Dwc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="63.95000076293945" x2="63.95000076293945" y1="109.5" y2="117.0"/>
+<line class="GlobalId-3NCh9HJwPC_RbvqwQSH0Ue IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="82.44999694824219" y2="82.44999694824219"/>
+<line class="GlobalId-3NCh9HJwPC_RbvqwQSH0Ue IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="84.04999542236328" y2="84.04999542236328"/>
+<line class="GlobalId-1QRUNSjprCTAZgob9$pu6n IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="69.5999984741211" y2="69.5999984741211"/>
+<line class="GlobalId-1QRUNSjprCTAZgob9$pu6n IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="71.25" y2="71.25"/>
+<line class="GlobalId-3E3LACMbfFe9PbLrgxEZ9P IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="111.35000610351562" x2="111.35000610351562" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-3E3LACMbfFe9PbLrgxEZ9P IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.6500015258789" x2="112.6500015258789" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-1AOrfyAZbBkvqb$Wik9I1f IfcAnnotation PredefinedType-DIMENSION" x1="73.125" x2="79.375" y1="10.0" y2="10.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.25, 9.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
   </text>
-<line class="GlobalId-0Ze4Ja7_XF6gm175tYMKWY IfcAnnotation PredefinedType-DIMENSION" x1="86.30000305175781" x2="87.29999542236328" y1="81.04999542236328" y2="81.04999542236328"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(86.7999992371, 80.0499954224) rotate(0.0)">
+<line class="GlobalId-32yhkl3pnCrAf12Bd7as8N IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.95000076293945" x2="62.95000076293945" y1="87.60000610351562" y2="95.59999084472656"/>
+<line class="GlobalId-32yhkl3pnCrAf12Bd7as8N IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.05000305175781" x2="87.05000305175781" y1="87.60000610351562" y2="95.59999084472656"/>
+<line class="GlobalId-1Q6ofKNRn1yxaFpU5nHCDA IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="82.5" y2="82.5"/>
+<line class="GlobalId-1Q6ofKNRn1yxaFpU5nHCDA IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="84.1500015258789" y2="84.1500015258789"/>
+<line class="GlobalId-2XC_g5Iv1EiwvJq$HSegvD IfcAnnotation PredefinedType-DIMENSION" x1="62.75" x2="63.95000076293945" y1="76.0999984741211" y2="76.0999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.3500003815, 75.0999984741) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">120</tspan>
+  </text>
+<line class="GlobalId-2U1HknGU14gwk10sCiK2YD IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="60.95000457763672" x2="60.95000457763672" y1="109.5" y2="113.5"/>
+<line class="GlobalId-2U1HknGU14gwk10sCiK2YD IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.349998474121094" x2="62.349998474121094" y1="109.5" y2="113.5"/>
+<line class="GlobalId-0rjgdP6ZP8kAokolIAP91r IfcAnnotation PredefinedType-DIMENSION" x1="98.125" x2="104.375" y1="10.0" y2="10.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(101.25, 9.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-1q92xYCerFURx$SBDG0WuP IfcAnnotation PredefinedType-DIMENSION" x1="86.04999542236328" x2="87.25" y1="76.0999984741211" y2="76.0999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(86.6499977112, 75.0999984741) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">120</tspan>
+  </text>
+<line class="GlobalId-0YHs28JgDFmPYoHat$gYTm IfcAnnotation PredefinedType-DIMENSION" x1="27.64999771118164" x2="28.64999771118164" y1="84.0999984741211" y2="84.0999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(28.1499977112, 83.0999984741) rotate(0.0)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">100</tspan>
   </text>
-<line class="GlobalId-0dhPOryGn1xRI5ZjpVUHpX IfcAnnotation PredefinedType-DIMENSION" x1="61.30000305175781" x2="62.39999771118164" y1="67.6500015258789" y2="67.6500015258789"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(61.8500003815, 66.6500015259) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">110</tspan>
-  </text>
-<line class="GlobalId-0_pm$GnO94TROd99pad4nm IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="27.400001525878906" y1="108.80000305175781" y2="112.79999542236328"/>
-<line class="GlobalId-0_pm$GnO94TROd99pad4nm IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.69999885559082" x2="28.69999885559082" y1="108.80000305175781" y2="112.79999542236328"/>
-<line class="GlobalId-0_yPOpr8z4Gx1qtQBtf5sm IfcAnnotation PredefinedType-DIMENSION" x1="33.70000076293945" x2="33.70000076293945" y1="112.55000305175781" y2="87.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(32.7000007629, 100.050003052) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">2500</tspan>
-  </text>
-<line class="GlobalId-3cDGF8JHLAfBgMzRlYSyMS IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="98.125" x2="98.125" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-3cDGF8JHLAfBgMzRlYSyMS IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="104.375" x2="104.375" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-1HWH_0Ean9KxIb9$ahd3U3 IfcAnnotation PredefinedType-DIMENSION" x1="48.125" x2="54.375" y1="10.05000114440918" y2="10.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(51.25, 9.05000114440918) rotate(0.0)">
+<line class="GlobalId-0UBPSyXbn0cRlyN9zsLqCS IfcAnnotation PredefinedType-DIMENSION" x1="48.125" x2="54.375" y1="10.0" y2="10.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(51.25, 9.0) rotate(0.0)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
   </text>
-<line class="GlobalId-0hGB1clt1C8fFNhd7IV4FI IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.700000762939453" x2="27.700000762939453" y1="87.55000305175781" y2="83.05000305175781"/>
-<line class="GlobalId-0hGB1clt1C8fFNhd7IV4FI IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.69999885559082" x2="28.69999885559082" y1="87.55000305175781" y2="83.05000305175781"/>
-<line class="GlobalId-026moWZZD6OQgVydN5Dxz0 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="86.30000305175781" x2="86.30000305175781" y1="69.64999389648438" y2="77.1500015258789"/>
-<line class="GlobalId-026moWZZD6OQgVydN5Dxz0 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.5" x2="87.5" y1="69.64999389648438" y2="77.1500015258789"/>
-<line class="GlobalId-3$ldJvC$zASRfA6wGtwl1B IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="61.30000305175781" x2="61.30000305175781" y1="108.80000305175781" y2="112.79999542236328"/>
-<line class="GlobalId-3$ldJvC$zASRfA6wGtwl1B IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.39999771118164" x2="62.39999771118164" y1="108.80000305175781" y2="112.79999542236328"/>
-<line class="GlobalId-0Y6NRUvdn4FehISu4YSOFS IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="35.625" x2="35.625" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-0Y6NRUvdn4FehISu4YSOFS IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="41.875" x2="41.875" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-03ZQ2hJ65AWh45ov1SieHR IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="64.64999389648438" y2="64.64999389648438"/>
-<line class="GlobalId-03ZQ2hJ65AWh45ov1SieHR IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="69.64999389648438" y2="69.64999389648438"/>
-<line class="GlobalId-2d6rM5R9XDdg1N_HW7b_T0 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.60000610351562" x2="129.6999969482422" y1="69.64999389648438" y2="69.64999389648438"/>
-<line class="GlobalId-2d6rM5R9XDdg1N_HW7b_T0 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.60000610351562" x2="129.6999969482422" y1="74.64999389648438" y2="74.64999389648438"/>
-<line class="GlobalId-3T8XyZk1P6ouundf1MWQz8 IfcAnnotation PredefinedType-DIMENSION" x1="54.375" x2="60.625" y1="15.05000114440918" y2="15.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(57.5, 14.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+<line class="GlobalId-2LO9_aSEL9_92aoQzzuRWt IfcAnnotation PredefinedType-DIMENSION" x1="110.625" x2="111.35000610351562" y1="39.85000228881836" y2="39.85000228881836"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(110.987503052, 38.8500022888) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">73</tspan>
   </text>
-<line class="GlobalId-1iFHbXrhr9j80n4w0wKyO2 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="103.80000305175781" y2="103.80000305175781"/>
-<line class="GlobalId-1iFHbXrhr9j80n4w0wKyO2 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="97.55000305175781" y2="97.55000305175781"/>
-<line class="GlobalId-15U_I8y313ufYsNlHXwtH3 IfcAnnotation PredefinedType-DIMENSION" x1="73.125" x2="79.375" y1="10.05000114440918" y2="10.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.25, 9.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-3pZ$Z4sGfAU8SsRALksEL1 IfcAnnotation PredefinedType-DIMENSION" x1="77.5" x2="77.5" y1="74.64999389648438" y2="80.9000015258789"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.5, 77.7749977112) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-37TfMXFkrBOxkiyk0LW8eL IfcAnnotation PredefinedType-DIMENSION" x1="111.30000305175781" x2="112.60000610351562" y1="67.6500015258789" y2="67.6500015258789"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(111.950004578, 66.6500015259) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">130</tspan>
-  </text>
-<line class="GlobalId-3AIDjGlKX9wQUOBOdhVtwm IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.60000610351562" x2="124.70000457763672" y1="74.64999389648438" y2="74.64999389648438"/>
-<line class="GlobalId-3AIDjGlKX9wQUOBOdhVtwm IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.60000610351562" x2="124.70000457763672" y1="79.6500015258789" y2="79.6500015258789"/>
-<line class="GlobalId-3fF3Hf8W50cvVf78ATdLNE IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="97.55000305175781" y2="97.55000305175781"/>
-<line class="GlobalId-3fF3Hf8W50cvVf78ATdLNE IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="92.55000305175781" y2="92.55000305175781"/>
-<line class="GlobalId-1750PvBLT8XeAPkWramrcm IfcAnnotation PredefinedType-DIMENSION" x1="79.375" x2="85.625" y1="15.05000114440918" y2="15.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(82.5, 14.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-2N$PZ536j5s8mJkErC03Dq IfcAnnotation PredefinedType-DIMENSION" x1="48.900001525878906" x2="48.900001525878906" y1="63.69999694824219" y2="64.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.9000015259, 64.1749954224) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">95</tspan>
-  </text>
-<line class="GlobalId-2kNeryEtb9hRLFB_nJ8uHy IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.70000457763672" x2="62.70000457763672" y1="87.55000305175781" y2="80.05000305175781"/>
-<line class="GlobalId-2kNeryEtb9hRLFB_nJ8uHy IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="63.69999694824219" x2="63.69999694824219" y1="87.55000305175781" y2="80.05000305175781"/>
-<line class="GlobalId-2SCEegOpHDvv4fp7C3PVRd IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="27.400001525878906" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-2SCEegOpHDvv4fp7C3PVRd IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.69999885559082" x2="28.69999885559082" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-3xvQk3OFr26RzVRFWLZXau IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="61.30000305175781" x2="61.30000305175781" y1="87.55000305175781" y2="83.05000305175781"/>
-<line class="GlobalId-3xvQk3OFr26RzVRFWLZXau IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.29999923706055" x2="62.29999923706055" y1="87.55000305175781" y2="83.05000305175781"/>
-<line class="GlobalId-0YJv1mPGPEcO34EVMzKfzt IfcAnnotation PredefinedType-DIMENSION" x1="62.5" x2="63.69999694824219" y1="115.29999542236328" y2="115.29999542236328"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.0999984741, 114.299995422) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">120</tspan>
-  </text>
-<line class="GlobalId-1nzM5iBRb0J9da40rqKD4b IfcAnnotation PredefinedType-DIMENSION" x1="91.19999694824219" x2="91.19999694824219" y1="112.55000305175781" y2="82.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(90.1999969482, 97.5500030518) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">3000</tspan>
-  </text>
-<line class="GlobalId-1eYGXHi7P87R4AS4oYhPeZ IfcAnnotation PredefinedType-DIMENSION" x1="72.5" x2="72.5" y1="69.64999389648438" y2="71.30000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(71.5, 70.4749984741) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
-  </text>
-<line class="GlobalId-1_vYmxP9HCZfi32Z6Kttq5 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="41.875" x2="41.875" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-1_vYmxP9HCZfi32Z6Kttq5 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="48.125" x2="48.125" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-0PtgWllw9DjO_EklPEI8H2 IfcAnnotation PredefinedType-DIMENSION" x1="11.30000114440918" x2="11.30000114440918" y1="69.64999389648438" y2="74.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.3000011444, 72.1499938965) rotate(-90)">
+<line class="GlobalId-0vn3R88XLAIAx_en_YvZqf IfcAnnotation PredefinedType-DIMENSION" x1="16.25" x2="16.25" y1="64.5999984741211" y2="69.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.25, 67.0999984741) rotate(-90)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
   </text>
-<line class="GlobalId-0v2tA7FN906w5a5mLjGcZ7 IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="90.94999694824219" y2="88.44999694824219"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 89.6999969482) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">250</tspan>
-  </text>
-<line class="GlobalId-1h2sTlMzH2AOS0gQPt1GMK IfcAnnotation PredefinedType-DIMENSION" x1="27.400001525878906" x2="28.69999885559082" y1="111.80000305175781" y2="111.80000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(28.0500001907, 110.800003052) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">130</tspan>
-  </text>
-<line class="GlobalId-1yXNm7VeXAFfa5HTQaC46r IfcAnnotation PredefinedType-DIMENSION" x1="72.5" x2="72.5" y1="80.9000015258789" y2="82.5"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(71.5, 81.7000007629) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">160</tspan>
-  </text>
-<line class="GlobalId-3N$oysMcbFTQXKIvsPlh3v IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="66.875" x2="66.875" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-3N$oysMcbFTQXKIvsPlh3v IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="73.125" x2="73.125" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-1snrKfdbXDqgnOzmI1sZDN IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.60000610351562" x2="87.60000610351562" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-1snrKfdbXDqgnOzmI1sZDN IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="88.69999694824219" x2="88.69999694824219" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-1__QScVNv3ZA3zVxFhVyky IfcAnnotation PredefinedType-DIMENSION" x1="48.900001525878906" x2="48.900001525878906" y1="90.94999694824219" y2="88.44999694824219"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.9000015259, 89.6999969482) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">250</tspan>
-  </text>
-<line class="GlobalId-2RAMuNGF5AX9DtroZtyVpX IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="84.0999984741211" y2="112.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 98.3250007629) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">2845</tspan>
-  </text>
-<line class="GlobalId-1lwYNxnLv5UxqLUawBf74K IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="92.55000305175781" y2="92.55000305175781"/>
-<line class="GlobalId-1lwYNxnLv5UxqLUawBf74K IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="90.94999694824219" y2="90.94999694824219"/>
-<line class="GlobalId-00GDyVurb9Af5jmLEpGtTV IfcAnnotation PredefinedType-DIMENSION" x1="85.625" x2="91.875" y1="10.05000114440918" y2="10.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(88.75, 9.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-0ZGSvwFp51mftI4pVKgHci IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="86.30000305175781" x2="86.30000305175781" y1="87.55000305175781" y2="80.05000305175781"/>
-<line class="GlobalId-0ZGSvwFp51mftI4pVKgHci IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.29999542236328" x2="87.29999542236328" y1="87.55000305175781" y2="80.05000305175781"/>
-<line class="GlobalId-17LBfRzgb33RHByCF1RLnp IfcAnnotation PredefinedType-DIMENSION" x1="77.5" x2="77.5" y1="82.5" y2="84.0999984741211"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.5, 83.2999992371) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">160</tspan>
-  </text>
-<line class="GlobalId-0j7sd6TDX9auRblL85Pu_T IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="73.125" x2="73.125" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-0j7sd6TDX9auRblL85Pu_T IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="79.375" x2="79.375" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-1mvavhR9L7d9ki3nMemT6o IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="61.30000305175781" x2="61.30000305175781" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-1mvavhR9L7d9ki3nMemT6o IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.39999771118164" x2="62.39999771118164" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-2evlEe2Gz4dfLuuVAJxVPL IfcAnnotation PredefinedType-DIMENSION" x1="119.125" x2="119.125" y1="63.125" y2="61.30000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(118.125, 62.2125015259) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">182</tspan>
-  </text>
-<line class="GlobalId-3i4mXPqkXFz9ejadkRj2J$ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="48.125" x2="48.125" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-3i4mXPqkXFz9ejadkRj2J$ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="54.375" x2="54.375" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-0$7Fca6g9ELPjwEr2fVr5X IfcAnnotation PredefinedType-DIMENSION" x1="16.30000114440918" x2="16.30000114440918" y1="74.64999389648438" y2="80.9000015258789"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.3000011444, 77.7749977112) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-1LlRcaX2L9FwidK1MvmQLt IfcAnnotation PredefinedType-DIMENSION" x1="123.69999694824219" x2="123.69999694824219" y1="64.64999389648438" y2="69.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(122.699996948, 67.1499938965) rotate(-90)">
+<line class="GlobalId-1tDr9H7lLDLBww_8F5Gino IfcAnnotation PredefinedType-DIMENSION" x1="128.75" x2="128.75" y1="69.5999984741211" y2="74.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(127.75, 72.0999984741) rotate(-90)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
   </text>
-<line class="GlobalId-0WYHpCtFfCd9KnbiYhuxbR IfcAnnotation PredefinedType-DIMENSION" x1="119.125" x2="119.125" y1="27.44999885559082" y2="25.625"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(118.125, 26.5374994278) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">182</tspan>
-  </text>
-<line class="GlobalId-1KH6DLlVvBsBVG5COITcbA IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="54.375" x2="54.375" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-1KH6DLlVvBsBVG5COITcbA IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="60.625" x2="60.625" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-1193vk_6bBbQSk$zEs77g5 IfcAnnotation PredefinedType-DIMENSION" x1="11.30000114440918" x2="11.30000114440918" y1="80.9000015258789" y2="82.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.3000011444, 81.7250022888) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
-  </text>
-<line class="GlobalId-1cUpyUIif3AAeCuCK8eDcK IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="74.64999389648438" y2="74.64999389648438"/>
-<line class="GlobalId-1cUpyUIif3AAeCuCK8eDcK IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="80.9000015258789" y2="80.9000015258789"/>
-<line class="GlobalId-1x6lGFiKzBTgzaEv$THsUC IfcAnnotation PredefinedType-DIMENSION" x1="91.875" x2="98.125" y1="15.05000114440918" y2="15.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(95.0, 14.05000114440918) rotate(0.0)">
+<line class="GlobalId-0H5nu0RLH4bfoiOK$gfLV_ IfcAnnotation PredefinedType-DIMENSION" x1="77.5" x2="77.5" y1="74.5999984741211" y2="80.8499984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.5, 77.7249984741) rotate(-90)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
   </text>
-<line class="GlobalId-2KCp0OTYPDMuFXZwof621e IfcAnnotation PredefinedType-DIMENSION" x1="27.700000762939453" x2="62.29999923706055" y1="94.55000305175781" y2="94.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(45.0, 93.55000305175781) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">3460</tspan>
+<line class="GlobalId-1LOnIXtK96Kux0KmbRRqN7 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="60.625" x2="60.625" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-1LOnIXtK96Kux0KmbRRqN7 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="66.875" x2="66.875" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-2KL6S20An5pgIZP97F8e_b IfcAnnotation PredefinedType-DIMENSION" x1="104.1500015258789" x2="104.1500015258789" y1="79.5999984741211" y2="113.25"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(103.150001526, 96.4249992371) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">3365</tspan>
   </text>
-<line class="GlobalId-3WdtRj$Dr6i9VPZ9HODHKE IfcAnnotation PredefinedType-DIMENSION" x1="62.5" x2="63.69999694824219" y1="76.14999389648438" y2="76.14999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.0999984741, 75.1499938965) rotate(0.0)">
+<line class="GlobalId-3c2w$hyKfBQA_GO1NjiyAc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="104.5" y2="104.5"/>
+<line class="GlobalId-3c2w$hyKfBQA_GO1NjiyAc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="98.25" y2="98.25"/>
+<line class="GlobalId-3o9iZ8lbXF0QYPwQdldZRK IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="86.04999542236328" x2="86.04999542236328" y1="109.5" y2="117.0"/>
+<line class="GlobalId-3o9iZ8lbXF0QYPwQdldZRK IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.25" x2="87.25" y1="109.5" y2="117.0"/>
+<line class="GlobalId-1Bn7uLdnH0xPQfv0v79682 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="71.25" y2="71.25"/>
+<line class="GlobalId-1Bn7uLdnH0xPQfv0v79682 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="72.94999694824219" y2="72.94999694824219"/>
+<line class="GlobalId-2REiIybGH4auoFG_7Usidp IfcAnnotation PredefinedType-DIMENSION" x1="16.25" x2="16.25" y1="82.5" y2="84.1500015258789"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.25, 83.3250007629) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
+  </text>
+<line class="GlobalId-35P5cy3jXBi8M7WswWBoM6 IfcAnnotation PredefinedType-DIMENSION" x1="123.75" x2="123.75" y1="74.5999984741211" y2="79.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(122.75, 77.0999984741) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
+  </text>
+<line class="GlobalId-0XT8Vv13v5ogfpWjz9FpuN IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="66.875" x2="66.875" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-0XT8Vv13v5ogfpWjz9FpuN IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="73.125" x2="73.125" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-22b$9bKOb95ukH0iZJ5SOV IfcAnnotation PredefinedType-DIMENSION" x1="27.35000228881836" x2="28.64999771118164" y1="67.60000610351562" y2="67.60000610351562"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(28, 66.6000061035) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">130</tspan>
+  </text>
+<line class="GlobalId-0w49lRJXv1Vu7iZ5qcot3q IfcAnnotation PredefinedType-DIMENSION" x1="48.85000228881836" x2="48.85000228881836" y1="91.6500015258789" y2="88.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.8500022888, 90.0750007629) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">315</tspan>
+  </text>
+<line class="GlobalId-1QyaRTZsL1pvkeNqLP3X74 IfcAnnotation PredefinedType-DIMENSION" x1="104.375" x2="110.625" y1="15.0" y2="15.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(107.5, 14.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-1ph3xwGd5E9werzaTqUjEE IfcAnnotation PredefinedType-DIMENSION" x1="60.95000457763672" x2="61.94999694824219" y1="84.0999984741211" y2="84.0999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(61.4500007629, 83.0999984741) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">100</tspan>
+  </text>
+<line class="GlobalId-33BUqmiMf0I9I5GRO8SHHe IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="63.95000076293945" y2="69.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 66.7749996185) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">565</tspan>
+  </text>
+<line class="GlobalId-0HzxOesS5CLxYNPKMe7a4r IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="91.875" x2="91.875" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-0HzxOesS5CLxYNPKMe7a4r IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="98.125" x2="98.125" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-2x_9mXrATB3PG3cyBoPq6m IfcAnnotation PredefinedType-DIMENSION" x1="11.25" x2="11.25" y1="69.5999984741211" y2="74.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.25, 72.0999984741) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
+  </text>
+<line class="GlobalId-0clClFoij0Rfq0s$mILgqP IfcAnnotation PredefinedType-DIMENSION" x1="41.875" x2="48.125" y1="15.0" y2="15.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(45.0, 14.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-0u7YmGckXD6fLeysTOyRTu IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.64999771118164" x2="27.64999771118164" y1="87.60000610351562" y2="95.59999084472656"/>
+<line class="GlobalId-0u7YmGckXD6fLeysTOyRTu IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="61.94999694824219" x2="61.94999694824219" y1="87.60000610351562" y2="95.59999084472656"/>
+<line class="GlobalId-0k3VQF7Ar5XR6RsXIpAGuT IfcAnnotation PredefinedType-DIMENSION" x1="119.125" x2="119.125" y1="62.60000228881836" y2="60.94999694824219"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(118.125, 61.7749996185) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
+  </text>
+<line class="GlobalId-0SdT4sJM14YwTk3A7Of_t_ IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="91.6500015258789" y2="88.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 90.0750007629) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">315</tspan>
+  </text>
+<line class="GlobalId-3M7E9jsjP529TeZh_jZKpM IfcAnnotation PredefinedType-DIMENSION" x1="33.650001525878906" x2="33.650001525878906" y1="113.25" y2="87.60000610351562"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(32.6500015259, 100.425003052) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">2565</tspan>
+  </text>
+<line class="GlobalId-3MbwPwkc5DFeqfLMx2caB6 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.6500015258789" x2="124.75" y1="64.5999984741211" y2="64.5999984741211"/>
+<line class="GlobalId-3MbwPwkc5DFeqfLMx2caB6 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.6500015258789" x2="124.75" y1="69.5999984741211" y2="69.5999984741211"/>
+<line class="GlobalId-02BQ_Pogz9RubQdX9FaZH2 IfcAnnotation PredefinedType-DIMENSION" x1="16.25" x2="16.25" y1="74.5999984741211" y2="80.8499984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.25, 77.7249984741) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-2PjN7yIkbA09k5_bi$Cjak IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="109.5" y2="109.5"/>
+<line class="GlobalId-2PjN7yIkbA09k5_bi$Cjak IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="104.5" y2="104.5"/>
+<line class="GlobalId-3_OKR8Ih11cv3pO4_zmZ7z IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="72.94999694824219" y2="72.94999694824219"/>
+<line class="GlobalId-3_OKR8Ih11cv3pO4_zmZ7z IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="74.5999984741211" y2="74.5999984741211"/>
+<line class="GlobalId-3IdTdpldj9oBNI6LM84U5A IfcAnnotation PredefinedType-DIMENSION" x1="16.25" x2="16.25" y1="98.25" y2="93.25"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.25, 95.75) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
+  </text>
+<line class="GlobalId-3cCmDnHpHAdP7BHyewptJI IfcAnnotation PredefinedType-DIMENSION" x1="72.5" x2="72.5" y1="80.8499984741211" y2="82.44999694824219"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(71.5, 81.6499977112) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">160</tspan>
+  </text>
+<line class="GlobalId-17dZo9Hqv5nPTjg00G42XM IfcAnnotation PredefinedType-DIMENSION" x1="87.64999389648438" x2="89.05000305175781" y1="67.60000610351562" y2="67.60000610351562"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(88.3499984741, 66.6000061035) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">140</tspan>
+  </text>
+<line class="GlobalId-2k80AkGYT3bAyuSf2cPQV3 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="73.125" x2="73.125" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-2k80AkGYT3bAyuSf2cPQV3 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="79.375" x2="79.375" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-1AM7AlLSX5LRz$jB7JlCps IfcAnnotation PredefinedType-DIMENSION" x1="86.04999542236328" x2="87.05000305175781" y1="81.0999984741211" y2="81.0999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(86.5499992371, 80.0999984741) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">100</tspan>
+  </text>
+<line class="GlobalId-0QOZEnzBv5muElnwGyXFfu IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="74.5999984741211" y2="74.5999984741211"/>
+<line class="GlobalId-0QOZEnzBv5muElnwGyXFfu IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="80.8499984741211" y2="80.8499984741211"/>
+<line class="GlobalId-0T7lm0UcvC_QhcQydGHQN2 IfcAnnotation PredefinedType-DIMENSION" x1="60.95000457763672" x2="62.349998474121094" y1="67.60000610351562" y2="67.60000610351562"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(61.6500015259, 66.6000061035) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">140</tspan>
+  </text>
+<line class="GlobalId-0ABJvvB15AiRTouE2FNRJo IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="98.125" x2="98.125" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-0ABJvvB15AiRTouE2FNRJo IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="104.375" x2="104.375" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-0tLVRwdZn2j96SLEJ7oh9E IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.64999771118164" x2="27.64999771118164" y1="87.60000610351562" y2="83.09999084472656"/>
+<line class="GlobalId-0tLVRwdZn2j96SLEJ7oh9E IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.64999771118164" x2="28.64999771118164" y1="87.60000610351562" y2="83.09999084472656"/>
+<line class="GlobalId-1rWIpj1h508hWBPHhK8BCl IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="86.04999542236328" x2="86.04999542236328" y1="69.5999984741211" y2="77.0999984741211"/>
+<line class="GlobalId-1rWIpj1h508hWBPHhK8BCl IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.25" x2="87.25" y1="69.5999984741211" y2="77.0999984741211"/>
+<line class="GlobalId-1GhjXIX69BdfOKWC19fWur IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="35.625" x2="35.625" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-1GhjXIX69BdfOKWC19fWur IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="41.875" x2="41.875" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-0KNhaPvSvAKfOWGM3Jd2RW IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="64.5999984741211" y2="64.5999984741211"/>
+<line class="GlobalId-0KNhaPvSvAKfOWGM3Jd2RW IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="69.5999984741211" y2="69.5999984741211"/>
+<line class="GlobalId-3Hba8IL$b1khyXlDWmRW1S IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.6500015258789" x2="129.75" y1="69.5999984741211" y2="69.5999984741211"/>
+<line class="GlobalId-3Hba8IL$b1khyXlDWmRW1S IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.6500015258789" x2="129.75" y1="74.5999984741211" y2="74.5999984741211"/>
+<line class="GlobalId-0APGM9ICLASfNxvl88KOT_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="104.375" x2="104.375" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-0APGM9ICLASfNxvl88KOT_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="110.625" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-3$$v5RWgb7$8c16xj6vdN1 IfcAnnotation PredefinedType-DIMENSION" x1="11.25" x2="11.25" y1="93.25" y2="91.6500015258789"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.25, 92.4500007629) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">160</tspan>
+  </text>
+<line class="GlobalId-2G8rPtVdLC4foJ4Hya3eUO IfcAnnotation PredefinedType-DIMENSION" x1="77.5" x2="77.5" y1="82.44999694824219" y2="84.04999542236328"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.5, 83.2499961853) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">160</tspan>
+  </text>
+<line class="GlobalId-1IXpTC6DDEU9ywNPRXbknT IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="69.5999984741211" y2="69.5999984741211"/>
+<line class="GlobalId-1IXpTC6DDEU9ywNPRXbknT IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="74.5999984741211" y2="74.5999984741211"/>
+<line class="GlobalId-2S$AI6YHzFo8J9$723mQzp IfcAnnotation PredefinedType-DIMENSION" x1="111.35000610351562" x2="112.6500015258789" y1="67.60000610351562" y2="67.60000610351562"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(112.000003815, 66.6000061035) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">130</tspan>
+  </text>
+<line class="GlobalId-1mSEf2Uiv2xhfyjuLvEebo IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.6500015258789" x2="124.75" y1="74.5999984741211" y2="74.5999984741211"/>
+<line class="GlobalId-1mSEf2Uiv2xhfyjuLvEebo IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.6500015258789" x2="124.75" y1="79.5999984741211" y2="79.5999984741211"/>
+<line class="GlobalId-1hbkKcjY15QRTFwUY_uEoU IfcAnnotation PredefinedType-DIMENSION" x1="48.85000228881836" x2="48.85000228881836" y1="63.95000076293945" y2="64.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.8500022888, 64.2749996185) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">65</tspan>
+  </text>
+<line class="GlobalId-30s9ME0XL75Q0XXrht8tGf IfcAnnotation PredefinedType-DIMENSION" x1="79.375" x2="85.625" y1="15.0" y2="15.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(82.5, 14.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-1HnjGNDPfDjBFTrJ5h30Yf IfcAnnotation PredefinedType-DIMENSION" x1="27.64999771118164" x2="61.94999694824219" y1="94.5999984741211" y2="94.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(44.7999973297, 93.5999984741) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">3430</tspan>
+  </text>
+<line class="GlobalId-0slVwxzo9DSwjTot7QFpGw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.95000076293945" x2="62.95000076293945" y1="87.60000610351562" y2="80.10000610351562"/>
+<line class="GlobalId-0slVwxzo9DSwjTot7QFpGw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="63.95000076293945" x2="63.95000076293945" y1="87.60000610351562" y2="80.10000610351562"/>
+<line class="GlobalId-3nZ9ph7n9FBQjhnoqc68nA IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="27.35000228881836" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-3nZ9ph7n9FBQjhnoqc68nA IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.64999771118164" x2="28.64999771118164" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-0HLtpTQJ91H8fh0MJtPuG2 IfcAnnotation PredefinedType-DIMENSION" x1="29.375" x2="35.625" y1="15.0" y2="15.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(32.5, 14.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-0fQpOFLYTCrBEKeeHNcUEe IfcAnnotation PredefinedType-DIMENSION" x1="123.75" x2="123.75" y1="64.5999984741211" y2="69.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(122.75, 67.0999984741) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
+  </text>
+<line class="GlobalId-3ey2Llx6H9YhTHq4_gGkwP IfcAnnotation PredefinedType-DIMENSION" x1="119.125" x2="119.125" y1="26.750001907348633" y2="25.10000228881836"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(118.125, 25.9250020981) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
+  </text>
+<line class="GlobalId-3I_8WO5Df1PgFuC_wzECT5 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="60.95000457763672" x2="60.95000457763672" y1="87.60000610351562" y2="83.09999084472656"/>
+<line class="GlobalId-3I_8WO5Df1PgFuC_wzECT5 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="61.94999694824219" x2="61.94999694824219" y1="87.60000610351562" y2="83.09999084472656"/>
+<line class="GlobalId-0U50BQrbH3Me1SdZKJMXrF IfcAnnotation PredefinedType-DIMENSION" x1="16.25" x2="16.25" y1="109.5" y2="104.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.25, 107) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
+  </text>
+<line class="GlobalId-3lkooP3Uv3_hQIMofwTVZ4 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="41.875" x2="41.875" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-3lkooP3Uv3_hQIMofwTVZ4 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="48.125" x2="48.125" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-05sW1KZmb3XfuHDLsnuPjl IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="86.04999542236328" x2="86.04999542236328" y1="87.60000610351562" y2="80.10000610351562"/>
+<line class="GlobalId-05sW1KZmb3XfuHDLsnuPjl IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.05000305175781" x2="87.05000305175781" y1="87.60000610351562" y2="80.10000610351562"/>
+<line class="GlobalId-00xwhLq4P1nu0XJcaVYVGC IfcAnnotation PredefinedType-DIMENSION" x1="11.25" x2="11.25" y1="80.8499984741211" y2="82.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.25, 81.6749992371) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
+  </text>
+<line class="GlobalId-3SCGoFZbj7HOzU3w2Ih2BS IfcAnnotation PredefinedType-DIMENSION" x1="54.375" x2="60.625" y1="15.0" y2="15.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(57.5, 14.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-0q9Q9zxDvD9uvu_TLg_jTs IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="62.60000228881836" y2="62.60000228881836"/>
+<line class="GlobalId-0q9Q9zxDvD9uvu_TLg_jTs IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="60.94999694824219" y2="60.94999694824219"/>
+<line class="GlobalId-3rjQ6mg2z4fAwPi3GcoDRQ IfcAnnotation PredefinedType-DIMENSION" x1="91.55000305175781" x2="91.55000305175781" y1="113.25" y2="82.60000610351562"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(90.5500030518, 97.9250030518) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">3065</tspan>
+  </text>
+<line class="GlobalId-0l8Ik8SALB6RTOgLpEt2XM IfcAnnotation PredefinedType-DIMENSION" x1="27.35000228881836" x2="28.64999771118164" y1="112.5" y2="112.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(28, 111.5) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">130</tspan>
+  </text>
+<line class="GlobalId-0oO5GQ9nz40QvKjSvyntZm IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="79.375" x2="79.375" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-0oO5GQ9nz40QvKjSvyntZm IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="85.625" x2="85.625" y1="25.10000228881836" y2="13.999996185302734"/>
+<line class="GlobalId-3NVvgXchD9yxsx3eiFH9QF IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="74.5999984741211" y2="74.5999984741211"/>
+<line class="GlobalId-3NVvgXchD9yxsx3eiFH9QF IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="80.8499984741211" y2="80.8499984741211"/>
+<line class="GlobalId-24d2vLoU1FteYVi7zmuIue IfcAnnotation PredefinedType-DIMENSION" x1="62.95000076293945" x2="87.05000305175781" y1="94.5999984741211" y2="94.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(75.0000019073, 93.5999984741) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">2410</tspan>
+  </text>
+<line class="GlobalId-2KPMBcbi16zxZW3nqXYmnZ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="80.8499984741211" y2="80.8499984741211"/>
+<line class="GlobalId-2KPMBcbi16zxZW3nqXYmnZ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="82.44999694824219" y2="82.44999694824219"/>
+<line class="GlobalId-2D3gALEEL0Kx4Zs5PdneHn IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="98.25" y2="98.25"/>
+<line class="GlobalId-2D3gALEEL0Kx4Zs5PdneHn IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="15.250000953674316" y1="93.25" y2="93.25"/>
+<line class="GlobalId-1J73dyZ6v6_xnemHjRTvTY IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.64999389648438" x2="87.64999389648438" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-1J73dyZ6v6_xnemHjRTvTY IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="89.05000305175781" x2="89.05000305175781" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-0FdTxmORj8NuLET7PCGZ$7 IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="84.04999542236328" y2="113.25"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 98.6499977112) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">2920</tspan>
+  </text>
+<line class="GlobalId-0USLk_fL5CNejKO6T9FlUP IfcAnnotation PredefinedType-DIMENSION" x1="60.95000457763672" x2="62.349998474121094" y1="112.5" y2="112.5"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(61.6500015259, 111.5) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">140</tspan>
+  </text>
+<line class="GlobalId-0$BYfXr_HFVvQ7AQk$8LOW IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="85.625" x2="85.625" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-0$BYfXr_HFVvQ7AQk$8LOW IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="91.875" x2="91.875" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-2xr6QSEBn36BuhKPCsxdBD IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="60.95000457763672" x2="60.95000457763672" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-2xr6QSEBn36BuhKPCsxdBD IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.349998474121094" x2="62.349998474121094" y1="64.5999984741211" y2="68.5999984741211"/>
+<line class="GlobalId-3_BZb21PD14vv6$VNSqKEt IfcAnnotation PredefinedType-DIMENSION" x1="35.625" x2="41.875" y1="10.0" y2="10.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(38.75, 9.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-3y6KHNlEX3Rvgdavqsd5NM IfcAnnotation PredefinedType-DIMENSION" x1="62.75" x2="63.95000076293945" y1="116.0" y2="116.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.3500003815, 115) rotate(0.0)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">120</tspan>
   </text>
-<line class="GlobalId-3xghpFUFrC4guFickyxXRk IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="79.375" x2="79.375" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-3xghpFUFrC4guFickyxXRk IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="85.625" x2="85.625" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-0PtktxFrL7GgtxUF9C$yA3 IfcAnnotation PredefinedType-DIMENSION" x1="62.70000457763672" x2="87.29999542236328" y1="94.55000305175781" y2="94.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(75.0, 93.55000305175781) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">2460</tspan>
+<line class="GlobalId-2ydRfeHCjDgfijt4W2qB0O IfcAnnotation PredefinedType-DIMENSION" x1="72.5" x2="72.5" y1="69.5999984741211" y2="71.25"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(71.5, 70.4249992371) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
   </text>
-<line class="GlobalId-2qjCUmhpfE6f$hWxpfSNym IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="80.9000015258789" y2="80.9000015258789"/>
-<line class="GlobalId-2qjCUmhpfE6f$hWxpfSNym IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="82.5" y2="82.5"/>
-<line class="GlobalId-3xoShkdbT8PvrnZgHDD8Cq IfcAnnotation PredefinedType-DIMENSION" x1="77.5" x2="77.5" y1="71.30000305175781" y2="73.0"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.5, 72.1500015259) rotate(-90)">
+<line class="GlobalId-24k1Fi7rTES80osOikDTlk IfcAnnotation PredefinedType-DIMENSION" x1="28.64999771118164" x2="29.375" y1="39.85000228881836" y2="39.85000228881836"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(29.0124988556, 38.8500022888) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">73</tspan>
+  </text>
+<line class="GlobalId-3$nIskKT1CigpWWNXySoxt IfcAnnotation PredefinedType-DIMENSION" x1="60.625" x2="66.875" y1="10.0" y2="10.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.75, 9.0) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-3VjN4yzVPDJQj4snniufAc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.64999771118164" x2="34.64999771118164" y1="113.25" y2="113.25"/>
+<line class="GlobalId-3VjN4yzVPDJQj4snniufAc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.64999771118164" x2="34.64999771118164" y1="87.60000610351562" y2="87.60000610351562"/>
+<line class="GlobalId-20QzKczi50U9xX_i4DmNIE IfcAnnotation PredefinedType-DIMENSION" x1="86.04999542236328" x2="87.25" y1="116.0" y2="116.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(86.6499977112, 115) rotate(0.0)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">120</tspan>
+  </text>
+<line class="GlobalId-3cnuvoNoz0RAXeypU56e1T IfcAnnotation PredefinedType-DIMENSION" x1="11.25" x2="11.25" y1="104.5" y2="98.25"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.25, 101.375) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
+  </text>
+<line class="GlobalId-1HqsFjLGT2VReZJcW6hGCA IfcAnnotation PredefinedType-DIMENSION" x1="77.5" x2="77.5" y1="71.25" y2="72.94999694824219"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(76.5, 72.0999984741) rotate(-90)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">170</tspan>
   </text>
-<line class="GlobalId-0VFkLnU2PDOhCkMzBufJmw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="104.375" x2="104.375" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-0VFkLnU2PDOhCkMzBufJmw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="110.625" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-0mnstDt955hOVWl0_MkD07 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.5" x2="62.5" y1="108.80000305175781" y2="116.30000305175781"/>
-<line class="GlobalId-0mnstDt955hOVWl0_MkD07 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="63.69999694824219" x2="63.69999694824219" y1="108.80000305175781" y2="116.30000305175781"/>
-<line class="GlobalId-1qvrXYWP18cui1rRnAIiRv IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="69.64999389648438" y2="69.64999389648438"/>
-<line class="GlobalId-1qvrXYWP18cui1rRnAIiRv IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="71.5" y1="71.30000305175781" y2="71.30000305175781"/>
-<line class="GlobalId-39x9lHj5LCv915575PNgb2 IfcAnnotation PredefinedType-DIMENSION" x1="16.30000114440918" x2="16.30000114440918" y1="108.80000305175781" y2="103.80000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.3000011444, 106.300003052) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
+<line class="GlobalId-1pk5YrK790h9uQA26iG9mG IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="48.125" x2="48.125" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-1pk5YrK790h9uQA26iG9mG IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="54.375" x2="54.375" y1="25.10000228881836" y2="8.999996185302734"/>
+<line class="GlobalId-29PdjQzA90Eh9pBT7PEf0B IfcAnnotation PredefinedType-DIMENSION" x1="104.1500015258789" x2="104.1500015258789" y1="63.95000076293945" y2="64.5999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(103.150001526, 64.2749996185) rotate(-90)">
+    <tspan class="DIMENSION" dy="0em" x="0" y="0">65</tspan>
   </text>
-<line class="GlobalId-1RYomPXAjFoPuQnvMPzpWM IfcAnnotation PredefinedType-DIMENSION" x1="72.5" x2="72.5" y1="73.0" y2="74.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(71.5, 73.8249969482) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
-  </text>
-<line class="GlobalId-0hj4I5dHvDaeJmjLINDhbH IfcAnnotation PredefinedType-DIMENSION" x1="128.6999969482422" x2="128.6999969482422" y1="69.64999389648438" y2="74.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(127.699996948, 72.1499938965) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
-  </text>
-<line class="GlobalId-1397_pN9nAF82AbjqmO9S1 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="69.64999389648438" y2="69.64999389648438"/>
-<line class="GlobalId-1397_pN9nAF82AbjqmO9S1 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="74.64999389648438" y2="74.64999389648438"/>
-<line class="GlobalId-11KZ2vVbv9fxHJqcdDhkZG IfcAnnotation PredefinedType-DIMENSION" x1="28.69999885559082" x2="29.375" y1="40.375" y2="40.375"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(29.0374994278, 39.375) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">68</tspan>
-  </text>
-<line class="GlobalId-2OpnYrWbr2pwn37y9daHRc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="63.125" y2="63.125"/>
-<line class="GlobalId-2OpnYrWbr2pwn37y9daHRc IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="61.30000305175781" y2="61.30000305175781"/>
-<line class="GlobalId-0PzGMJxcn52BuV4jfwr1Sw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="86.30000305175781" x2="86.30000305175781" y1="108.80000305175781" y2="116.30000305175781"/>
-<line class="GlobalId-0PzGMJxcn52BuV4jfwr1Sw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.5" x2="87.5" y1="108.80000305175781" y2="116.30000305175781"/>
-<line class="GlobalId-0HQaQL30969gCV08vytM6W IfcAnnotation PredefinedType-DIMENSION" x1="60.625" x2="66.875" y1="10.05000114440918" y2="10.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.75, 9.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-3P73eAOqv71e07U0AvwBrV IfcAnnotation PredefinedType-DIMENSION" x1="16.30000114440918" x2="16.30000114440918" y1="82.55000305175781" y2="84.19999694824219"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.3000011444, 83.375) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">165</tspan>
-  </text>
-<line class="GlobalId-375HyLtsf5F81aL2JFulYd IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="74.64999389648438" y2="74.64999389648438"/>
-<line class="GlobalId-375HyLtsf5F81aL2JFulYd IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="15.300002098083496" y1="80.9000015258789" y2="80.9000015258789"/>
-<line class="GlobalId-1tZeuhsiP9Yxq0XtUYHngM IfcAnnotation PredefinedType-DIMENSION" x1="104.0999984741211" x2="104.0999984741211" y1="63.69999694824219" y2="64.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(103.099998474, 64.1749954224) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">95</tspan>
-  </text>
-<line class="GlobalId-1t784999TDmOcLtzJcDxK$ IfcAnnotation PredefinedType-DIMENSION" x1="29.375" x2="35.625" y1="15.05000114440918" y2="15.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(32.5, 14.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-1RAcUtEBn7evhmb0gEB$2l IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="85.625" x2="85.625" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-1RAcUtEBn7evhmb0gEB$2l IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="91.875" x2="91.875" y1="25.625" y2="9.049997329711914"/>
-<line class="GlobalId-05Ol_$wzj7KwHjcKlTel0n IfcAnnotation PredefinedType-DIMENSION" x1="98.125" x2="104.375" y1="10.05000114440918" y2="10.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(101.25, 9.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-3rxZwJo8z0Cv_NRItYQHnX IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="82.5" y2="82.5"/>
-<line class="GlobalId-3rxZwJo8z0Cv_NRItYQHnX IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="84.0999984741211" y2="84.0999984741211"/>
-<line class="GlobalId-26eCozX6z0L982lbbDMJ1K IfcAnnotation PredefinedType-DIMENSION" x1="27.700000762939453" x2="28.69999885559082" y1="84.04999542236328" y2="84.04999542236328"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(28.1999998093, 83.0499954224) rotate(0.0)">
+<line class="GlobalId-1adqmi4z96OOd_IY31dIcr IfcAnnotation PredefinedType-DIMENSION" x1="62.95000076293945" x2="63.95000076293945" y1="81.0999984741211" y2="81.0999984741211"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.4500007629, 80.0999984741) rotate(0.0)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">100</tspan>
   </text>
-<line class="GlobalId-2YY_F$jiH8KuyRp4tdJfAI IfcAnnotation PredefinedType-DIMENSION" x1="35.625" x2="41.875" y1="10.05000114440918" y2="10.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(38.75, 9.05000114440918) rotate(0.0)">
+<line class="GlobalId-2kGWU8FZP9H9e1Ze7_yZ22 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="93.25" y2="93.25"/>
+<line class="GlobalId-2kGWU8FZP9H9e1Ze7_yZ22 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.35000228881836" x2="10.250000953674316" y1="91.6500015258789" y2="91.6500015258789"/>
+<line class="GlobalId-1JfeXndTfDJvuAYoKTxBxI IfcAnnotation PredefinedType-DIMENSION" x1="85.625" x2="91.875" y1="10.0" y2="10.0"/>
+<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(88.75, 9.0) rotate(0.0)">
     <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-26GI57BMrE$xwBBkgsnxw_ IfcAnnotation PredefinedType-DIMENSION" x1="16.30000114440918" x2="16.30000114440918" y1="64.64999389648438" y2="69.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.3000011444, 67.1499938965) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
-  </text>
-<line class="GlobalId-2P0WaE8pX2nBh0dfTF76JG IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="91.875" x2="91.875" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-2P0WaE8pX2nBh0dfTF76JG IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="98.125" x2="98.125" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-1U_nNc_T56ighgusstEz8M IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.700000762939453" x2="27.700000762939453" y1="87.55000305175781" y2="95.55000305175781"/>
-<line class="GlobalId-1U_nNc_T56ighgusstEz8M IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.29999923706055" x2="62.29999923706055" y1="87.55000305175781" y2="95.55000305175781"/>
-<line class="GlobalId-0bHY8aCW92E8PbSoWAggN2 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.69999885559082" x2="34.70000076293945" y1="112.55000305175781" y2="112.55000305175781"/>
-<line class="GlobalId-0bHY8aCW92E8PbSoWAggN2 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="28.69999885559082" x2="34.70000076293945" y1="87.55000305175781" y2="87.55000305175781"/>
-<line class="GlobalId-37F0ZC7HH4iuvihKsd4umH IfcAnnotation PredefinedType-DIMENSION" x1="86.30000305175781" x2="87.5" y1="115.29999542236328" y2="115.29999542236328"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(86.9000015259, 114.299995422) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">120</tspan>
-  </text>
-<line class="GlobalId-1XkZyPMx14vQVyz3VGQ4yU IfcAnnotation PredefinedType-DIMENSION" x1="11.30000114440918" x2="11.30000114440918" y1="103.80000305175781" y2="97.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(10.3000011444, 100.675003052) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-1CfPeACTz8Qg_bxiq$cNQY IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="71.30000305175781" y2="71.30000305175781"/>
-<line class="GlobalId-1CfPeACTz8Qg_bxiq$cNQY IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="75.0" x2="78.5" y1="73.0" y2="73.0"/>
-<line class="GlobalId-1H2GjiOJr3Rhk0E79U7mgz IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.60000610351562" x2="124.70000457763672" y1="64.64999389648438" y2="64.64999389648438"/>
-<line class="GlobalId-1H2GjiOJr3Rhk0E79U7mgz IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.60000610351562" x2="124.70000457763672" y1="69.64999389648438" y2="69.64999389648438"/>
-<line class="GlobalId-1KcqDxT_9CTuoMOvvn5DPg IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="27.44999885559082" y2="27.44999885559082"/>
-<line class="GlobalId-1KcqDxT_9CTuoMOvvn5DPg IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="110.625" x2="120.125" y1="25.625" y2="25.625"/>
-<line class="GlobalId-2Ga29qX59ArhwSnInehh09 IfcAnnotation PredefinedType-DIMENSION" x1="27.400001525878906" x2="28.69999885559082" y1="67.6500015258789" y2="67.6500015258789"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(28.0500001907, 66.6500015259) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">130</tspan>
-  </text>
-<line class="GlobalId-2ckfVUiq16q9pJbmtVMOQH IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="112.55000305175781" y2="108.80000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 110.675003052) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">375</tspan>
-  </text>
-<line class="GlobalId-1SsdCYn_n6qvHlX2UmwCQL IfcAnnotation PredefinedType-DIMENSION" x1="16.30000114440918" x2="16.30000114440918" y1="97.55000305175781" y2="92.55000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(15.3000011444, 95.0500030518) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
-  </text>
-<line class="GlobalId-0HKaMvWoX7EOM7MKzTY4jK IfcAnnotation PredefinedType-DIMENSION" x1="86.30000305175781" x2="87.5" y1="76.14999389648438" y2="76.14999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(86.9000015259, 75.1499938965) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">120</tspan>
-  </text>
-<line class="GlobalId-3iXd6V8wP2Gg$UkeR0i9Vj IfcAnnotation PredefinedType-DIMENSION" x1="61.30000305175781" x2="62.39999771118164" y1="111.80000305175781" y2="111.80000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(61.8500003815, 110.800003052) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">110</tspan>
-  </text>
-<line class="GlobalId-0aWI_RZ$vDAhNXBeOIZyWG IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="80.9000015258789" y2="80.9000015258789"/>
-<line class="GlobalId-0aWI_RZ$vDAhNXBeOIZyWG IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="27.400001525878906" x2="10.300002098083496" y1="82.55000305175781" y2="82.55000305175781"/>
-<line class="GlobalId-2KKS6XizH1Sv47r_yKK4FM IfcAnnotation PredefinedType-DIMENSION" x1="62.70000457763672" x2="63.69999694824219" y1="81.04999542236328" y2="81.04999542236328"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(63.2000007629, 80.0499954224) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">100</tspan>
-  </text>
-<line class="GlobalId-3M2eiHV39CoAulx0ghE$E3 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="111.30000305175781" x2="111.30000305175781" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-3M2eiHV39CoAulx0ghE$E3 IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="112.60000610351562" x2="112.60000610351562" y1="64.64999389648438" y2="68.64999389648438"/>
-<line class="GlobalId-3BU0MRo4HAzhTkmt7pQnVH IfcAnnotation PredefinedType-DIMENSION" x1="104.375" x2="110.625" y1="15.05000114440918" y2="15.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(107.5, 14.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-1EcA4g4Jn3a84gBxShP6O_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.5" x2="62.5" y1="69.64999389648438" y2="77.1500015258789"/>
-<line class="GlobalId-1EcA4g4Jn3a84gBxShP6O_ IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="63.69999694824219" x2="63.69999694824219" y1="69.64999389648438" y2="77.1500015258789"/>
-<line class="GlobalId-346jwGj2X5LAe9xrEc2NIL IfcAnnotation PredefinedType-DIMENSION" x1="61.30000305175781" x2="62.29999923706055" y1="84.04999542236328" y2="84.04999542236328"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(61.8000011444, 83.0499954224) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">100</tspan>
-  </text>
-<line class="GlobalId-38J10NQIP8Mft4cg7IRJsT IfcAnnotation PredefinedType-DIMENSION" x1="79.0" x2="79.0" y1="63.69999694824219" y2="69.64999389648438"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(78, 66.6749954224) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">595</tspan>
-  </text>
-<line class="GlobalId-25yIHRiUn7FQyQsj8Mg1B$ IfcAnnotation PredefinedType-DIMENSION" x1="48.900001525878906" x2="48.900001525878906" y1="112.55000305175781" y2="108.80000305175781"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(47.9000015259, 110.675003052) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">375</tspan>
-  </text>
-<line class="GlobalId-2pf_Mr$WPE4fcwHpsowicB IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="62.70000457763672" x2="62.70000457763672" y1="87.55000305175781" y2="95.55000305175781"/>
-<line class="GlobalId-2pf_Mr$WPE4fcwHpsowicB IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="87.29999542236328" x2="87.29999542236328" y1="87.55000305175781" y2="95.55000305175781"/>
-<line class="GlobalId-2Xq6PPlTT4uBZwZLJl7ujj IfcAnnotation PredefinedType-DIMENSION" x1="41.875" x2="48.125" y1="15.05000114440918" y2="15.05000114440918"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(45.0, 14.05000114440918) rotate(0.0)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">625</tspan>
-  </text>
-<line class="GlobalId-1jYEBcWkj8gfv0iFQEhavw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="29.375" x2="29.375" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-1jYEBcWkj8gfv0iFQEhavw IfcAnnotation PredefinedType-LINEWORK dimension-extension fine" x1="35.625" x2="35.625" y1="25.625" y2="14.049997329711914"/>
-<line class="GlobalId-3W$JCIeoXCOf6WCC$x8q4G IfcAnnotation PredefinedType-DIMENSION" x1="123.69999694824219" x2="123.69999694824219" y1="74.64999389648438" y2="79.6500015258789"/>
-<text dominant-baseline="baseline" style="font-size: 0;" text-anchor="middle" transform="translate(122.699996948, 77.1499977112) rotate(-90)">
-    <tspan class="DIMENSION" dy="0em" x="0" y="0">500</tspan>
   </text>
   </g>
 </g></svg>
