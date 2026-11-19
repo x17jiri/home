@@ -13,6 +13,41 @@ from ifc_utils import House
 
 
 class FoundationProfileTests(unittest.TestCase):
+    def test_selected_source_walls_allow_independent_footing_sizes(self):
+        house = House("Individual footing sizes")
+        basement = house.storey("Basement", elevation=-2.5)
+        foundation = house.storey("Foundation", elevation=-3)
+        wall_type = house.wall_type("300 mm wall", layers=[("Concrete", .3)])
+        east = basement.wall((.12, 6), (.12, 0), wall_type=wall_type, height=2.5)
+        west = basement.wall((8, 0), (8, 6), wall_type=wall_type, height=2.5)
+        east_footer, = foundation.add_strip_footings_from(
+            basement, source_walls=(east,), width=1, height=.5, start_height=0,
+        )
+        west_footer, = foundation.add_strip_footings_from(
+            basement, source_walls=(west,), width=.74, height=.5, start_height=0,
+        )
+        self.assertEqual(len(house.model.by_type("IfcFooting")), 2)
+        for footer, wall, width, centre_x in (
+            (east_footer, east, 1., .12), (west_footer, west, .74, 8.),
+        ):
+            points = self.vertices(footer)
+            self.assertAlmostEqual(np.ptp(points[:, 0]), width)
+            self.assertAlmostEqual((points[:, 0].min()+points[:, 0].max())/2, centre_x)
+            self.assertAlmostEqual(np.ptp(points[:, 2]), .5)
+            self.assertEqual(ifcopenshell.util.element.get_pset(
+                footer, "BBIM_StripFooting", "SourceWall",
+            ), wall.GlobalId)
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            foundation.add_strip_footings_from(
+                basement, source_walls=(east, east), width=1, height=.5, start_height=0,
+            )
+        foreign = house.storey("Other", elevation=0).wall((2, 0), (2, 6), wall_type=wall_type, height=2.5)
+        with self.assertRaisesRegex(ValueError, "source_storey"):
+            foundation.add_strip_footings_from(
+                basement, source_walls=(foreign,), width=1, height=.5, start_height=0,
+            )
+        self.assertEqual(len(house.model.by_type("IfcFooting")), 2)
+
     def fixture(self):
         house = House("Foundation steps")
         ground = house.storey("Ground", elevation=0)

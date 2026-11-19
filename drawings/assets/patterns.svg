@@ -137,9 +137,9 @@
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
-<!-- Same paired diagonals as 175 mm VPC, with a light-orange Ytong background. -->
+<!-- Same paired diagonals as 175 mm VPC, over the Liapor light-yellow fill. -->
 <pattern id="ytong-klasik" width="3" height="3" patternTransform="rotate(45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
-    <rect width="3" height="3" fill="#ffd9b3" />
+    <rect width="3" height="3" fill="#fff2cc" />
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
@@ -154,8 +154,8 @@
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
-<!-- The load-bearing brick hatch over the Liapor yellow tint. -->
-<pattern id="liapor-brick" width="3" height="3" patternTransform="rotate(45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
+<!-- Ytong Start: reverse the paired diagonals over the same yellow background. -->
+<pattern id="liapor-brick" width="3" height="3" patternTransform="rotate(-45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
     <rect width="3" height="3" fill="#fff2cc" />
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
@@ -240,6 +240,9 @@
     <path transform="translate(0 1.0875)" d="M 0 0.365 A 0.365 0.365 0 0 1 0.73 0.365 L 0.365 1.46 M 0 0.365 L 0.365 1.46 A 0.365 0.365 0 0 0 0.73 1.825 M 0.365 1.46 A 0.365 0.365 0 0 1 0 1.825" style="fill:none;stroke:black;stroke-width:0.10" vector-effect="non-scaling-stroke" />
 </pattern>
 <!-- Plain white swatch for materials drawn without hatching. -->
+<pattern id="liapor-km-240-aku-solid" width="1" height="1" patternUnits="objectBoundingBox" viewBox="0 0 1 1" preserveAspectRatio="none">
+    <rect width="1" height="1" fill="#fff2cc" />
+</pattern>
 <pattern id="solid-white" width="1" height="1" patternUnits="userSpaceOnUse">
     <rect width="1" height="1" fill="white" />
 </pattern>

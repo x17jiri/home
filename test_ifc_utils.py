@@ -961,6 +961,35 @@ class DrawingPdfTests(unittest.TestCase):
                 self.assertEqual(set(Path(directory).iterdir()), {svg, pdf})
 
 
+class DrawingCameraTests(unittest.TestCase):
+    def test_rectangular_camera_preserves_width_and_limits_section_height(self):
+        house = House("Shallow foundation section")
+        section = house.add_drawing(
+            "ZZ", x=.12, y=4.5, z=-3, radius=6.5, height=2,
+            view="elevation", direction=(1, 0, 0),
+        )
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        shape = ifcopenshell.geom.create_shape(settings, section.element)
+        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+        self.assertAlmostEqual(np.ptp(vertices[:, 1]), 13)
+        self.assertAlmostEqual(vertices[:, 2].min(), -4)
+        self.assertAlmostEqual(vertices[:, 2].max(), -2)
+        square = house.add_drawing("Default square", 0, 0, 1, 4)
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), square.element)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_x(shape.geometry), 8)
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_y(shape.geometry), 8)
+
+    def test_rejects_invalid_camera_heights(self):
+        for value, error in ((0, ValueError), (-1, ValueError), (True, TypeError),
+                             (float("nan"), ValueError), ("not-a-number", TypeError)):
+            with self.subTest(height=value):
+                house = House("Invalid camera")
+                with self.assertRaises(error):
+                    house.add_drawing("Invalid", 0, 0, 1, 4, height=value)
+                self.assertFalse(house.model.by_type("IfcAnnotation"))
+
+
 class DrawingTitleTests(unittest.TestCase):
     def test_header_preserves_uniform_scale_for_fractional_camera_sizes(self):
         with TemporaryDirectory() as directory:
@@ -12979,6 +13008,25 @@ class HouseTests(unittest.TestCase):
             self.assertIn(">1000 mm</text>", svg)
             self.assertIn(">125 mm</text>", svg)
             self.assertEqual(svg.count('class="lintel-legend-symbol"'), 2)
+
+    def test_notes_can_emphasise_one_complete_bullet(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"notes.svg"
+            path.write_text('<svg width="160mm" height="80mm" viewBox="0 0 160 80"><g id="model-view"/></svg>')
+            _postprocess_right_panel(path, {
+                "RightPanelWidth": 60,
+                "RightPanelTables": json.dumps([{
+                    "kind": "notes", "title": "Výztuž základů:",
+                    "items": [{"text": "**Ø12 po 150mm příčně**"}, {"text": "3× Ø12 podélně"}],
+                }], ensure_ascii=False),
+            })
+            root = ET.parse(path).getroot()
+            notes = [e for e in root.iter() if e.get("class") == "notes-text"]
+            self.assertEqual(["".join(e.itertext()) for e in notes],
+                             ["Ø12 po 150mm příčně", "3× Ø12 podélně"])
+            self.assertIn("font-weight:bold", notes[0].get("style"))
+            self.assertNotIn("font-weight:bold", notes[1].get("style"))
+            self.assertEqual(sum(e.get("class") == "notes-bullet" for e in root.iter()), 2)
 
     def test_appends_wrapped_notes_to_right_panel(self) -> None:
         with TemporaryDirectory() as directory:

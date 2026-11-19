@@ -466,6 +466,14 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+.cut.material-LiaporKM240AKU,
+.cut.material-LoadbearingwallLiaporKM240AKU,
+.cut.layer-material-LiaporKM240AKU {
+    fill: #fff2cc !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
 .cut.layer-material-Liaporbrick {
     fill: url(#liapor-brick) !important;
     stroke: black;
@@ -530,6 +538,14 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 .target-view-PLANVIEW .IfcFooting.cut {
     fill: white !important;
     stroke: white !important;
+}
+
+/* Foundation plans draw the merged footprint boundary as annotation.
+ * Suppress individual projected edges, including the lowered street strips. */
+.target-view-PLANVIEW .IfcFooting.projection,
+.target-view-PLANVIEW .IfcFooting.surface {
+    fill: none !important;
+    stroke: none !important;
 }
 
 .cut.layer-material-SDK {

@@ -89,11 +89,12 @@ It creates both `house_plan.svg` and `house_plan.png`.
 
 `house2.py` is an independent model using the shared `ifc_utils` helpers.
 Its `Basement` storey duplicates the selected `basement_source_walls`, including
-partitions, as solid `ztracene bedneni` walls. The front wall and all four
-internal walls use `basement_thin_wall_type`, 250 mm thick, with the existing
+partitions, as solid `ztracene bedneni` walls. The front wall and the two
+garden-room dividing walls use `basement_thin_wall_type`, 250 mm thick, with the existing
 lost-formwork hatch over the drywall-green fill (`#dfefcf`), pattern
-`ztracene-bedneni-green`. East, west and garden exterior walls retain the
-300 mm white type. `BASEMENT_THIN_WALL_THICKNESS` controls the new type.
+`ztracene-bedneni-green`. East, west and garden exterior walls and the
+S.03–S.04 / S.04–S.05 dividing walls use the 300 mm white type.
+`BASEMENT_THIN_WALL_THICKNESS` controls the thin type.
 The two SDK walls forming
 room 3's narrow end and the bathroom/hallway SDK partition are excluded,
 together with their strip footings and
@@ -207,7 +208,12 @@ With the current settings:
 | Basement walls, 2370 mm | −2.580 m | −0.210 m |
 | Basement ceiling, 210 mm | −0.210 m | 0.000 m |
 | Foundation slab, 150 mm | −2.730 m | −2.580 m |
-| Strip footings, 740 × 500 mm | −3.230 m | −2.730 m |
+| East/west and S.03–S.04 / S.04–S.05 strip footings, 1100 × 500 mm | −3.230 m | −2.730 m |
+| Back strip footing, 900 × 500 mm | −3.230 m | −2.730 m |
+| Lowered front strip footing, 800 × 500 mm | −3.730 m | −3.230 m |
+| Garden-room dividing wall footing, 800 × 500 mm | −3.230 m | −2.730 m |
+| S.01–S.02 dividing wall footing, 700 × 500 mm | −3.230 m | −2.730 m |
+| Default strip footing (unless overridden), 740 × 500 mm | −3.230 m | −2.730 m |
 
 Ring beams occupy the 210 mm ceiling bands above all basement walls and
 all ground-floor load-bearing walls. Their widths and centrelines follow
@@ -364,6 +370,56 @@ basement walls and blue dashed outlines of the ground-floor load-bearing walls a
 plus a green dashed outline of the chimney above its pad, with matching
 line-legend entries. Both plans show overall dimensions and wall/footing thickness.
 `foundation` is also accepted as an alias for `found`.
+`found` is an A3 portrait sheet: the foundation plan sits above section ZZ.
+The Z–Z marker follows the centre of the east footing and looks west (+X).
+ZZ shows foundations, the base plate and the bottom of the basement walls.
+Its camera top is set 500 mm above the finished basement floor. The rectangular camera
+uses `add_drawing(height=...)`; omitted heights keep the existing square views.
+The east and west outside walls each share a centreline across the basement,
+ground and upper floors. Both basement walls remain 300 mm thick. Their footings
+are 1100 × 500 mm. The two middle basement walls, S.03–S.04 and S.04–S.05,
+are 300 mm thick, centred under their ground-floor walls, with matching
+1100 × 500 mm footings and 300 mm formwork returns below the base plate.
+The front wall stack shares Y = 0.120 m, with a 250 mm
+basement wall and 240 mm walls above. Its footing is 800 × 500 mm.
+The garden-room dividing basement wall remains 250 mm thick, with a centred
+800 × 500 mm footing. The S.01–S.02 basement wall remains 250 mm thick beneath
+the wall between rooms 1 and 2, with a centred 700 × 500 mm footing.
+The back basement wall remains 300 mm thick, with a centred 900 × 500 mm footing.
+The default strip size is 740 × 500 mm; the existing street-side steps are retained.
+The front/back strip ends reach the outside faces of the east/west strips,
+whose ends reach the front/back strips' outside faces, forming square corners.
+These extensions follow the neighbouring footprint bounds. Widths, centrelines
+and stepped levels are retained. Individual projected footing edges are hidden
+in plans; the merged footprint annotation provides the visible outline.
+`found` marks the level change at `FOUNDATION_STREET_STEP_Y` with 0.30 mm
+black lines across the four affected strips. The line legend and note identify
+the 500 mm lowering of the street-side footings.
+An outside dimension locates this step from the front edge of the footings.
+The material table lists both visible lost-formwork types (300 mm white and
+250 mm green). At the front footing, two service lines sit 200 mm either side
+of S.04's clear-space centre: orange dashed arrows lead sewer out on the right,
+and blue dashed arrows bring water in on the left. The water line has a blue
+100 mm-wide sleeve outline, following the old house foundation-plan style.
+These are drawing annotations; pipe and sleeve styles appear in the line legend.
+`foundation_footing_dimensions` holds the per-wall overrides. The foundation
+plan dimensions both side strips, both middle strips, the front/back strips and the
+two garden-room dividing strips and includes
+the reinforcement and 500 mm footing-height notes.
+At Y = 2.0 m, one dimension chain shows the east, S.03–S.04, S.04–S.05 and
+west footing widths and the clear gaps between them, all with the same offset.
+At Y = HOUSE_DEPTH − 2.5 m, another chain aligns the east, S.01–S.02 and west
+footing widths with the two clear gaps between them, using the same offset.
+A vertical chain at X = 1.6 m (offset 0.35 m) shows the front, garden-room
+divider and back footing widths and the two clear gaps. It sits left of the
+S.03 horizontal gap label; the outside front/back width dimensions remain.
+`foundation_walls_below_base_plate` contains the front formwork wall and four
+short returns below the east, west and two middle basement walls. They fill
+the 500 mm gap from the lowered footing tops to the underside of the base
+plate, using the matching 300/250 mm basement wall types. Returns meet the
+front wall's inside face and stop at the footing step without overlapping
+each other. Sections exclude buried walls whose footprints they do not cross,
+so their projections cannot mask the cut soil.
 The foundation plan includes a red dashed `Zemnící pásovina FeZn 30/35`
 ring through the four exterior wall centrelines. Each corner has a diagonal
 lead extending `GROUNDING_LEAD_LENGTH = 1.0 m` beyond the masonry corner.
@@ -478,17 +534,18 @@ use `earth_to_z()`; no earth line or hatch is added in this view.
 It starts with a ground-floor storey at Z = 0, enclosing the
 `HOUSE_WIDTH × HOUSE_DEPTH` footprint. The ground-floor front and back walls use
 240 mm VPC (`FRONT_WALL_THICKNESS` / `BACK_WALL_THICKNESS`), described as
-`VPC Cihla 240 mm (20-2,0)` in the ground material legend; upstairs they remain
-175 mm VPC (`UPPER_FRONT_WALL_THICKNESS` / `UPPER_BACK_WALL_THICKNESS`). Both
-175 mm walls use the paired diagonal `brick` hatch; 240 mm VPC uses plain white.
-East and west remain 240 mm VPC. All four ground-floor outer walls use
+`VPC Cihla 240 mm (20-2,0)` in the ground material legend. All four upper-floor
+outer walls use `Liapor KM 240 AKU`, 240 mm thick, with solid light-yellow
+fill (`#fff2cc`) and no hatch. Their outside faces remain fixed, while floors,
+wall-side fixtures and dimensions follow their inside faces. Ground-floor
+240 mm VPC uses plain white. All four ground-floor outer walls use
 the `(20-2,0)` specification and share one material-legend entry.
 On both above-ground floors, east and west walls span the full house depth;
 front and back walls fit between their inner faces. The exterior footprint,
 opening positions and basement supports stay fixed when changing these joints.
 The ground-floor transverse garden-room divider uses 300 mm Ytong Klasik
-(`GARDEN_ROOMS_WALL_THICKNESS`), with the orange paired-diagonal hatch.
-The wall directly above it uses 300 mm Ytong Klasik, with the orange
+(`GARDEN_ROOMS_WALL_THICKNESS`), with the light-yellow paired-diagonal hatch.
+The wall directly above it uses 300 mm Ytong Klasik, with the light-yellow
 paired-diagonal hatch. Both retain the shared `GARDEN_ROOMS_WALL_CENTER_Y`.
 Its centreline and the back wall's outside face retain their positions;
 the room polygons, dimensions and ceiling bearings use the new inside faces.
@@ -577,7 +634,7 @@ shows the stair symbols, uphill walking arrow and combined stair notes.
 A centred 300 mm load-bearing Ytong Klasik wall along Y splits the garden
 section into equal rooms. Their clear width follows
 `(HOUSE_WIDTH-2*BWT-GARDEN_PARTITION_THICKNESS)/2`; their clear depth is
-`GARDEN_ROOMS_DEPTH`. Its cut hatch uses the orange `ytong-klasik` pattern.
+`GARDEN_ROOMS_DEPTH`. Its cut hatch uses the light-yellow `ytong-klasik` pattern.
 The common masonry finishing pass retains the Liapor base below the Ytong.
 The transverse divider and its corresponding basement and upper-floor walls
 keep their physical centres aligned at `GARDEN_ROOMS_WALL_CENTER_Y`.
@@ -1216,7 +1273,7 @@ ring beams, chimney and AA/BB symbols. Generate both with
 `python3 house2.py ceiling ceiling2`; the basement targets remain separate.
 
 The `Upper floor` storey starts at `UPPER_FLOOR_START` (Z = 3.035 m), with
-four 240 mm VPC exterior walls aligned above the ground-floor walls. The
+four 240 mm Liapor KM 240 AKU exterior walls aligned above the ground-floor walls. The
 east/west wall height is `NADEZDIVKA = 1.125 + UPPER_RING_BEAM_HEIGHT`;
 with the initial 240 mm ring-beam-height parameter this is 1.365 m,
 reaching Z = 4.400 m. The front/back masonry follows both roof planes at
@@ -1247,7 +1304,7 @@ Its sloped top is 50 mm below the rafter tops, measured perpendicular to the
 roof slope (`UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE`). It is capped
 horizontally at `purlin_bottom_z`; unlike the SDK, it is not capped at the
 plasterboard. The exterior gable walls keep their separate underside cuts.
-Cuts use the orange paired-diagonal `ytong-klasik` hatch.
+Cuts use the light-yellow paired-diagonal `ytong-klasik` hatch.
 The removed returns' ring-beam bands are not extended
 through this new wall; the wall-plate ring beams remain on the perimeter.
 The vertical SDK partition turns towards the chimney before the middle
@@ -1303,15 +1360,21 @@ aligned to the west purlin post's street face. The opposite wall and its door
 follow this alignment while retaining the bathroom's clear depth.
 `UPPER_TOILET_DEPTH = 1.20 m` sets the toilet's clear depth
 from this wall's garden face to the new horizontal end partition's street
-face. The kitchen-side vertical partition ends at the bathroom's street face,
+face. `UPPER_BATHROOM_WIDTH = 1.00 m` sets the clear width between the actual
+SDK faces. The kitchen-side drywall position follows the fixed stair-side
+drywall, so changes to the stairway wall thickness do not alter this width.
+The kitchen-side vertical partition ends at the bathroom's street face,
 opening the former technical area into the kitchen. The stair-side partition
 continues to the front wall and replaces the former technical-area railing.
-It has two sections sharing the stair-side face at `STAIR_LEFT_X`:
-`wall_kitchen_stairway_u` is 240 mm load-bearing VPC from the front wall to
+It has two sections:
+`wall_kitchen_stairway_u` is 300 mm load-bearing Ytong Klasik from the front wall to
 the bathroom's street face; `wall_technical_stairway_u` is 100 mm drywall
-along the bathroom. The kitchen and bathroom polygons follow their respective
+along the bathroom. The masonry remains centred over the ground-floor Ytong
+wall, controlled by `UPPER_STAIRWAY_WALL_THICKNESS` and `UPPER_STAIRWAY_WALL_X`.
+The drywall keeps its original stair-side face at `STAIR_LEFT_X`, 30 mm inward
+of the masonry face. The kitchen and bathroom polygons follow their respective
 inside faces, `upper_kitchen_right_x` and `upper_technical_right_x`.
-`upper_ring_beam_walls` includes the new VPC section alongside the exterior
+`upper_ring_beam_walls` includes this Ytong section alongside the exterior
 walls, inserting the same reinforced 240 mm-high concrete band at the existing
 upper ring-beam level. The masonry is removed within that band.
 The hallway occupies the area behind the toilet and follows the living-room
@@ -1393,7 +1456,7 @@ the extended stairway wall, positioned by `kitchen_lower_center_x`.
 bathroom's street wall. The cooker and dishwasher use 640 × 640 × 750 mm boxes;
 the sink and front counter are also 750 mm high. The boxes start 30 mm above the
 finished upper floor. There is one counter along the front wall, extending to
-the 240 mm VPC stairway wall with the same 30 mm wall gap. The former vertical
+the 300 mm Ytong stairway wall with the same 30 mm wall gap. The former vertical
 counter below the fridge is removed. Appliance socket positions follow the new run, and the cold-water
 branch ends at the relocated dishwasher.
 `FRIDGE_SIZE = (0.64, 1.0, 1.95)` controls the fridge. The dining table reuses the old house's

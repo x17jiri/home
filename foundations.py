@@ -286,6 +286,20 @@ def build_foundations(
     return tuple(walls), tuple(footers)
 
 
+def strip_footing_footprint(footer):
+    """Return a strip's global XY footprint, before or after stepping it."""
+    data = ifcopenshell.util.element.get_pset(footer, "BBIM_StripFooting")
+    if "Footprint" in data:
+        return Polygon(json.loads(data["Footprint"]))
+    placement = ifcopenshell.util.placement.get_local_placement(footer.ObjectPlacement)
+    length, width = data["Length"], data["Width"]
+    return Polygon([
+        tuple((placement @ np.array((x, y, 0, 1)))[:2])
+        for x, y in ((0, -width/2), (length, -width/2),
+                     (length, width/2), (0, width/2))
+    ])
+
+
 def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeightMap):
     """Apply stepped tops and 1:1 undersides to existing strip footings only.
 
@@ -302,16 +316,8 @@ def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeigh
         if not footer.is_a("IfcFooting") or footer.file is not model:
             raise ValueError("footings must be IfcFooting elements from this house")
         data = ifcopenshell.util.element.get_pset(footer, "BBIM_StripFooting")
-        placement = ifcopenshell.util.placement.get_local_placement(footer.ObjectPlacement)
-        length, width, height = data["Length"], data["Width"], data["Height"]
-        if "Footprint" in data:
-            polygon = Polygon(json.loads(data["Footprint"]))
-        else:
-            polygon = Polygon([
-                tuple((placement @ np.array((x, y, 0, 1)))[:2])
-                for x, y in ((0, -width/2), (length, -width/2),
-                             (length, width/2), (0, width/2))
-            ])
+        height = data["Height"]
+        polygon = strip_footing_footprint(footer)
         x0, y0, x1, y1 = polygon.bounds
         bands = []
         for lo, hi, bottom in height_map.bands(y0, y1):

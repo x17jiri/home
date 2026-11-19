@@ -3694,12 +3694,15 @@ def _notes_svg(
         int(available_text_width_mm / approximate_character_width_mm),
     )
 
-    normalised_items: list[tuple[list[str], bool]] = []
+    normalised_items: list[tuple[list[str], bool, bool]] = []
     for supplied_item in items:
         if not isinstance(supplied_item, dict):
             continue
         is_heading = "heading" in supplied_item
         text = str(supplied_item.get("heading" if is_heading else "text", ""))
+        is_bold = text.startswith("**") and text.endswith("**") and len(text) > 4
+        if is_bold:
+            text = text[2:-2]
         lines: list[str] = []
         for paragraph in text.splitlines() or [""]:
             lines.extend(
@@ -3711,7 +3714,7 @@ def _notes_svg(
                 )
                 or [""]
             )
-        normalised_items.append((lines, is_heading))
+        normalised_items.append((lines, is_heading, is_bold))
 
     u = units_per_mm
     title_height = 11.0 * layout_scale * u
@@ -3721,7 +3724,7 @@ def _notes_svg(
     item_gap = item_gap_mm * u
     body_height = (
         2 * padding
-        + sum(len(lines) * line_height for lines, _ in normalised_items)
+        + sum(len(lines) * line_height for lines, _, _ in normalised_items)
         + max(0, len(normalised_items) - 1) * item_gap
     )
     height = title_height + body_height
@@ -3749,7 +3752,7 @@ def _notes_svg(
     ]
 
     item_y = title_bottom + padding
-    for lines, is_heading in normalised_items:
+    for lines, is_heading, is_bold in normalised_items:
         first_baseline = item_y + 0.8 * line_height
         text_x = x + padding + (0 if is_heading else bullet_indent)
         if not is_heading:
@@ -3767,11 +3770,9 @@ def _notes_svg(
             )
             for index, line in enumerate(lines)
         )
-        parts.append(
-            f'<text class="notes-heading" style="font-weight:bold;font-size:{body_font_size:.6g}px">{tspans}</text>'
-            if is_heading else
-            f'<text class="notes-text" style="font-size:{body_font_size:.6g}px">{tspans}</text>'
-        )
+        text_class = "notes-heading" if is_heading else "notes-text"
+        weight = "font-weight:bold;" if is_heading or is_bold else ""
+        parts.append(f'<text class="{text_class}" style="{weight}font-size:{body_font_size:.6g}px">{tspans}</text>')
         item_y += len(lines) * line_height + item_gap
 
     parts.append("</g>")
@@ -8576,6 +8577,7 @@ class House:
         z: Number,
         radius: Number,
         *,
+        height: Number | None = None,
         view: DrawingView = "plan",
         direction: Point3D | None = None,
         storeys: Sequence[Storey] | None = None,
@@ -8595,7 +8597,11 @@ class House:
         surface_fills: bool = False,
         scale: Number = 100,
     ) -> Drawing:
-        """Add a persisted square plan or elevation drawing to this IFC model.
+        """Add a persisted plan or elevation drawing to this IFC model.
+
+        ``radius`` is half the horizontal view width in model metres.
+        ``height`` optionally sets the full vertical view height; by default
+        the view is square, with height equal to twice ``radius``.
 
         ``view="plan"`` preserves the existing downward-looking plan.  For a
         basic side view, use ``view="elevation"`` and supply a horizontal
@@ -8668,6 +8674,7 @@ class House:
             y=y,
             z=z,
             radius=radius,
+            height=height,
             view=view,
             direction=direction,
             storeys=storeys,
@@ -8858,6 +8865,7 @@ class Drawing:
         y: Number,
         z: Number,
         radius: Number,
+        height: Number | None = None,
         view: DrawingView,
         direction: Point3D | None,
         storeys: Sequence[Storey] | None,
@@ -8885,6 +8893,9 @@ class Drawing:
         self.radius = _number(radius, "radius")
         if self.radius <= 0:
             raise ValueError("radius must be greater than zero")
+        self.height = 2*self.radius if height is None else _number(height, "height")
+        if self.height <= 0:
+            raise ValueError("height must be greater than zero")
         self.scale = _number(scale, "scale")
         if self.scale <= 0:
             raise ValueError("scale must be greater than zero")
@@ -9073,20 +9084,21 @@ class Drawing:
         # the local X/Y extents are its frame and local negative Z is its view
         # depth.  Loader.create_camera reconstructs the Blender camera from it.
         r = self.radius
+        half_height = self.height/2
         depth = (
             max(10.0, hypot(self.x, self.y) + 2 * self.radius)
             if self.view == "elevation"
             else max(10.0, abs(self.z) + 10.0)
         )
         vertices = [
-            (-r, -r, -depth),
-            (-r, -r, 0.0),
-            (-r, r, -depth),
-            (-r, r, 0.0),
-            (r, -r, -depth),
-            (r, -r, 0.0),
-            (r, r, -depth),
-            (r, r, 0.0),
+            (-r, -half_height, -depth),
+            (-r, -half_height, 0.0),
+            (-r, half_height, -depth),
+            (-r, half_height, 0.0),
+            (r, -half_height, -depth),
+            (r, -half_height, 0.0),
+            (r, half_height, -depth),
+            (r, half_height, 0.0),
         ]
         faces = [
             (0, 1, 3, 2),
@@ -10407,7 +10419,10 @@ class Drawing:
         title: str = "POZNÁMKY",
         layout_scale: Number | None = None,
     ) -> Drawing:
-        """Add wrapped bullets, optionally grouped as ``(heading, notes)`` pairs."""
+        """Add wrapped bullets, optionally grouped as ``(heading, notes)`` pairs.
+
+        Wrap a complete note in ``**`` to render its text in bold.
+        """
         if self.right_panel_width <= 0:
             raise ValueError(
                 "add_notes requires right_panel_width on the drawing"
@@ -19168,6 +19183,7 @@ class Storey:
         source_storey: Storey,
         *,
         source_wall_type: ifcopenshell.entity_instance | None = None,
+        source_walls: Sequence[Wall] | None = None,
         structural_width: Number | None = None,
         structural_center_offset: Number | None = None,
         width: Number,
@@ -19182,6 +19198,8 @@ class Storey:
         Each footing projects past both wall ends by the same distance that it
         projects beyond either wall face.  This makes perpendicular strips
         meet cleanly at corners without extending past the footing outline.
+        ``source_walls`` selects individual walls, allowing separate calls with
+        different footing sizes without changing the other source walls.
 
         By default the whole physical wall body is treated as structural.
         ``structural_width`` and ``structural_center_offset`` can instead
@@ -19193,6 +19211,14 @@ class Storey:
             raise TypeError("source_storey must be a Storey")
         if source_storey.house is not self.house:
             raise ValueError("source_storey must belong to this house")
+        if isinstance(source_walls, (str, bytes)):
+            raise TypeError("source_walls must be a sequence of walls")
+        selected_walls = source_storey.walls if source_walls is None else tuple(source_walls)
+        if any(not isinstance(wall, Wall) or wall not in source_storey.walls
+               for wall in selected_walls):
+            raise ValueError("source_walls must contain walls from source_storey")
+        if len(set(selected_walls)) != len(selected_walls):
+            raise ValueError("source_walls must not contain duplicate walls")
         if source_wall_type is not None:
             if not (
                 isinstance(source_wall_type, ifcopenshell.entity_instance)
@@ -19241,7 +19267,7 @@ class Storey:
             self.house._materials[material_name] = ifc_material
 
         footings = []
-        for source_wall in source_storey.walls:
+        for source_wall in selected_walls:
             if (
                 source_wall_type is not None
                 and ifcopenshell.util.element.get_type(source_wall)
