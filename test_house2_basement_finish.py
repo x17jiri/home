@@ -184,64 +184,111 @@ class BasementCeilingFinishTests(unittest.TestCase):
 
     def test_garden_rooms_use_wall_centre_layouts_and_actual_face_bearings(self):
         v = self.v
-        for identifier, edge_gaps in (("S.01", (.02, .045)), ("S.02", (.045, .02))):
+        for identifier in ("S.01", "S.02"):
             slab, = v["basement_ceilings_by_room"][identifier]
             x0, y0, x1, y1 = v["basement_rooms_by_id"][identifier].bounds
             cx0, cy0, cx1, cy1 = v["basement_ceiling_layout_bounds"][identifier]
-            self.assertEqual(slab.structure, tuple(["beam"]+["space", "wide", "space", "beam"]*6))
-            self.assertEqual(len(slab.beams), 7)
-            self.assertAlmostEqual(slab.length, 3.75)
-            self.assertAlmostEqual(slab.width, 3.91)
-            self.assertAlmostEqual(slab.start[0]+slab.width/2, (cx0+cx1)/2)
-            self.assertAlmostEqual(cy0-slab.start[1], .0625)
-            self.assertAlmostEqual(slab.end[1]-cy1, .0625)
-            self.assertAlmostEqual(y0-slab.start[1], .1875)
-            self.assertAlmostEqual(slab.end[1]-y1, .2125)
-            self.assertAlmostEqual(slab.block_start_offset, y0-slab.start[1])
-            self.assertAlmostEqual(slab.block_end_offset, slab.end[1]-y1)
-            self.assertAlmostEqual(slab.start[0]-x0, edge_gaps[0])
-            self.assertAlmostEqual(x1-(slab.start[0]+slab.width), edge_gaps[1])
+            self.assertEqual(slab.structure, tuple(["beam"]
+                +[item for bay in ("wide", "narrow", "wide", "narrow", "wide")
+                  for item in ("space", bay, "space", "beam")]))
+            self.assertEqual(len(slab.beams), 6)
+            self.assertAlmostEqual(slab.length, 4.25)
+            self.assertAlmostEqual(slab.width, 3.035)
+            self.assertEqual(slab.direction, (0., 1.))
+            self.assertAlmostEqual((slab.start[0]+slab.end[0])/2, (cx0+cx1)/2)
+            self.assertAlmostEqual(slab.start[1]+slab.width/2, (cy0+cy1)/2)
+            self.assertAlmostEqual(slab.start[0], cx0)
+            self.assertAlmostEqual(slab.end[0], cx1)
+            self.assertAlmostEqual(x0-slab.start[0], .15)
+            self.assertAlmostEqual(slab.end[0]-x1, .15)
+            self.assertAlmostEqual(slab.block_start_offset, x0-slab.start[0])
+            self.assertAlmostEqual(slab.block_end_offset, slab.end[0]-x1)
+            self.assertAlmostEqual(slab.start[1]-y0, .0675)
+            self.assertAlmostEqual(y1-(slab.start[1]+slab.width), .0675)
+            for beam in slab.beams:
+                lo, hi = self.bounds(beam)
+                self.assertAlmostEqual(hi[0]-lo[0], slab.length)
+                self.assertLessEqual(hi[1]-lo[1], .16+1e-9)
+                self.assertGreater(lo[1], y0)
+                self.assertLess(hi[1], y1)
+        first, second = v["basement_ceiling_s01"], v["basement_ceiling_s02"]
+        np.testing.assert_allclose([end for start, end in first.beam_centerlines],
+                                   [start for start, end in second.beam_centerlines])
         middle_lo, middle_hi = self.bounds(v["wall_basement_s03_s04"])
         stair_lo, stair_hi = self.bounds(v["wall_basement_s04_s05"])
         slab = v["basement_ceiling_s04"]
         self.assertAlmostEqual(slab.start[0], (middle_lo[0]+middle_hi[0])/2)
         self.assertAlmostEqual(slab.end[0], (stair_lo[0]+stair_hi[0])/2)
 
-    def test_s03_s04_have_one_continuous_specification_and_keep_the_first_rows(self):
+    def test_s03_is_centred_with_150mm_bearings_and_narrow_bays_near_both_edges(self):
         v = self.v
-        for identifier, first_row in (
-            ("S.03", v["ceiling_room3"]),
-            ("S.04", v["ceiling_bathroom"]),
-        ):
-            x0, _, x1, _ = v["basement_rooms_by_id"][identifier].bounds
-            slab, = v["basement_ceilings_by_room"][identifier]
-            self.assertGreater(len(slab.beams), 1)
-            self.assertEqual(slab.structure[:4], ("beam", "space", "wide", "space"))
-            np.testing.assert_allclose(slab.beam_centerlines[0], first_row.beam_centerlines[0])
-            self.assertGreaterEqual(x0-slab.start[0], .125-1e-9)
-            self.assertGreaterEqual(slab.end[0]-x1, .125-1e-9)
-        self.assertEqual(v["basement_chimney_opening"].VoidsElements[0].RelatingBuildingElement,
-                         v["basement_ceiling_s04"].topping_element)
+        slab, = v["basement_ceilings_by_room"]["S.03"]
+        x0, y0, x1, y1 = v["basement_rooms_by_id"]["S.03"].bounds
+        footprint = Polygon(slab.footprint)
+        np.testing.assert_allclose(footprint.centroid.coords[0], ((x0+x1)/2, (y0+y1)/2))
+        self.assertEqual(slab.direction, (0., -1.))
+        self.assertAlmostEqual(slab.length, 3.5)
+        self.assertAlmostEqual(slab.width, 4.91)
+        self.assertEqual(len(slab.beams), 9)
+        self.assertEqual([item for item in slab.structure if item in ("wide", "narrow")],
+                         ["wide", "narrow", "wide", "wide", "wide", "wide", "narrow", "wide"])
+        centres = np.array([start[1] for start, end in slab.beam_centerlines])
+        np.testing.assert_allclose(-np.diff(centres), (.625, .5, .625, .625, .625, .625, .5, .625))
+        self.assertAlmostEqual(footprint.bounds[1]-y0, .035)
+        self.assertAlmostEqual(y1-footprint.bounds[3], .035)
+        self.assertAlmostEqual(slab.block_start_offset, .15)
+        self.assertAlmostEqual(slab.block_end_offset, .15)
+        for beam in slab.beam_shells:
+            lo, hi = self.bounds(beam)
+            self.assertAlmostEqual(x0-lo[0], .15)
+            self.assertAlmostEqual(hi[0]-x1, .15)
+            self.assertGreater(lo[1], y0)
+            self.assertLess(hi[1], y1)
 
-    def test_chimney_notch_trims_only_s04_first_block_row_with_blocks_on_both_sides(self):
+    def test_s04_straddles_chimney_and_trims_its_first_wide_bay(self):
         v = self.v
         slab = v["basement_ceiling_s04"]
-        first = [block for block in slab.blocks if " Block 1." in block.Name]
-        rest = [block for block in slab.blocks if " Block 1." not in block.Name]
-        xmin, _, xmax, _ = v["basement_chimney_clearance_region"].bounds
-        self.assertAlmostEqual(xmin, v["CHIMNEY_CENTER"][0]-v["CHIMNEY_SIZE"]/2-.05)
-        self.assertAlmostEqual(xmax, v["CHIMNEY_CENTER"][0]+v["CHIMNEY_SIZE"]/2+.05)
-        bounds = [self.bounds(block) for block in first]
-        left = [(lo, hi) for lo, hi in bounds if hi[0] <= xmin+1e-8]
-        right = [(lo, hi) for lo, hi in bounds if lo[0] >= xmax-1e-8]
+        chimney_lo, chimney_hi = self.bounds(v["chimney"])
+        first_lo, first_hi = self.bounds(slab.beam_shells[0])
+        _, second_hi = self.bounds(slab.beam_shells[1])
+        garden_lo, garden_hi = self.bounds(v["wall_basement_garden_rooms"])
+        last_lo, _ = self.bounds(slab.beam_shells[-1])
+        front_lo, front_hi = self.bounds(v["wall_basement_front"])
+        self.assertAlmostEqual(first_lo[1]-chimney_hi[1], .03)
+        self.assertAlmostEqual(chimney_lo[1]-second_hi[1], .035)
+        self.assertGreaterEqual(min(first_hi[1], garden_hi[1])-max(first_lo[1], garden_lo[1]), .128)
+        self.assertEqual(slab.structure[:5], ("beam", "space", "wide", "space", "beam"))
+        for spacing in -np.diff([start[1] for start, end in slab.beam_centerlines]):
+            self.assertTrue(np.isclose(spacing, .5) or np.isclose(spacing, .625))
+        self.assertGreater(last_lo[1], front_lo[1])
+        self.assertLess(last_lo[1], front_hi[1])
+        self.assertAlmostEqual(slab.block_start_offset, .15)
+        self.assertAlmostEqual(slab.block_end_offset, .15)
+        self.assertEqual(len(slab.topping_element.HasOpenings), 1)
+        self.assertEqual(v["basement_chimney_opening"].VoidsElements[0].RelatingBuildingElement,
+                         slab.topping_element)
+        region = v["chimney_ceiling_opening_region"]
+        self.assertLess(self.footprint(slab.topping_element).intersection(region).area, 1e-9)
+        first_blocks = [block for block in slab.blocks if " Block 1." in block.Name]
+        left, right = [], []
+        for block in first_blocks:
+            lo, hi = self.bounds(block)
+            self.assertLess(self.footprint(block).intersection(region).area, 1e-9)
+            if hi[0] <= region.bounds[0]+1e-9:
+                left.append(hi[0])
+            elif lo[0] >= region.bounds[2]-1e-9:
+                right.append(lo[0])
+            else:
+                self.fail("First-bay block still spans the chimney opening")
         self.assertTrue(left)
         self.assertTrue(right)
-        self.assertEqual(len(left)+len(right), len(bounds))
-        self.assertAlmostEqual(max(hi[0] for lo, hi in left), xmin)
-        self.assertAlmostEqual(min(lo[0] for lo, hi in right), xmax)
-        self.assertAlmostEqual(max(hi[0] for lo, hi in right), v["basement_s04_x1"])
-        self.assertAlmostEqual(max(self.bounds(block)[1][0] for block in rest), v["basement_s04_x1"])
-        self.assertAlmostEqual(min(self.bounds(block)[0][0] for block in first), v["basement_s04_x0"])
+        self.assertAlmostEqual(max(left), region.bounds[0])
+        self.assertAlmostEqual(min(right), region.bounds[2])
+        self.assertFalse(any(block.HasOpenings for block in slab.blocks if " Block 1." not in block.Name))
+        infills = [obj for obj in v["house"].model.by_type("IfcBuildingElementPart")
+                   if element.get_pset(obj, "BBIM_CeilingInfill")]
+        self.assertFalse(infills)
+        self.assertNotIn("basement_ceiling_s04_chimney_infill", v)
 
     def test_miako_omissions_do_not_trim_the_room_finish_polygons(self):
         v = self.v
@@ -256,9 +303,9 @@ class BasementCeilingFinishTests(unittest.TestCase):
         source = Path(__file__).with_name("house2.py")
         tree = ast.parse(source.read_text(), filename=str(source))
         assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
-                          and any(isinstance(target, ast.Name) and target.id == "basement_ceiling_s03"
+                          and any(isinstance(target, ast.Name) and target.id == "basement_s03_ceiling_structure"
                                   for target in node.targets))
-        structure = next(kw.value for kw in assignment.value.keywords if kw.arg == "structure")
+        structure = assignment.value
         self.assertIsInstance(structure, ast.List)
         structure.elts.extend(ast.Constant(value) for value in ("space", "wide", "space", "beam"))
         ast.fix_missing_locations(tree)
@@ -268,9 +315,12 @@ class BasementCeilingFinishTests(unittest.TestCase):
         original, changed = self.v["basement_ceiling_s03"], modified["basement_ceiling_s03"]
         self.assertEqual(len(changed.beams), len(original.beams)+1)
         self.assertAlmostEqual(changed.width-original.width, .625)
-        np.testing.assert_allclose(changed.beam_centerlines[0], original.beam_centerlines[0])
-        self.assertAlmostEqual(min(y for x, y in original.footprint)-min(y for x, y in changed.footprint), .625)
-        for key in ("ceiling_room3", "ceiling_bathroom", "basement_ceiling_s04"):
+        np.testing.assert_allclose(np.array(changed.beam_centerlines[0])-original.beam_centerlines[0],
+                                   ((0, .3125), (0, .3125)))
+        np.testing.assert_allclose(Polygon(changed.footprint).centroid.coords,
+                                   Polygon(original.footprint).centroid.coords)
+        for key in ("ceiling_room3", "ceiling_bathroom", "basement_ceiling_s01", "basement_ceiling_s02",
+                    "basement_ceiling_s04", "basement_ceiling_s05", "basement_ceiling_s05_front"):
             self.assertEqual(modified[key].structure, self.v[key].structure)
             np.testing.assert_allclose(modified[key].beam_centerlines, self.v[key].beam_centerlines)
 
@@ -280,15 +330,15 @@ class BasementCeilingFinishTests(unittest.TestCase):
         self.assertEqual(len(slab.beams), 4)
         self.assertAlmostEqual(slab.length, 2.5)
         self.assertAlmostEqual(v["basement_s05_x0"]-slab.start[0], .125)
-        self.assertAlmostEqual(slab.end[0]-v["basement_s05_x1"], .15)
+        self.assertAlmostEqual(slab.end[0]-v["basement_s05_x1"], .175)
         self.assertAlmostEqual(slab.start[1]-v["basement_s05_y1"], .015)
 
         source = Path(__file__).with_name("house2.py")
         tree = ast.parse(source.read_text())
         assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
-                          and any(isinstance(target, ast.Name) and target.id == "basement_ceiling_s05"
+                          and any(isinstance(target, ast.Name) and target.id == "basement_s05_garden_structure"
                                   for target in node.targets))
-        structure = next(keyword.value for keyword in assignment.value.keywords if keyword.arg == "structure")
+        structure = assignment.value
         structure.elts.extend(ast.Constant(value=item) for item in ("space", "wide", "space", "beam"))
         ast.fix_missing_locations(tree)
         modified = {"__file__": str(source)}
@@ -298,12 +348,36 @@ class BasementCeilingFinishTests(unittest.TestCase):
         changed = modified["basement_ceiling_s05"]
         self.assertEqual(len(changed.beams), len(slab.beams)+1)
         self.assertAlmostEqual(changed.width-slab.width, .625)
-        np.testing.assert_allclose(changed.beam_centerlines[:-1], slab.beam_centerlines)
-        for key in ("ceiling_stairway", "basement_ceiling_s03", "basement_ceiling_s04"):
+        np.testing.assert_allclose(changed.beam_centerlines[1:], slab.beam_centerlines)
+        for key in ("ceiling_stairway", "basement_ceiling_s03", "basement_ceiling_s04", "basement_ceiling_s05_front"):
             self.assertEqual(modified[key].structure, v[key].structure)
             np.testing.assert_allclose(modified[key].beam_centerlines, v[key].beam_centerlines)
 
-    def test_s05_front_section_can_reach_the_wall_without_a_stair_opening(self):
+    def test_s05_sections_clear_heb_and_leave_1200mm_stair_opening(self):
+        v = self.v
+        garden, street = v["basement_ceilings_by_room"]["S.05"]
+        heb_lo, heb_hi = self.bounds(v["basement_s05_edge_heb"])
+        self.assertEqual((len(garden.beams), len(street.beams)), (4, 3))
+        self.assertEqual(garden.structure.count("wide"), 3)
+        self.assertEqual(street.structure.count("wide"), 2)
+        self.assertAlmostEqual(min(y for x, y in garden.footprint)-heb_hi[1], .05)
+        self.assertAlmostEqual(heb_lo[1]-max(y for x, y in street.footprint), .05)
+        self.assertAlmostEqual(max(y for x, y in garden.footprint)-v["basement_s05_y1"], .015)
+        self.assertAlmostEqual(v["basement_stair_opening_length"], 1.27)
+        self.assertGreaterEqual(v["basement_stair_opening_length"], v["BASEMENT_S05_MIN_STAIR_OPENING"])
+        for slab, is_garden in ((garden, True), (street, False)):
+            for part in slab.components:
+                lo, hi = self.bounds(part)
+                gap = lo[1]-heb_hi[1] if is_garden else heb_lo[1]-hi[1]
+                self.assertGreaterEqual(gap, .05-1e-8)
+        for name in ("basement_ceiling", "basement_ceiling2"):
+            drawing = next(d for d in v["house"]._drawings if d.name == name)
+            annotations = [obj for rel in drawing.group.IsGroupedBy for obj in rel.RelatedObjects]
+            for side in ("Garden", "Street"):
+                dimension = next(obj for obj in annotations if obj.Name == f"S.05 {side} ceiling to HEB clearance")
+                self.assertAlmostEqual(element.get_pset(dimension, "BBIM_DimensionSource", "Length"), .05)
+
+    def test_s05_street_section_rejects_insufficient_stair_opening(self):
         source = Path(__file__).with_name("house2.py")
         tree = ast.parse(source.read_text())
         assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
@@ -320,18 +394,13 @@ class BasementCeilingFinishTests(unittest.TestCase):
                 exec(compile(tree, str(source), "exec"), result)
             return result
 
-        v = build(["beam", "space", "axis", "beam"]+["space", "wide", "space", "beam"]*4)
-        street_edge = min(y for x, y in v["basement_ceiling_s05_front"].footprint)
-        self.assertLess(street_edge, v["basement_s05_y0"])
-        self.assertEqual(v["basement_stair_opening_length"], 0)
-        self.assertEqual(v["basement_stair_opening_end_y"], v["basement_s05_y0"])
-        self.assertFalse(any(a.Name == "S.05 clear ceiling opening from inside street wall"
-                             for a in v["house"].model.by_type("IfcAnnotation")))
+        with self.assertRaisesRegex(ValueError, "at least 1.20 m"):
+            build(["beam"]+["space", "wide", "space", "beam"]*3)
 
         # Shortening only the editable section must restore the opening and dimension.
         modified = build(["beam", "space", "wide", "space", "beam"])
         edge = min(y for x, y in modified["basement_ceiling_s05_front"].footprint)
-        self.assertGreater(modified["basement_stair_opening_length"], 0)
+        self.assertGreaterEqual(modified["basement_stair_opening_length"], 1.2)
         self.assertAlmostEqual(modified["basement_stair_opening_length"], edge-modified["basement_s05_y0"])
         self.assertTrue(any(a.Name == "S.05 clear ceiling opening from inside street wall"
                             for a in modified["house"].model.by_type("IfcAnnotation")))

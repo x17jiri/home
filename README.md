@@ -105,94 +105,89 @@ between the physical wall centrelines, derived with `wall_body_centreline_point(
 S.01/S.02 use these rectangles to centre their layouts and size their spans.
 `BASEMENT_GARDEN_CEILING_MIN_CENTER_BEARING = 0.0` is the minimum beam extension
 past each supporting wall centre before rounding up the length to 250 mm.
-Their 3750 mm beams currently extend 62.5 mm past each centre. S.04 also uses
+Their 4250 mm beams currently end at the supporting wall centres. S.04 also uses
 the centre-based X reference; S.03/S.05 use actual
 internal wall faces with 125 mm bearing. Their Y grid is controlled separately
 below. Blocks and dimensioned bearings
 follow the actual current room faces.
 The basement ceilings belong to the `Basement ceiling` storey and are
-organised by `basement_ceilings_by_room`. S.01 and S.02 each use seven
-3750 mm beams along Y, six wide block bays and 5 mm spaces at every
-beam/block junction. Their 3910 mm layout retains its original coordinates;
-the thinner divider gives 3975 mm clear room width, leaving 20/45 mm side
-margins (mirrored between rooms). End bearings are now 187.5 mm at the
-transverse wall and 212.5 mm at the garden exterior wall.
+organised by `basement_ceilings_by_room`. S.01 and S.02 each use six
+4250 mm beams along X, supported by the east/west exterior wall and the
+S.01–S.02 divider, with 150 mm bearing at each end. Each editable structure
+has three wide bays and two narrow bays, with 5 mm spaces at every
+beam/block junction. The symmetric spacing sequence is 625/500/625/500/625 mm.
+Its 3035 mm width is centred in the 3170 mm clear room depth, leaving 67.5 mm
+at both the garden exterior and transverse wall faces.
+Both room grids align along Y; opposing beam ends meet at the divider centre.
 
-S.03 and S.04 each have one independent `basement_ceiling_storey.miako_slab()`
-specification: `basement_ceiling_s03` and `basement_ceiling_s04`. Edit their
-literal `structure=[...]` lists directly. Both run from garden to street,
-with their garden edge fixed by `basement_ceiling_garden_y`. The common grid
-starts with the first beam centre 215 mm streetward of the actual garden-room
-wall centreline, controlled by `BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE`.
-The same setting positions the ground-floor ceiling grid. With the 300 mm
-basement wall, the first beam edge overlaps it by 15 mm. S.04 omits the original first
-beam and narrow block row to clear the chimney. Its start is offset 500 mm
-towards the street by `basement_s04_omitted_garden_width`, and those four
-entries (`beam, space, narrow, space`) are removed from its structure list.
-Every remaining beam and block keeps its previous position. Edit or append
-the remaining rows freely. Appending
-`space, wide, space, beam` adds one wide bay and beam, extending the ceiling
-625 mm towards the street. No HEB position or upstairs row list limits
-these basement layouts.
+S.03 has an independent `basement_ceiling_s03` specification. Edit
+`basement_s03_ceiling_structure` to change its garden-to-street rows; the layout
+automatically recentres along Y when its width changes. Its nine 3500 mm beams
+run along X, with `BASEMENT_S03_BEARING = 0.15 m` at both actual room faces.
+The 4910 mm layout is centred in the 4980 mm room depth, leaving 35 mm at
+both parallel wall faces. Its spacing sequence is
+625/500/625/625/625/625/500/625 mm: each side starts with a wide bay, followed
+by a narrow bay, then the remaining wide bays. S.03 no longer follows the
+S.04/S.05 or upstairs beam grid.
+
+S.04 has its own `basement_ceiling_s04` specification with a literal
+`structure=[...]` list. Its first beam's street face follows the garden edge
+of `chimney_ceiling_opening_region`, leaving 30 mm clear from the chimney's
+garden face. Of its 160 mm width, 145 mm lies over the garden-room wall.
+The second beam sits on the street side of the chimney, with 35 mm clear.
+`trim_first_miako_block_row()` cuts the first wide bay and topping around the
+chimney with 30 mm clearance, retaining blocks on both sides along X.
+Nine beams and eight wide bays continue towards the street at
+625 mm centres, with the last beam extending 35 mm onto the front wall.
+There is no concrete infill between the chimney and garden-room wall in this
+basement layout. The first beam position follows chimney movements and is
+independent of S.03, S.05 and the upstairs ceiling. Appending
+`space, wide, space, beam` extends the ceiling 625 mm towards the street.
 
 The number and placement of later rows follow each independent list.
-`BASEMENT_S03_BEAM_LENGTH` / `BASEMENT_S03_MIDDLE_BEARING`
-set the 3500 mm S.03 span from its middle-wall face with 125 mm bearing;
-the opposite outside-wall bearing is 150 mm.
+`BASEMENT_S03_BEAM_LENGTH` is derived from the clear span plus the two equal
+bearings, currently 3500 mm.
 `BASEMENT_S04_BEAM_LENGTH` / `BASEMENT_S04_MIDDLE_CENTER_BEARING` set the 2500 mm
 S.04 span. The centre bearing is 0 mm, so the beam ends meet both supporting
-wall centres, giving actual 125 mm bearings at each end. S.04's MIAKO concrete
-cover follows the shortened footprint. A separate full-depth concrete infill,
-`basement_ceiling_s04_chimney_infill`, fills the gap from the first remaining
-beam to the street face of the garden-room wall. Its X edges stop at the
-room-facing wall surfaces, using the same clear span as the ceramic blocks,
-and it has a through-opening 30 mm clear of every chimney face.
-The remaining beams and full-width block rows keep their positions.
+wall centres, giving actual 150 mm bearings at each end. S.04's MIAKO concrete
+cover follows the beam/block footprint; the floor and ceiling finish layers
+retain their separate 30 mm chimney opening.
 
-S.05 has its own editable `basement_ceiling_storey.miako_slab()` specification,
-`basement_ceiling_s05`, with a literal garden-to-street `structure` list.
+S.05 has two independent `basement_ceiling_storey.miako_slab()` specifications,
+one on each side of the HEB. Both run along X, with rows ordered garden to street.
 `BASEMENT_S05_BEAM_LENGTH = 2.50 m` and
 `BASEMENT_S05_STAIRWAY_BEARING = 0.125 m` set the span and bearing from the
-actual internal wall face. The opposite west-wall bearing is 150 mm.
-Its first beam uses the same 215 mm centreline distance and 10 mm clear
-gap from the garden wall as S.03. S.04's first remaining beam aligns with the
-second beam in S.03/S.05, preserving its omitted 500 mm bay.
-Editing its rows, beam length or bearing does not change the upstairs ceiling.
-The remaining front-wall opening follows the nearest street edge of the S.05
-ceiling parts and HEB, stored in `basement_stair_opening_length`. It is
-clamped to zero when the street section reaches or overlaps the front wall;
-an opening is optional. In that case the drawing omits its dimension and
-notes that the ceiling reaches the wall.
-All five basement ceilings have explicit structure lists.
-
-`basement_ceiling_s05_front` is a second independently editable section on
-the street side of the HEB. Its reference line continues the garden part's
-beam grid as though a wide block bay lay between the two sections: 625 mm between
-beam centres, with a 455 mm block width and two 5 mm spaces between beam edges.
-`BASEMENT_S05_PART_GAP` derives this 465 mm clear separation. No blocks are
-added in the intervening gap, which contains the HEB. The section uses
-2500 mm beams with the same 125/150 mm wall bearings as the garden part.
-Edit its own `structure` list to extend it; an optional `axis` marker can
-place additional rows on the garden side of its reference line. The
-editable layout may extend into the front wall without requiring a stair
-opening. Notes count beams and wide rows from the actual specification.
-Both sections contribute to the S.05 beam schedule and finish coverage.
+actual internal wall face. The opposite west-wall bearing is 175 mm.
+`BASEMENT_S05_HEB_CLEARANCE = 0.05 m` anchors each section to its own HEB face,
+so neither section overlaps the steel. There are no blocks between sections.
+The garden section, `basement_ceiling_s05`, uses
+`basement_s05_garden_structure`: four beams and three wide bays, 2035 mm wide.
+Its street edge stays 50 mm beyond the HEB's garden face; its garden edge
+extends 15 mm onto the garden-room wall. Editing its rows grows the layout
+towards the garden without moving the street section or upstairs ceiling.
+The street section, `basement_ceiling_s05_front`, has a literal `structure`
+list with three beams and two wide bays, 1410 mm wide. Its garden edge sits
+50 mm beyond the HEB's street face. It leaves a 1270 mm clear opening from
+the inside front-wall face. `BASEMENT_S05_MIN_STAIR_OPENING = 1.20 m` enforces
+the minimum opening when editing this section.
+`basement_stair_opening_length` follows the actual nearest ceiling edge.
+The under-stairs floor, timber board and basement insulation coverage follow
+this updated opening automatically. Both sections contribute to the S.05
+beam schedule; both drawings dimension the separate 50 mm HEB clearances.
+All five basement ceilings have explicit editable structure lists.
 
 S.05 also has a separate native I-section `basement_s05_edge_heb` (HEB180)
 at its street edge. `BASEMENT_S05_HEB_MIDDLE_BEARING = 0.12 m` and
 `BASEMENT_S05_HEB_WEST_BEARING = 0.15 m` derive its endpoints from the actual
-wall faces, giving a current 2495 mm length. Its garden
+wall faces, giving a current 2470 mm length. Its garden
 flange edge follows the actual upper stair flight's arrival through
 `BASEMENT_S05_HEB_GARDEN_Y = upper_stairs.end[1]`. The front edge is one HEB
 flange width (180 mm) towards the street: currently 2760 mm from the
-ground-floor wall's inside face and 2755 mm from the basement wall's.
-The S.05 street section follows the garden part's beam grid independently
-of the HEB position. Rows before an `axis` marker can extend further towards
-the garden without shifting the rows after that marker.
+ground-floor wall's inside face and 2730 mm from the basement wall's.
+The two S.05 sections follow their respective HEB faces with 50 mm clearance.
 Its steel is centred vertically in the structural ceiling, leaving 15 mm
 above and below the profile. Both ceiling plans label the HEB and dimension that front edge.
-Adding the HEB leaves the editable MIAKO layout unchanged. The HEB is
-separate from the MIAKO beam counts.
+The HEB is separate from the MIAKO beam counts.
 
 There are six basement slab assemblies, grouped into five room schedules;
 beam counts follow their editable structures. Finish coverage uses the
@@ -276,6 +271,10 @@ extent beside the walls and below the footings. Gravel starts at the footing
 tops, outside the perimeter insulation and finish. Its initial bottom width
 is 0.30 m (`SECTION_GRAVEL_BOTTOM_WIDTH`), widening by 0.50 m per metre of
 height (`SECTION_GRAVEL_SLOPE`). These are adjustable drawing settings.
+BB and CC also mirror this gravel profile inside the short street foundation
+wall, between its footing top and the underside of the base plate. The inner
+backfill replaces the natural-soil hatch there and uses the existing
+"Zhutněná zemina" material entry.
 
 Run `python3 house2.py basement found` to generate the basement and foundation
 plans. Their PDFs are `D1.1.9. Půdorys suterénu.pdf` (`PDF_BASEMENT`) and
@@ -366,8 +365,10 @@ plus a green dashed outline of the chimney above its pad, with matching
 line-legend entries. Both plans show overall dimensions and wall/footing thickness.
 `foundation` is also accepted as an alias for `found`.
 `found` is an A3 portrait sheet: the foundation plan sits above section ZZ.
-The Z–Z marker follows the centre of the east footing and looks west (+X).
+The Z–Z marker runs through the east footing and looks west (+X).
 ZZ shows foundations, the base plate and the bottom of the basement walls.
+It uses the same perimeter-insulation helper as AA/BB/CC, showing the 100 mm
+XPS down to the lowered front footing top and the normal garden footing top.
 Its right-hand vertical dimension chain shows the footing height, the step
 height and the base plate thickness (currently 600, 400 and 150 mm).
 The 150 mm label uses `add_dimension(center_label=False)` to sit beyond its
@@ -636,7 +637,9 @@ actual door threshold and the west terrain interpolated at the flight's foot.
 `ENTRANCE_LANDING_LENGTH = 2.0 m` extends the landing from the opening's street
 edge towards the garden; `ENTRANCE_LANDING_DEPTH` keeps its projection from the
 facade, and `ENTRANCE_LANDING_THICKNESS` sets its thickness. The current flight
-has seven risers and six 300 mm treads, with the rise calculated at its new foot.
+has eight risers and seven 300 mm treads (2.10 m run), with the rise calculated
+at its foot. The current terrain gives approximately 155.5 mm per riser and
+`2h + b = 611.1 mm`, within the chosen 600–650 mm range.
 The outer railing continues around the landing's street edge. The ground plan
 shows the stair symbols, uphill walking arrow and combined stair notes.
 
@@ -681,10 +684,13 @@ Each has **eight risers and seven
 treads**, all with 270 mm treads.
 The lower flight runs toward the front wall (−Y); the upper returns toward
 the garden (+Y), with its left edge touching the stairway/bathroom wall.
-The landing is against the front wall and measures 2.26 × 1.05 m.
+The landing is against the front wall and measures 2.23 × 1.05 m.
 Both runs are 1.89 m. Each flight touches its adjacent wall;
 `STAIR_FLIGHT_GAP` is the remaining clear width after subtracting both
-flight widths, currently 0.11 m. The stairway notes list each flight's width.
+flight widths, currently 0.08 m. The stairway notes list each flight's width.
+`add_stairway_plan_dimensions()` dimensions the landing width and depth and both
+flight widths inside the landing in `ground` and `upper`. The labels use white
+backgrounds to remain readable over the stair linework.
 The reserved future basement layout keeps its independent
 `BASEMENT_STAIR_FLIGHT_GAP = 0.24 m` and divides the remaining clear stairwell
 width equally; these flights are not built in the current model.
@@ -698,58 +704,56 @@ the inside west wall. The terminal prints the plasterboard inner-face
 height above the finished upper floor at the west corner of the upper
 stair arrival, including that point's X/Y coordinates.
 
-One shared MIAKO assembly, `ceiling_garden_rooms`, covers Pokoj 1 and Pokoj 2
-in the `Ceiling` storey. Its 14 beams span along Y between the transverse
-load-bearing wall and the garden wall. `GARDEN_CEILING_STRUCTURE` is an
-editable list with 13 `wide` block bays and a 5 mm `space` at every
-beam–block junction (26 spaces). The 8285 mm layout is centred across both
-rooms, overlapping each outside wall's inner face by 12.5 mm. Beam length
-rounds the room depth plus minimum end bearings up to the next 250 mm:
-currently 3750 mm, centred along Y with 165 mm bearing at each end.
-Blocks stop at the supporting wall faces. The partition between the rooms
-has no ring beam or ceiling bearing role.
-`GARDEN_CEILING_*` constants derive the span, width and centring from the
-room geometry and explicit structure list.
+Two independent MIAKO assemblies, `ceiling_pokoj1` and `ceiling_pokoj2`, cover
+Pokoj 1 and Pokoj 2 in the `Ceiling` storey; `ceiling_garden_rooms` is their
+collection. Each has an editable `structure` list with seven beams along Y,
+six wide bays and 5 mm joints. Each 3910 mm layout is centred in its room's
+4010 mm clear width, leaving 50 mm along each parallel wall face.
+The existing 240 mm ring beam above `wall_garden_partition_g` runs between
+the two assemblies, without either topping covering it.
+`ground_garden_ceiling_layout_bounds` derives placement from the physical
+wall centres; `ground_garden_ceiling_support_bounds` uses the actual room
+polygons for block ends and bearing dimensions. The span therefore follows
+the current walls instead of the legacy `GARDEN_ROOMS_DEPTH` setting.
+The current 3230 mm clear depth uses 3500 mm beams, centred along Y with
+135 mm bearing at each end. Both assemblies share one beam-schedule row,
+with 14 beams total; their layouts remain independently editable.
 The basement S.03/S.04/S.05 layouts are independently editable.
-The stairway ceiling keeps its own editable beam/block pattern and 2500 mm
-span. Its first beam centre shares the basement's
-`BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE` offset from the transverse
-wall centreline, currently 215 mm. `ceiling_stairway_start_y` uses
-`upper_ceiling_garden_y`, also shared by the room-3 garden section.
-Both levels have their own editable beam/block layouts and independent HEB180
-positions. `ceiling_stairway_edge_heb` spans between this level's
-wall faces with `STAIRWAY_HEB_BEARING = 0.10 m` at each end. Its front flange
-edge is 3000 mm from the ground-floor front wall's inside face, controlled by
-`STAIRWAY_HEB_FRONT_WALL_DISTANCE`. The basement HEB retains its alignment with
-the stair arrival. The upper HEB's MIAKO overlaps remain visible for later
-layout adjustment. Both ceiling plans label
-the HEB inside its outline and dimension that front edge.
+The stairway ceiling has its own `ceiling_stairway_structure`: four 2500 mm
+beams with wide/narrow/wide bays. `STAIRWAY_CEILING_HEB_CLEARANCE = 0.05 m`
+anchors its street edge beyond the HEB's garden face; its garden edge
+extends 100 mm onto the garden-room wall. The unchanged room-2 beams remain
+5 mm clear of this layout. Its 1910 mm width leaves the full 3000 mm stair
+opening on the street side of the HEB; there is no street-side MIAKO section.
+Both levels retain independent HEB180 positions. `ceiling_stairway_edge_heb`
+spans between this level's wall faces with `STAIRWAY_HEB_BEARING = 0.10 m`
+at each end. Its front flange edge is 3000 mm from the ground-floor front
+wall's inside face, controlled by `STAIRWAY_HEB_FRONT_WALL_DISTANCE`.
+The basement HEB retains its alignment with the stair arrival. Both ceiling
+plans label the HEB, its front-edge position and the 50 mm MIAKO clearance.
 Layouts keep directly editable `structure` lists, so
-later basement edits do not propagate upstairs. Edit `GARDEN_CEILING_STRUCTURE`,
-`ceiling_room3`, `ceiling_room3_front`, `ceiling_bathroom`, `ceiling_bathroom_front` and
-`ceiling_stairway` directly. `ceiling_wall_bounds` holds this level's actual
-inner wall faces for dimensions. The upper ceiling's beam geometry and its
-two drawing blocks are deliberately copied, not generated by a shared
-per-floor layout function. Dimensions use each level's actual wall thickness.
+later basement edits do not propagate upstairs. Edit `ceiling_pokoj1`, `ceiling_pokoj2`,
+`room3_ceiling_garden_structure`, `ceiling_room3_front`, `ceiling_bathroom`,
+`ceiling_bathroom_front` and `ceiling_stairway_structure` directly. `ceiling_wall_bounds` holds this level's actual
+inner wall faces for dimensions. The garden-room layouts use the shared
+placement helper with their own specifications; the other assemblies and both
+drawing blocks remain independent of the basement. Dimensions use each level's actual wall thickness.
 `CEILING_ROOM3_SPLIT_Y`
 now remains only as the old bathroom reference used by upstairs fixtures.
 Rooms 0.03 and 0.05 have separate spans on either side of their middle
 load-bearing wall. `ceiling_room3` and `ceiling_room3_front` use 3500 mm
-beams with 130 mm east/outside-wall bearing; the remaining 140 mm bears
-on the middle wall. `ROOM3_CEILING_*` configures this span and its bearings.
-`ceiling_bathroom` and `ceiling_bathroom_front` have 120 mm bearing at each
-end (`BATHROOM_CEILING_BEARING`), giving a 2450 mm span with the current
+beams centred along X, with 135 mm bearing at both wall faces.
+`ROOM3_CEILING_*` derives these equal bearings from the current clear span.
+`ceiling_bathroom` and `ceiling_bathroom_front` have 150 mm bearing at each
+end (`BATHROOM_CEILING_BEARING`), giving a 2500 mm span with the current
 wall positions. All endpoints follow the physical supporting wall faces.
-Opposing beam ends leave 40 mm clear on the 300 mm middle wall, and block
+Opposing beam ends leave 15 mm clear on the 300 mm middle wall, and block
 offsets stop the ceramic bays at each wall's room-facing surface.
-Each of the four slabs has its own editable `structure` list. Garden-side
-sections use the shared basement wall-centre-to-beam-centre grid; the bathroom
-omits its chimney-side beam and first block row. The HEB supports and
-street-side sections retain their positions.
-Street-side rows start at `BWT-FRONT_CEILING_WALL_OVERLAP` (40 mm overlap).
-Both plans dimension the split spans and bearings, share one spacing chain
-for aligned room-3/bathroom rows. Room 0.03 has its own schedule row;
-rooms 0.04 and 0.05 have separate rows for their 2500 mm and 2450 mm beams.
+Each of the four slabs has its own editable `structure` list. Room 3 follows
+its HEB faces, while room 0.05 follows the chimney and HEB independently,
+as described below. Both plans dimension the
+separate spans and bearings. Room 0.03 has its own schedule row;
+rooms 0.04 and 0.05 share a row for their matching 2500 mm beams.
 The basement S.03/S.04 layouts have independent specifications, as described above.
 `purlin_support_girders` adds two separate bare HEB180 steel beams at each
 distinct Y coordinate of the timber posts, without concrete wrapping.
@@ -768,45 +772,44 @@ sets the common bearing. Plan outlines use the bare 180 mm steel width.
 Both ceiling plans show each girder's outline, HEB label, length and end
 bearings; the MIAKO rows around them remain independently editable.
 
-`ceiling_room3` and `ceiling_bathroom` each use one garden-side MIAKO ceiling
-with an explicit `structure` list. The room-3 section has six beams and
-starts at `upper_ceiling_garden_y`, derived from the garden-room wall centreline
-and `BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE`. Its first block bay is narrow,
-matching the basement. The bathroom omits the first beam and narrow
-block row: its five-beam layout starts 500 mm further towards the street,
-at `upper_bathroom_garden_y`. All remaining rows retain their positions
-within the aligned layout. Its first remaining beam aligns with S.04's,
-leaving the same 40 mm chimney clearance. The street-side assemblies remain separate
-across the unchanged HEB girders.
-Beam lengths and wall bearings remain 3500 mm with 130/110 mm for room 0.03,
-and 2500 mm with 120/120 mm for room 0.05.
+Room 3 has two X-spanning sections around its unchanged HEB. Each has five
+3500 mm beams and wide/narrow/narrow/wide bays (2410 mm layout width).
+`ROOM3_CEILING_HEB_CLEARANCE = 0.05 m` anchors both layouts 50 mm from their
+respective steel faces. The garden section extends 10 mm onto the garden-room
+wall, while the street section extends 50 mm onto the front wall. Its
+`room3_ceiling_garden_structure` and the street section's own `structure`
+list can be edited independently without a shared basement grid.
 
-The bathroom's MIAKO concrete cover follows the shortened footprint.
-`ceiling_bathroom_chimney_infill` fills the omitted garden-side gap with
-full-depth concrete, as in basement S.04. Both infills use
-`add_chimney_ceiling_infill()` and `CHIMNEY_CEILING_INFILL_CLEARANCE = 0.03`;
-their wall and beam boundaries follow the current geometry, and each chimney
-opening is 460 × 460 mm for the current 400 mm stack. They appear in both the
-beam diagrams and detailed ceiling plans. Later block rows retain their full
-clear span and their positions.
-Each infill is an `IfcBuildingElementPart` with a void in its extruded profile,
-avoiding Bonsai's slab-joining pass that fills inner loops. `BBIM_CeilingInfill`
-records its source slab, garden wall, chimney clearance and net concrete area.
-Both ceiling plans now dimension the complete main layouts and schedule
-them with their corresponding street-side assemblies.
+The bathroom/hallway ceiling (0.05) has two independent X-spanning sections,
+`ceiling_bathroom` and `ceiling_bathroom_front`, separated by its unchanged HEB.
+The garden section uses the same chimney arrangement as S.04: the first beam
+is on the garden side with 30 mm clearance, the next beam is 35 mm clear on
+the street side, and the first wide bay and topping are cut around the stack.
+There is no separate concrete infill. Room 1/2 beams retain their model
+positions, including the agreed 5 mm clash with this transverse beam.
+Each section has five beams. The garden-to-street bay sequence is
+wide/narrow/wide/wide for the chimney section, and wide/narrow/narrow/wide
+for the street section. Their widths are 2535 and 2410 mm respectively.
+The standard 625/500 mm modules leave a 25 mm garden-side HEB gap; the street
+section anchors 50 mm beyond the steel's street face using
+`BATHROOM_CEILING_HEB_CLEARANCE`. It finishes 50 mm onto the front wall.
+Both plans dimension the actual 25/50 mm gaps. The bathroom's spacing chains
+are placed around the garden section centre; aligned street rows share room 3's outside chain.
+Both sections use 150 mm end bearings and 2500 mm beams.
+The beam schedule groups them with room 0.04's matching 2500 mm beams.
+
 Both ground-floor ceiling plans place beam-spacing chains outside the
-house: the shared Pokoj 1/2 assembly beyond the garden wall, the Pokoj 3/hallway
-assemblies on the left and the stairway on the right. `CEILING_BEAM_SPACING_OUTSIDE_OFFSETS` sets two
+house: the separate Pokoj 1/2 assemblies beyond the garden wall, Pokoj 3
+on the left and the stairway on the right; the bathroom garden chain sits inside its section. `CEILING_BEAM_SPACING_OUTSIDE_OFFSETS` sets two
 distances beyond the exterior wall faces (1000 and 1500 mm). Consecutive
 dimensions alternate between them across each complete slab layout so
 short adjacent spacings remain readable.
 The stairway ceiling's span follows the physical stairway-facing surfaces
 of `wall_stairway_g` and `wall_west_g`, including their material offsets.
 `STAIRWAY_CEILING_BEAM_LENGTH` keeps the beams 2500 mm long.
-`STAIRWAY_CEILING_WEST_BEARING = 0.13 m` fixes the west-wall bearing;
-the stairway-wall bearing is the remaining length after the clear span
-and west bearing are subtracted (currently 110 mm). The resulting span is
-X = 6.130…8.630 m. Block end offsets match the respective bearings so blocks
+Both stairway bearings are half the beam length remaining beyond the clear
+span, currently 135 mm each. The resulting centred span is
+X = 6.135…8.635 m. Block end offsets match the respective bearings so blocks
 stop at the clear wall faces. The separate first-beam slab is removed
 from the model, both plans, spacing chains and schedules.
 

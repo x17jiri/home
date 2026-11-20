@@ -207,7 +207,6 @@ CEILING_BEAM_LENGTH_STEP = 0.25
 CEILING_LAYOUT_TOLERANCE = 0.07  # Total width mismatch, not the gap at each side.
 CEILING_STRIP_WIDTHS = {"beam": 0.16, "wide": 0.455, "narrow": 0.33, "space": 0.005}
 # Shared garden-side beam grid for the basement and ground-floor ceilings.
-BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE = 0.125+0.08+0.01
 CEILING_BEAM_SPACING_OUTSIDE_OFFSETS = (1.0, 1.5)  # Alternate beyond the exterior wall faces.
 UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_MASONRY_COURSE_HEIGHT = 0.125
@@ -268,11 +267,11 @@ ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
 CHIMNEY_CEILING_INFILL_CLEARANCE = 0.03
 # From the garden rooms wall centreline to the chimney's garden face.
-CHIMNEY_WALL_CENTER_OFFSET = 0.125 + 0.07
+CHIMNEY_WALL_CENTER_OFFSET = 0.125 + 0.075
 CHIMNEY_FOOTING_OVERHANG = 0.20
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 1.25
-SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = True  # Ground-floor post footprints and stove; ceiling plans always show posts.
+SHOW_PURLIN_SUPPORT_PLANNING_MARKERS = False  # Ground-floor post footprints and stove; ceiling plans always show posts.
 ROOF_EAVE_SETBACK = 0.02
 ROOF_SLOPED_SIDING_BOARD_COUNT = 4
 ROOF_WOOD_SIDING_COLOR = "#f2d08b"
@@ -421,7 +420,7 @@ if max(STAIR_LOWER_START_Y, STAIR_UPPER_END_Y) > GARDEN_ROOMS_WALL_Y+1e-9:
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
 ENTRANCE_OPENING_WIDTH = 1.1
-ENTRANCE_STAIR_RISERS = 7
+ENTRANCE_STAIR_RISERS = 8
 ENTRANCE_STAIR_TREAD_LENGTH = 0.30
 ENTRANCE_STAIR_WIDTH = ENTRANCE_OPENING_WIDTH
 ENTRANCE_LANDING_DEPTH = 1.125  # Projection beyond the facade, as in house_ifc.py.
@@ -499,7 +498,6 @@ DIR_ELEKTRO = PROJECT_DIR / "D1.4. Zařízení Silnoproudé Elektrotechniky"
 PDF_ELEKTRO_FOLDER = PDFFolder("D1.4.", DIR_ELEKTRO)
 PDF_ELEKTRO_GROUND = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys 1.NP"))
 PDF_ELEKTRO_UPPER = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys podkroví"))
-PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
 PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
 DIR_VYTAPENI = PROJECT_DIR / "D1.7. Vytápění"
 PDF_VYTAPENI_FOLDER = PDFFolder("D1.7.", DIR_VYTAPENI)
@@ -749,6 +747,28 @@ def add_stairway_edge_heb(storey, name, *, left_face, right_face, front_y, beari
     )
 
 
+def add_stairway_plan_dimensions(drawing):
+    """Place the landing size and both flight widths inside the middle landing."""
+    drawing.add_dimension(
+        (GROUND_STAIR_LEFT_X, STAIR_LANDING_START_Y),
+        (STAIR_RIGHT_X, STAIR_LANDING_START_Y),
+        offset=.25, highlight=True, name=f"{drawing.name} Stair landing width",
+    )
+    drawing.add_dimension(
+        (GROUND_STAIR_LEFT_X, STAIR_LANDING_START_Y),
+        (GROUND_STAIR_LEFT_X, STAIR_LANDING_END_Y),
+        offset=-.22, highlight=True, name=f"{drawing.name} Stair landing depth",
+    )
+    for flight, label in ((lower_stairs, "Lower"), (upper_stairs, "Upper")):
+        x = flight.start[0]
+        drawing.add_dimension(
+            (x-flight.width/2, STAIR_LANDING_END_Y),
+            (x+flight.width/2, STAIR_LANDING_END_Y),
+            offset=-.25, highlight=True,
+            name=f"{drawing.name} {label} stair flight width",
+        )
+
+
 def add_stairway_edge_heb_plan(drawing, beam, *, front_wall_y, dimension_x):
     """Identify the stair-opening HEB and dimension its front flange edge."""
     x0, y = beam.start[:2]
@@ -769,11 +789,39 @@ def add_stairway_edge_heb_plan(drawing, beam, *, front_wall_y, dimension_x):
 
 
 def add_basement_s05_section_spacing(drawing):
-    """Dimension the beam-grid continuation across the gap containing the HEB."""
+    """Dimension the two independent clearances to the HEB's flange edges."""
+    garden_street_y = min(y for x, y in basement_ceiling_s05.footprint)
+    street_garden_y = max(y for x, y in basement_ceiling_s05_front.footprint)
+    for y0, y1, offset, side in (
+        (BASEMENT_S05_HEB_GARDEN_Y, garden_street_y, -.95, "Garden"),
+        (street_garden_y, basement_s05_heb_front_y, -.55, "Street"),
+    ):
+        drawing.add_dimension(
+            (basement_s05_ceiling_end_x, y0), (basement_s05_ceiling_end_x, y1),
+            offset=offset, center_label=False, name=f"S.05 {side} ceiling to HEB clearance",
+        )
+
+
+def add_ground_ceiling_heb_clearances(drawing):
+    """Show the actual MIAKO clearances around the ground-floor HEBs."""
+    for room, garden, street in (
+        ("0.03", ceiling_room3, ceiling_room3_front),
+        ("0.05", ceiling_bathroom, ceiling_bathroom_front),
+    ):
+        x = (garden.start[0]+garden.end[0])/2
+        for y0, y1, offset, side in (
+            (ceiling_purlin_heb_garden_y, min(y for x, y in garden.footprint), .65, "Garden"),
+            (max(y for x, y in street.footprint), ceiling_front_girder_edge_y, -.65, "Street"),
+        ):
+            drawing.add_dimension(
+                (x, y0), (x, y1), offset=offset, center_label=False,
+                name=f"{room} {side} ceiling to HEB clearance",
+            )
+    x = ceiling_stairway.end[0]
     drawing.add_dimension(
-        basement_ceiling_s05.beam_centerlines[-1][1],
-        basement_ceiling_s05_front.beam_centerlines[0][1],
-        offset=0.65, name="S.05 beam centre spacing between ceiling sections",
+        (x, ceiling_stairway_heb_front_y+ceiling_stairway_edge_heb.width),
+        (x, min(y for x, y in ceiling_stairway.footprint)),
+        offset=-.55, center_label=False, name="Stairway ceiling to HEB clearance",
     )
 
 
@@ -1320,8 +1368,8 @@ front_footing = next(
 )
 front_footing_top_z = ifcopenshell.util.element.get_pset(front_footing, "BBIM_StripFooting", "TopZ")
 zz_cut = CutDefinition(
-    start=(float(wall_body_centreline_point(wall_basement_east)[0]), -1.5),
-    end=(float(wall_body_centreline_point(wall_basement_east)[0]), HOUSE_DEPTH+1.5),
+    start=(float(wall_body_centreline_point(wall_basement_east)[0])-0.05, -1.5),
+    end=(float(wall_body_centreline_point(wall_basement_east)[0])-0.05, HOUSE_DEPTH+1.5),
     identifier="Z", direction=-1,  # From east, looking west (+X).
 )
 
@@ -1911,96 +1959,53 @@ def trim_first_miako_block_row(slab, region):
     )
 
 
-def add_chimney_ceiling_infill(slab, garden_wall):
-    """Fill the omitted garden bay, leaving a through-opening around the stack."""
-    first_beam_y = slab.beam_centerlines[0][0][1]+CEILING_STRIP_WIDTHS["beam"]/2
-    wall_face_y = float(wall_body_centreline_point(garden_wall)[1])-garden_wall.thickness/2
-    if wall_face_y <= first_beam_y:
-        raise ValueError(f"{slab.Name}: no garden-side gap for concrete infill")
-    # The beam ends bear inside the walls; the infill stops at their room faces,
-    # using the same clear span as the ceramic blocks.
-    region = box(
-        slab.start[0]+slab.block_start_offset, first_beam_y,
-        slab.end[0]-slab.block_end_offset, wall_face_y,
-    )
-    opening_region = chimney_ceiling_opening_region
-    # Bonsai's slab-joining pass unions every inner loop as a solid polygon.
-    # Treat this local infill as a concrete part so its opening is preserved.
-    infill = ifcopenshell.api.root.create_entity(
-        house.model, ifc_class="IfcBuildingElementPart", predefined_type="USERDEFINED",
-        name=f"{slab.Name} Concrete infill around chimney",
-    )
-    infill.ObjectType = "Cast-in-place ceiling infill"
-    ifcopenshell.api.spatial.assign_container(house.model, products=[infill], relating_structure=slab.storey.element)
-    placement = np.eye(4)
-    placement[2, 3] = slab.storey.elevation
-    ifcopenshell.api.geometry.edit_object_placement(house.model, product=infill, matrix=placement, is_si=True)
-    body = ifcopenshell.api.geometry.add_slab_representation(
-        house.model, context=house._body_context, depth=CEILING_THICKNESS,
-        polyline=tuple(region.exterior.coords)[:-1],
-    )
-    solid = body.Items[0]
-    inner_curve = house.model.createIfcIndexedPolyCurve(
-        house.model.createIfcCartesianPointList2D(tuple(opening_region.exterior.coords)), None, False,
-    )
-    solid.SweptArea = house.model.createIfcArbitraryProfileDefWithVoids(
-        "AREA", None, solid.SweptArea.OuterCurve, (inner_curve,),
-    )
-    ifcopenshell.api.geometry.assign_representation(house.model, product=infill, representation=body)
-    ifcopenshell.api.material.assign_material(
-        house.model, products=[infill], type="IfcMaterial",
-        material=ifcopenshell.util.element.get_material(slab.topping_element),
-    )
-    ifcopenshell.api.style.assign_representation_styles(
-        house.model, shape_representation=body,
-        styles=[house._surface_style("slab", color="#b8b8b8", transparency=0)],
-    )
-    properties = ifcopenshell.api.pset.add_pset(house.model, product=infill, name="BBIM_CeilingInfill")
-    ifcopenshell.api.pset.edit_pset(house.model, pset=properties, properties={
-        "SourceSlab": slab.GlobalId, "GardenWall": garden_wall.GlobalId,
-        "ChimneyClearance": CHIMNEY_CEILING_INFILL_CLEARANCE,
-        "NetArea": region.difference(opening_region).area,
-    })
-    return infill
-
-
-# Define the upstairs layouts before the basement copies of their garden-side parts.
-# One ceiling across both garden rooms, with beams spanning along Y between
-# the transverse bearing wall and garden wall, independently of the partition.
-GARDEN_CEILING_STRUCTURE = [  # East to west; 14 beams, 13 wide bays, 26 spaces.
-    "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-    "space", "wide", "space", "beam",
-]
-GARDEN_CEILING_WIDTH = sum(CEILING_STRIP_WIDTHS[item] for item in GARDEN_CEILING_STRUCTURE)
-GARDEN_CEILING_BEAM_LENGTH = math.ceil(
-    (GARDEN_ROOMS_DEPTH+2*CEILING_BEAM_BEARING-1e-9)/CEILING_BEAM_LENGTH_STEP
-)*CEILING_BEAM_LENGTH_STEP
-GARDEN_CEILING_BEARING = (GARDEN_CEILING_BEAM_LENGTH-GARDEN_ROOMS_DEPTH)/2
-GARDEN_CEILING_START_X = (HOUSE_WIDTH-GARDEN_CEILING_WIDTH)/2
-GARDEN_CEILING_START_Y = GARDEN_ROOMS_WALL_Y+GARDEN_ROOMS_WALL_THICKNESS-GARDEN_CEILING_BEARING
-ceiling_garden_rooms = ceiling_storey.miako_slab(
-    "Ceiling - Pokoj 1 + Pokoj 2",
-    start=(GARDEN_CEILING_START_X, GARDEN_CEILING_START_Y),
-    end=(GARDEN_CEILING_START_X, GARDEN_CEILING_START_Y+GARDEN_CEILING_BEAM_LENGTH),
-    direction=(1, 0), top=CEILING_THICKNESS,
-    structure=GARDEN_CEILING_STRUCTURE,
-    block_length=0.25,
-    block_start_offset=GARDEN_CEILING_BEARING,
-    block_end_offset=GARDEN_CEILING_BEARING,
-    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
+# Separate garden-room ceilings, centred between their supporting wall bodies.
+# The existing ring beam above the room divider remains clear of both layouts.
+ground_garden_ceiling_support_bounds = (
+    Polygon(pokoj1.outline).bounds, Polygon(pokoj2.outline).bounds,
 )
+ground_garden_ceiling_layout_bounds = (
+    (float(wall_body_centreline_point(wall_east_g)[0]),
+     float(wall_body_centreline_point(wall_garden_rooms_g)[1]),
+     float(wall_body_centreline_point(wall_garden_partition_g)[0]),
+     float(wall_body_centreline_point(wall_back_g)[1])),
+    (float(wall_body_centreline_point(wall_garden_partition_g)[0]),
+     float(wall_body_centreline_point(wall_garden_rooms_g)[1]),
+     float(wall_body_centreline_point(wall_west_g)[0]),
+     float(wall_body_centreline_point(wall_back_g)[1])),
+)
+GARDEN_CEILING_MIN_CENTER_BEARING = max(
+    0.0, CEILING_BEAM_BEARING-min(wall_garden_rooms_g.thickness, wall_back_g.thickness)/2,
+)
+ceiling_pokoj1 = add_miako_ceiling(
+    ceiling_storey, "Ceiling - 0.01 Pokoj 1",
+    ground_garden_ceiling_layout_bounds[0], support_bounds=ground_garden_ceiling_support_bounds[0],
+    beam_axis="y", min_center_bearing=GARDEN_CEILING_MIN_CENTER_BEARING,
+    structure=[  # East to west; seven beams and six wide bays.
+        "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+    ],
+)
+ceiling_pokoj2 = add_miako_ceiling(
+    ceiling_storey, "Ceiling - 0.02 Pokoj 2",
+    ground_garden_ceiling_layout_bounds[1], support_bounds=ground_garden_ceiling_support_bounds[1],
+    beam_axis="y", min_center_bearing=GARDEN_CEILING_MIN_CENTER_BEARING,
+    structure=[  # East to west; seven beams and six wide bays.
+        "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
+    ],
+)
+ceiling_garden_rooms = (ceiling_pokoj1, ceiling_pokoj2)
 
 # Independent spans on either side of the middle load-bearing wall.
 room3_ceiling_east_face_x = wall_east_g.start[0]+wall_east_g.body_offset+wall_east_g.thickness
@@ -2008,59 +2013,62 @@ room3_ceiling_middle_face_x = wall_third_room_g.start[0]-(wall_third_room_g.body
 bathroom_ceiling_middle_face_x = wall_third_room_g.start[0]-wall_third_room_g.body_offset
 bathroom_ceiling_stairway_face_x = wall_stairway_g.start[0]-(wall_stairway_g.body_offset+wall_stairway_g.thickness)
 ROOM3_CEILING_BEAM_LENGTH = 3.50
-ROOM3_CEILING_EAST_BEARING = 0.13
-ROOM3_CEILING_MIDDLE_BEARING = (
+ROOM3_CEILING_EAST_BEARING = (
     ROOM3_CEILING_BEAM_LENGTH
     -(room3_ceiling_middle_face_x-room3_ceiling_east_face_x)
-    -ROOM3_CEILING_EAST_BEARING
-)
+)/2
+ROOM3_CEILING_MIDDLE_BEARING = ROOM3_CEILING_EAST_BEARING
 ceiling_room3_start_x = room3_ceiling_east_face_x-ROOM3_CEILING_EAST_BEARING
 ceiling_room3_end_x = room3_ceiling_middle_face_x+ROOM3_CEILING_MIDDLE_BEARING
-BATHROOM_CEILING_BEARING = 0.12
+BATHROOM_CEILING_BEARING = 0.15
 ceiling_bathroom_start_x = bathroom_ceiling_middle_face_x-BATHROOM_CEILING_BEARING
 ceiling_bathroom_end_x = bathroom_ceiling_stairway_face_x+BATHROOM_CEILING_BEARING
 BATHROOM_CEILING_BEAM_LENGTH = ceiling_bathroom_end_x-ceiling_bathroom_start_x
 
 
-# Match the basement's beam centres, measured from the shared wall centreline.
-upper_ceiling_garden_y = (
-    float(wall_body_centreline_point(wall_garden_rooms_g)[1])
-    -BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE+CEILING_STRIP_WIDTHS["beam"]/2
+# Independently editable room-3 sections, each referenced to its HEB face.
+ROOM3_CEILING_HEB_CLEARANCE = 0.05
+ceiling_front_girder_edge_y = min(
+    y for positions in PURLIN_SUPPORT_Y_POSITIONS for y in positions
+)-heb_section(PURLIN_SUPPORT_GIRDER_HEB).width/2
+ceiling_purlin_heb_garden_y = ceiling_front_girder_edge_y+heb_section(PURLIN_SUPPORT_GIRDER_HEB).width
+room3_ceiling_garden_structure = [  # Wide end bays; narrow bays just inside them.
+    "beam",
+    "space", "wide", "space", "beam",
+    "space", "narrow", "space", "beam",
+    "space", "narrow", "space", "beam",
+    "space", "wide", "space", "beam",
+]
+room3_ceiling_garden_y = (
+    ceiling_purlin_heb_garden_y+ROOM3_CEILING_HEB_CLEARANCE
+    +sum(CEILING_STRIP_WIDTHS[item] for item in room3_ceiling_garden_structure)
 )
 ceiling_room3 = ceiling_storey.miako_slab(
     "Ceiling - 0.03 Pokoj 3",
-    start=(ceiling_room3_start_x, upper_ceiling_garden_y),
-    end=(ceiling_room3_end_x, upper_ceiling_garden_y),
+    start=(ceiling_room3_start_x, room3_ceiling_garden_y),
+    end=(ceiling_room3_end_x, room3_ceiling_garden_y),
     direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street; first beam/bay and following rows in one slab.
-        "beam", "space", "narrow", "space",
-        "beam",
-        "space", "narrow", "space", "beam",
-        "space", "wide", "space", "beam",
-		"space", "beam", "space", "beam"
-    ],
+    structure=room3_ceiling_garden_structure,
     block_length=0.25,
     block_start_offset=ROOM3_CEILING_EAST_BEARING,
     block_end_offset=ROOM3_CEILING_MIDDLE_BEARING,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-# Remove the chimney-side beam/bay after aligning the complete garden layout.
-# Advancing its start by the omitted width preserves every following row.
-upper_bathroom_omitted_garden_width = (
-    CEILING_STRIP_WIDTHS["beam"]+2*CEILING_STRIP_WIDTHS["space"]+CEILING_STRIP_WIDTHS["narrow"]
-)
-upper_bathroom_garden_y = upper_ceiling_garden_y-upper_bathroom_omitted_garden_width
+# Match S.04 around the chimney; the room-1/2 beams intentionally stay in place.
+BATHROOM_CEILING_HEB_CLEARANCE = 0.05
+upper_bathroom_garden_y = chimney_ceiling_opening_region.bounds[3]+CEILING_STRIP_WIDTHS["beam"]
 ceiling_bathroom = ceiling_storey.miako_slab(
     "Ceiling - 0.05 Koupelna a chodba",
     start=(ceiling_bathroom_start_x, upper_bathroom_garden_y),
     end=(ceiling_bathroom_end_x, upper_bathroom_garden_y),
     direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street, beginning at the aligned original second beam.
+    structure=[  # First wide bay surrounds the chimney; one narrow bay near that end.
         "beam",
-        "space", "beam", "space", "space", "beam", "space", "beam",
-		"space", "wide", "space", "beam",
-		"beam", "beam",
+        "space", "wide", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "wide", "space", "beam",
+        "space", "wide", "space", "beam",
     ],
     block_length=0.25,
     block_start_offset=BATHROOM_CEILING_BEARING,
@@ -2068,22 +2076,22 @@ ceiling_bathroom = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-FRONT_CEILING_WALL_OVERLAP = 0.04
-ceiling_front_girder_edge_y = min(
-    y for positions in PURLIN_SUPPORT_Y_POSITIONS for y in positions
-)-heb_section(PURLIN_SUPPORT_GIRDER_HEB).width/2
+upper_bathroom_chimney_opening = trim_first_miako_block_row(
+    ceiling_bathroom, chimney_ceiling_opening_region,
+)
+
+room3_front_garden_y = ceiling_front_girder_edge_y-ROOM3_CEILING_HEB_CLEARANCE
 ceiling_room3_front = ceiling_storey.miako_slab(
     "Ceiling - 0.03 Pokoj 3 u ulice",
-    start=(ceiling_room3_start_x, FRONT_WALL_THICKNESS-FRONT_CEILING_WALL_OVERLAP),
-    end=(ceiling_room3_end_x, FRONT_WALL_THICKNESS-FRONT_CEILING_WALL_OVERLAP),
-    direction=(0, 1), top=CEILING_THICKNESS,
-    structure=[  # Street to garden; another full wide-block bay would reach the girder.
-        "narrow", "space",
-        "beam", "space", "narrow", "space",
-        "beam", "space", "wide", "space",
-        "beam", "space", "narrow", "space",
-		"beam",
-		"beam",
+    start=(ceiling_room3_start_x, room3_front_garden_y),
+    end=(ceiling_room3_end_x, room3_front_garden_y),
+    direction=(0, -1), top=CEILING_THICKNESS,
+    structure=[  # HEB to street; wide outer bays, narrow bays just inside them.
+        "beam",
+        "space", "wide", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "wide", "space", "beam",
     ],
     block_length=0.25,
     block_start_offset=ROOM3_CEILING_EAST_BEARING,
@@ -2091,18 +2099,18 @@ ceiling_room3_front = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
+bathroom_front_garden_y = ceiling_front_girder_edge_y-BATHROOM_CEILING_HEB_CLEARANCE
 ceiling_bathroom_front = ceiling_storey.miako_slab(
     "Ceiling - 0.05 Koupelna u ulice",
-    start=(ceiling_bathroom_start_x, FRONT_WALL_THICKNESS-FRONT_CEILING_WALL_OVERLAP),
-    end=(ceiling_bathroom_end_x, FRONT_WALL_THICKNESS-FRONT_CEILING_WALL_OVERLAP),
-    direction=(0, 1), top=CEILING_THICKNESS,
-    structure=[  # Street to garden; another full wide-block bay would reach the girder.
-        "narrow", "space",
-        "beam", "space", "narrow", "space",
-        "beam", "space", "wide", "space",
-        "beam", "space", "narrow", "space",
-		"beam",
-		"beam",
+    start=(ceiling_bathroom_start_x, bathroom_front_garden_y),
+    end=(ceiling_bathroom_end_x, bathroom_front_garden_y),
+    direction=(0, -1), top=CEILING_THICKNESS,
+    structure=[  # HEB to street; wide outer bays, two narrow bays between them.
+        "beam",
+        "space", "wide", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "wide", "space", "beam",
     ],
     block_length=0.25,
     block_start_offset=BATHROOM_CEILING_BEARING,
@@ -2110,50 +2118,36 @@ ceiling_bathroom_front = ceiling_storey.miako_slab(
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-ceiling_stairway_start_y = upper_ceiling_garden_y
 STAIRWAY_CEILING_BEAM_LENGTH = 2.50
-STAIRWAY_CEILING_WEST_BEARING = 0.13
 # Both walls run along +Y, with their material towards -X.
 stairway_ceiling_stairway_face_x = wall_stairway_g.start[0]-wall_stairway_g.body_offset
 stairway_ceiling_west_face_x = wall_west_g.start[0]-(wall_west_g.body_offset+wall_west_g.thickness)
-STAIRWAY_CEILING_STAIRWAY_BEARING = (
+STAIRWAY_CEILING_WEST_BEARING = (
     STAIRWAY_CEILING_BEAM_LENGTH
     -(stairway_ceiling_west_face_x-stairway_ceiling_stairway_face_x)
-    -STAIRWAY_CEILING_WEST_BEARING
-)
+)/2
+STAIRWAY_CEILING_STAIRWAY_BEARING = STAIRWAY_CEILING_WEST_BEARING
 ceiling_stairway_start_x = stairway_ceiling_stairway_face_x-STAIRWAY_CEILING_STAIRWAY_BEARING
 ceiling_stairway_end_x = stairway_ceiling_west_face_x+STAIRWAY_CEILING_WEST_BEARING
-ceiling_stairway = ceiling_storey.miako_slab(
-    "Ceiling - Schodiště",
-    # Keep the garden edge fixed; the structure determines the street edge.
-    start=(ceiling_stairway_start_x, ceiling_stairway_start_y),
-    end=(ceiling_stairway_end_x, ceiling_stairway_start_y),
-    direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street for X-spanning beams; east to west for Y-spanning beams.
-        "beam", "space", "narrow", "space",
-        # Edit or append the remaining rows here; there is no HEB split.
-        "beam",
-        "space", "narrow", "space", "beam",
-        "space", "narrow", "space", "beam",
-    ],
-    block_length=0.25,
-    block_start_offset=STAIRWAY_CEILING_STAIRWAY_BEARING,
-    block_end_offset=STAIRWAY_CEILING_WEST_BEARING,
-    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
-)
+STAIRWAY_CEILING_HEB_CLEARANCE = 0.05
+ceiling_stairway_structure = [  # Garden to HEB; wide end bays and one narrow bay.
+    "beam",
+    "space", "wide", "space", "beam",
+    "space", "narrow", "space", "beam",
+    "space", "narrow", "space", "beam",
+]
 
-# Centre the garden-room layouts between wall centres; blocks follow wall faces.
+# Span east/west to the S.01/S.02 divider; centre the rows in the room depth.
+# Blocks follow the actual wall faces, independently of the wall-centre layout.
 BASEMENT_GARDEN_CEILING_MIN_CENTER_BEARING = 0.0
 basement_ceiling_s01 = add_miako_ceiling(
     basement_ceiling_storey, "Basement ceiling - S.01",
     basement_ceiling_layout_bounds["S.01"], support_bounds=basement_rooms_by_id["S.01"].bounds,
-    beam_axis="y", min_center_bearing=BASEMENT_GARDEN_CEILING_MIN_CENTER_BEARING,
-    structure=[  # Seven beams and six wide bays, centred across the clear room.
-		"space","space","space","space","space",
+    beam_axis="x", min_center_bearing=BASEMENT_GARDEN_CEILING_MIN_CENTER_BEARING,
+    structure=[  # Six beams; three wide and two narrow bays, arranged symmetrically.
         "beam",
         "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
+        "space", "narrow", "space", "beam",
         "space", "wide", "space", "beam",
         "space", "wide", "space", "beam",
         "space", "wide", "space", "beam",
@@ -2162,114 +2156,94 @@ basement_ceiling_s01 = add_miako_ceiling(
 basement_ceiling_s02 = add_miako_ceiling(
     basement_ceiling_storey, "Basement ceiling - S.02",
     basement_ceiling_layout_bounds["S.02"], support_bounds=basement_rooms_by_id["S.02"].bounds,
-    beam_axis="y", min_center_bearing=BASEMENT_GARDEN_CEILING_MIN_CENTER_BEARING,
-    structure=[  # Seven beams and six wide bays, centred across the clear room.
+    beam_axis="x", min_center_bearing=BASEMENT_GARDEN_CEILING_MIN_CENTER_BEARING,
+    structure=[  # Six beams; three wide and two narrow bays, arranged symmetrically.
         "beam",
         "space", "wide", "space", "beam",
+        "space", "narrow", "space", "beam",
         "space", "wide", "space", "beam",
         "space", "wide", "space", "beam",
         "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-		"space","space","space","space","space",
     ],
 )
 basement_s03_x0, basement_s03_y0, basement_s03_x1, basement_s03_y1 = basement_rooms_by_id["S.03"].bounds
 basement_s04_x0, basement_s04_y0, basement_s04_x1, basement_s04_y1 = basement_rooms_by_id["S.04"].bounds
 basement_s05_x0, basement_s05_y0, basement_s05_x1, basement_s05_y1 = basement_rooms_by_id["S.05"].bounds
-# Independent basement specifications. Append/edit rows towards the street;
-# neither ceiling stops at, or depends on, the upstairs HEB position.
-BASEMENT_S03_BEAM_LENGTH = 3.50
-BASEMENT_S03_MIDDLE_BEARING = 0.125
+# Independent basement specifications; no upstairs HEB limits these layouts.
+BASEMENT_S03_BEARING = 0.15
+basement_s03_ceiling_start_x = basement_s03_x0-BASEMENT_S03_BEARING
+basement_s03_ceiling_end_x = basement_s03_x1+BASEMENT_S03_BEARING
+BASEMENT_S03_BEAM_LENGTH = basement_s03_ceiling_end_x-basement_s03_ceiling_start_x
+basement_s03_ceiling_structure = [  # Garden to street; narrow bays just inside the outer wide bays.
+    "beam",
+    "space", "wide", "space", "beam",
+    "space", "narrow", "space", "beam",
+    "space", "wide", "space", "beam",
+    "space", "wide", "space", "beam",
+    "space", "wide", "space", "beam",
+    "space", "wide", "space", "beam",
+    "space", "wide", "space", "beam",
+    "space", "wide", "space", "beam",
+]
+basement_s03_ceiling_width = sum(CEILING_STRIP_WIDTHS[item] for item in basement_s03_ceiling_structure)
+basement_s03_ceiling_garden_y = (basement_s03_y0+basement_s03_y1+basement_s03_ceiling_width)/2
 BASEMENT_S04_BEAM_LENGTH = 2.50
 BASEMENT_S04_MIDDLE_CENTER_BEARING = 0.0
-# The grid's first beam centre is streetward of the garden-room wall centre.
-# S.04 retains its omitted first bay and transverse placement below.
-basement_ceiling_garden_y = (
-    float(wall_body_centreline_point(wall_basement_garden_rooms)[1])
-    -BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE+CEILING_STRIP_WIDTHS["beam"]/2
-)
-basement_s03_ceiling_end_x = basement_s03_x1+BASEMENT_S03_MIDDLE_BEARING
-basement_s03_ceiling_start_x = basement_s03_ceiling_end_x-BASEMENT_S03_BEAM_LENGTH
 basement_s04_ceiling_start_x = basement_ceiling_layout_bounds["S.04"][0]-BASEMENT_S04_MIDDLE_CENTER_BEARING
 basement_s04_ceiling_end_x = basement_s04_ceiling_start_x+BASEMENT_S04_BEAM_LENGTH
 
 basement_ceiling_s03 = basement_ceiling_storey.miako_slab(
     "Basement ceiling - S.03",
-    start=(basement_s03_ceiling_start_x, basement_ceiling_garden_y),
-    end=(basement_s03_ceiling_end_x, basement_ceiling_garden_y),
+    start=(basement_s03_ceiling_start_x, basement_s03_ceiling_garden_y),
+    end=(basement_s03_ceiling_end_x, basement_s03_ceiling_garden_y),
     direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street. Keep the first beam and first wide bay.
-        "beam", "space", "narrow", "space",
-        # Edit or append the remaining rows here; there is no HEB split.
-        "beam",
-        "space", "narrow", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-    ],
+    structure=basement_s03_ceiling_structure,
     block_length=0.25,
     block_start_offset=basement_s03_x0-basement_s03_ceiling_start_x,
     block_end_offset=basement_s03_ceiling_end_x-basement_s03_x1,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
 
-# Omit the former first beam and wide block bay without moving later rows.
-basement_s04_omitted_garden_width = (
-    CEILING_STRIP_WIDTHS["beam"]+2*CEILING_STRIP_WIDTHS["space"]+CEILING_STRIP_WIDTHS["narrow"]
-)
-basement_s04_ceiling_garden_y = basement_ceiling_garden_y-basement_s04_omitted_garden_width
+# The first beam's street face sits beyond the chimney's garden clearance edge.
+# Its 160 mm width lies almost entirely over the garden-room wall.
+basement_s04_ceiling_garden_y = chimney_ceiling_opening_region.bounds[3]+CEILING_STRIP_WIDTHS["beam"]
 basement_ceiling_s04 = basement_ceiling_storey.miako_slab(
     "Basement ceiling - S.04",
     start=(basement_s04_ceiling_start_x, basement_s04_ceiling_garden_y),
     end=(basement_s04_ceiling_end_x, basement_s04_ceiling_garden_y),
     direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street, beginning at the original second beam.
-        # Edit or append the remaining rows here; there is no HEB split.
+    structure=[  # Garden to street; wide bays continue to the front wall.
         "beam",
-        "space", "beam", "space", "space", "beam", "space", "beam",
         "space", "wide", "space", "beam",
         "space", "wide", "space", "beam",
         "space", "wide", "space", "beam",
         "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
-        "space", "wide", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "narrow", "space", "beam",
+        "space", "narrow", "space", "beam",
     ],
     block_length=0.25,
     block_start_offset=basement_s04_x0-basement_s04_ceiling_start_x,
     block_end_offset=basement_s04_ceiling_end_x-basement_s04_x1,
     block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
 )
+basement_chimney_opening = trim_first_miako_block_row(
+    basement_ceiling_s04, chimney_ceiling_opening_region,
+)
 
 BASEMENT_S05_BEAM_LENGTH = 2.50
 BASEMENT_S05_STAIRWAY_BEARING = 0.125
+BASEMENT_S05_HEB_CLEARANCE = 0.05
+BASEMENT_S05_MIN_STAIR_OPENING = 1.20
 basement_s05_ceiling_start_x = basement_s05_x0-BASEMENT_S05_STAIRWAY_BEARING
 basement_s05_ceiling_end_x = basement_s05_ceiling_start_x+BASEMENT_S05_BEAM_LENGTH
-basement_s05_ceiling_garden_y = basement_ceiling_garden_y
 basement_s05_actual_start_bearing = basement_s05_x0-basement_s05_ceiling_start_x
 if min(basement_s05_actual_start_bearing, basement_s05_ceiling_end_x-basement_s05_x1) <= 0:
     raise ValueError("S.05 ceiling must bear on both supporting walls")
-basement_ceiling_s05 = basement_ceiling_storey.miako_slab(
-    "Basement ceiling - S.05",
-    start=(basement_s05_ceiling_start_x, basement_s05_ceiling_garden_y),
-    end=(basement_s05_ceiling_end_x, basement_s05_ceiling_garden_y),
-    direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street; edit independently of the upstairs stairway.
-        "beam", "space", "narrow", "space",
-        "beam", "space", "narrow", "space",
-        "beam", "space", "wide", "space",
-		"beam"
-    ],
-    block_length=0.25,
-    block_start_offset=basement_s05_actual_start_bearing,
-    block_end_offset=basement_s05_ceiling_end_x-basement_s05_x1,
-    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
-)
 
-# Position the two stair-edge HEBs independently; leave MIAKO layouts unchanged.
+# Position the two stair-edge HEBs independently.
 STAIRWAY_HEB_BEARING = 0.10
 STAIRWAY_HEB_FRONT_WALL_DISTANCE = 3.00  # From the original 240 mm wall's inside face.
 BASEMENT_S05_HEB_MIDDLE_BEARING = 0.12
@@ -2293,20 +2267,52 @@ ceiling_stairway_edge_heb = add_stairway_edge_heb(
     front_y=ceiling_stairway_heb_front_y, bearing=STAIRWAY_HEB_BEARING,
 )
 
-# Continue the beam grid as though a wide bay occupied the gap containing the HEB.
-BASEMENT_S05_PART_GAP = CEILING_STRIP_WIDTHS["wide"]+2*CEILING_STRIP_WIDTHS["space"]
-basement_s05_front_garden_y = (
-    basement_ceiling_s05.beam_centerlines[-1][0][1]-CEILING_STRIP_WIDTHS["beam"]/2
-    -BASEMENT_S05_PART_GAP
+# The street side remains the full stair opening; MIAKO stops beyond the HEB.
+ceiling_stairway_start_y = (
+    ceiling_stairway_heb_front_y+ceiling_stairway_edge_heb.width+STAIRWAY_CEILING_HEB_CLEARANCE
+    +sum(CEILING_STRIP_WIDTHS[item] for item in ceiling_stairway_structure)
 )
+ceiling_stairway = ceiling_storey.miako_slab(
+    "Ceiling - Schodiště",
+    start=(ceiling_stairway_start_x, ceiling_stairway_start_y),
+    end=(ceiling_stairway_end_x, ceiling_stairway_start_y),
+    direction=(0, -1), top=CEILING_THICKNESS,
+    structure=ceiling_stairway_structure,
+    block_length=0.25,
+    block_start_offset=STAIRWAY_CEILING_STAIRWAY_BEARING,
+    block_end_offset=STAIRWAY_CEILING_WEST_BEARING,
+    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
+)
+
+# Each section anchors to its own HEB face, independently of the other layout.
+basement_s05_garden_structure = [  # Garden to street; extend towards the garden wall.
+    "beam",
+    "space", "wide", "space", "beam",
+    "space", "wide", "space", "beam",
+    "space", "wide", "space", "beam",
+]
+basement_s05_ceiling_garden_y = (
+    BASEMENT_S05_HEB_GARDEN_Y+BASEMENT_S05_HEB_CLEARANCE
+    +sum(CEILING_STRIP_WIDTHS[item] for item in basement_s05_garden_structure)
+)
+basement_ceiling_s05 = basement_ceiling_storey.miako_slab(
+    "Basement ceiling - S.05",
+    start=(basement_s05_ceiling_start_x, basement_s05_ceiling_garden_y),
+    end=(basement_s05_ceiling_end_x, basement_s05_ceiling_garden_y),
+    direction=(0, -1), top=CEILING_THICKNESS,
+    structure=basement_s05_garden_structure,
+    block_length=0.25,
+    block_start_offset=basement_s05_actual_start_bearing,
+    block_end_offset=basement_s05_ceiling_end_x-basement_s05_x1,
+    block_height=CEILING_THICKNESS-0.06, topping=0.06, beam_height=0.06,
+)
+basement_s05_front_garden_y = basement_s05_heb_front_y-BASEMENT_S05_HEB_CLEARANCE
 basement_ceiling_s05_front = basement_ceiling_storey.miako_slab(
     "Basement ceiling - S.05 street part",
     start=(basement_s05_ceiling_start_x, basement_s05_front_garden_y),
     end=(basement_s05_ceiling_end_x, basement_s05_front_garden_y),
     direction=(0, -1), top=CEILING_THICKNESS,
-    structure=[  # Garden to street; starter bay, independently editable.
-#		"beam", "space",
-#		"axis",
+    structure=[  # Garden to street; keep at least 1.2 m clear at the front wall.
         "beam", "space", "wide", "space",
         "beam", "space", "wide", "space",
 		"beam",
@@ -2325,6 +2331,8 @@ basement_stair_opening_end_y = max(
     ),
 )
 basement_stair_opening_length = basement_stair_opening_end_y-basement_s05_y0
+if basement_stair_opening_length < BASEMENT_S05_MIN_STAIR_OPENING-1e-9:
+    raise ValueError("S.05 street ceiling must leave at least 1.20 m clear from the front wall")
 
 basement_ceilings_by_room = {
     "S.01": (basement_ceiling_s01,),
@@ -2352,12 +2360,6 @@ ground_room_windows = {
     chodba.room_id: (),
     koupelna.room_id: (window_koupelna,),
 }
-basement_ceiling_s04_chimney_infill = add_chimney_ceiling_infill(
-    basement_ceiling_s04, wall_basement_garden_rooms,
-)
-ceiling_bathroom_chimney_infill = add_chimney_ceiling_infill(
-    ceiling_bathroom, wall_garden_rooms_g,
-)
 ground_stair_opening_region = None
 ground_stair_opening_board = None
 if basement_stair_opening_length > 1e-9:
@@ -2386,8 +2388,8 @@ for floor in basement_room_floors:
         buildup_material=FLOOR_INSULATION_MATERIAL, color="#ffff80",
     ))
 basement_ceiling_insulation = tuple(basement_ceiling_insulation)
-# Continue the concrete infill's chimney opening through the finishes on both
-# sides of the slab, including both materials in the ground-floor build-up.
+# Retain chimney openings through the finishes independently of the beam layouts,
+# including both materials in the ground-floor build-up.
 for layer in (chodba, *(part for part in basement_ceiling_insulation
                        if "S.04." in part.Name)):
     add_horizontal_opening(
@@ -2412,17 +2414,18 @@ basement_ceiling_schedule_rows = [
 
 
 ceiling_slabs = (
-    ceiling_garden_rooms, ceiling_room3, ceiling_bathroom,
+    *ceiling_garden_rooms, ceiling_room3, ceiling_bathroom,
     ceiling_room3_front, ceiling_bathroom_front, ceiling_stairway,
 )
-# Actual ground-floor inner wall faces, used by this level's dimensions.
+# Actual wall faces and HEB edges bounding each section's dimension chains.
 ceiling_wall_bounds = (
-    (BWT, GARDEN_ROOMS_WALL_Y+GARDEN_ROOMS_WALL_THICKNESS, HOUSE_WIDTH-BWT, HOUSE_DEPTH-BACK_WALL_THICKNESS),
-    (room3_ceiling_east_face_x, FRONT_WALL_THICKNESS, room3_ceiling_middle_face_x, GARDEN_ROOMS_WALL_Y),
-    (bathroom_ceiling_middle_face_x, FRONT_WALL_THICKNESS, bathroom_ceiling_stairway_face_x, GARDEN_ROOMS_WALL_Y),
+    *ground_garden_ceiling_support_bounds,
+    (room3_ceiling_east_face_x, ceiling_purlin_heb_garden_y, room3_ceiling_middle_face_x, GARDEN_ROOMS_WALL_Y),
+    (bathroom_ceiling_middle_face_x, ceiling_purlin_heb_garden_y, bathroom_ceiling_stairway_face_x, GARDEN_ROOMS_WALL_Y),
     (room3_ceiling_east_face_x, FRONT_WALL_THICKNESS, room3_ceiling_middle_face_x, ceiling_front_girder_edge_y),
     (bathroom_ceiling_middle_face_x, FRONT_WALL_THICKNESS, bathroom_ceiling_stairway_face_x, ceiling_front_girder_edge_y),
-    (STAIRWAY_WALL_X, FRONT_WALL_THICKNESS, HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y),
+    (STAIRWAY_WALL_X, ceiling_stairway_heb_front_y+ceiling_stairway_edge_heb.width,
+     HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y),
 )
 
 ceiling_plan_min, ceiling_plan_max = (0., 0.), (HOUSE_WIDTH, HOUSE_DEPTH)
@@ -2433,8 +2436,7 @@ ceiling_stair_opening_end_y = min(
 ceiling_schedule_rows = [
     {"location": "0.01, 0.02", "slab": ceiling_garden_rooms},
     {"location": "0.03", "slab": (ceiling_room3, ceiling_room3_front)},
-    {"location": "0.04", "slab": ceiling_stairway},
-    {"location": "0.05", "slab": (ceiling_bathroom, ceiling_bathroom_front)},
+    {"location": "0.04, 0.05", "slab": (ceiling_stairway, ceiling_bathroom, ceiling_bathroom_front)},
 ]
 
 def add_ceiling_spacing_dimension(drawing, start, end, *, side, index, name):
@@ -2461,7 +2463,7 @@ def add_ceiling_beam_spacing_dimensions(drawing, slab, *, side):
     if counterpart is not None and side != "center":
         rows = [start[1] for start, end in slab.beam_centerlines]
         other_rows = [start[1] for start, end in counterpart.beam_centerlines]
-        # The bathroom can omit its first bay while sharing all later spacings.
+        # Aligned subsets can share a chain even when their end rows differ.
         if any(all(math.isclose(first, second, rel_tol=0, abs_tol=1e-9)
                    for first, second in zip(rows, other_rows[offset:offset+len(rows)]))
                for offset in range(len(other_rows)-len(rows)+1)):
@@ -4797,6 +4799,7 @@ if "found" in sys.argv or "foundation" in sys.argv:
     )
     drawing1.add_material_legend([
         ("ztracene-bedneni", f"Ztracené bednění {BASEMENT_WALL_THICKNESS*1000:.0f} mm"),
+        ("perimeter-polystyrene", f"Perimetrická izolace {EXTERIOR_XPS_INSULATION_THICKNESS*1000:g} mm"),
     ])
     wall_outline = drawing1.add_wall_outlines(basement_walls, style="dashed")
     ground_wall_outline = drawing1.add_wall_outlines(
@@ -5080,6 +5083,7 @@ if "ground" in sys.argv:
     drawing1.add_stair_annotation(lower_stairs)
     drawing1.add_stair_annotation(upper_stairs)
     drawing1.add_stair_landing_annotation(middle_stair_landing)
+    add_stairway_plan_dimensions(drawing1)
     drawing1.add_poly_line(
         stair_walking_route,
         arrow_end=True, circle_start=True,
@@ -5322,7 +5326,6 @@ if "ceiling" in sys.argv:
         ground_load_bearing_walls, style="solid", color="black",
         name="Ground-floor ceiling load-bearing wall outlines",
     )
-    drawing1.include_element(ceiling_bathroom_chimney_infill)
     # Deliberate copy of the basement diagram: this level will be edited independently.
     for slab, wall_bounds in zip(ceiling_slabs, ceiling_wall_bounds):
         for index, (start, end) in enumerate(slab.beam_centerlines, 1):
@@ -5335,20 +5338,20 @@ if "ceiling" in sys.argv:
                 drawing1.house.model, pset=drawing1.house.model.by_id(appearance["id"]),
                 properties={"Classes": appearance["Classes"]+" ceiling-beam-axis"},
             )
-            if slab == ceiling_garden_rooms and index == 1:
+            if slab == ceiling_pokoj1 and index == 1:
                 drawing1.add_line_legend([(axis, "Nosník MIAKO")])
         add_ceiling_beam_spacing_dimensions(
-            drawing1, slab, side=("garden" if slab == ceiling_garden_rooms
+            drawing1, slab, side=("garden" if slab in ceiling_garden_rooms
                                  else "center" if slab == ceiling_bathroom
                                  else "right" if slab == ceiling_stairway else "left"),
         )
         # Room wall-offset dimensions still reference the inner wall faces.
         midpoints = tuple(np.mean(centreline, axis=0) for centreline in slab.beam_centerlines)
 
-        # Put the shared garden ceiling's end bearings outside the west wall.
-        garden_slab = slab == ceiling_garden_rooms
-        bearing_row = -1 if garden_slab else 0
-        bearing_offset = (-0.85 if garden_slab else -0.65
+        # Put each garden-room ceiling bearing chain outside its exterior side wall.
+        garden_slab = slab in ceiling_garden_rooms
+        bearing_row = -1 if slab == ceiling_pokoj2 else 0
+        bearing_offset = (0.85 if slab == ceiling_pokoj1 else -0.85 if garden_slab else -0.65
                           if slab in (ceiling_bathroom, ceiling_bathroom_front) else -0.3)
         start, end = (np.asarray(point) for point in slab.beam_centerlines[bearing_row])
         along = (end-start)/slab.length
@@ -5370,7 +5373,7 @@ if "ceiling" in sys.argv:
         near_face, far_face = wall_bounds[across_axis], wall_bounds[across_axis+2]
         if slab.direction[across_axis] < 0:
             near_face, far_face = far_face, near_face
-        wall_reference_shift = along*min(0.4, slab.length/4)
+        wall_reference_shift = along*min(0.75 if slab == ceiling_pokoj2 else 0.4, slab.length/4)
         first_beam, last_beam = midpoints[0]+wall_reference_shift, midpoints[-1]+wall_reference_shift
         first_wall, last_wall = first_beam.copy(), last_beam.copy()
         first_wall[across_axis], last_wall[across_axis] = near_face, far_face
@@ -5390,6 +5393,7 @@ if "ceiling" in sys.argv:
                 name=f"{slab.Name} {label}",
             )
     add_purlin_support_girder_plan(drawing1)
+    add_ground_ceiling_heb_clearances(drawing1)
     add_stairway_edge_heb_plan(
         drawing1, ceiling_stairway_edge_heb,
         front_wall_y=ground_front_wall_inner_y, dimension_x=stairway_ceiling_stairway_face_x+.25,
@@ -5419,7 +5423,8 @@ if "ceiling2" in sys.argv:
     ])
     for slab in ceiling_slabs:
         add_ceiling_beam_spacing_dimensions(
-            drawing1, slab, side=("garden" if slab == ceiling_garden_rooms
+            drawing1, slab, side=("garden" if slab in ceiling_garden_rooms
+                                 else "center" if slab == ceiling_bathroom
                                  else "right" if slab == ceiling_stairway else "left"),
         )
     add_stairway_ceiling_bearing_dimensions(drawing1)
@@ -5428,6 +5433,7 @@ if "ceiling2" in sys.argv:
         front_wall_y=ground_front_wall_inner_y, dimension_x=stairway_ceiling_stairway_face_x+.25,
     )
     add_purlin_support_girder_plan(drawing1)
+    add_ground_ceiling_heb_clearances(drawing1)
     drawing1.add_dimension(
         start=tuple(ceiling_plan_min),
         end=(float(ceiling_plan_max[0]), float(ceiling_plan_min[1])), offset=-1.0,
@@ -5436,17 +5442,18 @@ if "ceiling2" in sys.argv:
         start=tuple(ceiling_plan_min),
         end=(float(ceiling_plan_min[0]), float(ceiling_plan_max[1])), offset=1.2,
     )
-    drawing1.add_dimension(
-        start=ceiling_garden_rooms.start, end=ceiling_garden_rooms.end,
-        offset=0.65,
-        name="Shared Pokoj 1 and Pokoj 2 beam length",
-    )
-    drawing1.add_dimension(
-        start=ceiling_garden_rooms.end,
-        end=tuple(np.asarray(ceiling_garden_rooms.end)
-                  +ceiling_garden_rooms.width*np.asarray(ceiling_garden_rooms.direction)),
-        offset=0.45, name="Shared Pokoj 1 and Pokoj 2 ceiling width",
-    )
+    for slab in ceiling_garden_rooms:
+        exterior_row = 0 if slab == ceiling_pokoj1 else -1
+        start, end = slab.beam_centerlines[exterior_row]
+        drawing1.add_dimension(
+            start=start, end=end, offset=.65 if slab == ceiling_pokoj1 else -.65,
+            name=f"{slab.Name} Beam length",
+        )
+        drawing1.add_dimension(
+            start=slab.end,
+            end=tuple(np.asarray(slab.end)+slab.width*np.asarray(slab.direction)),
+            offset=.45, name=f"{slab.Name} Ceiling width",
+        )
     for slab, left_face, right_face in (
         (ceiling_room3, room3_ceiling_east_face_x, room3_ceiling_middle_face_x),
         (ceiling_bathroom, bathroom_ceiling_middle_face_x, bathroom_ceiling_stairway_face_x),
@@ -5466,13 +5473,6 @@ if "ceiling2" in sys.argv:
             (right_face, end[1]), end, offset=bearing_offset,
             name=f"{slab.Name} End bearing",
         )
-    front_ceiling_garden_edge_y = max(point[1] for point in ceiling_room3_front.footprint)
-    front_ceiling_dimension_x = (ceiling_room3_front.start[0]+ceiling_room3_front.end[0])/2+0.4
-    drawing1.add_dimension(
-        start=(front_ceiling_dimension_x, front_ceiling_garden_edge_y),
-        end=(front_ceiling_dimension_x, ceiling_front_girder_edge_y),
-        name="Front ceiling clear gap to purlin support girder",
-    )
     ceiling_stairway_street_y = min(point[1] for point in ceiling_stairway.footprint)
     drawing1.add_dimension(
         start=(ceiling_stairway.start[0], ceiling_stairway_street_y),
@@ -5488,18 +5488,23 @@ if "ceiling2" in sys.argv:
         )
     drawing1.add_miako_beam_schedule(ceiling_schedule_rows)
     drawing1.add_notes([
-        f"Pokoje 1 a 2: společný strop, 14 nosníků {ceiling_garden_rooms.length*1000:.0f} mm ve směru Y, 13 širokých vložkových řad.",
-        f"Pokoje 1 a 2: šířka {ceiling_garden_rooms.width*1000:.0f} mm, vystředěno nad oběma pokoji; mezery 5 mm mezi nosníky a vložkami.",
-        f"Uložení na příčné a zahradní stěně: {GARDEN_CEILING_BEARING*1000:g} mm na každém konci.",
+        (f"Pokoje 1 a 2: dva samostatné stropy, každý {len(ceiling_pokoj1.beams)} nosníků "
+         f"{ceiling_pokoj1.length*1000:g} mm ve směru Y a {ceiling_pokoj1.structure.count('wide')} širokých řad."),
+        (f"Šířka každé skladby {ceiling_pokoj1.width*1000:g} mm, vystředěno nad místností; "
+         "mezery 5 mm. Mezi skladbami věnec nad střední nosnou stěnou."),
+        (f"Uložení na příčné / zahradní stěně: {ceiling_pokoj1.block_start_offset*1000:g} / "
+         f"{ceiling_pokoj1.block_end_offset*1000:g} mm."),
         f"0.03: nosníky {ROOM3_CEILING_BEAM_LENGTH*1000:.0f} mm; uložení obvod {ROOM3_CEILING_EAST_BEARING*1000:.0f} mm / střed {ROOM3_CEILING_MIDDLE_BEARING*1000:.0f} mm.",
         f"0.05: nosníky {BATHROOM_CEILING_BEAM_LENGTH*1000:.0f} mm; uložení {BATHROOM_CEILING_BEARING*1000:.0f} mm na obou koncích.",
         "Uložení nosníků je nutné upravit podle stěn v 1.NP.",
         f"Pod sloupky vaznic: dělené HEB{PURLIN_SUPPORT_GIRDER_HEB} bez obetonování, výškově vystředěné ve stropě; uložení {PURLIN_SUPPORT_GIRDER_BEARING*1000:.0f} mm na všech stěnách.",
         f"Otvor schodiště: {(ceiling_stair_opening_end_y-FRONT_WALL_THICKNESS)*1000:.0f} mm od vnitřního líce uliční stěny.",
         f"Schodiště: HEB180 s uložením {STAIRWAY_HEB_BEARING*1000:.0f} mm.",
-        f"0.03/0.04/0.05: společná osnova se suterénem; osa prvního nosníku {BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE*1000:.0f} mm od osy zahradní příčné stěny.",
-        "0.05: první nosník a úzká řada vložek vynechány kvůli komínu, stejně jako v S.04.",
-        f"0.05: mezera k zahradní příčné stěně vyplněna betonem; odstup od komínu {CHIMNEY_CEILING_INFILL_CLEARANCE*1000:g} mm po celém obvodu.",
+        f"0.03: dvě samostatné skladby, odstup od HEB {ROOM3_CEILING_HEB_CLEARANCE*1000:g} mm na obou stranách.",
+        f"0.04: odstup MIAKO od HEB {STAIRWAY_CEILING_HEB_CLEARANCE*1000:g} mm; uliční strana zůstává otvorem schodiště.",
+        f"0.05: nosníky po obou stranách komínu, odstup {CHIMNEY_CEILING_INFILL_CLEARANCE*1000:g} mm; první široká řada vyříznuta kolem komínu. Bez betonové výplně.",
+        (f"0.05: mezera k HEB zahradní / uliční část {(min(y for x,y in ceiling_bathroom.footprint)-ceiling_purlin_heb_garden_y)*1000:g} / "
+         f"{(ceiling_front_girder_edge_y-max(y for x,y in ceiling_bathroom_front.footprint))*1000:g} mm."),
     ])
     drawing1.add_chimney_annotation(chimney)
     add_purlin_support_planning_markers(drawing1)
@@ -5509,7 +5514,7 @@ if "ceiling2" in sys.argv:
 if "basement_ceiling" in sys.argv:
     drawing1 = house.add_drawing(
         "basement_ceiling", x=HOUSE_WIDTH/2, y=HOUSE_DEPTH/2,
-        # Keep diagram linework and the concrete infill below the camera.
+        # Keep diagram linework below the camera.
         z=0.1, radius=7, storeys=[], right_panel_width=60,
         door_annotations=False, automatic_plan_annotations=False,
     )
@@ -5519,7 +5524,6 @@ if "basement_ceiling" in sys.argv:
         style="solid", color="black",
         name="Basement ceiling load-bearing wall outlines",
     )
-    drawing1.include_element(basement_ceiling_s04_chimney_infill)
     for identifier, slabs in basement_ceilings_by_room.items():
         for slab in slabs:
             wall_bounds = list(basement_rooms_by_id[identifier].bounds)
@@ -5531,7 +5535,8 @@ if "basement_ceiling" in sys.argv:
                 wall_bounds[3] = basement_s05_heb_front_y
             axis = add_ceiling_beam_plan(
                 drawing1, slab, wall_bounds=wall_bounds,
-                bearing_offset=-0.65 if identifier == "S.04" else -0.3,
+                bearing_offset=(0.3 if identifier == "S.02" else
+                                -0.65 if identifier == "S.04" else -0.3),
 				dimension_offset=dimension_offset,
             )
             if slab == basement_ceiling_s01:
@@ -5548,7 +5553,7 @@ if "basement_ceiling" in sys.argv:
         if room["identifier"] in ("S.03", "S.04", "S.05"):
             position = (position[0]-0.5, position[1])
         else:
-            position = (position[0], position[1]-0.5)
+            position = (position[0]-0.95, position[1]-0.5)
         drawing1.add_room_annotation(
             position, identifier=room["identifier"], description=room["name"], area=region.area,
         )
@@ -5574,7 +5579,7 @@ if "basement_ceiling2" in sys.argv:
         ("reinforced-concrete", "Železobetonový věnec a dobetonávka"),
         ("perimeter-polystyrene", f"Perimetrická izolace {EXTERIOR_XPS_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
-    drawing1.add_miako_beam_dimensions(basement_ceiling_s01, side="end", offset=0.7)
+    drawing1.add_miako_beam_dimensions(basement_ceiling_s01, side="start", offset=0.7)
     drawing1.add_miako_beam_dimensions(basement_ceiling_s02, side="end", offset=0.7)
     drawing1.add_miako_beam_dimensions(basement_ceiling_s03, side="start", offset=0.7)
     drawing1.add_miako_beam_dimensions(basement_ceiling_s04, side="end", offset=0.45)
@@ -5592,16 +5597,16 @@ if "basement_ceiling2" in sys.argv:
         start=tuple(basement_plan_min),
         end=(float(basement_plan_min[0]), float(basement_plan_max[1])), offset=1.2,
     )
-    drawing1.add_dimension(
-        start=basement_ceiling_s01.start, end=basement_ceiling_s01.end,
-        offset=0.65,
-    )
-    drawing1.add_dimension(
-        start=basement_ceiling_s02.start, end=basement_ceiling_s02.end, offset=-0.55,
-    )
     for slab in (basement_ceiling_s01, basement_ceiling_s02):
+        across = np.asarray(slab.direction)*slab.width
         drawing1.add_dimension(
-            start=slab.end, end=(slab.end[0]+slab.width, slab.end[1]), offset=1.15,
+            start=tuple(np.asarray(slab.start)+across),
+            end=tuple(np.asarray(slab.end)+across), offset=0.65,
+        )
+        width_start = slab.start if slab == basement_ceiling_s01 else slab.end
+        drawing1.add_dimension(
+            start=width_start, end=tuple(np.asarray(width_start)+across),
+            offset=1.15 if slab == basement_ceiling_s01 else -1.15,
         )
     for slab in (basement_ceiling_s03, basement_ceiling_s04):
         street_edge_y = min(point[1] for point in slab.footprint)
@@ -5628,17 +5633,21 @@ if "basement_ceiling2" in sys.argv:
     drawing1.add_miako_beam_schedule(basement_ceiling_schedule_rows)
     drawing1.add_notes([
         "Uložení nosníků dle kót; délky po 250 mm.",
-        "S.01/S.02: 7 nosníků 3750 mm, 6 širokých řad, mezery 5 mm, vystředěno nad místnostmi.",
-        "S.03/S.04: samostatné průběžné skladby bez dělení u HEB; další řady se doplní k ulici.",
-        f"S.03/S.05: osa prvního nosníku {BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE*1000:.0f} mm od osy zahradní příčné stěny; S.04 první řadu vynechává.",
+        (f"S.01/S.02: {len(basement_ceiling_s01.beams)} nosníků {basement_ceiling_s01.length*1000:g} mm ve směru X, "
+         f"{basement_ceiling_s01.structure.count('wide')} široké a {basement_ceiling_s01.structure.count('narrow')} úzké řady, "
+         "mezery 5 mm, vystředěno nad místnostmi."),
+        f"S.03: samostatná vystředěná skladba; uložení {BASEMENT_S03_BEARING*1000:g} mm na obou stranách. Úzké řady za krajními širokými řadami.",
+        (f"S.05: dvě samostatné skladby, odstup od HEB {BASEMENT_S05_HEB_CLEARANCE*1000:g} mm na obou stranách. "
+         f"U uliční stěny ponechat otvor min. {BASEMENT_S05_MIN_STAIR_OPENING*1000:g} mm."),
         (f"Otvor nad S.05: {basement_stair_opening_length*1000:.0f} mm od vnitřního líce uliční stěny."
          if basement_stair_opening_length > 1e-9
          else "S.05: uliční část dosahuje k čelní stěně; u stěny není volný otvor."),
         f"S.05 uliční část: počet nosníků {len(basement_ceiling_s05_front.beams)}, širokých řad {basement_ceiling_s05_front.structure.count('wide')}; samostatně upravitelná skladba.",
         f"S.05 HEB180: přední hrana {BASEMENT_S05_HEB_FRONT_WALL_DISTANCE*1000:.0f} mm od líce uliční stěny 1.NP, {(basement_s05_heb_front_y-basement_s05_y0)*1000:.0f} mm v suterénu; uložení {(basement_s05_x0-basement_s05_edge_heb.start[0])*1000:.0f}/{(basement_s05_edge_heb.end[0]-basement_s05_x1)*1000:.0f} mm.",
         "Styk protilehlých nosníků na společných stěnách zatím není řešen.",
-        "S.04: první nosník a první řada vložek vynechány kvůli komínu; ostatní řady beze změny polohy.",
-        f"S.04: mezera k zahradní příčné stěně vyplněna betonem; odstup od komínu {CHIMNEY_CEILING_INFILL_CLEARANCE*1000:g} mm po celém obvodu.",
+        (f"S.04: první nosník na zahradní straně komínu, odstup {CHIMNEY_CEILING_INFILL_CLEARANCE*1000:g} mm; "
+         f"{len(basement_ceiling_s04.beams)} nosníků, {basement_ceiling_s04.structure.count('wide')} širokých řad až k uliční stěně. "
+         "První řada vložek vyříznuta kolem komínu. Bez betonové výplně u komínu."),
     ])
     drawing1.add_chimney_annotation(chimney)
     add_house_cut_symbols(drawing1)
@@ -5784,6 +5793,7 @@ if "upper" in sys.argv:
     drawing1.add_stair_annotation(lower_stairs)
     drawing1.add_stair_annotation(upper_stairs)
     drawing1.add_stair_landing_annotation(middle_stair_landing)
+    add_stairway_plan_dimensions(drawing1)
     drawing1.add_poly_line(
         stair_walking_route,
         arrow_end=True, circle_start=True,
@@ -6138,7 +6148,7 @@ def add_aa_roof_batting(drawing):
 
 
 def add_section_ground(drawing):
-    """Draw section-only natural soil and gravel outside the perimeter insulation."""
+    """Draw section-only natural soil and compacted backfill around the foundations."""
     if math.isclose(abs(drawing.direction[0]), 1.0):
         axis, length = 1, HOUSE_DEPTH
         fraction = min(1.0, max(0.0, drawing.x/HOUSE_WIDTH))
@@ -6173,7 +6183,24 @@ def add_section_ground(drawing):
             (face+outward*SECTION_GRAVEL_BOTTOM_WIDTH, gravel_bottom_z),
             (face+outward*top_width, terrain_z), (face, terrain_z),
         )).intersection(ground_region))
-    soil = ground_region.difference(unary_union((interior, *gravel_regions)))
+    inner_gravel = Polygon()
+    if drawing.name in ("bb", "cc") and axis == 1 and front_footing_top_z < BASEMENT_SLAB_BOTTOM_Z:
+        # Backfill the inside of the short street foundation wall, up to the plate.
+        face = front_foundation_inside_y
+        height = BASEMENT_SLAB_BOTTOM_Z-front_footing_top_z
+        top_width = SECTION_GRAVEL_BOTTOM_WIDTH+height*SECTION_GRAVEL_SLOPE
+        inner_gravel = Polygon((
+            (face, front_footing_top_z),
+            (face+SECTION_GRAVEL_BOTTOM_WIDTH, front_footing_top_z),
+            (face+top_width, BASEMENT_SLAB_BOTTOM_Z),
+            (face, BASEMENT_SLAB_BOTTOM_Z),
+        )).intersection(ground_region)
+        if inner_gravel.area > 1e-9:
+            drawing.add_polygon(
+                tuple(inner_gravel.exterior.coords)[:-1], pattern="gravel", background=True,
+                name=f"{drawing.name} Zhutněná zemina - vnitřní zásyp",
+            )
+    soil = ground_region.difference(unary_union((interior, *gravel_regions, inner_gravel)))
     for region, pattern, label in ((soil, "earth-section", "Rostlý terén"),
                                    *((region, "gravel", "Zhutněná zemina") for region in gravel_regions)):
         parts = (region,) if region.geom_type == "Polygon" else region.geoms
@@ -6527,6 +6554,7 @@ if "found" in sys.argv or "foundation" in sys.argv:
         section_outline_width=SECTION_OUTLINE_WIDTH,
     )
     add_section_ground(foundation_zz)
+    add_perimeter_insulation(foundation_zz)
     exclude_buried_foundation_projections(foundation_zz, zz_cut)
     # ZZ looks west, so decreasing world Y moves toward the sheet's right.
     front_footing_properties = ifcopenshell.util.element.get_pset(front_footing, "BBIM_StripFooting")

@@ -1,5 +1,7 @@
 <svg xmlns:ns0="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:100" height="150mm" id="root" version="1.1" viewBox="0 0 140 150" width="140.0mm" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink"><text class="drawing-title" x="70" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D1.5.4. Kanalizace 1:100</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">.drawing-line-color-000000, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-000000 { stroke: #000000 !important; }
 .drawing-line-color-ffa500, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-ffa500 { stroke: #ffa500 !important; }
+.PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-000000 { fill: #000000 !important; stroke: none !important; }
+.PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-ffa500 { fill: #ffa500 !important; stroke: none !important; }
 .drawing-text-color-000000, .drawing-text-color-000000 tspan { fill: #000000 !important; stroke: none !important; }
 .PredefinedType-FILLAREA.drawing-fill-pattern-earth-section { fill: url(#earth-section) !important; }
 .drawing-text-size-2p2, .drawing-text-size-2p2 tspan { font-size: 2.2px !important; }
@@ -27,7 +29,7 @@ a:hover { cursor: pointer; }
 .IfcRailing.projection { fill: none !important; stroke-width: 0.10 !important; }
 .target-view-ELEVATIONVIEW .IfcRailing.material-Wood.surface,
 .target-view-SECTIONVIEW .IfcRailing.material-Wood.surface {
-    fill: url(#railing-boards) !important;
+    fill: url(#railing-boards-transparent) !important;
 }
 .IfcFurniture.projection,
 .IfcFurniture.cut {
@@ -287,8 +289,8 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .IfcBeam.material-Structuralsteel.cut,
 .IfcBuildingElementPart.material-Structuralsteel.cut {
-    fill: #666 !important;
-    stroke: black !important;
+    fill: #aa00aa !important;
+    stroke: #aa00aa !important;
     stroke-width: 0.04 !important;
 }
 
@@ -444,10 +446,13 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
-/* Paired diagonals distinguish 175 mm VPC from the common 240 mm walls. */
+/* Paired diagonals distinguish 175/200 mm VPC from the common 240 mm walls. */
 .cut.material-LoadbearingwallVPC175mm,
 .cut.material-VPCcihla175mm,
-.cut.material-GroundloadbearingwallVPC175mmLiaporbasecourse.layer-material-Brick {
+.cut.material-GroundloadbearingwallVPC175mmLiaporbasecourse.layer-material-Brick,
+.cut.material-LoadbearingwallVPC200mm,
+.cut.material-VPCcihla200mm,
+.cut.material-GroundloadbearingwallVPC200mmLiaporbasecourse.layer-material-Brick {
     fill: url(#brick) !important;
     stroke: black;
     stroke-width: 0.05 !important;
@@ -466,6 +471,35 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 .cut.material-LoadbearingwallYtongStatik250mm,
 .cut.layer-material-YtongStatik {
     fill: url(#ytong-statik) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Retain the legacy Liapor material's yellow fill. */
+.cut.material-LiaporKM240AKU,
+.cut.material-LoadbearingwallLiaporKM240AKU,
+.cut.layer-material-LiaporKM240AKU {
+    fill: #fff2cc !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* VPC grade 10-1,4 uses the stronger light-blue tint. */
+.cut.material-VPCCihla240mm1014,
+.cut.material-LoadbearingwallVPCCihla240mm1014,
+.cut.material-UpperloadbearingwallVPCCihla240mm1014,
+.cut.material-GroundloadbearingwallVPCCihla240mm1014Liaporbasecourse,
+.cut.layer-material-VPCCihla240mm1014 {
+    fill: #cce6ff !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Grade 10-1,8 is halfway between that blue and white (rounded RGB). */
+.cut.material-VPCCihla240mm1018,
+.cut.material-LoadbearingwallVPCCihla240mm1018,
+.cut.layer-material-VPCCihla240mm1018 {
+    fill: #e6f3ff !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }
@@ -534,6 +568,14 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 .target-view-PLANVIEW .IfcFooting.cut {
     fill: white !important;
     stroke: white !important;
+}
+
+/* Foundation plans draw the merged footprint boundary as annotation.
+ * Suppress individual projected edges, including the lowered street strips. */
+.target-view-PLANVIEW .IfcFooting.projection,
+.target-view-PLANVIEW .IfcFooting.surface {
+    fill: none !important;
+    stroke: none !important;
 }
 
 .cut.layer-material-SDK {
@@ -1113,7 +1155,7 @@ tspan.door-dimension {
 </pattern>
 
 <pattern id="drywall-diagonal1" width="1" height="1" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
-    <rect width="1" height="1" fill="#dfefcf" />
+    <rect width="1" height="1" fill="#fff2cc" />
     <line x1="0" y1="0" x2="0" y2="1" style="stroke:black; stroke-width:0.25" />
 </pattern>
 
@@ -1232,7 +1274,7 @@ tspan.door-dimension {
 </pattern>
 
 <pattern id="ytong-klasik" width="3" height="3" patternTransform="rotate(45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
-    <rect width="3" height="3" fill="#ffd9b3" />
+    <rect width="3" height="3" fill="#fff2cc" />
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
@@ -1248,7 +1290,7 @@ tspan.door-dimension {
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
 </pattern>
 
-<pattern id="liapor-brick" width="3" height="3" patternTransform="rotate(45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
+<pattern id="liapor-brick" width="3" height="3" patternTransform="rotate(-45 0 0) scale(0.5)" patternUnits="userSpaceOnUse">
     <rect width="3" height="3" fill="#fff2cc" />
     <line x1="1" y1="0" x2="1" y2="3" style="stroke:black; stroke-width:0.25" />
     <line x1="2" y1="0" x2="2" y2="3" style="stroke:black; stroke-width:0.25" />
@@ -1330,6 +1372,15 @@ tspan.door-dimension {
     <path transform="translate(0 1.0875)" d="M 0 0.365 A 0.365 0.365 0 0 1 0.73 0.365 L 0.365 1.46 M 0 0.365 L 0.365 1.46 A 0.365 0.365 0 0 0 0.73 1.825 M 0.365 1.46 A 0.365 0.365 0 0 1 0 1.825" style="fill:none;stroke:black;stroke-width:0.10" vector-effect="non-scaling-stroke" />
 </pattern>
 
+<pattern id="liapor-km-240-aku-solid" width="1" height="1" patternUnits="objectBoundingBox" viewBox="0 0 1 1" preserveAspectRatio="none">
+    <rect width="1" height="1" fill="#fff2cc" />
+</pattern>
+<pattern id="vpc-240-10-14-solid" width="1" height="1" patternUnits="objectBoundingBox" viewBox="0 0 1 1" preserveAspectRatio="none">
+    <rect width="1" height="1" fill="#cce6ff" />
+</pattern>
+<pattern id="vpc-240-10-18-solid" width="1" height="1" patternUnits="objectBoundingBox" viewBox="0 0 1 1" preserveAspectRatio="none">
+    <rect width="1" height="1" fill="#e6f3ff" />
+</pattern>
 <pattern id="solid-white" width="1" height="1" patternUnits="userSpaceOnUse">
     <rect width="1" height="1" fill="white" />
 </pattern>
@@ -1353,6 +1404,9 @@ tspan.door-dimension {
 
 <pattern id="railing-boards" width="1.2" height="1000" patternUnits="userSpaceOnUse">
     <rect width="1.2" height="1000" fill="white" />
+    <path d="M 0.6 0 V 1000" fill="none" stroke="#555" stroke-width="0.06" />
+</pattern>
+<pattern id="railing-boards-transparent" width="1.2" height="1000" patternUnits="userSpaceOnUse">
     <path d="M 0.6 0 V 1000" fill="none" stroke="#555" stroke-width="0.06" />
 </pattern>
 
@@ -1451,359 +1505,359 @@ tspan.door-dimension {
     <use ns0:href="#stone-wall-outlines" opacity="0.2" />
 </pattern>
 </defs>  <defs/>
-  <line class="GlobalId-31Z3LoVP19ixcFJqYPj8Se IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="100.0" x2="100.0" y1="72.34123229980469" y2="62.491233825683594"/>
-  <line class="GlobalId-3KNFv8Vdv05veL_Q$iH3mA IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="75.0" x2="75.0" y1="99.1412353515625" y2="92.79122924804688"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.20000076293945" x2="60.79999923706055" y1="62.491233825683594" y2="62.491233825683594"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.79999923706055" x2="60.79999923706055" y1="62.491233825683594" y2="60.09123992919922"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.79999923706055" x2="59.20000076293945" y1="60.09123992919922" y2="60.09123992919922"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.20000076293945" x2="59.20000076293945" y1="60.09123992919922" y2="62.491233825683594"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.266666412353516" x2="60.261539459228516" y1="60.8912353515625" y2="60.83921432495117"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.261539459228516" x2="60.246368408203125" y1="60.83921432495117" y2="60.7891845703125"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.246368408203125" x2="60.22172546386719" y1="60.7891845703125" y2="60.74308395385742"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.22172546386719" x2="60.188560485839844" y1="60.74308395385742" y2="60.702674865722656"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.188560485839844" x2="60.148155212402344" y1="60.702674865722656" y2="60.66950988769531"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.148155212402344" x2="60.102046966552734" y1="60.66950988769531" y2="60.644866943359375"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.102046966552734" x2="60.052024841308594" y1="60.644866943359375" y2="60.62969207763672"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.052024841308594" x2="60.0" y1="60.62969207763672" y2="60.62457275390625"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.0" x2="59.947975158691406" y1="60.62457275390625" y2="60.62969207763672"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.947975158691406" x2="59.897953033447266" y1="60.62969207763672" y2="60.644866943359375"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.897953033447266" x2="59.851844787597656" y1="60.644866943359375" y2="60.66950988769531"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.851844787597656" x2="59.811439514160156" y1="60.66950988769531" y2="60.702674865722656"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.811439514160156" x2="59.77827453613281" y1="60.702674865722656" y2="60.74308395385742"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.77827453613281" x2="59.753631591796875" y1="60.74308395385742" y2="60.7891845703125"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.753631591796875" x2="59.738460540771484" y1="60.7891845703125" y2="60.83921432495117"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.738460540771484" x2="59.733333587646484" y1="60.83921432495117" y2="60.8912353515625"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.733333587646484" x2="59.738460540771484" y1="60.8912353515625" y2="60.943260192871094"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.738460540771484" x2="59.753631591796875" y1="60.943260192871094" y2="60.9932861328125"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.753631591796875" x2="59.77827453613281" y1="60.9932861328125" y2="61.039390563964844"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.77827453613281" x2="59.811439514160156" y1="61.039390563964844" y2="61.079795837402344"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.811439514160156" x2="59.851844787597656" y1="61.079795837402344" y2="61.11296081542969"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.851844787597656" x2="59.897953033447266" y1="61.11296081542969" y2="61.137603759765625"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.897953033447266" x2="59.947975158691406" y1="61.137603759765625" y2="61.15277862548828"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.947975158691406" x2="60.0" y1="61.15277862548828" y2="61.15790557861328"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.0" x2="60.052024841308594" y1="61.15790557861328" y2="61.15277862548828"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.052024841308594" x2="60.102046966552734" y1="61.15277862548828" y2="61.137603759765625"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.102046966552734" x2="60.148155212402344" y1="61.137603759765625" y2="61.11296081542969"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.148155212402344" x2="60.188560485839844" y1="61.11296081542969" y2="61.079795837402344"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.188560485839844" x2="60.22172546386719" y1="61.079795837402344" y2="61.039390563964844"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.22172546386719" x2="60.246368408203125" y1="61.039390563964844" y2="60.9932861328125"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.246368408203125" x2="60.261539459228516" y1="60.9932861328125" y2="60.943260192871094"/>
-  <line class="GlobalId-3n$tiraoz5jw2Kdn_Zrx8P IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.261539459228516" x2="60.266666412353516" y1="60.943260192871094" y2="60.8912353515625"/>
-  <line class="GlobalId-22k3uAd_DBhvMqqwgZFC5$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="70.0" y1="104.09123229980469" y2="16.108760833740234"/>
-  <line class="GlobalId-2qsKg23ov2GgCPwJNCcbD8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="110.0" x2="90.0" y1="104.09123229980469" y2="104.69123840332031"/>
-  <line class="GlobalId-3JT9JpPUD6fBU2PWkgQJb1 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="98.2912368774414" y2="98.2912368774414"/>
-  <line class="GlobalId-3_uSyCzOvDjxlVPChxSq$F IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="90.0" y1="104.09123229980469" y2="104.69123840332031"/>
-  <line class="GlobalId-1EMxqGK_j3Me1KuEf1OQVJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="103.09123992919922" y2="103.09123992919922"/>
-  <line class="GlobalId-3JlU_RpQz6yQa5SneT2$Jf IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="65.0" x2="65.0" y1="99.1412353515625" y2="96.2912368774414"/>
-  <line class="GlobalId-1xLg5SuMf6PBByPriaNvTp IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="65.0" y1="99.29122924804688" y2="99.1412353515625"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.0" x2="107.01445007324219" y1="60.49123764038086" y2="60.68727111816406"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.01445007324219" x2="107.05764770507812" y1="60.68727111816406" y2="60.88141632080078"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.05764770507812" x2="107.12918090820312" y1="60.88141632080078" y2="61.071807861328125"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.12918090820312" x2="107.22836303710938" y1="61.071807861328125" y2="61.25659942626953"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.22836303710938" x2="107.35424041748047" y1="61.25659942626953" y2="61.43402862548828"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.35424041748047" x2="107.50558471679688" y1="61.43402862548828" y2="61.60237121582031"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.50558471679688" x2="107.68096923828125" y1="61.60237121582031" y2="61.76002502441406"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.68096923828125" x2="107.87867736816406" y1="61.76002502441406" y2="61.90544891357422"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.87867736816406" x2="108.09681701660156" y1="61.90544891357422" y2="62.03725814819336"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.09681701660156" x2="108.33329010009766" y1="62.03725814819336" y2="62.1541748046875"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.33329010009766" x2="108.58580780029297" y1="62.1541748046875" y2="62.25507736206055"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.58580780029297" x2="108.85194396972656" y1="62.25507736206055" y2="62.33899688720703"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.85194396972656" x2="109.12914276123047" y1="62.33899688720703" y2="62.405120849609375"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="109.12914276123047" x2="109.41473388671875" y1="62.405120849609375" y2="62.45280838012695"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="109.41473388671875" x2="109.70594787597656" y1="62.45280838012695" y2="62.481605529785156"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="109.70594787597656" x2="110.0" y1="62.481605529785156" y2="62.491233825683594"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.0" x2="110.29405212402344" y1="62.491233825683594" y2="62.481605529785156"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.29405212402344" x2="110.58526611328125" y1="62.481605529785156" y2="62.45280838012695"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.58526611328125" x2="110.87085723876953" y1="62.45280838012695" y2="62.405120849609375"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.87085723876953" x2="111.14805603027344" y1="62.405120849609375" y2="62.33899688720703"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.14805603027344" x2="111.41419219970703" y1="62.33899688720703" y2="62.25507736206055"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.41419219970703" x2="111.66670989990234" y1="62.25507736206055" y2="62.1541748046875"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.66670989990234" x2="111.90318298339844" y1="62.1541748046875" y2="62.03725814819336"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.90318298339844" x2="112.12132263183594" y1="62.03725814819336" y2="61.90544891357422"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.12132263183594" x2="112.31903076171875" y1="61.90544891357422" y2="61.76002502441406"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.31903076171875" x2="112.49441528320312" y1="61.76002502441406" y2="61.60237121582031"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.49441528320312" x2="112.64575958251953" y1="61.60237121582031" y2="61.43402862548828"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.64575958251953" x2="112.77163696289062" y1="61.43402862548828" y2="61.25659942626953"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.77163696289062" x2="112.87081909179688" y1="61.25659942626953" y2="61.071807861328125"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.87081909179688" x2="112.94235229492188" y1="61.071807861328125" y2="60.88141632080078"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.94235229492188" x2="112.98554992675781" y1="60.88141632080078" y2="60.68727111816406"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.98554992675781" x2="113.0" y1="60.68727111816406" y2="60.49123764038086"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="106.5" x2="113.5" y1="60.49123764038086" y2="60.49123764038086"/>
-  <line class="GlobalId-1UGCaiPN14fwVcY1_f_MBq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.0" x2="110.0" y1="62.491233825683594" y2="63.491233825683594"/>
-  <line class="GlobalId-0y8QMPDdX0EO2$eYu5qsMz IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="53.0" x2="53.0" y1="69.48123168945312" y2="63.491233825683594"/>
-  <line class="GlobalId-2YN9FCs8H9iBiKGcu$NNwV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="53.0" y1="69.9912338256836" y2="69.48123168945312"/>
-  <line class="GlobalId-1OnjYhRJTF1AiJR1XEoagR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="35.28396224975586" y2="35.28396224975586"/>
-  <line class="GlobalId-0DuTmdWXv1$PD7S8zwp7ph IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="47.5" x2="47.5" y1="60.49123764038086" y2="62.491233825683594"/>
-  <line class="GlobalId-0DuTmdWXv1$PD7S8zwp7ph IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="47.5" x2="53.5" y1="62.491233825683594" y2="62.491233825683594"/>
-  <line class="GlobalId-0DuTmdWXv1$PD7S8zwp7ph IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="53.5" x2="53.5" y1="62.491233825683594" y2="60.49123764038086"/>
-  <line class="GlobalId-0DuTmdWXv1$PD7S8zwp7ph IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="47.0" x2="53.999996185302734" y1="60.49123764038086" y2="60.49123764038086"/>
-  <line class="GlobalId-1gacnoEt158AZNZDXhr2VQ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="90.0" x2="90.0" y1="104.69123840332031" y2="129.8912353515625"/>
-  <line class="GlobalId-2oJdgbEwTCKhfEdPzIgmJC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="110.0" y1="73.2412338256836" y2="72.0412368774414"/>
-  <line class="GlobalId-0xAikQ$q19$BD0A2RiABmz IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="72.2412338256836" y2="72.2412338256836"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.0" x2="72.01445007324219" y1="89.79124450683594" y2="89.98726654052734"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.01445007324219" x2="72.0576400756836" y1="89.98726654052734" y2="90.1814193725586"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.0576400756836" x2="72.12918090820312" y1="90.1814193725586" y2="90.37179565429688"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.12918090820312" x2="72.22836303710938" y1="90.37179565429688" y2="90.55660247802734"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.22836303710938" x2="72.35423278808594" y1="90.55660247802734" y2="90.73402404785156"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.35423278808594" x2="72.5055923461914" y1="90.73402404785156" y2="90.90237426757812"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.5055923461914" x2="72.68096923828125" y1="90.90237426757812" y2="91.06002044677734"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.68096923828125" x2="72.87867736816406" y1="91.06002044677734" y2="91.2054443359375"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.87867736816406" x2="73.09681701660156" y1="91.2054443359375" y2="91.33726501464844"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.09681701660156" x2="73.33329010009766" y1="91.33726501464844" y2="91.45417022705078"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.33329010009766" x2="73.58580780029297" y1="91.45417022705078" y2="91.55508422851562"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.58580780029297" x2="73.85194396972656" y1="91.55508422851562" y2="91.63899230957031"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.85194396972656" x2="74.129150390625" y1="91.63899230957031" y2="91.70510864257812"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="74.129150390625" x2="74.41473388671875" y1="91.70510864257812" y2="91.7528076171875"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="74.41473388671875" x2="74.70594787597656" y1="91.7528076171875" y2="91.78160858154297"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="74.70594787597656" x2="75.0" y1="91.78160858154297" y2="91.79122924804688"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.0" x2="75.29405212402344" y1="91.79122924804688" y2="91.78160858154297"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.29405212402344" x2="75.58526611328125" y1="91.78160858154297" y2="91.7528076171875"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.58526611328125" x2="75.870849609375" y1="91.7528076171875" y2="91.70510864257812"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.870849609375" x2="76.14805603027344" y1="91.70510864257812" y2="91.63899230957031"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.14805603027344" x2="76.41419219970703" y1="91.63899230957031" y2="91.55508422851562"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.41419219970703" x2="76.66670989990234" y1="91.55508422851562" y2="91.45417022705078"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.66670989990234" x2="76.90318298339844" y1="91.45417022705078" y2="91.33726501464844"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.90318298339844" x2="77.12132263183594" y1="91.33726501464844" y2="91.2054443359375"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.12132263183594" x2="77.31903076171875" y1="91.2054443359375" y2="91.06002044677734"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.31903076171875" x2="77.4944076538086" y1="91.06002044677734" y2="90.90237426757812"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.4944076538086" x2="77.64576721191406" y1="90.90237426757812" y2="90.73402404785156"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.64576721191406" x2="77.77163696289062" y1="90.73402404785156" y2="90.55660247802734"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.77163696289062" x2="77.87081909179688" y1="90.55660247802734" y2="90.37179565429688"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.87081909179688" x2="77.9423599243164" y1="90.37179565429688" y2="90.1814193725586"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.9423599243164" x2="77.98554992675781" y1="90.1814193725586" y2="89.98726654052734"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.98554992675781" x2="78.0" y1="89.98726654052734" y2="89.79124450683594"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="71.5" x2="78.5" y1="89.79124450683594" y2="89.79124450683594"/>
-  <line class="GlobalId-2k$31Af0H2QxDTlNy6MsKn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.0" x2="75.0" y1="91.79122924804688" y2="92.79122924804688"/>
-  <line class="GlobalId-334h7Hq$jEhhtwPfbZWByo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="75.0" y1="99.29122924804688" y2="99.1412353515625"/>
-  <line class="GlobalId-0QmsZQf6rFh84$tuz6hsHw IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="110.0" x2="110.0" y1="97.99124145507812" y2="104.09123229980469"/>
-  <line class="GlobalId-2V4b4QPkPEO8JCgKQ1CPpP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="53.0" x2="53.0" y1="63.491233825683594" y2="62.491233825683594"/>
-  <line class="GlobalId-0puRQztG1BNADAiIOTq7FB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="124.8912353515625" y2="124.8912353515625"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.00962829589844" y1="94.29122924804688" y2="94.48726654052734"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.00962829589844" x2="63.038429260253906" y1="94.48726654052734" y2="94.68141174316406"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.038429260253906" x2="63.08612060546875" y1="94.68141174316406" y2="94.87181091308594"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.08612060546875" x2="63.15224075317383" y1="94.87181091308594" y2="95.05660247802734"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.15224075317383" x2="63.23615646362305" y1="95.05660247802734" y2="95.2340316772461"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.23615646362305" x2="63.337059020996094" y1="95.2340316772461" y2="95.40237426757812"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.337059020996094" x2="63.4539794921875" y1="95.40237426757812" y2="95.56001281738281"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.4539794921875" x2="63.585784912109375" y1="95.56001281738281" y2="95.70545196533203"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.585784912109375" x2="63.7312126159668" y1="95.70545196533203" y2="95.8372573852539"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.7312126159668" x2="63.888858795166016" y1="95.8372573852539" y2="95.95417022705078"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.888858795166016" x2="64.05720520019531" y1="95.95417022705078" y2="96.0550765991211"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.05720520019531" x2="64.23463439941406" y1="96.0550765991211" y2="96.13899230957031"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.23463439941406" x2="64.41943359375" y1="96.13899230957031" y2="96.20512390136719"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.41943359375" x2="64.60981750488281" y1="96.20512390136719" y2="96.2528076171875"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.60981750488281" x2="64.80397033691406" y1="96.2528076171875" y2="96.28160095214844"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.80397033691406" x2="65.0" y1="96.28160095214844" y2="96.2912368774414"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.0" x2="65.19602966308594" y1="96.2912368774414" y2="96.28160095214844"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.19602966308594" x2="65.39018249511719" y1="96.28160095214844" y2="96.2528076171875"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.39018249511719" x2="65.58056640625" y1="96.2528076171875" y2="96.20512390136719"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.58056640625" x2="65.76536560058594" y1="96.20512390136719" y2="96.13899230957031"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.76536560058594" x2="65.94279479980469" y1="96.13899230957031" y2="96.0550765991211"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.94279479980469" x2="66.11113739013672" y1="96.0550765991211" y2="95.95417022705078"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.11113739013672" x2="66.26878356933594" y1="95.95417022705078" y2="95.8372573852539"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.26878356933594" x2="66.41421508789062" y1="95.8372573852539" y2="95.70545196533203"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.41421508789062" x2="66.5460205078125" y1="95.70545196533203" y2="95.56001281738281"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.5460205078125" x2="66.6629409790039" y1="95.56001281738281" y2="95.40237426757812"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.6629409790039" x2="66.76384735107422" y1="95.40237426757812" y2="95.2340316772461"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.76384735107422" x2="66.8477554321289" y1="95.2340316772461" y2="95.05660247802734"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.8477554321289" x2="66.91387939453125" y1="95.05660247802734" y2="94.87181091308594"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.91387939453125" x2="66.9615707397461" y1="94.87181091308594" y2="94.68141174316406"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.9615707397461" x2="66.99037170410156" y1="94.68141174316406" y2="94.48726654052734"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.99037170410156" x2="67.0" y1="94.48726654052734" y2="94.29122924804688"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.0" y1="94.29122924804688" y2="94.04122924804688"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="67.0" y1="94.04122924804688" y2="94.04122924804688"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="67.0" y1="94.04122924804688" y2="94.29122924804688"/>
-  <line class="GlobalId-3q1eGIuZ9AQPScjWOQ8iTG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="63.0" y1="94.29122924804688" y2="94.29122924804688"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.00962829589844" y1="64.9912338256836" y2="65.18727111816406"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.00962829589844" x2="63.038429260253906" y1="65.18727111816406" y2="65.38140869140625"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.038429260253906" x2="63.08612060546875" y1="65.38140869140625" y2="65.57180786132812"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.08612060546875" x2="63.15224075317383" y1="65.57180786132812" y2="65.75659942626953"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.15224075317383" x2="63.23615646362305" y1="65.75659942626953" y2="65.93402862548828"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.23615646362305" x2="63.337059020996094" y1="65.93402862548828" y2="66.10237121582031"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.337059020996094" x2="63.4539794921875" y1="66.10237121582031" y2="66.26002502441406"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.4539794921875" x2="63.585784912109375" y1="66.26002502441406" y2="66.40544891357422"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.585784912109375" x2="63.7312126159668" y1="66.40544891357422" y2="66.5372543334961"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.7312126159668" x2="63.888858795166016" y1="66.5372543334961" y2="66.6541748046875"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.888858795166016" x2="64.05720520019531" y1="66.6541748046875" y2="66.75507354736328"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.05720520019531" x2="64.23463439941406" y1="66.75507354736328" y2="66.83899688720703"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.23463439941406" x2="64.41943359375" y1="66.83899688720703" y2="66.90512084960938"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.41943359375" x2="64.60981750488281" y1="66.90512084960938" y2="66.95280456542969"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.60981750488281" x2="64.80397033691406" y1="66.95280456542969" y2="66.98159790039062"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.80397033691406" x2="65.0" y1="66.98159790039062" y2="66.9912338256836"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.0" x2="65.19602966308594" y1="66.9912338256836" y2="66.98159790039062"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.19602966308594" x2="65.39018249511719" y1="66.98159790039062" y2="66.95280456542969"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.39018249511719" x2="65.58056640625" y1="66.95280456542969" y2="66.90512084960938"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.58056640625" x2="65.76536560058594" y1="66.90512084960938" y2="66.83899688720703"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.76536560058594" x2="65.94279479980469" y1="66.83899688720703" y2="66.75507354736328"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.94279479980469" x2="66.11113739013672" y1="66.75507354736328" y2="66.6541748046875"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.11113739013672" x2="66.26878356933594" y1="66.6541748046875" y2="66.5372543334961"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.26878356933594" x2="66.41421508789062" y1="66.5372543334961" y2="66.40544891357422"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.41421508789062" x2="66.5460205078125" y1="66.40544891357422" y2="66.26002502441406"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.5460205078125" x2="66.6629409790039" y1="66.26002502441406" y2="66.10237121582031"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.6629409790039" x2="66.76384735107422" y1="66.10237121582031" y2="65.93402862548828"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.76384735107422" x2="66.8477554321289" y1="65.93402862548828" y2="65.75659942626953"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.8477554321289" x2="66.91387939453125" y1="65.75659942626953" y2="65.57180786132812"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.91387939453125" x2="66.9615707397461" y1="65.57180786132812" y2="65.38140869140625"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.9615707397461" x2="66.99037170410156" y1="65.38140869140625" y2="65.18727111816406"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.99037170410156" x2="67.0" y1="65.18727111816406" y2="64.9912338256836"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.0" y1="64.9912338256836" y2="64.7412338256836"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="67.0" y1="64.7412338256836" y2="64.7412338256836"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="67.0" y1="64.7412338256836" y2="64.9912338256836"/>
-  <line class="GlobalId-0dj$oKPHD16Ofoc7ZXTmDG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="63.0" y1="64.9912338256836" y2="64.9912338256836"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.19999694824219" x2="100.80000305175781" y1="62.491233825683594" y2="62.491233825683594"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.80000305175781" x2="100.80000305175781" y1="62.491233825683594" y2="60.09123992919922"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.80000305175781" x2="99.19999694824219" y1="60.09123992919922" y2="60.09123992919922"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.19999694824219" x2="99.19999694824219" y1="60.09123992919922" y2="62.491233825683594"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.26666259765625" x2="100.26154327392578" y1="60.8912353515625" y2="60.83921432495117"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.26154327392578" x2="100.24636840820312" y1="60.83921432495117" y2="60.7891845703125"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.24636840820312" x2="100.22172546386719" y1="60.7891845703125" y2="60.74308395385742"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.22172546386719" x2="100.18856048583984" y1="60.74308395385742" y2="60.702674865722656"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.18856048583984" x2="100.14815521240234" y1="60.702674865722656" y2="60.66950988769531"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.14815521240234" x2="100.10205078125" y1="60.66950988769531" y2="60.644866943359375"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.10205078125" x2="100.0520248413086" y1="60.644866943359375" y2="60.62969207763672"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0520248413086" x2="100.0" y1="60.62969207763672" y2="60.62457275390625"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0" x2="99.9479751586914" y1="60.62457275390625" y2="60.62969207763672"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.9479751586914" x2="99.89794921875" y1="60.62969207763672" y2="60.644866943359375"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.89794921875" x2="99.85184478759766" y1="60.644866943359375" y2="60.66950988769531"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.85184478759766" x2="99.81143951416016" y1="60.66950988769531" y2="60.702674865722656"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.81143951416016" x2="99.77827453613281" y1="60.702674865722656" y2="60.74308395385742"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.77827453613281" x2="99.75363159179688" y1="60.74308395385742" y2="60.7891845703125"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.75363159179688" x2="99.73845672607422" y1="60.7891845703125" y2="60.83921432495117"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.73845672607422" x2="99.73333740234375" y1="60.83921432495117" y2="60.8912353515625"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.73333740234375" x2="99.73845672607422" y1="60.8912353515625" y2="60.943260192871094"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.73845672607422" x2="99.75363159179688" y1="60.943260192871094" y2="60.9932861328125"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.75363159179688" x2="99.77827453613281" y1="60.9932861328125" y2="61.039390563964844"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.77827453613281" x2="99.81143951416016" y1="61.039390563964844" y2="61.079795837402344"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.81143951416016" x2="99.85184478759766" y1="61.079795837402344" y2="61.11296081542969"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.85184478759766" x2="99.89794921875" y1="61.11296081542969" y2="61.137603759765625"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.89794921875" x2="99.9479751586914" y1="61.137603759765625" y2="61.15277862548828"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.9479751586914" x2="100.0" y1="61.15277862548828" y2="61.15790557861328"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0" x2="100.0520248413086" y1="61.15790557861328" y2="61.15277862548828"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0520248413086" x2="100.10205078125" y1="61.15277862548828" y2="61.137603759765625"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.10205078125" x2="100.14815521240234" y1="61.137603759765625" y2="61.11296081542969"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.14815521240234" x2="100.18856048583984" y1="61.11296081542969" y2="61.079795837402344"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.18856048583984" x2="100.22172546386719" y1="61.079795837402344" y2="61.039390563964844"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.22172546386719" x2="100.24636840820312" y1="61.039390563964844" y2="60.9932861328125"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.24636840820312" x2="100.26154327392578" y1="60.9932861328125" y2="60.943260192871094"/>
-  <line class="GlobalId-1xDMheJST58fYQGAPvgw8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.26154327392578" x2="100.26666259765625" y1="60.943260192871094" y2="60.8912353515625"/>
-  <line class="GlobalId-3PfuX5WrzD79ExsHpVuiJR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="105.5" x2="114.5" y1="97.99124145507812" y2="97.99124145507812"/>
-  <line class="GlobalId-3PfuX5WrzD79ExsHpVuiJR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="114.5" x2="114.5" y1="97.99124145507812" y2="94.9912338256836"/>
-  <line class="GlobalId-3PfuX5WrzD79ExsHpVuiJR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="114.5" x2="105.5" y1="94.9912338256836" y2="94.9912338256836"/>
-  <line class="GlobalId-3PfuX5WrzD79ExsHpVuiJR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="105.5" x2="105.5" y1="94.9912338256836" y2="97.99124145507812"/>
-  <line class="GlobalId-3np6fW9Jv1DBHGjWIazAs7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-roof_vent" x1="68.0" x2="72.0" y1="16.108760833740234" y2="16.108760833740234"/>
-  <line class="GlobalId-3np6fW9Jv1DBHGjWIazAs7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-roof_vent" x1="72.0" x2="70.0" y1="16.108760833740234" y2="14.108762741088867"/>
-  <line class="GlobalId-3np6fW9Jv1DBHGjWIazAs7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-roof_vent" x1="70.0" x2="68.0" y1="14.108762741088867" y2="16.108760833740234"/>
-  <line class="GlobalId-3S6uZ2bRDBbAt5RbfOyoZn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="19.108762741088867" y2="19.108762741088867"/>
-  <line class="GlobalId-1ouQJrEcz0gg$4yInBZ1TZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="60.0" x2="60.0" y1="69.69123840332031" y2="62.491233825683594"/>
-  <line class="GlobalId-1lTXRKRH909A3whAZ4jck5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="68.9912338256836" y2="68.9912338256836"/>
-  <line class="GlobalId-3B3A3cpDP7y83I78Jnp170 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="110.0" x2="110.0" y1="72.0412368774414" y2="63.491233825683594"/>
-  <line class="GlobalId-3Kq3fi4pf9reXFl8LkMf$s IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="65.0" x2="65.0" y1="69.84123229980469" y2="66.9912338256836"/>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 96.2912368774414) rotate(-0.0)">
-    <tspan class="GlobalId-1YFx96gUj1buEhFR3bMY1F IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Přízemí 0 mm</tspan>
+  <line class="GlobalId-3kQw8KzR1CqflCxdBx9X5X IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="75.0" x2="75.0" y1="99.29188537597656" y2="92.94188690185547"/>
+  <line class="GlobalId-0Ivkzjcu56EO54GEs7jI6K IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="70.0" y1="103.79188537597656" y2="15.958118438720703"/>
+  <line class="GlobalId-2W5zPCCV54Vf$QPQOEUag8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="47.5" x2="47.5" y1="60.641883850097656" y2="62.64188766479492"/>
+  <line class="GlobalId-2W5zPCCV54Vf$QPQOEUag8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="47.5" x2="53.5" y1="62.64188766479492" y2="62.64188766479492"/>
+  <line class="GlobalId-2W5zPCCV54Vf$QPQOEUag8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="53.5" x2="53.5" y1="62.64188766479492" y2="60.641883850097656"/>
+  <line class="GlobalId-2W5zPCCV54Vf$QPQOEUag8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-sink" x1="47.0" x2="53.999996185302734" y1="60.641883850097656" y2="60.641883850097656"/>
+  <line class="GlobalId-3LwDq4OGLF5OfUD7PqH9KC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="110.0" x2="90.0" y1="103.79188537597656" y2="104.39187622070312"/>
+  <line class="GlobalId-0Wymi6nTXAZfQmOU734G0p IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="98.44188690185547" y2="98.44188690185547"/>
+  <line class="GlobalId-2BsKEOcRD1buv7LmUqsby3 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="125.04188537597656" y2="125.04188537597656"/>
+  <line class="GlobalId-1g9FMeJg5B5wk6TCnnAZ3N IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="65.0" x2="65.0" y1="99.29188537597656" y2="96.44187927246094"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.00962829589844" y1="94.44187927246094" y2="94.6379165649414"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.00962829589844" x2="63.038429260253906" y1="94.6379165649414" y2="94.83206939697266"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.038429260253906" x2="63.08612060546875" y1="94.83206939697266" y2="95.02244567871094"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.08612060546875" x2="63.15224075317383" y1="95.02244567871094" y2="95.2072525024414"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.15224075317383" x2="63.23615646362305" y1="95.2072525024414" y2="95.38467407226562"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.23615646362305" x2="63.337059020996094" y1="95.38467407226562" y2="95.55302429199219"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.337059020996094" x2="63.4539794921875" y1="95.55302429199219" y2="95.7106704711914"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.4539794921875" x2="63.585784912109375" y1="95.7106704711914" y2="95.85609436035156"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.585784912109375" x2="63.7312126159668" y1="95.85609436035156" y2="95.9879150390625"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.7312126159668" x2="63.888858795166016" y1="95.9879150390625" y2="96.10482025146484"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.888858795166016" x2="64.05720520019531" y1="96.10482025146484" y2="96.20573425292969"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.05720520019531" x2="64.23463439941406" y1="96.20573425292969" y2="96.28964233398438"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.23463439941406" x2="64.41943359375" y1="96.28964233398438" y2="96.35575866699219"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.41943359375" x2="64.60981750488281" y1="96.35575866699219" y2="96.40345764160156"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.60981750488281" x2="64.80397033691406" y1="96.40345764160156" y2="96.43225860595703"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.80397033691406" x2="65.0" y1="96.43225860595703" y2="96.44187927246094"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.0" x2="65.19602966308594" y1="96.44187927246094" y2="96.43225860595703"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.19602966308594" x2="65.39018249511719" y1="96.43225860595703" y2="96.40345764160156"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.39018249511719" x2="65.58056640625" y1="96.40345764160156" y2="96.35575866699219"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.58056640625" x2="65.76536560058594" y1="96.35575866699219" y2="96.28964233398438"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.76536560058594" x2="65.94279479980469" y1="96.28964233398438" y2="96.20573425292969"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.94279479980469" x2="66.11113739013672" y1="96.20573425292969" y2="96.10482025146484"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.11113739013672" x2="66.26878356933594" y1="96.10482025146484" y2="95.9879150390625"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.26878356933594" x2="66.41421508789062" y1="95.9879150390625" y2="95.85609436035156"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.41421508789062" x2="66.5460205078125" y1="95.85609436035156" y2="95.7106704711914"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.5460205078125" x2="66.6629409790039" y1="95.7106704711914" y2="95.55302429199219"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.6629409790039" x2="66.76384735107422" y1="95.55302429199219" y2="95.38467407226562"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.76384735107422" x2="66.8477554321289" y1="95.38467407226562" y2="95.2072525024414"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.8477554321289" x2="66.91387939453125" y1="95.2072525024414" y2="95.02244567871094"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.91387939453125" x2="66.9615707397461" y1="95.02244567871094" y2="94.83206939697266"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.9615707397461" x2="66.99037170410156" y1="94.83206939697266" y2="94.6379165649414"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.99037170410156" x2="67.0" y1="94.6379165649414" y2="94.44187927246094"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.0" y1="94.44187927246094" y2="94.19188690185547"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="67.0" y1="94.19188690185547" y2="94.19188690185547"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="67.0" y1="94.19188690185547" y2="94.44187927246094"/>
+  <line class="GlobalId-2mG703HOnCoQp$cQGbY4h_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="63.0" y1="94.44187927246094" y2="94.44187927246094"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.00962829589844" y1="65.14188385009766" y2="65.3379135131836"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.00962829589844" x2="63.038429260253906" y1="65.3379135131836" y2="65.53206634521484"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.038429260253906" x2="63.08612060546875" y1="65.53206634521484" y2="65.72245788574219"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.08612060546875" x2="63.15224075317383" y1="65.72245788574219" y2="65.9072494506836"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.15224075317383" x2="63.23615646362305" y1="65.9072494506836" y2="66.08467864990234"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.23615646362305" x2="63.337059020996094" y1="66.08467864990234" y2="66.25302124023438"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.337059020996094" x2="63.4539794921875" y1="66.25302124023438" y2="66.4106674194336"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.4539794921875" x2="63.585784912109375" y1="66.4106674194336" y2="66.55609893798828"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.585784912109375" x2="63.7312126159668" y1="66.55609893798828" y2="66.68790435791016"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.7312126159668" x2="63.888858795166016" y1="66.68790435791016" y2="66.80481719970703"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.888858795166016" x2="64.05720520019531" y1="66.80481719970703" y2="66.90573120117188"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.05720520019531" x2="64.23463439941406" y1="66.90573120117188" y2="66.98963928222656"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.23463439941406" x2="64.41943359375" y1="66.98963928222656" y2="67.0557632446289"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.41943359375" x2="64.60981750488281" y1="67.0557632446289" y2="67.10345458984375"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.60981750488281" x2="64.80397033691406" y1="67.10345458984375" y2="67.13225555419922"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="64.80397033691406" x2="65.0" y1="67.13225555419922" y2="67.14188385009766"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.0" x2="65.19602966308594" y1="67.14188385009766" y2="67.13225555419922"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.19602966308594" x2="65.39018249511719" y1="67.13225555419922" y2="67.10345458984375"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.39018249511719" x2="65.58056640625" y1="67.10345458984375" y2="67.0557632446289"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.58056640625" x2="65.76536560058594" y1="67.0557632446289" y2="66.98963928222656"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.76536560058594" x2="65.94279479980469" y1="66.98963928222656" y2="66.90573120117188"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="65.94279479980469" x2="66.11113739013672" y1="66.90573120117188" y2="66.80481719970703"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.11113739013672" x2="66.26878356933594" y1="66.80481719970703" y2="66.68790435791016"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.26878356933594" x2="66.41421508789062" y1="66.68790435791016" y2="66.55609893798828"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.41421508789062" x2="66.5460205078125" y1="66.55609893798828" y2="66.4106674194336"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.5460205078125" x2="66.6629409790039" y1="66.4106674194336" y2="66.25302124023438"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.6629409790039" x2="66.76384735107422" y1="66.25302124023438" y2="66.08467864990234"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.76384735107422" x2="66.8477554321289" y1="66.08467864990234" y2="65.9072494506836"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.8477554321289" x2="66.91387939453125" y1="65.9072494506836" y2="65.72245788574219"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.91387939453125" x2="66.9615707397461" y1="65.72245788574219" y2="65.53206634521484"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.9615707397461" x2="66.99037170410156" y1="65.53206634521484" y2="65.3379135131836"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="66.99037170410156" x2="67.0" y1="65.3379135131836" y2="65.14188385009766"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="63.0" y1="65.14188385009766" y2="64.89188385009766"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="63.0" x2="67.0" y1="64.89188385009766" y2="64.89188385009766"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="67.0" y1="64.89188385009766" y2="65.14188385009766"/>
+  <line class="GlobalId-19JKJjFPv7pgb32L8At6o8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-toilet" x1="67.0" x2="63.0" y1="65.14188385009766" y2="65.14188385009766"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.19999694824219" x2="100.80000305175781" y1="62.64188766479492" y2="62.64188766479492"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.80000305175781" x2="100.80000305175781" y1="62.64188766479492" y2="60.241886138916016"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.80000305175781" x2="99.19999694824219" y1="60.241886138916016" y2="60.241886138916016"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.19999694824219" x2="99.19999694824219" y1="60.241886138916016" y2="62.64188766479492"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.26666259765625" x2="100.26154327392578" y1="61.04188537597656" y2="60.98986053466797"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.26154327392578" x2="100.24636840820312" y1="60.98986053466797" y2="60.93983459472656"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.24636840820312" x2="100.22172546386719" y1="60.93983459472656" y2="60.89373779296875"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.22172546386719" x2="100.18856048583984" y1="60.89373779296875" y2="60.85332489013672"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.18856048583984" x2="100.14815521240234" y1="60.85332489013672" y2="60.820159912109375"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.14815521240234" x2="100.10205078125" y1="60.820159912109375" y2="60.79551696777344"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.10205078125" x2="100.0520248413086" y1="60.79551696777344" y2="60.78034210205078"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0520248413086" x2="100.0" y1="60.78034210205078" y2="60.77521896362305"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0" x2="99.9479751586914" y1="60.77521896362305" y2="60.78034210205078"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.9479751586914" x2="99.89794921875" y1="60.78034210205078" y2="60.79551696777344"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.89794921875" x2="99.85184478759766" y1="60.79551696777344" y2="60.820159912109375"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.85184478759766" x2="99.81143951416016" y1="60.820159912109375" y2="60.85332489013672"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.81143951416016" x2="99.77827453613281" y1="60.85332489013672" y2="60.89373779296875"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.77827453613281" x2="99.75363159179688" y1="60.89373779296875" y2="60.93983459472656"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.75363159179688" x2="99.73845672607422" y1="60.93983459472656" y2="60.98986053466797"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.73845672607422" x2="99.73333740234375" y1="60.98986053466797" y2="61.04188537597656"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.73333740234375" x2="99.73845672607422" y1="61.04188537597656" y2="61.093910217285156"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.73845672607422" x2="99.75363159179688" y1="61.093910217285156" y2="61.1439323425293"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.75363159179688" x2="99.77827453613281" y1="61.1439323425293" y2="61.19003677368164"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.77827453613281" x2="99.81143951416016" y1="61.19003677368164" y2="61.23044967651367"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.81143951416016" x2="99.85184478759766" y1="61.23044967651367" y2="61.26361083984375"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.85184478759766" x2="99.89794921875" y1="61.26361083984375" y2="61.28825378417969"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.89794921875" x2="99.9479751586914" y1="61.28825378417969" y2="61.30342483520508"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="99.9479751586914" x2="100.0" y1="61.30342483520508" y2="61.30855178833008"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0" x2="100.0520248413086" y1="61.30855178833008" y2="61.30342483520508"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.0520248413086" x2="100.10205078125" y1="61.30342483520508" y2="61.28825378417969"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.10205078125" x2="100.14815521240234" y1="61.28825378417969" y2="61.26361083984375"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.14815521240234" x2="100.18856048583984" y1="61.26361083984375" y2="61.23044967651367"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.18856048583984" x2="100.22172546386719" y1="61.23044967651367" y2="61.19003677368164"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.22172546386719" x2="100.24636840820312" y1="61.19003677368164" y2="61.1439323425293"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.24636840820312" x2="100.26154327392578" y1="61.1439323425293" y2="61.093910217285156"/>
+  <line class="GlobalId-3wb6PH0gbClg_Lik_DS9hJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="100.26154327392578" x2="100.26666259765625" y1="61.093910217285156" y2="61.04188537597656"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.0" x2="107.01445007324219" y1="60.641883850097656" y2="60.83791732788086"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.01445007324219" x2="107.05764770507812" y1="60.83791732788086" y2="61.032066345214844"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.05764770507812" x2="107.12918090820312" y1="61.032066345214844" y2="61.22245788574219"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.12918090820312" x2="107.22836303710938" y1="61.22245788574219" y2="61.407249450683594"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.22836303710938" x2="107.35424041748047" y1="61.407249450683594" y2="61.584678649902344"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.35424041748047" x2="107.50558471679688" y1="61.584678649902344" y2="61.75302505493164"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.50558471679688" x2="107.68096923828125" y1="61.75302505493164" y2="61.91067123413086"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.68096923828125" x2="107.87867736816406" y1="61.91067123413086" y2="62.05609893798828"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="107.87867736816406" x2="108.09681701660156" y1="62.05609893798828" y2="62.187904357910156"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.09681701660156" x2="108.33329010009766" y1="62.187904357910156" y2="62.3048210144043"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.33329010009766" x2="108.58580780029297" y1="62.3048210144043" y2="62.405731201171875"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.58580780029297" x2="108.85194396972656" y1="62.405731201171875" y2="62.48964309692383"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="108.85194396972656" x2="109.12914276123047" y1="62.48964309692383" y2="62.55576705932617"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="109.12914276123047" x2="109.41473388671875" y1="62.55576705932617" y2="62.60345458984375"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="109.41473388671875" x2="109.70594787597656" y1="62.60345458984375" y2="62.63225555419922"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="109.70594787597656" x2="110.0" y1="62.63225555419922" y2="62.64188766479492"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.0" x2="110.29405212402344" y1="62.64188766479492" y2="62.63225555419922"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.29405212402344" x2="110.58526611328125" y1="62.63225555419922" y2="62.60345458984375"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.58526611328125" x2="110.87085723876953" y1="62.60345458984375" y2="62.55576705932617"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.87085723876953" x2="111.14805603027344" y1="62.55576705932617" y2="62.48964309692383"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.14805603027344" x2="111.41419219970703" y1="62.48964309692383" y2="62.405731201171875"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.41419219970703" x2="111.66670989990234" y1="62.405731201171875" y2="62.3048210144043"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.66670989990234" x2="111.90318298339844" y1="62.3048210144043" y2="62.187904357910156"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="111.90318298339844" x2="112.12132263183594" y1="62.187904357910156" y2="62.05609893798828"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.12132263183594" x2="112.31903076171875" y1="62.05609893798828" y2="61.91067123413086"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.31903076171875" x2="112.49441528320312" y1="61.91067123413086" y2="61.75302505493164"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.49441528320312" x2="112.64575958251953" y1="61.75302505493164" y2="61.584678649902344"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.64575958251953" x2="112.77163696289062" y1="61.584678649902344" y2="61.407249450683594"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.77163696289062" x2="112.87081909179688" y1="61.407249450683594" y2="61.22245788574219"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.87081909179688" x2="112.94235229492188" y1="61.22245788574219" y2="61.032066345214844"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.94235229492188" x2="112.98554992675781" y1="61.032066345214844" y2="60.83791732788086"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="112.98554992675781" x2="113.0" y1="60.83791732788086" y2="60.641883850097656"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="106.5" x2="113.5" y1="60.641883850097656" y2="60.641883850097656"/>
+  <line class="GlobalId-02CWurgB9Fbh$iIt6EcN44 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="110.0" x2="110.0" y1="62.64188766479492" y2="63.641883850097656"/>
+  <line class="GlobalId-3_t9HquTn7EfQi4dcxPgBo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="18.958120346069336" y2="18.958120346069336"/>
+  <line class="GlobalId-2PgCcUtjv8dO3HRmKBOOxD IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="65.0" x2="65.0" y1="69.99188232421875" y2="67.14188385009766"/>
+  <line class="GlobalId-1shf3Cszf3MeUmsvHgl38U IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="72.39188385009766" y2="72.39188385009766"/>
+  <line class="GlobalId-1CGoJDEhz3WPmPe1kfyXfF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="100.0" x2="100.0" y1="72.49188232421875" y2="62.64188766479492"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.20000076293945" x2="60.79999923706055" y1="62.64188766479492" y2="62.64188766479492"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.79999923706055" x2="60.79999923706055" y1="62.64188766479492" y2="60.241886138916016"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.79999923706055" x2="59.20000076293945" y1="60.241886138916016" y2="60.241886138916016"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.20000076293945" x2="59.20000076293945" y1="60.241886138916016" y2="62.64188766479492"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.266666412353516" x2="60.261539459228516" y1="61.04188537597656" y2="60.98986053466797"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.261539459228516" x2="60.246368408203125" y1="60.98986053466797" y2="60.93983459472656"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.246368408203125" x2="60.22172546386719" y1="60.93983459472656" y2="60.89373779296875"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.22172546386719" x2="60.188560485839844" y1="60.89373779296875" y2="60.85332489013672"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.188560485839844" x2="60.148155212402344" y1="60.85332489013672" y2="60.820159912109375"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.148155212402344" x2="60.102046966552734" y1="60.820159912109375" y2="60.79551696777344"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.102046966552734" x2="60.052024841308594" y1="60.79551696777344" y2="60.78034210205078"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.052024841308594" x2="60.0" y1="60.78034210205078" y2="60.77521896362305"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.0" x2="59.947975158691406" y1="60.77521896362305" y2="60.78034210205078"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.947975158691406" x2="59.897953033447266" y1="60.78034210205078" y2="60.79551696777344"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.897953033447266" x2="59.851844787597656" y1="60.79551696777344" y2="60.820159912109375"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.851844787597656" x2="59.811439514160156" y1="60.820159912109375" y2="60.85332489013672"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.811439514160156" x2="59.77827453613281" y1="60.85332489013672" y2="60.89373779296875"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.77827453613281" x2="59.753631591796875" y1="60.89373779296875" y2="60.93983459472656"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.753631591796875" x2="59.738460540771484" y1="60.93983459472656" y2="60.98986053466797"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.738460540771484" x2="59.733333587646484" y1="60.98986053466797" y2="61.04188537597656"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.733333587646484" x2="59.738460540771484" y1="61.04188537597656" y2="61.093910217285156"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.738460540771484" x2="59.753631591796875" y1="61.093910217285156" y2="61.1439323425293"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.753631591796875" x2="59.77827453613281" y1="61.1439323425293" y2="61.19003677368164"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.77827453613281" x2="59.811439514160156" y1="61.19003677368164" y2="61.23044967651367"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.811439514160156" x2="59.851844787597656" y1="61.23044967651367" y2="61.26361083984375"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.851844787597656" x2="59.897953033447266" y1="61.26361083984375" y2="61.28825378417969"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.897953033447266" x2="59.947975158691406" y1="61.28825378417969" y2="61.30342483520508"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="59.947975158691406" x2="60.0" y1="61.30342483520508" y2="61.30855178833008"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.0" x2="60.052024841308594" y1="61.30855178833008" y2="61.30342483520508"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.052024841308594" x2="60.102046966552734" y1="61.30342483520508" y2="61.28825378417969"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.102046966552734" x2="60.148155212402344" y1="61.28825378417969" y2="61.26361083984375"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.148155212402344" x2="60.188560485839844" y1="61.26361083984375" y2="61.23044967651367"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.188560485839844" x2="60.22172546386719" y1="61.23044967651367" y2="61.19003677368164"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.22172546386719" x2="60.246368408203125" y1="61.19003677368164" y2="61.1439323425293"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.246368408203125" x2="60.261539459228516" y1="61.1439323425293" y2="61.093910217285156"/>
+  <line class="GlobalId-21nRhgIG90C8mPnwyCRBVX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-washing_machine_connection" x1="60.261539459228516" x2="60.266666412353516" y1="61.093910217285156" y2="61.04188537597656"/>
+  <line class="GlobalId-19_N0vLIz3mw$GW5Z_5zcB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="102.79188537597656" y2="102.79188537597656"/>
+  <line class="GlobalId-3YHJKVPMjBt9AIUUy8RiDQ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="75.0" y1="99.44187927246094" y2="99.29188537597656"/>
+  <line class="GlobalId-3zJIX_Cq9DyRJRVcZODWj9 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="90.0" y1="103.79188537597656" y2="104.39187622070312"/>
+  <line class="GlobalId-3xvaC6xCb6UfVjxhXt7EBG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="65.0" y1="99.44187927246094" y2="99.29188537597656"/>
+  <line class="GlobalId-1n5srNk9n0kQ6$nyftPM3W IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="110.0" x2="110.0" y1="98.14187622070312" y2="103.79188537597656"/>
+  <line class="GlobalId-1neuKUMOfA8B3XZ$kdrHdf IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="53.0" x2="53.0" y1="63.641883850097656" y2="62.64188766479492"/>
+  <line class="GlobalId-3j2t0TgpL2OQaSlBOBbXId IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="105.5" x2="114.5" y1="98.14187622070312" y2="98.14187622070312"/>
+  <line class="GlobalId-3j2t0TgpL2OQaSlBOBbXId IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="114.5" x2="114.5" y1="98.14187622070312" y2="95.14189147949219"/>
+  <line class="GlobalId-3j2t0TgpL2OQaSlBOBbXId IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="114.5" x2="105.5" y1="95.14189147949219" y2="95.14189147949219"/>
+  <line class="GlobalId-3j2t0TgpL2OQaSlBOBbXId IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-shower" x1="105.5" x2="105.5" y1="95.14189147949219" y2="98.14187622070312"/>
+  <line class="GlobalId-3hhsQG4kbE79w3qfVpYPd3 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-roof_vent" x1="68.0" x2="72.0" y1="15.958118438720703" y2="15.958118438720703"/>
+  <line class="GlobalId-3hhsQG4kbE79w3qfVpYPd3 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-roof_vent" x1="72.0" x2="70.0" y1="15.958118438720703" y2="13.958120346069336"/>
+  <line class="GlobalId-3hhsQG4kbE79w3qfVpYPd3 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-roof_vent" x1="70.0" x2="68.0" y1="13.958120346069336" y2="15.958118438720703"/>
+  <line class="GlobalId-09D6TltTnBLODDUjWEezER IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="53.0" x2="53.0" y1="69.63188171386719" y2="63.641883850097656"/>
+  <line class="GlobalId-1VDavSVQn9JhGDzQ4PVblh IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="35.23651885986328" y2="35.23651885986328"/>
+  <line class="GlobalId-2IQ_XwA8T5SxjZsFpx8$3L IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="53.0" y1="70.14189147949219" y2="69.63188171386719"/>
+  <line class="GlobalId-3VRE7DqA99qglwJPqEitkw IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="70.0" x2="110.0" y1="73.39188385009766" y2="72.19188690185547"/>
+  <line class="GlobalId-0hKesYAH1BWxF$V$_Bh0cn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="60.0" x2="60.0" y1="69.84188842773438" y2="62.64188766479492"/>
+  <line class="GlobalId-2iRw3Z51vBrupxBoo1$THZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p1" x1="5.0" x2="135.0" y1="69.14188385009766" y2="69.14188385009766"/>
+  <line class="GlobalId-20Cu6IIfr8wO$EIieo$p_6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="110.0" x2="110.0" y1="72.19188690185547" y2="63.641883850097656"/>
+  <line class="GlobalId-2EGtt9AC5ATxuW2rxZuP_M IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-ffa500 drawing-line-width-0p3" x1="90.0" x2="90.0" y1="104.39187622070312" y2="130.04188537597656"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.0" x2="72.01445007324219" y1="89.94187927246094" y2="90.13792419433594"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.01445007324219" x2="72.0576400756836" y1="90.13792419433594" y2="90.33206939697266"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.0576400756836" x2="72.12918090820312" y1="90.33206939697266" y2="90.52245330810547"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.12918090820312" x2="72.22836303710938" y1="90.52245330810547" y2="90.7072525024414"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.22836303710938" x2="72.35423278808594" y1="90.7072525024414" y2="90.88467407226562"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.35423278808594" x2="72.5055923461914" y1="90.88467407226562" y2="91.05302429199219"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.5055923461914" x2="72.68096923828125" y1="91.05302429199219" y2="91.2106704711914"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.68096923828125" x2="72.87867736816406" y1="91.2106704711914" y2="91.35609436035156"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="72.87867736816406" x2="73.09681701660156" y1="91.35609436035156" y2="91.48789978027344"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.09681701660156" x2="73.33329010009766" y1="91.48789978027344" y2="91.60482788085938"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.33329010009766" x2="73.58580780029297" y1="91.60482788085938" y2="91.70571899414062"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.58580780029297" x2="73.85194396972656" y1="91.70571899414062" y2="91.78964233398438"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="73.85194396972656" x2="74.129150390625" y1="91.78964233398438" y2="91.85576629638672"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="74.129150390625" x2="74.41473388671875" y1="91.85576629638672" y2="91.90345764160156"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="74.41473388671875" x2="74.70594787597656" y1="91.90345764160156" y2="91.93225860595703"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="74.70594787597656" x2="75.0" y1="91.93225860595703" y2="91.94189453125"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.0" x2="75.29405212402344" y1="91.94189453125" y2="91.93225860595703"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.29405212402344" x2="75.58526611328125" y1="91.93225860595703" y2="91.90345764160156"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.58526611328125" x2="75.870849609375" y1="91.90345764160156" y2="91.85576629638672"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.870849609375" x2="76.14805603027344" y1="91.85576629638672" y2="91.78964233398438"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.14805603027344" x2="76.41419219970703" y1="91.78964233398438" y2="91.70571899414062"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.41419219970703" x2="76.66670989990234" y1="91.70571899414062" y2="91.60482788085938"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.66670989990234" x2="76.90318298339844" y1="91.60482788085938" y2="91.48789978027344"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="76.90318298339844" x2="77.12132263183594" y1="91.48789978027344" y2="91.35609436035156"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.12132263183594" x2="77.31903076171875" y1="91.35609436035156" y2="91.2106704711914"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.31903076171875" x2="77.4944076538086" y1="91.2106704711914" y2="91.05302429199219"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.4944076538086" x2="77.64576721191406" y1="91.05302429199219" y2="90.88467407226562"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.64576721191406" x2="77.77163696289062" y1="90.88467407226562" y2="90.7072525024414"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.77163696289062" x2="77.87081909179688" y1="90.7072525024414" y2="90.52245330810547"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.87081909179688" x2="77.9423599243164" y1="90.52245330810547" y2="90.33206939697266"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.9423599243164" x2="77.98554992675781" y1="90.33206939697266" y2="90.13792419433594"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="77.98554992675781" x2="78.0" y1="90.13792419433594" y2="89.94187927246094"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="71.5" x2="78.5" y1="89.94187927246094" y2="89.94187927246094"/>
+  <line class="GlobalId-2xeaa016P5ZQQyDxF5Dd_7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 sanitary-symbol sanitary-basin" x1="75.0" x2="75.0" y1="91.94189453125" y2="92.94188690185547"/>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 96.44187927246094) rotate(-0.0)">
+    <tspan class="GlobalId-25b9MQkSbCeQGgeWdrPqkL IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Přízemí 0 mm</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 17.1087646484375) rotate(-0.0)">
-    <tspan class="GlobalId-2WPape_Lr4yvOQTrwRbh_T IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Střecha 7918 mm</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 16.95812225341797) rotate(-0.0)">
+    <tspan class="GlobalId-3sNf4MjrLFVguhldnQ19FT IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Střecha 7948 mm</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(94.5, 117.29124450683594) rotate(-0.0)">
-    <tspan class="GlobalId-1FkOFX_SX6sREv2EgSyUZN IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN160</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 74.64188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-0QW9HRoxD12R0euSsQwNMW IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(94.5, 117.29124450683594) rotate(-0.0)">
-    <tspan class="GlobalId-1FkOFX_SX6sREv2EgSyUZN IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN160</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 74.64188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-0QW9HRoxD12R0euSsQwNMW IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 11.108760833740234) rotate(-0.0)">
-    <tspan class="GlobalId-29pFe0elf0pvFqTn4Vnurt IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Odvětrání</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 66.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-3jDFb09vr3zxpCHjqN0cxm IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 65.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-1i7l8B5Qv8LfNkWwU70C0S IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 66.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-3jDFb09vr3zxpCHjqN0cxm IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 65.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-1i7l8B5Qv8LfNkWwU70C0S IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(100.0, 57.24188995361328) rotate(-0.0)">
+    <tspan class="GlobalId-3vOgVLV6LEB8LwoRVq4Yu9 IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Pračka</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(49.5, 65.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-0i3M4kDDz3NviGR9vqcd7X IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(70.0, 10.958118438720703) rotate(-0.0)">
+    <tspan class="GlobalId-0kSh9BusbAt9fUosLAKyEJ IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Odvětrání</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(49.5, 65.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-0i3M4kDDz3NviGR9vqcd7X IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(57.5, 68.64188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-0ufHoJs6z6Zfef6o2o6MtY IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(57.5, 68.4912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-3h05D_CRb5UwYfA$DxCEi8 IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(57.5, 68.64188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-0ufHoJs6z6Zfef6o2o6MtY IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(57.5, 68.4912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-3h05D_CRb5UwYfA$DxCEi8 IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(110.0, 57.64188766479492) rotate(-0.0)">
+    <tspan class="GlobalId-0JYJcCqIrCOOGJZecw_xeF IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Umyvadlo</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(61.0, 100.29122924804688) rotate(-0.0)">
-    <tspan class="GlobalId-0a7vB99XX1v9e6oZThuTms IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(78.5, 95.44188690185547) rotate(-0.0)">
+    <tspan class="GlobalId-3XRO1$l_187xYusW5SpOVc IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(61.0, 100.29122924804688) rotate(-0.0)">
-    <tspan class="GlobalId-0a7vB99XX1v9e6oZThuTms IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(78.5, 95.44188690185547) rotate(-0.0)">
+    <tspan class="GlobalId-3XRO1$l_187xYusW5SpOVc IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(50.5, 57.491233825683594) rotate(-0.0)">
-    <tspan class="GlobalId-1jZp9$pgT1vx6W7XxF7wbU IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Dřez</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 61.891883850097656) rotate(-0.0)">
+    <tspan class="GlobalId-0iOYa_SrD918CZeqV7Szhm IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">WC</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(75.0, 86.7912368774414) rotate(-0.0)">
-    <tspan class="GlobalId-2Biz4Ec8j9PO6lb7FQykWA IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Umyvadlo</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(64.5, 57.24188995361328) rotate(-0.0)">
+    <tspan class="GlobalId-1XI2Q3hJbFNvX3PJn7tNOy IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000" dy="0em" x="0" y="0">Myčka</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 100.29122924804688) rotate(-0.0)">
-    <tspan class="GlobalId-3vq4iAZ6HE6wP0kYU6gahV IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(75.0, 86.94187927246094) rotate(-0.0)">
+    <tspan class="GlobalId-0_tZ0FfEHBM8Tik9fi_Sia IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Umyvadlo</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 100.29122924804688) rotate(-0.0)">
-    <tspan class="GlobalId-3vq4iAZ6HE6wP0kYU6gahV IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 100.44188690185547) rotate(-0.0)">
+    <tspan class="GlobalId-2koGZuHlfBsRkuhXuRXAu9 IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 122.8912353515625) rotate(-0.0)">
-    <tspan class="GlobalId-0evBYLoJHAP88kp_SjuNsF IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Suterén -2660 mm</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(106.5, 100.44188690185547) rotate(-0.0)">
+    <tspan class="GlobalId-2koGZuHlfBsRkuhXuRXAu9 IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 66.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-1BNbMlehn3JAIAUVXOSEBx IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Podkroví 2930 mm</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(100.0, 106.89187622070312) rotate(-0.0)">
+    <tspan class="GlobalId-32vnXyl5n1Qvh67SnjiuHc IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(64.0, 85.2662353515625) rotate(-0.0)">
-    <tspan class="GlobalId-2BkaP$Y8nCsumFbjuOR$OU IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">DN100</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(100.0, 106.89187622070312) rotate(-0.0)">
+    <tspan class="GlobalId-32vnXyl5n1Qvh67SnjiuHc IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(96.5, 65.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-2WwqilUNz0yAlize5QmTDv IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(94.5, 117.21688079833984) rotate(-0.0)">
+    <tspan class="GlobalId-2k$rplOw5BKxeUWi3h09QB IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN160</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(96.5, 65.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-2WwqilUNz0yAlize5QmTDv IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(94.5, 117.21688079833984) rotate(-0.0)">
+    <tspan class="GlobalId-2k$rplOw5BKxeUWi3h09QB IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN160</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(100.0, 107.19123840332031) rotate(-0.0)">
-    <tspan class="GlobalId-38Ig0$oznAPftIkO2Hx7Hw IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 67.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-2eNwUJAn1ED9BB1c4XnQpE IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Podkroví 2930 mm</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(100.0, 107.19123840332031) rotate(-0.0)">
-    <tspan class="GlobalId-38Ig0$oznAPftIkO2Hx7Hw IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(64.0, 85.41688537597656) rotate(-0.0)">
+    <tspan class="GlobalId-22dA2E3mnBLeXl6Mo5$m8j IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">DN100</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(100.0, 57.09123611450195) rotate(-0.0)">
-    <tspan class="GlobalId-3vi7UaUE94y88xcXYXRAZO IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Pračka</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(96.5, 66.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-0wl_e4kQn75BL8g9RMwreK IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(110.0, 57.491233825683594) rotate(-0.0)">
-    <tspan class="GlobalId-3TuWyczy5CghU6lICRZ2rA IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Umyvadlo</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(96.5, 66.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-0wl_e4kQn75BL8g9RMwreK IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 74.4912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-1Cl_Y8PMT6mv3wkvMDwpRx IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 91.19187927246094) rotate(-0.0)">
+    <tspan class="GlobalId-2QIlPxNjDC7P$59s3XE3XX IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">WC</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 74.4912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-1Cl_Y8PMT6mv3wkvMDwpRx IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(61.0, 100.44188690185547) rotate(-0.0)">
+    <tspan class="GlobalId-13x0ImRmH4zfd2WxgLs_IQ IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(110.0, 91.9912338256836) rotate(-0.0)">
-    <tspan class="GlobalId-3yo5W_VnD0Tg3fLJC2visF IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Sprcha</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(61.0, 100.44188690185547) rotate(-0.0)">
+    <tspan class="GlobalId-13x0ImRmH4zfd2WxgLs_IQ IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 91.04124450683594) rotate(-0.0)">
-    <tspan class="GlobalId-3hheP_Tq16V9vpD_gZOupw IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">WC</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(49.5, 66.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-3iJcZLxAH31f4wjCtdF6H$ IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(78.5, 95.29122924804688) rotate(-0.0)">
-    <tspan class="GlobalId-3EMaXZq9P0VRsWJW8Y9xVU IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(49.5, 66.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-3iJcZLxAH31f4wjCtdF6H$ IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(78.5, 95.29122924804688) rotate(-0.0)">
-    <tspan class="GlobalId-3EMaXZq9P0VRsWJW8Y9xVU IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN50</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(110.0, 92.14188385009766) rotate(-0.0)">
+    <tspan class="GlobalId-3zPZSB2FzDehANsA8jl7D1 IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Sprcha</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(65.0, 61.74123764038086) rotate(-0.0)">
-    <tspan class="GlobalId-2lc4oi2hz0ivaoaNWM07LW IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">WC</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(50.5, 57.64188766479492) rotate(-0.0)">
+    <tspan class="GlobalId-0y6yVM71X3e9wL_t4C1smY IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Dřez</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(64.5, 57.09123611450195) rotate(-0.0)">
-    <tspan class="GlobalId-3ZyujdUKHBU9LZqjkoeZnz IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000" dy="0em" x="0" y="0">Myčka</tspan>
+  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(80.0, 106.89187622070312) rotate(-0.0)">
+    <tspan class="GlobalId-3ojurBTrf7POVzJD16I3XB IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
   </text>
-  <text dominant-baseline="middle" filter="url(#fill-background)" style="font-size: 0;" text-anchor="middle" transform="translate(80.0, 107.19123840332031) rotate(-0.0)">
-    <tspan class="GlobalId-2if1KmaGT4FR38NlIVwA1d IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(80.0, 106.89187622070312) rotate(-0.0)">
+    <tspan class="GlobalId-3ojurBTrf7POVzJD16I3XB IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
   </text>
-  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(80.0, 107.19123840332031) rotate(-0.0)">
-    <tspan class="GlobalId-2if1KmaGT4FR38NlIVwA1d IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p2 drawing-text-color-000000 fill-bg" dy="0em" x="0" y="0">DN100</tspan>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="start" transform="translate(5.0, 123.04188537597656) rotate(-0.0)">
+    <tspan class="GlobalId-1zYXLr3_TEw8TGBqZuFxie IfcAnnotation PredefinedType-TEXT drawing-text drawing-text-size-2p5 drawing-text-color-000000" dy="0em" x="0" y="0">Suterén -2660 mm</tspan>
   </text>
 </g></svg>
