@@ -4798,6 +4798,7 @@ def _postprocess_dimension_labels(svg_path: Path) -> None:
             return match.group(0)
         midpoint_x = (start_x + end_x) / 2
         midpoint_y = (start_y + end_y) / 2
+        center_label = "dimension-label-outside" not in attributes.get("class", "").split()
         def center_text(text: re.Match[str]) -> str:
             if not re.search(r'\bclass="[^"]*\bDIMENSION\b', text[0]):
                 return text[0]
@@ -4806,7 +4807,11 @@ def _postprocess_dimension_labels(svg_path: Path) -> None:
                 nonlocal changed
                 x, y = float(position["x"]), float(position["y"])
                 along = ((x - midpoint_x) * delta_x + (y - midpoint_y) * delta_y) / squared_length
-                centered_x, centered_y = x - along * delta_x, y - along * delta_y
+                anchor_x, anchor_y = midpoint_x, midpoint_y
+                if not center_label:
+                    anchor_x += along * delta_x
+                    anchor_y += along * delta_y
+                centered_x, centered_y = (x-along*delta_x, y-along*delta_y) if center_label else (x, y)
                 rotation = position["rotation"] or ""
                 angle = float(position["angle"]) if position["angle"] else None
                 if angle is not None:
@@ -4825,11 +4830,11 @@ def _postprocess_dimension_labels(svg_path: Path) -> None:
                         # Rotating the glyphs alone leaves width below the line
                         # and Description above it. Reverse their normal offsets
                         # too: width above (left for vertical), height below/right.
-                        centered_x = 2 * midpoint_x - centered_x
-                        centered_y = 2 * midpoint_y - centered_y
+                        centered_x = 2 * anchor_x - centered_x
+                        centered_y = 2 * anchor_y - centered_y
                     if angle != readable_angle:
                         rotation = f" rotate({readable_angle:.12g})"
-                if abs(along) <= 1e-12 and rotation == (position["rotation"] or ""):
+                if (not center_label or abs(along) <= 1e-12) and rotation == (position["rotation"] or ""):
                     return position[0]
                 changed = True
                 return (f'{position["prefix"]}{centered_x:.12g}, '
@@ -4840,8 +4845,8 @@ def _postprocess_dimension_labels(svg_path: Path) -> None:
                 rf'(?P<rotation>\s+rotate\((?P<angle>{_SVG_NUMBER})\))?',
                 center_position, text[0])
 
-        # Bonsai places short dimensions' labels beyond the endpoint. Centre
-        # both the measured value and optional Description below the line.
+        # Centre values and descriptions by default. A caller can retain
+        # Bonsai's outside placement for a short dimension in a tight chain.
         return match["line"] + re.sub(r'<text\b[^>]*>[\s\S]*?</text>', center_text, match["labels"])
 
     svg = _DIMENSION_LABEL.sub(center_dimension_label, svg)
@@ -12110,6 +12115,7 @@ class Drawing:
         *,
         offset: Number = 0,
         highlight: bool = False,
+        center_label: bool = True,
         name: str | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add one linear dimension scoped only to this drawing.
@@ -12124,6 +12130,8 @@ class Drawing:
         the dimension line at 1:100.
         ``highlight=True`` adds a white background behind the dimension text
         to keep it readable over overlapping geometry.
+        ``center_label=False`` retains Bonsai's placement beyond the endpoint
+        for short dimensions, useful in chains with closely spaced labels.
         The caller's source location and original inputs are saved on the
         annotation for the dimension index produced by render().
         """
@@ -12132,6 +12140,8 @@ class Drawing:
         offset = _number(offset, "offset")
         if not isinstance(highlight, bool):
             raise TypeError("highlight must be a boolean")
+        if not isinstance(center_label, bool):
+            raise TypeError("center_label must be a boolean")
         delta_x = end_x - start_x
         delta_y = end_y - start_y
         length = hypot(delta_x, delta_y)
@@ -12227,9 +12237,14 @@ class Drawing:
             product=dimension,
             name="BBIM_Dimension",
         )
+        classes = []
         if highlight:
+            classes.append("fill-bg")
+        if not center_label:
+            classes.append("dimension-label-outside")
+        if classes:
             appearance = ifcopenshell.api.pset.add_pset(model, product=dimension, name="EPset_Annotation")
-            ifcopenshell.api.pset.edit_pset(model, pset=appearance, properties={"Classes": "fill-bg"})
+            ifcopenshell.api.pset.edit_pset(model, pset=appearance, properties={"Classes": " ".join(classes)})
         unit_choices = (
             "Feet and Inches - Fractional",
             "Feet - Decimal",

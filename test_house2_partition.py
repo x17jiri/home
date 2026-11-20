@@ -32,28 +32,29 @@ class GardenPartitionTests(unittest.TestCase):
         vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
         return vertices.min(axis=0), vertices.max(axis=0)
 
-    def test_garden_room_wall_is_centred_300mm_load_bearing_ytong(self):
+    def test_garden_room_wall_is_centred_240mm_load_bearing_vpc(self):
         v = self.v
         wall = v["wall_garden_partition_g"]
         lo, hi = self.bounds(wall)
-        self.assertAlmostEqual(hi[0]-lo[0], .30)
+        self.assertAlmostEqual(hi[0]-lo[0], .24)
         self.assertAlmostEqual((hi[0]+lo[0])/2, v["HOUSE_WIDTH"]/2)
         self.assertTrue(ifcopenshell.util.element.get_pset(wall, "Pset_WallCommon", "LoadBearing"))
         material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
         self.assertEqual([layer.Material.Name for layer in material.MaterialLayers],
-                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Ytong Klasik"])
-        self.assertIn("load bearing wall - Ytong Klasik 300 mm", ifcopenshell.util.element.get_type(wall).Name)
+                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "VPC Cihla 240 mm (10-1,4)"])
+        self.assertIn("load bearing wall - VPC Cihla 240 mm (10-1,4)", ifcopenshell.util.element.get_type(wall).Name)
+        self.assertEqual(wall.Description, "VPC Cihla 240 mm (10-1,4)")
         room1 = Polygon(v["pokoj1"].outline)
         room2 = Polygon(v["pokoj2"].outline)
         self.assertAlmostEqual(room1.bounds[2], lo[0])
         self.assertAlmostEqual(room2.bounds[0], hi[0])
         self.assertAlmostEqual(room1.area, room2.area)
 
-    def test_garden_dividers_are_aligned_300mm_ytong_on_both_floors(self):
+    def test_garden_dividers_use_centred_240mm_vpc_on_both_floors(self):
         v = self.v
         for wall, thickness, expected_material in (
             (v["wall_back_g"], .24, "Brick"),
-            (v["wall_back_u"], .24, "Liapor KM 240 AKU"),
+            (v["wall_back_u"], .24, v["UPPER_EXTERIOR_WALL_MATERIAL"]),
         ):
             lo, hi = self.bounds(wall)
             self.assertAlmostEqual(hi[1]-lo[1], thickness)
@@ -62,24 +63,38 @@ class GardenPartitionTests(unittest.TestCase):
             self.assertEqual(material.MaterialLayers[-1].Material.Name, expected_material)
         wall = v["wall_garden_rooms_g"]
         lo, hi = self.bounds(wall)
-        self.assertAlmostEqual(hi[1]-lo[1], .30)
+        self.assertAlmostEqual(hi[1]-lo[1], .24)
         basement_lo, basement_hi = self.bounds(v["wall_basement_garden_rooms"])
         self.assertAlmostEqual((lo[1]+hi[1])/2, (basement_lo[1]+basement_hi[1])/2)
         material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
         self.assertEqual([layer.Material.Name for layer in material.MaterialLayers],
-                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Ytong Klasik"])
+                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "VPC Cihla 240 mm (10-1,4)"])
+        self.assertEqual(wall.Description, "VPC Cihla 240 mm (10-1,4)")
+        ring = next(beam for beam in v["ground_ring_beams"] if beam.source_wall == wall)
+        ring_lo, ring_hi = self.bounds(ring)
+        self.assertAlmostEqual(ring_hi[1]-ring_lo[1], .24)
+        self.assertAlmostEqual((ring_hi[1]+ring_lo[1])/2, v["GARDEN_ROOMS_WALL_CENTER_Y"])
         upper_wall = v["wall_living_room_back_u"]
         upper_lo, upper_hi = self.bounds(upper_wall)
-        self.assertAlmostEqual(upper_hi[1]-upper_lo[1], .30)
+        self.assertAlmostEqual(upper_hi[1]-upper_lo[1], .24)
         self.assertAlmostEqual((upper_lo[1]+upper_hi[1])/2, (lo[1]+hi[1])/2)
         self.assertAlmostEqual((lo[1]+hi[1])/2, v["GARDEN_ROOMS_WALL_CENTER_Y"])
         upper_material = ifcopenshell.util.element.get_material(upper_wall, should_skip_usage=True)
-        self.assertEqual([layer.Material.Name for layer in upper_material.MaterialLayers], ["Ytong Klasik"])
-        self.assertIn("Ytong Klasik 300 mm", ifcopenshell.util.element.get_type(upper_wall).Name)
+        self.assertEqual([layer.Material.Name for layer in upper_material.MaterialLayers],
+                         ["VPC Cihla 240 mm (10-1,4)"])
+        self.assertIn("VPC Cihla 240 mm (10-1,4)", ifcopenshell.util.element.get_type(upper_wall).Name)
+        self.assertEqual(upper_wall.Description, "VPC Cihla 240 mm (10-1,4)")
         for room in (v["pokoj1"], v["pokoj2"]):
             bounds = Polygon(room.outline).bounds
             self.assertAlmostEqual(bounds[1], hi[1])
             self.assertAlmostEqual(bounds[3], v["HOUSE_DEPTH"]-.24)
+
+    def test_room3_door_opening_is_50mm_from_the_garden_room_wall(self):
+        opening = self.v["pokoj3_door"].FillsVoids[0].RelatingOpeningElement
+        lo, hi = self.bounds(opening)
+        wall_lo, _ = self.bounds(self.v["wall_garden_rooms_g"])
+        self.assertAlmostEqual(wall_lo[1]-hi[1], .05)
+        self.assertAlmostEqual(hi[1]-lo[1], self.v["ROOM_DOOR_OPENING_WIDTH"])
 
     def test_ground_mid_walls_are_300mm_ytong_on_the_original_centrelines(self):
         v = self.v
@@ -253,7 +268,7 @@ class GardenPartitionTests(unittest.TestCase):
         rings = [beam for beam in v["ground_ring_beams"] if beam.source_wall == wall]
         self.assertEqual(len(rings), 1)
         lo, hi = self.bounds(rings[0])
-        self.assertAlmostEqual(hi[0]-lo[0], .30)
+        self.assertAlmostEqual(hi[0]-lo[0], .24)
         self.assertAlmostEqual((hi[0]+lo[0])/2, v["HOUSE_WIDTH"]/2)
         self.assertAlmostEqual(lo[1], wall.start[1])
         self.assertAlmostEqual(hi[1], wall.end[1])
@@ -262,13 +277,13 @@ class GardenPartitionTests(unittest.TestCase):
         self.assertTrue(any(beam.source_wall == basement_host for beam in v["basement_ring_beams"]))
         self.assertTrue(ifcopenshell.util.element.get_pset(basement_host, "Pset_WallCommon", "LoadBearing"))
 
-    def test_basement_support_uses_250mm_type_and_keeps_its_endpoints(self):
+    def test_basement_support_uses_300mm_type_and_keeps_its_endpoints(self):
         v = self.v
         wall = v["wall_basement_s01_s02"]
         np.testing.assert_allclose(wall.start, (v["HOUSE_WIDTH"]/2, v["GARDEN_ROOMS_WALL_CENTER_Y"]+v["INNER_BWT"]/2))
         np.testing.assert_allclose(wall.end, (v["HOUSE_WIDTH"]/2, v["HOUSE_DEPTH"]-v["BWT"]))
         lo, hi = self.bounds(wall)
-        self.assertAlmostEqual(hi[0]-lo[0], .25)
+        self.assertAlmostEqual(hi[0]-lo[0], .30)
         self.assertAlmostEqual(lo[2], v["BASEMENT_FLOOR_START"])
         self.assertAlmostEqual(hi[2], v["BASEMENT_WALL_TOP_Z"])
 
@@ -336,7 +351,7 @@ class GardenPartitionTests(unittest.TestCase):
         for key in ("wall_basement_front", "wall_front_g", "wall_front_u"):
             lo, hi = self.bounds(v[key])
             self.assertAlmostEqual((lo[1]+hi[1])/2, v["BWT"]/2)
-        self.assertAlmostEqual(v["wall_basement_front"].thickness, .25)
+        self.assertAlmostEqual(v["wall_basement_front"].thickness, .30)
         properties = ifcopenshell.util.element.get_pset(v["front_footing"], "BBIM_StripFooting")
         self.assertEqual(properties["SourceWall"], v["wall_basement_front"].GlobalId)
         self.assertAlmostEqual(properties["Width"], .8)
@@ -382,6 +397,28 @@ class GardenPartitionTests(unittest.TestCase):
                 transverse = v["front_footing"] if y < front_hi[1] else back_footing
                 self.assertTrue(v["strip_footing_footprint"](transverse).covers(corner))
 
+    def test_footing_heights_extend_down_from_the_base_plate_and_lowered_top(self):
+        v = self.v
+        for footing in v["foundation_footings"]:
+            data = ifcopenshell.util.element.get_pset(footing, "BBIM_StripFooting")
+            wall = v["house"].model.by_guid(data["SourceWall"])
+            lo, hi = self.bounds(footing)
+            expected_top = v["BASEMENT_SLAB_BOTTOM_Z"]
+            if wall == v["wall_basement_front"]:
+                expected_top -= v["FOUNDATION_STREET_STEP_DROP"]
+            self.assertAlmostEqual(hi[2], expected_top)
+            self.assertLessEqual(hi[2], v["BASEMENT_SLAB_BOTTOM_Z"]+1e-9)
+            width, height = v["foundation_footing_dimensions"][wall]
+            self.assertAlmostEqual(data["Width"], width)
+            self.assertAlmostEqual(data["Height"], height)
+            footprint = v["strip_footing_footprint"](footing)
+            is_lowered = footprint.bounds[1] < v["FOUNDATION_STREET_STEP_Y"]
+            expected_bottom = v["BASEMENT_SLAB_BOTTOM_Z"]-height
+            if is_lowered:
+                expected_bottom -= v["FOUNDATION_STREET_STEP_DROP"]
+            self.assertAlmostEqual(lo[2], expected_bottom)
+            self.assertAlmostEqual(data["MinimumBottomZ"], expected_bottom)
+
     def test_formwork_fills_all_five_street_step_gaps_below_the_base_plate(self):
         v = self.v
         sources = (v["wall_basement_front"], v["wall_basement_east"], v["wall_basement_west"],
@@ -405,7 +442,7 @@ class GardenPartitionTests(unittest.TestCase):
             lo, hi = self.bounds(wall)
             self.assertAlmostEqual(lo[2], v["front_footing_top_z"])
             self.assertAlmostEqual(hi[2], v["BASEMENT_SLAB_BOTTOM_Z"])
-            self.assertAlmostEqual(hi[2]-lo[2], .5)
+            self.assertAlmostEqual(hi[2]-lo[2], v["FOUNDATION_STREET_STEP_DROP"])
             self.assertTrue(ifcopenshell.util.element.get_pset(wall, "Pset_WallCommon", "LoadBearing"))
             if wall != v["foundation_front_wall"]:
                 self.assertAlmostEqual(lo[1], v["front_foundation_inside_y"])
@@ -417,19 +454,15 @@ class GardenPartitionTests(unittest.TestCase):
             actual = actual.union(footprint)
         self.assertLess(actual.symmetric_difference(expected).area, 1e-9)
 
-    def test_basement_walls_use_300mm_type_except_front_and_garden_dividers(self):
+    def test_all_basement_and_under_slab_walls_use_the_300mm_type(self):
         v = self.v
-        sources_300 = {v["wall_east_g"], v["wall_west_g"], v["wall_back_g"],
-                       v["wall_third_room_g"], v["wall_stairway_g"]}
         self.assertEqual(len(v["basement_rooms"]), 5)
         for wall in v["basement_walls"]:
-            thick = wall.source_wall in sources_300
-            expected_type = v["basement_wall_type"] if thick else v["basement_thin_wall_type"]
-            self.assertEqual(ifcopenshell.util.element.get_type(wall), expected_type)
-            self.assertAlmostEqual(wall.thickness, .30 if thick else .25)
+            self.assertEqual(ifcopenshell.util.element.get_type(wall), v["basement_wall_type"])
+            self.assertAlmostEqual(wall.thickness, .30)
             material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
             self.assertEqual(material.MaterialLayers[0].Material.Name,
-                             "ztracene bedneni" if thick else "ztracene bedneni 250")
+                             "ztracene bedneni")
             tangent = (np.asarray(wall.source_wall.end)-wall.source_wall.start)/wall.source_wall.length
             normal = np.array((-tangent[1], tangent[0]))
             old_centre = np.asarray(wall.source_wall.start)+normal*(wall.source_wall.body_offset+wall.source_wall.thickness/2)
@@ -437,6 +470,9 @@ class GardenPartitionTests(unittest.TestCase):
             expected_offset = ((v["BWT"]-v["BACK_WALL_THICKNESS"])/2
                                if wall.source_wall in (v["wall_front_g"], v["wall_back_g"]) else 0)
             self.assertAlmostEqual(float((new_centre-old_centre)@normal), expected_offset)
+        for wall in v["foundation_walls_below_base_plate"]:
+            self.assertEqual(ifcopenshell.util.element.get_type(wall), v["basement_wall_type"])
+            self.assertAlmostEqual(wall.thickness, .30)
 
     def test_basement_beam_grid_uses_configured_distance_from_garden_wall_centre(self):
         v = self.v
@@ -456,12 +492,14 @@ class GardenPartitionTests(unittest.TestCase):
         chimney_lo, _ = self.bounds(v["chimney"])
         self.assertGreaterEqual(chimney_lo[1]-first_hi[1], 0)
 
-    def test_chimney_has_70mm_clearance_from_250mm_wall_using_centreline_offset(self):
+    def test_chimney_clearance_follows_the_300mm_wall_and_configured_setout(self):
         v = self.v
         wall_lo, wall_hi = self.bounds(v["wall_basement_garden_rooms"])
         _, chimney_hi = self.bounds(v["chimney"])
-        self.assertAlmostEqual((wall_lo[1]+wall_hi[1])/2-chimney_hi[1], .125+.07)
-        self.assertAlmostEqual(wall_lo[1]-chimney_hi[1], .07)
+        offset = v["CHIMNEY_BASEMENT_WALL_CENTER_OFFSET"]
+        self.assertAlmostEqual((wall_lo[1]+wall_hi[1])/2-chimney_hi[1], offset)
+        self.assertAlmostEqual(wall_lo[1]-chimney_hi[1], offset-.15)
+        self.assertGreaterEqual(wall_lo[1]-chimney_hi[1]+1e-9, v["CHIMNEY_CEILING_INFILL_CLEARANCE"])
 
     def test_basement_room3_and_room5_internal_bearings_are_125mm(self):
         v = self.v

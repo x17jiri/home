@@ -1981,6 +1981,18 @@ class DimensionHighlightTests(unittest.TestCase):
             dimension = next(o for o in reopened.by_type("IfcAnnotation") if o.Name == drawing.name+" on")
             self.assertEqual(ifcopenshell.util.element.get_pset(dimension, "EPset_Annotation", "Classes"), "fill-bg")
 
+    def test_outside_label_option_combines_with_highlight_and_rejects_invalid_values(self):
+        before = set(self.house.model.by_type("IfcAnnotation"))
+        for value in (None, "yes", 0, 1):
+            with self.assertRaisesRegex(TypeError, "center_label must be a boolean"):
+                self.section.add_dimension((0, 0), (0, .15), center_label=value)
+            self.assertEqual(set(self.house.model.by_type("IfcAnnotation")), before)
+        dimension = self.section.add_dimension((0, 0), (0, .15), center_label=False, highlight=True)
+        reopened = ifcopenshell.file.from_string(self.house.model.to_string())
+        self.assertEqual(ifcopenshell.util.element.get_pset(
+            reopened.by_guid(dimension.GlobalId), "EPset_Annotation", "Classes",
+        ), "fill-bg dimension-label-outside")
+
     def test_invalid_highlight_does_not_create_annotations(self):
         before = set(self.house.model.by_type("IfcAnnotation"))
         for value in (None, "yes", 0, 1):
@@ -1999,6 +2011,22 @@ class DimensionHighlightTests(unittest.TestCase):
 
 
 class DimensionOverlayTests(unittest.TestCase):
+    def test_outside_label_stays_beyond_endpoint_and_other_labels_are_centred(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/"section.svg"
+            path.write_text('''<svg>
+<line class="IfcAnnotation PredefinedType-DIMENSION dimension-label-outside" x1="10" x2="10" y1="10" y2="8.5"/>
+<text transform="translate(9, 5.5) rotate(-90)"><tspan class="DIMENSION">150</tspan></text>
+<line class="IfcAnnotation PredefinedType-DIMENSION" x1="10" x2="10" y1="15" y2="10"/>
+<text transform="translate(9, 7) rotate(-90)"><tspan class="DIMENSION">500</tspan></text>
+</svg>''', encoding="utf-8")
+            _postprocess_dimension_overlays(path)
+            result = path.read_text(encoding="utf-8")
+            self.assertIn('translate(9, 5.5) rotate(-90)', result)
+            self.assertIn('translate(9, 12.5) rotate(-90)', result)
+            _postprocess_dimension_overlays(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), result)
+
     def test_reversed_dimensions_keep_text_upright_and_width_before_height(self):
         cases = (
             ("left", (10, 10, 0, 10), "180.000005", (13, 11), (13, 9),
@@ -15079,7 +15107,7 @@ class HouseTests(unittest.TestCase):
             '<pattern id="drywall-diagonal1"', maxsplit=1
         )[1].split("</pattern>", maxsplit=1)[0]
         self.assertIn('fill="white"', diagonal)
-        self.assertIn('fill="#dfefcf"', drywall_diagonal)
+        self.assertIn('fill="#fff2cc"', drywall_diagonal)
         self.assertIn(
             '<line x1="0" y1="0" x2="0" y2="1" '
             'style="stroke:black; stroke-width:0.25" />',

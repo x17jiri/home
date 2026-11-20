@@ -300,16 +300,22 @@ def strip_footing_footprint(footer):
     ])
 
 
-def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeightMap):
+def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeightMap,
+                       reference_height: float | None = None):
     """Apply stepped tops and 1:1 undersides to existing strip footings only.
 
     Retain each footing's full XY footprint, material and source wall. Unlike
     ``build_foundations``, this does not create or extend foundation walls.
     One footing can contain several height bands, without adding end returns
     at the steps. ``Footprint`` metadata records the global XY outline.
+    With ``reference_height``, the supplied map describes bottoms at that
+    thickness. Each footing's actual height changes its bottom instead of
+    its top, keeping the tops at map level + reference_height.
     """
     if not isinstance(height_map, FoundationHeightMap):
         raise TypeError("height_map must be a FoundationHeightMap")
+    if reference_height is not None:
+        reference_height = _number(reference_height, "reference_height", positive=True)
     model = storey.house.model
     jobs = []
     for footer in footings:
@@ -317,18 +323,21 @@ def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeigh
             raise ValueError("footings must be IfcFooting elements from this house")
         data = ifcopenshell.util.element.get_pset(footer, "BBIM_StripFooting")
         height = data["Height"]
+        footer_map = (height_map if reference_height is None else FoundationHeightMap(
+            tuple((y, z+reference_height-height) for y, z in height_map.steps),
+        ))
         polygon = strip_footing_footprint(footer)
         x0, y0, x1, y1 = polygon.bounds
         bands = []
-        for lo, hi, bottom in height_map.bands(y0, y1):
+        for lo, hi, bottom in footer_map.bands(y0, y1):
             part = polygon.intersection(box(x0-1, lo, x1+1, hi))
             if part.area > 1e-10:
-                bands.append((part, bottom, height_map.bottom_profile(lo, hi)))
-        jobs.append((footer, data, polygon, height, bands,
+                bands.append((part, bottom, footer_map.bottom_profile(lo, hi)))
+        jobs.append((footer, data, polygon, height, bands, footer_map,
                      ifcopenshell.util.element.get_styles(footer)))
 
     builder = ShapeBuilder(model)
-    for footer, data, polygon, height, bands, styles in jobs:
+    for footer, data, polygon, height, bands, footer_map, styles in jobs:
         solids = []
         for part, bottom, profile in bands:
             solid = _footer_solid(model, builder, part, bottom, height, profile)
@@ -371,11 +380,11 @@ def step_strip_footings(storey: Storey, footings, *, height_map: FoundationHeigh
         bottom = min(z for _, _, profile in bands for _, z in profile)
         ifcopenshell.api.pset.edit_pset(model, pset=model.by_id(data["id"]), properties={
             "Footprint": json.dumps(tuple(polygon.exterior.coords)[:-1]),
-            "HeightMap": json.dumps(height_map.steps),
+            "HeightMap": json.dumps(footer_map.steps),
             "MinimumBottomZ": bottom,
             "TopZ": max(b+height for _, b, _ in bands),
             "StartHeight": bottom-storey.elevation,
-            "BottomProfile": json.dumps(height_map.bottom_profile(polygon.bounds[1], polygon.bounds[3])),
+            "BottomProfile": json.dumps(footer_map.bottom_profile(polygon.bounds[1], polygon.bounds[3])),
         })
 
 

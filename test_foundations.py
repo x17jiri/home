@@ -144,6 +144,39 @@ class FoundationProfileTests(unittest.TestCase):
             self.assertIn(body.RepresentationType, ("SweptSolid", "CSG"))
             self.assertAlmostEqual(self.volume(persisted), expected_volume)
 
+    def test_reference_height_keeps_tops_fixed_when_individual_heights_change(self):
+        house, sources, options = self.fixture()
+        storey = options["footer_storey"]
+        footers = []
+        for wall, height in zip(sources[1:], (.4, .6)):
+            footer, = storey.add_strip_footings_from(
+                wall.storey, source_walls=(wall,), width=.7, height=height, start_height=0,
+            )
+            footers.append(footer)
+        before = [self.vertices(f) for f in footers]
+        profile = FoundationHeightMap(((0, -3.5), (1.5, -3)))
+        for invalid in (0, -1, float("nan")):
+            with self.assertRaises(ValueError):
+                step_strip_footings(storey, footers, height_map=profile, reference_height=invalid)
+        for footer, old in zip(footers, before):
+            np.testing.assert_allclose(self.vertices(footer), old)
+        step_strip_footings(storey, footers, height_map=profile, reference_height=.5)
+        for footer, old, height in zip(footers, before, (.4, .6)):
+            points = self.vertices(footer)
+            np.testing.assert_allclose(points[:, :2].min(0), old[:, :2].min(0))
+            np.testing.assert_allclose(points[:, :2].max(0), old[:, :2].max(0))
+            self.assertAlmostEqual(points[:, 2].max(), -2.5)
+            self.assertAlmostEqual(points[:, 2].min(), -3-height)
+            for y, z in ((old[:, 1].min(), -3), (1.5, -3), (2, -2.5-height)):
+                self.assertTrue(np.any(np.isclose(points[:, 1], y) & np.isclose(points[:, 2], z)))
+            data = ifcopenshell.util.element.get_pset(footer, "BBIM_StripFooting")
+            np.testing.assert_allclose(json.loads(data["HeightMap"]),
+                                       ((0, -3-height), (1.5, -2.5-height)))
+            self.assertAlmostEqual(data["TopZ"], -2.5)
+        volumes = [self.volume(f) for f in footers]
+        step_strip_footings(storey, footers, height_map=profile, reference_height=.5)
+        np.testing.assert_allclose([self.volume(f) for f in footers], volumes)
+
     def test_per_wall_dimensions_override_defaults_and_change_the_correct_geometry(self):
         _, sources, options = self.fixture()
         walls, footers = build_foundations(

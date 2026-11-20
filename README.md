@@ -89,12 +89,9 @@ It creates both `house_plan.svg` and `house_plan.png`.
 
 `house2.py` is an independent model using the shared `ifc_utils` helpers.
 Its `Basement` storey duplicates the selected `basement_source_walls`, including
-partitions, as solid `ztracene bedneni` walls. The front wall and the two
-garden-room dividing walls use `basement_thin_wall_type`, 250 mm thick, with the existing
-lost-formwork hatch over the drywall-green fill (`#dfefcf`), pattern
-`ztracene-bedneni-green`. East, west and garden exterior walls and the
-S.03–S.04 / S.04–S.05 dividing walls use the 300 mm white type.
-`BASEMENT_THIN_WALL_THICKNESS` controls the thin type.
+partitions, as solid `ztracene bedneni` walls. Every basement wall and the
+formwork sections below the base plate use the same 300 mm white-hatched
+`basement_wall_type`, controlled by `BASEMENT_WALL_THICKNESS`.
 The two SDK walls forming
 room 3's narrow end and the bathroom/hallway SDK partition are excluded,
 together with their strip footings and
@@ -127,8 +124,8 @@ literal `structure=[...]` lists directly. Both run from garden to street,
 with their garden edge fixed by `basement_ceiling_garden_y`. The common grid
 starts with the first beam centre 215 mm streetward of the actual garden-room
 wall centreline, controlled by `BASEMENT_CEILING_FIRST_BEAM_CENTER_DISTANCE`.
-The same setting positions the ground-floor ceiling grid. The beam edge leaves
-10 mm clear from the 250 mm basement wall. S.04 omits the original first
+The same setting positions the ground-floor ceiling grid. With the 300 mm
+basement wall, the first beam edge overlaps it by 15 mm. S.04 omits the original first
 beam and narrow block row to clear the chimney. Its start is offset 500 mm
 towards the street by `basement_s04_omitted_garden_width`, and those four
 entries (`beam, space, narrow, space`) are removed from its structure list.
@@ -208,30 +205,30 @@ With the current settings:
 | Basement walls, 2370 mm | −2.580 m | −0.210 m |
 | Basement ceiling, 210 mm | −0.210 m | 0.000 m |
 | Foundation slab, 150 mm | −2.730 m | −2.580 m |
-| East/west and S.03–S.04 / S.04–S.05 strip footings, 1100 × 500 mm | −3.230 m | −2.730 m |
-| Back strip footing, 900 × 500 mm | −3.230 m | −2.730 m |
-| Lowered front strip footing, 800 × 500 mm | −3.730 m | −3.230 m |
-| Garden-room dividing wall footing, 800 × 500 mm | −3.230 m | −2.730 m |
-| S.01–S.02 dividing wall footing, 700 × 500 mm | −3.230 m | −2.730 m |
+| East/west and S.03–S.04 / S.04–S.05 strip footings, 900 × 600 mm | −3.330 m | −2.730 m |
+| Back strip footing, 800 × 600 mm | −3.330 m | −2.730 m |
+| Lowered front strip footing, 800 × 600 mm | −3.730 m | −3.130 m |
+| Garden-room dividing wall footing, 700 × 600 mm | −3.330 m | −2.730 m |
+| S.01–S.02 dividing wall footing, 600 × 600 mm | −3.330 m | −2.730 m |
 | Default strip footing (unless overridden), 740 × 500 mm | −3.230 m | −2.730 m |
 
 Ring beams occupy the 210 mm ceiling bands above all basement walls and
 all ground-floor load-bearing walls. Their widths and centrelines follow
-the physical wall bodies. The 300 mm load-bearing Ytong Klasik wall between
-Pokoj 1 and 2 has a centred ground-floor ceiling ring beam. Its existing
-250 mm load-bearing
-basement support, endpoints, strip footing and basement-ceiling ring beam
-are retained. These beams belong to the corresponding ceiling
+the physical wall bodies. The 240 mm load-bearing VPC 10-1,4 wall between
+Pokoj 1 and 2 has a centred ground-floor ceiling ring beam and a 300 mm
+basement support with its own centred basement-ceiling ring beam.
+The basement support endpoints are retained. These beams belong to the corresponding ceiling
 storeys, so hiding a ceiling hides its ring beams as well.
 
-The basement ceiling has 100 mm of insulation directly beneath its structural
-underside, followed by a 12.5 mm plasterboard lining. Both layers belong to `Basement
-ceiling` and directly reuse each `basement_room_floors` layer's `outline`.
-They cover the room polygons, including areas outside the MIAKO layout,
+The basement ceiling reserves 15 mm below the MIAKO underside for plaster,
+then has 60 mm of insulation. The plaster is not modelled, and there is no
+basement plasterboard, including under the stairs. Insulation belongs to
+`Basement ceiling` and directly reuses each `basement_room_floors` layer's `outline`.
+It covers the room polygons, including areas outside the MIAKO layout,
 except for the S.05 stair opening closed by the separate timber board.
 The omitted chimney-side MIAKO bay does not trim these finishes.
-`BASEMENT_CEILING_INSULATION_THICKNESS` and `BASEMENT_CEILING_PLASTERBOARD_THICKNESS`
-control the layers; `BASEMENT_FINISHED_CEILING_Z` is the resulting plasterboard
+`BASEMENT_CEILING_INSULATION_THICKNESS` and `BASEMENT_CEILING_PLASTER_ALLOWANCE`
+control this build-up; `BASEMENT_FINISHED_CEILING_Z` is the insulation
 underside. Insulation uses the floor-insulation material and the same
 `thermal-impact-insulation` cut hatch. The detailed structural ceiling plan
 excludes these finish layers so the MIAKO layout remains visible.
@@ -240,7 +237,6 @@ The single `Base plate concrete` slab covers the outer footprint of the
 thicker basement walls. Every basement wall has a centred concrete strip
 footing, with returns at its ends. Footings belong to the separate
 `Foundation` storey. Configure these elements with `BASEMENT_WALL_THICKNESS`,
-`BASEMENT_THIN_WALL_THICKNESS`,
 `BASEMENT_SLAB_THICKNESS`, `FOUNDATION_FOOTING_WIDTH` and
 `FOUNDATION_FOOTING_HEIGHT`; all lower elevations follow automatically.
 
@@ -249,12 +245,12 @@ legend. It follows the foundation slab's top beneath the basement walls,
 then rises along both exterior wall faces to `PERIMETER_TOP_HEIGHT`, behind
 the perimeter XPS. `HYDROIZOLACE_LINE_WIDTH = 0.7` sets its printed width in
 millimetres; the `hydroizolace` CSS class uses 4 mm dashes and 1.5 mm gaps.
-AA, BB and CC dimension the basement clear height to the plasterboard underside,
-subtracting the configured ceiling finish without an additional plaster
-allowance. The height follows the configured floor and ceiling finishes.
+AA, BB and CC dimension the basement clear height to the insulation underside,
+including the 15 mm reserved plaster space once. The height follows the
+configured floor and ceiling finishes.
 BB and CC place their basement and ground-floor clear-height dimensions 500 mm from
 the respective garden wall's inside face. The basement dimension ends at the
-plasterboard lining underside; the ground-floor dimension allows 15 mm for plaster.
+insulation underside; the ground-floor dimension allows 15 mm for plaster.
 AA's ground-floor clear height still allows 15 mm for plaster, controlled
 by `CEILING_PLASTER_THICKNESS`.
 AA also uses `add_aa_elevation_marks()` for nine signed level marks, in
@@ -338,12 +334,11 @@ The hallway floor continues beneath the retained ground-to-upper stairs to
 the street edge of the ceiling above S.05 (`basement_stair_opening_end_y`).
 Both insulation and floor build-up follow that edge. The remaining opening
 towards the front wall is closed by `ground_stair_opening_board`, a 50 mm
-timber board with its top flush with the finished ground floor. A second board,
-`basement_stair_opening_board`, is 12.5 mm plasterboard with its underside
-level with the regular basement lining. CC centers
-200 mm of drawing-only rockwool batting in the clear space between the boards.
-This leaves a 105 mm air gap on each side of the insulation, calculated by
-`GROUND_STAIR_OPENING_AIR_GAP_THICKNESS`. Skladba 7 records this complete
+timber board with its top flush with the finished ground floor. CC centres
+200 mm of drawing-only rockwool batting between that board's underside and
+the regular basement ceiling level. No lower plasterboard panel is modelled.
+`GROUND_STAIR_OPENING_AIR_GAP_THICKNESS` calculates the surrounding air space.
+Skladba 7 lists the timber and mineral wool for this
 detail on all section sheets; its SK7 marker appears only in CC.
 The normal basement ceiling insulation stops at the opening's garden edge.
 `GROUND_STAIR_OPENING_BOARD_THICKNESS` and
@@ -364,8 +359,8 @@ basement walls, with the configured cement floor buildup.
 
 The foundation cut passes through
 the middle of the strip footings, at
-`FOUNDATION_FOOTING_BOTTOM_Z + FOUNDATION_FOOTING_HEIGHT/2` (currently
-Z = −2.910 m). The foundation plan includes black dashed outlines of the
+`BASEMENT_SLAB_BOTTOM_Z - min(actual footing heights)/2` (currently
+Z = −3.030 m). The foundation plan includes black dashed outlines of the
 basement walls and blue dashed outlines of the ground-floor load-bearing walls above,
 plus a green dashed outline of the chimney above its pad, with matching
 line-legend entries. Both plans show overall dimensions and wall/footing thickness.
@@ -373,20 +368,30 @@ line-legend entries. Both plans show overall dimensions and wall/footing thickne
 `found` is an A3 portrait sheet: the foundation plan sits above section ZZ.
 The Z–Z marker follows the centre of the east footing and looks west (+X).
 ZZ shows foundations, the base plate and the bottom of the basement walls.
+Its right-hand vertical dimension chain shows the footing height, the step
+height and the base plate thickness (currently 600, 400 and 150 mm).
+The 150 mm label uses `add_dimension(center_label=False)` to sit beyond its
+endpoint and avoid touching the adjacent 400 mm label.
 Its camera top is set 500 mm above the finished basement floor. The rectangular camera
 uses `add_drawing(height=...)`; omitted heights keep the existing square views.
 The east and west outside walls each share a centreline across the basement,
 ground and upper floors. Both basement walls remain 300 mm thick. Their footings
-are 1100 × 500 mm. The two middle basement walls, S.03–S.04 and S.04–S.05,
+are 900 × 600 mm. The two middle basement walls, S.03–S.04 and S.04–S.05,
 are 300 mm thick, centred under their ground-floor walls, with matching
-1100 × 500 mm footings and 300 mm formwork returns below the base plate.
-The front wall stack shares Y = 0.120 m, with a 250 mm
-basement wall and 240 mm walls above. Its footing is 800 × 500 mm.
-The garden-room dividing basement wall remains 250 mm thick, with a centred
-800 × 500 mm footing. The S.01–S.02 basement wall remains 250 mm thick beneath
-the wall between rooms 1 and 2, with a centred 700 × 500 mm footing.
-The back basement wall remains 300 mm thick, with a centred 900 × 500 mm footing.
+900 × 600 mm footings and 300 mm formwork returns below the base plate.
+The front wall stack shares Y = 0.120 m, with a 300 mm
+basement wall and 240 mm walls above. Its footing is 800 × 600 mm.
+The garden-room dividing basement wall is 300 mm thick, with a centred
+700 × 600 mm footing. The S.01–S.02 basement wall is 300 mm thick beneath
+the wall between rooms 1 and 2, with a centred 600 × 600 mm footing.
+The back basement wall remains 300 mm thick, with a centred 800 × 600 mm footing.
 The default strip size is 740 × 500 mm; the existing street-side steps are retained.
+`FOUNDATION_HEIGHT_MAP` gives bottom levels at the default height.
+`step_strip_footings(..., reference_height=FOUNDATION_FOOTING_HEIGHT)` adjusts
+each strip's bottom for its actual height, holding the normal top at the base
+plate underside and the street top 400 mm lower. Increasing a per-wall height
+therefore extends the footing downward. Depth marks and soil extents use the
+actual footing bottoms; under-plate formwork uses the actual footing tops.
 The front/back strip ends reach the outside faces of the east/west strips,
 whose ends reach the front/back strips' outside faces, forming square corners.
 These extensions follow the neighbouring footprint bounds. Widths, centrelines
@@ -394,10 +399,10 @@ and stepped levels are retained. Individual projected footing edges are hidden
 in plans; the merged footprint annotation provides the visible outline.
 `found` marks the level change at `FOUNDATION_STREET_STEP_Y` with 0.30 mm
 black lines across the four affected strips. The line legend and note identify
-the 500 mm lowering of the street-side footings.
+the 400 mm lowering of the street-side footings.
 An outside dimension locates this step from the front edge of the footings.
-The material table lists both visible lost-formwork types (300 mm white and
-250 mm green). At the front footing, two service lines sit 200 mm either side
+The material table lists the 300 mm white lost-formwork type.
+At the front footing, two service lines sit 200 mm either side
 of S.04's clear-space centre: orange dashed arrows lead sewer out on the right,
 and blue dashed arrows bring water in on the left. The water line has a blue
 100 mm-wide sleeve outline, following the old house foundation-plan style.
@@ -405,7 +410,7 @@ These are drawing annotations; pipe and sleeve styles appear in the line legend.
 `foundation_footing_dimensions` holds the per-wall overrides. The foundation
 plan dimensions both side strips, both middle strips, the front/back strips and the
 two garden-room dividing strips and includes
-the reinforcement and 500 mm footing-height notes.
+the reinforcement and actual footing-height notes (currently 600 mm).
 At Y = 2.0 m, one dimension chain shows the east, S.03–S.04, S.04–S.05 and
 west footing widths and the clear gaps between them, all with the same offset.
 At Y = HOUSE_DEPTH − 2.5 m, another chain aligns the east, S.01–S.02 and west
@@ -415,8 +420,8 @@ divider and back footing widths and the two clear gaps. It sits left of the
 S.03 horizontal gap label; the outside front/back width dimensions remain.
 `foundation_walls_below_base_plate` contains the front formwork wall and four
 short returns below the east, west and two middle basement walls. They fill
-the 500 mm gap from the lowered footing tops to the underside of the base
-plate, using the matching 300/250 mm basement wall types. Returns meet the
+the 400 mm gap from the lowered footing tops to the underside of the base
+plate, using the same 300 mm basement wall type. Returns meet the
 front wall's inside face and stop at the footing step without overlapping
 each other. Sections exclude buried walls whose footprints they do not cross,
 so their projections cannot mask the cut soil.
@@ -535,18 +540,22 @@ It starts with a ground-floor storey at Z = 0, enclosing the
 `HOUSE_WIDTH × HOUSE_DEPTH` footprint. The ground-floor front and back walls use
 240 mm VPC (`FRONT_WALL_THICKNESS` / `BACK_WALL_THICKNESS`), described as
 `VPC Cihla 240 mm (20-2,0)` in the ground material legend. All four upper-floor
-outer walls use `Liapor KM 240 AKU`, 240 mm thick, with solid light-yellow
-fill (`#fff2cc`) and no hatch. Their outside faces remain fixed, while floors,
+outer walls use `VPC Cihla 240 mm (10-1,8)`, 240 mm thick, with solid pale-blue
+fill (`#e6f3ff`) and no hatch, halfway between the grade 1,4 blue and white
+(rounded RGB). The material's SVG classes have explicit cut styles.
+Their outside faces remain fixed, while floors,
 wall-side fixtures and dimensions follow their inside faces. Ground-floor
 240 mm VPC uses plain white. All four ground-floor outer walls use
 the `(20-2,0)` specification and share one material-legend entry.
 On both above-ground floors, east and west walls span the full house depth;
 front and back walls fit between their inner faces. The exterior footprint,
 opening positions and basement supports stay fixed when changing these joints.
-The ground-floor transverse garden-room divider uses 300 mm Ytong Klasik
-(`GARDEN_ROOMS_WALL_THICKNESS`), with the light-yellow paired-diagonal hatch.
-The wall directly above it uses 300 mm Ytong Klasik, with the light-yellow
-paired-diagonal hatch. Both retain the shared `GARDEN_ROOMS_WALL_CENTER_Y`.
+The ground-floor transverse garden-room divider uses 240 mm
+`VPC Cihla 240 mm (10-1,4)` (`GARDEN_ROOMS_WALL_MATERIAL`), with the original
+solid-blue fill (`#cce6ff`). `GARDEN_ROOMS_WALL_THICKNESS` controls its width.
+The wall directly above it uses the same 240 mm VPC 10-1,4 and solid-blue
+fill. `UPPER_BEARING_WALL_THICKNESS` follows the ground-floor divider thickness.
+Both retain the shared `GARDEN_ROOMS_WALL_CENTER_Y`.
 Its centreline and the back wall's outside face retain their positions;
 the room polygons, dimensions and ceiling bearings use the new inside faces.
 The room polygons measure the clear garden-room depth from the actual wall faces.
@@ -631,31 +640,31 @@ has seven risers and six 300 mm treads, with the rise calculated at its new foot
 The outer railing continues around the landing's street edge. The ground plan
 shows the stair symbols, uphill walking arrow and combined stair notes.
 
-A centred 300 mm load-bearing Ytong Klasik wall along Y splits the garden
+A centred 240 mm load-bearing VPC 10-1,4 wall along Y splits the garden
 section into equal rooms. Their clear width follows
 `(HOUSE_WIDTH-2*BWT-GARDEN_PARTITION_THICKNESS)/2`; their clear depth is
-`GARDEN_ROOMS_DEPTH`. Its cut hatch uses the light-yellow `ytong-klasik` pattern.
-The common masonry finishing pass retains the Liapor base below the Ytong.
+`GARDEN_ROOMS_DEPTH`. Its cuts use the solid-blue `vpc-240-10-14-solid` tint.
+The common masonry finishing pass retains the existing base course below the VPC.
 The transverse divider and its corresponding basement and upper-floor walls
 keep their physical centres aligned at `GARDEN_ROOMS_WALL_CENTER_Y`.
 `GARDEN_ROOMS_DEPTH` remains the beam-sizing reference. The upper middle wall
-uses 300 mm Ytong Klasik and the basement divider remains 250 mm formwork.
+uses 240 mm VPC 10-1,4 and the basement divider uses 300 mm formwork.
 Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
 openings through the garden-room dividing wall. Their nearest opening edges
-are each 300 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
-`GARDEN_DOOR_CENTER_CLEARANCE`, leaving 600 mm between openings. The centred
-300 mm Ytong Klasik wall has 150 mm clear between each face and the nearest opening.
+are each 500 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
+`GARDEN_DOOR_CENTER_CLEARANCE`, leaving 1000 mm between openings. The centred
+240 mm VPC wall has 380 mm clear between each face and the nearest opening.
 Dimensions on the garden-room wall show the distances from the outer opening
 jambs to the inside faces of the east and west exterior walls.
 `rozvadec` is a white 360 × 150 × 500 mm cabinet on the hallway face of
-the 600 mm pier, centred at `HOUSE_WIDTH/2`. `ROZVADEC_SIZE` stores width,
+the 1000 mm pier, centred at `HOUSE_WIDTH/2`. `ROZVADEC_SIZE` stores width,
 depth and height; `ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.20` sets its mounting level
 above the finished ground floor, and `ROZVADEC_WALL_GAP = 0.01` clears the wall.
 Pokoj 3 also has a 900 mm inward-opening door in a 1000 mm construction
-opening at its narrow garden-side end. The opening's garden-side edge is
-375 mm from the room 1 face of the garden-room dividing wall, controlled by
-`THIRD_ROOM_DOOR_GARDEN_CLEARANCE` (135 mm from the room 3 face with the
-current 240 mm wall).
+opening at its narrow garden-side end. The opening's garden-side jamb is
+50 mm from the street-facing surface of the garden-room dividing wall,
+controlled by `THIRD_ROOM_DOOR_GARDEN_CLEARANCE`. Its position is calculated
+from the actual length of the vertical SDK host wall.
 Opening dimensions are placed inside the rooms.
 Five room floors (`0.01–0.05`: Pokoj 1, Pokoj 2, Pokoj 3, Chodba, Koupelna)
 use 120 mm insulation and 65 mm screed/finish,
@@ -1298,13 +1307,13 @@ garden-side living area.
 `LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - living_room_back_face_y` is the
 clear depth of the back/garden-side strip.
 The former horizontal SDK and two 1.25 m VPC returns are replaced by one
-300 mm load-bearing Ytong Klasik wall across the full inside house width.
+240 mm load-bearing VPC 10-1,4 wall across the full inside house width.
 Its centre follows the actual centre of the ground-floor garden-room divider.
 Its sloped top is 50 mm below the rafter tops, measured perpendicular to the
 roof slope (`UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE`). It is capped
 horizontally at `purlin_bottom_z`; unlike the SDK, it is not capped at the
 plasterboard. The exterior gable walls keep their separate underside cuts.
-Cuts use the light-yellow paired-diagonal `ytong-klasik` hatch.
+Cuts use the solid-blue `vpc-240-10-14-solid` tint.
 The removed returns' ring-beam bands are not extended
 through this new wall; the wall-plate ring beams remain on the perimeter.
 The vertical SDK partition turns towards the chimney before the middle
@@ -1550,9 +1559,9 @@ its own `Roof - …` visibility storey, including both roof slopes.
 The chimney starts at the top of the foundation slab (`BASEMENT_FLOOR_START`), centred at
 `CHIMNEY_CENTER`. Its Y coordinate is calculated from the centreline of the
 basement garden-room wall, using
-`CHIMNEY_BASEMENT_WALL_CENTER_OFFSET = 0.125 + 0.07 m` to the chimney's garden
-face: half the 250 mm wall plus 70 mm clear space. Half the chimney width is
-then subtracted to locate its centre. No 300 mm wall compensation is added.
+`CHIMNEY_BASEMENT_WALL_CENTER_OFFSET = 0.15 + 0.03 m` to the chimney's garden
+face. This 180 mm setout gives 30 mm clear from the 300 mm basement wall.
+Half the chimney width is then subtracted to locate its centre.
 The vertical SDK wall stops at the chimney's front face,
 and the kitchen follows the shortened wall. There is no chimney-to-stair
 clearance parameter or dimension. It reuses the original model's
@@ -4023,7 +4032,7 @@ Descriptions wrap automatically and may also contain explicit newlines.
 Available pattern names are defined in `drawings/assets/patterns.svg`, including
 `diagonal1`, `diagonal2`, `crosshatch1`, `brick`, `concrete`, `sand`, and
 `wood`. Project-specific reusable patterns include `drywall-diagonal1` (the
-`diagonal1` hatch on the drywall tint) and `random-dots` (the preserved
+`diagonal1` hatch on the same `#fff2cc` yellow tint as Porfix) and `random-dots` (the preserved
 irregular dot field). A zero `right_panel_width` (the default) keeps the
 original square drawing sheet.
 

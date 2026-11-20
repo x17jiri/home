@@ -466,10 +466,31 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
     stroke-width: 0.05 !important;
 }
 
+/* Retain the legacy Liapor material's yellow fill. */
 .cut.material-LiaporKM240AKU,
 .cut.material-LoadbearingwallLiaporKM240AKU,
 .cut.layer-material-LiaporKM240AKU {
     fill: #fff2cc !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* VPC grade 10-1,4 uses the stronger light-blue tint. */
+.cut.material-VPCCihla240mm1014,
+.cut.material-LoadbearingwallVPCCihla240mm1014,
+.cut.material-UpperloadbearingwallVPCCihla240mm1014,
+.cut.material-GroundloadbearingwallVPCCihla240mm1014Liaporbasecourse,
+.cut.layer-material-VPCCihla240mm1014 {
+    fill: #cce6ff !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Grade 10-1,8 is halfway between that blue and white (rounded RGB). */
+.cut.material-VPCCihla240mm1018,
+.cut.material-LoadbearingwallVPCCihla240mm1018,
+.cut.layer-material-VPCCihla240mm1018 {
+    fill: #e6f3ff !important;
     stroke: black;
     stroke-width: 0.05 !important;
 }

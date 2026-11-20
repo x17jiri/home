@@ -36,21 +36,23 @@ FRONT_WALL_THICKNESS = 0.24
 BACK_WALL_THICKNESS = 0.24
 UPPER_FRONT_WALL_THICKNESS = 0.24
 UPPER_BACK_WALL_THICKNESS = 0.24
-UPPER_EXTERIOR_WALL_MATERIAL = "Liapor KM 240 AKU"
-UPPER_EXTERIOR_WALL_COLOR = "#fff2cc"
+UPPER_EXTERIOR_WALL_MATERIAL = "VPC Cihla 240 mm (10-1,8)"
+UPPER_EXTERIOR_WALL_COLOR = "#e6f3ff"
 INNER_BWT = 0.24
 MID_WALL_THICKNESS = 0.30
-GARDEN_ROOMS_WALL_THICKNESS = 0.30
-GARDEN_PARTITION_THICKNESS = 0.30
+GARDEN_ROOMS_WALL_THICKNESS = 0.24
+GARDEN_ROOMS_WALL_MATERIAL = "VPC Cihla 240 mm (10-1,4)"
+GARDEN_ROOMS_WALL_COLOR = "#cce6ff"
+GARDEN_PARTITION_THICKNESS = 0.24
 DRY_WALL_WIDTH = 0.10
 FACADE_INSULATION_THICKNESS = 0.20
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.10
 FACADE_THICKNESS = 0.005
-GARDEN_ROOMS_WALL_CENTER_Y = 5.37
+GARDEN_ROOMS_WALL_CENTER_Y = -0.005 + 5.375 + 0.03
 GARDEN_ROOMS_WALL_Y = GARDEN_ROOMS_WALL_CENTER_Y-GARDEN_ROOMS_WALL_THICKNESS/2
 GARDEN_ROOMS_DEPTH = 3.375+0.6
 ROOM_DOOR_OPENING_WIDTH = 1.0
-GARDEN_DOOR_CENTER_CLEARANCE = 0.30  # Each construction opening stops this far from the centreline.
+GARDEN_DOOR_CENTER_CLEARANCE = 0.25  # Each construction opening stops this far from the centreline.
 THIRD_ROOM_DRYWALL_DOOR_CLEARANCE = 0.05  # Hallway face to the near jamb of the Pokoj 1 opening.
 THIRD_ROOM_NARROW_WALL_X = (
     HOUSE_WIDTH/2-GARDEN_DOOR_CENTER_CLEARANCE-ROOM_DOOR_OPENING_WIDTH-THIRD_ROOM_DRYWALL_DOOR_CLEARANCE
@@ -67,7 +69,7 @@ STAIRWAY_WALL_X = STAIRWAY_WALL_CENTER_X+MID_WALL_THICKNESS/2
 STAIRWAY_WIDTH = HOUSE_WIDTH-BWT-STAIRWAY_WALL_X
 BATHROOM_LEFT_X = THIRD_ROOM_WALL_X
 BATHROOM_RIGHT_X = STAIRWAY_WALL_X-MID_WALL_THICKNESS
-HALLWAY_OPENING_LENGTH = 1.73  # From the garden-room wall towards the street.
+HALLWAY_OPENING_LENGTH = 1.785 - 0.125  # From the garden-room wall towards the street.
 STAIRWAY_OPENING_START_Y = GARDEN_ROOMS_WALL_Y-HALLWAY_OPENING_LENGTH
 STAIRWAY_OPENING_FRONT_Y = STAIRWAY_OPENING_START_Y
 BATHROOM_PARTITION_Y = STAIRWAY_OPENING_FRONT_Y-DRY_WALL_WIDTH
@@ -81,14 +83,14 @@ HYDROBOX_SIZE = (0.8, 0.5, 0.9)
 RECUPERATION_SIZE = (1.0, 0.5, 1.5)
 RECUPERATION_STAIR_END_CLEARANCE = 0.5
 RECUPERATION_BATHROOM_WALL_CLEARANCE = 0.05
-THIRD_ROOM_OPENING_LENGTH = 1.73  # Room 3 to hallway; independent of the stairway opening.
+THIRD_ROOM_OPENING_LENGTH = HALLWAY_OPENING_LENGTH  # Room 3 to hallway; independent of the stairway opening.
 THIRD_ROOM_OPENING_START_Y = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_OPENING_LENGTH
 THIRD_ROOM_STEP_Y = THIRD_ROOM_OPENING_START_Y-DRY_WALL_WIDTH  # Hallway face meets the opening end.
 THIRD_ROOM_NARROW_DEPTH = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_STEP_Y
 HALLWAY_OPENING_TOP_GAP = 0.25  # Masonry below the underside of the ground-floor ceiling.
 
 UPPER_BATHROOM_WIDTH = 1.0
-UPPER_BEARING_WALL_THICKNESS = 0.30
+UPPER_BEARING_WALL_THICKNESS = GARDEN_ROOMS_WALL_THICKNESS
 UPPER_STAIRWAY_WALL_THICKNESS = MID_WALL_THICKNESS
 UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE = 0.05  # Perpendicular to the roof slope.
 KITCHEN_UNIT_SIZE = (0.64, 0.64, 0.75)
@@ -153,33 +155,31 @@ STREET_BACKGROUND_WALL_WEST_EXTENT = 1.0
 STREET_BACKGROUND_TERRAIN_BELOW_STAIRS = 0.05
 CEILING_THICKNESS = 0.21
 CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height dimensions.
-BASEMENT_CEILING_INSULATION_THICKNESS = 0.10
-BASEMENT_CEILING_PLASTERBOARD_THICKNESS = 0.0125
-BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_INSULATION_THICKNESS+BASEMENT_CEILING_PLASTERBOARD_THICKNESS
-BASEMENT_STAIR_OPENING_BOARD_THICKNESS = BASEMENT_CEILING_PLASTERBOARD_THICKNESS
+BASEMENT_CEILING_INSULATION_THICKNESS = 0.06
+BASEMENT_CEILING_PLASTER_ALLOWANCE = 0.015  # Reserved gap; plaster is not modelled.
+BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_PLASTER_ALLOWANCE+BASEMENT_CEILING_INSULATION_THICKNESS
 GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.05
 GROUND_STAIR_OPENING_INSULATION_THICKNESS = 0.20  # Drawing-only rockwool in CC.
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
 CEILING_ROOM3_SPLIT_Y = BWT+3.0
 BASEMENT_WALL_HEIGHT = ZAKLADACI_MALTA + 2.35 # 7*25 + 3*20 = 235cm
 BASEMENT_WALL_THICKNESS = 0.30
-BASEMENT_THIN_WALL_THICKNESS = 0.25  # Front wall and the garden-room dividing walls.
 BASEMENT_SLAB_THICKNESS = 0.15
 FOUNDATION_FOOTING_WIDTH = 0.74
 FOUNDATION_FOOTING_HEIGHT = 0.50
-FOUNDATION_STREET_STEP_Y = 1.50-0.08
-FOUNDATION_STREET_STEP_DROP = 0.50
+FOUNDATION_STREET_STEP_Y = 1.55-0.08
+FOUNDATION_STREET_STEP_DROP = 0.40
 GROUNDING_LEAD_LENGTH = 1.0  # Length beyond the outside masonry face/corner.
 BASEMENT_WALL_TOP_Z = -CEILING_THICKNESS  # Ground-floor layers start at Z = 0.
 BASEMENT_FINISHED_CEILING_Z = BASEMENT_WALL_TOP_Z-BASEMENT_CEILING_FINISH_THICKNESS
-# Equal air spaces above and below the centred insulation in the stair opening.
+# Centre the stair-opening wool between the timber floor and the ceiling level.
 GROUND_STAIR_OPENING_AIR_GAP_THICKNESS = (
     GROUND_FLOOR_THICKNESS-GROUND_STAIR_OPENING_BOARD_THICKNESS
-    -BASEMENT_FINISHED_CEILING_Z-BASEMENT_STAIR_OPENING_BOARD_THICKNESS
+    -BASEMENT_FINISHED_CEILING_Z
     -GROUND_STAIR_OPENING_INSULATION_THICKNESS
 )/2
 if GROUND_STAIR_OPENING_AIR_GAP_THICKNESS < 0:
-    raise ValueError("Stair-opening insulation does not fit between floor and ceiling boards")
+    raise ValueError("Stair-opening insulation does not fit below the timber floor")
 BASEMENT_FLOOR_START = BASEMENT_WALL_TOP_Z-BASEMENT_WALL_HEIGHT
 BASEMENT_FLOOR_THICKNESS = CEMFLOW_AND_FINISH_THICKNESS
 BASEMENT_FINISHED_FLOOR_HEIGHT = BASEMENT_FLOOR_START+BASEMENT_FLOOR_THICKNESS
@@ -267,8 +267,8 @@ ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PL
 ROOF_GABLE_OVERHANG = 0.25 + 0.125
 CHIMNEY_SIZE = 0.40
 CHIMNEY_CEILING_INFILL_CLEARANCE = 0.03
-# From the wall centreline to the chimney's garden face: half wall + clear gap.
-CHIMNEY_BASEMENT_WALL_CENTER_OFFSET = 0.15 + 0.03
+# From the garden rooms wall centreline to the chimney's garden face.
+CHIMNEY_WALL_CENTER_OFFSET = 0.125 + 0.07
 CHIMNEY_FOOTING_OVERHANG = 0.20
 CHIMNEY_FLUE_DIAMETER = 0.20
 CHIMNEY_ABOVE_ROOF = 1.25
@@ -334,8 +334,8 @@ CONSTRUCTION_ASSEMBLIES = {
         "Kročejová minerální vata | 30 mm",
         f"Podlahový polystyren | {(GROUND_FLOOR_INSULATION_THICKNESS-.03)*1000:g} mm",
         f"Stropní konstrukce MIAKO | {CEILING_THICKNESS*1000:g} mm",
-        f"Minerální vata | {BASEMENT_CEILING_INSULATION_THICKNESS*1000:g} mm",
-        f"Sádrokarton | {BASEMENT_CEILING_PLASTERBOARD_THICKNESS*1000:g} mm",
+		f"Omítka | 15 mm",
+        f"Minerální vata | {BASEMENT_CEILING_INSULATION_THICKNESS*1000:g} mm (např. Rockwool Stroprock)",
     )},
     4: {"title": "Podlaha suterénu", "layers": (
         f"Cementový potěr | {(BASEMENT_FLOOR_THICKNESS-.005)*1000:g} mm",
@@ -351,13 +351,12 @@ CONSTRUCTION_ASSEMBLIES = {
     6: {"title": "Obvodové zdi sklepa", "layers": (
         f"Finální vrstva fasády | {FACADE_THICKNESS*1000:g} mm",
         f"Perimetrický polystyren | {EXTERIOR_XPS_INSULATION_THICKNESS*1000:g} mm",
-        f"Ztracené bednění | {BASEMENT_THIN_WALL_THICKNESS*1000:g}/{BASEMENT_WALL_THICKNESS*1000:g} mm",
+        f"Ztracené bednění | {BASEMENT_WALL_THICKNESS*1000:g} mm",
         "Bez vnitřní omítky | 0 mm",
     )},
     7: {"title": "Podlaha pod schody", "layers": (
         f"Dřevo | {GROUND_STAIR_OPENING_BOARD_THICKNESS*1000:g} mm",
         f"Minerální vata | {GROUND_STAIR_OPENING_INSULATION_THICKNESS*1000:g} mm",
-        f"Sádrokarton | {BASEMENT_STAIR_OPENING_BOARD_THICKNESS*1000:g} mm",
     )},
 }
 SECTION_CONSTRUCTION_ASSEMBLY_IDS = {
@@ -394,7 +393,7 @@ STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
 BASEMENT_GARDEN_WALL_CENTER_Y = GARDEN_ROOMS_WALL_Y+GARDEN_ROOMS_WALL_THICKNESS/2
 CHIMNEY_CENTER = (
     HOUSE_WIDTH/2.0,
-    BASEMENT_GARDEN_WALL_CENTER_Y-CHIMNEY_BASEMENT_WALL_CENTER_OFFSET-CHIMNEY_SIZE/2,
+    GARDEN_ROOMS_WALL_CENTER_Y-CHIMNEY_WALL_CENTER_OFFSET-CHIMNEY_SIZE/2,
 )
 chimney_ceiling_opening_region = box(
     CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-CHIMNEY_CEILING_INFILL_CLEARANCE,
@@ -445,7 +444,7 @@ UPPER_TOILET_DEPTH = 1.2  # Clear depth from the lower cross-wall's toilet face.
 UPPER_TOILET_DOOR_WIDTH = 0.7
 UPPER_TOILET_DOOR_OPENING_WIDTH = 0.8
 UPPER_TOILET_DOOR_SIDE_CLEARANCE = 0.05  # From the vertical living-room wall's toilet face.
-THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.125  # From the room 1 face to the construction opening.
+THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.05  # Garden-room wall's street face to the nearest opening jamb.
 BATHROOM_DOOR_SIDE_CLEARANCE = 0.125
 ENTRANCE_OPENING_AT = 4.0 + 0.025  # absolute y position
 ROOM_WINDOW_WIDTH = 1.50
@@ -859,34 +858,32 @@ upper_side_wall_type = (upper_back_wall_type if BWT == UPPER_BACK_WALL_THICKNESS
                            color=UPPER_EXTERIOR_WALL_COLOR,
                        ))
 garden_rooms_wall_type = house.wall_type(
-    f"Load bearing wall - Ytong Klasik {GARDEN_ROOMS_WALL_THICKNESS*1000:g} mm",
-    layers=[("Ytong Klasik", GARDEN_ROOMS_WALL_THICKNESS), "axis"],
+    f"Load bearing wall - {GARDEN_ROOMS_WALL_MATERIAL}",
+    layers=[(GARDEN_ROOMS_WALL_MATERIAL, GARDEN_ROOMS_WALL_THICKNESS), "axis"],
+    color=GARDEN_ROOMS_WALL_COLOR,
 )
 mid_wall_type = house.wall_type(
     f"Load bearing wall - Ytong Klasik {MID_WALL_THICKNESS*1000:g} mm",
     layers=[("Ytong Klasik", MID_WALL_THICKNESS), "axis"],
 )
 garden_partition_wall = house.wall_type(
-    f"Load bearing wall - Ytong Klasik {GARDEN_PARTITION_THICKNESS*1000:g} mm",
-    layers=[("Ytong Klasik", GARDEN_PARTITION_THICKNESS)],  # Centred between rooms.
+    f"Load bearing wall - {GARDEN_ROOMS_WALL_MATERIAL}",
+    layers=[(GARDEN_ROOMS_WALL_MATERIAL, GARDEN_PARTITION_THICKNESS)],  # Centred between rooms.
+    color=GARDEN_ROOMS_WALL_COLOR,
 )
 partition_wall = garden_partition_wall  # Legacy alias for the garden-room wall type.
 upper_bearing_wall_type = house.wall_type(
-    f"Upper load bearing wall - Ytong Klasik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm",
-    layers=[("Ytong Klasik", UPPER_BEARING_WALL_THICKNESS)],  # Centred over the wall below.
+    f"Upper load bearing wall - {GARDEN_ROOMS_WALL_MATERIAL}",
+    layers=[(GARDEN_ROOMS_WALL_MATERIAL, UPPER_BEARING_WALL_THICKNESS)],  # Centred over the wall below.
+    color=GARDEN_ROOMS_WALL_COLOR,
 )
 dry_wall = house.wall_type(
-    f"drywall - {DRY_WALL_WIDTH*1000:g} mm", layers=[("SDK", DRY_WALL_WIDTH)], color="#dfefcf",
+    f"drywall - {DRY_WALL_WIDTH*1000:g} mm", layers=[("SDK", DRY_WALL_WIDTH)], color="#fff2cc",
 )
 basement_wall_type = house.wall_type(
     f"Basement wall - ztracene bedneni {BASEMENT_WALL_THICKNESS*1000:g} mm",
     layers=[("ztracene bedneni", BASEMENT_WALL_THICKNESS)],
     color="#ffffff",
-)
-basement_thin_wall_type = house.wall_type(
-    f"Basement wall - ztracene bedneni {BASEMENT_THIN_WALL_THICKNESS*1000:g} mm",
-    layers=[("ztracene bedneni 250", BASEMENT_THIN_WALL_THICKNESS)],
-    color="#dfefcf",
 )
 
 # Outer-face reference lines, with all material toward the interior.
@@ -906,16 +903,18 @@ wall_east_g = ground.wall(
     (0, HOUSE_DEPTH), (0, 0), wall_type=load_bearing_wall, height=ground_floor_height,
 )
 for wall in (wall_front_g, wall_back_g, wall_east_g, wall_west_g):
-    wall.Description = f"VPC Cihla {wall.thickness*1000:g} mm (20-2,0)"
+    wall.Description = f"VPC Cihla {wall.thickness*1000:g} mm (10-2,0)"
 wall_garden_rooms_g = ground.wall(
     (BWT, GARDEN_ROOMS_WALL_Y), (HOUSE_WIDTH-BWT, GARDEN_ROOMS_WALL_Y),
     wall_type=garden_rooms_wall_type, height=ground_floor_height,
 )
+wall_garden_rooms_g.Description = GARDEN_ROOMS_WALL_MATERIAL
 wall_garden_partition_g = ground.wall(
     (HOUSE_WIDTH/2, GARDEN_ROOMS_WALL_Y+GARDEN_ROOMS_WALL_THICKNESS),
     (HOUSE_WIDTH/2, HOUSE_DEPTH-BACK_WALL_THICKNESS),
     wall_type=garden_partition_wall, height=ground_floor_height,
 )
+wall_garden_partition_g.Description = GARDEN_ROOMS_WALL_MATERIAL
 wall_third_room_g = ground.wall(
     (THIRD_ROOM_WALL_X, FRONT_WALL_THICKNESS), (THIRD_ROOM_WALL_X, GARDEN_ROOMS_WALL_Y),
     wall_type=mid_wall_type, height=ground_floor_height,
@@ -990,7 +989,7 @@ pokoj2_door = wall_garden_rooms_g.add_door(
 )
 pokoj3_door = wall_third_room_top_g.add_door(
     name="Pokoj 3 door",
-    at=0.125,
+    at=wall_third_room_top_g.length-THIRD_ROOM_DOOR_GARDEN_CLEARANCE-ROOM_DOOR_OPENING_WIDTH,
     opening_width=ROOM_DOOR_OPENING_WIDTH,
     width=ROOM_DOOR_WIDTH,
     height=ROOM_DOOR_HEIGHT,
@@ -1020,7 +1019,7 @@ for wall in ground.walls:
     role = "load bearing" if load_bearing else "partition"
     material_set = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
     wall_material = material_set.MaterialLayers[0].Material.Name
-    if wall_material in ("Brick", "Ytong Klasik"):
+    if wall_material in ("Brick", "Ytong Klasik", GARDEN_ROOMS_WALL_MATERIAL):
         layers = [
             (GROUND_WALL_BASE_COURSE_MATERIAL, GROUND_WALL_BASE_COURSE_HEIGHT),
             (wall_material, wall.height-GROUND_WALL_BASE_COURSE_HEIGHT),
@@ -1028,7 +1027,9 @@ for wall in ground.walls:
         masonry_name = "VPC" if wall_material == "Brick" else wall_material
         wall.set_vertical_material_layers(
             layers,
-            type_name=f"Ground {role} wall - {masonry_name} {wall.thickness*1000:g} mm - Liapor base course",
+            type_name=(f"Ground {role} wall - {wall_material} - Liapor base course"
+                       if wall_material == GARDEN_ROOMS_WALL_MATERIAL else
+                       f"Ground {role} wall - {masonry_name} {wall.thickness*1000:g} mm - Liapor base course"),
         )
     common = ifcopenshell.api.pset.add_pset(house.model, product=wall, name="Pset_WallCommon")
     ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": load_bearing})
@@ -1042,12 +1043,8 @@ basement_source_walls = tuple(
     if wall not in (wall_third_room_return_g, wall_third_room_top_g, wall_bathroom_partition_g)
 )
 for source in basement_source_walls:
-    wall_type = (basement_wall_type if source in (
-        wall_west_g, wall_back_g, wall_east_g, wall_third_room_g, wall_stairway_g,
-    )
-                 else basement_thin_wall_type)
-    thickness = (BASEMENT_WALL_THICKNESS if wall_type == basement_wall_type
-                 else BASEMENT_THIN_WALL_THICKNESS)
+    wall_type = basement_wall_type
+    thickness = BASEMENT_WALL_THICKNESS
     tangent = (np.asarray(source.end)-source.start)/source.length
     normal = np.array((-tangent[1], tangent[0]))
     centre_offset = source.body_offset+source.thickness/2
@@ -1075,8 +1072,8 @@ for source in basement_source_walls:
         reference_thickness = INNER_BWT
         reference_start[1] = BWT
         reference_end[1] = GARDEN_ROOMS_WALL_CENTER_Y-INNER_BWT/2
-    # Retain the existing garden-room basement support's endpoints when
-    # replacing the wall above with a thinner, non-load-bearing partition.
+    # Retain the garden-room basement support's endpoints independently of
+    # the thinner load-bearing wall above.
     # Front/back walls span to the outside faces of the 300 mm side walls.
     end_thickness = BASEMENT_WALL_THICKNESS if source in (wall_front_g, wall_back_g) else thickness
     extension = (0 if source == wall_garden_partition_g
@@ -1247,14 +1244,14 @@ heat_pump = basement.furniture(
 )
 # Per-wall (width, height) overrides in metres; other strips keep the defaults.
 foundation_footing_dimensions = {
-    wall_basement_east: (1.10, 0.50),
-    wall_basement_west: (1.10, 0.50),
-    wall_basement_back: (0.9, 0.50),
-    wall_basement_s03_s04: (1.10, 0.50),
-    wall_basement_s04_s05: (1.10, 0.50),
-    wall_basement_front: (0.80, 0.50),
-    wall_basement_garden_rooms: (0.80, 0.50),
-    wall_basement_s01_s02: (0.70, 0.50),
+    wall_basement_east: (0.9, 0.60),
+    wall_basement_west: (0.9, 0.60),
+    wall_basement_back: (0.8, 0.60),
+    wall_basement_s03_s04: (0.9, 0.60),
+    wall_basement_s04_s05: (0.9, 0.60),
+    wall_basement_front: (0.8, 0.60),
+    wall_basement_garden_rooms: (0.70, 0.60),
+    wall_basement_s01_s02: (0.60, 0.60),
 }
 foundation_footings = []
 for source_wall in basement_walls:
@@ -1288,11 +1285,24 @@ for wall, footprint, axis in (
         "Footprint": json.dumps(tuple(footprint.exterior.coords)[:-1]),
         "Length": footprint.bounds[axis+2]-footprint.bounds[axis],
     })
+# Reference bottoms for the default height; individual footing heights grow
+# downward from the same tops (the plate underside, or the lowered street top).
 FOUNDATION_HEIGHT_MAP = FoundationHeightMap((
     (0.0, FOUNDATION_FOOTING_BOTTOM_Z-FOUNDATION_STREET_STEP_DROP),
     (FOUNDATION_STREET_STEP_Y, FOUNDATION_FOOTING_BOTTOM_Z),
 ))
-step_strip_footings(foundation, foundation_footings, height_map=FOUNDATION_HEIGHT_MAP)
+step_strip_footings(
+    foundation, foundation_footings, height_map=FOUNDATION_HEIGHT_MAP,
+    reference_height=FOUNDATION_FOOTING_HEIGHT,
+)
+foundation_footing_properties = tuple(
+    ifcopenshell.util.element.get_pset(footing, "BBIM_StripFooting")
+    for footing in foundation_footings
+)
+foundation_lowest_footing_bottom_z = min(p["MinimumBottomZ"] for p in foundation_footing_properties)
+foundation_normal_footing_bottom_z = min(
+    json.loads(p["HeightMap"])[-1][1] for p in foundation_footing_properties
+)
 east_footing = next(
     footing for footing in foundation_footings
     if ifcopenshell.util.element.get_pset(footing, "BBIM_StripFooting", "SourceWall")
@@ -1350,11 +1360,12 @@ for source_wall in (wall_basement_east, wall_basement_west,
                     wall_basement_s03_s04, wall_basement_s04_s05):
     y0, y1 = sorted((source_wall.start[1], source_wall.end[1]))
     y0 = max(y0, front_foundation_inside_y)
-    footing_height = ifcopenshell.util.element.get_pset(
-        footings_by_source_wall[source_wall.GlobalId], "BBIM_StripFooting", "Height",
+    footing_properties = ifcopenshell.util.element.get_pset(
+        footings_by_source_wall[source_wall.GlobalId], "BBIM_StripFooting",
     )
-    for band_start, band_end, footing_bottom_z in FOUNDATION_HEIGHT_MAP.bands(y0, y1):
-        wall_bottom_z = footing_bottom_z+footing_height
+    footing_map = FoundationHeightMap(json.loads(footing_properties["HeightMap"]))
+    for band_start, band_end, footing_bottom_z in footing_map.bands(y0, y1):
+        wall_bottom_z = footing_bottom_z+footing_properties["Height"]
         if wall_bottom_z >= BASEMENT_SLAB_BOTTOM_Z-1e-9:
             continue
         start, end = list(source_wall.start), list(source_wall.end)
@@ -1367,7 +1378,7 @@ for source_wall in (wall_basement_east, wall_basement_west,
 foundation_walls_below_base_plate = tuple(foundation_walls_below_base_plate)
 print(
     "Foundation footing bottom below ground-floor finished floor: "
-    f"{ground.elevation+GROUND_FLOOR_THICKNESS-FOUNDATION_FOOTING_BOTTOM_Z:.3f} m"
+    f"{ground.elevation+GROUND_FLOOR_THICKNESS-foundation_normal_footing_bottom_z:.3f} m"
 )
 
 floor_layer_settings = dict(
@@ -2363,7 +2374,6 @@ if basement_stair_opening_length > 1e-9:
 # Reuse the floor polygons so finishes follow the actual room wall faces,
 # except for the stair opening closed by the separate ground-floor board.
 basement_ceiling_insulation = []
-basement_ceiling_plasterboard = []
 for floor in basement_room_floors:
     finish_region = Polygon(floor.outline)
     if floor.room_id == "S.05" and ground_stair_opening_region is not None:
@@ -2372,20 +2382,13 @@ for floor in basement_room_floors:
     basement_ceiling_insulation.append(basement_ceiling_storey.floor_layer(
         f"Basement ceiling insulation - {floor.room_id}.1",
         outline=finish_outline, thickness=BASEMENT_CEILING_INSULATION_THICKNESS,
-        start_height=-BASEMENT_CEILING_INSULATION_THICKNESS,
+        start_height=-BASEMENT_CEILING_FINISH_THICKNESS,
         buildup_material=FLOOR_INSULATION_MATERIAL, color="#ffff80",
     ))
-    basement_ceiling_plasterboard.append(basement_ceiling_storey.floor_layer(
-        f"Basement ceiling plasterboard - {floor.room_id}.1",
-        outline=finish_outline, thickness=BASEMENT_CEILING_PLASTERBOARD_THICKNESS,
-        start_height=-BASEMENT_CEILING_FINISH_THICKNESS,
-        buildup_material="Gypsum plasterboard", color="#E8E5DE",
-    ))
 basement_ceiling_insulation = tuple(basement_ceiling_insulation)
-basement_ceiling_plasterboard = tuple(basement_ceiling_plasterboard)
 # Continue the concrete infill's chimney opening through the finishes on both
 # sides of the slab, including both materials in the ground-floor build-up.
-for layer in (chodba, *(part for part in (*basement_ceiling_insulation, *basement_ceiling_plasterboard)
+for layer in (chodba, *(part for part in basement_ceiling_insulation
                        if "S.04." in part.Name)):
     add_horizontal_opening(
         layer, f"{layer.Name} Chimney opening", chimney_ceiling_opening_region,
@@ -2399,21 +2402,7 @@ for layer in (chodba, *(part for part in (*basement_ceiling_insulation, *basemen
         pset=house.model.by_id(ifcopenshell.util.element.get_pset(layer, "BBIM_FloorLayer")["id"]),
         properties={"Area": net_area},
     )
-basement_stair_opening_board = None
-if ground_stair_opening_region is not None:
-    s05_floor = next(floor for floor in basement_room_floors if floor.room_id == "S.05")
-    lower_board_region = Polygon(s05_floor.outline).intersection(ground_stair_opening_region)
-    basement_stair_opening_board = basement_ceiling_storey.floor_layer(
-        "Basement ceiling plasterboard - S.05 stair opening",
-        outline=tuple(lower_board_region.exterior.coords)[:-1],
-        thickness=BASEMENT_STAIR_OPENING_BOARD_THICKNESS,
-        start_height=BASEMENT_FINISHED_CEILING_Z-basement_ceiling_storey.elevation,
-        buildup_material="Gypsum plasterboard", color="#E8E5DE",
-    )
-basement_ceiling_finishes = (
-    *basement_ceiling_insulation, *basement_ceiling_plasterboard,
-    *((basement_stair_opening_board,) if basement_stair_opening_board is not None else ()),
-)
+basement_ceiling_finishes = basement_ceiling_insulation
 basement_ceiling_schedule_rows = [
     {"location": "S.01, S.02", "slab": (basement_ceiling_s01, basement_ceiling_s02)},
     {"location": "S.03", "slab": basement_ceilings_by_room["S.03"]},
@@ -2820,7 +2809,8 @@ wall_living_room_back_u = upper.wall(
     (BWT, upper_bearing_wall_center_y), (HOUSE_WIDTH-BWT, upper_bearing_wall_center_y),
     wall_type=upper_bearing_wall_type, height=gable_masonry_height, cuts=upper_bearing_wall_cuts,
 )
-wall_living_room_back_u.Name = f"Upper load-bearing wall - Ytong Klasik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm"
+wall_living_room_back_u.Name = f"Upper load-bearing wall - {GARDEN_ROOMS_WALL_MATERIAL}"
+wall_living_room_back_u.Description = GARDEN_ROOMS_WALL_MATERIAL
 common = ifcopenshell.api.pset.add_pset(house.model, product=wall_living_room_back_u, name="Pset_WallCommon")
 ifcopenshell.api.pset.edit_pset(house.model, pset=common, properties={"LoadBearing": True})
 upper_bearing_wall_region = box(
@@ -4683,7 +4673,6 @@ if "basement" in sys.argv:
     )
     drawing1.add_material_legend([
         ("ztracene-bedneni", f"Ztracené bednění {BASEMENT_WALL_THICKNESS*1000:.0f} mm"),
-        ("ztracene-bedneni-green", f"Ztracené bednění {BASEMENT_THIN_WALL_THICKNESS*1000:.0f} mm"),
         ("perimeter-polystyrene", f"Perimetrická izolace {EXTERIOR_XPS_INSULATION_THICKNESS*1000:.0f} mm"),
         ("wood-solid", "Podpěrný sloupek podesty"),
     ])
@@ -4802,13 +4791,12 @@ if "basement" in sys.argv:
 if "found" in sys.argv or "foundation" in sys.argv:
     drawing1 = house.add_drawing(
         "found", x=HOUSE_WIDTH/2, y=HOUSE_DEPTH/2,
-        z=FOUNDATION_FOOTING_BOTTOM_Z+FOUNDATION_FOOTING_HEIGHT/2,
+        z=BASEMENT_SLAB_BOTTOM_Z-min(p["Height"] for p in foundation_footing_properties)/2,
         radius=6.5, storeys=[foundation], right_panel_width=60,
         door_annotations=False, automatic_plan_annotations=False,
     )
     drawing1.add_material_legend([
         ("ztracene-bedneni", f"Ztracené bednění {BASEMENT_WALL_THICKNESS*1000:.0f} mm"),
-        ("ztracene-bedneni-green", f"Ztracené bednění {BASEMENT_THIN_WALL_THICKNESS*1000:.0f} mm"),
     ])
     wall_outline = drawing1.add_wall_outlines(basement_walls, style="dashed")
     ground_wall_outline = drawing1.add_wall_outlines(
@@ -4957,7 +4945,9 @@ if "found" in sys.argv or "foundation" in sys.argv:
     drawing1.add_notes([
         "Výztuž základových pasů: Ø12 po 150mm příčně, 3× Ø12 podélně",
 		f"Uliční část základových pasů je snížena o {FOUNDATION_STREET_STEP_DROP*1000:g} mm.",
-		"Výška základových pasů: 500mm"
+		"Výška základových pasů: "+" / ".join(
+            f"{height*1000:g}" for height in sorted({p["Height"] for p in foundation_footing_properties})
+        )+" mm",
     ])
     footing_plan_min = np.array(footing_region.bounds[:2])
     footing_plan_max = np.array(footing_region.bounds[2:])
@@ -5067,8 +5057,9 @@ if "ground" in sys.argv:
     for post in stair_landing_posts:
         drawing1.include_element(post)
     drawing1.add_material_legend([
-        ("solid-white", f"Nosná zeď - VPC Cihla {BACK_WALL_THICKNESS*1000:g} mm (20-2,0)"),
-        ("ytong-klasik", f"Nosná zeď - Ytong Klasik {MID_WALL_THICKNESS*1000:g} mm"),
+        ("solid-white", f"Nosná zeď - VPC Cihla {BACK_WALL_THICKNESS*1000:g} mm (10-2,0)"),
+        ("vpc-240-10-14-solid", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
+        ("ytong-klasik", f"Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm"),
         ("drywall-diagonal1", f"Příčka - SDK {DRY_WALL_WIDTH*1000:g} mm"),
         ("rockwool-wave", f"Fasádní izolace"),
     ])
@@ -5580,7 +5571,6 @@ if "basement_ceiling2" in sys.argv:
     add_perimeter_insulation(drawing1)
     drawing1.add_material_legend([
         ("ztracene-bedneni", f"Ztracené bednění {BASEMENT_WALL_THICKNESS*1000:.0f} mm"),
-        ("ztracene-bedneni-green", f"Ztracené bednění {BASEMENT_THIN_WALL_THICKNESS*1000:.0f} mm"),
         ("reinforced-concrete", "Železobetonový věnec a dobetonávka"),
         ("perimeter-polystyrene", f"Perimetrická izolace {EXTERIOR_XPS_INSULATION_THICKNESS*1000:.0f} mm"),
     ])
@@ -5668,8 +5658,9 @@ if "upper" in sys.argv:
         section_outline_width=SECTION_OUTLINE_WIDTH,
     )
     drawing1.add_material_legend([
-        ("liapor-km-240-aku-solid", f"Nosná zeď - {UPPER_EXTERIOR_WALL_MATERIAL}"),
-        ("ytong-klasik", f"Nosná zeď - Ytong Klasik {UPPER_BEARING_WALL_THICKNESS*1000:g} mm"),
+        ("vpc-240-10-18-solid", f"Nosná zeď - {UPPER_EXTERIOR_WALL_MATERIAL}"),
+        ("vpc-240-10-14-solid", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
+        ("ytong-klasik", f"Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm"),
         ("drywall-diagonal1", f"Sádrokartonová příčka {DRY_WALL_WIDTH*1000:.0f} mm"),
         ("rockwool-wave", f"Fasádní izolace"),
     ])
@@ -6161,7 +6152,7 @@ def add_section_ground(drawing):
     first, last = earth_to_z(first), earth_to_z(last)
     wall_start, wall_end = float(basement_plan_min[axis]), float(basement_plan_max[axis])
     left, right = wall_start-SECTION_SOIL_EXTENT, wall_end+SECTION_SOIL_EXTENT
-    bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.steps)-SECTION_SOIL_DEPTH
+    bottom = foundation_lowest_footing_bottom_z-SECTION_SOIL_DEPTH
     ground_region = Polygon(((left, bottom), (right, bottom), (right, last),
                              (length, last), (0, first), (left, first)))
     finish = EXTERIOR_XPS_INSULATION_THICKNESS+FACADE_THICKNESS
@@ -6173,10 +6164,7 @@ def add_section_ground(drawing):
         if drawing.name in ("bb", "cc", "zz") and axis == 1 and outward == -1:
             # Follow the lowered street footing's top; the garden side retains its
             # existing backfill depth. Use the same profile as the IFC footers.
-            gravel_bottom_z = (
-                FOUNDATION_HEIGHT_MAP.bottom_profile(wall_start, wall_end)[0][1]
-                +FOUNDATION_FOOTING_HEIGHT
-            )
+            gravel_bottom_z = front_footing_top_z
         if terrain_z <= gravel_bottom_z:
             continue
         top_width = SECTION_GRAVEL_BOTTOM_WIDTH+(terrain_z-gravel_bottom_z)*SECTION_GRAVEL_SLOPE
@@ -6229,11 +6217,11 @@ def add_aa_elevation_marks(drawing):
         (UPPER_FINISHED_FLOOR_HEIGHT, False, "Upper finished floor level"),
         (roof_tiles_lowest_z, False, "Lowest roof tile level"),
         (roof_tiles_top_z, False, "Roof ridge level"),
-        (BASEMENT_FINISHED_CEILING_Z, True, "Basement plasterboard ceiling underside level"),
+        (BASEMENT_FINISHED_CEILING_Z, True, "Basement insulation underside level"),
         (BASEMENT_FINISHED_FLOOR_HEIGHT, False, "Basement finished floor level"),
         (BASEMENT_SLAB_BOTTOM_Z, True, "Foundation slab bottom level"),
-        (FOUNDATION_FOOTING_BOTTOM_Z, False, "Foundation footing bottom level"),
-        (min(z for _, z in FOUNDATION_HEIGHT_MAP.steps), False, "Lowered foundation footing bottom level"),
+        (foundation_normal_footing_bottom_z, False, "Foundation footing bottom level"),
+        (foundation_lowest_footing_bottom_z, False, "Lowered foundation footing bottom level"),
     ):
         x0, x1 = (HOUSE_WIDTH+.4, HOUSE_WIDTH+1.0) if west_side else (-1.0, -0.4)
         drawing.add_elevation_dimension(
@@ -6260,7 +6248,7 @@ def exclude_buried_foundation_projections(drawing, cut):
 def add_house_section(cut, name, pdf):
     """Create a complete vertical section using the same cut as its plan markers."""
     section_top = max(roof_tiles_top_z, chimney.storey.elevation+chimney.end_height)
-    section_bottom = min(z for _, z in FOUNDATION_HEIGHT_MAP.steps)-SECTION_SOIL_DEPTH
+    section_bottom = foundation_lowest_footing_bottom_z-SECTION_SOIL_DEPTH
     drawing = cut.add_drawing(
         house, name, z=(section_bottom+section_top)/2,
         radius=max(6.5, (section_top-section_bottom)/2+.5),
@@ -6316,7 +6304,7 @@ def add_house_section(cut, name, pdf):
     drawing.add_dimension(
         start=(basement_height_dimension_x, BASEMENT_FINISHED_FLOOR_HEIGHT),
         end=(basement_height_dimension_x, BASEMENT_FINISHED_CEILING_Z),
-        name="Basement finished floor to plasterboard ceiling",
+        name="Basement finished floor to insulation underside",
     )
     if name in ("bb", "cc"):
         add_bb_roof_batting(drawing, include_ceiling=name != "cc")
@@ -6332,11 +6320,7 @@ def add_house_section(cut, name, pdf):
         if ground_stair_opening_board is not None:
             _, front_y, _, back_y = ground_stair_opening_region.bounds
             upper_board_bottom_z = ground_stair_opening_board.storey.elevation+ground_stair_opening_board.start_height
-            lower_board_top_z = (
-                basement_stair_opening_board.storey.elevation+basement_stair_opening_board.start_height
-                +basement_stair_opening_board.thickness
-            )
-            insulation_center_z = (upper_board_bottom_z+lower_board_top_z)/2
+            insulation_center_z = (upper_board_bottom_z+BASEMENT_FINISHED_CEILING_Z)/2
             drawing.add_batting(
                 (drawing.x, front_y, insulation_center_z),
                 (drawing.x, back_y, insulation_center_z),
@@ -6389,16 +6373,16 @@ def add_house_section(cut, name, pdf):
         ("mdf-solid", "MDF záklop"),
         ("vapour-barrier-solid", "OSB záklop + parobrzda"),
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
-        ("liapor-km-240-aku-solid", f"Nosná zeď - {UPPER_EXTERIOR_WALL_MATERIAL}"),
+        ("vpc-240-10-14-solid", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
+        ("vpc-240-10-18-solid", f"Nosná zeď - {UPPER_EXTERIOR_WALL_MATERIAL}"),
         *[("brick", f"Nosná zeď - VPC Cihla {thickness*1000:g} mm")
           for thickness in sorted({FRONT_WALL_THICKNESS, BACK_WALL_THICKNESS,
                                    UPPER_FRONT_WALL_THICKNESS, UPPER_BACK_WALL_THICKNESS})
           if thickness != BWT],
-        ("ytong-klasik", f"Nosná zeď - Ytong Klasik {MID_WALL_THICKNESS*1000:g} mm"),
+        ("ytong-klasik", f"Nosná zeď - Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm"),
         ("drywall-diagonal1", "Sádrokarton"),
         ("liapor-brick", "Zakládací řada - Ytong Start"),
         ("ztracene-bedneni", "Ztracené bednění 300 mm"),
-        ("ztracene-bedneni-green", "Ztracené bednění 250 mm"),
         ("base-plate", "Základová deska"),
         ("earth-section", "Rostlý terén"),
         ("gravel", "Zhutněná zemina"),
@@ -6534,7 +6518,7 @@ def add_house_section(cut, name, pdf):
 
 if "found" in sys.argv or "foundation" in sys.argv:
     foundation_zz_top_z = BASEMENT_FINISHED_FLOOR_HEIGHT+.50
-    foundation_zz_bottom_z = min(z for _, z in FOUNDATION_HEIGHT_MAP.steps)-SECTION_SOIL_DEPTH
+    foundation_zz_bottom_z = foundation_lowest_footing_bottom_z-SECTION_SOIL_DEPTH
     foundation_zz = zz_cut.add_drawing(
         house, "zz", z=(foundation_zz_bottom_z+foundation_zz_top_z)/2,
         radius=6.5, height=foundation_zz_top_z-foundation_zz_bottom_z,
@@ -6544,6 +6528,23 @@ if "found" in sys.argv or "foundation" in sys.argv:
     )
     add_section_ground(foundation_zz)
     exclude_buried_foundation_projections(foundation_zz, zz_cut)
+    # ZZ looks west, so decreasing world Y moves toward the sheet's right.
+    front_footing_properties = ifcopenshell.util.element.get_pset(front_footing, "BBIM_StripFooting")
+    footer_front_y = strip_footing_footprint(front_footing).bounds[1]
+    dimension_y = footer_front_y-.6
+    for anchor_y, bottom_z, top_z, label in (
+        (footer_front_y, front_footing_properties["MinimumBottomZ"], front_footing_top_z,
+         "ZZ footing height"),
+        (footer_front_y, front_footing_top_z, BASEMENT_SLAB_BOTTOM_Z,
+         "ZZ footing step height"),
+        (float(basement_plan_min[1]), BASEMENT_SLAB_BOTTOM_Z, BASEMENT_FLOOR_START,
+         "ZZ base plate thickness"),
+    ):
+        foundation_zz.add_dimension(
+            start=(anchor_y, bottom_z), end=(anchor_y, top_z),
+            offset=anchor_y-dimension_y+0.5, name=label,
+            center_label=label != "ZZ base plate thickness",
+        )
     foundation_sheet = DrawingSheet(paper="A3", orientation="portrait")
     foundation_sheet.add(foundation_plan, x=.5, y=.25, title=PDF_FOUND.stem, crop=False)
     foundation_sheet.add(foundation_zz, x=.5, y=.57, title="Řez ZZ", tables=False)
@@ -6703,7 +6704,7 @@ def add_exterior_view(name, camera, direction):
         east_house_right_y = -FACADE_INSULATION_THICKNESS-FACADE_THICKNESS
         east_wall_left_y = east_house_left_y+EAST_VIEW_STONE_WALL_OVERHANG
         east_wall_right_y = east_house_right_y-EAST_VIEW_STONE_WALL_OVERHANG
-        east_wall_bottom_z = FOUNDATION_FOOTING_BOTTOM_Z-.1
+        east_wall_bottom_z = foundation_normal_footing_bottom_z-.1
         camera = (camera[0], (east_wall_left_y+east_wall_right_y)/2)
         radius = max(radius, (east_wall_left_y-east_wall_right_y)/2+.1)
         view_top = max(view_top, earth_to_z(EAST_VIEW_STONE_WALL_LEFT_ELEVATION),
