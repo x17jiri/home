@@ -47,41 +47,41 @@ class BasementCeilingFinishTests(unittest.TestCase):
         triangles = [Polygon(vertices[face, :2]) for face in faces]
         return unary_union([triangle for triangle in triangles if triangle.area > 1e-10])
 
-    def test_insulation_reserves_15mm_for_plaster_below_the_structural_ceiling(self):
+    def test_basement_ceiling_has_only_a_15mm_plaster_allowance_and_no_insulation(self):
         v = self.v
         self.assertAlmostEqual(v["BASEMENT_CEILING_PLASTER_ALLOWANCE"], .015)
-        self.assertEqual(len(v["basement_ceiling_insulation"]), 5)
-        self.assertEqual(v["basement_ceiling_finishes"], v["basement_ceiling_insulation"])
-        for insulation in v["basement_ceiling_insulation"]:
-            ilo, ihi = self.bounds(insulation)
-            self.assertAlmostEqual(ihi[2], v["BASEMENT_WALL_TOP_Z"]-.015)
-            self.assertAlmostEqual(ihi[2]-ilo[2], v["BASEMENT_CEILING_INSULATION_THICKNESS"])
-            self.assertAlmostEqual(ilo[2], v["BASEMENT_FINISHED_CEILING_Z"])
-            self.assertEqual(element.get_material(insulation).Name, v["FLOOR_INSULATION_MATERIAL"])
-            self.assertEqual(element.get_container(insulation), v["basement_ceiling_storey"].element)
-            self.assertFalse(element.get_pset(insulation, "Pset_SlabCommon", "LoadBearing"))
-        self.assertFalse(any((obj.Name or "").startswith("Basement ceiling plasterboard")
+        self.assertAlmostEqual(v["BASEMENT_FINISHED_CEILING_Z"], v["BASEMENT_WALL_TOP_Z"]-.015)
+        self.assertEqual(v["basement_ceiling_finishes"], (v["basement_stair_opening_plasterboard"],))
+        self.assertFalse(any((obj.Name or "").startswith("Basement ceiling insulation")
                              for obj in v["house"].model.by_type("IfcElement")))
 
-    def test_stair_opening_has_50mm_floor_and_wool_without_a_lower_panel(self):
+    def test_stair_opening_has_50mm_floor_wool_and_a_level_plasterboard_ceiling(self):
         v = self.v
         upper = v["ground_stair_opening_board"]
         upper_lo, upper_hi = self.bounds(upper)
         self.assertEqual(element.get_material(upper).Name, "Wood")
         self.assertAlmostEqual(upper_hi[2]-upper_lo[2], .05)
         self.assertAlmostEqual(upper_hi[2], v["ground"].elevation+v["GROUND_FLOOR_THICKNESS"])
-        gap = (upper_lo[2]-v["BASEMENT_FINISHED_CEILING_Z"]-v["GROUND_STAIR_OPENING_INSULATION_THICKNESS"])/2
+        panel = v["basement_stair_opening_plasterboard"]
+        lower_lo, lower_hi = self.bounds(panel)
+        self.assertEqual(element.get_material(panel).Name, "Gypsum plasterboard")
+        self.assertAlmostEqual(lower_hi[2]-lower_lo[2], .0125)
+        self.assertAlmostEqual(lower_lo[2], v["BASEMENT_FINISHED_CEILING_Z"])
+        self.assertLess(self.footprint(panel).symmetric_difference(v["ground_stair_opening_region"]).area, 1e-9)
+        self.assertEqual(element.get_container(panel), v["basement_ceiling_storey"].element)
+        self.assertFalse(element.get_pset(panel, "Pset_SlabCommon", "LoadBearing"))
+        gap = (upper_lo[2]-lower_hi[2]-v["GROUND_STAIR_OPENING_INSULATION_THICKNESS"])/2
         self.assertAlmostEqual(gap, v["GROUND_STAIR_OPENING_AIR_GAP_THICKNESS"])
         batting = next(e for e in v["house"].model.by_type("IfcAnnotation")
                        if e.Name == "CC rockwool below stair-opening timber board")
         placement = ifcopenshell.util.placement.get_local_placement(batting.ObjectPlacement)
-        self.assertAlmostEqual(placement[2, 3], (upper_lo[2]+v["BASEMENT_FINISHED_CEILING_Z"])/2)
+        self.assertAlmostEqual(placement[2, 3], (upper_lo[2]+lower_hi[2])/2)
         self.assertAlmostEqual(element.get_pset(batting, "BBIM_Batting", "Thickness"), .20)
 
     def test_sk7_is_shared_in_the_list_and_marked_only_on_cc(self):
         v = self.v
         self.assertEqual(v["CONSTRUCTION_ASSEMBLIES"][7]["layers"], (
-            "Dřevo | 50 mm", "Minerální vata | 200 mm",
+            "Dřevo | 50 mm", "Minerální vata | 200 mm", "Sádrokarton | 12.5 mm",
         ))
         markers = [e for e in v["house"].model.by_type("IfcAnnotation")
                    if element.get_pset(e, "BBIM_HexagonMarker", "Identifier") == "SK7"]
@@ -92,10 +92,11 @@ class BasementCeilingFinishTests(unittest.TestCase):
         self.assertAlmostEqual(placement[2, 3]-element.get_pset(marker, "BBIM_HexagonMarker", "LineLength"),
                                v["BASEMENT_FINISHED_CEILING_Z"]-.1)
 
-    def test_sk3_preserves_plaster_allowance_and_crosses_the_insulation(self):
+    def test_sk3_ends_with_plaster_and_has_no_basement_ceiling_insulation(self):
         v = self.v
-        self.assertEqual(len(v["CONSTRUCTION_ASSEMBLIES"][3]["layers"]), 7)
+        self.assertEqual(len(v["CONSTRUCTION_ASSEMBLIES"][3]["layers"]), 6)
         self.assertIn("Omítka | 15 mm", v["CONSTRUCTION_ASSEMBLIES"][3]["layers"])
+        self.assertEqual(v["CONSTRUCTION_ASSEMBLIES"][3]["layers"][-1], "Omítka | 15 mm")
         self.assertFalse(any("Sádrokarton" in layer for layer in v["CONSTRUCTION_ASSEMBLIES"][3]["layers"]))
         for name in ("aa", "bb"):
             marker = next(e for e in v["house"].model.by_type("IfcAnnotation")
@@ -106,29 +107,13 @@ class BasementCeilingFinishTests(unittest.TestCase):
             self.assertAlmostEqual(placement[2, 3]-properties["LineLength"],
                                    v["BASEMENT_FINISHED_CEILING_Z"]-.1)
 
-    def test_finish_uses_floor_polygons_except_at_stairs_and_chimney(self):
-        v = self.v
-        for floor in v["basement_room_floors"]:
-            expected = self.footprint(floor)
-            if floor.room_id == "S.05" and v["ground_stair_opening_region"] is not None:
-                expected = expected.difference(v["ground_stair_opening_region"])
-            if floor.room_id == "S.04":
-                expected = expected.difference(v["chimney_ceiling_opening_region"])
-            for layers in (v["basement_ceiling_insulation"],):
-                finish = next(part for part in layers if f"{floor.room_id}." in part.Name)
-                actual = self.footprint(finish)
-                self.assertLess(actual.symmetric_difference(expected).area, 1e-9)
-                self.assertAlmostEqual(finish.area, expected.area)
-
-    def test_chimney_opening_continues_through_both_sides_of_the_slab(self):
+    def test_chimney_opening_continues_through_the_ground_floor_build_up(self):
         v = self.v
         cx, cy = v["CHIMNEY_CENTER"]
         half = v["CHIMNEY_SIZE"]/2 + .03
         opening_region = box(cx-half, cy-half, cx+half, cy+half)
         self.assertTrue(v["chimney_ceiling_opening_region"].equals(opening_region))
-        layers = [v["chodba"], *(part for part in v["basement_ceiling_insulation"]
-                                if "S.04." in part.Name)]
-        self.assertEqual(len(layers), 2)
+        layers = [v["chodba"]]
         for layer in layers:
             expected = Polygon(layer.outline).difference(opening_region)
             self.assertLess(self.footprint(layer).symmetric_difference(expected).area, 1e-9)
@@ -143,17 +128,17 @@ class BasementCeilingFinishTests(unittest.TestCase):
             self.assertLess(lo[2], layer_lo[2])
             self.assertGreater(hi[2], layer_hi[2])
 
-    def test_sections_measure_to_insulation_including_the_plaster_allowance_once(self):
+    def test_sections_measure_to_the_plastered_ceiling(self):
         v = self.v
         for name in ("aa", "bb", "cc"):
             drawing = next(d for d in v["house"]._drawings if d.name == name)
             annotations = [obj for rel in drawing.group.IsGroupedBy for obj in rel.RelatedObjects]
-            dimensions = [obj for obj in annotations if obj.Name == "Basement finished floor to insulation underside"]
+            dimensions = [obj for obj in annotations if obj.Name == "Basement finished floor to plastered ceiling"]
             self.assertEqual(len(dimensions), 1)
             props = element.get_pset(dimensions[0], "BBIM_DimensionSource")
             self.assertAlmostEqual(json.loads(props["End"])[1], v["basement_ceiling_storey"].elevation-v["BASEMENT_CEILING_FINISH_THICKNESS"])
             self.assertAlmostEqual(props["Length"], v["BASEMENT_WALL_HEIGHT"]-v["BASEMENT_FLOOR_THICKNESS"]-v["BASEMENT_CEILING_FINISH_THICKNESS"])
-            self.assertFalse(any(obj.Name == "Basement finished floor to plastered ceiling" for obj in annotations))
+            self.assertFalse(any(obj.Name == "Basement finished floor to insulation underside" for obj in annotations))
         ground = next(obj for obj in v["house"].model.by_type("IfcAnnotation")
                       if obj.Name == "Ground finished floor to plastered ceiling")
         end = json.loads(element.get_pset(ground, "BBIM_DimensionSource", "End"))
@@ -289,15 +274,6 @@ class BasementCeilingFinishTests(unittest.TestCase):
                    if element.get_pset(obj, "BBIM_CeilingInfill")]
         self.assertFalse(infills)
         self.assertNotIn("basement_ceiling_s04_chimney_infill", v)
-
-    def test_miako_omissions_do_not_trim_the_room_finish_polygons(self):
-        v = self.v
-        for identifier in ("S.04", "S.05"):
-            coverage = unary_union([Polygon(slab.footprint)
-                                    for slab in v["basement_ceilings_by_room"][identifier]])
-            for layers in (v["basement_ceiling_insulation"],):
-                layer = next(part for part in layers if f"{identifier}." in part.Name)
-                self.assertGreater(self.footprint(layer).difference(coverage).area, 1e-6)
 
     def test_appending_a_basement_row_does_not_change_upstairs_or_the_other_room(self):
         source = Path(__file__).with_name("house2.py")

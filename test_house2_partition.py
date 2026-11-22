@@ -533,9 +533,10 @@ class GardenPartitionTests(unittest.TestCase):
             self.assertEqual(slab.structure, tuple(["beam"]+["space", "wide", "space", "beam"]*6))
             self.assertAlmostEqual(slab.width, 3.91)
             self.assertEqual(v["ceiling_slabs"].count(slab), 1)
-        row = next(row for row in v["ceiling_schedule_rows"] if row["location"] == "0.01, 0.02")
-        self.assertEqual(row["slab"], slabs)
-        self.assertEqual(sum(len(slab.beams) for slab in row["slab"]), 14)
+        row = next(row for row in v["ceiling_schedule_rows"] if slabs[0] in row["slab"])
+        self.assertTrue(all(slab in row["slab"] for slab in slabs))
+        self.assertTrue({"0.01", "0.02"}.issubset(row["location"].split(", ")))
+        self.assertEqual(sum(len(slab.beams) for slab in row["slab"] if slab in slabs), 14)
         self.assertFalse(any(obj.Name == "Ceiling - Pokoj 1 + Pokoj 2"
                              for obj in v["house"].model.by_type("IfcSlab")))
 
@@ -593,7 +594,7 @@ class GardenPartitionTests(unittest.TestCase):
         self.assertFalse(any(slab.Name == "Ceiling - Schodiště krajní nosník"
                              for slab in v["house"].model.by_type("IfcSlab")))
         slab = v["ceiling_stairway"]
-        row = next(row for row in v["ceiling_schedule_rows"] if row["location"] == "0.04, 0.05")
+        row = next(row for row in v["ceiling_schedule_rows"] if slab in row["slab"])
         self.assertIn(slab, row["slab"])
         self.assertAlmostEqual(min(y for x,y in slab.footprint)
                                -v["ceiling_stairway_heb_front_y"]-v["ceiling_stairway_edge_heb"].width, .05)
@@ -681,13 +682,13 @@ class GardenPartitionTests(unittest.TestCase):
                 dimension = next(obj for obj in annotations if obj.Name == f"{slab.Name} Last Beam to Wall")
                 self.assertAlmostEqual(ifcopenshell.util.element.get_pset(dimension, "BBIM_DimensionSource", "Length"), .13)
 
-    def test_bathroom_ceilings_have_150mm_bearings_and_share_the_2500mm_schedule_row(self):
+    def test_bathroom_ceilings_have_150mm_bearings_and_a_matching_schedule_row(self):
         v = self.v
         _, middle_hi = self.bounds(v["wall_third_room_g"])
         stairway_lo, _ = self.bounds(v["wall_stairway_g"])
         for key in ("ceiling_bathroom", "ceiling_bathroom_front"):
             slab = v[key]
-            self.assertAlmostEqual(slab.length, 2.5)
+            self.assertAlmostEqual(slab.length, stairway_lo[0]-middle_hi[0]+.30)
             self.assertAlmostEqual(middle_hi[0]-slab.start[0], .15)
             self.assertAlmostEqual(slab.end[0]-stairway_lo[0], .15)
             self.assertAlmostEqual(slab.start[0]+slab.block_start_offset, middle_hi[0])
@@ -696,14 +697,39 @@ class GardenPartitionTests(unittest.TestCase):
                 lo, hi = self.bounds(beam)
                 self.assertAlmostEqual(middle_hi[0]-lo[0], .15)
                 self.assertAlmostEqual(hi[0]-stairway_lo[0], .15)
-        self.assertAlmostEqual(v["ceiling_bathroom"].start[0]-v["ceiling_room3"].end[0], .015)
+        self.assertAlmostEqual(v["ceiling_bathroom"].start[0]-v["ceiling_room3"].end[0],
+                               v["wall_third_room_g"].thickness-v["ROOM3_CEILING_MIDDLE_BEARING"]-.15)
         self.assertNotIn("ceiling_room3_hallway", v)
         self.assertNotIn("ceiling_front", v)
-        rows = {row["location"]: row["slab"] for row in v["ceiling_schedule_rows"]}
-        self.assertEqual(rows["0.03"], (v["ceiling_room3"], v["ceiling_room3_front"]))
-        self.assertEqual(rows["0.04, 0.05"],
-                         (v["ceiling_stairway"], v["ceiling_bathroom"], v["ceiling_bathroom_front"]))
-        self.assertTrue(all(abs(slab.length-2.5) < 1e-9 for slab in rows["0.04, 0.05"]))
+        for location in ("0.03", "0.04", "0.05"):
+            for slab in v["ground_ceilings_by_room"][location]:
+                row = next(row for row in v["ceiling_schedule_rows"] if slab in row["slab"])
+                self.assertIn(location, row["location"].split(", "))
+                self.assertTrue(all(round(part.length*1000) == round(slab.length*1000)
+                                    for part in row["slab"]))
+
+    def test_schedule_merges_matching_lengths_across_rooms_and_splits_mixed_rooms(self):
+        house = House("Ceiling schedule regrouping")
+        storey = house.storey("Ceiling", elevation=3)
+        lengths = (3.5, 2.25, 3.5, 2.25, 2.5, 3.0)
+        counts = (2, 2, 3, 4, 2, 3)
+        slabs = [storey.miako_slab(
+            f"Part {index}", start=(0, index*3), end=(length, index*3),
+            top=0, direction=(0, 1), structure=["beam"]+["wide", "beam"]*(count-1),
+        ) for index, (length, count) in enumerate(zip(lengths, counts))]
+        rooms = {"A": (slabs[0], slabs[1]), "B": (slabs[2],), "C": (slabs[3], slabs[4])}
+        drawing = house.add_drawing("Schedule", 2, 8, 4, 10, right_panel_width=60)
+
+        def schedule():
+            drawing.add_miako_beam_schedule(self.v["miako_schedule_rows_by_length"](rooms))
+            return [(item["location"], item["length"], item["count"])
+                    for item in drawing._right_panel_tables[-1]["items"]]
+
+        self.assertEqual(schedule(), [("A, B", 3500, 5), ("A, C", 2250, 6), ("C", 2500, 2)])
+        # A changed span must move B to its own row without retaining its old label.
+        rooms["B"] = (slabs[5],)
+        self.assertEqual(schedule(), [("A", 3500, 2), ("A, C", 2250, 6),
+                                      ("B", 3000, 3), ("C", 2500, 2)])
 
     def test_bathroom_ceilings_straddle_the_heb_and_reach_the_front_wall(self):
         v = self.v

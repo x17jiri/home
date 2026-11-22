@@ -962,6 +962,13 @@ class DrawingPdfTests(unittest.TestCase):
 
 
 class DrawingCameraTests(unittest.TestCase):
+    def test_unit_scale_keeps_the_fraction_format_required_by_bonsai(self):
+        house = House("Schematic scale")
+        drawing = house.add_drawing("Schematic", 0, 0, 1, .3, storeys=[], scale=1)
+        properties = ifcopenshell.util.element.get_pset(drawing.element, "EPset_Drawing")
+        self.assertEqual(properties["Scale"], "1/1")
+        self.assertEqual(properties["HumanScale"], "1:1")
+
     def test_rectangular_camera_preserves_width_and_limits_section_height(self):
         house = House("Shallow foundation section")
         section = house.add_drawing(

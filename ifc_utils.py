@@ -9165,7 +9165,7 @@ class Drawing:
             "TargetView": (
                 "PLAN_VIEW" if self.view == "plan" else "ELEVATION_VIEW"
             ),
-            "Scale": str(scale_ratio),
+            "Scale": f"{scale_ratio.numerator}/{scale_ratio.denominator}",
             "HumanScale": f"{scale_ratio.numerator}:{scale_ratio.denominator}",
             "HasUnderlay": False,
             "HasLinework": True,

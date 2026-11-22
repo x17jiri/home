@@ -27,6 +27,7 @@ from foundations import FoundationHeightMap, step_strip_footings, strip_footing_
 from materials import resolve_timber_grade
 from pdf_utils import PDFFolder
 from steel_profiles import heb_profile, heb_section
+from electrical_schematic import Circuit, add_distribution_board
 
 
 HOUSE_WIDTH = 8.74
@@ -52,14 +53,14 @@ GARDEN_ROOMS_WALL_CENTER_Y = -0.005 + 5.375 + 0.03
 GARDEN_ROOMS_WALL_Y = GARDEN_ROOMS_WALL_CENTER_Y-GARDEN_ROOMS_WALL_THICKNESS/2
 GARDEN_ROOMS_DEPTH = 3.375+0.6
 ROOM_DOOR_OPENING_WIDTH = 1.0
-GARDEN_DOOR_CENTER_CLEARANCE = 0.25  # Each construction opening stops this far from the centreline.
+GARDEN_DOOR_CENTER_CLEARANCE = 0.375  # Each construction opening stops this far from the centreline.
 THIRD_ROOM_DRYWALL_DOOR_CLEARANCE = 0.05  # Hallway face to the near jamb of the Pokoj 1 opening.
 THIRD_ROOM_NARROW_WALL_X = (
     HOUSE_WIDTH/2-GARDEN_DOOR_CENTER_CLEARANCE-ROOM_DOOR_OPENING_WIDTH-THIRD_ROOM_DRYWALL_DOOR_CLEARANCE
 )
 THIRD_ROOM_NARROW_WIDTH = THIRD_ROOM_NARROW_WALL_X-BWT-DRY_WALL_WIDTH
 # Retain the former 240 mm walls' centrelines while changing their thickness.
-THIRD_ROOM_REFERENCE_WIDTH = 3.26
+THIRD_ROOM_REFERENCE_WIDTH = 3.26+0.25
 THIRD_ROOM_WALL_CENTER_X = BWT+THIRD_ROOM_REFERENCE_WIDTH+INNER_BWT/2
 THIRD_ROOM_WALL_X = THIRD_ROOM_WALL_CENTER_X+MID_WALL_THICKNESS/2
 THIRD_ROOM_WIDTH = THIRD_ROOM_WALL_X-MID_WALL_THICKNESS-BWT
@@ -69,12 +70,12 @@ STAIRWAY_WALL_X = STAIRWAY_WALL_CENTER_X+MID_WALL_THICKNESS/2
 STAIRWAY_WIDTH = HOUSE_WIDTH-BWT-STAIRWAY_WALL_X
 BATHROOM_LEFT_X = THIRD_ROOM_WALL_X
 BATHROOM_RIGHT_X = STAIRWAY_WALL_X-MID_WALL_THICKNESS
-HALLWAY_OPENING_LENGTH = 1.785 - 0.125  # From the garden-room wall towards the street.
-STAIRWAY_OPENING_START_Y = GARDEN_ROOMS_WALL_Y-HALLWAY_OPENING_LENGTH
+STAIRWAY_OPENING_START_Y = BWT+3.25+0.125
+HALLWAY_OPENING_LENGTH = GARDEN_ROOMS_WALL_Y-STAIRWAY_OPENING_START_Y
 STAIRWAY_OPENING_FRONT_Y = STAIRWAY_OPENING_START_Y
 BATHROOM_PARTITION_Y = STAIRWAY_OPENING_FRONT_Y-DRY_WALL_WIDTH
 BATHROOM_DEPTH = BATHROOM_PARTITION_Y-FRONT_WALL_THICKNESS
-BATHROOM_TOILET_ZONE_DEPTH = 0.90
+BATHROOM_TOILET_ZONE_DEPTH = 1.00
 BATHROOM_BASIN_ZONE_DEPTH = 0.80
 BATHROOM_TUV_ZONE_DEPTH = 0.80
 BATHROOM_TUV_STAIRWAY_CLEARANCE = 0.10
@@ -109,18 +110,23 @@ HEAT_PUMP_HEIGHT_ABOVE_BASEMENT_FLOOR = 0.60
 ROZVADEC_SIZE = (0.7, 0.3, 0.50)  # Width along X, depth, height.
 ROZVADEC_BOTTOM_ABOVE_FLOOR = 1.60
 ROZVADEC_WALL_GAP = 0.05
-FAN_COIL_SIZE = (.90, .35, .30)  # Deeper casing leaves room for the plan label.
-FAN_COIL_DOOR_CLEARANCE = .05
-FAN_COIL_WALL_GAP = .01
-BATHROOM_FAN_COIL_SIZE = (.80, .30, .60)
-BATHROOM_FAN_COIL_DOOR_WALL_GAP = .10
+FAN_COIL_SIZE = (1.030, .210, .690)  # Local width, depth, height in metres.
+BATHROOM_FAN_COIL_SIZE = (.830, .210, .690)
+LIVING_ROOM_FAN_COIL_SIZE = (1.430, .210, .690)
+GARDEN_FAN_COIL_WALL_GAP = .01
+GARDEN_FAN_COIL_GARDEN_WALL_CLEARANCE = .75  # Inside wall face to nearest casing end.
+ROOM3_FAN_COIL_WALL_GAP = .01
+LIVING_ROOM_FAN_COIL_WALL_GAP = .01
+# Bathroom placement references, independent of casing size.
+BATHROOM_FAN_COIL_CENTER_WALL_OFFSET = .160
+BATHROOM_FAN_COIL_CENTER_DOOR_WALL_OFFSET = 1.700
 
 ZAKLADACI_MALTA = 0.02
 GROUND_WALL_BASE_COURSE_HEIGHT = ZAKLADACI_MALTA + 0.125
 GROUND_WALL_BASE_COURSE_MATERIAL = "Liapor brick"
-ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.625
+ground_floor_height = GROUND_WALL_BASE_COURSE_HEIGHT + 2.5+0.2
 CEMFLOW_AND_FINISH_THICKNESS = 0.07
-GROUND_FLOOR_INSULATION_THICKNESS = 0.08
+GROUND_FLOOR_INSULATION_THICKNESS = 0.06+0.06+0.03
 GROUND_FLOOR_THICKNESS = GROUND_FLOOR_INSULATION_THICKNESS+CEMFLOW_AND_FINISH_THICKNESS
 PERIMETER_TOP_HEIGHT = -0.21#GROUND_FLOOR_THICKNESS
 GROUND_FINISHED_FLOOR_ELEVATION = 417.9  # Metres above sea level.
@@ -155,27 +161,28 @@ STREET_BACKGROUND_WALL_WEST_EXTENT = 1.0
 STREET_BACKGROUND_TERRAIN_BELOW_STAIRS = 0.05
 CEILING_THICKNESS = 0.21
 CEILING_PLASTER_THICKNESS = 0.015  # Allowance below the slab for clear-height dimensions.
-BASEMENT_CEILING_INSULATION_THICKNESS = 0.06
 BASEMENT_CEILING_PLASTER_ALLOWANCE = 0.015  # Reserved gap; plaster is not modelled.
-BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_PLASTER_ALLOWANCE+BASEMENT_CEILING_INSULATION_THICKNESS
+BASEMENT_CEILING_FINISH_THICKNESS = BASEMENT_CEILING_PLASTER_ALLOWANCE
 GROUND_STAIR_OPENING_BOARD_THICKNESS = 0.05
 GROUND_STAIR_OPENING_INSULATION_THICKNESS = 0.20  # Drawing-only rockwool in CC.
+GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS = 0.0125
 # Retain the former bathroom-wall reference for the upper-floor fixtures.
 CEILING_ROOM3_SPLIT_Y = BWT+3.0
 BASEMENT_WALL_HEIGHT = ZAKLADACI_MALTA + 2.35 # 7*25 + 3*20 = 235cm
 BASEMENT_WALL_THICKNESS = 0.30
 BASEMENT_SLAB_THICKNESS = 0.15
 FOUNDATION_FOOTING_WIDTH = 0.74
-FOUNDATION_FOOTING_HEIGHT = 0.50
+FOUNDATION_FOOTING_HEIGHT = 0.60
 FOUNDATION_STREET_STEP_Y = 1.55-0.08
 FOUNDATION_STREET_STEP_DROP = 0.40
 GROUNDING_LEAD_LENGTH = 1.0  # Length beyond the outside masonry face/corner.
 BASEMENT_WALL_TOP_Z = -CEILING_THICKNESS  # Ground-floor layers start at Z = 0.
 BASEMENT_FINISHED_CEILING_Z = BASEMENT_WALL_TOP_Z-BASEMENT_CEILING_FINISH_THICKNESS
-# Centre the stair-opening wool between the timber floor and the ceiling level.
+# Centre the stair-opening wool between the timber floor and plasterboard top.
 GROUND_STAIR_OPENING_AIR_GAP_THICKNESS = (
     GROUND_FLOOR_THICKNESS-GROUND_STAIR_OPENING_BOARD_THICKNESS
     -BASEMENT_FINISHED_CEILING_Z
+    -GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS
     -GROUND_STAIR_OPENING_INSULATION_THICKNESS
 )/2
 if GROUND_STAIR_OPENING_AIR_GAP_THICKNESS < 0:
@@ -333,8 +340,7 @@ CONSTRUCTION_ASSEMBLIES = {
         "Kročejová minerální vata | 30 mm",
         f"Podlahový polystyren | {(GROUND_FLOOR_INSULATION_THICKNESS-.03)*1000:g} mm",
         f"Stropní konstrukce MIAKO | {CEILING_THICKNESS*1000:g} mm",
-		f"Omítka | 15 mm",
-        f"Minerální vata | {BASEMENT_CEILING_INSULATION_THICKNESS*1000:g} mm (např. Rockwool Stroprock)",
+        f"Omítka | {BASEMENT_CEILING_PLASTER_ALLOWANCE*1000:g} mm",
     )},
     4: {"title": "Podlaha suterénu", "layers": (
         f"Cementový potěr | {(BASEMENT_FLOOR_THICKNESS-.005)*1000:g} mm",
@@ -345,7 +351,7 @@ CONSTRUCTION_ASSEMBLIES = {
         f"Finální vrstva fasády | {FACADE_THICKNESS*1000:g} mm",
         f"Fasádní minerální vata | {FACADE_INSULATION_THICKNESS*1000:g} mm",
         f"VPC cihla / {UPPER_EXTERIOR_WALL_MATERIAL} | {BWT*1000:g} mm",
-        "Vnitřní omítka | 10 mm",
+        "Vnitřní omítka | 5 mm",
     )},
     6: {"title": "Obvodové zdi sklepa", "layers": (
         f"Finální vrstva fasády | {FACADE_THICKNESS*1000:g} mm",
@@ -356,6 +362,7 @@ CONSTRUCTION_ASSEMBLIES = {
     7: {"title": "Podlaha pod schody", "layers": (
         f"Dřevo | {GROUND_STAIR_OPENING_BOARD_THICKNESS*1000:g} mm",
         f"Minerální vata | {GROUND_STAIR_OPENING_INSULATION_THICKNESS*1000:g} mm",
+        f"Sádrokarton | {GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS*1000:g} mm",
     )},
 }
 SECTION_CONSTRUCTION_ASSEMBLY_IDS = {
@@ -430,7 +437,7 @@ ENTRANCE_DOOR_WIDTH = 0.9
 ENTRANCE_DOOR_HEIGHT = GROUND_FLOOR_THICKNESS+2.135
 ENTRANCE_CLEAR_HEIGHT = 2.1
 ROOM_DOOR_WIDTH = 0.9
-ROOM_DOOR_HEIGHT = GROUND_FLOOR_THICKNESS+2.135
+ROOM_DOOR_HEIGHT = ground_floor_height-0.45
 ROOM_DOOR_CLEAR_HEIGHT = 2.1
 UPPER_DOOR_TOP_HEIGHT = ZAKLADACI_MALTA+18*UPPER_MASONRY_COURSE_HEIGHT
 UPPER_DOOR_CLEAR_HEIGHT = 2.1
@@ -444,13 +451,14 @@ UPPER_TOILET_DOOR_WIDTH = 0.7
 UPPER_TOILET_DOOR_OPENING_WIDTH = 0.8
 UPPER_TOILET_DOOR_SIDE_CLEARANCE = 0.05  # From the vertical living-room wall's toilet face.
 THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.05  # Garden-room wall's street face to the nearest opening jamb.
-BATHROOM_DOOR_SIDE_CLEARANCE = 0.125
+BATHROOM_DOOR_SIDE_CLEARANCE = 0.05
 ENTRANCE_OPENING_AT = 4.0 + 0.025  # absolute y position
+GARDEN_WINDOW_WIDTH = 1.25
 ROOM_WINDOW_WIDTH = 1.50
 GARDEN_WINDOW_CENTER_CLEARANCE = 1.0  # House centreline to the nearest opening jamb.
 THIRD_ROOM_WINDOW_EAST_CLEARANCE = 1.255  # Inside east wall face to the opening.
-GROUND_WINDOW_TOP_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+2.25
-GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+0.875
+GROUND_WINDOW_TOP_HEIGHT = ground_floor_height - 0.2
+GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+1.0
 UPPER_WINDOW_WIDTH = 1.5
 UPPER_BACK_WINDOW_WIDTH = 1.5
 UPPER_BACK_WINDOW_GAP = 1.0
@@ -499,6 +507,7 @@ PDF_ELEKTRO_FOLDER = PDFFolder("D1.4.", DIR_ELEKTRO)
 PDF_ELEKTRO_GROUND = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys 1.NP"))
 PDF_ELEKTRO_UPPER = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys podkroví"))
 PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
+PDF_ROZVADEC = Path(PDF_ELEKTRO_FOLDER.add_pdf("Rozvaděč - jednopólové schéma"))
 DIR_VYTAPENI = PROJECT_DIR / "D1.7. Vytápění"
 PDF_VYTAPENI_FOLDER = PDFFolder("D1.7.", DIR_VYTAPENI)
 PDF_VYTAPENI_GROUND = Path(PDF_VYTAPENI_FOLDER.add_pdf("Vytápění - Půdorys 1.NP"))
@@ -1292,8 +1301,8 @@ heat_pump = basement.furniture(
 )
 # Per-wall (width, height) overrides in metres; other strips keep the defaults.
 foundation_footing_dimensions = {
-    wall_basement_east: (0.9, 0.60),
-    wall_basement_west: (0.9, 0.60),
+    wall_basement_east: (0.8, 0.60),
+    wall_basement_west: (0.8, 0.60),
     wall_basement_back: (0.8, 0.60),
     wall_basement_s03_s04: (0.9, 0.60),
     wall_basement_s04_s05: (0.9, 0.60),
@@ -1495,15 +1504,15 @@ koupelna = ground.floor_layer(
 window_pokoj1 = wall_back_g.add_window(
     name="Pokoj 1 window",
     at=wall_back_g.start[0]-(HOUSE_WIDTH/2-GARDEN_WINDOW_CENTER_CLEARANCE),
-    width=ROOM_WINDOW_WIDTH,
-    sill_height=GROUND_WINDOW_SILL_HEIGHT,
+    width=GARDEN_WINDOW_WIDTH,
+    sill_height=GROUND_WALL_BASE_COURSE_HEIGHT+0.375,
     height=GROUND_WINDOW_TOP_HEIGHT,
 )
 window_pokoj2 = wall_back_g.add_window(
     name="Pokoj 2 window",
-    at=wall_back_g.start[0]-(HOUSE_WIDTH/2+GARDEN_WINDOW_CENTER_CLEARANCE+ROOM_WINDOW_WIDTH),
-    width=ROOM_WINDOW_WIDTH,
-    sill_height=GROUND_WINDOW_SILL_HEIGHT,
+    at=wall_back_g.start[0]-(HOUSE_WIDTH/2+GARDEN_WINDOW_CENTER_CLEARANCE+GARDEN_WINDOW_WIDTH),
+    width=GARDEN_WINDOW_WIDTH,
+    sill_height=GROUND_WALL_BASE_COURSE_HEIGHT+0.375,
     height=GROUND_WINDOW_TOP_HEIGHT,
 )
 window_pokoj3 = wall_front_g.add_window(
@@ -1545,31 +1554,33 @@ def add_ground_room_annotations(drawing, *, include_legend=True):
         drawing.add_room_legend()
 
 
-# Fan coils face into their rooms, centred above the construction door openings.
+# Garden-room consoles face away from the divider; room 3 sits under its window.
 ground_fan_coils = []
-for room, door, wall, room_normal in (
-    (pokoj1, pokoj1_door, wall_garden_rooms_g, (0., 1.)),
-    (pokoj2, pokoj2_door, wall_garden_rooms_g, (0., 1.)),
-    (pokoj3, pokoj3_door, wall_third_room_top_g, (-1., 0.)),
+for room, wall, room_normal in (
+    (pokoj1, wall_garden_partition_g, (-1., 0.)),
+    (pokoj2, wall_garden_partition_g, (1., 0.)),
+    (pokoj3, wall_front_g, (0., 1.)),
 ):
-    opening = door.FillsVoids[0].RelatingOpeningElement
-    opening_placement = ifcopenshell.util.placement.get_local_placement(opening.ObjectPlacement)
-    door_center = opening_placement[:2, 3]+opening_placement[:2, 0]*ROOM_DOOR_OPENING_WIDTH/2
-    tangent = (np.asarray(wall.end)-wall.start)/wall.length
-    wall_normal = np.array((-tangent[1], tangent[0]))
     inward = np.asarray(room_normal)
-    face_offset = wall.body_offset+(wall.thickness if np.dot(wall_normal, inward)>0 else 0)
-    face = np.asarray(wall.start)+wall_normal*face_offset
-    wall_face_center = door_center+inward*np.dot(face-door_center, inward)
-    center = wall_face_center+inward*(FAN_COIL_WALL_GAP+FAN_COIL_SIZE[1]/2)
-    door_placement = ifcopenshell.util.placement.get_local_placement(door.ObjectPlacement)
-    bottom = float(door_placement[2, 3])+door.OverallHeight+FAN_COIL_DOOR_CLEARANCE-ground.elevation
-    if bottom+FAN_COIL_SIZE[2] > ground_floor_height-CEILING_PLASTER_THICKNESS:
-        raise ValueError(f"Fan coil above {room.room_id} door does not fit below the ceiling")
+    if room in (pokoj1, pokoj2):
+        divider_x = float(wall_body_centreline_point(wall)[0])
+        garden_wall_face_y = (float(wall_body_centreline_point(wall_garden_rooms_g)[1])
+                              +wall_garden_rooms_g.thickness/2)
+        center = np.array((
+            divider_x+inward[0]*(wall.thickness/2+GARDEN_FAN_COIL_WALL_GAP+FAN_COIL_SIZE[1]/2),
+            garden_wall_face_y+GARDEN_FAN_COIL_GARDEN_WALL_CLEARANCE+FAN_COIL_SIZE[0]/2,
+        ))
+    else:
+        window_placement = ifcopenshell.util.placement.get_local_placement(window_pokoj3.ObjectPlacement)
+        window_center = (window_placement[:2, 3]
+                         +window_placement[:2, 0]*window_pokoj3.OverallWidth/2)
+        front_wall_inner_y = float(wall_body_centreline_point(wall)[1])+wall.thickness/2
+        center = np.array((window_center[0],
+                           front_wall_inner_y+ROOM3_FAN_COIL_WALL_GAP+FAN_COIL_SIZE[1]/2))
     ground_fan_coils.append(ground.fan_coil(
         f"Fan coil {room.room_id}", center=tuple(float(v) for v in center), size=FAN_COIL_SIZE,
-        start_height=bottom, rotation=math.degrees(math.atan2(inward[1], inward[0]))+90,
-        label_rotation=90 if room == pokoj3 else None,
+        start_height=GROUND_FLOOR_THICKNESS, form="console",
+        rotation=math.degrees(math.atan2(inward[1], inward[0]))+90,
         label="FCU",
     ))
 ground_fan_coils = tuple(ground_fan_coils)
@@ -1584,12 +1595,16 @@ rozvadec = ground.furniture(
     start_height=GROUND_FLOOR_THICKNESS+ROZVADEC_BOTTOM_ABOVE_FLOOR,
 )
 
-# Right-hand fixtures occupy consecutive zones from the inside garden partition.
+# Stairway-wall fixtures: WC, basin, remaining hydrobox zone, then TUV at the street end.
 bathroom_right_x = BATHROOM_RIGHT_X
 bathroom_toilet_center_y = BATHROOM_PARTITION_Y-BATHROOM_TOILET_ZONE_DEPTH/2
 bathroom_basin_center_y = BATHROOM_PARTITION_Y-BATHROOM_TOILET_ZONE_DEPTH-BATHROOM_BASIN_ZONE_DEPTH/2
-bathroom_tuv_center_y = (BATHROOM_PARTITION_Y-BATHROOM_TOILET_ZONE_DEPTH
-                         -BATHROOM_BASIN_ZONE_DEPTH-BATHROOM_TUV_ZONE_DEPTH/2)
+bathroom_tuv_center_y = FRONT_WALL_THICKNESS+BATHROOM_TUV_ZONE_DEPTH/2
+bathroom_hydrobox_zone_start_y = FRONT_WALL_THICKNESS+BATHROOM_TUV_ZONE_DEPTH
+bathroom_hydrobox_zone_end_y = BATHROOM_PARTITION_Y-BATHROOM_TOILET_ZONE_DEPTH-BATHROOM_BASIN_ZONE_DEPTH
+bathroom_hydrobox_zone_depth = bathroom_hydrobox_zone_end_y-bathroom_hydrobox_zone_start_y
+if bathroom_hydrobox_zone_depth <= 0:
+    raise ValueError("Bathroom must leave space for the hydrobox between the basin and TUV zones")
 bathroom_toilet = ground.asset(
     "WC", asset="toilet_with_cistern",
     center=(bathroom_right_x-0.53/2-0.2, bathroom_toilet_center_y),
@@ -1617,8 +1632,8 @@ bathroom_water_heater = ground.furniture(
     color="#ffffff",
 )
 bathroom_hydrobox_center = (
-    BATHROOM_WINDOW_CENTER_X,
-    FRONT_WALL_THICKNESS+BATHROOM_HYDROBOX_WALL_GAP+HYDROBOX_SIZE[1]/2,
+    bathroom_right_x-BATHROOM_HYDROBOX_WALL_GAP-HYDROBOX_SIZE[0]/2,
+    (bathroom_hydrobox_zone_start_y+bathroom_hydrobox_zone_end_y)/2,
 )
 bathroom_hydrobox = ground.furniture(
     "Hydro-\nbox", kind="USERDEFINED", size=HYDROBOX_SIZE, color="#ffffff",
@@ -1626,8 +1641,8 @@ bathroom_hydrobox = ground.furniture(
     start_height=GROUND_FLOOR_THICKNESS+0.03,
 )
 bathroom_fan_coil_center = (
-    BATHROOM_LEFT_X+FAN_COIL_WALL_GAP+BATHROOM_FAN_COIL_SIZE[1]/2,
-    BATHROOM_PARTITION_Y-BATHROOM_FAN_COIL_DOOR_WALL_GAP-BATHROOM_FAN_COIL_SIZE[0]/2,
+    BATHROOM_LEFT_X+BATHROOM_FAN_COIL_CENTER_WALL_OFFSET,
+    BATHROOM_PARTITION_Y-BATHROOM_FAN_COIL_CENTER_DOOR_WALL_OFFSET,
 )
 bathroom_fan_coil = ground.fan_coil(
     "Fan coil 0.05 console", center=bathroom_fan_coil_center, size=BATHROOM_FAN_COIL_SIZE,
@@ -2187,7 +2202,7 @@ basement_s03_ceiling_structure = [  # Garden to street; narrow bays just inside 
 ]
 basement_s03_ceiling_width = sum(CEILING_STRIP_WIDTHS[item] for item in basement_s03_ceiling_structure)
 basement_s03_ceiling_garden_y = (basement_s03_y0+basement_s03_y1+basement_s03_ceiling_width)/2
-BASEMENT_S04_BEAM_LENGTH = 2.50
+BASEMENT_S04_BEAM_LENGTH = 2.25
 BASEMENT_S04_MIDDLE_CENTER_BEARING = 0.0
 basement_s04_ceiling_start_x = basement_ceiling_layout_bounds["S.04"][0]-BASEMENT_S04_MIDDLE_CENTER_BEARING
 basement_s04_ceiling_end_x = basement_s04_ceiling_start_x+BASEMENT_S04_BEAM_LENGTH
@@ -2362,6 +2377,7 @@ ground_room_windows = {
 }
 ground_stair_opening_region = None
 ground_stair_opening_board = None
+basement_stair_opening_plasterboard = None
 if basement_stair_opening_length > 1e-9:
     ground_stair_opening_region = box(
         GROUND_STAIR_LEFT_X, ground_front_wall_inner_y, STAIR_RIGHT_X, basement_stair_opening_end_y,
@@ -2373,25 +2389,15 @@ if basement_stair_opening_length > 1e-9:
         start_height=GROUND_FLOOR_THICKNESS-GROUND_STAIR_OPENING_BOARD_THICKNESS,
         buildup_material="Wood", color="#f4d35e", load_bearing=True,
     )
-# Reuse the floor polygons so finishes follow the actual room wall faces,
-# except for the stair opening closed by the separate ground-floor board.
-basement_ceiling_insulation = []
-for floor in basement_room_floors:
-    finish_region = Polygon(floor.outline)
-    if floor.room_id == "S.05" and ground_stair_opening_region is not None:
-        finish_region = finish_region.difference(ground_stair_opening_region)
-    finish_outline = tuple(finish_region.exterior.coords)[:-1]
-    basement_ceiling_insulation.append(basement_ceiling_storey.floor_layer(
-        f"Basement ceiling insulation - {floor.room_id}.1",
-        outline=finish_outline, thickness=BASEMENT_CEILING_INSULATION_THICKNESS,
-        start_height=-BASEMENT_CEILING_FINISH_THICKNESS,
-        buildup_material=FLOOR_INSULATION_MATERIAL, color="#ffff80",
-    ))
-basement_ceiling_insulation = tuple(basement_ceiling_insulation)
-# Retain chimney openings through the finishes independently of the beam layouts,
-# including both materials in the ground-floor build-up.
-for layer in (chodba, *(part for part in basement_ceiling_insulation
-                       if "S.04." in part.Name)):
+    basement_stair_opening_plasterboard = basement_ceiling_storey.floor_layer(
+        "Basement stair opening plasterboard",
+        outline=tuple(ground_stair_opening_region.exterior.coords)[:-1],
+        thickness=GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS,
+        start_height=BASEMENT_FINISHED_CEILING_Z-basement_ceiling_storey.elevation,
+        buildup_material="Gypsum plasterboard", color="#E8E5DE",
+    )
+# Retain the chimney opening through both materials of the ground-floor build-up.
+for layer in (chodba,):
     add_horizontal_opening(
         layer, f"{layer.Name} Chimney opening", chimney_ceiling_opening_region,
         bottom_z=layer.storey.elevation+layer.start_height-0.01,
@@ -2404,13 +2410,22 @@ for layer in (chodba, *(part for part in basement_ceiling_insulation
         pset=house.model.by_id(ifcopenshell.util.element.get_pset(layer, "BBIM_FloorLayer")["id"]),
         properties={"Area": net_area},
     )
-basement_ceiling_finishes = basement_ceiling_insulation
-basement_ceiling_schedule_rows = [
-    {"location": "S.01, S.02", "slab": (basement_ceiling_s01, basement_ceiling_s02)},
-    {"location": "S.03", "slab": basement_ceilings_by_room["S.03"]},
-    {"location": "S.04, S.05", "slab": (*basement_ceilings_by_room["S.04"],
-                                        *basement_ceilings_by_room["S.05"])},
-]
+basement_ceiling_finishes = (() if basement_stair_opening_plasterboard is None
+                            else (basement_stair_opening_plasterboard,))
+def miako_schedule_rows_by_length(ceilings_by_room):
+    """Combine only rooms supplying the same displayed beam length, in millimetres."""
+    groups = {}
+    for location, slabs in ceilings_by_room.items():
+        for slab in slabs:
+            group = groups.setdefault(round(slab.length*1000), {"locations": [], "slabs": []})
+            if location not in group["locations"]:
+                group["locations"].append(location)
+            group["slabs"].append(slab)
+    return [{"location": ", ".join(group["locations"]), "slab": tuple(group["slabs"])}
+            for group in groups.values()]
+
+
+basement_ceiling_schedule_rows = miako_schedule_rows_by_length(basement_ceilings_by_room)
 
 
 ceiling_slabs = (
@@ -2433,11 +2448,14 @@ ceiling_stair_opening_end_y = min(
     ceiling_stairway_edge_heb.start[1]-ceiling_stairway_edge_heb.width/2,
     min(point[1] for point in ceiling_stairway.footprint),
 )
-ceiling_schedule_rows = [
-    {"location": "0.01, 0.02", "slab": ceiling_garden_rooms},
-    {"location": "0.03", "slab": (ceiling_room3, ceiling_room3_front)},
-    {"location": "0.04, 0.05", "slab": (ceiling_stairway, ceiling_bathroom, ceiling_bathroom_front)},
-]
+ground_ceilings_by_room = {
+    "0.01": (ceiling_pokoj1,),
+    "0.02": (ceiling_pokoj2,),
+    "0.03": (ceiling_room3, ceiling_room3_front),
+    "0.04": (ceiling_stairway,),
+    "0.05": (ceiling_bathroom, ceiling_bathroom_front),
+}
+ceiling_schedule_rows = miako_schedule_rows_by_length(ground_ceilings_by_room)
 
 def add_ceiling_spacing_dimension(drawing, start, end, *, side, index, name):
     """Alternate consecutive spacing dimensions between the two outside lines."""
@@ -2976,26 +2994,23 @@ upper_room_windows = {
     upper_toilet_room.room_id: (),
 }
 
-# Living-room fan coil: centred above the door, facing into the room.
+# Centre the living-room radiator on the wall section between the garden windows.
+upper_garden_window_spans = []
+for window in windows_living_room_back:
+    window_placement = ifcopenshell.util.placement.get_local_placement(window.ObjectPlacement)
+    start_x = float(window_placement[0, 3])
+    end_x = start_x+float(window_placement[0, 0])*window.OverallWidth
+    upper_garden_window_spans.append(tuple(sorted((start_x, end_x))))
+upper_garden_window_spans.sort()
+upper_garden_wall_inner_y = float(wall_body_centreline_point(wall_back_u)[1])-wall_back_u.thickness/2
 upper_fan_coil_center = (
-    living_room_door_opening_x+ROOM_DOOR_OPENING_WIDTH/2,
-    living_room_back_face_y+FAN_COIL_WALL_GAP+FAN_COIL_SIZE[1]/2,
+    (upper_garden_window_spans[0][1]+upper_garden_window_spans[1][0])/2,
+    upper_garden_wall_inner_y-LIVING_ROOM_FAN_COIL_WALL_GAP-LIVING_ROOM_FAN_COIL_SIZE[1]/2,
 )
-upper_fan_coil_bottom = (
-    float(ifcopenshell.util.placement.get_local_placement(living_room_door.ObjectPlacement)[2, 3])
-    +living_room_door.OverallHeight+FAN_COIL_DOOR_CLEARANCE-upper.elevation
-)
-upper_fan_coil_ceiling = min(
-    plane_height_at(*cut, x=x, y=y)
-    for cut in upper_partition_cuts
-    for x in (upper_fan_coil_center[0]-FAN_COIL_SIZE[0]/2, upper_fan_coil_center[0]+FAN_COIL_SIZE[0]/2)
-    for y in (upper_fan_coil_center[1]-FAN_COIL_SIZE[1]/2, upper_fan_coil_center[1]+FAN_COIL_SIZE[1]/2)
-)
-if upper.elevation+upper_fan_coil_bottom+FAN_COIL_SIZE[2] > upper_fan_coil_ceiling:
-    raise ValueError("Upper living-room door fan coil does not fit below the ceiling")
+upper_fan_coil_bottom = UPPER_FINISHED_FLOOR_HEIGHT-upper.elevation
 upper_fan_coil = upper.fan_coil(
-    "Fan coil 1.01 above door", center=upper_fan_coil_center, size=FAN_COIL_SIZE,
-    start_height=upper_fan_coil_bottom, rotation=180, label="FCU",
+    "Fan coil 1.01 console", center=upper_fan_coil_center, size=LIVING_ROOM_FAN_COIL_SIZE,
+    start_height=upper_fan_coil_bottom, rotation=0, form="console", label="FCU",
 )
 
 # Reuse the old house's technical-equipment sizes, with small wall gaps.
@@ -3915,18 +3930,20 @@ def add_ground_heating_connections(drawing):
     for unit, control_offset, approach_offset in (
         (ground_fan_coils[0], (.2, 1.), (-1., -.6)),
         (ground_fan_coils[1], (1.4, 1.5), (1.3, -.6)),
-        (ground_fan_coils[2], (-1.3, .35), (-1.5, -.7)),
+        (ground_fan_coils[2], (-1.3, .35), (.6, .8)),
         (bathroom_fan_coil, (-1.2, 1.1), (0., -.6)),
     ):
         placement = ifcopenshell.util.placement.get_local_placement(unit.ObjectPlacement)
         depth = ifcopenshell.util.element.get_pset(unit, "BBIM_FanCoil", "Depth")
-        # Garden-room tips sit below the units; room 3 approaches the front
-        # face. The console uses its bottom end. Keep 120 mm off each casing.
-        end_side = 1 if unit in ground_fan_coils[:2] else -1
-        end = placement[:2, 3]+end_side*placement[:2, 1]*(depth/2+.12)
-        if unit == bathroom_fan_coil:
+        # Keep 120 mm clear of the garden units' street ends and room 3's front.
+        # The bathroom arrow meets the casing's bottom end directly.
+        end = placement[:2, 3]-placement[:2, 1]*(depth/2+.12)
+        if unit in ground_fan_coils[:2]:
             width = ifcopenshell.util.element.get_pset(unit, "BBIM_FanCoil", "Width")
-            end = placement[:2, 3]-placement[:2, 0]*(width/2+.12)
+            end = placement[:2, 3]+np.array((0., -width/2-.12))
+        elif unit == bathroom_fan_coil:
+            width = ifcopenshell.util.element.get_pset(unit, "BBIM_FanCoil", "Width")
+            end = placement[:2, 3]-placement[:2, 0]*(width/2) + (0.1, 0.4)
         add_heating_connection_arrow(
             drawing, start, start+control_offset, end+approach_offset, end,
             name=f"Hydrobox connection to {unit.Name}",
@@ -4012,7 +4029,8 @@ def electrical_ground_fan_coil_layout():
     bathroom_connection = (bathroom[0], bathroom[1]+.15)
     branch = (THIRD_ROOM_NARROW_WALL_X+ELECTRICAL_SOCKET_WALL_OFFSET, junction[1])
     # Keep the final vertical leg outside the casing, then meet it at mid-height.
-    room3_connection = (room3[0]-FAN_COIL_SIZE[1]/2, room3[1])
+    room3_placement = ifcopenshell.util.placement.get_local_placement(ground_fan_coils[2].ObjectPlacement)
+    room3_connection = tuple(room3_placement[:2, 3]-room3_placement[:2, 1]*FAN_COIL_SIZE[1]/2)
     room3_wall_run_x = room3_connection[0]-.10
     return dict(junction=junction, routes=(
         ("feed", (port, junction)),
@@ -4025,11 +4043,11 @@ def electrical_ground_fan_coil_layout():
 
 
 def electrical_upper_fan_coil_layout():
-    """Receive the shared circuit, clear the chimney, and meet the door unit."""
+    """Receive the shared circuit, clear the chimney, and meet the garden-wall unit."""
     riser = electrical_ground_fan_coil_layout()["junction"]
     clear_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-.10
     placement = ifcopenshell.util.placement.get_local_placement(upper_fan_coil.ObjectPlacement)
-    end = tuple(placement[:2, 3]-placement[:2, 1]*FAN_COIL_SIZE[1]/2)
+    end = tuple(placement[:2, 3]-placement[:2, 1]*LIVING_ROOM_FAN_COIL_SIZE[1]/2)
     return dict(riser=riser, route=(riser, (clear_x, riser[1]), (clear_x, end[1]), end))
 
 
@@ -4193,7 +4211,6 @@ def electrical_room05_layout():
     tuv = sewer_fixture_center(bathroom_water_heater)
     hydrobox = sewer_fixture_center(bathroom_hydrobox)
     socket_entry, socket_end = (right, top), (left, y1-.55)
-    hydrobox_socket_x = min(right-.15, hydrobox[0]+HYDROBOX_SIZE[0]/2+.15)
     stairway_socket_x = wall_stairway_g.start[0]-wall_stairway_g.body_offset+ELECTRICAL_SOCKET_WALL_OFFSET
     recuperation_upper = (stairway_socket_x, (toilet[1]+basin[1])/2)
     recuperation_lower = (stairway_socket_x, (basin[1]+tuv[1])/2)
@@ -4209,7 +4226,7 @@ def electrical_room05_layout():
         sockets=(
             ("basin", (right, basin[1]), "left", .1125),
             ("TUV", (right, tuv[1]-.25), "left", .1125),
-            ("hydrobox", (hydrobox_socket_x, bottom), "up", .1125),
+            ("hydrobox", (right, hydrobox[1]), "left", .1125),
             ("loop end before door", socket_end, "right", .1125),
             ("recuperation between toilet and basin", recuperation_upper, "right", .1125),
             ("recuperation between basin and TUV", recuperation_lower, "right", .1125),
@@ -4638,6 +4655,52 @@ def add_electrical_plan(name, storey, cut_height, room_floors, *, skip_lights=()
     return drawing
 
 
+def electrical_distribution_circuits():
+    """One entry per existing plan feed, counting shared floor risers only once."""
+    circuits = []
+
+    def room_circuits(group, room, layout):
+        if "lighting" in layout:
+            circuits.append(Circuit(f"{room.room_id}-light", group, room.Name, "light", room.room_id))
+        if "socket_feed" in layout:
+            circuits.append(Circuit(f"{room.room_id}-sockets", group, room.Name, "socket", room.room_id))
+
+    for room, layout in (
+        (pokoj1, electrical_room01_layout()), (pokoj2, electrical_room02_layout()),
+        (pokoj3, electrical_room03_layout()), (chodba, electrical_room04_layout()),
+        (koupelna, electrical_room05_layout()),
+    ):
+        room_circuits("1.NP", room, layout)
+    circuits.extend((
+        Circuit("entrance-light", "1.NP", "Vstupní podesta", "light", "venku"),
+        Circuit("stairs-light", "1.NP", "Schodiště a mezipodesta", "light", "1.NP + podkroví"),
+        Circuit("fan-coils", "1.NP", "Společný okruh", "fan_coil", "1.NP + podkroví"),
+    ))
+    room_circuits("Podkroví", living_room, electrical_upper_living_light_layout())
+    for side, label in (("garden", "zahrada"), ("street", "ulice + KK")):
+        circuits.append(Circuit(f"living-{side}-sockets", "Podkroví", f"Obývací pokoj {label}",
+                                "socket", living_room.room_id))
+    room_circuits("Podkroví", upper_toilet_room, electrical_upper_toilet_layout())
+    room_circuits("Podkroví", upper_hallway, electrical_upper_hallway_layout())
+    circuits.append(Circuit("cooker", "Podkroví", "Sporák", "three_phase", living_room.room_id))
+
+    basement_lights = {
+        "S.01": electrical_basement_s01_light_layout(), "S.02": electrical_basement_s02_light_layout(),
+        "S.03": electrical_basement_garage_light_layout(), "S.04": electrical_basement_s04_light_layout(),
+        "S.05": electrical_basement_s05_light_layout(),
+    }
+    for room in basement_room_floors:
+        room_circuits("Suterén", room, basement_lights[room.room_id])
+    circuits.extend((
+        Circuit("basement-sockets", "Suterén", "Celý suterén", "socket", "S.01–S.05"),
+        Circuit("garden-socket", "Suterén", "Zahrada", "socket", "venku"),
+    ))
+    for name, _, _, _ in electrical_basement_three_phase_layout():
+        description, room = {"Garage": ("Garáž", "S.03"), "Heat pump": ("Tepelné čerpadlo", "venku")}[name]
+        circuits.append(Circuit(f"basement-{name}", "Suterén", description, "three_phase", room))
+    return tuple(circuits)
+
+
 def add_sewer_routes(drawing, routes):
     for name, points in routes:
         drawing.add_poly_line(points, color="orange", line_width=SEWER_LINE_WIDTH,
@@ -4676,11 +4739,14 @@ if "basement" in sys.argv:
     drawing1.add_material_legend([
         ("ztracene-bedneni", f"Ztracené bednění {BASEMENT_WALL_THICKNESS*1000:.0f} mm"),
         ("perimeter-polystyrene", f"Perimetrická izolace {EXTERIOR_XPS_INSULATION_THICKNESS*1000:.0f} mm"),
-        ("wood-solid", "Podpěrný sloupek podesty"),
     ])
+    drawing1.add_symbol_legend([
+        ("timber_post_section",
+         f"Podpěrný sloupek podesty\n{STAIR_LANDING_POST_SIZE[0]*1000:g} × {STAIR_LANDING_POST_SIZE[1]*1000:g} mm"),
+    ], title="LEGENDA PRVKŮ")
     add_perimeter_insulation(drawing1)
     drawing1.add_notes([
-        "Garáž je určená pro městské vozidlo s délkou do 4.3m",
+        "Garáž je určená pro vozidlo s délkou do 4.4m",
     ])
     for room in basement_rooms:
         region = room["region"]
@@ -4946,7 +5012,6 @@ if "found" in sys.argv or "foundation" in sys.argv:
         (water_sleeve, "Chránička"),
     ])
     drawing1.add_notes([
-        "Výztuž základových pasů: Ø12 po 150mm příčně, 3× Ø12 podélně",
 		f"Uliční část základových pasů je snížena o {FOUNDATION_STREET_STEP_DROP*1000:g} mm.",
 		"Výška základových pasů: "+" / ".join(
             f"{height*1000:g}" for height in sorted({p["Height"] for p in foundation_footing_properties})
@@ -5075,8 +5140,8 @@ if "ground" in sys.argv:
     drawing1.add_lintel(pokoj2_door, 2, position="after", direction="in")
     drawing1.add_lintel(bathroom_left_opening, 3, direction="in")
     drawing1.add_lintel(stairway_opening, 3, position="after")
-    drawing1.add_lintel(window_pokoj1, 4)
-    drawing1.add_lintel(window_pokoj2, 4, position="after")
+    drawing1.add_lintel(window_pokoj1, 7)
+    drawing1.add_lintel(window_pokoj2, 7, position="after")
     drawing1.add_lintel(window_pokoj3, 4)
     drawing1.add_lintel(window_koupelna, 5, position="after")
     drawing1.add_lintel_legend()
@@ -6244,7 +6309,7 @@ def add_aa_elevation_marks(drawing):
         (UPPER_FINISHED_FLOOR_HEIGHT, False, "Upper finished floor level"),
         (roof_tiles_lowest_z, False, "Lowest roof tile level"),
         (roof_tiles_top_z, False, "Roof ridge level"),
-        (BASEMENT_FINISHED_CEILING_Z, True, "Basement insulation underside level"),
+        (BASEMENT_FINISHED_CEILING_Z, True, "Basement finished ceiling level"),
         (BASEMENT_FINISHED_FLOOR_HEIGHT, False, "Basement finished floor level"),
         (BASEMENT_SLAB_BOTTOM_Z, True, "Foundation slab bottom level"),
         (foundation_normal_footing_bottom_z, False, "Foundation footing bottom level"),
@@ -6331,7 +6396,7 @@ def add_house_section(cut, name, pdf):
     drawing.add_dimension(
         start=(basement_height_dimension_x, BASEMENT_FINISHED_FLOOR_HEIGHT),
         end=(basement_height_dimension_x, BASEMENT_FINISHED_CEILING_Z),
-        name="Basement finished floor to insulation underside",
+        name="Basement finished floor to plastered ceiling",
     )
     if name in ("bb", "cc"):
         add_bb_roof_batting(drawing, include_ceiling=name != "cc")
@@ -6347,7 +6412,8 @@ def add_house_section(cut, name, pdf):
         if ground_stair_opening_board is not None:
             _, front_y, _, back_y = ground_stair_opening_region.bounds
             upper_board_bottom_z = ground_stair_opening_board.storey.elevation+ground_stair_opening_board.start_height
-            insulation_center_z = (upper_board_bottom_z+BASEMENT_FINISHED_CEILING_Z)/2
+            plasterboard_top_z = BASEMENT_FINISHED_CEILING_Z+GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS
+            insulation_center_z = (upper_board_bottom_z+plasterboard_top_z)/2
             drawing.add_batting(
                 (drawing.x, front_y, insulation_center_z),
                 (drawing.x, back_y, insulation_center_z),
@@ -7225,7 +7291,7 @@ if "vytapeni" in sys.argv or "vytapeni_upper" in sys.argv:
         name="Ground hydrobox projection label on upper plan",
     )
     start = hydrobox+(0., HYDROBOX_SIZE[1]/2+.05)
-    end = np.array(upper_fan_coil_center)-(0., FAN_COIL_SIZE[1]/2+.12)
+    end = np.array(upper_fan_coil_center)-(0., LIVING_ROOM_FAN_COIL_SIZE[1]/2+.12)
     add_heating_connection_arrow(
         vytapeni_upper, start, start+(1.6, .8), end+(.8, -.8), end,
         name="Ground hydrobox connection to upper FCU",
@@ -7404,6 +7470,12 @@ if "voda" in sys.argv or "voda_upper" in sys.argv:
         )
     voda_upper.render(PROJECT_DIR / "voda_upper.svg", pdf=PDF_VODA_UPPER)
 
+
+if "rozvadec" in sys.argv or "elektro" in sys.argv:
+    rozvadec_schematic = add_distribution_board(house, electrical_distribution_circuits())
+    rozvadec_schematic.render(
+        PROJECT_DIR / "rozvadec.svg", pdf=PDF_ROZVADEC, paper="A2", orientation="landscape",
+    )
 
 if "elektro" in sys.argv or "elektro_basement" in sys.argv:
     elektro_basement = add_electrical_plan(

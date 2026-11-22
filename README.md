@@ -146,10 +146,11 @@ independent of S.03, S.05 and the upstairs ceiling. Appending
 
 The number and placement of later rows follow each independent list.
 `BASEMENT_S03_BEAM_LENGTH` is derived from the clear span plus the two equal
-bearings, currently 3500 mm.
-`BASEMENT_S04_BEAM_LENGTH` / `BASEMENT_S04_MIDDLE_CENTER_BEARING` set the 2500 mm
+bearings, currently 3750 mm.
+`BASEMENT_S04_BEAM_LENGTH` / `BASEMENT_S04_MIDDLE_CENTER_BEARING` set the 2250 mm
 S.04 span. The centre bearing is 0 mm, so the beam ends meet both supporting
-wall centres, giving actual 150 mm bearings at each end. S.04's MIAKO concrete
+wall centres, giving actual 150 mm bearings at each end and leaving 25 mm
+clear to the S.05 beam ends. S.04's MIAKO concrete
 cover follows the beam/block footprint; the floor and ceiling finish layers
 retain their separate 30 mm chimney opening.
 
@@ -171,7 +172,7 @@ list with three beams and two wide bays, 1410 mm wide. Its garden edge sits
 the inside front-wall face. `BASEMENT_S05_MIN_STAIR_OPENING = 1.20 m` enforces
 the minimum opening when editing this section.
 `basement_stair_opening_length` follows the actual nearest ceiling edge.
-The under-stairs floor, timber board and basement insulation coverage follow
+The under-stairs floor, timber board and plasterboard coverage follow
 this updated opening automatically. Both sections contribute to the S.05
 beam schedule; both drawings dimension the separate 50 mm HEB clearances.
 All five basement ceilings have explicit editable structure lists.
@@ -216,17 +217,12 @@ The basement support endpoints are retained. These beams belong to the correspon
 storeys, so hiding a ceiling hides its ring beams as well.
 
 The basement ceiling reserves 15 mm below the MIAKO underside for plaster,
-then has 60 mm of insulation. The plaster is not modelled, and there is no
-basement plasterboard, including under the stairs. Insulation belongs to
-`Basement ceiling` and directly reuses each `basement_room_floors` layer's `outline`.
-It covers the room polygons, including areas outside the MIAKO layout,
-except for the S.05 stair opening closed by the separate timber board.
-The omitted chimney-side MIAKO bay does not trim these finishes.
-`BASEMENT_CEILING_INSULATION_THICKNESS` and `BASEMENT_CEILING_PLASTER_ALLOWANCE`
-control this build-up; `BASEMENT_FINISHED_CEILING_Z` is the insulation
-underside. Insulation uses the floor-insulation material and the same
-`thermal-impact-insulation` cut hatch. The detailed structural ceiling plan
-excludes these finish layers so the MIAKO layout remains visible.
+controlled by `BASEMENT_CEILING_PLASTER_ALLOWANCE`. Plaster is not modelled;
+there is no insulation layer beneath the MIAKO. `BASEMENT_FINISHED_CEILING_Z`
+is the plastered ceiling level. Only the stair opening has a separate
+12.5 mm plasterboard panel, with its bottom aligned to this finished level.
+The detailed structural ceiling plan excludes the panel so the MIAKO layout
+remains visible.
 
 The single `Base plate concrete` slab covers the outer footprint of the
 thicker basement walls. Every basement wall has a centred concrete strip
@@ -240,7 +236,7 @@ legend. It follows the foundation slab's top beneath the basement walls,
 then rises along both exterior wall faces to `PERIMETER_TOP_HEIGHT`, behind
 the perimeter XPS. `HYDROIZOLACE_LINE_WIDTH = 0.7` sets its printed width in
 millimetres; the `hydroizolace` CSS class uses 4 mm dashes and 1.5 mm gaps.
-AA, BB and CC dimension the basement clear height to the insulation underside,
+AA, BB and CC dimension the basement clear height to the plastered ceiling,
 including the 15 mm reserved plaster space once. The height follows the
 configured floor and ceiling finishes.
 BB and CC place their basement and ground-floor clear-height dimensions 500 mm from
@@ -250,8 +246,8 @@ AA's ground-floor clear height still allows 15 mm for plaster, controlled
 by `CEILING_PLASTER_THICKNESS`.
 AA also uses `add_aa_elevation_marks()` for nine signed level marks, in
 millimetres relative to the finished ground floor (`±0`). They cover the
-finished floors, the ground-floor plastered ceiling and basement wood
-underside, lowest roof-tile edge, ridge, and slab
+finished floors, the ground-floor and basement plastered ceilings,
+lowest roof-tile edge, ridge, and slab
 and footing undersides. Closely spaced levels use opposite sides of the
 section; their X positions and names are grouped in that helper.
 Marks on the left use `add_elevation_dimension(..., side="left")`, putting
@@ -295,6 +291,11 @@ actual beam end and supporting inner wall face, retaining the individual
 start/end bearing offsets. The chimney is included for orientation.
 A right-side `SPECIFIKACE MIAKO NOSNÍKŮ` schedule lists beam lengths and
 counts for all five rooms; both ceiling formats share `basement_ceiling_schedule_rows`.
+Both basement and ground-floor schedules use `miako_schedule_rows_by_length()`
+to derive rows from the individual room assemblies. It groups equal displayed
+millimetre lengths across rooms, combines counts, and lists only rooms supplying
+that length. A room with different beam lengths contributes to separate rows.
+This keeps all four ceiling schedules in sync when wall positions change.
 The previous detailed format is preserved as `basement_ceiling2`:
 `python3 house2.py basement_ceiling2` produces `projekt2/basement_ceiling2.svg`
 and `D1.1.14. Strop nad suterénem - podrobný plán.pdf`
@@ -335,13 +336,14 @@ Both insulation and floor build-up follow that edge. The remaining opening
 towards the front wall is closed by `ground_stair_opening_board`, a 50 mm
 timber board with its top flush with the finished ground floor. CC centres
 200 mm of drawing-only rockwool batting between that board's underside and
-the regular basement ceiling level. No lower plasterboard panel is modelled.
+the top of `basement_stair_opening_plasterboard`. This 12.5 mm panel's bottom
+aligns with the regular plastered basement ceiling.
 `GROUND_STAIR_OPENING_AIR_GAP_THICKNESS` calculates the surrounding air space.
-Skladba 7 lists the timber and mineral wool for this
+Skladba 7 lists the timber, mineral wool and plasterboard for this
 detail on all section sheets; its SK7 marker appears only in CC.
-The normal basement ceiling insulation stops at the opening's garden edge.
 `GROUND_STAIR_OPENING_BOARD_THICKNESS` and
-`GROUND_STAIR_OPENING_INSULATION_THICKNESS` control this detail. CC also labels
+`GROUND_STAIR_OPENING_INSULATION_THICKNESS`, together with
+`GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS`, control this detail. CC also labels
 the washing machine and ground-floor recuperation unit.
 The bathroom SDK's hallway face aligns
 with the front edge of the opening in the 300 mm Ytong stairway wall; the concrete
@@ -607,17 +609,20 @@ continuous floor extends through it into the stair approach, follows room
 3's stepped wall and continues beneath both flights up to the S.05 ceiling edge. Its room area
 and legend update from that same outline. Floor build-up still reaches the
 bathroom partition and excludes the new solid side-wall segment below the opening.
-The bathroom keeps the shower at the lower-left/street corner. Along the right
-wall, the WC, basin and hot-water tank are centred in consecutive 900, 800 and
-800 mm zones measured from the bathroom's inside garden partition towards the
-street. `BATHROOM_TOILET_ZONE_DEPTH`, `BATHROOM_BASIN_ZONE_DEPTH` and
-`BATHROOM_TUV_ZONE_DEPTH` control these zones. The 900 mm door leaf
+The bathroom keeps the shower at the lower-left/street corner. Along the stairway
+wall, garden to street, the WC, basin, hydrobox and hot-water tank are centred in
+their assigned vertical zones. The WC occupies the top 1000 mm, the basin the
+next 800 mm, and TUV the bottom 800 mm. The hydrobox occupies the remaining
+space between the basin and TUV zones (currently 675 mm), centred in that space.
+`BATHROOM_TOILET_ZONE_DEPTH`, `BATHROOM_BASIN_ZONE_DEPTH` and
+`BATHROOM_TUV_ZONE_DEPTH` control the fixed zones. The 900 mm door leaf
 has a 1000 mm opening 125 mm from room 3's wall and swings into the
 bathroom. The WC and basin face inward from the stairway wall. The shower is
 900 × 900 mm. The 700 × 700 × 2000 mm hot-water tank sits at the centre of
-the third zone, 100 mm from the inner stairway wall face. The
-800 × 500 × 900 mm hydrobox is on the ground floor, centred under the bathroom
-window, with a 50 mm gap to the front wall and its 800 mm side parallel to it.
+the bottom zone, 100 mm from the inner stairway wall face. The
+800 × 500 × 900 mm hydrobox retains its orientation and sits 50 mm from the
+stairway wall, centred in the unassigned zone. Its shared position also updates
+the heating arrows and its dashed projection on the upper heating plan.
 The 600 × 550 × 900 mm water-meter box is in the basement, at its former
 ground-floor X/Y position and on the basement finished floor. Fixtures start at the
 finished floor, with the basin rim at 850 mm above it.
@@ -716,8 +721,8 @@ wall centres; `ground_garden_ceiling_support_bounds` uses the actual room
 polygons for block ends and bearing dimensions. The span therefore follows
 the current walls instead of the legacy `GARDEN_ROOMS_DEPTH` setting.
 The current 3230 mm clear depth uses 3500 mm beams, centred along Y with
-135 mm bearing at each end. Both assemblies share one beam-schedule row,
-with 14 beams total; their layouts remain independently editable.
+135 mm bearing at each end. Together the assemblies contribute 14 beams to
+the length-grouped schedule; their layouts remain independently editable.
 The basement S.03/S.04/S.05 layouts are independently editable.
 The stairway ceiling has its own `ceiling_stairway_structure`: four 2500 mm
 beams with wide/narrow/wide bays. `STAIRWAY_CEILING_HEB_CLEARANCE = 0.05 m`
@@ -742,18 +747,18 @@ drawing blocks remain independent of the basement. Dimensions use each level's a
 now remains only as the old bathroom reference used by upstairs fixtures.
 Rooms 0.03 and 0.05 have separate spans on either side of their middle
 load-bearing wall. `ceiling_room3` and `ceiling_room3_front` use 3500 mm
-beams centred along X, with 135 mm bearing at both wall faces.
+beams centred along X, with equal bearing at both wall faces.
 `ROOM3_CEILING_*` derives these equal bearings from the current clear span.
 `ceiling_bathroom` and `ceiling_bathroom_front` have 150 mm bearing at each
-end (`BATHROOM_CEILING_BEARING`), giving a 2500 mm span with the current
-wall positions. All endpoints follow the physical supporting wall faces.
-Opposing beam ends leave 15 mm clear on the 300 mm middle wall, and block
+end (`BATHROOM_CEILING_BEARING`); their length follows the clear span plus
+300 mm. All endpoints follow the physical supporting wall faces.
+The gap between opposing beam ends follows the wall thickness and bearings, and block
 offsets stop the ceramic bays at each wall's room-facing surface.
 Each of the four slabs has its own editable `structure` list. Room 3 follows
 its HEB faces, while room 0.05 follows the chimney and HEB independently,
 as described below. Both plans dimension the
-separate spans and bearings. Room 0.03 has its own schedule row;
-rooms 0.04 and 0.05 share a row for their matching 2500 mm beams.
+separate spans and bearings. Schedule rows merge only equal beam lengths;
+room labels and counts are derived from the current room assemblies.
 The basement S.03/S.04 layouts have independent specifications, as described above.
 `purlin_support_girders` adds two separate bare HEB180 steel beams at each
 distinct Y coordinate of the timber posts, without concrete wrapping.
@@ -795,8 +800,8 @@ section anchors 50 mm beyond the steel's street face using
 `BATHROOM_CEILING_HEB_CLEARANCE`. It finishes 50 mm onto the front wall.
 Both plans dimension the actual 25/50 mm gaps. The bathroom's spacing chains
 are placed around the garden section centre; aligned street rows share room 3's outside chain.
-Both sections use 150 mm end bearings and 2500 mm beams.
-The beam schedule groups them with room 0.04's matching 2500 mm beams.
+Both sections use 150 mm end bearings, with lengths derived from the walls.
+Their schedule row shares room 0.04 only when the beam lengths match.
 
 Both ground-floor ceiling plans place beam-spacing chains outside the
 house: the separate Pokoj 1/2 assemblies beyond the garden wall, Pokoj 3
@@ -856,6 +861,9 @@ faces follow the actual basement S.05 wall faces: five posts touch a basement
 wall, leaving 5 mm clearance to the ground-floor front and stairway walls and
 30 mm to the west wall. The posts belong to the basement and are also included
 in ground-floor plans.
+The basement's `LEGENDA PRVKŮ` identifies them as "Podpěrný sloupek podesty"
+with their 120 × 120 mm section and the yellow `timber_post_section` sample,
+matching the purlin-post entry in `upper`.
 
 Wooden banisters run along the inner edges of both retained flights.
 Each `railing_path("right", inset=STAIR_RAILING_INSET)`
@@ -1028,18 +1036,20 @@ Fan coils, the heat pump, hydrobox and TUV have bright orange outlines and label
 in this drawing, using a generated stylesheet based on `plan.css`.
 Four broad red arrows (40% opacity) follow smooth Bezier curves from the
 hydrobox to the FCUs. They show schematic connectivity, with tips stopping
-120 mm before each casing. `add_ground_heating_connections()` sets their
+120 mm before the room casings and directly on the bathroom casing.
+`add_ground_heating_connections()` sets their
 control points; these drawing annotations do not add physical pipework.
 Two matching arrows connect the heat pump to the hydrobox and the hydrobox
 to TUV, with the latter bowing toward the stairway before returning to the tank.
 Run `python3 house2.py vytapeni_upper` for `projekt2/vytapeni_upper.svg` and
 `projekt2/D1.7. Vytápění/D1.7.2. Vytápění - Půdorys podkroví.pdf`.
-The upper FCU is orange above the living-room door. A schematic arrow starts
+The upper FCU is orange between the garden windows. A schematic arrow starts
 at the downstairs hydrobox's XY position. An orange dashed outline labelled
 `Hydrobox (1.NP)` shows the projected equipment at the arrow's start without
 adding another physical unit upstairs. `vytapeni` generates both heating plans.
 
-Run `python3 house2.py elektro` for all three electrical plans, or select
+Run `python3 house2.py elektro` for all three electrical plans and the
+distribution-board schematic, or select
 `elektro_ground`, `elektro_upper`, and `elektro_basement` individually.
 Their SVGs are in `projekt2/`; PDFs use
 `projekt2/D1.4. Zařízení Silnoproudé Elektrotechniky/`, numbered ground 1,
@@ -1055,6 +1065,17 @@ light centred over the middle stair landing, with both flights and the landing
 shown for context. The ground-floor plan adds an outside landing light 250 mm
 from the finished west facade, aligned in Y with the entrance opening's centre.
 The plans contain 5 basement, 6 ground-floor and 5 upper-floor lights.
+Run `python3 house2.py rozvadec` to generate only `projekt2/rozvadec.svg` and
+`D1.4.4. Rozvaděč - jednopólové schéma.pdf` in the electrical folder.
+The A2 landscape sheet has an incoming supply, main switch, surge protector,
+HEP and earthing section, followed by 28 circuit columns grouped by floor
+(12 ground/shared, 7 upper and 9 basement/garden). The shared stair-light
+and fan-coil circuits each appear once; the thick inter-floor cable bundles
+are not extra circuits. `electrical_distribution_circuits()` in `house2.py`
+builds the inventory from the existing route definitions. `electrical_schematic.py`
+contains the reusable symbols, paper layout and editable `Circuit` fields for
+cables and protection. Unspecified incoming devices, cable sizes, breaker
+ratings and RCD arrangements remain open and are identified in the drawing.
 Two thick black routes leave the ground-floor rozvaděč. The basement bundle
 runs diagonally to its riser in front of the chimney. The upstairs bundle leaves
 at 12:00 and runs straight to the chimney centre's Y level, then rises. Its
@@ -1134,8 +1155,8 @@ and wall positions; the line legend reads
 `Okruh Fancoily`, using `ELECTRICAL_FAN_COIL_CIRCUIT_COLOR`.
 At the junction a thin black floor-change arrow continues the circuit upstairs.
 The upper plan receives it at the same XY position, shifts 300 mm left to
-clear the chimney, then turns along the middle wall to the FCU above the
-living-room door. `electrical_upper_fan_coil_layout()` defines this route;
+clear the chimney, then runs up to the FCU between the garden windows.
+`electrical_upper_fan_coil_layout()` defines this route;
 the upper line legend also includes `Okruh Fancoily`.
 Room 0.01 has two branch cables from the rozvaděč, using straight segments.
 The magenta lighting route starts at the former room-1 socket position and runs
@@ -2214,24 +2235,37 @@ the room-0.03 label uses 90° so its top faces left on the drawing.
 These are generic dimensions and geometry.
 Run `python3 fan_coil_preview.py` to generate the isolated sample IFC, a Blender
 3D preview and a Bonsai plan PDF in `projekt2/fan_coil_preview/`.
-`house2.py` places three units in rooms 0.01, 0.02 and 0.03, centred over their
-door openings on the room-facing wall surfaces. The casing underside is
-50 mm above the door head, with a 10 mm wall gap; the outlets face into the
-rooms. `FAN_COIL_SIZE=(.90, .35, .30)` leaves room for the plan labels.
-`FAN_COIL_SIZE`, `FAN_COIL_DOOR_CLEARANCE` and `FAN_COIL_WALL_GAP` control
-these placements, and `ground_fan_coils` holds the instances.
-The upper living room has one more unit centred above its door in the middle
-VPC wall, facing into the room. Its underside is 50 mm above the door head,
-derived from the actual door placement and height. `upper_fan_coil` holds
-this instance; `FAN_COIL_DOOR_CLEARANCE` controls its head clearance, and the
-model checks that it fits below the sloping ceiling.
-The ground bathroom has a radiator-style console (`form="console"`) behind
-its door, parallel to the room-3 wall and facing into the bathroom. Its feet
-rest on the finished floor. `BATHROOM_FAN_COIL_SIZE=(.80, .30, .60)` gives its
-generic width, depth and height; the cabinet is 10 mm from the shared wall
-and 100 mm from the door wall. The console has a top grille and the same
-light-blue FCU plan styling. Its plan grille is drawn near the casing edge
-to leave the central label clear. `bathroom_fan_coil` holds this instance.
+All five `house2.py` fan coils use the radiator-style console (`form="console"`),
+with their feet on the respective finished floors. Sizes use the helper's local
+**width, depth, height** order, in metres:
+
+- Rooms 0.01, 0.02 and 0.03: `FAN_COIL_SIZE=(1.030, .210, .690)`.
+- Bathroom: `BATHROOM_FAN_COIL_SIZE=(.830, .210, .690)`.
+- Living room: `LIVING_ROOM_FAN_COIL_SIZE=(1.430, .210, .690)`.
+
+The room 0.01 and 0.02 consoles run along the wall dividing those rooms,
+with a 10 mm casing-to-wall gap (`GARDEN_FAN_COIL_WALL_GAP`). Their street ends
+are 750 mm from the inside face of the garden-room wall, controlled by
+`GARDEN_FAN_COIL_GARDEN_WALL_CLEARANCE`. Each faces into its own room, with
+rotations of 270° and 90° respectively. Their heating arrows meet the street
+ends with 120 mm clearance. Room 3 is centred under its street window and faces
+into the room, with a 10 mm wall gap (`ROOM3_FAN_COIL_WALL_GAP`). Its placement
+follows the window centre and the front wall's inside face; its heating arrow
+approaches from inside the room. The living-room unit is centred on the wall
+section between the garden windows, with a 10 mm wall gap
+(`LIVING_ROOM_FAN_COIL_WALL_GAP`) and its outlet facing into the room. The
+1430 mm casing extends 215 mm under each adjacent window, whose gap is
+1000 mm; the casing top stays below their sills.
+The bathroom console's centre is .160 m from the room-3 wall and 1.700 m
+from the door wall, controlled by `BATHROOM_FAN_COIL_CENTER_WALL_OFFSET`
+and `BATHROOM_FAN_COIL_CENTER_DOOR_WALL_OFFSET`. This leaves 165 mm between
+the unit and the shower, with the unit outside the door's swing. Its heating
+arrow ends directly on the casing's bottom edge.
+`ground_fan_coils`,
+`bathroom_fan_coil` and `upper_fan_coil` hold the instances. The consoles have
+feet, a top grille and the existing light-blue FCU plan styling; heating plans
+highlight them in orange. The plan grille stays near the casing edge to leave
+the central label clear.
 
 For simple cylindrical objects, provide the centre of the circular footprint,
 its radius, and its vertical dimensions:
@@ -3287,6 +3321,142 @@ drawing.add_ridge_tile(
 
 The curved, terracotta-filled annotation is scoped to that drawing and stays
 attached to the model when its camera or scale changes.
+
+## Coordination situation
+
+`cadastral_situation.py` draws the cadastral neighbourhood around the surveyed
+points, independently of the IFC model and Bonsai. The default outputs are
+`projekt2/situace.svg` and
+`projekt2/C Situace Stavby/C1.2 Koordinační Situace.pdf`.
+
+Install the mapping dependencies from `requirements-situation.txt` in your
+Python environment. In the existing PDF environment, regenerate with:
+
+```sh
+.venv-pdf/bin/python cadastral_situation.py
+```
+
+The A3 landscape sheet uses scale 1:500 and covers 153 × 128.5 m, centred on
+the extent of `points.txt`. Edit that file to change the survey overlay;
+`--scale 1000` increases the surrounding area. `--cadastre`, `--points`,
+`--output` and `--pdf` override the input and output paths.
+
+Parcel boundaries, parcel labels, building footprints and house numbers come
+from the SHP/DBF layers in `katastr/679453`. Additional cadastral linework is
+grey; survey points are blue, with small pink Bpv elevations (e.g. `415.13` m)
+at half the parcel-label font size. Nearby labels are offset to avoid overlaps.
+The survey polylines supply the placement and
+surface boundaries without being drawn as a separate dashed overlay.
+Point **294** in `points.txt` marks the neighbour's house č.p. 41 on parcel 107:
+its plan position is derived from the midpoint of the building's shared edge
+with sidewalk parcel 343/146, offset 0.5 m into the building. Its user-supplied
+elevation is 422.87 m Bpv (Y 588818.533, X 1144315.368).
+The project title block uses `projekt2/title_block.json`.
+
+Parcel-label arrows (code 1033) from `PARCELY_KN_B` and their additional line
+segments (1032) from `PARCELY_KN_L` are rendered in black. Arrow geometry,
+3 m × `MERITKO` size and `ROTACE` follow the
+[ČÚZK QGIS styles and symbol set](https://services.cuzk.gov.cz/shp/ku/QGIS-plugin/QGIS_verze-3.x/).
+Parcel labels retain their stored `VZ_BOD` alignment and `ROTACE`, adjusted for
+the north-up map frame, so off-parcel numbers remain associated with their arrows.
+
+The house's red outline and light red fill use `survey_points.HOUSE_PLACEMENT`, shared with the
+old-house `points` drawing (currently 9.17 × 9.42 m). Its position and rotation
+come from the same fitted `street`/`neighbour` axes and are transformed through
+S-JTSK into the north-up map. Edit that one placement definition to move the
+box in both drawings.
+A red ridge line joins the midpoints of the house's two shorter edges, dividing
+the shorter dimension into equal halves.
+
+A light blue band, labelled **Zpevněné plochy**, follows the measured `street` polyline
+on its south side. Its inner edge runs straight between a 5.5 m perpendicular
+offset at the southwest neighbour-side boundary and a 7 m offset at the northeast
+stone-wall-side boundary. It is clipped to the enclosure made by the street,
+the pink `neighbour` polyline and the green stone-wall polyline (which may also
+be named `garden_wall`). Their first and last segments are extended to find
+the intersections; intermediate measured bends are preserved. The enclosure
+containing the house centre is used, excluding remote intersections of the
+extended lines. `STREET_BAND_SOUTHWEST_WIDTH` and `STREET_BAND_WIDTH` control the
+two end widths in metres.
+The rest of this enclosure is light green, labelled **Trávník**, clipped to the
+union of parcels **105** and **106/1** (`LAWN_PARCEL_NUMBERS`). Both surface
+fills exclude the proposed house footprint, which retains its light red fill.
+The remaining parts of cadastral parcels **106/1** and **103/2**, excluding the house, paving
+and lawn, is light brown and labelled **Zahrada**. Its boundary comes directly
+from the parcel polygons; `GARDEN_PARCEL_NUMBERS` selects the parcels.
+The line from survey point **1** to the nearest house corner divides the paving;
+the smaller part beside the lawn is also grass. This divider follows changes to
+the survey point and the house placement automatically.
+Both shared boundaries of the paved and lawn polygons are drawn as bold dark
+magenta lines, labelled **Drátěný plot** in the legend. The fence geometry is derived from
+the planned surface division before parcel clipping of the lawn;
+`FENCE_LINE_WIDTH` sets its paper thickness.
+The street-side fence is black and labelled **Zděné oplocení z cihel ztraceného
+bednění. Výška 120cm**. It has a 4 m opening at
+each end, measured along the surveyed street polyline. Change
+`STREET_FENCE_END_GAP` to adjust both openings.
+The original green survey polyline is drawn as a thick green line, labelled
+**Stávající opěrná stěna**. Its measured segments are drawn without extending
+the ends; the colour and thickness use `RETAINING_WALL_COLOR` and
+`RETAINING_WALL_LINE_WIDTH`.
+A dark magenta wire-fence segment connects point 1 at the street to the first
+measured point of the retaining wall.
+
+Two 5 m cars use `drawings/assets/car-top.svg`, with dimensions stored on the
+asset's SVG root. Their axes pass through the centres of the street-side fence
+openings. The neighbour-side car is perpendicular to the measured street;
+the other is parallel to the magenta fence from point 1 to the house.
+Both cars sit fully inside the paved area, with `CAR_STREET_CLEARANCE` (200 mm)
+between the car envelope and the street edge. The asset is embedded in the map
+so the exported SVG and PDF do not depend on external image links.
+Cars have fully transparent interiors and opaque dark outlines. The map uses
+`CAR_LINE_WIDTH` (0.12 mm on paper) for consistent visibility over all backgrounds.
+
+**Geographic north is at the top.** The script reads the dataset's `.prj`
+and uses PROJ to calculate north at the survey centre, correcting the roughly
+6.09° difference from S-JTSK grid north. A rigid rotation preserves the original
+plan distances and drawing scale. The SVG embeds the coordinate frame, extent,
+scale and survey points in its `situation-data` metadata.
+
+## Pick positions on the map
+
+The water routes on the situation map are stored separately in
+`situation_water.json`: **1 → 2**, branching at **2** to **3 → 4 → 5** and
+**6 → 7**. These are the S-JTSK positions captured in the picker, so later
+changes to `selected_points.json` do not move the water lines. They are drawn
+in blue with a junction at point 2 and a **Vodovod** legend sample.
+Edit the saved coordinates or route ID sequences in `situation_water.json`
+and regenerate with `.venv-pdf/bin/python cadastral_situation.py`.
+
+Open the existing situation map in a small desktop window:
+
+```sh
+.venv-pdf/bin/python pick_points.py
+```
+
+The app rasterizes `projekt2/situace.svg` once using Inkscape. It opens the map
+area without regenerating drawings or running Bonsai. It needs Pillow and
+Python's Tkinter (already available in the current PDF environment).
+
+- Click an empty place to add a numbered **×**; click an existing marker to select it.
+- Arrow keys move the selected point by **10 cm** in the displayed map directions.
+  Hold **Shift** for 1 m or **Ctrl** for 1 cm.
+- Use the mouse wheel to zoom around the pointer, and drag with the right or
+  middle button to pan. **Fit map** restores the full view.
+- **Tab** selects the next point. **Delete** or **Backspace** removes the selected
+  point. **Ctrl+Z** or **Undo** reverses the last edit.
+- **Done**, **Escape**, or closing the window finishes.
+
+Every edit atomically saves `selected_points.json` and prints coordinates to
+the terminal. Reopening loads that selection. Use `--output another.json` for a
+separate set, or `--map path/to/map.svg` to open another situation SVG containing
+coordinate metadata.
+
+Each saved point contains `id`, local map `x`/`y`, positive **S-JTSK `Y`/`X`**
+in metres, and `Z: null` for an unspecified elevation. Survey coordinates are
+authoritative when reloading, so regenerated map extents or orientations do not
+move the selected positions. The app edits its selection file; `points.txt`
+continues to supply the background survey.
 
 ## Survey points
 
