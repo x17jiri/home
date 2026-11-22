@@ -3421,12 +3421,29 @@ scale and survey points in its `situation-data` metadata.
 ## Pick positions on the map
 
 The water routes on the situation map are stored separately in
-`situation_water.json`: **1 → 2**, branching at **2** to **3 → 4 → 5** and
+`situation_water.json`: **1 → 2**, branching at **2** to **19 → 20** and
 **6 → 7**. These are the S-JTSK positions captured in the picker, so later
 changes to `selected_points.json` do not move the water lines. They are drawn
 in blue with a junction at point 2 and a **Vodovod** legend sample.
+The replacement branch **2 → 19 → 20** is listed in `adjusted_routes`, drawn
+in light blue and labelled **Vodovod - tato část vedení bude upravena**.
 Edit the saved coordinates or route ID sequences in `situation_water.json`
 and regenerate with `.venv-pdf/bin/python cadastral_situation.py`.
+
+The gas line uses picked points **8 → 9 → 10 → 11 → 12 → 13 → 14 → 15**,
+saved in `situation_gas.json`. It is drawn in gold with a **Plynovod** legend
+sample, independently of the water routes and later picker selections.
+
+The overhead communications route uses picked points **16 → 17 → 18**,
+saved in `situation_cetin.json`. It is drawn as an orange dash-dot line with
+the matching legend **Nadzemní sdělovací vedení, CETIN**.
+
+Electrical routes are read directly from `katastr/139202/VYJ-ELE/Elektro.dgn`
+using `ezdgn` (included in `requirements-situation.txt`). Active NN routes
+on levels 21 and 22 retain their native S-JTSK metre coordinates. Underground
+routes are solid red and overhead routes dashed red, with separate legend
+samples. Decommissioned routes and equipment symbols are excluded. Layer and
+line-style definitions are supplied in `katastr/139202/DATA-INFO/data_info_ele.pdf`.
 
 Open the existing situation map in a small desktop window:
 

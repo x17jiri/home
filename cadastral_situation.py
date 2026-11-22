@@ -58,6 +58,21 @@ SURVEY_POINT_LABEL_COLOR = "#d94c9b"
 WATER_ROUTES_FILE = ROOT / "situation_water.json"
 WATER_LINE_COLOR = "#0066cc"
 WATER_LINE_WIDTH = .45  # Millimetres on paper.
+WATER_ADJUSTMENT_COLOR = "#66bbee"
+WATER_ADJUSTMENT_DESCRIPTION = "Vodovod - tato část vedení bude upravena"
+GAS_ROUTES_FILE = ROOT / "situation_gas.json"
+GAS_LINE_COLOR = "#d69a00"
+GAS_LINE_WIDTH = .45  # Millimetres on paper.
+CETIN_ROUTES_FILE = ROOT / "situation_cetin.json"
+CETIN_LINE_COLOR = "#cc6600"
+CETIN_LINE_WIDTH = .45  # Millimetres on paper.
+CETIN_LINE_DASH = "2.4,1,.5,1"
+CETIN_DESCRIPTION = "Nadzemní sdělovací vedení, CETIN"
+ELECTRIC_SOURCE = ROOT / "katastr/139202/VYJ-ELE/Elektro.dgn"
+ELECTRIC_LINE_COLOR = "#e02020"
+ELECTRIC_LINE_WIDTH = .45  # Millimetres on paper.
+ELECTRIC_OVERHEAD_DASH = "2.4,1.2"
+ELECTRIC_DESCRIPTIONS = {"underground": "Podzemní vedení NN", "overhead": "Nadzemní vedení NN"}
 
 
 @dataclass(frozen=True)
@@ -112,24 +127,57 @@ def cadastral_parcel_area(directory, numbers, frame):
     return unary_union(polygons)
 
 
-def load_water_routes(source, crs):
+def load_utility_routes(source, crs):
     """Use saved S-JTSK positions so future picker sessions cannot move the pipes."""
     data = json.loads(Path(source).read_text(encoding="utf-8"))
     if data["crs"] != crs:
-        raise ValueError("Water-route coordinates must use the same CRS as the cadastral map")
+        raise ValueError("Utility-route coordinates must use the same CRS as the cadastral map")
     points = {p["id"]: (-p["Y"], -p["X"]) for p in data["points"]}
     if len(points) != len(data["points"]) or not all(isfinite(v) for p in points.values() for v in p):
-        raise ValueError("Water points must have unique IDs and finite survey coordinates")
+        raise ValueError("Utility points must have unique IDs and finite survey coordinates")
+    adjusted_routes = data.get("adjusted_routes", [])
+    if any(ids not in data["routes"] for ids in adjusted_routes):
+        raise ValueError("Adjusted utility routes must reference an existing route")
     routes, neighbours = [], {}
     for ids in data["routes"]:
         if len(ids) < 2 or any(i not in points for i in ids):
-            raise ValueError("Each water route must reference at least two saved points")
+            raise ValueError("Each utility route must reference at least two saved points")
         routes.append({"point_ids": ids, "grid_points_m": [points[i] for i in ids]})
+        if ids in adjusted_routes:
+            routes[-1]["to_be_adjusted"] = True
         for a, b in zip(ids, ids[1:]):
             neighbours.setdefault(a, set()).add(b)
             neighbours.setdefault(b, set()).add(a)
     junctions = {i: points[i] for i, adjacent in neighbours.items() if len(adjacent) > 2}
     return routes, junctions
+
+
+def load_electric_routes(source):
+    """Read active NN linework from DGN v8 in its native S-JTSK metre coordinates.
+
+    The supplier's DATA-INFO/data_info_ele.pdf identifies levels 21–26 as NN,
+    with solid underground lines and dashed overhead lines. Levels 21 and 22
+    carry those routes; level 23 is decommissioned and 24–26 contain symbols.
+    """
+    import ezdgn
+
+    routes = []
+    for model in ezdgn.open_document(source).models:
+        for entity in model.entities:
+            if entity.level not in (21, 22):
+                continue
+            if entity.dxftype() != "LINE_STRING":
+                raise ValueError(f"Unsupported electrical-route geometry: {entity.dxftype()}")
+            points = [tuple(vertex.master[:2]) for vertex in entity.data.vertices]
+            if len(points) < 2 or not all(isfinite(v) for p in points for v in p):
+                raise ValueError("Electrical routes must have at least two finite metre coordinates")
+            routes.append({"source_element_id": entity.common.element_id,
+                           "source_level": entity.level,
+                           "installation": "underground" if entity.level == 21 else "overhead",
+                           "grid_points_m": points})
+    if not routes:
+        raise ValueError(f"No active electrical routes found in {source}")
+    return routes
 
 
 def parcel_arrow_paths(position, rotation, size_factor=1):
@@ -314,7 +362,10 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     east = -(min(p.y for p in survey) + max(p.y for p in survey)) / 2
     north = -(min(p.x for p in survey) + max(p.x for p in survey)) / 2
     frame = NorthUpFrame.at(east, north, crs)
-    water_routes, water_junctions = load_water_routes(WATER_ROUTES_FILE, crs.to_string())
+    water_routes, water_junctions = load_utility_routes(WATER_ROUTES_FILE, crs.to_string())
+    gas_routes, _ = load_utility_routes(GAS_ROUTES_FILE, crs.to_string())
+    cetin_routes, _ = load_utility_routes(CETIN_ROUTES_FILE, crs.to_string())
+    electric_routes = load_electric_routes(ELECTRIC_SOURCE)
     garden_walls = [g for g in groups if g.color is not None and to_hex(g.color) == "#00ff00"]
     garden_wall = polylines.get("garden_wall")
     if garden_wall is None:
@@ -535,12 +586,42 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
                f'stroke-width="{WATER_LINE_WIDTH:g}">')
     for route in water_routes:
         ids = "-".join(str(i) for i in route["point_ids"])
-        svg.append(f'<path id="water-route-{ids}" d="{path(route["grid_points_m"])}">'
-                   f'<title>Vodovod: {escape(ids)}</title></path>')
+        adjusted = route.get("to_be_adjusted", False)
+        color = WATER_ADJUSTMENT_COLOR if adjusted else WATER_LINE_COLOR
+        description = WATER_ADJUSTMENT_DESCRIPTION if adjusted else "Vodovod"
+        svg.append(f'<path id="water-route-{ids}" d="{path(route["grid_points_m"])}" stroke="{color}">'
+                   f'<title>{escape(description)}: {escape(ids)}</title></path>')
     for number, position in water_junctions.items():
         x, y = paper_position(*position)
         svg.append(f'<circle id="water-junction-{number}" cx="{x:g}" cy="{y:g}" '
                    f'r=".5" fill="{WATER_LINE_COLOR}" stroke="none"/>')
+    svg.append('</g>')
+    svg.append(f'<g id="gas-routes" fill="none" stroke="{GAS_LINE_COLOR}" '
+               f'stroke-width="{GAS_LINE_WIDTH:g}">')
+    for route in gas_routes:
+        ids = "-".join(str(i) for i in route["point_ids"])
+        svg.append(f'<path id="gas-route-{ids}" d="{path(route["grid_points_m"])}">'
+                   f'<title>Plynovod: {escape(ids)}</title></path>')
+    svg.append('</g>')
+    svg.append(f'<g id="cetin-routes" fill="none" stroke="{CETIN_LINE_COLOR}" '
+               f'stroke-width="{CETIN_LINE_WIDTH:g}" stroke-dasharray="{CETIN_LINE_DASH}">')
+    for route in cetin_routes:
+        ids = "-".join(str(i) for i in route["point_ids"])
+        svg.append(f'<path id="cetin-route-{ids}" d="{path(route["grid_points_m"])}">'
+                   f'<title>{escape(CETIN_DESCRIPTION)}: {escape(ids)}</title></path>')
+    svg.append('</g>')
+    svg.append(f'<g id="electric-routes" fill="none" stroke="{ELECTRIC_LINE_COLOR}" '
+               f'stroke-width="{ELECTRIC_LINE_WIDTH:g}">')
+    for installation, description in ELECTRIC_DESCRIPTIONS.items():
+        pattern = f' stroke-dasharray="{ELECTRIC_OVERHEAD_DASH}"' if installation == "overhead" else ""
+        svg.append(f'<g id="electric-{installation}"{pattern}>')
+        for route in electric_routes:
+            if route["installation"] != installation:
+                continue
+            svg.append(f'<path id="electric-route-{route["source_element_id"]}" '
+                       f'd="{path(route["grid_points_m"])}"><title>{escape(description)} '
+                       f'(DGN, vrstva {route["source_level"]})</title></path>')
+        svg.append('</g>')
     svg.append('</g>')
     svg.append('<g id="survey-point-numbers">')
     for number, elevation, x, y in survey_point_labels(survey, paper_position):
@@ -559,7 +640,7 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     text(328, 73, "LEGENDA", 2.8, bold=True)
     legend_y = 82
 
-    def legend_row(label, *, fill=None, stroke="#202020", width=.2, sample=None, sample_id=None):
+    def legend_row(label, *, fill=None, stroke="#202020", width=.2, sample=None, sample_id=None, dasharray=None):
         nonlocal legend_y
         identifier = f' id="{sample_id}"' if sample_id else ""
         if sample == "parcel":
@@ -570,12 +651,13 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
             svg.append(f'<rect{identifier} x="329" y="{legend_y-2.5:g}" width="12" height="5" '
                        f'fill="{fill}" stroke="{stroke}" stroke-width="{width:g}"/>')
         else:
+            pattern = f' stroke-dasharray="{dasharray}"' if dasharray else ""
             svg.append(f'<path{identifier} d="M329,{legend_y:g}H341" fill="none" '
-                       f'stroke="{stroke}" stroke-width="{width:g}"/>')
+                       f'stroke="{stroke}" stroke-width="{width:g}"{pattern}/>')
         lines = (label,) if isinstance(label, str) else label
         for i, line in enumerate(lines):
             text(345, legend_y+1+3.5*(i-(len(lines)-1)/2), line)
-        legend_y += 14 if len(lines) > 1 else 9
+        legend_y += 11 if len(lines) > 1 else 7
 
     legend_row("Hranice parcel", stroke="#454545", width=.18)
     legend_row("Stávající budovy", fill="#e5e5e5", width=.25)
@@ -594,6 +676,16 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     legend_row("Stávající opěrná stěna", stroke=RETAINING_WALL_COLOR,
                width=RETAINING_WALL_LINE_WIDTH, sample_id="retaining-wall-legend")
     legend_row("Vodovod", stroke=WATER_LINE_COLOR, width=WATER_LINE_WIDTH, sample_id="water-legend")
+    if any(route.get("to_be_adjusted") for route in water_routes):
+        legend_row(WATER_ADJUSTMENT_DESCRIPTION, stroke=WATER_ADJUSTMENT_COLOR,
+                   width=WATER_LINE_WIDTH, sample_id="water-adjustment-legend")
+    legend_row("Plynovod", stroke=GAS_LINE_COLOR, width=GAS_LINE_WIDTH, sample_id="gas-legend")
+    legend_row(CETIN_DESCRIPTION, stroke=CETIN_LINE_COLOR, width=CETIN_LINE_WIDTH,
+               sample_id="cetin-legend", dasharray=CETIN_LINE_DASH)
+    for installation, description in ELECTRIC_DESCRIPTIONS.items():
+        legend_row(description, stroke=ELECTRIC_LINE_COLOR, width=ELECTRIC_LINE_WIDTH,
+                   sample_id=f"electric-{installation}-legend",
+                   dasharray=ELECTRIC_OVERHEAD_DASH if installation == "overhead" else None)
     territory = next(layer_features(cadastre, "KATASTRALNI_UZEMI_DEF"))[0]
     text(328, 205, f'k. ú. {territory["TEXT_KM"]}', 2.3, bold=True)
     text(328, 211, f'Kód katastrálního území: {territory["KOD"]}', 2.1)
@@ -639,6 +731,10 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
                 "cars": cars,
                 "parcel_arrows": parcel_arrows,
                 "water_routes": water_routes,
+                "gas_routes": gas_routes,
+                "cetin_routes": cetin_routes,
+                "electric_source": str(ELECTRIC_SOURCE),
+                "electric_routes": electric_routes,
                 "points": [asdict(p) for p in survey]}
     svg.append('<metadata id="situation-data">' + escape(json.dumps(metadata, ensure_ascii=False)) + '</metadata>')
     svg.append('</svg>')
