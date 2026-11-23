@@ -3324,6 +3324,22 @@ attached to the model when its camera or scale changes.
 
 ## Coordination situation
 
+The companion C1.1 sheet is generated with:
+
+```sh
+.venv-pdf/bin/python cadastral_overview.py
+```
+
+It writes `projekt2/situace_prehled.svg` and
+`projekt2/C. Situace Stavby/C1.1. Přehledová a katastrální mapa.pdf`.
+The A3 landscape sheet places `lokalizace.jpg` on the left and a north-up
+cadastral map at 1:1000 on the right. Only parcels 105, 106/1 and 103/2 are
+highlighted, with an arrow labelled **Zájmové území**. The map uses the frame
+and centre saved in `projekt2/situace.svg`; it omits the proposed house,
+survey points, site surfaces and utilities. The shared project title block
+is included. `--image`, `--source-map`, `--cadastre`, `--output` and `--pdf`
+override the default inputs and outputs.
+
 `cadastral_situation.py` draws the cadastral neighbourhood around the surveyed
 points, independently of the IFC model and Bonsai. The default outputs are
 `projekt2/situace.svg` and

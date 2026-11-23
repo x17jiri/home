@@ -28,7 +28,7 @@ from survey_points import (
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CADASTRE = ROOT / "katastr/679453"
 DEFAULT_SVG = ROOT / "projekt2/situace.svg"
-DEFAULT_PDF = ROOT / "projekt2/C Situace Stavby/C1.2 Koordinační Situace.pdf"
+DEFAULT_PDF = ROOT / "projekt2/C. Situace Stavby/C1.2. Koordinační Situace.pdf"
 DRAWING_NUMBER = "C1.2"
 DRAWING_TITLE = "Koordinační situace"
 SURVEY_COLOR = "#2989ad"
@@ -695,8 +695,8 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     for distance in (0, 5, 10, 20):
         text(328 + distance * mm_per_m, 224, str(distance), 1.9, anchor="middle")
     text(332 + 20 * mm_per_m, 224, "m", 1.9)
-    text(10, 289, "Podklad: katastr/679453 · S-JTSK (EPSG:5514) · zaměření points.txt", 1.9)
-    text(10, 293, "Orientace: geografický sever nahoře; zaměřené body modře, výšky Bpv [m] růžově.", 1.9)
+#    text(10, 289, "Podklad: katastr/679453 · S-JTSK (EPSG:5514) · zaměření points.txt", 1.9)
+#    text(10, 293, "Orientace: geografický sever nahoře; zaměřené body modře, výšky Bpv [m] růžově.", 1.9)
 
     settings = load_title_block(output)
     if settings is not None:
