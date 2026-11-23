@@ -25,6 +25,16 @@ default; `--no-continuous-purlins` switches it off for a comparison.
 
 ## Geometry and load path
 
+The current simulator experiment uses **one transverse connector at every
+rafter pair** (`Settings.rafter_connectors = True`). These 160 × 160 mm
+members replace the sparse `PURLIN_CONNECTION_Y_POSITIONS` rows for the
+calculation; the IFC model is unchanged. Their axes remain at the purlin
+centre height and their ends retain the existing ideal pins at the purlin
+inner faces. Connector self-weight is included. Run with
+`--no-rafter-connectors` to compare with the original connector positions.
+Wall-plate restraint still follows `Settings.horizontal_stiffness_kn_mm`;
+use `--horizontal-stiffness rigid` for the rigid-seat comparison.
+
 Global X runs east to west, Y street to garden, and Z upward, matching
 `house2.py` without drawing mirroring. Read-only AST evaluation follows
 numeric assignments and the restricted rafter-spacing comprehension.
@@ -123,13 +133,14 @@ The rafters are continuous over their purlin seats. The ridge is a pin
 between each pair, with no ridge beam or ground support. Wall plates are
 treated as continuously supported, immovable ring-beam/plate assemblies,
 rather than additional elastic beams. Rafter seats are vertically attached
-and restrained against yaw. By default they slide freely in X (across the
-house, allowing inward/outward movement), with zero X restraint force and
+and restrained against yaw. The current `Settings.horizontal_stiffness_kn_mm`
+is `None`, fixing X to assess ring-beam forces. With `--horizontal-stiffness free`,
+seats slide freely across the house in X with zero X restraint force and
 no small numerical spring. Y translation is fixed along the wall plates,
 preventing a rafter pair from tipping sideways about its purlin joints.
 `--horizontal-stiffness rigid` also fixes X;
 `--horizontal-stiffness 0.12` adds a 0.12 kN/mm spring in X only.
-`free` or `0` explicitly selects the default sliding-X seats. In the Python
+`free` or `0` explicitly selects sliding-X seats. In the Python
 `Settings`, zero means free X, `None` means rigid X, and a positive value
 means X spring stiffness in kN/mm. Y and vertical support remain fixed in
 every mode. The previous free-X/free-Y experiment had an unrestrained

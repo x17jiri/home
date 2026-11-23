@@ -30,7 +30,7 @@ def layout_with_supports(positions, **overrides):
     inputs.cache["PURLIN_SUPPORT_Y_POSITIONS"] = positions
     inputs.cache.update(overrides)
     with patch("roof_frame_3d_house2.House2Inputs", return_value=inputs):
-        return Layout.from_house(HOUSE, saddles=False, wall_bearings=False)
+        return Layout.from_house(HOUSE, saddles=False, wall_bearings=False, rafter_connectors=False)
 
 
 class InputTests(unittest.TestCase):
@@ -108,8 +108,29 @@ class InputTests(unittest.TestCase):
                 np.testing.assert_allclose(original.start, taller.start)
                 np.testing.assert_allclose(original.end, taller.end)
 
+    def test_rafter_connectors_follow_each_pair_without_changing_other_members(self):
+        sparse = Layout.from_house(HOUSE, rafter_connectors=False)
+        dense = Layout.from_house(HOUSE, rafter_connectors=True)
+        crosses = [b for b in dense.beams if b.category == "cross_beam"]
+        self.assertEqual(tuple(b.start[1] for b in crosses), dense.rafter_y)
+        self.assertEqual(tuple(b.end[1] for b in crosses), dense.rafter_y)
+        self.assertEqual([b for b in sparse.beams if b.category != "cross_beam"],
+                         [b for b in dense.beams if b.category != "cross_beam"])
+        self.assertEqual(sparse.plates, dense.plates)
+        self.assertEqual(sparse.bases, dense.bases)
+        self.assertEqual(sparse.gables, dense.gables)
+        self.assertEqual(sparse.walls, dense.walls)
+        for beam in crosses:
+            pins = [p for p in dense.pins if p.name.startswith("purlin_cross_")
+                    and p.contact in (beam.start, beam.end)]
+            self.assertEqual(len(pins), 2)
+        _, settings = parse_arguments(["--rafter-connectors"])
+        self.assertTrue(settings.rafter_connectors)
+        _, settings = parse_arguments(["--no-rafter-connectors"])
+        self.assertFalse(settings.rafter_connectors)
+
     def test_horizontal_restraint_accepts_exactly_free_rigid_or_positive_springs(self):
-        self.assertEqual(Settings().horizontal_stiffness_kn_mm, 0)
+        self.assertEqual(Settings(horizontal_stiffness_kn_mm=0).horizontal_stiffness_kn_mm, 0)
         self.assertEqual(horizontal_stiffness("free"), 0)
         self.assertEqual(horizontal_stiffness("0"), 0)
         self.assertIsNone(horizontal_stiffness("rigid"))
@@ -152,7 +173,7 @@ class InputTests(unittest.TestCase):
 
     def test_legacy_direct_post_geometry_follows_live_house_dimensions(self):
         g = House2Inputs(HOUSE).get
-        layout = Layout.from_house(HOUSE, saddles=False, wall_bearings=False)
+        layout = Layout.from_house(HOUSE, saddles=False, wall_bearings=False, rafter_connectors=False)
         post_count = sum(map(len, g("PURLIN_SUPPORT_Y_POSITIONS")))
         self.assertLessEqual(sum(b.category == "brace" for b in layout.beams), 3*post_count)
         self.assertEqual(sum(b.category == "brace" and b.name.endswith(".cross")
@@ -537,14 +558,16 @@ class SolverTests(unittest.TestCase):
         self.assertGreater(max(r["horizontal_mm"] for r in support_rows(roof)), 1)
 
     def test_wall_plate_seats_slide_in_x_without_force_and_remain_fixed_in_y(self):
-        for name in self.roof.seat_nodes.values():
-            node = self.roof.model.nodes[name]
+        roof = build_roof_model(self.layout, Settings(horizontal_stiffness_kn_mm=0))
+        self.assertLess(max(solve_roof_model(roof).values()), 1e-6)
+        for name in roof.seat_nodes.values():
+            node = roof.model.nodes[name]
             self.assertFalse(node.support_DX)
             self.assertTrue(node.support_DY)
             self.assertTrue(node.support_DZ)
             self.assertFalse(node.spring_DX[0])
             self.assertFalse(node.spring_DY[0])
-        rows = [r for r in support_rows(self.roof) if r["kind"] == "wall_plate_seat"]
+        rows = [r for r in support_rows(roof) if r["kind"] == "wall_plate_seat"]
         self.assertGreater(max(r["horizontal_mm"] for r in rows), 1)
         self.assertLess(max(abs(r["Fx_kN"]) for r in rows), 1e-7)
         self.assertTrue(all(r["Dy_mm"] == 0 for r in rows))
@@ -608,6 +631,20 @@ class SedloAndWallTests(unittest.TestCase):
         cls.layout = Layout.from_house(HOUSE)
         cls.roof = build_roof_model(cls.layout)
         cls.residuals = solve_roof_model(cls.roof)
+
+    def test_extra_connectors_preserve_roof_loading_and_add_only_their_self_weight(self):
+        sparse = build_roof_model(Layout.from_house(HOUSE, rafter_connectors=False),
+                                  Settings(rafter_connectors=False))
+        dense = build_roof_model(Layout.from_house(HOUSE, rafter_connectors=True),
+                                 Settings(rafter_connectors=True))
+        self.assertEqual([r for r in sparse.loads if r[0].startswith("R")],
+                         [r for r in dense.loads if r[0].startswith("R")])
+        weight_difference = sum(-q*(b-a) for name, case, q, a, b in dense.loads if name.startswith("CROSS")) \
+            - sum(-q*(b-a) for name, case, q, a, b in sparse.loads if name.startswith("CROSS"))
+        added_volume = sum(b.length*b.timber.width*b.timber.height for b in dense.layout.beams if b.category == "cross_beam") \
+            - sum(b.length*b.timber.width*b.timber.height for b in sparse.layout.beams if b.category == "cross_beam")
+        self.assertAlmostEqual(weight_difference, added_volume*Settings().timber_density*Settings().gravity)
+        self.assertLess(max(self.residuals.values()), 1e-6)
 
     def test_masonry_replaces_garden_posts_and_carries_load(self):
         g = House2Inputs(HOUSE).get

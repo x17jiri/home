@@ -49,8 +49,9 @@ class Settings:
     wall_bearings: bool = True
     saddle_contact_points: int = 5  # Odd grid along each sedlo; centre has the existing ideal pin.
     continuous_purlins: bool = False
+    rafter_connectors: bool = True  # Simulator experiment: connector at each rafter pair instead of the sparse IFC rows.
     brace_action: str = "compression"
-    horizontal_stiffness_kn_mm: float | None = 0.0  # X: 0 free; None rigid; positive spring stiffness. Y fixed.
+    horizontal_stiffness_kn_mm: float | None = None  # X: 0 free; None rigid; positive spring stiffness. Y fixed.
     joint_stiffness_factor: float = 1000.0  # Numerical rigid-arm multiplier, not joint slip stiffness.
 
     def __post_init__(self):
@@ -192,8 +193,9 @@ class Layout:
 
     @classmethod
     def from_house(cls, path, rafter_material=None, beam_material=None, *, saddles=True,
-                   wall_bearings=True, saddle_contact_points=5):
+                   wall_bearings=True, saddle_contact_points=5, rafter_connectors=None):
         defaults = Settings()
+        rafter_connectors = defaults.rafter_connectors if rafter_connectors is None else rafter_connectors
         rafter_material = defaults.rafter_material if rafter_material is None else rafter_material
         beam_material = defaults.beam_material if beam_material is None else beam_material
         data = House2Inputs(path)
@@ -328,7 +330,10 @@ class Layout:
                 beam(name, "brace", first, last, brace_size)
                 result.pins.extend((Pin(name+"_lower", ((x, y, anchor),), first),
                                     Pin(name+"_upper", ((last[0], y, z),), last)))
-        cross_rows = tuple(g("PURLIN_CONNECTION_Y_POSITIONS"))
+        result.rafter_y = tuple(g("RAFTER_Y_POSITIONS"))
+        if len(result.rafter_y) < 2 or any(b <= a for a, b in zip(result.rafter_y, result.rafter_y[1:])):
+            raise ValueError("rafter Y coordinates must be strictly increasing")
+        cross_rows = result.rafter_y if rafter_connectors else tuple(g("PURLIN_CONNECTION_Y_POSITIONS"))
         if len(set(cross_rows)) != len(cross_rows):
             raise ValueError("purlin connector Y positions must be distinct")
         for j, y in enumerate(cross_rows):
@@ -338,9 +343,6 @@ class Layout:
             for i, endpoint in ((0, cross.start), (len(px)-1, cross.end)):
                 result.pins.append(Pin(f"purlin_cross_{i}_{j}", ((px[i], y, z), endpoint), endpoint))
 
-        result.rafter_y = tuple(g("RAFTER_Y_POSITIONS"))
-        if len(result.rafter_y) < 2 or any(b <= a for a, b in zip(result.rafter_y, result.rafter_y[1:])):
-            raise ValueError("rafter Y coordinates must be strictly increasing")
         result.roof_y = (-g("ROOF_GABLE_OVERHANG"), depth+g("ROOF_GABLE_OVERHANG"))
         ridge_heights = []
         for i, side in enumerate(("E", "W")):
@@ -1029,6 +1031,8 @@ def parse_arguments(argv=None):
                         help="odd number of bearing stations along each sedlo (centre is an ideal pin)")
     parser.add_argument("--continuous-purlins", action=argparse.BooleanOptionalAction, default=defaults.continuous_purlins,
                         help="use continuous purlins instead of splitting at each internal bearing")
+    parser.add_argument("--rafter-connectors", action=argparse.BooleanOptionalAction, default=defaults.rafter_connectors,
+                        help="place transverse connectors at every rafter pair instead of the sparse IFC rows")
     parser.add_argument("--brace-action", choices=("compression", "both"), default=defaults.brace_action,
                         help="when braces are enabled: compression only or tension/compression")
     parser.add_argument("--horizontal-stiffness", type=horizontal_stiffness, default=defaults.horizontal_stiffness_kn_mm,
@@ -1047,6 +1051,7 @@ def parse_arguments(argv=None):
                        saddles=args.saddles, wall_bearings=args.wall_bearings,
                        saddle_contact_points=args.saddle_contact_points,
                        continuous_purlins=args.continuous_purlins,
+                       rafter_connectors=args.rafter_connectors,
                        horizontal_stiffness_kn_mm=args.horizontal_stiffness,
                        joint_stiffness_factor=args.joint_stiffness_factor)
     return args, settings
@@ -1056,7 +1061,8 @@ def main(argv=None):
     args, settings = parse_arguments(argv)
     layout = Layout.from_house(args.house, settings.rafter_material, settings.beam_material,
                                saddles=settings.saddles, wall_bearings=settings.wall_bearings,
-                               saddle_contact_points=settings.saddle_contact_points)
+                               saddle_contact_points=settings.saddle_contact_points,
+                               rafter_connectors=settings.rafter_connectors)
     roof = build_roof_model(layout, settings)
     layout = roof.layout
     print(f"Roof angle: {math.degrees(math.atan(layout.slope)):.2f}° ({layout.slope*100:.2f}%)")
@@ -1067,6 +1073,8 @@ def main(argv=None):
           "Snow and timber self-weight unchanged along the full rafter.")
     print(f"Members: {len(layout.beams)}; gable bearings {'on' if settings.gable_bearings else 'off'}; "
           f"braces {settings.brace_action if roof.brace_springs else 'off'}")
+    print(f"Transverse purlin connectors: {sum(b.category == 'cross_beam' for b in layout.beams)}; "
+          f"{'at every rafter pair (simulator experiment)' if settings.rafter_connectors else 'IFC positions'}")
     print(f"Purlins: {purlin_configuration_description(roof)}"
           + ("" if settings.continuous_purlins else ", bending hinges above each internal bearing"))
     print(f"Sedla: {sum(b.category == 'saddle' for b in layout.beams)} separate beams; "
@@ -1124,6 +1132,8 @@ def main(argv=None):
         "Sedlo unloaded roll and yaw orientations are fixed; vertical bending rotation is free at the central connection.",
         "Internal masonry bearings are immovable, anchored pins at the purlin axes; wall, lintel and local bearing capacity are not designed here.",
         "Connector ends are pinned to the purlin inner faces at purlin centre height.",
+        ("Transverse connectors follow every rafter pair; this simulator-only layout replaces the sparse IFC connector rows."
+         if settings.rafter_connectors else "Transverse connectors follow the IFC connector rows."),
         "One connector X rotation is fixed only to remove unloaded axial spin; no translational support or bending fixity is added.",
         "One post Z rotation is fixed only to remove unloaded axial spin; no translational support or bending fixity is added.",
         f"Rafter-to-wall-plate translation restraint: {restraint}; vertical support and yaw restraint retained.",

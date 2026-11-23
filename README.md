@@ -3862,6 +3862,12 @@ load conventions and remaining checks.
 
 ## House 2 roof simulator (PyNite)
 
+The current connector experiment places one transverse 160 × 160 mm beam at
+every rafter pair in the simulator, replacing the four sparse IFC rows.
+`Settings.rafter_connectors` controls this layout; use `--no-rafter-connectors`
+to restore the IFC rows for a comparison. The IFC geometry remains unchanged.
+`--horizontal-stiffness rigid` selects rigid rafter-to-wall-plate X restraint.
+
 `roof_frame_3d_house2.py` reads the current `house2.py` geometry without
 executing the IFC generator. It models the rafters, purlins,
 side cross beams, configurable posts, optional pin-ended braces and paired
@@ -3876,11 +3882,12 @@ The default includes gable-wall bearings and omits the tesařské pásky,
 including their self-weight and attachment arms. Use `--braces` to include
 three per post as compression-only axial springs, or `--braces --brace-action both`
 to allow tension too. The IFC braces remain in the house model.
-Rafter-to-wall-plate seats are vertically supported and completely free
-to slide in X by default, with zero X reaction; Y stays fixed to prevent
-sideways tipping. The console
+Rafter-to-wall-plate seats are vertically supported; Y stays fixed to prevent
+sideways tipping. X restraint follows `Settings.horizontal_stiffness_kn_mm`,
+currently `None` for rigid seats. Use `--horizontal-stiffness free` for
+unrestrained X sliding with zero X reaction. The console
 prints the maximum movement, including separate SLS/ULS maxima. Use
-`--horizontal-stiffness rigid` to compare with the previous restrained seats,
+`--horizontal-stiffness rigid` to select restrained seats,
 or supply a positive kN/mm stiffness for elastic X connections (Y fixed).
 All simulation defaults are in the **USER INPUTS** block at the top of
 `roof_frame_3d_house2.py`: edit `Settings.roof_mass`, `snow_load`, material
