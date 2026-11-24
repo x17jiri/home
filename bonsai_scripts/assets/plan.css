@@ -451,7 +451,11 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .cut.material-YtongKlasik,
 .cut.material-LoadbearingwallYtongKlasik300mm,
-.cut.layer-material-YtongKlasik {
+.cut.layer-material-YtongKlasik,
+.cut.material-PorfixP2440PDK300mm,
+.cut.material-LoadbearingwallPorfixP2440PDK300mm,
+.cut.material-UpperloadbearingwallPorfixP2440PDK300mm,
+.cut.layer-material-PorfixP2440PDK300mm {
     fill: url(#ytong-klasik) !important;
     stroke: black;
     stroke-width: 0.05 !important;

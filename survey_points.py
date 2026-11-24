@@ -130,8 +130,8 @@ class SurveyAxes:
 class SurveyHouse:
     center: tuple[float, float] = (-8.0, 7.0)
     angle_degrees: float = 0.0
-    width: float = 9.17
-    depth: float = 9.17 + 0.25
+    width: float = 8.75 + 0.41 # 9.30
+    depth: float = 9.00 + 0.41 #9.55
 
     def __post_init__(self):
         if len(self.center) != 2 or not all(isfinite(v) for v in (*self.center, self.angle_degrees, self.width, self.depth)):
@@ -162,6 +162,30 @@ class SurveyHouse:
             distances[name] = (0.0 if min(projections) <= 0 <= max(projections)
                                else min(abs(value) for value in projections))
         return distances
+
+    def polyline_clearance(self, axes: SurveyAxes, group: SurveyGroup):
+        """Closest footprint/segment points in Cartesian drawing coordinates.
+
+        Use the actual surveyed segments, including a closing segment only
+        for a closed group. A crossing or a line inside the footprint has
+        zero clearance. The closest house point may lie between corners.
+        """
+        from shapely.geometry import LineString, Polygon
+        from shapely.ops import nearest_points
+
+        if len(group.points) < 2:
+            raise ValueError("house clearance needs a polyline with at least two points")
+        footprint = Polygon(self.corners(axes))
+        points = (*group.points, group.points[0]) if group.closed else group.points
+        candidates = []
+        for first, last in zip(points, points[1:]):
+            segment = LineString([axes.frame.to_local(p.y, p.x) for p in (first, last)])
+            house_point, line_point = nearest_points(footprint, segment)
+            candidates.append({"distance_m": house_point.distance(line_point),
+                               "house_local": tuple(house_point.coords[0]),
+                               "line_local": tuple(line_point.coords[0]),
+                               "segment_point_ids": (first.number, last.number)})
+        return min(candidates, key=lambda candidate: candidate["distance_m"])
 
 
 @dataclass(frozen=True)
@@ -233,13 +257,16 @@ class RoofSlope:
 # Tune these for both the standalone command and `house_ifc.py points`.
 # Center coordinates are metres along street/neighbour; rotation is CCW from street.
 HOUSE_PLACEMENT = SurveyHouse(center=(-10.4, 10.515), angle_degrees=-10)
+ROOF_FOOTPRINT_SIZE = (9.95, 9.75)  # Overall roof width/depth, including overhangs.
+ROOF_BOX_HEIGHT = 4.3025  # Flat-box check, metres above the new house's finished ground floor.
+ROOF_BOX_GROUND_ELEVATION = 417.90  # New-house finished floor, metres Bpv; independent of house_ifc.py.
 NEIGHBOUR_WINDOW_DISTANCE = 7.75  # Metres from the fitted intersection along +y.
 NEIGHBOUR_WINDOW_ELEVATION = 417.60  # Metres above sea level (Bpv).
 ROOF_SLOPES: tuple[RoofSlope, ...] = (
     # RoofSlope(start=(-10.0, 5.0), end=(-10.0, 14.0), elevation=423.0, angle_degrees=35.0),
 )
 ROOF_SLOPE_OVERHANG = 2.0  # Extra metres at each end of the drawn preview only.
-HOUSE_ROOF_ENABLED = True
+HOUSE_ROOF_ENABLED = False  # Legacy roof-height profiles; the current drawing uses the plan outline.
 HOUSE_ROOF_GROUND_ELEVATION = 417.0  # Explicit survey placement datum, metres Bpv.
 HOUSE_ROOF_EDGE_DROP = 0.875
 HOUSE_ROOF_PROFILE_SPACING = 2.25  # Perpendicular plan distance, away from neighbour.
@@ -287,6 +314,45 @@ def neighbour_window_point(axes: SurveyAxes) -> SurveyPoint:
     """A derived reference point; it never participates in the surveyed line fit."""
     y, x = axes.frame.to_survey(*axes.to_local(0, NEIGHBOUR_WINDOW_DISTANCE))
     return SurveyPoint("neighbour-window", y, x, NEIGHBOUR_WINDOW_ELEVATION, "neighbour window")
+
+
+@dataclass(frozen=True)
+class RoofBoxSightCheck:
+    point: tuple[float, float]  # Governing top point, Cartesian drawing coordinates.
+    top_elevation: float  # Bpv, not height relative to the observer or house floor.
+    plan_distance: float
+    elevation_difference: float
+    vertical_angle_degrees: float
+    margin_45_m: float  # Vertical clearance below the observer's 45-degree cone.
+    below_45: bool
+
+
+def roof_box_sight_check(footprint: SurveyHouse, axes: SurveyAxes, observer: SurveyPoint, *,
+                         height: float, floor_elevation: float) -> RoofBoxSightCheck:
+    """Maximum elevation angle over a flat-topped rectangular box, without sampling.
+
+    For a top above eye level the nearest plan point governs, including edge
+    interiors. If the top is below eye level the farthest corner governs.
+    Every lower point at the same XY has a smaller angle, so this checks the
+    entire solid box. Original S-JTSK and Bpv coordinates share metre units.
+    """
+    from shapely.geometry import Point, Polygon
+    from shapely.ops import nearest_points
+
+    if not all(isfinite(v) for v in (height, floor_elevation, observer.y, observer.x, observer.z)) or height <= 0:
+        raise ValueError("box height must be positive and all box/observer coordinates must be finite")
+    wx, wy = axes.frame.to_local(observer.y, observer.x)
+    corners = footprint.corners(axes)
+    top = floor_elevation+height
+    rise = top-observer.z
+    if rise >= 0:
+        point = tuple(nearest_points(Polygon(corners), Point(wx, wy))[0].coords[0])
+    else:
+        point = max(corners, key=lambda p: hypot(p[0]-wx, p[1]-wy))
+    distance = hypot(point[0]-wx, point[1]-wy)
+    angle = degrees(atan2(rise, distance))
+    # Treat coordinate-transform roundoff at exactly 45 degrees as equality.
+    return RoofBoxSightCheck(point, top, distance, rise, angle, distance-rise, angle < 45-1e-8)
 
 
 @dataclass(frozen=True)
@@ -464,6 +530,8 @@ def _unique_points(groups):
 def _place_labels(ax, points, positions, font_size, show_ids):
     """Put each spot height directly below its measured cross, without leaders."""
     for point, position in zip(points, positions):
+        if point.number == "neighbour-window":
+            continue  # Highlighted separately so this observer cannot be confused with survey crosses.
         label = f"{point.number}: {point.z:.2f}" if show_ids else f"{point.z:.2f}"
         named = not point.number.isdigit()
         if named:
@@ -509,6 +577,9 @@ def render_survey_points(
     title: str | None = None,
     show_ids: bool = False,
     house: SurveyHouse | None = None,
+    roof_footprint_size: tuple[float, float] | None = None,
+    roof_box_height: float | None = None,
+    roof_box_ground_elevation: float = ROOF_BOX_GROUND_ELEVATION,
     roof_slopes: tuple[RoofSlope, ...] = (),
     roof_overhang: float = 2.0,
     house_roof: bool = False,
@@ -547,6 +618,13 @@ def render_survey_points(
         if axes is None:
             raise ValueError("house placement requires named street and neighbour polylines")
         frame = axes.frame
+    roof_footprint = None
+    if roof_footprint_size is not None:
+        if house is None:
+            raise ValueError("roof footprint requires a placed house")
+        if len(roof_footprint_size) != 2:
+            raise ValueError("roof footprint size must contain width and depth")
+        roof_footprint = replace(house, width=roof_footprint_size[0], depth=roof_footprint_size[1])
     if house_roof:
         if house is None:
             raise ValueError("house roof slope requires a placed house")
@@ -565,8 +643,17 @@ def render_survey_points(
     if axes is not None:
         points = (*points, neighbour_window_point(axes))
     house_corners = house.corners(axes) if house is not None else ()
+    roof_corners = roof_footprint.corners(axes) if roof_footprint is not None else ()
+    box_check = None
+    if roof_box_height is not None:
+        if roof_footprint is None:
+            raise ValueError("roof box sight check requires a roof footprint")
+        box_check = roof_box_sight_check(roof_footprint, axes, neighbour_window_point(axes),
+                                         height=roof_box_height, floor_elevation=roof_box_ground_elevation)
     positions = np.array([frame.to_local(p.y, p.x) for p in points])
     extent_positions = np.vstack((positions, house_corners, (0, 0))) if house is not None else positions
+    if roof_footprint is not None:
+        extent_positions = np.vstack((extent_positions, roof_corners))
     for roof in roof_slopes:
         extent_positions = np.vstack((extent_positions, roof.drawing_endpoints(axes, roof_overhang)))
     sizes = {"A4": (210, 297), "A3": (297, 420)}
@@ -622,6 +709,13 @@ def render_survey_points(
                         color="black", zorder=3, gid=f"survey-point-{point.number}")
             _place_labels(ax, points, positions, font_size=6, show_ids=show_ids)
             if house is not None:
+                if roof_footprint is not None:
+                    roof_vertices = np.array((*roof_corners, roof_corners[0]))
+                    ax.plot(roof_vertices[:, 0], roof_vertices[:, 1], color="#0066cc", linewidth=1.1,
+                            zorder=4, gid="survey-roof-footprint")
+                    ax.annotate(f"Střecha {roof_footprint.width:g} × {roof_footprint.depth:g} m",
+                                xy=axes.to_local(*house.center), xytext=(0, -10), textcoords="offset points",
+                                ha="center", fontsize=7, color="#0066cc", zorder=5, gid="survey-roof-footprint-label")
                 vertices = np.array((*house_corners, house_corners[0]))
                 ax.plot(vertices[:, 0], vertices[:, 1], color="#333333", linewidth=1.1,
                         zorder=5, gid="survey-house-footprint")
@@ -638,6 +732,39 @@ def render_survey_points(
                                 arrowprops={"arrowstyle": "->", "lw": .6, "color": "#555555"})
                     ax.annotate(name, xy=endpoint, xytext=(3, 3), textcoords="offset points",
                                 fontsize=7, color="#555555", zorder=5)
+            if axes is not None:
+                observer = neighbour_window_point(axes)
+                observer_xy = frame.to_local(observer.y, observer.x)
+                observer_color = "#c44900"
+                ax.plot(*observer_xy, marker="o", markersize=9, markerfacecolor="white",
+                        markeredgecolor=observer_color, markeredgewidth=1.8, zorder=7,
+                        gid="survey-neighbour-window-highlight")
+                ax.plot(*observer_xy, marker="+", markersize=6, color=observer_color,
+                        markeredgewidth=1.2, zorder=8)
+                ax.annotate(f"Okno souseda – pozorovatel\nx=0.000, y={NEIGHBOUR_WINDOW_DISTANCE:.3f} m\n"
+                            f"Y={observer.y:.3f}\nX={observer.x:.3f}\nZ={observer.z:.3f} m Bpv",
+                            xy=observer_xy, xytext=(35, 20), textcoords="offset points",
+                            ha="left", va="bottom", fontsize=7, color=observer_color, zorder=9,
+                            bbox={"boxstyle": "round,pad=.4", "fc": "white", "ec": observer_color, "lw": .7},
+                            arrowprops={"arrowstyle": "->", "color": observer_color, "lw": .8},
+                            gid="survey-label-neighbour-window")
+                if box_check is not None:
+                    color = "#16713a" if box_check.below_45 else "#b02020"
+                    ax.plot((observer_xy[0], box_check.point[0]), (observer_xy[1], box_check.point[1]),
+                            color=color, linewidth=1.0, linestyle="--", zorder=6,
+                            gid="survey-roof-box-sightline")
+                    ax.plot(*box_check.point, marker="o", markersize=3, color=color, zorder=7,
+                            gid="survey-roof-box-governing-point")
+                    result_text = "< 45°" if box_check.below_45 else "≥ 45°"
+                    ax.text(.025, .97,
+                            f"Modrý kvádr: {roof_box_height:.4f} m nad podlahou 1.NP\n"
+                            f"Horní plocha: {box_check.top_elevation:.4f} m Bpv\n"
+                            f"Největší svislý úhel: {box_check.vertical_angle_degrees:.3f}° {result_text}\n"
+                            f"Vzdálenost: {box_check.plan_distance:.3f} m; převýšení: {box_check.elevation_difference:.4f} m\n"
+                            f"Výšková rezerva k 45°: {box_check.margin_45_m:.3f} m",
+                            transform=ax.transAxes, ha="left", va="top", fontsize=7, color=color, zorder=8,
+                            bbox={"boxstyle": "round,pad=.5", "fc": "white", "ec": color, "lw": .7},
+                            gid="survey-roof-box-check-label")
             north_center = np.array((.90, .85))
             north_half = .065*np.array((sin(frame.rotation_radians), cos(frame.rotation_radians)*map_w/map_h))
             ax.annotate("−X\nsever sítě", xy=north_center+north_half, xytext=north_center-north_half,
@@ -686,6 +813,14 @@ def render_survey_points(
         metadata["house"] = {**asdict(house), "local_center": axes.to_local(*house.center),
                              "local_corners": house_corners,
                              "survey_corners": [frame.to_survey(*p) for p in house_corners]}
+    if roof_footprint is not None:
+        metadata["roof_footprint"] = {**asdict(roof_footprint), "local_corners": roof_corners,
+                                      "survey_corners": [frame.to_survey(*p) for p in roof_corners]}
+    if box_check is not None:
+        metadata["roof_box_check"] = {**asdict(box_check), "height_above_floor_m": roof_box_height,
+                                      "floor_elevation_bpv": roof_box_ground_elevation,
+                                      "observer": asdict(neighbour_window_point(axes)),
+                                      "point_survey": frame.to_survey(*box_check.point)}
     root = re.search(r"<svg\b[^>]*>", svg)
     svg = svg[:root.end()] + '<metadata id="survey-data">' + escape(json.dumps(metadata, ensure_ascii=False)) + '</metadata>' + svg[root.end():]
     for point in points:
@@ -715,6 +850,37 @@ def render_survey_points(
               f"axis angle {degrees(atan2(axes.neighbour_direction[1], axes.neighbour_direction[0])):.3f}°")
         for name, distance in house.line_distances(axes).items():
             print(f"Shortest house distance to {name}: {distance:.3f} m")
+        green_lines = [group for group in groups if len(group.points) >= 2 and group.color is not None
+                       and matplotlib.colors.to_hex(group.color) == "#00ff00"]
+        if green_lines:
+            clearance = min((house.polyline_clearance(axes, group) for group in green_lines),
+                            key=lambda candidate: candidate["distance_m"])
+            first, last = clearance["segment_point_ids"]
+            print(f"Shortest house distance to green line: {clearance['distance_m']:.3f} m "
+                  f"(segment {first}–{last})")
+            x, y = axes.from_local(*clearance["house_local"])
+            survey_y, survey_x = frame.to_survey(*clearance["house_local"])
+            print(f"  Closest house point: x={x:.3f}, y={y:.3f} m along street/neighbour; "
+                  f"Y={survey_y:.3f}, X={survey_x:.3f} (S-JTSK)")
+            survey_y, survey_x = frame.to_survey(*clearance["line_local"])
+            print(f"  Closest green-line point: Y={survey_y:.3f}, X={survey_x:.3f} (S-JTSK)")
+    if roof_footprint is not None:
+        print(f"Roof footprint: {roof_footprint.width:g} × {roof_footprint.depth:g} m, "
+              "including overhangs; same centre and rotation as the house")
+    if box_check is not None:
+        observer = neighbour_window_point(axes)
+        print(f"Roof box observer: Y={observer.y:.3f}, X={observer.x:.3f}, Z={observer.z:.3f} m Bpv; "
+              f"placement x=0.000, y={NEIGHBOUR_WINDOW_DISTANCE:.3f} m")
+        print(f"Roof box: height={roof_box_height:.4f} m above finished floor {roof_box_ground_elevation:.3f} m Bpv; "
+              f"top={box_check.top_elevation:.4f} m Bpv")
+        print(f"Roof box sight check: {'PASS' if box_check.below_45 else 'FAIL'} strictly below 45°; "
+              f"maximum vertical angle={box_check.vertical_angle_degrees:.3f}°")
+        print(f"  Governing plan distance={box_check.plan_distance:.3f} m; "
+              f"rise above window={box_check.elevation_difference:.4f} m; "
+              f"vertical margin below 45°={box_check.margin_45_m:.3f} m")
+        target_y, target_x = frame.to_survey(*box_check.point)
+        print(f"  Governing box-top point: Y={target_y:.3f}, X={target_x:.3f}, "
+              f"Z={box_check.top_elevation:.4f} m Bpv")
     for index, roof in enumerate(roof_slopes, 1):
         print(f"Roof slope {index}: midpoint elevation {roof.elevation:.2f} m Bpv, "
               f"angle {roof.angle_degrees:g}°, unbounded in both directions")
@@ -753,6 +919,8 @@ def main():
                          title="Zaměření pozemku – výškové body", show_ids=args.point_ids,
                          house=None if args.no_house else replace(HOUSE_PLACEMENT, center=tuple(args.house_center),
                                                                   angle_degrees=args.house_angle),
+                         roof_footprint_size=None if args.no_house else ROOF_FOOTPRINT_SIZE,
+                         roof_box_height=None if args.no_house else ROOF_BOX_HEIGHT,
                          roof_slopes=ROOF_SLOPES, roof_overhang=ROOF_SLOPE_OVERHANG,
                          house_roof=HOUSE_ROOF_ENABLED and not args.no_house)
 

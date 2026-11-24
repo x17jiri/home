@@ -11,7 +11,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from survey_points import (RoofSlope, SurveyAxes, SurveyFrame, SurveyGroup, SurveyHouse, SurveyPoint, named_survey_groups,
-                           first_roof_45_degree_hit, house_roof_profiles, neighbour_window_point,
+                           first_roof_45_degree_hit, house_roof_profiles, neighbour_window_point, roof_box_sight_check,
                            read_house_roof_metrics, read_survey_groups, read_survey_points,
                            render_survey_points)
 
@@ -305,7 +305,7 @@ class SurveyPointsTests(unittest.TestCase):
                     self.assertFalse(any("neighbour-window" in g["point_ids"] for g in data["groups"]))
                     label = root.find('.//s:g[@id="survey-label-neighbour-window"]', ns)
                     text = "".join(label.itertext())
-                    self.assertIn("neighbour window", text)
+                    self.assertIn("Okno souseda", text)
                     self.assertIn("417.60", text)
             self.assertEqual(source.read_bytes(), original)
 
@@ -343,6 +343,44 @@ class SurveyPointsTests(unittest.TestCase):
         touching_neighbour = SurveyHouse(center=(-2.75, 4), width=4, depth=2)
         self.assertAlmostEqual(touching_neighbour.line_distances(axes)["neighbour"], 0)
 
+    def test_house_polyline_clearance_handles_edges_bends_closure_and_overlap(self):
+        axes = SurveyAxes(SurveyFrame(100, 200), (0, 1))
+        cases = (
+            ([(5, -.5), (5, .5)], False, 0, 3),
+            ([(5, 3), (5, 5), (-5, 5)], False, 0, sqrt(13)),
+            ([(5, -.5), (5, .5)], False, 90, 4),
+            ([(-3, 0), (3, 0)], False, 25, 0),
+            ([(-.5, 0), (.5, 0)], False, 0, 0),
+            ([(5, 5), (5, -5), (-5, -5)], False, 0, 3),
+            ([(5, 5), (5, -5), (-5, -5)], True, 0, 0),
+        )
+        for coords, closed, angle, expected in cases:
+            with self.subTest(coords=coords, closed=closed, angle=angle):
+                group = SurveyGroup("#00ff00", tuple(
+                    SurveyPoint(str(i), *axes.frame.to_survey(*p), 417)
+                    for i, p in enumerate(coords, 1)), closed=closed)
+                house = SurveyHouse(center=(0, 0), width=4, depth=2, angle_degrees=angle)
+                result = house.polyline_clearance(axes, group)
+                self.assertAlmostEqual(result["distance_m"], expected)
+                self.assertAlmostEqual(hypot(*(a-b for a, b in zip(result["house_local"], result["line_local"]))), expected)
+                if coords == [(5, -.5), (5, .5)]:
+                    self.assertAlmostEqual(result["house_local"][0], 2 if angle == 0 else 1)
+                    self.assertLessEqual(abs(result["house_local"][1]), .5)
+
+    def test_house_export_prints_closest_green_line_points(self):
+        with TemporaryDirectory() as directory:
+            source, output = Path(directory)/"points.txt", Path(directory)/"points.svg"
+            source.write_text("#blue: street\n1 100 200 417\n2 110 200 417\n\n"
+                              "#magenta: neighbour\n3 100 200 417\n4 100 190 417\n\n"
+                              "#00ff00\n5 120 185 417\n6 120 180 417\n")
+            terminal = StringIO()
+            with redirect_stdout(terminal):
+                render_survey_points(source, output, house=SurveyHouse(center=(-8, 7)))
+            self.assertRegex(terminal.getvalue(), r"Shortest house distance to green line: \d+\.\d{3} m \(segment 5–6\)")
+            self.assertIn("Closest house point: x=", terminal.getvalue())
+            self.assertIn("m along street/neighbour; Y=", terminal.getvalue())
+            self.assertIn("Closest green-line point: Y=", terminal.getvalue())
+
     def test_house_export_preserves_rectangle_scale_and_oblique_coordinates(self):
         with TemporaryDirectory() as directory:
             source, output = Path(directory)/"points.txt", Path(directory)/"points.svg"
@@ -371,6 +409,67 @@ class SurveyPointsTests(unittest.TestCase):
             for local, survey in zip(data["house"]["local_corners"], data["house"]["survey_corners"]):
                 for actual, expected in zip(frame.to_local(*survey), local):
                     self.assertAlmostEqual(actual, expected, places=8)
+
+    def test_roof_footprint_exports_correct_size_and_follows_house_placement(self):
+        with TemporaryDirectory() as directory:
+            source, output = Path(directory)/"points.txt", Path(directory)/"points.svg"
+            source.write_text("\n\n".join(f"#{g.color}: {g.name}\n"+"\n".join(
+                f"{p.number} {p.y} {p.x} {p.z}" for p in g.points) for g in self.placement_groups()))
+            for angle in (0, 25, 90):
+                with self.subTest(angle=angle), redirect_stdout(StringIO()):
+                    house = SurveyHouse(center=(-8, 7), angle_degrees=angle)
+                    render_survey_points(source, output, house=house, roof_footprint_size=(9.95, 9.75),
+                                         roof_box_height=4.3025, roof_box_ground_elevation=417.90)
+                    root = ET.parse(output).getroot()
+                    ns = {"s": "http://www.w3.org/2000/svg"}
+                    data = json.loads(root.find('s:metadata[@id="survey-data"]', ns).text)
+                    roof = data["roof_footprint"]
+                    self.assertEqual(roof["center"], data["house"]["center"])
+                    self.assertEqual(roof["angle_degrees"], angle)
+                    self.assertNotIn("roof_slopes", data)
+                    check = data["roof_box_check"]
+                    self.assertAlmostEqual(check["top_elevation"], 422.2025)
+                    self.assertEqual(check["observer"]["z"], 417.60)
+                    dy = check["point_survey"][0]-check["observer"]["y"]
+                    dx = check["point_survey"][1]-check["observer"]["x"]
+                    self.assertAlmostEqual(check["plan_distance"], hypot(dy, dx), places=7)
+                    self.assertAlmostEqual(check["vertical_angle_degrees"],
+                                           degrees(atan2(422.2025-417.60, hypot(dy, dx))), places=7)
+                    for identifier in ("survey-neighbour-window-highlight", "survey-roof-box-sightline",
+                                       "survey-roof-box-check-label"):
+                        self.assertIsNotNone(root.find(f'.//s:g[@id="{identifier}"]', ns))
+                    path = root.find('.//s:g[@id="survey-roof-footprint"]/s:path', ns)
+                    self.assertIn("#0066cc", path.get("style"))
+                    values = [float(v) for v in re.findall(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?", path.get("d"))]
+                    corners = list(zip(values[::2], values[1::2]))
+                    self.assertEqual(corners[0], corners[-1])
+                    for index, length in ((0, 9.95), (1, 9.75)):
+                        a, b = corners[index:index+2]
+                        self.assertAlmostEqual(hypot(b[0]-a[0], b[1]-a[1]),
+                                               length*1000/data["scale"]*72/25.4, places=5)
+
+    def test_box_sight_check_uses_edge_interiors_elevation_and_strict_45_degree_limit(self):
+        for rotation in (0, .7):
+            axes = SurveyAxes(SurveyFrame(588800, 1144300, rotation), (.6, .8))
+            box = SurveyHouse(center=(0, 0), width=4, depth=2)
+            for eye_z, expected_pass in ((-1, False), (0, False), (1, True)):
+                with self.subTest(rotation=rotation, eye_z=eye_z):
+                    observer = SurveyPoint("window", *axes.frame.to_survey(5, 0), eye_z)
+                    check = roof_box_sight_check(box, axes, observer, height=3, floor_elevation=0)
+                    self.assertAlmostEqual(check.point[0], 2, places=7)
+                    self.assertAlmostEqual(check.point[1], 0, places=7)
+                    self.assertAlmostEqual(check.plan_distance, 3, places=7)
+                    self.assertAlmostEqual(check.vertical_angle_degrees, degrees(atan2(3-eye_z, 3)), places=7)
+                    self.assertEqual(check.below_45, expected_pass)
+            inside = SurveyPoint("window", *axes.frame.to_survey(0, 0), 0)
+            check = roof_box_sight_check(box, axes, inside, height=3, floor_elevation=0)
+            self.assertEqual(check.vertical_angle_degrees, 90)
+            self.assertFalse(check.below_45)
+            above = SurveyPoint("window", *axes.frame.to_survey(5, 0), 10)
+            check = roof_box_sight_check(box, axes, above, height=3, floor_elevation=0)
+            self.assertAlmostEqual(check.plan_distance, sqrt(50), places=7)
+            self.assertAlmostEqual(check.vertical_angle_degrees, degrees(atan2(-7, sqrt(50))), places=7)
+            self.assertTrue(check.below_45)
 
     def test_named_polylines_are_indexed_and_blank_lines_reset_names(self):
         with TemporaryDirectory() as directory:

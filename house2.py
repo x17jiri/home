@@ -30,28 +30,30 @@ from steel_profiles import heb_profile, heb_section
 from electrical_schematic import Circuit, add_distribution_board
 
 
-HOUSE_WIDTH = 8.74
-HOUSE_DEPTH = 8.99
-BWT = 0.24
-FRONT_WALL_THICKNESS = 0.24
-BACK_WALL_THICKNESS = 0.24
-UPPER_FRONT_WALL_THICKNESS = 0.24
-UPPER_BACK_WALL_THICKNESS = 0.24
+HOUSE_WIDTH = 8.75
+HOUSE_DEPTH = 9.00
+BWT = 0.25
+FRONT_WALL_THICKNESS = 0.25
+BACK_WALL_THICKNESS = 0.25
+UPPER_FRONT_WALL_THICKNESS = 0.25
+UPPER_BACK_WALL_THICKNESS = 0.25
 UPPER_EXTERIOR_WALL_MATERIAL = "VPC Cihla 240 mm (10-1,8)"
 UPPER_EXTERIOR_WALL_COLOR = "#e6f3ff"
-INNER_BWT = 0.24
+INNER_BWT = 0.25
 MID_WALL_THICKNESS = 0.30
-GARDEN_ROOMS_WALL_THICKNESS = 0.24
-GARDEN_ROOMS_WALL_MATERIAL = "VPC Cihla 240 mm (10-1,4)"
-GARDEN_ROOMS_WALL_COLOR = "#cce6ff"
-GARDEN_PARTITION_THICKNESS = 0.24
+GARDEN_ROOMS_WALL_THICKNESS = 0.30
+GARDEN_ROOMS_WALL_MATERIAL = "Porfix P2-440 PDK 300 mm"
+GARDEN_ROOMS_WALL_COLOR = "#ffffff"
+GARDEN_PARTITION_THICKNESS = GARDEN_ROOMS_WALL_THICKNESS
 DRY_WALL_WIDTH = 0.10
 FACADE_INSULATION_THICKNESS = 0.20
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.10
 FACADE_THICKNESS = 0.005
-GARDEN_ROOMS_WALL_CENTER_Y = -0.005 + 5.375 + 0.03
+GARDEN_ROOMS_DEPTH = 3.225  # Clear depth, from the divider's garden face to the back wall's inner face.
+GARDEN_ROOMS_WALL_CENTER_Y = (
+    HOUSE_DEPTH-BACK_WALL_THICKNESS-GARDEN_ROOMS_DEPTH-GARDEN_ROOMS_WALL_THICKNESS/2
+)
 GARDEN_ROOMS_WALL_Y = GARDEN_ROOMS_WALL_CENTER_Y-GARDEN_ROOMS_WALL_THICKNESS/2
-GARDEN_ROOMS_DEPTH = 3.375+0.6
 ROOM_DOOR_OPENING_WIDTH = 1.0
 GARDEN_DOOR_CENTER_CLEARANCE = 0.375  # Each construction opening stops this far from the centreline.
 THIRD_ROOM_DRYWALL_DOOR_CLEARANCE = 0.05  # Hallway face to the near jamb of the Pokoj 1 opening.
@@ -60,17 +62,17 @@ THIRD_ROOM_NARROW_WALL_X = (
 )
 THIRD_ROOM_NARROW_WIDTH = THIRD_ROOM_NARROW_WALL_X-BWT-DRY_WALL_WIDTH
 # Retain the former 240 mm walls' centrelines while changing their thickness.
-THIRD_ROOM_REFERENCE_WIDTH = 3.26+0.25
+THIRD_ROOM_REFERENCE_WIDTH = 3.5
 THIRD_ROOM_WALL_CENTER_X = BWT+THIRD_ROOM_REFERENCE_WIDTH+INNER_BWT/2
 THIRD_ROOM_WALL_X = THIRD_ROOM_WALL_CENTER_X+MID_WALL_THICKNESS/2
 THIRD_ROOM_WIDTH = THIRD_ROOM_WALL_X-MID_WALL_THICKNESS-BWT
-STAIRWAY_REFERENCE_WIDTH = 2.23
+STAIRWAY_REFERENCE_WIDTH = 2.225
 STAIRWAY_WALL_CENTER_X = HOUSE_WIDTH-BWT-STAIRWAY_REFERENCE_WIDTH-MID_WALL_THICKNESS/2.0
 STAIRWAY_WALL_X = STAIRWAY_WALL_CENTER_X+MID_WALL_THICKNESS/2
 STAIRWAY_WIDTH = HOUSE_WIDTH-BWT-STAIRWAY_WALL_X
 BATHROOM_LEFT_X = THIRD_ROOM_WALL_X
 BATHROOM_RIGHT_X = STAIRWAY_WALL_X-MID_WALL_THICKNESS
-STAIRWAY_OPENING_START_Y = BWT+3.25+0.125
+STAIRWAY_OPENING_START_Y = BWT+3.25
 HALLWAY_OPENING_LENGTH = GARDEN_ROOMS_WALL_Y-STAIRWAY_OPENING_START_Y
 STAIRWAY_OPENING_FRONT_Y = STAIRWAY_OPENING_START_Y
 BATHROOM_PARTITION_Y = STAIRWAY_OPENING_FRONT_Y-DRY_WALL_WIDTH
@@ -129,7 +131,7 @@ CEMFLOW_AND_FINISH_THICKNESS = 0.07
 GROUND_FLOOR_INSULATION_THICKNESS = 0.06+0.06+0.03
 GROUND_FLOOR_THICKNESS = GROUND_FLOOR_INSULATION_THICKNESS+CEMFLOW_AND_FINISH_THICKNESS
 PERIMETER_TOP_HEIGHT = -0.21#GROUND_FLOOR_THICKNESS
-GROUND_FINISHED_FLOOR_ELEVATION = 417.9  # Metres above sea level.
+GROUND_FINISHED_FLOOR_ELEVATION = 418.07  # Metres above sea level.
 # Corner terrain elevations above sea level: X=0 east, X=HOUSE_WIDTH west;
 # Y=0 street, Y=HOUSE_DEPTH garden.
 TERRAIN_STREET_EAST_ELEVATION = 415.8
@@ -219,19 +221,19 @@ UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_MASONRY_COURSE_HEIGHT = 0.125
 UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
 UPPER_FINISHED_FLOOR_HEIGHT = UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS
-UPPER_RING_BEAM_HEIGHT = 0.24
-NADEZDIVKA = ZAKLADACI_MALTA + 1.20 + UPPER_RING_BEAM_HEIGHT
+UPPER_RING_BEAM_HEIGHT = 0.43 - 0.002
+NADEZDIVKA = ZAKLADACI_MALTA + 1.0 + 0.002 + UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.2
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
-PURLIN_SIZE = (0.16*3, 0.24*3)
+PURLIN_SIZE = (0.18, 0.26)
 ROOF_TIMBER_MATERIAL = resolve_timber_grade("c22").name
 PURLIN_WALL_DISTANCE = 2.95
 PURLIN_X_POSITIONS = (
 	BWT+PURLIN_WALL_DISTANCE-PURLIN_SIZE[0]/2.0,
 	HOUSE_WIDTH-BWT-PURLIN_WALL_DISTANCE+PURLIN_SIZE[0]/2.0
 )
-PURLIN_CENTER_HEIGHT = 3.77  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
+PURLIN_CENTER_HEIGHT = 3.73  # Purlin TOP above the upper-floor datum / ceiling top (legacy name).
 PURLIN_Z = UPPER_FLOOR_START+PURLIN_CENTER_HEIGHT-PURLIN_SIZE[1]/2
 PURLIN_SUPPORT_SIZE = (0.16, 0.16)
 PURLIN_SUPPORT_GIRDER_HEB = 180
@@ -456,7 +458,7 @@ ENTRANCE_OPENING_AT = 4.0 + 0.025  # absolute y position
 GARDEN_WINDOW_WIDTH = 1.25
 ROOM_WINDOW_WIDTH = 1.50
 GARDEN_WINDOW_CENTER_CLEARANCE = 0.75  # House centreline to the nearest opening jamb.
-THIRD_ROOM_WINDOW_EAST_CLEARANCE = 1.255  # Inside east wall face to the opening.
+THIRD_ROOM_WINDOW_EAST_CLEARANCE = 1.25  # Inside east wall face to the opening.
 GROUND_WINDOW_TOP_HEIGHT = ground_floor_height - 0.2
 GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+1.0
 UPPER_WINDOW_WIDTH = 1.5
@@ -470,7 +472,7 @@ BATHROOM_WINDOW_WIDTH = 0.75
 BATHROOM_WINDOW_HEIGHT = 0.75
 BATHROOM_WINDOW_STAIRWAY_CLEARANCE = 0.38  # Inside stairway wall face to the opening jamb.
 UPPER_BASIN_SIZE = (0.60, 0.5)
-BATHROOM_WINDOW_CENTER_X = 4.81 + 0.5
+BATHROOM_WINDOW_CENTER_X = 5.0 + 0.5
 
 PROJECT_DIR = Path("projekt2")
 DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = PROJECT_DIR / "D1.1. Architektonicko Stavební Řešení"
@@ -493,6 +495,7 @@ PDF_BASEMENT_CEILING = Path(PDF_FOLDER.add_pdf("Strop nad suterénem"))
 PDF_BASEMENT_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad suterénem - podrobný plán"))
 PDF_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad 1.NP - podrobný plán"))
 PDF_CC = Path(PDF_FOLDER.add_pdf("Řez CC"))
+PDF_ZASTINENI = Path(PDF_FOLDER.add_pdf("Zastínění sousedního RD"))
 DIR_ZDRAVOTECHNICKE_INSTALACE = PROJECT_DIR / "D1.5. Zdravotechnické Instalace"
 PDF_KANAL_FOLDER = PDFFolder("D1.5.", DIR_ZDRAVOTECHNICKE_INSTALACE)
 PDF_KANAL_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys suterénu"))
@@ -922,6 +925,7 @@ garden_rooms_wall_type = house.wall_type(
 mid_wall_type = house.wall_type(
     f"Load bearing wall - Ytong Klasik {MID_WALL_THICKNESS*1000:g} mm",
     layers=[("Ytong Klasik", MID_WALL_THICKNESS), "axis"],
+    color="#ffffff",
 )
 garden_partition_wall = house.wall_type(
     f"Load bearing wall - {GARDEN_ROOMS_WALL_MATERIAL}",
@@ -935,7 +939,7 @@ upper_bearing_wall_type = house.wall_type(
     color=GARDEN_ROOMS_WALL_COLOR,
 )
 dry_wall = house.wall_type(
-    f"drywall - {DRY_WALL_WIDTH*1000:g} mm", layers=[("SDK", DRY_WALL_WIDTH)], color="#fff2cc",
+    f"drywall - {DRY_WALL_WIDTH*1000:g} mm", layers=[("SDK", DRY_WALL_WIDTH)], color="#ffffff",
 )
 basement_wall_type = house.wall_type(
     f"Basement wall - ztracene bedneni {BASEMENT_WALL_THICKNESS*1000:g} mm",
@@ -1506,6 +1510,7 @@ window_pokoj1 = wall_back_g.add_window(
     at=wall_back_g.start[0]-(HOUSE_WIDTH/2-GARDEN_WINDOW_CENTER_CLEARANCE),
     width=GARDEN_WINDOW_WIDTH,
     sill_height=GROUND_WALL_BASE_COURSE_HEIGHT+0.375,
+#    sill_height=GROUND_WINDOW_SILL_HEIGHT,
     height=GROUND_WINDOW_TOP_HEIGHT,
 )
 window_pokoj2 = wall_back_g.add_window(
@@ -3706,6 +3711,10 @@ roof_gutters = add_roof_gutters()
 
 house.write("house2.ifc")
 
+if "zastineni" in sys.argv:
+    from cadastral_shading import render_shading
+    render_shading(output=PROJECT_DIR / "zastineni.svg", pdf=PDF_ZASTINENI)
+
 
 def sewer_fixture_center(fixture):
     """Use the actual plan centre, including library assets with shifted origins."""
@@ -5126,8 +5135,9 @@ if "ground" in sys.argv:
         drawing1.include_element(post)
     drawing1.add_material_legend([
         ("solid-white", f"Nosná zeď - VPC Cihla {BACK_WALL_THICKNESS*1000:g} mm (10-2,0)"),
-        ("vpc-240-10-14-solid", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
-        ("ytong-klasik", f"Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm"),
+        ("ytong-klasik", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
+        *[("ytong-klasik", f"Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm")
+          for _ in (0,) if MID_WALL_THICKNESS != GARDEN_ROOMS_WALL_THICKNESS],
         ("drywall-diagonal1", f"Příčka - SDK {DRY_WALL_WIDTH*1000:g} mm"),
         ("rockwool-wave", f"Fasádní izolace"),
     ])
@@ -5723,7 +5733,7 @@ if "upper" in sys.argv:
         "upper",
         x=HOUSE_WIDTH/2,
         y=HOUSE_DEPTH/2,
-        z=UPPER_FLOOR_START+1.2,
+        z=UPPER_FLOOR_START+1.021,
         radius=6.5,
         storeys=[upper],
         door_annotations=False,
@@ -5733,8 +5743,9 @@ if "upper" in sys.argv:
     )
     drawing1.add_material_legend([
         ("vpc-240-10-18-solid", f"Nosná zeď - {UPPER_EXTERIOR_WALL_MATERIAL}"),
-        ("vpc-240-10-14-solid", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
-        ("ytong-klasik", f"Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm"),
+        ("ytong-klasik", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
+        *[("ytong-klasik", f"Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm")
+          for _ in (0,) if MID_WALL_THICKNESS != GARDEN_ROOMS_WALL_THICKNESS],
         ("drywall-diagonal1", f"Sádrokartonová příčka {DRY_WALL_WIDTH*1000:.0f} mm"),
         ("rockwool-wave", f"Fasádní izolace"),
     ])
@@ -6466,13 +6477,14 @@ def add_house_section(cut, name, pdf):
         ("mdf-solid", "MDF záklop"),
         ("vapour-barrier-solid", "OSB záklop + parobrzda"),
         ("solid-white", "Nosná zeď - VPC Cihla 240 mm"),
-        ("vpc-240-10-14-solid", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
+        ("ytong-klasik", f"Nosná zeď - {GARDEN_ROOMS_WALL_MATERIAL}"),
         ("vpc-240-10-18-solid", f"Nosná zeď - {UPPER_EXTERIOR_WALL_MATERIAL}"),
         *[("brick", f"Nosná zeď - VPC Cihla {thickness*1000:g} mm")
           for thickness in sorted({FRONT_WALL_THICKNESS, BACK_WALL_THICKNESS,
                                    UPPER_FRONT_WALL_THICKNESS, UPPER_BACK_WALL_THICKNESS})
           if thickness != BWT],
-        ("ytong-klasik", f"Nosná zeď - Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm"),
+        *[("ytong-klasik", f"Nosná zeď - Porfix P2-440 PDK {MID_WALL_THICKNESS*1000:g} mm")
+          for _ in (0,) if MID_WALL_THICKNESS != GARDEN_ROOMS_WALL_THICKNESS],
         ("drywall-diagonal1", "Sádrokarton"),
         ("liapor-brick", "Zakládací řada - Ytong Start"),
         ("ztracene-bedneni", "Ztracené bednění 300 mm"),

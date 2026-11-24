@@ -33,25 +33,27 @@ class GardenPartitionTests(unittest.TestCase):
         vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
         return vertices.min(axis=0), vertices.max(axis=0)
 
-    def test_garden_room_wall_is_centred_240mm_load_bearing_vpc(self):
+    def test_garden_room_wall_is_centred_300mm_load_bearing_porfix(self):
         v = self.v
         wall = v["wall_garden_partition_g"]
         lo, hi = self.bounds(wall)
-        self.assertAlmostEqual(hi[0]-lo[0], .24)
+        self.assertAlmostEqual(hi[0]-lo[0], .30)
         self.assertAlmostEqual((hi[0]+lo[0])/2, v["HOUSE_WIDTH"]/2)
         self.assertTrue(ifcopenshell.util.element.get_pset(wall, "Pset_WallCommon", "LoadBearing"))
         material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
         self.assertEqual([layer.Material.Name for layer in material.MaterialLayers],
-                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "VPC Cihla 240 mm (10-1,4)"])
-        self.assertIn("load bearing wall - VPC Cihla 240 mm (10-1,4)", ifcopenshell.util.element.get_type(wall).Name)
-        self.assertEqual(wall.Description, "VPC Cihla 240 mm (10-1,4)")
+                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Porfix P2-440 PDK 300 mm"])
+        self.assertIn("load bearing wall - Porfix P2-440 PDK 300 mm", ifcopenshell.util.element.get_type(wall).Name)
+        self.assertEqual(wall.Description, "Porfix P2-440 PDK 300 mm")
+        basement_lo, basement_hi = self.bounds(v["wall_basement_s01_s02"])
+        self.assertAlmostEqual((lo[0]+hi[0])/2, (basement_lo[0]+basement_hi[0])/2)
         room1 = Polygon(v["pokoj1"].outline)
         room2 = Polygon(v["pokoj2"].outline)
         self.assertAlmostEqual(room1.bounds[2], lo[0])
         self.assertAlmostEqual(room2.bounds[0], hi[0])
         self.assertAlmostEqual(room1.area, room2.area)
 
-    def test_garden_dividers_use_centred_240mm_vpc_on_both_floors(self):
+    def test_garden_dividers_use_centred_300mm_porfix_with_3230mm_clear_depth(self):
         v = self.v
         for wall, thickness, expected_material in (
             (v["wall_back_g"], .24, "Brick"),
@@ -64,31 +66,34 @@ class GardenPartitionTests(unittest.TestCase):
             self.assertEqual(material.MaterialLayers[-1].Material.Name, expected_material)
         wall = v["wall_garden_rooms_g"]
         lo, hi = self.bounds(wall)
-        self.assertAlmostEqual(hi[1]-lo[1], .24)
+        self.assertAlmostEqual(hi[1]-lo[1], .30)
         basement_lo, basement_hi = self.bounds(v["wall_basement_garden_rooms"])
         self.assertAlmostEqual((lo[1]+hi[1])/2, (basement_lo[1]+basement_hi[1])/2)
         material = ifcopenshell.util.element.get_material(wall, should_skip_usage=True)
         self.assertEqual([layer.Material.Name for layer in material.MaterialLayers],
-                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "VPC Cihla 240 mm (10-1,4)"])
-        self.assertEqual(wall.Description, "VPC Cihla 240 mm (10-1,4)")
+                         [v["GROUND_WALL_BASE_COURSE_MATERIAL"], "Porfix P2-440 PDK 300 mm"])
+        self.assertEqual(wall.Description, "Porfix P2-440 PDK 300 mm")
         ring = next(beam for beam in v["ground_ring_beams"] if beam.source_wall == wall)
         ring_lo, ring_hi = self.bounds(ring)
-        self.assertAlmostEqual(ring_hi[1]-ring_lo[1], .24)
+        self.assertAlmostEqual(ring_hi[1]-ring_lo[1], .30)
         self.assertAlmostEqual((ring_hi[1]+ring_lo[1])/2, v["GARDEN_ROOMS_WALL_CENTER_Y"])
         upper_wall = v["wall_living_room_back_u"]
         upper_lo, upper_hi = self.bounds(upper_wall)
-        self.assertAlmostEqual(upper_hi[1]-upper_lo[1], .24)
+        self.assertAlmostEqual(upper_hi[1]-upper_lo[1], .30)
         self.assertAlmostEqual((upper_lo[1]+upper_hi[1])/2, (lo[1]+hi[1])/2)
         self.assertAlmostEqual((lo[1]+hi[1])/2, v["GARDEN_ROOMS_WALL_CENTER_Y"])
         upper_material = ifcopenshell.util.element.get_material(upper_wall, should_skip_usage=True)
         self.assertEqual([layer.Material.Name for layer in upper_material.MaterialLayers],
-                         ["VPC Cihla 240 mm (10-1,4)"])
-        self.assertIn("VPC Cihla 240 mm (10-1,4)", ifcopenshell.util.element.get_type(upper_wall).Name)
-        self.assertEqual(upper_wall.Description, "VPC Cihla 240 mm (10-1,4)")
+                         ["Porfix P2-440 PDK 300 mm"])
+        self.assertIn("Porfix P2-440 PDK 300 mm", ifcopenshell.util.element.get_type(upper_wall).Name)
+        self.assertEqual(upper_wall.Description, "Porfix P2-440 PDK 300 mm")
         for room in (v["pokoj1"], v["pokoj2"]):
             bounds = Polygon(room.outline).bounds
             self.assertAlmostEqual(bounds[1], hi[1])
             self.assertAlmostEqual(bounds[3], v["HOUSE_DEPTH"]-.24)
+            self.assertAlmostEqual(bounds[3]-bounds[1], 3.23)
+        self.assertAlmostEqual(v["GARDEN_ROOMS_DEPTH"], 3.23)
+        self.assertAlmostEqual(v["GARDEN_ROOMS_WALL_CENTER_Y"], 5.37)
 
     def test_room3_door_opening_is_50mm_from_the_garden_room_wall(self):
         opening = self.v["pokoj3_door"].FillsVoids[0].RelatingOpeningElement

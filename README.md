@@ -648,20 +648,23 @@ at its foot. The current terrain gives approximately 155.5 mm per riser and
 The outer railing continues around the landing's street edge. The ground plan
 shows the stair symbols, uphill walking arrow and combined stair notes.
 
-A centred 240 mm load-bearing VPC 10-1,4 wall along Y splits the garden
+A centred 300 mm load-bearing Porfix P2-440 PDK wall along Y splits the garden
 section into equal rooms. Their clear width follows
 `(HOUSE_WIDTH-2*BWT-GARDEN_PARTITION_THICKNESS)/2`; their clear depth is
-`GARDEN_ROOMS_DEPTH`. Its cuts use the solid-blue `vpc-240-10-14-solid` tint.
-The common masonry finishing pass retains the existing base course below the VPC.
+`GARDEN_ROOMS_DEPTH = 3.23 m`. Its cuts use the `ytong-klasik` hatch on white.
+The common masonry finishing pass retains the existing base course below the Porfix.
 The transverse divider and its corresponding basement and upper-floor walls
 keep their physical centres aligned at `GARDEN_ROOMS_WALL_CENTER_Y`.
-`GARDEN_ROOMS_DEPTH` remains the beam-sizing reference. The upper middle wall
-uses 240 mm VPC 10-1,4 and the basement divider uses 300 mm formwork.
+The shared centre is derived from the garden rooms' clear depth and divider
+thickness, keeping the garden face fixed at Y = 5.52 m and all three levels
+centred at Y = 5.37 m. The upper middle wall uses the same 300 mm Porfix;
+the basement divider remains 300 mm formwork. The room-to-room divider
+remains centred over its basement support at X = HOUSE_WIDTH/2.
 Pokoj 1 and 2 have inward-opening 900 mm doors in 1000 mm construction
 openings through the garden-room dividing wall. Their nearest opening edges
-are each 500 mm from the house centreline (`HOUSE_WIDTH/2`), controlled by
-`GARDEN_DOOR_CENTER_CLEARANCE`, leaving 1000 mm between openings. The centred
-240 mm VPC wall has 380 mm clear between each face and the nearest opening.
+are controlled by `GARDEN_DOOR_CENTER_CLEARANCE` from the house centreline
+(`HOUSE_WIDTH/2`). The clear gap to each face of the room-to-room divider is
+`GARDEN_DOOR_CENTER_CLEARANCE-GARDEN_PARTITION_THICKNESS/2`.
 Dimensions on the garden-room wall show the distances from the outer opening
 jambs to the inside faces of the east and west exterior walls.
 `rozvadec` is a white 360 × 150 × 500 mm cabinet on the hallway face of
@@ -1331,13 +1334,13 @@ garden-side living area.
 `LIVING_ROOM_DEPTH = HOUSE_DEPTH - BWT - living_room_back_face_y` is the
 clear depth of the back/garden-side strip.
 The former horizontal SDK and two 1.25 m VPC returns are replaced by one
-240 mm load-bearing VPC 10-1,4 wall across the full inside house width.
+300 mm load-bearing Porfix P2-440 PDK wall across the full inside house width.
 Its centre follows the actual centre of the ground-floor garden-room divider.
 Its sloped top is 50 mm below the rafter tops, measured perpendicular to the
 roof slope (`UPPER_BEARING_WALL_RAFTER_TOP_CLEARANCE`). It is capped
 horizontally at `purlin_bottom_z`; unlike the SDK, it is not capped at the
 plasterboard. The exterior gable walls keep their separate underside cuts.
-Cuts use the solid-blue `vpc-240-10-14-solid` tint.
+Cuts use the `ytong-klasik` hatch on white.
 The removed returns' ring-beam bands are not extended
 through this new wall; the wall-plate ring beams remain on the perimeter.
 The vertical SDK partition turns towards the chimney before the middle
@@ -3324,6 +3327,27 @@ attached to the model when its camera or scale changes.
 
 ## Coordination situation
 
+The shading-clearance diagram is generated independently of Bonsai with:
+
+```sh
+.venv-pdf/bin/python cadastral_shading.py
+```
+
+It writes `projekt2/zastineni.svg` and
+`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.17. Zastínění sousedního RD.pdf`.
+`.venv-pdf/bin/python house2.py zastineni` selects the same drawing through the house generator.
+The A3 landscape cadastral plan at 1:250 follows the current
+`survey_points.HOUSE_PLACEMENT`. The house has a thick black outline. The
+viewing half-plane faces the house, perpendicular to the measured neighbour
+façade; excluding 25° along each façade direction leaves one continuous 130°
+sector. The current control-point coordinates, floor elevation and maximum
+vertical roof/chimney viewing angles appear beside the diagram. Roof and
+chimney geometry is read from the live arithmetic inputs in `house2.py`,
+including the pitched roof and the 400 mm chimney top, with edge-interior
+maxima checked analytically. The supplied compliance note is included verbatim.
+If the current geometry reaches 45°, generation stops rather than publishing
+that note with an inconsistent result. The shared project title block is included.
+
 The companion C1.1 sheet is generated with:
 
 ```sh
@@ -3588,6 +3612,12 @@ The terminal also prints the shortest perpendicular distance from the rotated
 house rectangle to each infinite fitted line, in metres. A line that crosses
 or touches the rectangle has distance zero. These are actual perpendicular
 gaps, rather than distances measured along the oblique placement axes.
+With a green (`#00ff00`) survey polyline, both drawing commands also print
+the shortest house-to-green-line distance, the measured segment's point IDs,
+and the closest point on each object. The house point is reported in both
+street/neighbour placement coordinates and original S-JTSK Y/X coordinates.
+This calculation follows the finite surveyed segments, including bends; it
+can find a closest point along a house edge rather than only at a corner.
 
 When both fitted lines are available, a derived **neighbour window** point is
 drawn at placement coordinates `(0, 7.75)`, with elevation **417.60 m Bpv**.
@@ -3596,7 +3626,27 @@ Tune `NEIGHBOUR_WINDOW_DISTANCE` and `NEIGHBOUR_WINDOW_ELEVATION` in
 `survey_points.py`. It is labelled by name and elevation and included in SVG
 metadata, but never added to `points.txt` or used to fit the measured lines.
 
-The first default roof profile follows the **two right-hand corners of the
+Both drawing commands show a **blue 9.95 × 9.75 m roof outline**, including
+the overhangs. `ROOF_FOOTPRINT_SIZE` controls its dimensions. It shares the
+house's centre and rotation, so placement edits move both rectangles together.
+The two legacy roof-height profiles are disabled (`HOUSE_ROOF_ENABLED = False`).
+The neighbour-window observer is highlighted in orange and labelled with
+placement coordinates and its S-JTSK Y/X and Bpv Z. It remains the derived
+point at `(0, 7.75)` with Z = 417.60 m Bpv.
+
+The blue outline is checked as a flat-topped box with `ROOF_BOX_HEIGHT = 4.3025 m`
+above `ROOF_BOX_GROUND_ELEVATION = 417.90 m Bpv`, the new house's finished floor.
+Thus the top is at 422.2025 m Bpv. For a top above the observer, the closest
+point of the full footprint governs the maximum vertical angle; this includes
+edge interiors, rather than checking only the four corners. Every lower point
+at the same XY has a smaller angle. If the entire top is below eye level,
+the farthest corner governs instead. Both drawing commands print the exact
+flat-box check, observer and governing top-point coordinates, plan distance,
+elevation difference, maximum angle and vertical margin below the 45° cone.
+The drawing shows the governing plan sightline and result, also embedded in
+the SVG metadata. This is the specified flat-box geometry check.
+
+The first optional legacy roof profile follows the **two right-hand corners of the
 placed house**, including its current rotation. Its midpoint elevation is
 `417.0 + total_house_height - 0.875` metres Bpv. A second parallel profile is
 2.25 m away, perpendicular to the first and on the side farther from the
@@ -4245,7 +4295,7 @@ Descriptions wrap automatically and may also contain explicit newlines.
 Available pattern names are defined in `drawings/assets/patterns.svg`, including
 `diagonal1`, `diagonal2`, `crosshatch1`, `brick`, `concrete`, `sand`, and
 `wood`. Project-specific reusable patterns include `drywall-diagonal1` (the
-`diagonal1` hatch on the same `#fff2cc` yellow tint as Porfix) and `random-dots` (the preserved
+`diagonal1` hatch on white, matching the untinted Porfix hatch) and `random-dots` (the preserved
 irregular dot field). A zero `right_panel_width` (the default) keeps the
 original square drawing sheet.
 
