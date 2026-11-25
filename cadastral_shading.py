@@ -18,16 +18,18 @@ import shapefile
 
 from cadastral_situation import DEFAULT_CADASTRE, NorthUpFrame, ROOT, layer_features, parcel_arrow_paths
 from drawing_title_block import load_title_block, title_block_svg
+from pdf_utils import save_drawing_svg
+from project_documents import DRAWINGS, document_path
 from roof_frame_3d import HouseInputs
 from survey_points import (
     HOUSE_PLACEMENT, SurveyAxes, named_survey_groups, neighbour_window_point, read_survey_groups,
 )
 
 
-TITLE = "Zastínění sousedního RD"
-NUMBER = "D1.1.17"
+TITLE = DRAWINGS["zastineni"].title
+NUMBER = DRAWINGS["zastineni"].number
 DEFAULT_SVG = ROOT / "projekt2/zastineni.svg"
-DEFAULT_PDF = ROOT / f"projekt2/D1.1. Architektonicko Stavební Řešení/{NUMBER}. {TITLE}.pdf"
+DEFAULT_PDF = ROOT / document_path("zastineni")
 GREEN = "#16713a"
 ORANGE = "#b65610"
 NOTE = (
@@ -310,9 +312,10 @@ def render_shading(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     output.parent.mkdir(parents=True, exist_ok=True)
     pdf.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(svg)+"\n",encoding="utf-8")
+    sheet_path = save_drawing_svg(output, pdf)
     with TemporaryDirectory(prefix=".shading-pdf-",dir=pdf.parent) as directory:
         target = Path(directory)/pdf.name
-        subprocess.run([inkscape,str(output),f"--export-filename={target}","--export-type=pdf",
+        subprocess.run([inkscape,str(sheet_path),f"--export-filename={target}","--export-type=pdf",
                         "--export-area-page","--batch-process"],check=True)
         if not target.is_file() or target.stat().st_size==0:
             raise RuntimeError("Inkscape did not create the shading PDF")

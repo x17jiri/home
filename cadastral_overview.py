@@ -1,4 +1,4 @@
-"""Compose the overview image and a cadastral-only map on the C1.1 sheet."""
+"""Compose the overview image and a cadastral-only map on the combined C.1-C.2 sheet."""
 
 from __future__ import annotations
 
@@ -15,16 +15,21 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image, ImageOps
 import shapefile
+from shapely.geometry import Polygon
+from shapely.ops import polylabel
 
 from cadastral_situation import (
     DEFAULT_CADASTRE, HOUSE_COLOR, HOUSE_FILL, NorthUpFrame, ROOT,
     cadastral_parcel_area, layer_features, parcel_arrow_paths,
+    WATER_LINE_COLOR, WATER_ADJUSTMENT_COLOR, GAS_LINE_COLOR, CETIN_LINE_COLOR, ELECTRIC_LINE_COLOR,
 )
 from drawing_title_block import load_title_block, title_block_svg
+from pdf_utils import save_drawing_svg
+from project_documents import DRAWINGS, document_path
 
 
 DEFAULT_SVG = ROOT / "projekt2/situace_prehled.svg"
-DEFAULT_PDF = ROOT / "projekt2/C. Situace Stavby/C1.1. Přehledová a katastrální mapa.pdf"
+DEFAULT_PDF = ROOT / document_path("situace_prehled")
 PARCELS = ("105", "106/1", "103/2")
 
 
@@ -76,8 +81,8 @@ def render_overview(*, image=ROOT / "lokalizace.jpg", source_map=ROOT / "projekt
         svg.append(f'<text x="{x:g}" y="{y:g}" font-size="{size:g}" text-anchor="{anchor}" '
                    f'font-weight="{"bold" if bold else "normal"}" {attrs}>{escape(str(value))}</text>')
 
-    text(107, 17, "Přehledová mapa", 4.5, anchor="middle", bold=True)
-    text(313, 17, "Katastrální mapa", 4.5, anchor="middle", bold=True)
+    text(107, 17, "C.1 Širší vztahy", 4.5, anchor="middle", bold=True)
+    text(313, 17, "C.2 Katastrální situace", 4.5, anchor="middle", bold=True)
     # Embed the original JPEG, preserving its aspect ratio and avoiding external links.
     with Image.open(image) as overview:
         overview = ImageOps.exif_transpose(overview)
@@ -157,7 +162,37 @@ def render_overview(*, image=ROOT / "lokalizace.jpg", source_map=ROOT / "projekt
                      attrs=f'class="map-label" dominant-baseline="{baseline}" transform="rotate({angle:g} {x:g} {y:g})"')
             else:
                 text(x, y, record["TEXT_KM"], size, anchor="middle", attrs='class="map-label"')
-    target = highlighted.representative_point()
+    # The cadastral panel includes the actual proposed footprint, the existing
+    # supply networks and the connection identified in the coordination sheet.
+    for key,color in (("water_routes",WATER_LINE_COLOR),("gas_routes",GAS_LINE_COLOR),
+                      ("cetin_routes",CETIN_LINE_COLOR),("electric_routes",ELECTRIC_LINE_COLOR)):
+        svg.append(f'<g id="overview-{key}" fill="none" stroke="{color}" stroke-width=".18">')
+        for route in metadata[key]:
+            adjusted=route.get('to_be_adjusted',False)
+            dash=' stroke-dasharray="1.2,.6"' if adjusted or key=='cetin_routes' or route.get('installation')=='overhead' else ''
+            tint=f' stroke="{WATER_ADJUSTMENT_COLOR}"' if adjusted else ''
+            svg.append(f'<path d="{path(route["grid_points_m"])}"{dash}{tint}/>')
+        svg.append('</g>')
+    proposed=[(-y,-x) for y,x in metadata['house']['survey_corners']]
+    centre_house=tuple(sum(p[i] for p in proposed)/4 for i in (0,1))
+    svg.append(f'<path id="proposed-house" d="{path(proposed,close=True)}" fill="#efaaaa" stroke="{HOUSE_COLOR}" stroke-width=".5"/>')
+    hx,hy=position(*centre_house)
+    svg.append(f'<path d="M{hx-19:.3f},{hy-9:.3f}L{hx:.3f},{hy:.3f}" fill="none" stroke="{HOUSE_COLOR}" stroke-width=".25"/>')
+    text(hx-19,hy-10,'Navrhovaný RD',2.3,anchor='middle',bold=True,attrs='class="map-label"')
+    design=metadata.get('site_design')
+    if design is None:
+        raise ValueError('Regenerate C.3 before the overview: the site connection data is missing')
+    nn=[frame.to_grid(*p) for p in design['proposed_nn_route_local_m']]
+    svg.append(f'<path id="overview-nn-connection" d="{path(nn)}" fill="none" stroke="#b30032" stroke-width=".3" stroke-dasharray="1,.6"/>')
+    entrances=[]
+    for i,p in enumerate(design['existing_accesses_local_m'],1):
+        grid=frame.to_grid(*p);x,y=position(*grid)
+        svg.append(f'<circle id="overview-access-{i}" cx="{x:.3f}" cy="{y:.3f}" r=".9" fill="white" stroke="black" stroke-width=".2"/>')
+        entrances.append(grid)
+    footprint = Polygon([frame.to_local(*p) for p in proposed])
+    arrow_area = highlighted.difference(footprint.buffer(5))
+    areas = arrow_area.geoms if arrow_area.geom_type == 'MultiPolygon' else (arrow_area,)
+    target = polylabel(max(areas,key=lambda area:area.area),tolerance=.02)
     target_paper = position(*frame.to_grid(target.x, target.y))
     label_x, label_y = map_x + map_w - 12, map_y + map_h * .79
     svg.append(f'<path id="interest-area-arrow" d="M{label_x-12:g},{label_y-4:g} '
@@ -175,20 +210,32 @@ def render_overview(*, image=ROOT / "lokalizace.jpg", source_map=ROOT / "projekt
     text(216, 224, "Katastrální mapa 1:1000 · geografický sever nahoře", 2.1)
     text(10, 232, "Zájmové území: parcely 105, 106/1 a 103/2", 2.6, bold=True)
     text(10, 239, "k. ú. Lažánky u Blanska (679453)", 2.5)
+    text(10,247,"Červený obrys: navrhovaný RD. Růžová plocha: řešené parcely.",2.3)
+    for i,(label,color) in enumerate((("Vodovod",WATER_LINE_COLOR),("NN",ELECTRIC_LINE_COLOR),
+                                    ("CETIN",CETIN_LINE_COLOR),("Plynovod",GAS_LINE_COLOR))):
+        x=10+i*47
+        svg.append(f'<path d="M{x},254h9" fill="none" stroke="{color}" stroke-width=".3"/>')
+        text(x+12,255,label,2.1)
+    text(10,263,"Napojení: stávající vodovod a NN; stávající sjezdy jsou zachovány.",2.3)
+    text(10,270,"Přívod NN od stávajícího elektroměrového pilíře; plynová přípojka se nenavrhuje.",2.1)
+    text(10,277,"Podrobné osazení, přípojky a výšky jsou uvedeny v C.3.",2.3)
     settings = load_title_block(output)
     if settings is not None:
         svg.append(title_block_svg(settings, filename=pdf.name, scale="1:1000*", paper="A3", x=330, y=228))
     text(10, 290, "* Měřítko platí pro katastrální mapu; přehledová mapa je bez určeného měřítka.", 2)
     info = {"highlighted_parcels": PARCELS, "highlight_geometry_local_m": highlighted.__geo_interface__,
             "frame": metadata["frame"], "map_bounds_local_m": bounds, "map_scale": scale,
-            "overview_image": str(image), "cadastre": str(cadastre), "paper_mm": [420, 297]}
+            "overview_image": str(image), "cadastre": str(cadastre), "paper_mm": [420, 297],
+            "proposed_house_grid_corners": proposed, "existing_access_grid_points": entrances,
+            "proposed_nn_grid_points": nn, "interest_area_target_local_m": list(target.coords[0])}
     svg.append('<metadata id="overview-data">' + escape(json.dumps(info, ensure_ascii=False)) + '</metadata></svg>')
     output.parent.mkdir(parents=True, exist_ok=True)
     pdf.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(svg) + "\n", encoding="utf-8")
+    sheet_path = save_drawing_svg(output, pdf)
     with TemporaryDirectory(prefix=".prehled-pdf-", dir=pdf.parent) as directory:
         temporary_pdf = Path(directory) / pdf.name
-        subprocess.run([inkscape, str(output), f"--export-filename={temporary_pdf}",
+        subprocess.run([inkscape, str(sheet_path), f"--export-filename={temporary_pdf}",
                         "--export-type=pdf", "--export-area-page", "--batch-process"], check=True)
         if not temporary_pdf.is_file() or temporary_pdf.stat().st_size == 0:
             raise RuntimeError("Inkscape did not create the overview PDF")

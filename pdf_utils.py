@@ -1,16 +1,18 @@
-"""PDF naming and Markdown export helpers, independent of IFC libraries."""
+"""PDF naming, drawing sources and Markdown export, independent of IFC libraries."""
 
 from __future__ import annotations
 
 import argparse
-from html import escape
+from html import escape, unescape
 from math import isfinite
 from os import PathLike
+from os.path import relpath
 from pathlib import Path
+import re
 from tempfile import TemporaryDirectory
-from urllib.parse import urlparse
+from urllib.parse import quote, unquote, urlparse, urlsplit, urlunsplit
 
-__all__ = ["PDFFolder", "markdown_to_pdf"]
+__all__ = ["PDFFolder", "markdown_to_pdf", "save_drawing_svg"]
 
 
 class PDFFolder:
@@ -24,6 +26,46 @@ class PDFFolder:
     def add_pdf(self, name: str) -> str:
         self.counter += 1
         return str(Path(self.dir)/f"{self.section}{self.counter}. {name}.pdf")
+
+
+def save_drawing_svg(source: str | PathLike[str], pdf: str | PathLike[str], *,
+                     svg: str | None = None) -> Path:
+    """Save the PDF's complete SVG sheet as <PDF folder>/src/<PDF stem>.svg.
+
+    Rebase relative image, use and CSS resource links to the new directory.
+    The original rendering/cache SVG remains available to its existing users.
+    ``svg`` can supply the finished paper layout, including its title block.
+    """
+    source, pdf = Path(source).resolve(), Path(pdf)
+    if source.suffix.lower() != ".svg" or pdf.suffix.lower() != ".pdf":
+        raise ValueError("Drawing source and output must use .svg and .pdf extensions")
+    target = (pdf.parent / "src" / pdf.with_suffix(".svg").name).resolve()
+    document = source.read_text(encoding="utf-8") if svg is None else svg
+
+    def rebase(value):
+        parsed = urlsplit(unescape(value))
+        if not parsed.path or parsed.scheme or parsed.netloc or parsed.path.startswith("/"):
+            return value
+        resource = (source.parent / unquote(parsed.path)).resolve()
+        path = quote(Path(relpath(resource, target.parent)).as_posix(), safe="/:")
+        return escape(urlunsplit(("", "", path, parsed.query, parsed.fragment)), quote=True)
+
+    document = re.sub(
+        r'''(?P<key>\b(?:xlink:)?href\s*=\s*)(?P<q>["'])(?P<url>.*?)(?P=q)''',
+        lambda m: f"{m['key']}{m['q']}{rebase(m['url'])}{m['q']}", document,
+    )
+    document = re.sub(
+        r'''url\(\s*(?:(?P<q>["'])(?P<quoted>.*?)(?P=q)|(?P<bare>[^)\s]+))\s*\)''',
+        lambda m: f"url({m['q'] or ''}{rebase(m['quoted'] if m['q'] else m['bare'])}{m['q'] or ''})",
+        document,
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".svg-", dir=target.parent) as directory:
+        temporary_svg = Path(directory) / target.name
+        temporary_svg.write_text(document, encoding="utf-8")
+        temporary_svg.replace(target)
+    return target
+
 
 _PAPER_SIZES = {"A4": (210, 297), "A3": (297, 420), "A2": (420, 594),
                 "A1": (594, 841), "A0": (841, 1189)}
@@ -70,8 +112,16 @@ def _local_resource_fetcher(url, *args, **kwargs):
     """Render local/data images without making unexpected network requests."""
     if urlparse(url).scheme not in {"file", "data"}:
         raise ValueError("Markdown PDF export only loads local files or data URLs")
-    from weasyprint import default_url_fetcher
+    try:
+        from weasyprint import default_url_fetcher
+    except ImportError:
+        from weasyprint.urls import URLFetcher
+        return URLFetcher(allowed_protocols={"file", "data"}, fail_on_errors=True).fetch(url, *args, **kwargs)
     return default_url_fetcher(url, *args, **kwargs)
+
+
+# Newer WeasyPrint releases consult this flag on custom fetchers after errors.
+_local_resource_fetcher._fail_on_errors = True
 
 
 def markdown_to_pdf(

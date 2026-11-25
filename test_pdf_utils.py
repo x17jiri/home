@@ -5,10 +5,12 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+from urllib.parse import unquote, urlsplit
+import xml.etree.ElementTree as ET
 
 from markdown_it import MarkdownIt
 
-from pdf_utils import PDFFolder, markdown_to_pdf, _local_resource_fetcher
+from pdf_utils import PDFFolder, markdown_to_pdf, save_drawing_svg, _local_resource_fetcher
 
 
 class PDFNamingTests(unittest.TestCase):
@@ -23,6 +25,50 @@ class PDFNamingTests(unittest.TestCase):
                 self.assertEqual(folder.counter, 2)
                 self.assertEqual(Path(PDFFolder("D1.5.", directory).add_pdf("Kanalizace")).name,
                                  "D1.5.1. Kanalizace.pdf")
+
+
+class DrawingSvgSourceTests(unittest.TestCase):
+    def test_named_sheet_rebases_assets_and_keeps_original_cache(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "cache" / "ground.svg"
+            source.parent.mkdir()
+            original = '''<svg xmlns="http://www.w3.org/2000/svg"
+                xmlns:xlink="http://www.w3.org/1999/xlink">
+                <image xlink:href="../obrázek%20fasády.png"/>
+                <use href="symbols.svg#north"/>
+                <style>.texture{fill:url('../textures/stone wall.svg#tile')}</style>
+                <use href="#local"/><image href="data:image/png;base64,AAAA"/>
+                <image href="https://example.org/map.png"/>
+                </svg>'''
+            source.write_text(original, encoding="utf-8")
+            pdf = root / "Výkresy" / "D1.1.1. Půdorys 1.NP.pdf"
+            result = save_drawing_svg(source, pdf)
+            self.assertEqual(result, pdf.parent / "src" / "D1.1.1. Půdorys 1.NP.svg")
+            self.assertEqual(source.read_text(encoding="utf-8"), original)
+            saved = ET.parse(result).getroot()
+            image, use, style, internal, data, remote = saved
+            for actual, expected in (
+                (image.get("{http://www.w3.org/1999/xlink}href"), root / "obrázek fasády.png"),
+                (use.get("href"), source.parent / "symbols.svg"),
+                (style.text.split("url('")[1].split("')")[0], root / "textures/stone wall.svg"),
+            ):
+                self.assertEqual((result.parent / unquote(urlsplit(actual).path)).resolve(), expected)
+            self.assertEqual(internal.get("href"), "#local")
+            self.assertEqual(data.get("href"), "data:image/png;base64,AAAA")
+            self.assertEqual(remote.get("href"), "https://example.org/map.png")
+
+    def test_finished_paper_layout_replaces_previous_source(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / "ground.svg"
+            cache.write_text('<svg width="200mm" height="150mm"/>')
+            pdf = root / "plans" / "Ground.pdf"
+            source = save_drawing_svg(cache, pdf)
+            sheet = '<svg width="297mm" height="210mm"><g class="drawing-title-block"/></svg>'
+            self.assertEqual(save_drawing_svg(cache, pdf, svg=sheet), source)
+            self.assertEqual(source.read_text(), sheet)
+            self.assertEqual(cache.read_text(), '<svg width="200mm" height="150mm"/>')
 
 
 class MarkdownPdfTests(unittest.TestCase):
@@ -141,6 +187,17 @@ class MarkdownPdfTests(unittest.TestCase):
         import ifc_utils
         self.assertIs(ifc_utils.markdown_to_pdf, markdown_to_pdf)
         self.assertIn("markdown_to_pdf", ifc_utils.__all__)
+
+    def test_local_resources_support_weasyprint_url_fetcher_api(self):
+        factory = Mock()
+        with patch.dict("sys.modules", {
+            "weasyprint": SimpleNamespace(),
+            "weasyprint.urls": SimpleNamespace(URLFetcher=factory),
+        }):
+            result = _local_resource_fetcher(self.source.as_uri())
+        factory.assert_called_once_with(allowed_protocols={"file", "data"}, fail_on_errors=True)
+        factory.return_value.fetch.assert_called_once_with(self.source.as_uri())
+        self.assertIs(result, factory.return_value.fetch.return_value)
 
 
 if __name__ == "__main__":

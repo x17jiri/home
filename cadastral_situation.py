@@ -20,6 +20,11 @@ from shapely.geometry import LineString, Point, Polygon, shape as geometry_shape
 from shapely.ops import linemerge, polygonize, split, substring, transform, unary_union
 
 from drawing_title_block import load_title_block, title_block_svg
+from pdf_utils import save_drawing_svg
+from project_documents import DRAWINGS, document_path
+from site_plan_annotations import (SITE_PARCELS, SETBACK_PARCELS, METER_SURVEY_POINT,
+    SITE_BOUNDARY_COLOR, NN_CONNECTION_COLOR, house_site_data, boundary_setbacks, annotations_svg,
+    FOREST_PARCEL, FOREST_REFERENCE_POINTS, forest_reference_edge)
 from survey_points import (
     HOUSE_PLACEMENT, SurveyAxes, named_survey_groups, read_survey_groups, read_survey_points,
 )
@@ -28,9 +33,9 @@ from survey_points import (
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CADASTRE = ROOT / "katastr/679453"
 DEFAULT_SVG = ROOT / "projekt2/situace.svg"
-DEFAULT_PDF = ROOT / "projekt2/C. Situace Stavby/C1.2. Koordinační Situace.pdf"
-DRAWING_NUMBER = "C1.2"
-DRAWING_TITLE = "Koordinační situace"
+DEFAULT_PDF = ROOT / document_path("situace")
+DRAWING_NUMBER = DRAWINGS["situace"].number
+DRAWING_TITLE = DRAWINGS["situace"].title
 SURVEY_COLOR = "#2989ad"
 HOUSE_COLOR = "#d32222"
 HOUSE_FILL = "#f8d2d2"
@@ -335,7 +340,7 @@ def parked_cars(frontage, paved, neighbour, side_fence, *, length, width, gap=ST
 
 
 def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
-                     output=DEFAULT_SVG, pdf=DEFAULT_PDF, scale=500):
+                     output=DEFAULT_SVG, pdf=DEFAULT_PDF, scale=200):
     cadastre, points, output, pdf = map(Path, (cadastre, points, output, pdf))
     if not isfinite(scale) or scale <= 0:
         raise ValueError("Scale denominator must be positive and finite")
@@ -377,6 +382,26 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
         return [frame.to_local(-p.y, -p.x) for p in group.points]
 
     house_polygon = Polygon([frame.to_local(*p) for p in house_grid_corners])
+    site = cadastral_parcel_area(cadastre, SITE_PARCELS, frame)
+    levels = house_site_data(house_axes, frame)
+    neighbouring_boundaries = {number: site.boundary.intersection(
+        cadastral_parcel_area(cadastre, (number,), frame).boundary) for number in SETBACK_PARCELS}
+    setbacks = boundary_setbacks(house_polygon, neighbouring_boundaries)
+    street_corner = Point(list(house_polygon.exterior.coords)[1])  # B, beside parcel 107.
+    street_setback = boundary_setbacks(street_corner, {'107': neighbouring_boundaries['107']})[0]
+    street_setback.update(corner='B', identifier='setback-107-street', dimension_offset_mm=-8)
+    setbacks.append(street_setback)
+    survey_by_number = {p.number:p for p in survey}
+    forest_points = [Point(frame.to_local(-survey_by_number[n].y,-survey_by_number[n].x))
+                     for n in FOREST_REFERENCE_POINTS]
+    forest_edge = forest_reference_edge(
+        cadastral_parcel_area(cadastre,(FOREST_PARCEL,),frame),forest_points)
+    forest_setback = boundary_setbacks(house_polygon,{FOREST_PARCEL:forest_edge})[0]
+    forest_setback['identifier']='setback-forest'
+    setbacks.append(forest_setback)
+    meter_point = next(p for p in survey if p.number == METER_SURVEY_POINT)
+    meter = frame.to_local(-meter_point.y, -meter_point.x)
+    corners_table = [dict(name=chr(65+i), Y=y, X=x) for i,(y,x) in enumerate(house_survey_corners)]
     enclosure, band = street_band(
         local_line(polylines["street"]), local_line(garden_wall), local_line(polylines["neighbour"]),
         house_polygon, southwest_width=STREET_BAND_SOUTHWEST_WIDTH,
@@ -420,10 +445,17 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     cars = parked_cars(street_frontage, paved, LineString(local_line(polylines["neighbour"])),
                        paving_lawn_divider, length=float(car_asset.get("data-body-length-m")),
                        width=float(car_asset.get("data-maximum-width-m")))
-    local_points = [frame.to_local(-p.y, -p.x) for p in survey]
-    extent_points = [*local_points, *(frame.to_local(*p) for p in house_grid_corners)]
-    centre = tuple((min(v[i] for v in extent_points) + max(v[i] for v in extent_points)) / 2
-                   for i in (0, 1))
+    # Surveyed frontage and cadastral edges differ slightly. Keep proposed
+    # paving and fencing within the confirmed extent of the investor's land.
+    paved = paved.intersection(site)
+    wire_fence = wire_fence.intersection(site)
+    wire_fence_lines = [line for line in getattr(wire_fence, "geoms", (wire_fence,))
+                        if line.geom_type == "LineString"]
+    fence = unary_union([wire_fence, street_fence])
+    # C.3 shows the site and immediate neighbours at 1:200. Distant surveyed
+    # points remain in the dataset and the wider-context sheet, outside this viewport.
+    extent_points = [*site.envelope.exterior.coords, *house_polygon.exterior.coords]
+    centre = ((site.bounds[0]+site.bounds[2])/2, (site.bounds[1]+site.bounds[3])/2)
 
     # Physical A3 landscape layout. Keep the shared project title block clear.
     page_w, page_h = 420, 297
@@ -434,7 +466,7 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
               centre[0] + half_w, centre[1] + half_h)
     if any(not (bounds[0] + 5 <= x <= bounds[2] - 5 and
                 bounds[1] + 5 <= y <= bounds[3] - 5) for x, y in extent_points):
-        raise ValueError("Survey points and house need at least 5 m of map margin; increase --scale")
+        raise ValueError("The site needs 5 m of map margin; use a larger sheet rather than reducing the coordination scale")
     corners = [frame.to_grid(x, y) for x in (bounds[0], bounds[2])
                for y in (bounds[1], bounds[3])]
     grid_bbox = (min(p[0] for p in corners), min(p[1] for p in corners),
@@ -452,7 +484,8 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
            f'.survey-point-label{{fill:{SURVEY_POINT_LABEL_COLOR};paint-order:stroke;stroke:white;stroke-width:.15}}'
            'path{stroke-linejoin:round;stroke-linecap:round}</style>',
            f'<defs><clipPath id="map-clip"><rect x="{map_x}" y="{map_y}" '
-           f'width="{map_w}" height="{map_h}"/></clipPath>{car_symbol}</defs>']
+           f'width="{map_w}" height="{map_h}"/></clipPath>{car_symbol}'
+           '<marker id="site-arrow" markerUnits="userSpaceOnUse" viewBox="0 0 4 3" refX="4" refY="1.5" markerWidth="4" markerHeight="3" orient="auto"><path d="M0,0L4,1.5L0,3Z" fill="#222"/></marker></defs>']
 
     def text(x, y, value, size=2.3, *, anchor="start", bold=False, css="", attrs=""):
         svg.append(f'<text x="{x:g}" y="{y:g}" font-size="{size:g}" '
@@ -478,6 +511,7 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
          anchor="middle", bold=True, css="drawing-title")
     svg.append('<g clip-path="url(#map-clip)">')
     counts = {}
+    demolition = []
     for name, fill, stroke, width in (
         ("PARCELY_KN_P", "none", "#454545", .18),
         ("DALSI_PRVKY_MAPY_L", "none", "#909090", .13),
@@ -489,10 +523,14 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
             if not shape.points:
                 continue
             closed = shape.shapeType == shapefile.POLYGON
+            if name == "BUDOVY_P":
+                building = transform(frame.to_local, geometry_shape(shape.__geo_interface__))
+                if building.intersection(house_polygon).area > 1:
+                    demolition.append(building)
             indices = [*shape.parts, len(shape.points)]
             d = " ".join(path(shape.points[a:b], close=closed) for a, b in zip(indices, indices[1:]))
             svg.append(f'<path d="{d}" fill-rule="evenodd"><title>'
-                       f'{escape(name)}: {escape(str(record["ID_2"]))}</title></path>')
+                       f'{escape({"PARCELY_KN_P": "Hranice parcely", "DALSI_PRVKY_MAPY_L": "Katastrální detail", "BUDOVY_P": "Stávající stavba"}[name])}</title></path>')
             count += 1
         svg.append('</g>')
         counts[name] = count
@@ -506,6 +544,14 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
                f'fill="{STREET_BAND_FILL}" fill-opacity=".8" stroke="{SURVEY_COLOR}" stroke-width=".2">'
                f'<title>Zpevněné plochy: pás {STREET_BAND_SOUTHWEST_WIDTH:g}–{STREET_BAND_WIDTH:g} m '
                'od ulice mimo půdorys domu</title></path>')
+    for i,building in enumerate(demolition):
+        svg.append(f'<path id="existing-house-for-removal-{i}" d="{polygon_path(building)}" fill="none" stroke="#666" stroke-width=".35" stroke-dasharray="1,.6"/>')
+        x0,y0,x1,y1=building.bounds
+        for start,end in (((x0,y0),(x1,y1)),((x0,y1),(x1,y0))):
+            mark=LineString([start,end]).intersection(building)
+            segments=list(mark.geoms) if mark.geom_type=='MultiLineString' else [mark]
+            for segment in segments:
+                svg.append(f'<path d="{path([frame.to_grid(*p) for p in segment.coords])}" fill="none" stroke="#666" stroke-width=".2"/>')
     svg.append(f'<path id="survey-house-fill" d="{path(house_grid_corners, close=True)}" '
                f'fill="{HOUSE_FILL}" fill-opacity=".8" stroke="none"/>')
     svg.append('<g id="parcel-label-leaders" fill="none" stroke="#202020" stroke-width=".13">')
@@ -516,7 +562,7 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
         indices = [*shape.parts, len(shape.points)]
         d = " ".join(path(shape.points[a:b]) for a, b in zip(indices, indices[1:]))
         svg.append(f'<path id="parcel-leader-{record["ID"]}" d="{d}">'
-                   f'<title>Vynášecí čára parcely {escape(str(record["ID_2"]))}</title></path>')
+                   '<title>Vynášecí čára parcelního čísla</title></path>')
         leader_count += 1
     svg.append('</g>')
     counts["PARCELY_KN_L"] = leader_count
@@ -528,7 +574,7 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
         shaft, head = parcel_arrow_paths(shape.points[0], float(record["ROTACE"] or 0),
                                          float(record["MERITKO"] or 1))
         svg.append(f'<path id="parcel-arrow-{record["ID"]}" d="{path(shaft)} {path(head)}">'
-                   f'<title>Šipka parcely {escape(str(record["ID_2"]))}</title></path>')
+                   '<title>Šipka parcelního čísla</title></path>')
         parcel_arrows.append({"parcel_id": str(record["ID_2"]), "source_id": str(record["ID"]),
                               "rotation_degrees": record["ROTACE"],
                               "shaft_grid_m": shaft, "head_grid_m": head})
@@ -556,12 +602,12 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     for p in survey:
         x, y = paper_position(-p.y, -p.x)
         svg.append(f'<path id="survey-point-{p.number}" d="{cross(x,y)}"><title>'
-                   f'{escape(f"Bod {p.number}: Y={p.y:.2f}, X={p.x:.2f}, Z={p.z:.2f} m; {p.note}")}'
+                   f'{escape(f"Zaměřená výška {p.z:.2f} m Bpv; S-JTSK: Y={p.y:.2f}, X={p.x:.2f}")}'
                    '</title></path>')
     svg.append('</g>')
     svg.append(f'<g id="survey-house-footprint" fill="none" stroke="{HOUSE_COLOR}" stroke-width=".55">'
                f'<path d="{path(house_grid_corners, close=True)}"><title>'
-               f'{escape(f"Dům {HOUSE_PLACEMENT.width:g} × {HOUSE_PLACEMENT.depth:g} m; umístění dle points")}'
+               f'{escape(f"Navrhovaný dům {HOUSE_PLACEMENT.width:g} × {HOUSE_PLACEMENT.depth:g} m")}'
                '</title></path></g>')
     svg.append(f'<path id="house-ridge" d="{path(ridge_grid_endpoints)}" fill="none" '
                f'stroke="{HOUSE_COLOR}" stroke-width=".35"><title>Hřeben střechy</title></path>')
@@ -590,7 +636,7 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
         color = WATER_ADJUSTMENT_COLOR if adjusted else WATER_LINE_COLOR
         description = WATER_ADJUSTMENT_DESCRIPTION if adjusted else "Vodovod"
         svg.append(f'<path id="water-route-{ids}" d="{path(route["grid_points_m"])}" stroke="{color}">'
-                   f'<title>{escape(description)}: {escape(ids)}</title></path>')
+                   f'<title>{escape(description)}</title></path>')
     for number, position in water_junctions.items():
         x, y = paper_position(*position)
         svg.append(f'<circle id="water-junction-{number}" cx="{x:g}" cy="{y:g}" '
@@ -601,14 +647,14 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     for route in gas_routes:
         ids = "-".join(str(i) for i in route["point_ids"])
         svg.append(f'<path id="gas-route-{ids}" d="{path(route["grid_points_m"])}">'
-                   f'<title>Plynovod: {escape(ids)}</title></path>')
+                   '<title>Plynovod</title></path>')
     svg.append('</g>')
     svg.append(f'<g id="cetin-routes" fill="none" stroke="{CETIN_LINE_COLOR}" '
                f'stroke-width="{CETIN_LINE_WIDTH:g}" stroke-dasharray="{CETIN_LINE_DASH}">')
     for route in cetin_routes:
         ids = "-".join(str(i) for i in route["point_ids"])
         svg.append(f'<path id="cetin-route-{ids}" d="{path(route["grid_points_m"])}">'
-                   f'<title>{escape(CETIN_DESCRIPTION)}: {escape(ids)}</title></path>')
+                   f'<title>{escape(CETIN_DESCRIPTION)}</title></path>')
     svg.append('</g>')
     svg.append(f'<g id="electric-routes" fill="none" stroke="{ELECTRIC_LINE_COLOR}" '
                f'stroke-width="{ELECTRIC_LINE_WIDTH:g}">')
@@ -619,8 +665,7 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
             if route["installation"] != installation:
                 continue
             svg.append(f'<path id="electric-route-{route["source_element_id"]}" '
-                       f'd="{path(route["grid_points_m"])}"><title>{escape(description)} '
-                       f'(DGN, vrstva {route["source_level"]})</title></path>')
+                       f'd="{path(route["grid_points_m"])}"><title>{escape(description)}</title></path>')
         svg.append('</g>')
     svg.append('</g>')
     svg.append('<g id="survey-point-numbers">')
@@ -628,75 +673,88 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
         text(x, y, elevation, SURVEY_POINT_LABEL_SIZE, css="survey-point-label",
              attrs=f'id="survey-point-number-{number}"')
     svg.append('</g>')
+    def paper_local(x, y):
+        return map_x+(x-bounds[0])*mm_per_m, map_y+(bounds[3]-y)*mm_per_m
+
+    annotations, site_design = annotations_svg(
+        house=house_polygon, site=site, setbacks=setbacks, retaining_wall=retaining_wall,
+        levels=levels, corners=corners_table, meter=meter, paper_local=paper_local,
+        cars=cars, street_frontage=street_frontage, forest_edge=forest_edge,
+    )
+    svg.append(annotations)
     svg.append('</g>')
     svg.append(f'<rect x="{map_x}" y="{map_y}" width="{map_w}" height="{map_h}" '
                'fill="none" stroke="#333" stroke-width=".25"/>')
 
-    # North arrow, legend and graphic scale occupy the right-hand column.
-    text(368, 31, "S", 4, anchor="middle", bold=True)
-    svg.append('<path d="M368,57V36 M368,36L365.5,42L368,40L370.5,42Z" '
-               'fill="black" stroke="black" stroke-width=".35"/>')
-    text(368, 63, "Geografický sever", 2.1, anchor="middle")
-    text(328, 73, "LEGENDA", 2.8, bold=True)
-    legend_y = 82
+    # Compact right-hand column leaves room for setting-out data and the title block.
+    territory = next(layer_features(cadastre, "KATASTRALNI_UZEMI_DEF"))[0]
+    text(328, 28, f'k. ú. {territory["TEXT_KM"]}', 2.1, bold=True)
+    text(328, 33, f'{territory["KOD"]} | S-JTSK / Bpv', 1.8)
+    text(403, 28, "S", 3, anchor="middle", bold=True)
+    svg.append('<path d="M403,43V32 M403,32L401,37L403,35L405,37Z" fill="black" stroke="black" stroke-width=".25"/>')
+    text(328, 41, "LEGENDA", 2.3, bold=True)
+    legend_y = 47
 
     def legend_row(label, *, fill=None, stroke="#202020", width=.2, sample=None, sample_id=None, dasharray=None):
         nonlocal legend_y
         identifier = f' id="{sample_id}"' if sample_id else ""
-        if sample == "parcel":
-            text(335, legend_y+1, "105", PARCEL_LABEL_SIZE, anchor="middle")
-        elif sample == "point":
-            svg.append(f'<path d="{cross(335,legend_y)}" stroke="{stroke}" stroke-width="{width:g}"/>')
+        if sample == "point":
+            svg.append(f'<path d="{cross(333,legend_y)}" stroke="{stroke}" stroke-width="{width:g}"/>')
+        elif sample == "access":
+            svg.append(f'<path d="M329,{legend_y:g}H338" fill="none" stroke="{stroke}" stroke-width="{width:g}" marker-end="url(#site-arrow)"/>')
         elif fill is not None:
-            svg.append(f'<rect{identifier} x="329" y="{legend_y-2.5:g}" width="12" height="5" '
-                       f'fill="{fill}" stroke="{stroke}" stroke-width="{width:g}"/>')
+            svg.append(f'<rect{identifier} x="329" y="{legend_y-1.5:g}" width="9" height="3" fill="{fill}" stroke="{stroke}" stroke-width="{width:g}"/>')
         else:
             pattern = f' stroke-dasharray="{dasharray}"' if dasharray else ""
-            svg.append(f'<path{identifier} d="M329,{legend_y:g}H341" fill="none" '
-                       f'stroke="{stroke}" stroke-width="{width:g}"{pattern}/>')
+            svg.append(f'<path{identifier} d="M329,{legend_y:g}H338" fill="none" stroke="{stroke}" stroke-width="{width:g}"{pattern}/>')
         lines = (label,) if isinstance(label, str) else label
-        for i, line in enumerate(lines):
-            text(345, legend_y+1+3.5*(i-(len(lines)-1)/2), line)
-        legend_y += 11 if len(lines) > 1 else 7
+        for i,line in enumerate(lines):
+            text(341, legend_y+.7+2.7*i, line, 1.8)
+        legend_y += 4.3+2.7*(len(lines)-1)
 
     legend_row("Hranice parcel", stroke="#454545", width=.18)
     legend_row("Stávající budovy", fill="#e5e5e5", width=.25)
-    legend_row("Parcelní čísla", sample="parcel")
-    legend_row("Zaměřené body", sample="point", stroke=SURVEY_COLOR)
+    legend_row("Zaměřené body / výšky Bpv", sample="point", stroke=SURVEY_COLOR)
     house_area_text = f"{house_polygon.area:.2f}".replace(".", ",")
-    legend_row(f"Navržený dům, zastavěná plocha {house_area_text} m²",
-               fill=HOUSE_FILL, stroke=HOUSE_COLOR, width=.55)
+    legend_row(f"Navržený RD, plocha {house_area_text} m²", fill=HOUSE_FILL, stroke=HOUSE_COLOR, width=.55)
     paved_area_text = f"{paved.area:.2f}".replace(".", ",")
     legend_row(f"Zpevněné plochy, {paved_area_text} m²", fill=STREET_BAND_FILL, stroke=SURVEY_COLOR)
     legend_row("Trávník", fill=LAWN_FILL, stroke=LAWN_COLOR)
     legend_row("Zahrada", fill=GARDEN_FILL, stroke=GARDEN_COLOR)
-    legend_row(("Zděné oplocení z cihel", "ztraceného bednění.", "Výška 120cm"),
-               stroke="black", width=FENCE_LINE_WIDTH, sample_id="street-fence-legend")
+    legend_row(("Zděné oplocení z cihel ztraceného bednění", "Výška 1,20 m"), stroke="black", width=FENCE_LINE_WIDTH, sample_id="street-fence-legend")
     legend_row("Drátěný plot", stroke=WIRE_FENCE_COLOR, width=FENCE_LINE_WIDTH, sample_id="wire-fence-legend")
-    legend_row("Stávající opěrná stěna", stroke=RETAINING_WALL_COLOR,
-               width=RETAINING_WALL_LINE_WIDTH, sample_id="retaining-wall-legend")
-    legend_row("Vodovod", stroke=WATER_LINE_COLOR, width=WATER_LINE_WIDTH, sample_id="water-legend")
+    legend_row("Stávající opěrná stěna", stroke=RETAINING_WALL_COLOR, width=RETAINING_WALL_LINE_WIDTH, sample_id="retaining-wall-legend")
+    legend_row("Vodovod – stávající vedení", stroke=WATER_LINE_COLOR, width=WATER_LINE_WIDTH, sample_id="water-legend")
     if any(route.get("to_be_adjusted") for route in water_routes):
-        legend_row(WATER_ADJUSTMENT_DESCRIPTION, stroke=WATER_ADJUSTMENT_COLOR,
-                   width=WATER_LINE_WIDTH, sample_id="water-adjustment-legend")
-    legend_row("Plynovod", stroke=GAS_LINE_COLOR, width=GAS_LINE_WIDTH, sample_id="gas-legend")
-    legend_row(CETIN_DESCRIPTION, stroke=CETIN_LINE_COLOR, width=CETIN_LINE_WIDTH,
-               sample_id="cetin-legend", dasharray=CETIN_LINE_DASH)
-    for installation, description in ELECTRIC_DESCRIPTIONS.items():
-        legend_row(description, stroke=ELECTRIC_LINE_COLOR, width=ELECTRIC_LINE_WIDTH,
-                   sample_id=f"electric-{installation}-legend",
-                   dasharray=ELECTRIC_OVERHEAD_DASH if installation == "overhead" else None)
-    territory = next(layer_features(cadastre, "KATASTRALNI_UZEMI_DEF"))[0]
-    text(328, 205, f'k. ú. {territory["TEXT_KM"]}', 2.3, bold=True)
-    text(328, 211, f'Kód katastrálního území: {territory["KOD"]}', 2.1)
-    for a, b in ((0, 5), (5, 10), (10, 20)):
-        svg.append(f'<rect x="{328+a*mm_per_m:g}" y="217" width="{(b-a)*mm_per_m:g}" '
-                   f'height="2" fill="{"black" if a != 5 else "white"}" stroke="black" stroke-width=".18"/>')
-    for distance in (0, 5, 10, 20):
-        text(328 + distance * mm_per_m, 224, str(distance), 1.9, anchor="middle")
-    text(332 + 20 * mm_per_m, 224, "m", 1.9)
-#    text(10, 289, "Podklad: katastr/679453 · S-JTSK (EPSG:5514) · zaměření points.txt", 1.9)
-#    text(10, 293, "Orientace: geografický sever nahoře; zaměřené body modře, výšky Bpv [m] růžově.", 1.9)
+        legend_row("Vodovod – upravovaná část", stroke=WATER_ADJUSTMENT_COLOR, width=WATER_LINE_WIDTH, sample_id="water-adjustment-legend")
+    legend_row("Plynovod – stávající vedení", stroke=GAS_LINE_COLOR, width=GAS_LINE_WIDTH, sample_id="gas-legend")
+    legend_row("CETIN – nadzemní vedení", stroke=CETIN_LINE_COLOR, width=CETIN_LINE_WIDTH, sample_id="cetin-legend", dasharray=CETIN_LINE_DASH)
+    for installation,description in ELECTRIC_DESCRIPTIONS.items():
+        legend_row(description+" – stávající", stroke=ELECTRIC_LINE_COLOR, width=ELECTRIC_LINE_WIDTH, sample_id=f"electric-{installation}-legend", dasharray=ELECTRIC_OVERHEAD_DASH if installation=="overhead" else None)
+    legend_row("NN od ER – schematická trasa", stroke=NN_CONNECTION_COLOR, width=.5, sample_id="nn-connection-legend", dasharray="2,.8")
+    legend_row("Hranice řešeného území / staveniště", stroke=SITE_BOUNDARY_COLOR, width=.45, dasharray="2,.8")
+    legend_row("Stavba k odstranění – samostatné povolení", stroke="#666", width=.35, dasharray="1,.6")
+    legend_row("Stávající sjezdy – zachovány", stroke="#222", width=.4, sample="access")
+    if legend_y > 137:
+        raise ValueError("The coordination legend overlaps the setting-out data")
+    text(328, 143, "VÝŠKOVÉ OSAZENÍ", 2.1, bold=True)
+    text(328, 148, f"±0,000 = {levels['floor_elevation_bpv']:.3f} m Bpv", 2.1)
+    text(328, 152, f"Hřeben: {levels['ridge_elevation_bpv']:.3f} m Bpv", 1.9)
+    text(328, 156, f"Nejvyšší bod – komín: {levels['chimney_elevation_bpv']:.3f} m Bpv", 1.9)
+    text(328, 164, "ROHY FASÁDY – S-JTSK [m]", 2.1, bold=True)
+    for i,row in enumerate(corners_table):
+        text(328, 169+4*i, f"{row['name']}  Y {row['Y']:.3f}   X {row['X']:.3f}", 1.8)
+    text(328, 188, "Kóty v metrech. ÚT dle architektonických řezů.", 1.65)
+    text(328, 193, "Staveniště bez záboru cizích pozemků.", 1.65)
+    text(328, 198, "ČOV a dešťové hospodářství: samostatný návrh.", 1.65)
+    text(328, 203, "Požární řešení a odstupy: viz samostatné PBŘ.", 1.65)
+    text(328, 208, "Plynová přípojka se nenavrhuje.", 1.65)
+    text(328, 213, "Přívody médií dle podmínek správců sítí.", 1.65)
+    for a,b in ((0,2),(2,5),(5,10)):
+        svg.append(f'<rect x="{328+a*mm_per_m:g}" y="218" width="{(b-a)*mm_per_m:g}" height="2" fill="{"black" if a!=2 else "white"}" stroke="black" stroke-width=".18"/>')
+    for distance in (0,2,5,10):
+        text(328+distance*mm_per_m,225,str(distance),1.8,anchor="middle")
+    text(332+10*mm_per_m,225,"m",1.8)
 
     settings = load_title_block(output)
     if settings is not None:
@@ -706,6 +764,11 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
                 "frame": asdict(frame), "scale": scale, "paper_mm": [page_w, page_h],
                 "map_bounds_local_m": bounds, "map_rect_mm": [map_x, map_y, map_w, map_h],
                 "cadastre": str(cadastre), "survey": str(points), "feature_counts": counts,
+                "site_design": site_design, "site_parcels": SITE_PARCELS,
+                "demolition_buildings_local_m": [p.__geo_interface__ for p in demolition],
+                "site_boundary_local_m": site.__geo_interface__,
+                "deferred_design": ["ČOV", "dešťové hospodářství"],
+                "external_reports": {"PBŘ": "externí zpracovatel", "PENB": "externí zpracovatel"},
                 "house": {**asdict(HOUSE_PLACEMENT), "survey_corners": house_survey_corners,
                           "area_m2": house_polygon.area,
                           "ridge_geometry_local_m": LineString([frame.to_local(*p) for p in ridge_grid_endpoints]).__geo_interface__,
@@ -741,9 +804,10 @@ def render_situation(*, cadastre=DEFAULT_CADASTRE, points=ROOT / "points.txt",
     output.parent.mkdir(parents=True, exist_ok=True)
     pdf.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(svg) + "\n", encoding="utf-8")
+    sheet_path = save_drawing_svg(output, pdf)
     with TemporaryDirectory(prefix=".situace-pdf-", dir=pdf.parent) as directory:
         temporary_pdf = Path(directory) / pdf.name
-        subprocess.run([inkscape, str(output), f"--export-filename={temporary_pdf}",
+        subprocess.run([inkscape, str(sheet_path), f"--export-filename={temporary_pdf}",
                         "--export-type=pdf", "--export-area-page", "--batch-process"], check=True)
         if not temporary_pdf.is_file() or temporary_pdf.stat().st_size == 0:
             raise RuntimeError("Inkscape did not create the situation PDF")
@@ -760,7 +824,7 @@ def main():
     parser.add_argument("--points", type=Path, default=ROOT / "points.txt")
     parser.add_argument("--output", type=Path, default=DEFAULT_SVG)
     parser.add_argument("--pdf", type=Path, default=DEFAULT_PDF)
-    parser.add_argument("--scale", type=float, default=500, help="Scale denominator; default 500")
+    parser.add_argument("--scale", type=float, default=200, help="Scale denominator; default 200 (C.3)")
     render_situation(**vars(parser.parse_args()))
 
 

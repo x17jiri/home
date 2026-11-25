@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:100" height="180.0mm" id="root" version="1.1" viewBox="0 0 180.0 180.0" width="180.0mm">
+  <defs/>
+  <path class="GlobalId-0vlXhmD7z4IxJniOBvyLz6 IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-d0d0d0 drawing-background drawing-fill-pattern-stone-wall-background GlobalId-0vlXhmD7z4IxJniOBvyLz6" d="M 155.0 112.38579511642456 L 112.54999876022339 112.38579511642456 L 112.54999876022339 133.38579654693604 L 155.0 133.38579654693604 L 155.0 112.38579511642456"/>
+  <path class="GlobalId-3SP9akKi99tgw1uJwuBkNb IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-000000 drawing-fill-pattern-stone-wall GlobalId-3SP9akKi99tgw1uJwuBkNb" d="M 160.0 112.38579511642456 L 155.0 112.38579511642456 L 155.0 133.38579654693604 L 160.0 133.38579654693604 L 160.0 112.38579511642456"/>
+  <line class="GlobalId-1FdvtOHcv81xHDbghicayq IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-1FdvtOHcv81xHDbghicayq" x1="0.0" x2="20.0" y1="148.3857879638672" y2="148.3857879638672"/>
+  <line class="GlobalId-1FdvtOHcv81xHDbghicayq IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-1FdvtOHcv81xHDbghicayq" x1="20.0" x2="110.0" y1="148.3857879638672" y2="133.3857879638672"/>
+  <line class="GlobalId-1FdvtOHcv81xHDbghicayq IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-1FdvtOHcv81xHDbghicayq" x1="110.0" x2="160.0" y1="133.3857879638672" y2="133.3857879638672"/>
+  <line class="GlobalId-1FdvtOHcv81xHDbghicayq IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-1FdvtOHcv81xHDbghicayq" x1="160.0" x2="160.0" y1="133.3857879638672" y2="112.38579559326172"/>
+  <line class="GlobalId-1FdvtOHcv81xHDbghicayq IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-1FdvtOHcv81xHDbghicayq" x1="160.0" x2="180.0" y1="112.38579559326172" y2="108.8592529296875"/>
+</svg>

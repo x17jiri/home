@@ -51,7 +51,7 @@ def drawing_scale(svg: str) -> str:
 def title_block_svg(settings: Mapping[str, str], *, filename: str, scale: str,
                     paper: str, x: float, y: float) -> str:
     """Render a Czech title block in mm; all text remains selectable."""
-    match = re.fullmatch(r"([A-Za-z]\d+(?:\.\d+)+)\.\s+(.+)", Path(filename).stem)
+    match = re.fullmatch(r"([A-Za-z][A-Za-z0-9.-]*\d)\.\s+(.+)", Path(filename).stem)
     number, title = match.groups() if match else ("—", Path(filename).stem)
     parts = [
         f'<g class="drawing-title-block" transform="translate({x:g}, {y:g})" '

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="22mm" height="52.2222222222mm" viewBox="-110 -261.1111111111 220 522.2222222222"
+     data-body-length-m="5" data-body-width-m="1.8" data-maximum-width-m="2.1" data-units-per-metre="100">
+  <title>Osobní automobil – pohled shora</title>
+  <desc>Front faces upward. Body represents 1.8 × 5 metres; 100 drawing units equal one metre after the group transform. Physical SVG size is 1:100, including room for mirrors. Opaque outlines only; all interiors are transparent.</desc>
+  <g id="car-top" transform="scale(1 1.1111111111111111)" fill="none" stroke="#202020" stroke-width="2" stroke-opacity="1" opacity="1" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Wheels. -->
+    <g>
+      <rect x="-94" y="-141" width="13" height="57" rx="4"/>
+      <rect x="81" y="-141" width="13" height="57" rx="4"/>
+      <rect x="-94" y="110" width="13" height="57" rx="4"/>
+      <rect x="81" y="110" width="13" height="57" rx="4"/>
+    </g>
+    <path id="body" d="M-55-225 C-78-225-87-208-89-181 L-90 164 Q-89 215-64 225 H64 Q89 215 90 164 L89-181 C87-208 78-225 55-225 Z"/>
+    <!-- Bumpers, bonnet and boot seams. -->
+    <g>
+      <path d="M-67-210 Q0-220 67-210 M-73 209 Q0 217 73 209"/>
+      <path d="M-67-178 Q0-192 67-178 L65-108 Q0-96-65-108 Z"/>
+      <path d="M-66 179 Q0 188 66 179 L65 200 Q0 208-65 200"/>
+    </g>
+    <!-- Side mirrors. -->
+    <g>
+      <path d="M-88-65 L-102-58 Q-105-54-102-46 L-89-48 Z"/>
+      <path d="M88-65 L102-58 Q105-54 102-46 L89-48 Z"/>
+    </g>
+    <!-- Windscreen, rear window and side windows. -->
+    <g>
+      <path d="M-68-90 Q0-111 68-90 L56-34 Q0-44-56-34 Z"/>
+      <path d="M-55 120 Q0 132 55 120 L67 165 Q0 181-67 165 Z"/>
+      <path d="M-77-73 L-63-30 L-62 27 L-79 27 Z"/>
+      <path d="M-79 38 L-62 38 L-60 107 L-76 140 Z"/>
+      <path d="M77-73 L63-30 L62 27 L79 27 Z"/>
+      <path d="M79 38 L62 38 L60 107 L76 140 Z"/>
+    </g>
+    <rect x="-51" y="-24" width="102" height="135" rx="13"/>
+    <!-- Door seams and handles. -->
+    <g>
+      <path d="M-87 32 H-63 M63 32 H87 M-84 150 L-65 174 M84 150 L65 174"/>
+      <path d="M-84 10 V23 M84 10 V23 M-83 106 V119 M83 106 V119"/>
+    </g>
+    <g>
+      <path d="M-75-199 L-48-207 L-46-198 L-73-189 Z"/>
+      <path d="M75-199 L48-207 L46-198 L73-189 Z"/>
+      <path d="M-81 189 L-61 198 L-62 207 L-81 199 Z"/>
+      <path d="M81 189 L61 198 L62 207 L81 199 Z"/>
+    </g>
+  </g>
+</svg>

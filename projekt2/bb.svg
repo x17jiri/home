@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink" width="297mm" height="420mm" viewBox="0 0 297 420"><rect width="297" height="420" fill="white" /><g id="sheet-drawing-1"><svg baseProfile="full" data-scale="1:100" height="170" id="sheet-1-root" version="1.1" viewBox="0 0 205.808 170" width="205.808" data-ring-beam-seams-cleaned="14" x="45.596" y="20"><text class="drawing-title" x="102.904" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D1.1.12. Řez BB 1:100</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">#sheet-drawing-1 .drawing-line-color-000000, #sheet-drawing-1 .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-000000 { stroke: #000000 !important; }
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink" width="297mm" height="420mm" viewBox="0 0 297 420"><rect width="297" height="420" fill="white" /><g id="sheet-drawing-1"><svg baseProfile="full" data-scale="1:100" height="170" id="sheet-1-root" version="1.1" viewBox="0 0 205.808 170" width="205.808" data-ring-beam-seams-cleaned="14" x="45.596" y="20"><text class="drawing-title" x="102.904" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D.1.1.2-05. Řez B–B 1:100</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">#sheet-drawing-1 .drawing-line-color-000000, #sheet-drawing-1 .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-000000 { stroke: #000000 !important; }
 #sheet-drawing-1 .PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-000000 { fill: #000000 !important; stroke: none !important; }
 #sheet-drawing-1 .PredefinedType-FILLAREA.drawing-fill-pattern-earth-section { fill: url(#sheet-1-earth-section) !important; }
 #sheet-drawing-1 .PredefinedType-FILLAREA.drawing-fill-pattern-gravel { fill: url(#sheet-1-gravel) !important; }
@@ -700,7 +700,7 @@
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
         </g>
     </marker>
-    
+
     <marker id="sheet-1-fall-marker-end" markerHeight="14" markerWidth="11" orient="auto" refX="10" refY="7">
         <g>
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
@@ -6987,19 +6987,19 @@
     <use class="ring-beam-reinforcement-overlay" href="#sheet-1-ring-beam-reinforcement-overlay-source-24" xlink:href="#sheet-1-ring-beam-reinforcement-overlay-source-24" />
   </g>
 </g><g class="terrain-overlays" />
-  
+
   <line class="GlobalId-19rdwfqFP2xO4L0puj7ZRq IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-19rdwfqFP2xO4L0puj7ZRq" x1="26.60384750366211" x2="7.653841972351074" y1="108.30769348144531" y2="108.30769348144531" />
-  
-  
-  
+
+
+
   <marker id="sheet-1-batting-3AkS2yhOf4Xgorzyjj7Ode" markerHeight="1.6" markerUnits="userSpaceOnUse" markerWidth="0.64" orient="auto" refX="0" refY="0.8">
     <path d="M 0 0.32000000000000006 A 0.32 0.32000000000000006 0 0 1 0.64 0.32000000000000006 L 0.32 1.2800000000000002 M 0 0.32000000000000006 L 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 0 0.64 1.6 M 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 1 0 1.6" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
   <marker id="sheet-1-batting-end-3AkS2yhOf4Xgorzyjj7Ode" markerHeight="1.6" markerUnits="userSpaceOnUse" markerWidth="0.638898342031645" orient="auto" refX="0" refY="0.8">
     <path d="M 0 0.32000000000000006 A 0.32 0.32000000000000006 0 0 1 0.64 0.32000000000000006 L 0.32 1.2800000000000002 M 0 0.32000000000000006 L 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 0 0.64 1.6 M 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 1 0 1.6" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
-  
-  
+
+
   <marker id="sheet-1-batting-21533P_Uf5hhJOLhOef0WV" markerHeight="1.6" markerUnits="userSpaceOnUse" markerWidth="0.64" orient="auto" refX="0" refY="0.8">
     <path d="M 0 0.32000000000000006 A 0.32 0.32000000000000006 0 0 1 0.64 0.32000000000000006 L 0.32 1.2800000000000002 M 0 0.32000000000000006 L 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 0 0.64 1.6 M 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 1 0 1.6" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
@@ -7007,9 +7007,9 @@
     <path d="M 0 0.32000000000000006 A 0.32 0.32000000000000006 0 0 1 0.64 0.32000000000000006 L 0.32 1.2800000000000002 M 0 0.32000000000000006 L 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 0 0.64 1.6 M 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 1 0 1.6" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
   <path class="GlobalId-2StCv$xVb8HPCKa4EAAaQh IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-000000 drawing-line-width-0p4 hydroizolace GlobalId-2StCvxVb8HPCKa4EAAaQh" d="M 118.153847,101.607697 L 118.153847,125.307693 L 27.6538429,125.307693 L 27.6538429,101.607697" />
-  
-  
-  
+
+
+
   <marker id="sheet-1-batting-38sTCW8mfAqgo24gW$bsIH" markerHeight="1.6" markerUnits="userSpaceOnUse" markerWidth="0.64" orient="auto" refX="0" refY="0.8">
     <path d="M 0 0.32000000000000006 A 0.32 0.32000000000000006 0 0 1 0.64 0.32000000000000006 L 0.32 1.2800000000000002 M 0 0.32000000000000006 L 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 0 0.64 1.6 M 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 1 0 1.6" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
@@ -7022,10 +7022,10 @@
   <marker id="sheet-1-batting-end-0XD2fFODf4ceMi_Udwxy6h" markerHeight="1.6" markerUnits="userSpaceOnUse" markerWidth="0.2600045442225589" orient="auto" refX="0" refY="0.8">
     <path d="M 0 0.32000000000000006 A 0.32 0.32000000000000006 0 0 1 0.64 0.32000000000000006 L 0.32 1.2800000000000002 M 0 0.32000000000000006 L 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 0 0.64 1.6 M 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 1 0 1.6" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
-  
-  
-  
-  
+
+
+
+
   <marker id="sheet-1-batting-3klTZNUnD4lxuX97wz5Kjw" markerHeight="1.6" markerUnits="userSpaceOnUse" markerWidth="0.64" orient="auto" refX="0" refY="0.8">
     <path d="M 0 0.32000000000000006 A 0.32 0.32000000000000006 0 0 1 0.64 0.32000000000000006 L 0.32 1.2800000000000002 M 0 0.32000000000000006 L 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 0 0.64 1.6 M 0.32 1.2800000000000002 A 0.32 0.32000000000000006 0 0 1 0 1.6" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
@@ -7038,54 +7038,54 @@
   <marker id="sheet-1-batting-end-1M2FfgHj92vPpPyUcCXlLE" markerHeight="2.0" markerUnits="userSpaceOnUse" markerWidth="0.3000101920255247" orient="auto" refX="0" refY="1.0">
     <path d="M 0 0.4 A 0.4 0.4 0 0 1 0.8 0.4 L 0.4 1.6 M 0 0.4 L 0.4 1.6 A 0.4 0.4 0 0 0 0.8 2.0 M 0.4 1.6 A 0.4 0.4 0 0 1 0 2.0" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
-  
+
   <line class="GlobalId-0$eDmU6iX3YAxubprcKXVh IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-0eDmU6iX3YAxubprcKXVh" x1="138.1538543701172" x2="119.203857421875" y1="120.08116149902344" y2="120.08116149902344" />
-  
-  
+
+
   <marker id="sheet-1-batting-09nVdIz1D0KRIof5AOW3Te" markerHeight="2.0" markerUnits="userSpaceOnUse" markerWidth="0.8" orient="auto" refX="0" refY="1.0">
     <path d="M 0 0.4 A 0.4 0.4 0 0 1 0.8 0.4 L 0.4 1.6 M 0 0.4 L 0.4 1.6 A 0.4 0.4 0 0 0 0.8 2.0 M 0.4 1.6 A 0.4 0.4 0 0 1 0 2.0" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
   <marker id="sheet-1-batting-end-09nVdIz1D0KRIof5AOW3Te" markerHeight="2.0" markerUnits="userSpaceOnUse" markerWidth="0.3000101920255247" orient="auto" refX="0" refY="1.0">
     <path d="M 0 0.4 A 0.4 0.4 0 0 1 0.8 0.4 L 0.4 1.6 M 0 0.4 L 0.4 1.6 A 0.4 0.4 0 0 0 0.8 2.0 M 0.4 1.6 A 0.4 0.4 0 0 1 0 2.0" style="fill: none; stroke:black; stroke-width:0.06!important" />
   </marker>
-  
-  
-  
-  
-  
-  
-    
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-    
-  
-  
-  
-    
-  
-  
-  
-  
-  
-    
-  
-  
-  
-  
-  
-  
-    
-  
-  
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <g class="furniture-elevation-label-overlays">
     <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(94.75384521484375, 63.90769577026367) rotate(-1.7075472925031877e-06)">
         <tspan class="GlobalId-1rlckt5Xj43BrMnNsHc5MT IfcAnnotation PredefinedType-TEXT furniture-label furniture-elevation-label small furniture-owner-0eHXumYuL4PvK$nzBsG1qA GlobalId-1rlckt5Xj43BrMnNsHc5MT" dy="0em" x="0" y="0">Myčka</tspan>
@@ -7128,64 +7128,64 @@
     <line class="GlobalId-1X1EMypiDF283k97ZdcZ8b IfcAnnotation PredefinedType-LINEWORK hexagon-marker-leader GlobalId-1X1EMypiDF283k97ZdcZ8b" x1="24.284404754638672" x2="29.722064971923828" y1="23.016204833984375" y2="27.547588348388672" />
     <line class="GlobalId-1PvmxeiHL8euNCuXjXRIxe IfcAnnotation PredefinedType-LINEWORK hexagon-marker-leader GlobalId-1PvmxeiHL8euNCuXjXRIxe" x1="45.95384979248047" x2="45.95384979248047" y1="93.0396957397461" y2="102.7576904296875" />
     <g transform="translate(45.95384979248047, 61.95769500732422) rotate(-1.7075472925031877e-06) scale(1.0)">
-        
-            
+
+
         <path d="M -2,0 -1,-1.732 1,-1.732 2,0 1,1.732 -1,1.732 Z" fill="white" stroke="black" style="stroke-width: 0.096;" />
-        
-            
+
+
         <text y="0.2" class="GlobalId-04mXB4Uhz8Q9d9dAtspxxD IfcAnnotation PredefinedType-TEXT hexagon-marker GlobalId-04mXB4Uhz8Q9d9dAtspxxD" text-anchor="middle" dominant-baseline="middle" data-type="text-template">SK2</text>
-        
-        
+
+
       </g>
     <g transform="translate(125.20384979248047, 102.2576904296875) rotate(-1.7075472925031877e-06) scale(1.0)">
-        
-            
+
+
         <path d="M -2,0 -1,-1.732 1,-1.732 2,0 1,1.732 -1,1.732 Z" fill="white" stroke="black" style="stroke-width: 0.096;" />
-        
-            
+
+
         <text y="0.2" class="GlobalId-13Kih9N71DdgJ48T6GOBMv IfcAnnotation PredefinedType-TEXT hexagon-marker GlobalId-13Kih9N71DdgJ48T6GOBMv" text-anchor="middle" dominant-baseline="middle" data-type="text-template">SK6</text>
-        
-        
+
+
       </g>
     <g transform="translate(45.95384979248047, 91.30769348144531) rotate(-1.7075472925031877e-06) scale(1.0)">
-        
-            
+
+
         <path d="M -2,0 -1,-1.732 1,-1.732 2,0 1,1.732 -1,1.732 Z" fill="white" stroke="black" style="stroke-width: 0.096;" />
-        
-            
+
+
         <text y="0.2" class="GlobalId-12lDan9VT1OfqC$S7SFMzP IfcAnnotation PredefinedType-TEXT hexagon-marker GlobalId-12lDan9VT1OfqCS7SFMzP" text-anchor="middle" dominant-baseline="middle" data-type="text-template">SK3</text>
-        
-        
+
+
       </g>
     <g transform="translate(125.90385437011719, 90.00769805908203) rotate(-1.7075472925031877e-06) scale(1.0)">
-        
-            
+
+
         <path d="M -2,0 -1,-1.732 1,-1.732 2,0 1,1.732 -1,1.732 Z" fill="white" stroke="black" style="stroke-width: 0.096;" />
-        
-            
+
+
         <text y="0.2" class="GlobalId-3VSzhLBx19_9J53$c$mY6G IfcAnnotation PredefinedType-TEXT hexagon-marker GlobalId-3VSzhLBx199J53cmY6G" text-anchor="middle" dominant-baseline="middle" data-type="text-template">SK5</text>
-        
-        
+
+
       </g>
     <g transform="translate(22.95384979248047, 21.907405853271484) rotate(-1.7075472925031877e-06) scale(1.0)">
-        
-            
+
+
         <path d="M -2,0 -1,-1.732 1,-1.732 2,0 1,1.732 -1,1.732 Z" fill="white" stroke="black" style="stroke-width: 0.096;" />
-        
-            
+
+
         <text y="0.2" class="GlobalId-1g8ITrBDL85RlD7sJfeztz IfcAnnotation PredefinedType-TEXT hexagon-marker GlobalId-1g8ITrBDL85RlD7sJfeztz" text-anchor="middle" dominant-baseline="middle" data-type="text-template">SK1</text>
-        
-        
+
+
       </g>
     <g transform="translate(45.95384979248047, 118.60769653320312) rotate(-1.7075472925031877e-06) scale(1.0)">
-        
-            
+
+
         <path d="M -2,0 -1,-1.732 1,-1.732 2,0 1,1.732 -1,1.732 Z" fill="white" stroke="black" style="stroke-width: 0.096;" />
-        
-            
+
+
         <text y="0.2" class="GlobalId-1FKy24g_DClPciOUbgfa09 IfcAnnotation PredefinedType-TEXT hexagon-marker GlobalId-1FKy24gDClPciOUbgfa09" text-anchor="middle" dominant-baseline="middle" data-type="text-template">SK4</text>
-        
-        
+
+
       </g>
   </g>
   <g class="right-side-panel">

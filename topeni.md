@@ -1,4 +1,4 @@
-# D1.7. Vytápění a chlazení
+# D.1.2.1-VYT-01. Vytápění a chlazení
 
 ## Technická zpráva – pracovní návrh
 
@@ -15,7 +15,7 @@ Zpráva zachycuje potvrzený záměr investora a předběžné technické řeše
 
 ## 1. Úvod
 
-Předmětem části D1.7 je vytápění a letní chlazení rodinného domu tepelným čerpadlem vzduch–voda a pěti vodními ventilokonvektory. Součástí řešení je příprava teplé vody pro čtyři osoby v samostatném zásobníku o objemu 400 l.
+Předmětem části D.1.2 – vytápění a chlazení je vytápění a letní chlazení rodinného domu tepelným čerpadlem vzduch–voda a pěti vodními ventilokonvektory. Součástí řešení je příprava teplé vody pro čtyři osoby v samostatném zásobníku o objemu 400 l.
 
 Suterén nebude vytápěn. V obytných podlažích budou jedinými koncovými zařízeními ústřední otopné a chladicí soustavy fan-coily; podlahové vytápění ani další otopná tělesa nejsou součástí záměru. Kamna v obývacím pokoji budou sloužit k doplňkovému vytápění a nebudou hydraulicky propojena s tepelným čerpadlem.
 
@@ -25,7 +25,7 @@ Suterén nebude vytápěn. V obytných podlažích budou jedinými koncovými za
 
 Rodinný dům má suterén, přízemí a obytné podkroví. V přízemí jsou tři pokoje, koupelna a chodba se schodištěm. V podkroví se nachází obývací pokoj s kuchyňským koutem, chodba s umyvadlem a pračkou a samostatné WC. Suterén obsahuje skladovací a garážové prostory.
 
-Pro tepelnětechnický výpočet se použijí aktuální skladby konstrukcí, rozměry, výplně otvorů a vazby k nevytápěnému suterénu ze stavební části. Větrání s rekuperací tepla řeší samostatná část D1.6; její návrhové průtoky a účinnost se zohlední při výpočtu tepelných ztrát. Fan-coily zajišťují úpravu teploty vnitřního vzduchu, přívod čerstvého vzduchu zajišťuje větrací soustava.
+Pro tepelnětechnický výpočet se použijí aktuální skladby konstrukcí, rozměry, výplně otvorů a vazby k nevytápěnému suterénu ze stavební části. Větrání s rekuperací tepla řeší samostatná část D.1.2 VZT; její návrhové průtoky a účinnost se zohlední při výpočtu tepelných ztrát. Fan-coily zajišťují úpravu teploty vnitřního vzduchu, přívod čerstvého vzduchu zajišťuje větrací soustava.
 
 ### 2.2. Návrhové podmínky
 
@@ -42,8 +42,8 @@ Pro tepelnětechnický výpočet se použijí aktuální skladby konstrukcí, ro
 ### 2.3. Podklady
 
 - Aktuální model `house2.py`, stavební výkresy a skladby konstrukcí.
-- Výkresy `D1.7.1. Vytápění - Půdorys 1.NP.pdf` a `D1.7.2. Vytápění - Půdorys podkroví.pdf` v adresáři `projekt2/D1.7. Vytápění/`.
-- Koordinační podklady částí D1.4 elektro, D1.5 zdravotnětechnické instalace a D1.6 řízené větrání.
+- Výkresy `D.1.2.2-VYT-01. Vytápění a chlazení – půdorys 1.NP.pdf` a `D.1.2.2-VYT-02. Vytápění a chlazení – půdorys 2.NP.pdf` v adresáři `projekt2/D.1.2. Technologické řešení/VYT. Vytápění a chlazení/`.
+- Koordinační podklady částí D.1.2 ELE – elektroinstalace, D.1.2 ZTI – zdravotně technické instalace a D.1.2 VZT – řízené větrání.
 - Zadání investora: sestava LG, pět fan-coilů IVAR, vytápění i chlazení, zásobník TV 400 l, nevytápěný suterén a doplňková kamna.
 - Výrobní podklady uvedené u příslušných zařízení níže.
 
@@ -139,7 +139,7 @@ Pro čtyři uživatele je zadán samostatný zásobník TV o objemu **400 l**, u
 
 Přepínání mezi ohřevem zásobníku a prostorovou soustavou zajistí řízená armatura podle hydraulického schématu. Návrh ověří přenosový výkon výměníku při dostupné teplotě vody z TČ, dobu dohřevu a očekávaný odběrový profil domácnosti. Z objemu zásobníku samotného nelze určit dostatečnost zdroje ani dobu ohřevu.
 
-Provozní teplota TV, hygienický ohřev a případný elektrický dohřev zásobníku budou stanoveny podle zvolené sestavy. Cirkulace TV zatím není stanovena. Připojení studené a teplé vody, zabezpečení zásobníku na straně pitné vody a odvod z pojistných armatur řeší část D1.5.
+Provozní teplota TV, hygienický ohřev a případný elektrický dohřev zásobníku budou stanoveny podle zvolené sestavy. Cirkulace TV zatím není stanovena. Připojení studené a teplé vody, zabezpečení zásobníku na straně pitné vody a odvod z pojistných armatur řeší část D.1.2 ZTI.
 
 ## 8. Měření a regulace
 
@@ -185,7 +185,7 @@ Profese elektro doplní potřebné přívody, jištění, ochrany, odpojování,
 - Připojit zásobník TV, řešit jeho zabezpečení, případnou cirkulaci a napouštění otopné soustavy.
 - Doplnit odvod kondenzátu od pěti fan-coilů a řešení vody z venkovní jednotky.
 - Koordinovat odvod z pojistných armatur.
-- Převzít návrhové údaje větrání z části D1.6 pro tepelnou a chladicí bilanci a ověřit provoz při používání kamen.
+- Převzít návrhové údaje větrání z části D.1.2 VZT pro tepelnou a chladicí bilanci a ověřit provoz při používání kamen.
 
 ## 12. Technické údaje a tepelná bilance
 

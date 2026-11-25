@@ -1,4 +1,4 @@
-<svg xmlns:ns0="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:1" height="269.873535203mm" id="root" version="1.1" viewBox="0 0 564.999997616 269.873535203" width="564.9999976158142mm" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink"><text class="drawing-title" x="282.499998808" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D1.4.4. Rozvaděč - jednopólové schéma 1:1</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">.drawing-line-color-000000, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-000000 { stroke: #000000 !important; }
+<svg xmlns:ns0="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:1" height="269.873535203mm" id="root" version="1.1" viewBox="0 0 564.999997616 269.873535203" width="564.9999976158142mm" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink"><text class="drawing-title" x="282.499998808" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D.1.2.2-ELE-04. Rozvaděč – jednopólové schéma 1:1</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">.drawing-line-color-000000, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-000000 { stroke: #000000 !important; }
 .PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-000000 { fill: #000000 !important; stroke: none !important; }
 .drawing-text-color-000000, .drawing-text-color-000000 tspan { fill: #000000 !important; stroke: none !important; }
 .PredefinedType-FILLAREA.drawing-fill-pattern-earth-section { fill: url(#earth-section) !important; }
@@ -978,7 +978,7 @@ tspan.door-dimension {
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
         </g>
     </marker>
-    
+
     <marker id="fall-marker-end" markerHeight="14" markerWidth="11" orient="auto" refX="10" refY="7">
         <g>
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
@@ -1512,12 +1512,12 @@ tspan.door-dimension {
 </defs>  <defs/>
   <line class="GlobalId-1yP6H084H9KRdzknwDlnRY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="411.0" x2="411.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-0uPEUqKNzBPQ7_SvMcI6Pf IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-48 drawing-circle-exact" cx="323.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3PP0kfe01C8uAAIPU_8dN1 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="159.0" x2="156.60000610351562" y1="121.93677520751953" y2="107.93677520751953"/>
   <circle class="GlobalId-0DA5Pd1wb6sRlwlNm0whef IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-46 drawing-circle-exact" cx="321" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-3sxVzaYQ9Frv0zt8xrAwuW IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="44.0" x2="46.000003814697266" y1="222.7367706298828" y2="222.7367706298828"/>
   <line class="GlobalId-0dsALaNrb6IQXfdmPIa8Nm IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="177.0" x2="177.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-1Y9JQdTNfC3u5LTe30Gh1t IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="187.5" x2="202.5" y1="134.936767578125" y2="134.936767578125"/>
@@ -1525,39 +1525,39 @@ tspan.door-dimension {
   <line class="GlobalId-18AY869Wj5WPzd3Y$aiaEo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="119.69999694824219" x2="118.69999694824219" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-18AY869Wj5WPzd3Y$aiaEo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="118.69999694824219" x2="119.69999694824219" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-18AY869Wj5WPzd3Y$aiaEo IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="119.69999694824219" x2="120.99999237060547" y1="57.43675994873047" y2="56.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-1uIp$ZWxz3$PIwHQJzZbDH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="300.79998779296875" x2="303.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-0q48UwTiD7jvr3S3NZfRNZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="313.5" x2="328.4999694824219" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-0SlKGR7Cv7ifRnNCFkKcVG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="69.00000762939453" x2="69.00000762939453" y1="195.936767578125" y2="197.936767578125"/>
@@ -1583,16 +1583,16 @@ tspan.door-dimension {
   <line class="GlobalId-0trhcb3g12MeZEhUlKh9A0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="100.69998931884766" x2="101.70000457763672" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-0trhcb3g12MeZEhUlKh9A0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="101.70000457763672" x2="103.0" y1="57.43675994873047" y2="56.936767578125"/>
   <circle class="GlobalId-0MWfwLc$v4phWzpP4k8qaY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-60 drawing-circle-exact" cx="395.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-3y8dYwJDzEewpTY2xRxZmJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-79 drawing-circle-exact" cx="519" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-2Cpowc1Q97bAjByS2yktTJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="483.0" x2="483.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-02HvoaHzTAzvReG8q0D_ic IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="303.0" x2="300.6000061035156" y1="121.93677520751953" y2="107.93677520751953"/>
   <circle class="GlobalId-3f3wsCA3j41PY2bMTk3mhr IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-75 drawing-circle-exact" cx="485.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-1WsPvspXH0uA9iEWl81JcU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="223.5" x2="238.5" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-13BGZcoc91ZO3vHLHrJcR0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="390.79998779296875" x2="393.5999755859375" y1="63.63677978515625" y2="61.63677215576172"/>
   <line class="GlobalId-1BoEEmtn9Baxm3d8_RiSG6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="61.499996185302734" x2="274.5" y1="26.936767578125" y2="26.936767578125"/>
@@ -1600,19 +1600,19 @@ tspan.door-dimension {
   <line class="GlobalId-2mkIaSAhHAkwYCaq7MK9rJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="552.7999877929688" x2="555.5999755859375" y1="63.63677978515625" y2="61.63677215576172"/>
   <line class="GlobalId-0qUriN_d15fvRZ8W1Zx4M2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="115.5" x2="130.5" y1="134.936767578125" y2="134.936767578125"/>
   <circle class="GlobalId-3AhzQwEVfEQuo_qcYAxINq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-41 drawing-circle-exact" cx="282.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-0w4HfT5_H78AfijEvky2eG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="480.79998779296875" x2="483.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-1sSp8CKt1CQP6J$rw5o$EK IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-38 drawing-circle-exact" cx="264.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-0abujnGyH0NBXKNL_xJe6o IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="177.0" x2="177.0" y1="62.936767578125" y2="125.93675994873047"/>
   <circle class="GlobalId-2x5G2hDYvB8wy53nnZXrKE IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-63 drawing-circle-exact" cx="413.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-2JDkY_5t1CFQnzr0vMMGSr IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-61 drawing-circle-exact" cx="411" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-2uaP1hvxn4kvXK9VsbZxjr IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="259.5" x2="274.4999694824219" y1="129.936767578125" y2="129.936767578125"/>
   <line class="GlobalId-0krMN50jP4M8NVYWTVHK_k IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="169.5" x2="184.5" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-0krMN50jP4M8NVYWTVHK_k IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="184.5" x2="184.5" y1="139.936767578125" y2="125.93677520751953"/>
@@ -1645,112 +1645,112 @@ tspan.door-dimension {
   <line class="GlobalId-3lEfBdAp99oR4u5EtqcKN9 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="41.999996185302734" x2="48.00000762939453" y1="219.936767578125" y2="219.936767578125"/>
   <line class="GlobalId-3e$LmPxvz3WPRukaAxGl66 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="501.0" x2="498.5999755859375" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-1eotpV7YP0Uw0vS33YmyEe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="447.0" x2="445.0" y1="62.936767578125" y2="56.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-1jO9o5rxn0eBj7Qp5hd0pc IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="411.0" x2="413.4000244140625" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-3tNskbyWzD2PsUs5HPSKLP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="555.0" x2="555.0" y1="139.936767578125" y2="195.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-0cOw$ikH57C9rNRxhVCIeI IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="303.0" x2="303.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-1TE$$zaqfCvBIEbv0zGWG4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="483.0" x2="483.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-0luYDhCmf6lv7Hhqx8R5hS IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-40 drawing-circle-exact" cx="285" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-2U1gDqld95X8AOq4Q1TyoG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="295.5" x2="310.5" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-2U1gDqld95X8AOq4Q1TyoG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="310.5" x2="310.5" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-2U1gDqld95X8AOq4Q1TyoG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="310.5" x2="295.5" y1="125.93677520751953" y2="125.93677520751953"/>
@@ -1762,8 +1762,8 @@ tspan.door-dimension {
   <line class="GlobalId-0gYtCfayjAk9qRFfPw7Osj IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="411.0" x2="411.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-1jifFNHTDBPAkuk1lPy6I2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="159.0" x2="156.99998474121094" y1="62.936767578125" y2="56.936767578125"/>
   <circle class="GlobalId-2RX3grkwD0dfFVLGDC8Ph7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-43 drawing-circle-exact" cx="303" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-0yjNkl2HbBExucVxsxAK6m IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="534.7999877929688" x2="537.5999755859375" y1="62.53677749633789" y2="60.53676986694336"/>
   <line class="GlobalId-0k6yD$SKTEVfo77vvW_QHX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="267.0" x2="269.3999938964844" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-2E4L7Rt5vCJOLBpUL3G9ms IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="265.0" x2="263.6999816894531" y1="56.936767578125" y2="54.436767578125"/>
@@ -1780,42 +1780,42 @@ tspan.door-dimension {
   <line class="GlobalId-1YS$tD8u536vlZXvITclLH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="42.500003814697266" x2="42.500003814697266" y1="49.936767578125" y2="61.936763763427734"/>
   <line class="GlobalId-3DfyR4wKf4tu76mD3Kpm6T IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="285.0" x2="287.3999938964844" y1="121.93677520751953" y2="115.93677520751953"/>
   <circle class="GlobalId-0g05UjC6PCVPI6jrY$P536 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-58 drawing-circle-exact" cx="393" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1RG5zXyLD0pO$qM_h0m_af IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="231.0" x2="231.0" y1="39.936763763427734" y2="53.93675994873047"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-334qU3aijCGwWxZAlAus1E IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="339.0" x2="339.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-0LQtx6ECTD988ALaOZcU3f IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="519.0" x2="519.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-1IlQ4t6u96GuKAbJDXT8M4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="9.999990463256836" x2="30.000001907348633" y1="139.936767578125" y2="139.936767578125"/>
@@ -1824,8 +1824,8 @@ tspan.door-dimension {
   <line class="GlobalId-1IlQ4t6u96GuKAbJDXT8M4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="9.999990463256836" x2="9.999990463256836" y1="125.93677520751953" y2="139.936767578125"/>
   <line class="GlobalId-1Fak$v8NP2cBF1cLWV2$HY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="403.5" x2="562.5" y1="26.936767578125" y2="26.936767578125"/>
   <circle class="GlobalId-0KA$4KnEjD$P8nEnSNO9k_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-33 drawing-circle-exact" cx="233.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-2q0ixyGhzCBPGEfwBtA3B_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="87.0" x2="85.00000762939453" y1="62.936767578125" y2="56.936767578125"/>
   <line class="GlobalId-27MkEQs81DhfdTry6RfOdU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="357.0" x2="357.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-2vYKTOr6r0xejcjPrY6MKG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="301.0" x2="299.6999816894531" y1="56.936767578125" y2="54.436767578125"/>
@@ -1837,39 +1837,39 @@ tspan.door-dimension {
   <line class="GlobalId-2s5LNPmqn0KeGf$ygOFrLn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="547.5" x2="562.5" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-2uYfzgj$P5dh$8gUbW3hnC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="2.9999911785125732" x2="59.0" y1="26.936767578125" y2="26.936767578125"/>
   <circle class="GlobalId-2HqvEg5JX10gIPnG$bgSgE IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-72 drawing-circle-exact" cx="467.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-1CdKB$aBXBhxtLp__XQCy$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="403.5" x2="418.4999694824219" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-1CdKB$aBXBhxtLp__XQCy$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="418.4999694824219" x2="418.4999694824219" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-1CdKB$aBXBhxtLp__XQCy$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="418.4999694824219" x2="403.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-1CdKB$aBXBhxtLp__XQCy$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="403.5" x2="403.5" y1="125.93677520751953" y2="139.936767578125"/>
   <circle class="GlobalId-1LLCTcOtD88Qlb7KUPbEEr IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-36 drawing-circle-exact" cx="251.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3JyB6iLy9B5g8TRXiEDLU3 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="429.0" x2="429.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-2_yA$SP4f5yx9vQ9ji9yVr IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="375.0" x2="375.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-3$AxZGDw52Kw3ZjUbtVIIQ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="475.5" x2="490.4999694824219" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-2_MmmBBVPASQcdOvst9oy6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="228.8000030517578" x2="231.60000610351562" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-25X4z4sXD6aurgzzcW5CLN IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-57 drawing-circle-exact" cx="377.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-13YAqoQbvCKfusw8_U134f IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-29 drawing-circle-exact" cx="210.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3BHadOPAT6HQKo0TL5ZRzT IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="336.8000183105469" x2="339.6000061035156" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-2EpXBn$Q96SQosA7X0_ePa IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-55 drawing-circle-exact" cx="375" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-00JZTq9pf8NAApMt4GCbjY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="205.5" x2="220.5" y1="129.936767578125" y2="129.936767578125"/>
   <circle class="GlobalId-3oC_orEFD7rPM1z2prDMIb IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-73 drawing-circle-exact" cx="483" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1TB03204DFUvR4wtkj_qj2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="447.0" x2="447.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-3TUxnVvN9BTPB1jen4kTn7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="241.5" x2="256.5" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-0iOcbasdv1FuUhbYosVts0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="120.80000305175781" x2="123.60000610351562" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-2tzMpfSAv28R_qtQC95pDT IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-69 drawing-circle-exact" cx="449.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-1fFp6gJjH3cx1b5qHlxidC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="263.5" x2="270.5" y1="201.936767578125" y2="201.936767578125"/>
   <line class="GlobalId-1fFp6gJjH3cx1b5qHlxidC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="270.5" x2="270.5" y1="201.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-1fFp6gJjH3cx1b5qHlxidC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="270.5" x2="263.5" y1="195.936767578125" y2="195.936767578125"/>
@@ -1886,127 +1886,127 @@ tspan.door-dimension {
   <line class="GlobalId-3zgUie$091nwY2Yna3wBUk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="426.8000183105469" x2="429.6000061035156" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-1R4zZIZO1978cJAWgf4CCX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="372.79998779296875" x2="375.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-0WATeKUVzAP85qXJo2rF7S IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-54 drawing-circle-exact" cx="359.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-2hmaSA$M1CYAPDhTcND$q8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="391.0" x2="389.6999816894531" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-2hmaSA$M1CYAPDhTcND$q8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="389.6999816894531" x2="388.70001220703125" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-2hmaSA$M1CYAPDhTcND$q8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="388.70001220703125" x2="389.6999816894531" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-2hmaSA$M1CYAPDhTcND$q8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="389.6999816894531" x2="391.0" y1="57.43675994873047" y2="56.936767578125"/>
   <line class="GlobalId-1jk8RlhUT7Bwo$Cm4bVbLy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="42.999996185302734" x2="47.00000762939453" y1="221.33676147460938" y2="221.33676147460938"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <circle class="GlobalId-1pOyakcRj9TwwnwhVeOUWJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-83 drawing-circle-exact" cx="534.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-0FQsfbiPL5_9WFAPtnOLEm IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="285.0" x2="285.0" y1="62.936767578125" y2="125.93675994873047"/>
   <circle class="GlobalId-3xRosjJaz6yh3FOPAS7XSd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-21 drawing-circle-exact" cx="161.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-3f5oryORb96QavTzM1xsmq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-47 drawing-circle-exact" cx="318.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-08w_9HHpr2Lg_i6NQjCsrY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="313.5" x2="328.4999694824219" y1="129.936767578125" y2="129.936767578125"/>
   <line class="GlobalId-38gX9fZ3XCVvZpX59gzC7a IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="97.5" x2="112.5" y1="129.936767578125" y2="129.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <circle class="GlobalId-24rd7HdB9CdPqOwdlu3_$f IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-1 drawing-circle-exact" cx="20" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1QBDeIcG9BL9HXicl$EFQ8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="249.0" x2="249.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-0xIetnSlXDDuHkFSL$nEiI IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="156.8000030517578" x2="159.60000610351562" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-3ERymVn5XEC9mQrlcfG9Tj IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="177.0" x2="177.0" y1="139.936767578125" y2="195.936767578125"/>
@@ -2017,136 +2017,136 @@ tspan.door-dimension {
   <line class="GlobalId-3lQWIw58D5Ww8DC9r$wDcy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="292.5" x2="292.5" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-3lQWIw58D5Ww8DC9r$wDcy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="292.5" x2="277.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-3lQWIw58D5Ww8DC9r$wDcy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="277.5" x2="277.5" y1="125.93677520751953" y2="139.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-1Mem9ka7j4fxBux6T8obml IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="447.0" x2="444.5999755859375" y1="121.93677520751953" y2="107.93677520751953"/>
   <circle class="GlobalId-0qfdMyeDbFjPBD2CoAVKfm IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-32 drawing-circle-exact" cx="228.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3v7uMewXL6wAtk0TOQlbbd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="195.0" x2="195.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <circle class="GlobalId-2$$_0VBD1BkA3cXrV27Qiy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-50 drawing-circle-exact" cx="336.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3M_Qgcsl105QO9SlJdg96$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="231.0" x2="231.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-2$y$7UnzvEGwGeYP2l_x4y IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-27 drawing-circle-exact" cx="197.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3HO9I7Vj5CS9_3uHKbfHde IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="357.0" x2="354.5999755859375" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-2U6PPtML56AAwO5h_C4xfj IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="213.0" x2="213.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-3piuc4Gpr4s8qjp1XZal24 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-25 drawing-circle-exact" cx="195" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1O3snXxPXCtAL3FvCdZtwI IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="321.0" x2="321.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <circle class="GlobalId-3ibdlLonT8V9s8Iek60Cly IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-17 drawing-circle-exact" cx="138.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-1iZ6kzQFPBYPTsryDfzbyH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="87.0" x2="87.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-3L83vV_If1Ghm1E4ncTsJh IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="133.5" x2="148.5" y1="129.936767578125" y2="129.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-2jbIdcT$b4zg929XDWs26_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="122.99999237060547" x2="122.99999237060547" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-1BlJgk_cXDqeiM9tNC2Ag4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-9 drawing-circle-exact" cx="89.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3BMdj56DTDWe4BvCdxkqFe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="537.0" x2="534.6000366210938" y1="121.93677520751953" y2="107.93677520751953"/>
   <circle class="GlobalId-3L_Pbe1$TCP99qxzmjQ4FI IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-65 drawing-circle-exact" cx="426.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-23zsS$DJvCqetvhtML0UPD IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="16.000001907348633" x2="23.999988555908203" y1="201.936767578125" y2="201.936767578125"/>
   <line class="GlobalId-23zsS$DJvCqetvhtML0UPD IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="23.999988555908203" x2="23.999988555908203" y1="201.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-23zsS$DJvCqetvhtML0UPD IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="23.999988555908203" x2="16.000001907348633" y1="197.936767578125" y2="197.936767578125"/>
@@ -2155,72 +2155,72 @@ tspan.door-dimension {
   <line class="GlobalId-0ZBCfnM2PB2gFkkTvWUWOj IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="447.0" x2="447.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-26OWPuiRL7Qe$pf6BlwpZm IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="339.0" x2="339.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-06v0$zpWv7m8zoCqIrJIxh IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="519.0" x2="517.0" y1="62.936767578125" y2="56.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-2sdIebotTBLQZ2m6ZIC_ld IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="331.5" x2="346.4999694824219" y1="129.936767578125" y2="129.936767578125"/>
   <line class="GlobalId-2ueBkJ$wrCVx674SU4OKPO IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="138.79998779296875" x2="141.59999084472656" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-0YcWKWgST8GPrJMrpqaBxR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="213.0" x2="215.39999389648438" y1="121.93677520751953" y2="115.93677520751953"/>
@@ -2233,8 +2233,8 @@ tspan.door-dimension {
   <line class="GlobalId-0uzwugSDb4mhuzhYW5OBtv IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="192.8000030517578" x2="195.60000610351562" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-24g$rMO3PBcxcYvn1jG6JF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="421.5" x2="436.4999694824219" y1="129.936767578125" y2="129.936767578125"/>
   <circle class="GlobalId-2bjNXuCinCTuVzhk2FOuJP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-24 drawing-circle-exact" cx="179.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-0bxufiqjH3LPIiGYS51ck6 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="339.0" x2="336.5999755859375" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-3yDgS7SLn94Aex3zYIIHqZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="537.0" x2="537.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-0NIhhsALL04xBZiBkO$OPj IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="141.0" x2="138.60000610351562" y1="121.93677520751953" y2="107.93677520751953"/>
@@ -2245,128 +2245,128 @@ tspan.door-dimension {
   <line class="GlobalId-0guicXvHnALPWacu$NyQg5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="281.6999816894531" x2="283.0" y1="57.43675994873047" y2="56.936767578125"/>
   <line class="GlobalId-3nikhtmiP31B3l$P4bQi6b IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="501.0" x2="501.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <circle class="GlobalId-1UqW3bygb2_95dWwwXiGn0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-78 drawing-circle-exact" cx="503.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-30X67OMWr4vxgrU5bxtG5b IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p3" x1="20.000011444091797" x2="564.0" y1="39.936763763427734" y2="39.936763763427734"/>
   <line class="GlobalId-3DLUIznWf3yAZF8mIRy0hc IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="411.0" x2="411.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <circle class="GlobalId-31nVkSis98FwT9vYJP2UUd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-31 drawing-circle-exact" cx="231" cy="39.9368" r="0.55"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-2flZhBYyjCKQT_seMn6px9 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="122.99999237060547" x2="122.99999237060547" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-0t3l_g9gH5hBu1SHYpXO3Q IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="375.0" x2="375.0" y1="62.936767578125" y2="125.93675994873047"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-0VWiWf3mn2APV85qV_LLce IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="355.0" x2="353.6999816894531" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-0VWiWf3mn2APV85qV_LLce IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="353.6999816894531" x2="352.6999816894531" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-0VWiWf3mn2APV85qV_LLce IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="352.6999816894531" x2="353.6999816894531" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-0VWiWf3mn2APV85qV_LLce IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="353.6999816894531" x2="355.0" y1="57.43675994873047" y2="56.936767578125"/>
   <circle class="GlobalId-3CAGLQiGz4xulKX6LL$zVC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-15 drawing-circle-exact" cx="125.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-2hjU5xDdP9ZPu$bq2sdza5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="367.5" x2="382.5" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-2hjU5xDdP9ZPu$bq2sdza5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="382.5" x2="382.5" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-2hjU5xDdP9ZPu$bq2sdza5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="382.5" x2="367.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-2hjU5xDdP9ZPu$bq2sdza5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="367.5" x2="367.5" y1="125.93677520751953" y2="139.936767578125"/>
   <circle class="GlobalId-1giNmoSLj9YRaCfeY258tl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-13 drawing-circle-exact" cx="123" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-0AlGTFStj0iwCvoiy58eu7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="66.79999542236328" x2="69.5999984741211" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-0HQMVuofP678$fHy7nYC1E IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="195.0" x2="195.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-09qCcDVJPD0viTATHDAIWc IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="205.5" x2="220.5" y1="134.936767578125" y2="134.936767578125"/>
@@ -2380,8 +2380,8 @@ tspan.door-dimension {
   <line class="GlobalId-03UKlMdAr9aRkVR$HYieMR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="519.0" x2="519.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-2KI3q9SrH3jRzwjQSRDDqK IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="321.0" x2="323.4000244140625" y1="121.93677520751953" y2="115.93677520751953"/>
   <circle class="GlobalId-1UMCXjp_5FNQcs58gXMRwO IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-64 drawing-circle-exact" cx="429" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-12Q6MwVWjBtwkAzFrf2krk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="439.5" x2="454.5" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-12Q6MwVWjBtwkAzFrf2krk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="454.5" x2="454.5" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-12Q6MwVWjBtwkAzFrf2krk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="454.5" x2="439.5" y1="125.93677520751953" y2="125.93677520751953"/>
@@ -2396,116 +2396,116 @@ tspan.door-dimension {
   <line class="GlobalId-2H5xBtYH540fsEjxweY6RZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="460.70001220703125" x2="461.6999816894531" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-2H5xBtYH540fsEjxweY6RZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="461.6999816894531" x2="463.0" y1="57.43675994873047" y2="56.936767578125"/>
   <circle class="GlobalId-2$TT17CJb3rxh0cyVYoWJ1 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-44 drawing-circle-exact" cx="300.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-0DIW7D$tL0KPnTMmvBOV9y IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="498.8000183105469" x2="501.60003662109375" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-0nxalNLOn3cwzfyLfC4Vrb IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="97.5" x2="112.5" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-3pcplBiU1FF8gbuTWZgfVB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="295.5" x2="310.5" y1="129.936767578125" y2="129.936767578125"/>
   <line class="GlobalId-2HJ0wE1gH3Rx9D88SwaZ0s IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="213.0" x2="213.0" y1="62.936767578125" y2="125.93675994873047"/>
   <circle class="GlobalId-0W70olb$X6Tx2h$r64PHww IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-19 drawing-circle-exact" cx="159" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-2Dyhknaon7th8Nb2eh7liU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="231.0" x2="233.40000915527344" y1="121.93677520751953" y2="115.93677520751953"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-12nkJrZmz8XQ_D7ERV2OTE IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="339.0" x2="341.3999938964844" y1="121.93677520751953" y2="115.93677520751953"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-23RELyXkXB0Ri1kgOVotMg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="337.0" x2="335.70001220703125" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-23RELyXkXB0Ri1kgOVotMg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="335.70001220703125" x2="334.70001220703125" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-23RELyXkXB0Ri1kgOVotMg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="334.70001220703125" x2="335.70001220703125" y1="54.936763763427734" y2="57.43675994873047"/>
@@ -2515,76 +2515,76 @@ tspan.door-dimension {
   <line class="GlobalId-28l2Du51P1Ug$phIeJd27a IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="220.5" x2="205.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-28l2Du51P1Ug$phIeJd27a IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="205.5" x2="205.5" y1="125.93677520751953" y2="139.936767578125"/>
   <circle class="GlobalId-0_5MABPTv9BALUf8K4BBEd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-86 drawing-circle-exact" cx="552.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3D25NmF9944eILDYB7L1OQ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="122.99999237060547" x2="125.40000915527344" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-0W6yR4j4D2T9udCNsMkVEP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="285.0" x2="283.0" y1="62.936767578125" y2="56.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-3yDqd_CrzC1950_EMaeQVv IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="529.5" x2="544.5" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-3oy9ZU4lv5Q8mPcoVb312d IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="429.0" x2="431.3999938964844" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-2d6BlzAuLA7xbqJX5Qp7Jq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="373.0" x2="371.6999816894531" y1="56.936767578125" y2="54.436767578125"/>
@@ -2594,18 +2594,18 @@ tspan.door-dimension {
   <line class="GlobalId-2qHAlhWTTEn9tbxhCwZlcf IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="519.0" x2="519.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-0g2BdYkdrArfiQfD9dBAyz IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="231.0" x2="231.0" y1="195.936767578125" y2="197.936767578125"/>
   <circle class="GlobalId-2ofoEcatrEYx7hD9cSfZhN IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-59 drawing-circle-exact" cx="390.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-2agL147LP9J98tmqU6yrCA IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-81 drawing-circle-exact" cx="521.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3gm5m0Pg98UwTu987nikS0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="547.5" x2="562.5" y1="129.936767578125" y2="129.936767578125"/>
   <circle class="GlobalId-36Km6kvWX0MgUnzuMdFDhy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-74 drawing-circle-exact" cx="480.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-3qab__hhHEz8e63fUE9Yv9 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-2 drawing-circle-exact" cx="45" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-12K41nqQL9$RgzAcxs5z1a IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="195.0" x2="195.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-1$frgPMIb4rvYLEwZ3piGA IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="429.0" x2="429.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-04aADU7pXDw9qUqh1idGYk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="267.0" x2="267.0" y1="139.936767578125" y2="195.936767578125"/>
@@ -2618,111 +2618,111 @@ tspan.door-dimension {
   <line class="GlobalId-3XMlz00W13zu_5zvWiNcED IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="155.6999969482422" x2="154.70001220703125" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-3XMlz00W13zu_5zvWiNcED IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="154.70001220703125" x2="155.6999969482422" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-3XMlz00W13zu_5zvWiNcED IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="155.6999969482422" x2="157.0" y1="57.43675994873047" y2="56.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-08u$Th21j6Gxrf4X1kBQiw IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="104.99999237060547" x2="102.59999084472656" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-2cRyCMARb6eQfPymqP0UQg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="331.5" x2="346.4999694824219" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-0vIE9abfn9TBsMVclVePmM IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="321.0" x2="321.0" y1="62.936767578125" y2="125.93675994873047"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <circle class="GlobalId-2t_GLTcD1FDv_4OlUy0xHe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-77 drawing-circle-exact" cx="498.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-1NMjmDtOrEQfb_wj4XGW5d IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="87.0" x2="87.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-1RNA62nBH3KeE_AZ5vfdtL IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="313.5" x2="328.4999694824219" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-1RNA62nBH3KeE_AZ5vfdtL IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="328.4999694824219" x2="328.4999694824219" y1="139.936767578125" y2="125.93677520751953"/>
@@ -2745,49 +2745,49 @@ tspan.door-dimension {
   <line class="GlobalId-0HT7W_PjPBEfnOlP78BYZx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="475.5" x2="490.4999694824219" y1="129.936767578125" y2="129.936767578125"/>
   <line class="GlobalId-0GmT9yGGz0rgz6wp5mANzn IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="555.0" x2="553.0000610351562" y1="62.936767578125" y2="56.936767578125"/>
   <circle class="GlobalId-2sUj7KYEbEfRb4WCJySCdH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-7 drawing-circle-exact" cx="87" cy="39.9368" r="0.55"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-0KnUC3VDX4Z9g1q7AJs0Oe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="339.0" x2="336.9999694824219" y1="62.936767578125" y2="56.936767578125"/>
   <line class="GlobalId-0U_5wv6Rz63uMUe0WhqcZP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="321.0" x2="318.6000061035156" y1="121.93677520751953" y2="107.93677520751953"/>
   <circle class="GlobalId-0WuwIK5vz3JRijB0VV8IKE IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-87 drawing-circle-exact" cx="557.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-12YFcgdt58qQFbV8E23drY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-85 drawing-circle-exact" cx="555" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1KjNpAaQrBHO5U9cUuHBBW IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="501.0" x2="501.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-1OMkUKCon5MhzfXAavN_IS IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="303.0" x2="303.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-1yNwuDpMv8yR81jnOarB1Y IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="465.0" x2="463.0" y1="62.936767578125" y2="56.936767578125"/>
@@ -2807,118 +2807,118 @@ tspan.door-dimension {
   <line class="GlobalId-2XXuJ4nDr6MBAoPPmeRZUC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="130.5" x2="115.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-2XXuJ4nDr6MBAoPPmeRZUC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="115.5" x2="115.5" y1="125.93677520751953" y2="139.936767578125"/>
   <line class="GlobalId-2_Q7pe5f99og5MX8ewmwrM IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="519.0" x2="516.6000366210938" y1="121.93677520751953" y2="107.93677520751953"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-3pn_VLYrvDv9_TyoMZneZm IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="267.0" x2="267.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-1AidfjmWL77QVFzBoUq7lY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="61.499996185302734" x2="76.5" y1="134.936767578125" y2="134.936767578125"/>
   <circle class="GlobalId-0qcLIp8YX9u9JlaavMnTRC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-39 drawing-circle-exact" cx="269.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-2bjG$0pS19tefnudE66KCx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-37 drawing-circle-exact" cx="267" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-19lsf3ASP2GufTpCCN44OB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="493.5" x2="508.4999694824219" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-19lsf3ASP2GufTpCCN44OB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="508.4999694824219" x2="508.4999694824219" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-19lsf3ASP2GufTpCCN44OB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="508.4999694824219" x2="493.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-19lsf3ASP2GufTpCCN44OB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="493.5" x2="493.5" y1="125.93677520751953" y2="139.936767578125"/>
   <line class="GlobalId-3m4k4sxM50NgpjKGKfpdji IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="411.0" x2="408.6000061035156" y1="121.93677520751953" y2="107.93677520751953"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-2bbpcA4fb8bfVUCkuW5EOF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="177.0" x2="175.0" y1="62.936767578125" y2="56.936767578125"/>
   <line class="GlobalId-0lBI1EJuP2kB3NAu18Mole IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="393.0" x2="393.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-2XJew5mQP9MgGw6FY0uSaB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="141.0" x2="141.0" y1="195.936767578125" y2="197.936767578125"/>
@@ -2927,8 +2927,8 @@ tspan.door-dimension {
   <line class="GlobalId-04njFjugf7O9_ugaLgODGX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="316.70001220703125" x2="317.70001220703125" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-04njFjugf7O9_ugaLgODGX IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="317.70001220703125" x2="319.0" y1="57.43675994873047" y2="56.936767578125"/>
   <circle class="GlobalId-31hy3huEP9L8OpIcvzwZ8d IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-76 drawing-circle-exact" cx="501" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-0Ga6dNOjP069uT$VhCzQxl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="85.00000762939453" x2="83.70000457763672" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-0Ga6dNOjP069uT$VhCzQxl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="83.70000457763672" x2="82.69999694824219" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-0Ga6dNOjP069uT$VhCzQxl IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="82.69999694824219" x2="83.70000457763672" y1="54.936763763427734" y2="57.43675994873047"/>
@@ -2936,78 +2936,78 @@ tspan.door-dimension {
   <line class="GlobalId-3WrRGCzEr4x8WpOxt7XNyA IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="285.0" x2="285.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-1tN7QcGXfFCxv4YXMFo$jF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="555.0" x2="557.3999633789062" y1="121.93677520751953" y2="115.93677520751953"/>
   <circle class="GlobalId-0Zh0ReNKLCoPqySvWlJ1Fb IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-42 drawing-circle-exact" cx="287.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3j5NhLKOL2JR0whDHO9mFg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="421.5" x2="436.4999694824219" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-3j5NhLKOL2JR0whDHO9mFg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="436.4999694824219" x2="436.4999694824219" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-3j5NhLKOL2JR0whDHO9mFg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="436.4999694824219" x2="421.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-3j5NhLKOL2JR0whDHO9mFg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="421.5" x2="421.5" y1="125.93677520751953" y2="139.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-0r98uZmEn878KGvcTcY8IT IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="45.0" x2="45.0" y1="39.936763763427734" y2="49.936767578125"/>
   <line class="GlobalId-1pvOdzbkL5P9ISt9ld0_Wt IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="20.000011444091797" x2="20.000011444091797" y1="139.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-02UxImt995P8PeDiag6c_9 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="246.8000030517578" x2="249.60000610351562" y1="61.436767578125" y2="59.436763763427734"/>
@@ -3031,8 +3031,8 @@ tspan.door-dimension {
   <line class="GlobalId-1NI6$ug8P6IAHq0YNcgFmU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="407.70001220703125" x2="409.0" y1="57.43675994873047" y2="56.936767578125"/>
   <line class="GlobalId-0TGYFh8CX5mQhEqEl_FxNO IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="195.0" x2="192.99998474121094" y1="62.936767578125" y2="56.936767578125"/>
   <circle class="GlobalId-0KVyqLSH59SRpn4GWR$l2O IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-3 drawing-circle-exact" cx="45" cy="115.937" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1SD8UlM_jB5wM2atX8Llc7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="555.0" x2="555.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-0DNlB7OcHCuOX9fMN3NSs1 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="321.0" x2="319.0" y1="62.936767578125" y2="56.936767578125"/>
   <line class="GlobalId-2saa1wb4j5ChkDt5KeR1Tk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="104.99999237060547" x2="103.0" y1="62.936767578125" y2="56.936767578125"/>
@@ -3044,77 +3044,77 @@ tspan.door-dimension {
   <line class="GlobalId-3iKpRJQmrEaR2GQifL0Xpy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="511.5" x2="511.5" y1="125.93677520751953" y2="139.936767578125"/>
   <line class="GlobalId-36OrLrZ_jDVwaL3omAyHF_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="385.5" x2="400.5" y1="134.936767578125" y2="134.936767578125"/>
   <circle class="GlobalId-3zCmjCg0D8GB7CZymF5sK0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-71 drawing-circle-exact" cx="462.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-0bhQdBKXz9TOth0mb5dvHY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-35 drawing-circle-exact" cx="246.6" cy="107.937" r="0.5"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-3P_126qFfACRigaCdI$Kw4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="20.000011444091797" x2="20.000011444091797" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-2YAD5uBuzDBe$OEiK5$cSa IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="393.0" x2="393.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-3HZCktMIfDpReIFuEzBDmk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="9.999990463256836" x2="30.000001907348633" y1="134.936767578125" y2="134.936767578125"/>
@@ -3124,42 +3124,42 @@ tspan.door-dimension {
   <line class="GlobalId-37eVIq4dT2WQqHx9m1bS9g IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="403.5" x2="418.4999694824219" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-1cyEHxUKn8qw_oi$yA5yCe IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="241.5" x2="256.5" y1="129.936767578125" y2="129.936767578125"/>
   <line class="GlobalId-0GHGza5X9BRhCpI3rJV9Po IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="390.79998779296875" x2="393.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <circle class="GlobalId-2SXVE3yGPCbuaMG3Nxg20l IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-56 drawing-circle-exact" cx="372.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3uClXpGgfAf9DExbn7AO$u IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="177.0" x2="177.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-1x0DJzb6vEZOSL9_zmsp2l IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="552.7999877929688" x2="555.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-19cFKE0b1Dte8Z8yzfDR43 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="385.5" x2="400.5" y1="139.936767578125" y2="139.936767578125"/>
@@ -3174,8 +3174,8 @@ tspan.door-dimension {
   <line class="GlobalId-0$ueMDMB94yfU_FeO0bs$O IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="483.0" x2="483.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-2O3jKyWa96bwCqt9VXuO_m IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="285.0" x2="285.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-36D1V$t5XE29hrRp8dqNg8 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-68 drawing-circle-exact" cx="444.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-2LVr56QCj89PKq93LPbJDU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="475.5" x2="490.4999694824219" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-2LVr56QCj89PKq93LPbJDU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="490.4999694824219" x2="490.4999694824219" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-2LVr56QCj89PKq93LPbJDU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="490.4999694824219" x2="475.5" y1="125.93677520751953" y2="125.93677520751953"/>
@@ -3187,21 +3187,21 @@ tspan.door-dimension {
   <line class="GlobalId-3TpQ8RfM14YuLG9o2KIPbw IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="393.0" x2="390.6000061035156" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-14s9jsALXDJ9fYNIlvIHSt IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="249.0" x2="249.0" y1="62.936767578125" y2="125.93675994873047"/>
   <circle class="GlobalId-2s3CHc64v1COfmCbtaAmgZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-53 drawing-circle-exact" cx="354.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-2hOuBi_r11DfectsB5tCk0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="174.79998779296875" x2="177.59999084472656" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-2dHRFn5DH5wBvUYA5ZknVF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="241.5" x2="256.5" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-2dHRFn5DH5wBvUYA5ZknVF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="256.5" x2="256.5" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-2dHRFn5DH5wBvUYA5ZknVF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="256.5" x2="241.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-2dHRFn5DH5wBvUYA5ZknVF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="241.5" x2="241.5" y1="125.93677520751953" y2="139.936767578125"/>
   <circle class="GlobalId-3OGvPcgZv9WwdStJcwei9b IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-20 drawing-circle-exact" cx="156.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3eYT9nia188AW7sdJjm4o4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="483.0" x2="480.6000061035156" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-3isMlccOzAP9yMWaDTIS8h IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="151.5" x2="166.5" y1="129.936767578125" y2="129.936767578125"/>
   <circle class="GlobalId-2ZBNeEUyvCqOrD_8xYo1DO IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-34 drawing-circle-exact" cx="249" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-3fcQckG4b2qRYw5b$NE0lg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="259.5" x2="274.4999694824219" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-3fcQckG4b2qRYw5b$NE0lg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="274.4999694824219" x2="274.4999694824219" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-3fcQckG4b2qRYw5b$NE0lg IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="274.4999694824219" x2="259.5" y1="125.93677520751953" y2="125.93677520751953"/>
@@ -3210,13 +3210,13 @@ tspan.door-dimension {
   <line class="GlobalId-31pSf0mc16IPEJ4cfHAQzm IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="339.0" x2="339.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-260oPBWx517BgM_eUbPQsT IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="104.99999237060547" x2="104.99999237060547" y1="39.936763763427734" y2="53.93675994873047"/>
   <circle class="GlobalId-292yzxtjv8ruwQs2fEUxGJ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-30 drawing-circle-exact" cx="215.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-25HUq2z9L9VwX9xsFMjXKr IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="375.0" x2="372.5999755859375" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-1sjESd9Vv3JvOf0$EoguIZ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="349.5" x2="364.5" y1="129.936767578125" y2="129.936767578125"/>
   <circle class="GlobalId-2umsEtMyzC9BaNHVi9SPce IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-67 drawing-circle-exact" cx="447" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-2Yl0u8YmXD38DMlTn5Hb9q IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="465.0" x2="465.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-0ZrS3bPZnFB8FS09uoDawS IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="210.8000030517578" x2="213.60000610351562" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-0b_Ab8F5TD39v0WNOxyBGV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="553.0" x2="551.7000122070312" y1="56.936767578125" y2="54.436767578125"/>
@@ -3224,8 +3224,8 @@ tspan.door-dimension {
   <line class="GlobalId-0b_Ab8F5TD39v0WNOxyBGV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="550.699951171875" x2="551.7000122070312" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-0b_Ab8F5TD39v0WNOxyBGV IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="551.7000122070312" x2="553.0" y1="57.43675994873047" y2="56.936767578125"/>
   <circle class="GlobalId-1_dt7SNtf0se517e57T366 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-12 drawing-circle-exact" cx="107.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-1DlhAQKDf7POJkzGFHoMD1 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="277.5" x2="292.5" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-0y3AjnHbDEefCkZ2yZnAUs IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="249.0" x2="251.39999389648438" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-1BjfaSyhrAbertqRGdA$8f IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="247.0" x2="245.69998168945312" y1="56.936767578125" y2="54.436767578125"/>
@@ -3233,12 +3233,12 @@ tspan.door-dimension {
   <line class="GlobalId-1BjfaSyhrAbertqRGdA$8f IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="244.6999969482422" x2="245.69998168945312" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-1BjfaSyhrAbertqRGdA$8f IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="245.69998168945312" x2="247.0" y1="57.43675994873047" y2="56.936767578125"/>
   <circle class="GlobalId-2pqqxoEqT6XxP_RWugcPKd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-26 drawing-circle-exact" cx="192.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-37douWvNjA_xWJWH$ZIARU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="375.0" x2="375.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-29NAMPqk5ErRE_33HppFIw IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-52 drawing-circle-exact" cx="357" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1gJrNtNIb09wG9y_0UG9T9 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="555.0" x2="555.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-1sNjMP2E18JuS3TL1dlAYD IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="537.0" x2="535.0" y1="62.936767578125" y2="56.936767578125"/>
   <line class="GlobalId-0R_JUeKyz0EOJGY3CHjLf_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="39.99999237060547" x2="49.999996185302734" y1="201.936767578125" y2="201.936767578125"/>
@@ -3251,14 +3251,14 @@ tspan.door-dimension {
   <line class="GlobalId-1Z_i$XL61CeuQT6BSXvI3$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="102.79999542236328" x2="105.5999984741211" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-3G_nB6wWf7FBII1SoeUO_M IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="303.0" x2="301.0" y1="62.936767578125" y2="56.936767578125"/>
   <circle class="GlobalId-2qN1t790L6h9brPrmJUIve IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-84 drawing-circle-exact" cx="539.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-0$8mHex3z6$8to4ijmWHjB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-8 drawing-circle-exact" cx="84.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-35bsb$qRfBpOgCmqcRjy6u IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-82 drawing-circle-exact" cx="537" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1KOeRxBuf9g9u$fuPaFA1c IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="481.0" x2="479.70001220703125" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-1KOeRxBuf9g9u$fuPaFA1c IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="479.70001220703125" x2="478.70001220703125" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-1KOeRxBuf9g9u$fuPaFA1c IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="478.70001220703125" x2="479.70001220703125" y1="54.936763763427734" y2="57.43675994873047"/>
@@ -3271,35 +3271,35 @@ tspan.door-dimension {
   <line class="GlobalId-0pjwkF_Vz8G8ZtJOIsOFWu IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="442.70001220703125" x2="443.6999816894531" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-0pjwkF_Vz8G8ZtJOIsOFWu IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="443.6999816894531" x2="445.0" y1="57.43675994873047" y2="56.936767578125"/>
   <circle class="GlobalId-0D3X$T0C946RNS0Xu5uYiy IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-23 drawing-circle-exact" cx="174.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-2Ho$jNFB56dhuJ_nbPx27X IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="141.0" x2="141.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-3AlqowGdXD$wRQQWDaWNst IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="393.0" x2="393.0" y1="62.936767578125" y2="125.93675994873047"/>
   <circle class="GlobalId-0ksPAWq6LFCgUaGAyexwJa IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-49 drawing-circle-exact" cx="339" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <circle class="GlobalId-1mBz2vdU92l9YWFVJ8WYK9 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-18 drawing-circle-exact" cx="143.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-18M5gqtZ11qfydqHOmQAO7 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-16 drawing-circle-exact" cx="141" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1HMDmu7wHEYuv2GZDvtOsd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="159.0" x2="159.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-1ivqGqsRv5RgDKrTTfx7NH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="318.79998779296875" x2="321.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-1x7MNZbEv0UeZcRM9Nolrp IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-5 drawing-circle-exact" cx="66.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <circle class="GlobalId-3VExlfIbH73RzThHBACRDE IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-70 drawing-circle-exact" cx="465" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-2ksMROdR5BQOJginbE7nfQ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="69.00000762939453" x2="69.00000762939453" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-07Defo9ur6aOdNbq1BESSI IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-51 drawing-circle-exact" cx="341.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-1f8oJHKs10hg2Cx$bGBTwv IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="457.5" x2="472.5" y1="134.936767578125" y2="134.936767578125"/>
   <circle class="GlobalId-1tLiv9DnP2ohtC3afOc02n IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-14 drawing-circle-exact" cx="120.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3jgnNqdXL5oQGvgZTP6DLx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="357.0" x2="359.3999938964844" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-34a2AmoMHFMef7GW_XBPo4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="195.0" x2="192.59999084472656" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-3boQ8POTTDFxQ2ksT$TWw4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="552.7999877929688" x2="555.5999755859375" y1="62.53677749633789" y2="60.53676986694336"/>
@@ -3307,8 +3307,8 @@ tspan.door-dimension {
   <line class="GlobalId-3uWquJuOP7kuo4dEENU9u$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="285.0" x2="285.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-1TwsyDPBnCK8t0VWoXX5eY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="516.7999877929688" x2="519.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-3oXbI5fCb5KxvXbe4HgPdA IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-66 drawing-circle-exact" cx="431.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-3kF7L$OEfAMucniH49vcrO IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="231.0" x2="231.0" y1="62.936767578125" y2="125.93675994873047"/>
   <line class="GlobalId-0t5YTVo896SOmm1JJAStxb IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="493.5" x2="508.4999694824219" y1="129.936767578125" y2="129.936767578125"/>
   <line class="GlobalId-1dCWKjkBn8uuZcFSw4sumQ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="17.800003051757812" x2="20.599990844726562" y1="63.63677978515625" y2="61.63677215576172"/>
@@ -3318,267 +3318,267 @@ tspan.door-dimension {
   <line class="GlobalId-0TTnk7bCf8AAzabywCeE2d IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="367.5" x2="382.5" y1="134.936767578125" y2="134.936767578125"/>
   <line class="GlobalId-0SwDrgFOD6Hfa7mVu0Dy$u IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="483.0" x2="481.0" y1="62.936767578125" y2="56.936767578125"/>
   <line class="GlobalId-3ClQwvq999xAnjDMPv8EFC IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="231.0" x2="228.60000610351562" y1="121.93677520751953" y2="107.93677520751953"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-0ayEbzj097o9kQ32fJNl3x IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="439.5" x2="454.5" y1="134.936767578125" y2="134.936767578125"/>
   <circle class="GlobalId-3WytdS6Dz6b9YeW11bGodR IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-22 drawing-circle-exact" cx="177" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-3wIJy77QL9TO0OdmuJWM9$ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="408.8000183105469" x2="411.6000061035156" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-1Gq_epYGf5zusmvf1cPYRP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-11 drawing-circle-exact" cx="102.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-199I8aO2HEtvjpHz2L_$yx IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="69.00000762939453" x2="69.00000762939453" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-1REfgCjyvBI8tBm0Eb4uVt IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="195.0" x2="197.39999389648438" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-1EE1cy_GrDj8Ek3ALPxsG4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="193.0" x2="191.6999969482422" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-1EE1cy_GrDj8Ek3ALPxsG4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="191.6999969482422" x2="190.70001220703125" y1="54.436767578125" y2="54.936763763427734"/>
   <line class="GlobalId-1EE1cy_GrDj8Ek3ALPxsG4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="190.70001220703125" x2="191.6999969482422" y1="54.936763763427734" y2="57.43675994873047"/>
   <line class="GlobalId-1EE1cy_GrDj8Ek3ALPxsG4 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="191.6999969482422" x2="193.0" y1="57.43675994873047" y2="56.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-1_VPArsQ575hxOG8Ve5u82 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="321.0" x2="321.0" y1="139.936767578125" y2="195.936767578125"/>
   <line class="GlobalId-1Ps3JhrPr2X9SnNkotRT0Q IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="122.99999237060547" x2="120.5999984741211" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-2PRDAQ3vXC2gNWv3B0gb5Z IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="349.5" x2="364.5" y1="134.936767578125" y2="134.936767578125"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <circle class="GlobalId-3PNXvJtor2R8_d5EzpI_bB IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-6 drawing-circle-exact" cx="71.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-0GOs1G4059PPjiG3ykpJLP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="87.0" x2="87.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-1OSzvU2Vb7TO4B9mcbSXWM IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-4 drawing-circle-exact" cx="69" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-0QYmShePD3we3OSbYqcGeW IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="87.0" x2="89.39999389648438" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-0iaFHQXmP6Iff6ztCuWCzd IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="151.5" x2="166.5" y1="134.936767578125" y2="134.936767578125"/>
   <circle class="GlobalId-2dseU5eE5FcPRFaOOQsqyb IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-28 drawing-circle-exact" cx="213" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-1vUEVuVo15tB1yrg3EESKF IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="429.0" x2="429.0" y1="62.936767578125" y2="125.93675994873047"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-2uRcdQSkr3WOhebPx3Z69x IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="45.0" x2="45.0" y1="201.936767578125" y2="219.936767578125"/>
   <line class="GlobalId-35E8ndU1bBL9YqQvo7v1Pk IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="537.0" x2="537.0" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-2YI1FspZzA7urLbVPqXFUv IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="339.0" x2="339.0" y1="195.936767578125" y2="197.936767578125"/>
@@ -3590,77 +3590,77 @@ tspan.door-dimension {
   <line class="GlobalId-3EnKd638L2d88RUQONIMyj IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="112.5" x2="97.5" y1="125.93677520751953" y2="125.93677520751953"/>
   <line class="GlobalId-3EnKd638L2d88RUQONIMyj IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="97.5" x2="97.5" y1="125.93677520751953" y2="139.936767578125"/>
   <circle class="GlobalId-0yfGZ_Ju93yviB8LWhDXnG IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-45 drawing-circle-exact" cx="305.4" cy="115.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-07JnUs9rz5ZfEfqacOk14p IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="465.0" x2="465.0" y1="195.936767578125" y2="197.936767578125"/>
   <line class="GlobalId-28tyrohuP139ENfXehM2_j IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="20.000011444091797" x2="20.000011444091797" y1="39.936763763427734" y2="53.93675994873047"/>
   <line class="GlobalId-3vUFJToL50cguI33ZxUFa_ IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="357.0" x2="357.0" y1="62.936767578125" y2="125.93675994873047"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-3D0_hfvl5DA8Y4tV8luvW2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="429.0" x2="426.5999755859375" y1="121.93677520751953" y2="107.93677520751953"/>
   <line class="GlobalId-0zoCPwHd11LxOAlaTV5Rxb IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="264.8000183105469" x2="267.6000061035156" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-0HM6syFADDs9MKXoE99XM5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="349.5" x2="364.5" y1="139.936767578125" y2="139.936767578125"/>
@@ -3669,8 +3669,8 @@ tspan.door-dimension {
   <line class="GlobalId-0HM6syFADDs9MKXoE99XM5 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="349.5" x2="349.5" y1="125.93677520751953" y2="139.936767578125"/>
   <line class="GlobalId-1uW0VYCED2GO2Z9GUwXA6z IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="159.0" x2="159.0" y1="62.936767578125" y2="125.93675994873047"/>
   <circle class="GlobalId-375Ms_QhP0VBV0Q6luz9CO IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-10 drawing-circle-exact" cx="105" cy="39.9368" r="0.55"/>
-  
-  
+
+
   <line class="GlobalId-3tKeDHrff2yevU23tzNdsq IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="177.0" x2="179.39999389648438" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-39AT18Vt54OOM0M7QFJAHH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="175.0" x2="173.6999969482422" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-39AT18Vt54OOM0M7QFJAHH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="173.6999969482422" x2="172.6999969482422" y1="54.436767578125" y2="54.936763763427734"/>
@@ -3678,8 +3678,8 @@ tspan.door-dimension {
   <line class="GlobalId-39AT18Vt54OOM0M7QFJAHH IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="173.6999969482422" x2="175.0" y1="57.43675994873047" y2="56.936767578125"/>
   <line class="GlobalId-2jDvwvq1DFkBs3s6QwBcvW IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="534.7999877929688" x2="537.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <circle class="GlobalId-1ZQEuRgOrFEAHV7SvuDBKI IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-80 drawing-circle-exact" cx="516.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-26O0x288j0588Hc4XZZzIP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="151.5" x2="166.5" y1="139.936767578125" y2="139.936767578125"/>
   <line class="GlobalId-26O0x288j0588Hc4XZZzIP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="166.5" x2="166.5" y1="139.936767578125" y2="125.93677520751953"/>
   <line class="GlobalId-26O0x288j0588Hc4XZZzIP IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000" x1="166.5" x2="151.5" y1="125.93677520751953" y2="125.93677520751953"/>
@@ -3692,8 +3692,8 @@ tspan.door-dimension {
   <line class="GlobalId-09_O6KI0LDk9E8K_GyQYoU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p13" x1="69.00000762939453" x2="71.4000015258789" y1="121.93677520751953" y2="115.93677520751953"/>
   <line class="GlobalId-3PlCsOxNj2d8ugSdqnY_BU IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="501.0" x2="501.0" y1="139.936767578125" y2="195.936767578125"/>
   <circle class="GlobalId-0ZYtx9_9r1MeYTjd6h_qSY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-circle-62 drawing-circle-exact" cx="408.6" cy="107.937" r="0.5"/>
-  
-  
+
+
   <line class="GlobalId-2uIYEDWgz0w9E7VGkOFhzD IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="282.79998779296875" x2="285.5999755859375" y1="61.436767578125" y2="59.436763763427734"/>
   <line class="GlobalId-1ZeFSojtn94Qr$bJ3VdUB0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="229.0" x2="227.6999969482422" y1="56.936767578125" y2="54.436767578125"/>
   <line class="GlobalId-1ZeFSojtn94Qr$bJ3VdUB0 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-000000 drawing-line-width-0p18" x1="227.6999969482422" x2="226.70001220703125" y1="54.436767578125" y2="54.936763763427734"/>

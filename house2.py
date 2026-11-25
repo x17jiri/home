@@ -221,8 +221,8 @@ UPPER_FLOOR_THICKNESS = 0.03+CEMFLOW_AND_FINISH_THICKNESS
 UPPER_MASONRY_COURSE_HEIGHT = 0.125
 UPPER_FLOOR_START = ground_floor_height+CEILING_THICKNESS
 UPPER_FINISHED_FLOOR_HEIGHT = UPPER_FLOOR_START+UPPER_FLOOR_THICKNESS
-UPPER_RING_BEAM_HEIGHT = 0.43 - 0.002
-NADEZDIVKA = ZAKLADACI_MALTA + 1.0 + 0.002 + UPPER_RING_BEAM_HEIGHT
+UPPER_RING_BEAM_HEIGHT = 0.3
+NADEZDIVKA = ZAKLADACI_MALTA + 1.125 + UPPER_RING_BEAM_HEIGHT
 WALL_PLATE_SIZE = (0.16, 0.12)
 WALL_PLATE_OVERHANG = 0.2
 WALL_PLATE_Z = UPPER_FLOOR_START+NADEZDIVKA+WALL_PLATE_SIZE[1]/2
@@ -474,52 +474,48 @@ BATHROOM_WINDOW_STAIRWAY_CLEARANCE = 0.38  # Inside stairway wall face to the op
 UPPER_BASIN_SIZE = (0.60, 0.5)
 BATHROOM_WINDOW_CENTER_X = 5.0 + 0.5
 
+from project_documents import ARCHITECTURE, ELE, VYT, VZT, ZTI, document_path, expand_drawing_targets
+
+sys.argv[1:] = expand_drawing_targets(sys.argv[1:])
+
 PROJECT_DIR = Path("projekt2")
-DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = PROJECT_DIR / "D1.1. Architektonicko Stavební Řešení"
-PDF_FOLDER = PDFFolder("D1.1.", DIR_ARCHITEKTONICKO_STAVEBNI_RESENI)
-PDF_GROUND = Path(PDF_FOLDER.add_pdf("Půdorys 1.NP"))
-PDF_CEILING = Path(PDF_FOLDER.add_pdf("Strop nad 1.NP"))
-PDF_UPPER = Path(PDF_FOLDER.add_pdf("Půdorys podkroví"))
-PDF_ROOF = Path(PDF_FOLDER.add_pdf("Krov"))
-PDF_POHLEDY = Path(PDF_FOLDER.add_pdf("Pohledy"))
-# Reserve the former individual-elevation numbers to keep later plans stable.
-PDF_FOLDER.add_pdf("Pohled - Ulice")
-PDF_FOLDER.add_pdf("Pohled - Zahrada")
-PDF_FOLDER.add_pdf("Pohled - Východ")
+DIR_ARCHITEKTONICKO_STAVEBNI_RESENI = PROJECT_DIR / ARCHITECTURE
+DIR_ZDRAVOTECHNICKE_INSTALACE = PROJECT_DIR / ZTI
+DIR_ELEKTRO = PROJECT_DIR / ELE
+DIR_VYTAPENI = PROJECT_DIR / VYT
+DIR_VETRANI = PROJECT_DIR / VZT
 POHLEDY_SCALE = 130
-PDF_BASEMENT = Path(PDF_FOLDER.add_pdf("Půdorys suterénu"))
-PDF_FOUND = Path(PDF_FOLDER.add_pdf("Základy"))
-PDF_AA = Path(PDF_FOLDER.add_pdf("Řez AA"))
-PDF_BB = Path(PDF_FOLDER.add_pdf("Řez BB"))
-PDF_BASEMENT_CEILING = Path(PDF_FOLDER.add_pdf("Strop nad suterénem"))
-PDF_BASEMENT_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad suterénem - podrobný plán"))
-PDF_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad 1.NP - podrobný plán"))
-PDF_CC = Path(PDF_FOLDER.add_pdf("Řez CC"))
-PDF_ZASTINENI = Path(PDF_FOLDER.add_pdf("Zastínění sousedního RD"))
-PDF_SOUSEDI = Path(PDF_FOLDER.add_pdf("Porovnání se sousední zástavbou"))
-DIR_ZDRAVOTECHNICKE_INSTALACE = PROJECT_DIR / "D1.5. Zdravotechnické Instalace"
-PDF_KANAL_FOLDER = PDFFolder("D1.5.", DIR_ZDRAVOTECHNICKE_INSTALACE)
-PDF_KANAL_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys suterénu"))
-PDF_KANAL_GROUND = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys 1.NP"))
-PDF_KANAL_UPPER = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys podkroví"))
-PDF_KANAL = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace"))
-PDF_VODA_GROUND = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys 1.NP"))
-PDF_VODA_UPPER = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys podkroví"))
-PDF_VODA_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Vodovod - Půdorys suterénu"))
-DIR_ELEKTRO = PROJECT_DIR / "D1.4. Zařízení Silnoproudé Elektrotechniky"
-PDF_ELEKTRO_FOLDER = PDFFolder("D1.4.", DIR_ELEKTRO)
-PDF_ELEKTRO_GROUND = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys 1.NP"))
-PDF_ELEKTRO_UPPER = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys podkroví"))
-PDF_ELEKTRO_BASEMENT = Path(PDF_ELEKTRO_FOLDER.add_pdf("Elektro - Půdorys suterénu"))
-PDF_ROZVADEC = Path(PDF_ELEKTRO_FOLDER.add_pdf("Rozvaděč - jednopólové schéma"))
-DIR_VYTAPENI = PROJECT_DIR / "D1.7. Vytápění"
-PDF_VYTAPENI_FOLDER = PDFFolder("D1.7.", DIR_VYTAPENI)
-PDF_VYTAPENI_GROUND = Path(PDF_VYTAPENI_FOLDER.add_pdf("Vytápění - Půdorys 1.NP"))
-PDF_VYTAPENI_UPPER = Path(PDF_VYTAPENI_FOLDER.add_pdf("Vytápění - Půdorys podkroví"))
-DIR_VETRANI = PROJECT_DIR / "D1.6. Řízené Větrání"
-PDF_VETRANI_FOLDER = PDFFolder("D1.6.", DIR_VETRANI)
-PDF_VETRANI_GROUND = Path(PDF_VETRANI_FOLDER.add_pdf("Řízené větrání - Půdorys 1.NP"))
-PDF_VETRANI_UPPER = Path(PDF_VETRANI_FOLDER.add_pdf("Řízené větrání - Půdorys podkroví"))
+PDF_GROUND = document_path("ground", PROJECT_DIR)
+PDF_CEILING = document_path("ceiling", PROJECT_DIR)
+PDF_UPPER = document_path("upper", PROJECT_DIR)
+PDF_ROOF = document_path("roof", PROJECT_DIR)
+PDF_POHLEDY = document_path("pohledy", PROJECT_DIR)
+PDF_BASEMENT = document_path("basement", PROJECT_DIR)
+PDF_FOUND = document_path("found", PROJECT_DIR)
+PDF_AA = document_path("aa", PROJECT_DIR)
+PDF_BB = document_path("bb", PROJECT_DIR)
+PDF_BASEMENT_CEILING = document_path("basement_ceiling", PROJECT_DIR)
+PDF_BASEMENT_CEILING2 = document_path("basement_ceiling2", PROJECT_DIR)
+PDF_CEILING2 = document_path("ceiling2", PROJECT_DIR)
+PDF_CC = document_path("cc", PROJECT_DIR)
+PDF_ZASTINENI = document_path("zastineni", PROJECT_DIR)
+PDF_SOUSEDI = document_path("sousede", PROJECT_DIR)
+PDF_KANAL_BASEMENT = document_path("kanal_basement", PROJECT_DIR)
+PDF_KANAL_GROUND = document_path("kanal_ground", PROJECT_DIR)
+PDF_KANAL_UPPER = document_path("kanal_upper", PROJECT_DIR)
+PDF_KANAL = document_path("kanal", PROJECT_DIR)
+PDF_VODA_GROUND = document_path("voda_ground", PROJECT_DIR)
+PDF_VODA_UPPER = document_path("voda_upper", PROJECT_DIR)
+PDF_VODA_BASEMENT = document_path("voda_basement", PROJECT_DIR)
+PDF_ELEKTRO_GROUND = document_path("elektro_ground", PROJECT_DIR)
+PDF_ELEKTRO_UPPER = document_path("elektro_upper", PROJECT_DIR)
+PDF_ELEKTRO_BASEMENT = document_path("elektro_basement", PROJECT_DIR)
+PDF_ROZVADEC = document_path("rozvadec", PROJECT_DIR)
+PDF_VYTAPENI_GROUND = document_path("vytapeni_ground", PROJECT_DIR)
+PDF_VYTAPENI_UPPER = document_path("vytapeni_upper", PROJECT_DIR)
+PDF_VETRANI_GROUND = document_path("vetrani_ground", PROJECT_DIR)
+PDF_VETRANI_UPPER = document_path("vetrani_upper", PROJECT_DIR)
+
 ELECTRICAL_LINE_WIDTH = 0.30  # Printed millimetres, matching the reference electrical plans.
 ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH = 0.30  # Black riser symbols, matching sewer and water drawings.
 ELECTRICAL_LIGHT_OFFSETS = {}  # Optional room-specific offsets from the calculated centre.
@@ -3711,6 +3707,15 @@ roof_gutters = add_roof_gutters()
 
 
 house.write("house2.ifc")
+
+if "situace" in sys.argv:
+    from cadastral_situation import render_situation
+    render_situation(output=PROJECT_DIR / "situace.svg", pdf=document_path("situace", PROJECT_DIR))
+
+if "situace_prehled" in sys.argv:
+    from cadastral_overview import render_overview
+    render_overview(source_map=PROJECT_DIR / "situace.svg",
+                    output=PROJECT_DIR / "situace_prehled.svg", pdf=document_path("situace_prehled", PROJECT_DIR))
 
 if "zastineni" in sys.argv:
     from cadastral_shading import render_shading

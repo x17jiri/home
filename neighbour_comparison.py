@@ -17,15 +17,17 @@ import xml.etree.ElementTree as ET
 import ifcopenshell.util.element
 
 from drawing_title_block import load_title_block, title_block_svg
+from pdf_utils import save_drawing_svg
+from project_documents import DRAWINGS, document_path
 from survey_points import HOUSE_PLACEMENT, SurveyAxes, named_survey_groups, read_survey_groups, read_survey_points
 
 
 ROOT = Path(__file__).resolve().parent
 SVG_NS = "http://www.w3.org/2000/svg"
-TITLE = "Porovnání se sousední zástavbou"
-NUMBER = "D1.1.18"
+TITLE = DRAWINGS["sousede"].title
+NUMBER = DRAWINGS["sousede"].number
 SCALE = 150
-LEFT_WIDTH = 10.0
+LEFT_WIDTH = 16.8  # Overall width, including the open carport on the left.
 LEFT_RIDGE_HEIGHT = 9.0  # Above point 94; the chimneys extend above the ridge.
 LEFT_ROOF_FILL = "#c8c8c8"
 RIGHT_WIDTH = 7.0
@@ -33,7 +35,7 @@ RIGHT_RIDGE_ELEVATION = 422.87
 LEFT_ASSET = ROOT / "drawings/assets/neighbour-house-elevation.svg"
 RIGHT_ASSET = ROOT / "drawings/assets/neighbour-gable-elevation.svg"
 # Reference points are on the façades, not on the SVG canvas or gutter tips.
-LEFT_REFERENCE = dict(left_x=113.0, right_x=1270.0, base_y=825.0, ridge_y=-60.0, top_y=-156.0)
+LEFT_REFERENCE = dict(left_x=-260.0, right_x=1270.0, base_y=825.0, ridge_y=-60.0, top_y=-156.0)
 RIGHT_REFERENCE = dict(left_x=14.999917, right_x=413.039956, base_y=446.040039, ridge_y=15.0,
                        right_base_y=459.240051)
 
@@ -97,7 +99,7 @@ def render_comparison(*, width, floor_z, floor_bpv, top_z,
                       output=ROOT / "projekt2/sousede.svg", pdf=None):
     """Render only a new front view; compose neighbours at one shared Bpv datum."""
     output = Path(output)
-    pdf = Path(pdf or ROOT / f"projekt2/D1.1. Architektonicko Stavební Řešení/{NUMBER}. {TITLE}.pdf")
+    pdf = Path(pdf or ROOT / document_path("sousede"))
     anchors = projected_anchors()
     left, right = anchors["94"], anchors["13"]
     left_sx = LEFT_WIDTH/(LEFT_REFERENCE["right_x"]-LEFT_REFERENCE["left_x"])
@@ -183,7 +185,8 @@ def render_comparison(*, width, floor_z, floor_bpv, top_z,
         parts.append(f'<path d="M{x1:g},{y1:g}L{x2:g},{y2:g}" fill="none" stroke="black" stroke-width=".2"/>')
     left_ridge = left["survey"]["z"]+LEFT_RIDGE_HEIGHT
     label_y = max(paper(0,414)[1]+13,177)
-    for x,label,detail in ((left["station_m"]-LEFT_WIDTH/2,"Levý sousední RD","Šířka přibližně 10 m"),
+    for x,label,detail in ((left["station_m"]-LEFT_WIDTH/2,"Levý sousední RD",
+                           f"Celková šířka {LEFT_WIDTH:g} m".replace(".", ",")),
                            (0,"Navrhovaný RD",f"±0,000 = {floor_bpv:.3f} m Bpv"),
                            (right["station_m"]+RIGHT_WIDTH/2,"Pravý sousední RD","Šířka přibližně 7 m")):
         xx,_=paper(x,0)
@@ -199,11 +202,11 @@ def render_comparison(*, width, floor_z, floor_bpv, top_z,
     for number in ("94","13"):
         anchor=anchors[number];xx,yy=paper(anchor["station_m"],anchor["survey"]["z"])
         parts.append(f'<circle cx="{xx:g}" cy="{yy:g}" r=".65" fill="white" stroke="black" stroke-width=".2"/>')
-        text(xx,yy+5,f"Bod {number}: {anchor['survey']['z']:.3f} m Bpv",2.3,anchor="middle",halo=True)
+        text(xx,yy+5,f"Roh fasády: {anchor['survey']['z']:.3f} m Bpv",2.3,anchor="middle",halo=True)
     text(15,214,"Výšky jsou ve společném systému Bpv; půdorysné polohy jsou promítnuty do směru fasády.",2.4)
     text(15,221,"Sousední domy jsou schematické. Jejich šířky a natočení jsou orientační.",2.4)
-    text(15,228,"Levý RD: pravý dolní roh v bodě 94, hřeben 9,00 m nad bodem; komíny nad hřebenem.",2.4)
-    text(15,235,"Pravý RD: levý dolní roh v bodě 13, hřeben 422,87 m Bpv.",2.4)
+    text(15,228,"Levý RD: pravý dolní roh fasády; hřeben 9,00 m nad rohem; komíny nad hřebenem.",2.4)
+    text(15,235,"Pravý RD: levý dolní roh fasády; hřeben 422,87 m Bpv.",2.4)
     settings=load_title_block(output)
     if settings is not None:
         parts.append(title_block_svg(settings,filename=pdf.name,scale=f"1:{SCALE}",paper="A3",x=330,y=228))
@@ -217,13 +220,14 @@ def render_comparison(*, width, floor_z, floor_bpv, top_z,
                                 native_registration_mm=native_floor,registration_step_mm=native_delta))
     parts.append('<metadata id="comparison-data">'+escape(json.dumps(metadata,ensure_ascii=False))+'</metadata></svg>')
     output.parent.mkdir(parents=True,exist_ok=True);pdf.parent.mkdir(parents=True,exist_ok=True)
-    output.write_text("\n".join(parts)+"\n",encoding="utf-8")
+    output.write_text(re.sub(r"(?m)[ \t]+$", "", "\n".join(parts))+"\n",encoding="utf-8")
     inkscape=shutil.which("inkscape")
     if inkscape is None:
         raise FileNotFoundError("Inkscape is required to export the comparison PDF")
+    sheet_path = save_drawing_svg(output, pdf)
     with TemporaryDirectory(prefix=".neighbours-pdf-",dir=pdf.parent) as directory:
         target=Path(directory)/pdf.name
-        subprocess.run([inkscape,str(output),f"--export-filename={target}","--export-type=pdf","--export-area-page","--batch-process"],check=True)
+        subprocess.run([inkscape,str(sheet_path),f"--export-filename={target}","--export-type=pdf","--export-area-page","--batch-process"],check=True)
         if not target.is_file() or target.stat().st_size==0:
             raise RuntimeError("Inkscape did not create the comparison PDF")
         target.replace(pdf)

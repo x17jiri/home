@@ -701,7 +701,7 @@
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
         </g>
     </marker>
-    
+
     <marker id="sheet-1-fall-marker-end" markerHeight="14" markerWidth="11" orient="auto" refX="10" refY="7">
         <g>
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
@@ -1474,7 +1474,7 @@
   <line class="GlobalId-14c84m8NnAeQE_PssvduM0 IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-14c84m8NnAeQEPssvduM0" x1="123.07691955566406" x2="123.07691955566406" y1="102.05610656738281" y2="85.90225982666016" />
   <line class="GlobalId-14c84m8NnAeQE_PssvduM0 IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-14c84m8NnAeQEPssvduM0" x1="123.07691955566406" x2="138.46153259277344" y1="85.90225982666016" y2="83.18954467773438" />
   <path class="GlobalId-27jWIScDfD883uTfJRdHm$ IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-000000 drawing-fill-pattern-stone-wall GlobalId-27jWIScDfD883uTfJRdHm" d="M 123.07692307692308 85.90226540198694 L 119.23076923076924 85.90226540198694 L 119.23076923076924 102.05611082223746 L 123.07692307692308 102.05611082223746 L 123.07692307692308 85.90226540198694" />
-  
+
 </g></g><text class="drawing-title" x="69.2307427086" y="28.2600541667" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">Pohled - Západ 1:130</text></svg></g><g id="sheet-drawing-2"><svg baseProfile="full" data-scale="1:130" height="122.432791667" id="sheet-2-root" version="1.1" viewBox="-2 18.4132391667 132.8462625 122.432791667" width="132.8462625" x="206.57686875" y="42.7336041666"><defs><clipPath id="sheet-2-sheet-original-viewport" clipPathUnits="userSpaceOnUse"><rect x="0" y="0" width="128.846153846" height="138.846153846" /></clipPath></defs><g class="sheet-viewport" clip-path="url(#sheet-2-sheet-original-viewport)"><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">#sheet-drawing-2 .drawing-line-color-000000, #sheet-drawing-2 .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-000000 { stroke: #000000 !important; }
 #sheet-drawing-2 .drawing-line-color-555555, #sheet-drawing-2 .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-555555 { stroke: #555555 !important; }
 #sheet-drawing-2 .drawing-line-color-d0d0d0, #sheet-drawing-2 .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-d0d0d0 { stroke: #d0d0d0 !important; }
@@ -2180,7 +2180,7 @@
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
         </g>
     </marker>
-    
+
     <marker id="sheet-2-fall-marker-end" markerHeight="14" markerWidth="11" orient="auto" refX="10" refY="7">
         <g>
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
@@ -3160,15 +3160,15 @@
   <line class="GlobalId-1Brorz$cb4Xvybakz__pc2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-555555 drawing-line-width-0p1 GlobalId-1Brorzcb4Xvybakzpc2" x1="74.99864959716797" x2="75.14141845703125" y1="94.62496185302734" y2="94.72779083251953" />
   <line class="GlobalId-1Brorz$cb4Xvybakz__pc2 IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-555555 drawing-line-width-0p1 GlobalId-1Brorzcb4Xvybakzpc2" x1="75.14141845703125" x2="75.66715240478516" y1="94.72779083251953" y2="94.30915069580078" />
   <circle class="GlobalId-3QIb1kuVL4lgP28dxtPNdT IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-555555 drawing-circle-2 GlobalId-3QIb1kuVL4lgP28dxtPNdT drawing-circle-exact" cx="75.7692" cy="95.0176" r="0.531692" />
-  
-  
+
+
   <circle class="GlobalId-0xH1USxTL9PgPQkySsu7Ru IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-555555 drawing-circle-1 GlobalId-0xH1USxTL9PgPQkySsu7Ru drawing-circle-exact" cx="75.7692" cy="95.0176" r="3.32308" />
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
   <line class="GlobalId-3IsZPNHw1E5PEYiwWwpOxY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-555555 drawing-line-width-0p1 GlobalId-3IsZPNHw1E5PEYiwWwpOxY" x1="75.20669555664062" x2="74.85355377197266" y1="95.4603042602539" y2="95.41719818115234" />
   <line class="GlobalId-3IsZPNHw1E5PEYiwWwpOxY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-555555 drawing-line-width-0p1 GlobalId-3IsZPNHw1E5PEYiwWwpOxY" x1="74.85355377197266" x2="74.53490447998047" y1="95.41719818115234" y2="95.42340087890625" />
   <line class="GlobalId-3IsZPNHw1E5PEYiwWwpOxY IfcAnnotation PredefinedType-LINEWORK drawing-line solid drawing-line-color-555555 drawing-line-width-0p1 GlobalId-3IsZPNHw1E5PEYiwWwpOxY" x1="74.53490447998047" x2="74.25223541259766" y1="95.42340087890625" y2="95.47321319580078" />
@@ -3205,9 +3205,9 @@
   <line class="GlobalId-34Ilnp6XDDVf1GVmA7BqbK IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-34Ilnp6XDDVf1GVmA7BqbK" x1="19.23076820373535" x2="44.19230651855469" y1="98.75482177734375" y2="98.75482177734375" />
   <path class="GlobalId-3axbd3wj1D6gsqy3XL$Uwc IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-000000 drawing-fill-pattern-stone-wall GlobalId-3axbd3wj1D6gsqy3XLUwc" d="M 19.23076923076923 88.0176489169781 L 15.384615384615385 88.0176489169781 L 15.384615384615385 104.94072620685284 L 19.23076923076923 104.94072620685284 L 19.23076923076923 88.0176489169781" />
   <path class="GlobalId-16GWdOrqD5T9ymdldJa9IL IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-000000 drawing-fill-pattern-stone-wall GlobalId-16GWdOrqD5T9ymdldJa9IL" d="M 92.88461758540227 103.40226613558256 L 90.57692381051871 103.40226613558256 L 90.57692381051871 108.47918803875264 L 92.88461758540227 108.47918803875264 L 92.88461758540227 103.40226613558256" />
-  
+
   <path class="GlobalId-15vu3qIO9BGv7ARR4TeR7X IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-000000 drawing-fill-pattern-stone-wall GlobalId-15vu3qIO9BGv7ARR4TeR7X" d="M 51.73076941416814 103.40226613558256 L 49.42307655627911 103.40226613558256 L 49.42307655627911 108.47918803875264 L 51.73076941416814 108.47918803875264 L 51.73076941416814 103.40226613558256" />
-  
+
   <path class="GlobalId-2GUt9N89n4wgZK42LlOhNj IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-000000 drawing-fill-pattern-stone-wall GlobalId-2GUt9N89n4wgZK42LlOhNj" d="M 71.53846117166373 103.40226613558256 L 69.23076923076923 103.40226613558256 L 69.23076923076923 108.47918803875264 L 71.53846117166373 108.47918803875264 L 71.53846117166373 103.40226613558256" />
   <line class="GlobalId-3HcfEyR_TEJgHW9MbWqpA2 IfcAnnotation PredefinedType-LINEWORK drawing-terrain-source GlobalId-3HcfEyRTEJgHW9MbWqpA2" x1="115.4230728149414" x2="122.73076629638672" y1="98.75482177734375" y2="98.75482177734375" />
   <path class="GlobalId-1UYetO4R19xg24oKxp4wkI IfcAnnotation PredefinedType-FILLAREA drawing-line solid drawing-line-color-000000 drawing-fill-pattern-stone-wall GlobalId-1UYetO4R19xg24oKxp4wkI" d="M 82.88461611821101 103.40226613558256 L 80.57692234332745 103.40226613558256 L 80.57692234332745 108.47918803875264 L 82.88461611821101 108.47918803875264 L 82.88461611821101 103.40226613558256" />
@@ -3910,7 +3910,7 @@
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
         </g>
     </marker>
-    
+
     <marker id="sheet-3-fall-marker-end" markerHeight="14" markerWidth="11" orient="auto" refX="10" refY="7">
         <g>
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
@@ -5520,7 +5520,7 @@
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
         </g>
     </marker>
-    
+
     <marker id="sheet-4-fall-marker-end" markerHeight="14" markerWidth="11" orient="auto" refX="10" refY="7">
         <g>
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />

@@ -905,13 +905,13 @@ class DrawingPdfTests(unittest.TestCase):
                     temporary_svg = Path(command[1])
                     temporary_pdf = Path(next(a.split("=", 1)[1] for a in command
                                               if a.startswith("--export-filename=")))
-                    temporary_paths.extend((temporary_svg, temporary_pdf))
+                    temporary_paths.append(temporary_pdf)
                     root = ET.parse(temporary_svg).getroot()
                     self.assertEqual(root.get("width"), "297mm")
                     self.assertEqual(root.get("height"), "210mm")
                     self.assertIn(">36°</text>", temporary_svg.read_text(encoding="utf-8"))
                     self.assertIn(">D1.1.5. Krov 1:100</text>", temporary_svg.read_text(encoding="utf-8"))
-                    self.assertEqual(temporary_svg.parent, svg_path.parent)
+                    self.assertEqual(temporary_svg, pdf_path.parent / "src" / pdf_path.with_suffix(".svg").name)
                     self.assertIn("--export-type=pdf", command)
                     self.assertNotIn("--export-text-to-path", command)
                     temporary_pdf.write_bytes(b"%PDF-test")
@@ -933,6 +933,7 @@ class DrawingPdfTests(unittest.TestCase):
             svg = ET.parse(svg_path).getroot()
             self.assertEqual((svg.get("width"), svg.get("height")), ("235mm", "180mm"))
             self.assertTrue(all(not path.exists() for path in temporary_paths))
+            self.assertTrue((pdf_path.parent / "src" / pdf_path.with_suffix(".svg").name).is_file())
 
     def test_oversized_drawing_preserves_previous_pdf_without_launching_exporter(self):
         with TemporaryDirectory() as directory:
@@ -958,7 +959,8 @@ class DrawingPdfTests(unittest.TestCase):
                     with self.assertRaises(error):
                         _export_drawing_pdf(svg, pdf)
                 self.assertEqual(pdf.read_bytes(), b"previous PDF")
-                self.assertEqual(set(Path(directory).iterdir()), {svg, pdf})
+                self.assertEqual(set(Path(directory).iterdir()), {svg, pdf, Path(directory)/"src"})
+                self.assertEqual(list((Path(directory)/"src").iterdir()), [Path(directory)/"src/roof.svg"])
 
 
 class DrawingCameraTests(unittest.TestCase):

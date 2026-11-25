@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="151.003000mm" height="167.301351mm" viewBox="0 0 428.040000 474.240051">
+<title>Sousední RD č.p. 41 – štítový pohled</title>
+<desc>Original vector linework extracted from the top-right neighbouring house in the supplied elevation PDF. Surrounding buildings, annotations and the property-boundary symbol are omitted. All geometry is editable.</desc>
+<style>.house-line{fill:none;stroke:#000;stroke-width:.45;stroke-linejoin:round;stroke-linecap:round}.window-line{fill:none;stroke:#000;stroke-width:.4;stroke-linejoin:round;stroke-linecap:round}.ground-line{fill:none;stroke:#000;stroke-width:.65;stroke-linecap:round}</style>
+<metadata>{&quot;source_document&quot;: &quot;D1.1.10.pohledy_navrhovaný stav.pdf&quot;, &quot;source_page&quot;: 1, &quot;source_region_pdf_points&quot;: [1220.04, 307.47998046875, 1648.08, 781.7200317382812], &quot;building&quot;: &quot;Sousední objekt, parcela 107, č.p. 41&quot;, &quot;geometry&quot;: &quot;original PDF vectors; source proportions preserved&quot;, &quot;units&quot;: &quot;PDF points; no independent dimension verification&quot;}</metadata>
+<g id="roof" class="house-line">
+<path data-source-path="1766" d="M14.999917 187.320068L213.960000 15.000000 M213.960000 15.000000L413.039956 187.320068"/>
+<path data-source-path="1767" d="M157.319985 64.080078L270.720010 64.080078"/>
+<path data-source-path="1768" d="M14.999917 192.960083L158.879922 68.280029 M158.879922 68.280029L269.159951 68.280029 M269.159951 68.280029L413.039956 192.960083"/>
+</g>
+<g id="facade" class="house-line">
+<path data-source-path="1769" d="M413.039956 187.320068L413.039956 381.840027 M413.039956 381.840027L14.999917 381.840027 M14.999917 381.840027L14.999917 187.320068"/>
+<path data-source-path="1770" d="M14.999917 381.840027L14.999917 446.040039"/>
+<path data-source-path="1771" d="M413.039956 381.840027L413.039956 459.240051"/>
+</g>
+<g id="attic-window" class="window-line">
+<rect data-source-path="1774" x="188.999917" y="140.880005" width="49.920044" height="24.840088"/>
+<rect data-source-path="1775" x="192.720010" y="144.600098" width="42.479980" height="17.399902"/>
+<rect data-source-path="1776" x="214.679971" y="144.600098" width="20.520020" height="17.399902"/>
+<rect data-source-path="1776" x="192.720010" y="144.600098" width="21.959961" height="17.399902"/>
+<rect data-source-path="1777" x="188.999917" y="165.720093" width="49.920044" height="2.279907"/>
+</g>
+<g id="left-window" class="window-line">
+<rect data-source-path="1778" x="94.319985" y="251.400024" width="82.199951" height="82.200073"/>
+<rect data-source-path="1779" x="97.799966" y="254.880005" width="75.359985" height="75.359985"/>
+<rect data-source-path="1780" x="135.480020" y="254.880005" width="37.679932" height="75.359985"/>
+<rect data-source-path="1780" x="97.799966" y="254.880005" width="37.680054" height="75.359985"/>
+<rect data-source-path="1781" x="94.319985" y="333.600098" width="82.199951" height="2.039917"/>
+</g>
+<g id="right-window" class="window-line">
+<rect data-source-path="1782" x="248.639932" y="251.400024" width="82.200073" height="82.200073"/>
+<rect data-source-path="1783" x="251.999917" y="254.880005" width="75.480103" height="75.359985"/>
+<rect data-source-path="1784" x="289.799966" y="254.880005" width="37.680054" height="75.359985"/>
+<rect data-source-path="1784" x="251.999917" y="254.880005" width="37.800049" height="75.359985"/>
+<rect data-source-path="1785" x="248.639932" y="333.600098" width="82.200073" height="2.039917"/>
+</g>
+<path id="ground-line" class="ground-line" data-source-path="1772" d="M0.000000 445.577581 L428.040000 459.694600"/>
+</svg>

@@ -674,6 +674,7 @@ class SurveyPointsTests(unittest.TestCase):
             output, pdf = Path(directory)/"points.svg", Path(directory)/"points.pdf"
             with redirect_stdout(StringIO()):
                 render_survey_points(source, output, pdf=pdf, title="Zaměření", show_ids=True)
+            self.assertEqual((pdf.parent/"src/points.svg").read_bytes(), output.read_bytes())
             root = ET.parse(output).getroot()
             ns = {"s": "http://www.w3.org/2000/svg"}
             data = json.loads(root.find('s:metadata[@id="survey-data"]', ns).text)

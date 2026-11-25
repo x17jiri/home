@@ -1,4 +1,4 @@
-<svg xmlns:ns0="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:100" height="140mm" id="root" version="1.1" viewBox="0 0 190 140" width="190mm" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink"><text class="drawing-title" x="95" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D1.6.2. Řízené větrání - Půdorys podkroví 1:100</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">.drawing-line-color-0000ff, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-0000ff { stroke: #0000ff !important; }
+<svg xmlns:ns0="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:100" height="140mm" id="root" version="1.1" viewBox="0 0 190 140" width="190mm" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink"><text class="drawing-title" x="95" y="6.5" text-anchor="middle" style="font-family: DejaVu Sans, sans-serif; font-size: 4px; font-weight: bold; fill: black; stroke: none;">D.1.2.2-VZT-02. Řízené větrání – půdorys 2.NP 1:100</text><g class="drawing-title-content" transform="translate(0, 10)"><defs><style class="drawing-line-colors" type="text/css">.drawing-line-color-0000ff, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-0000ff { stroke: #0000ff !important; }
 .drawing-line-color-ff0000, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-ff0000 { stroke: #ff0000 !important; }
 .drawing-line-color-ff8000, .PredefinedType-LINEWORK.load-bearing-wall-outline.drawing-line-color-ff8000 { stroke: #ff8000 !important; }
 .PredefinedType-FILLAREA.ventilation-symbol-fill.drawing-line-color-0000ff { fill: #0000ff !important; stroke: none !important; }
@@ -977,7 +977,7 @@ tspan.door-dimension {
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
         </g>
     </marker>
-    
+
     <marker id="fall-marker-end" markerHeight="14" markerWidth="11" orient="auto" refX="10" refY="7">
         <g>
             <path d="M 0 3.5 L 0 10.5 L 10 7" class="annotation" style="fill:black;" />
@@ -2218,15 +2218,15 @@ tspan.door-dimension {
         </g>
     <g ifc:guid="2AtmaH5EL8GQBpUw5lMn75" ifc:name="Main chimney" class="IfcChimney material-Chimney cut"><path/><path d="M63.00000190734863,57.95000076293945 L63.00000190734863,59.68313694000244 L63.00000190734863,61.94999694824219 L64.73313808441162,61.94999694824219 L66.99999809265137,61.94999694824219 L66.99999809265137,60.2168607711792 L66.99999809265137,57.95000076293945 L65.26686191558838,57.95000076293945 Z M65.99999904632568,59.94999885559082 L65.96701622009277,60.11580944061279 L65.92388153076172,60.33268451690674 L65.82995414733887,60.47325134277344 L65.707106590271,60.657105445861816 L65.5665397644043,60.751028060913086 L65.38268566131592,60.87388038635254 L65.21687507629395,60.90685844421387 L65.0,60.949997901916504 L64.83418941497803,60.917015075683594 L64.61731433868408,60.87388038635254 L64.47674751281738,60.77995300292969 L64.292893409729,60.657105445861816 L64.19897079467773,60.51653861999512 L64.07611846923828,60.33268451690674 L64.04314041137695,60.166873931884766 L64.00000095367432,59.94999885559082 L64.03298377990723,59.78418827056885 L64.07611846923828,59.5673131942749 L64.17004585266113,59.4267463684082 L64.292893409729,59.242892265319824 L64.4334602355957,59.148969650268555 L64.61731433868408,59.0261173248291 L64.78312492370605,58.99313926696777 L65.0,58.94999980926514 L65.16581058502197,58.98298263549805 L65.38268566131592,59.0261173248291 L65.52325248718262,59.12004470825195 L65.707106590271,59.242892265319824 L65.80102920532227,59.38345909118652 L65.92388153076172,59.5673131942749 L65.95685958862305,59.733123779296875 Z"/></g><g ifc:guid="0mqhdM7vz11eZLa0qgAtPY" ifc:name="Sloupek vaznice 1.1" class="IfcBeam material-Wood cut"><path d="M51.599998474121094,81.74999952316284 L51.599998474121094,82.76641130447388 L51.599998474121094,83.34999799728394 L52.61641263961792,83.34999799728394 L53.19999933242798,83.34999799728394 L53.19999933242798,82.3335862159729 L53.19999933242798,81.74999952316284 L52.18358516693115,81.74999952316284 Z"/></g><g ifc:guid="2vfraR3u9C8gLBeT2eGSzN" ifc:name="Sloupek vaznice 2.1" class="IfcBeam material-Wood cut"><path d="M76.80000305175781,81.74999952316284 L76.80000305175781,82.76641130447388 L76.80000305175781,83.34999799728394 L77.81641483306885,83.34999799728394 L78.4000015258789,83.34999799728394 L78.4000015258789,82.3335862159729 L78.4000015258789,81.74999952316284 L77.38358974456787,81.74999952316284 Z"/></g><g class="072auezoX8gxIwh7cOf0S0 cut 0dJ5Fgo9r9m85zX0wFpiIi IfcWall 0mRLcEMHDCkxe8OIIsVVmr material-LoadbearingwallVPCCihla240mm1018"><path d="M106.3,22.45 L106.3,107.55 L101.795,107.55 L61.25,107.55 L61.25,109.71 L61.25,109.95 L101.795,109.95 L106.3,109.95 L108.661,109.95 L108.7,109.95 L108.7,21.524 L108.7,20.05 L108.661,20.05 L106.3,20.05 L104.17,20.05 L85.0,20.05 L85.0,20.29 L85.0,22.45 L104.17,22.45 Z"/></g><g class="072auezoX8gxIwh7cOf0S0 cut 0dJ5Fgo9r9m85zX0wFpiIi IfcWall 0mRLcEMHDCkxe8OIIsVVmr material-LoadbearingwallVPCCihla240mm1018"><path d="M60.0,22.45 L61.0,22.45 L70.0,22.45 L70.0,20.29 L70.0,20.05 L61.0,20.05 L60.0,20.05 L60.0,20.29 Z"/></g><g class="072auezoX8gxIwh7cOf0S0 3Q_X2X3m13CfbYKuRvVOUR cut 0dJ5Fgo9r9m85zX0wFpiIi IfcWall 0mRLcEMHDCkxe8OIIsVVmr material-LoadbearingwallVPCCihla240mm1018"><path d="M45.0,22.45 L45.0,20.29 L45.0,20.05 L25.83,20.05 L23.7,20.05 L21.339,20.05 L21.3,20.05 L21.3,108.476 L21.3,109.95 L21.339,109.95 L23.7,109.95 L25.955,109.95 L46.25,109.95 L46.25,109.71 L46.25,107.55 L25.955,107.55 L23.7,107.55 L23.7,22.45 L25.83,22.45 Z"/></g><g class="cut material-UpperloadbearingwallVPCCihla240mm1014 0HHwa49k960Q7ETCzCIrvT IfcWall"><path d="M73.447,54.75 L67.5,54.75 L67.5,56.019 L67.5,57.15 L73.447,57.15 L78.75,57.15 L78.75,56.019 L78.75,54.75 Z"/></g><g class="cut material-UpperloadbearingwallVPCCihla240mm1014 0HHwa49k960Q7ETCzCIrvT IfcWall"><path d="M29.869,54.75 L23.7,54.75 L23.7,56.306 L23.7,57.15 L29.869,57.15 L41.25,57.15 L41.25,56.019 L41.25,54.75 Z"/></g><g class="cut material-UpperloadbearingwallVPCCihla240mm1014 0HHwa49k960Q7ETCzCIrvT IfcWall"><path d="M106.3,54.75 L100.131,54.75 L88.75,54.75 L88.75,56.019 L88.75,57.15 L100.131,57.15 L106.3,57.15 L106.3,56.306 Z"/></g><g class="cut material-LoadbearingwallYtongKlasik300mm 1jZ6x1dfrCheYOQVABFyiG IfcWall"><path d="M81.0,83.35 L81.0,83.747 L81.0,107.55 L83.951,107.55 L84.0,107.55 L84.0,83.747 L84.0,83.35 L83.951,83.35 Z"/></g><g class="cut 16zLZfH$n6gfgMNvx7lN1Y material-drywall100mm IfcWall"><path d="M67.5,55.328 L67.5,54.75 L65.716,56.019 L63.595,57.527 L63.0,57.95 L63.593,57.95 L64.726,57.95 L65.32,57.527 L66.628,56.597 L67.5,55.977 Z"/></g><g class="material-drywall100mm cut IfcWall 0YvVRb7Jn7rQhBfVSM4$I7 00EiNNaj57ZfNPTTYFo38y"><path d="M73.2,69.857 L73.2,69.35 L72.964,69.35 L72.7,69.35 L72.7,64.15 L72.356,64.494 L71.7,65.15 L71.7,71.407 L71.7,83.35 L72.044,83.35 L72.7,83.35 L72.7,76.749 L72.7,70.35 L72.964,70.35 L73.2,70.35 Z"/></g><g class="material-drywall100mm cut IfcWall 1rHWQJLhnBRAOvGCz3AE$y 0YvVRb7Jn7rQhBfVSM4$I7 00EiNNaj57ZfNPTTYFo38y"><path d="M82.378,69.35 L81.2,69.35 L81.2,69.843 L81.2,70.35 L81.907,70.35 L82.7,70.35 L82.7,75.451 L82.7,83.35 L83.102,83.35 L83.7,83.35 L83.7,77.722 L83.7,69.35 Z"/></g><g class="material-drywall100mm cut 3NiWDEzDP8L8T7SgvgVQME 3ovnJRZOn7Dghd02Y5I1Um IfcWall"><path d="M63.656,61.95 L63.0,61.95 L63.0,63.05 L63.0,65.15 L65.991,65.15 L71.7,65.15 L72.044,64.806 L72.7,64.15 L69.709,64.15 L64.0,64.15 L64.0,63.394 L64.0,61.95 Z M63.344,64.806 L63.5,64.65 L63.0,65.15 Z"/></g><g class="cut 1wAvdY3KH0P8pN2UujuJ1R material-drywall100mm IfcWall"><path d="M82.7,82.35 L80.087,82.35 L78.4,82.35 L78.4,82.715 L78.4,83.35 L80.087,83.35 L82.7,83.35 L82.7,82.742 Z"/></g><g class="cut 1wAvdY3KH0P8pN2UujuJ1R material-drywall100mm IfcWall"><path d="M76.8,82.35 L74.195,82.35 L72.7,82.35 L72.7,82.694 L72.7,83.35 L74.195,83.35 L76.8,83.35 L76.8,82.715 Z"/></g><g class="072auezoX8gxIwh7cOf0S0 cut 0dJ5Fgo9r9m85zX0wFpiIi IfcMaterialLayer IfcWall layer-material-VPCCihla240mm1018 0mRLcEMHDCkxe8OIIsVVmr material-LoadbearingwallVPCCihla240mm1018"><path d="M106.3,22.45 L106.3,107.55 L101.795,107.55 L61.25,107.55 L61.25,109.71 L61.25,109.95 L101.795,109.95 L106.3,109.95 L108.661,109.95 L108.7,109.95 L108.7,21.524 L108.7,20.05 L108.661,20.05 L106.3,20.05 L104.17,20.05 L85.0,20.05 L85.0,20.29 L85.0,22.45 L104.17,22.45 Z"/></g><g class="072auezoX8gxIwh7cOf0S0 cut 0dJ5Fgo9r9m85zX0wFpiIi IfcMaterialLayer IfcWall layer-material-VPCCihla240mm1018 0mRLcEMHDCkxe8OIIsVVmr material-LoadbearingwallVPCCihla240mm1018"><path d="M60.0,22.45 L61.0,22.45 L70.0,22.45 L70.0,20.29 L70.0,20.05 L61.0,20.05 L60.0,20.05 L60.0,20.29 Z"/></g><g class="072auezoX8gxIwh7cOf0S0 3Q_X2X3m13CfbYKuRvVOUR cut 0dJ5Fgo9r9m85zX0wFpiIi IfcMaterialLayer IfcWall layer-material-VPCCihla240mm1018 0mRLcEMHDCkxe8OIIsVVmr material-LoadbearingwallVPCCihla240mm1018"><path d="M45.0,22.45 L45.0,20.29 L45.0,20.05 L25.83,20.05 L23.7,20.05 L21.339,20.05 L21.3,20.05 L21.3,108.476 L21.3,109.95 L21.339,109.95 L23.7,109.95 L25.955,109.95 L46.25,109.95 L46.25,109.71 L46.25,107.55 L25.955,107.55 L23.7,107.55 L23.7,22.45 L25.83,22.45 Z"/></g><g class="0HHwa49k960Q7ETCzCIrvT cut IfcMaterialLayer material-UpperloadbearingwallVPCCihla240mm1014 IfcWall layer-material-VPCCihla240mm1014"><path d="M73.447,54.75 L67.5,54.75 L67.5,56.019 L67.5,57.15 L73.447,57.15 L78.75,57.15 L78.75,56.019 L78.75,54.75 Z"/></g><g class="0HHwa49k960Q7ETCzCIrvT cut IfcMaterialLayer material-UpperloadbearingwallVPCCihla240mm1014 IfcWall layer-material-VPCCihla240mm1014"><path d="M29.869,54.75 L23.7,54.75 L23.7,56.306 L23.7,57.15 L29.869,57.15 L41.25,57.15 L41.25,56.019 L41.25,54.75 Z"/></g><g class="0HHwa49k960Q7ETCzCIrvT cut IfcMaterialLayer material-UpperloadbearingwallVPCCihla240mm1014 IfcWall layer-material-VPCCihla240mm1014"><path d="M106.3,54.75 L100.131,54.75 L88.75,54.75 L88.75,56.019 L88.75,57.15 L100.131,57.15 L106.3,57.15 L106.3,56.306 Z"/></g><g class="1jZ6x1dfrCheYOQVABFyiG cut material-LoadbearingwallYtongKlasik300mm layer-material-YtongKlasik IfcMaterialLayer IfcWall"><path d="M81.0,83.35 L81.0,83.747 L81.0,107.55 L83.951,107.55 L84.0,107.55 L84.0,83.747 L84.0,83.35 L83.951,83.35 Z"/></g><g class="material-drywall100mm cut IfcMaterialLayer IfcWall layer-material-SDK 16zLZfH$n6gfgMNvx7lN1Y"><path d="M67.5,55.328 L67.5,54.75 L65.716,56.019 L63.595,57.527 L63.0,57.95 L63.593,57.95 L64.726,57.95 L65.32,57.527 L66.628,56.597 L67.5,55.977 Z"/></g><g class="material-drywall100mm cut IfcMaterialLayer IfcWall layer-material-SDK 0YvVRb7Jn7rQhBfVSM4$I7 00EiNNaj57ZfNPTTYFo38y"><path d="M73.2,69.857 L73.2,69.35 L72.964,69.35 L72.7,69.35 L72.7,64.15 L72.356,64.494 L71.7,65.15 L71.7,71.407 L71.7,83.35 L72.044,83.35 L72.7,83.35 L72.7,76.749 L72.7,70.35 L72.964,70.35 L73.2,70.35 Z"/></g><g class="material-drywall100mm cut IfcMaterialLayer IfcWall layer-material-SDK 1rHWQJLhnBRAOvGCz3AE$y 0YvVRb7Jn7rQhBfVSM4$I7 00EiNNaj57ZfNPTTYFo38y"><path d="M82.378,69.35 L81.2,69.35 L81.2,69.843 L81.2,70.35 L81.907,70.35 L82.7,70.35 L82.7,75.451 L82.7,83.35 L83.102,83.35 L83.7,83.35 L83.7,77.722 L83.7,69.35 Z"/></g><g class="material-drywall100mm cut 3NiWDEzDP8L8T7SgvgVQME 3ovnJRZOn7Dghd02Y5I1Um IfcMaterialLayer IfcWall layer-material-SDK"><path d="M63.656,61.95 L63.0,61.95 L63.0,63.05 L63.0,65.15 L65.991,65.15 L71.7,65.15 L72.044,64.806 L72.7,64.15 L69.709,64.15 L64.0,64.15 L64.0,63.394 L64.0,61.95 Z M63.344,64.806 L63.5,64.65 L63.0,65.15 Z"/></g><g class="material-drywall100mm cut IfcMaterialLayer IfcWall layer-material-SDK 1wAvdY3KH0P8pN2UujuJ1R"><path d="M82.7,82.35 L80.087,82.35 L78.4,82.35 L78.4,82.715 L78.4,83.35 L80.087,83.35 L82.7,83.35 L82.7,82.742 Z"/></g><g class="material-drywall100mm cut IfcMaterialLayer IfcWall layer-material-SDK 1wAvdY3KH0P8pN2UujuJ1R"><path d="M76.8,82.35 L74.195,82.35 L72.7,82.35 L72.7,82.694 L72.7,83.35 L74.195,83.35 L76.8,83.35 L76.8,82.715 Z"/></g></g>
   <defs/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-2cAMzUkdbF0QjE2KBCsXcX IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="66.0" x2="65.98078918457031" y1="59.94999694824219" y2="59.75490951538086"/>
   <line class="GlobalId-2cAMzUkdbF0QjE2KBCsXcX IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.98078918457031" x2="65.92388153076172" y1="59.75490951538086" y2="59.56731414794922"/>
   <line class="GlobalId-2cAMzUkdbF0QjE2KBCsXcX IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.92388153076172" x2="65.83146667480469" y1="59.56731414794922" y2="59.39442443847656"/>
@@ -2259,28 +2259,28 @@ tspan.door-dimension {
   <line class="GlobalId-2cAMzUkdbF0QjE2KBCsXcX IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.83146667480469" x2="65.92388153076172" y1="60.50556945800781" y2="60.33268356323242"/>
   <line class="GlobalId-2cAMzUkdbF0QjE2KBCsXcX IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.92388153076172" x2="65.98078918457031" y1="60.33268356323242" y2="60.14508819580078"/>
   <line class="GlobalId-2cAMzUkdbF0QjE2KBCsXcX IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.98078918457031" x2="66.0" y1="60.14508819580078" y2="59.94999694824219"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <line class="GlobalId-0RBsL9OgfF0voOK3K$4FYi IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.0" x2="94.0" y1="97.05000305175781" y2="78.1500015258789"/>
   <line class="GlobalId-0RBsL9OgfF0voOK3K$4FYi IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.0" x2="84.0" y1="78.1500015258789" y2="78.14999389648438"/>
   <line class="GlobalId-0RBsL9OgfF0voOK3K$4FYi IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="84.0" x2="84.0" y1="78.14999389648438" y2="97.05000305175781"/>
@@ -2291,38 +2291,38 @@ tspan.door-dimension {
   <line class="GlobalId-0RBsL9OgfF0voOK3K$4FYi IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.0" x2="84.0" y1="86.25" y2="86.25"/>
   <line class="GlobalId-0RBsL9OgfF0voOK3K$4FYi IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.0" x2="84.0" y1="83.54999542236328" y2="83.54999542236328"/>
   <line class="GlobalId-0RBsL9OgfF0voOK3K$4FYi IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.0" x2="84.0" y1="80.8499984741211" y2="80.8499984741211"/>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   <polygon class="door-overhead-mask" points="79.0,57.14999771118164 88.5,57.14999771118164 88.5,54.75 79.0,54.75"/>
   <line class="GlobalId-3NbpaqopLC48E0Cu3G9UvR IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="79.0" x2="88.5" y1="57.14999771118164" y2="57.14999771118164"/>
   <line class="GlobalId-3NbpaqopLC48E0Cu3G9UvR IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="79.0" x2="88.5" y1="54.75" y2="54.75"/>
   <path class="GlobalId-0wP9YNj8j0wO0Rn6b_8P$w IfcAnnotation PredefinedType-FILLAREA chimney-flue-fill" d="M 64.16852951049805 59.394426345825195 L 64.07611846923828 59.5673131942749 L 64.01921272277832 59.754910469055176 L 64.00000095367432 59.94999885559082 L 64.01921272277832 60.145087242126465 L 64.07611846923828 60.33268451690674 L 64.16852951049805 60.505571365356445 L 64.292893409729 60.657105445861816 L 65.707106590271 59.242892265319824 L 65.55557250976562 59.11852836608887 L 65.38268566131592 59.0261173248291 L 65.19508838653564 58.96921157836914 L 65.0 58.94999980926514 L 64.80491161346436 58.96921157836914 L 64.61731433868408 59.0261173248291 L 64.44442749023438 59.11852836608887 L 64.292893409729 59.242892265319824 L 64.16852951049805 59.394426345825195"/>
-  
-  
-  
-  
+
+
+
+
   <line class="GlobalId-2d_MXRHYX9nRDaC0qOHy7Y IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.80000305175781" x2="94.80000305175781" y1="78.14999389648438" y2="97.05000305175781"/>
   <line class="GlobalId-2d_MXRHYX9nRDaC0qOHy7Y IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.80000305175781" x2="106.30000305175781" y1="97.05000305175781" y2="97.05000305175781"/>
   <line class="GlobalId-2d_MXRHYX9nRDaC0qOHy7Y IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="106.30000305175781" x2="106.30000305175781" y1="97.05000305175781" y2="78.14999389648438"/>
@@ -2333,17 +2333,17 @@ tspan.door-dimension {
   <line class="GlobalId-2d_MXRHYX9nRDaC0qOHy7Y IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.80000305175781" x2="106.30000305175781" y1="88.95000457763672" y2="88.94999694824219"/>
   <line class="GlobalId-2d_MXRHYX9nRDaC0qOHy7Y IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.80000305175781" x2="106.30000305175781" y1="91.6500015258789" y2="91.6500015258789"/>
   <line class="GlobalId-2d_MXRHYX9nRDaC0qOHy7Y IfcAnnotation PredefinedType-LINEWORK stair dashed" x1="94.80000305175781" x2="106.30000305175781" y1="94.34999084472656" y2="94.34999084472656"/>
-  
-  
-  
-  
+
+
+
+
   <polygon class="door-overhead-mask" points="73.45000457763672,70.3499984741211 80.95000457763672,70.3499984741211 80.95000457763672,69.34999084472656 73.45000457763672,69.34999084472656"/>
   <line class="GlobalId-0__xJoGtf79AMgCJHvkjN5 IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="73.45000457763672" x2="80.95000457763672" y1="70.3499984741211" y2="70.3499984741211"/>
   <line class="GlobalId-0__xJoGtf79AMgCJHvkjN5 IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="73.45000457763672" x2="80.95000457763672" y1="69.34999084472656" y2="69.34999084472656"/>
-  
-  
-  
-  
+
+
+
+
   <polygon class="door-overhead-mask" points="41.5,57.14999771118164 63.875003814697266,57.14999771118164 67.25,54.75 41.5,54.75"/>
   <line class="GlobalId-3FKH_8S55CPwmnX_EBCxxH IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="41.5" x2="63.875003814697266" y1="57.14999771118164" y2="57.14999771118164"/>
   <line class="GlobalId-3FKH_8S55CPwmnX_EBCxxH IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="41.5" x2="67.25" y1="54.75" y2="54.75"/>
@@ -2410,7 +2410,7 @@ tspan.door-dimension {
   <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(77.5, 95.05000305175781) rotate(-0.0)">
     <tspan class="GlobalId-3pCayaExT7evNQLjkYdGJR IfcAnnotation PredefinedType-TEXT furniture-label small" dy="0em" x="0" y="0">Lednice</tspan>
   </text>
-  
+
 <g id="section-outlines" class="section-outlines" data-width-mm="0.3" data-offset-ratio="0.25" data-offset-mm="0.075" style="fill:none;stroke:#000000;stroke-width:0.3;stroke-linejoin:round;stroke-linecap:round">
 <path class="section-outline" d="M41.325,54.675 L23.775,54.675 L23.775,22.525 L45.075,22.525 L45.075,19.975 L21.225,19.975 L21.225,110.025 L46.325,110.025 L46.325,107.475 L23.775,107.475 L23.775,57.225 L41.325,57.225 L41.325,54.675"/>
 <path class="section-outline" d="M59.925,19.975 L59.925,22.525 L70.075,22.525 L70.075,19.975 L59.925,19.975"/>

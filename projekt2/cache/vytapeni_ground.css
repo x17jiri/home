@@ -1,0 +1,966 @@
+/*
+ * Project-owned Bonsai drawing stylesheet.
+ *
+ * Edit this file, then run House.generate_plan() again. Bonsai embeds a fresh
+ * copy in the generated SVG, so generated SVG files should not be edited.
+ */
+
+* { stroke-linecap: round; stroke-linejoin: round; }
+text, tspan { /* 2.5mm */ fill: black; stroke: none; font-family: 'OpenGost Type B TT', 'DejaVu Sans Condensed', 'Liberation Sans', 'Arial Narrow', 'Arial'; font-size: 4.13px; }
+a text, a tspan { fill: blue !important; text-decoration: underline; }
+a:hover { cursor: pointer; }
+.cut { fill: black; stroke: black; stroke-linecap: round; stroke-width: 0.35; fill-rule: evenodd; }
+.projection { fill: white; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
+/* Railings have a simplified drawing panel; cuts show its plain outline. */
+.IfcRailing.material-Wood.cut {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.10 !important;
+}
+.IfcRailing.projection { fill: none !important; stroke-width: 0.10 !important; }
+.target-view-ELEVATIONVIEW .IfcRailing.material-Wood.surface,
+.target-view-SECTIONVIEW .IfcRailing.material-Wood.surface {
+    fill: url(#railing-boards-transparent) !important;
+}
+.IfcFurniture.projection,
+.IfcFurniture.cut {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.25 !important;
+    stroke-dasharray: 3, 2;
+}
+.IfcSlab.material-Concrete.cut {
+    fill: #c5c7c8 !important;
+    stroke: black !important;
+    stroke-width: 0.08 !important;
+}
+.surface { stroke: none; fill: #fff; fill-rule: evenodd; }
+.target-view-ELEVATIONVIEW .IfcWindow.surface.drawing-glazing {
+    fill: #d9f4f7;
+}
+.annotation { fill: none; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
+.IfcAnnotation { fill: none; stroke: black; stroke-linecap: round; stroke-width: 0.25; }
+.IfcGeographicElement { fill: none; stroke: black; stroke-linecap: round; stroke-width: 1; }
+.PredefinedType-LINEWORK { stroke: black; stroke-width: 0.25; }
+.PredefinedType-LINEWORK.dashed { stroke-dasharray: 3, 2; }
+.PredefinedType-LINEWORK.drawing-line.dash-dot { stroke-dasharray: 3, 1.5, 0.15, 1.5 !important; }
+.PredefinedType-LINEWORK.drawing-line.dash-dot.ceiling-beam-axis {
+    stroke-dasharray: 1.5, 0.75, 0.15, 0.75 !important;
+}
+.PredefinedType-LINEWORK.stair.dashed,
+.PredefinedType-LINEWORK.stair-landing.dashed {
+    stroke-width: 0.08;
+    stroke-dasharray: 0.5, 0.7;
+}
+.PredefinedType-LINEWORK.fine { stroke-width: 0.18; stroke: #777; }
+.PredefinedType-LINEWORK.thin { stroke-width: 0.25; }
+.PredefinedType-LINEWORK.medium { stroke-width: 0.35; }
+.PredefinedType-LINEWORK.thick { stroke-width: 0.5; }
+.PredefinedType-LINEWORK.strong { stroke-width: 1; }
+.PredefinedType-BACKGROUND { stroke: black; stroke-width: 0.18; }
+.PredefinedType-GRID { marker-start: url(#grid-marker); marker-end: url(#grid-marker); }
+.PredefinedType-SECTION { stroke-dasharray: 12.5, 3, 3, 3; }
+.PredefinedType-SECTIONLEVEL { marker-start: url(#section-level-marker); stroke-dasharray: 12.5, 3, 3, 3; }
+.PredefinedType-PLANLEVEL { marker-end: url(#plan-level-marker); }
+.PredefinedType-DIMENSION { marker-start: url(#dimension-marker-start); marker-end: url(#dimension-marker-end); }
+.PredefinedType-ANGLE { marker-start: url(#dimension-marker-start); marker-end: url(#dimension-marker-end); }
+.PredefinedType-ANGLE.angle-dimension {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.08;
+    marker-start: url(#angle-marker-start);
+    marker-end: url(#angle-marker-end);
+}
+.PredefinedType-LINEWORK.angle-reference {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.06;
+}
+.PredefinedType-RADIUS { marker-end: url(#fall-marker-end); }
+.PredefinedType-FALL { marker-end: url(#radius-marker-end); }
+.PredefinedType-SLOPEANGLE { marker-end: url(#radius-marker-end); }
+.PredefinedType-SLOPEPERCENT { marker-end: url(#radius-marker-end); }
+.PredefinedType-SLOPEFRACTION { marker-end: url(#radius-marker-end); }
+.PredefinedType-DIAMETER { marker-start: url(#diameter-marker-start); marker-end: url(#diameter-marker-end); }
+.PredefinedType-STAIRARROW { marker-start: url(#stair-marker); }
+.PredefinedType-BOUNDARY { fill: none; stroke: red; stroke-width: 1; stroke-dasharray: 12, 4, 3, 4, 3, 4; }
+.PredefinedType-SEALANT { fill: url(#crosshatch1); stroke-width: 0.25; }
+.PredefinedType-FILLAREA { fill: white; stroke: black; }
+.PredefinedType-FILLAREA.dashed { stroke-dasharray: 3, 2; }
+.PredefinedType-FILLAREA.wall-insulation {
+    stroke: black !important;
+    stroke-width: 0.05 !important;
+}
+.PredefinedType-FILLAREA.wall-insulation-polystyrene {
+    fill: url(#polystyrene-transparent) !important;
+}
+.PredefinedType-FILLAREA.wall-insulation-xps {
+    fill: url(#perimeter-polystyrene) !important;
+}
+.PredefinedType-FILLAREA.ridge-tile {
+    fill: #e46b55 !important;
+    stroke: #b33425 !important;
+    stroke-width: 0.10 !important;
+    stroke-linejoin: round !important;
+}
+.PredefinedType-BREAKLINE { fill: none; stroke: black; stroke-width: 0.25; marker-mid: url(#breakline-marker); }
+.PredefinedType-TEXT { fill: black; stroke: none; }
+path.PredefinedType-TEXTLEADER { marker-end: url(#leader-marker); }
+text.PredefinedType-TEXTLEADER, tspan.PredefinedType-TEXTLEADER { fill: black; stroke: none; }
+text.title, tspan.title { /* 7mm */ font-size: 11.55px; }
+text.header, tspan.header { /* 5mm */ font-size: 8.25px; }
+text.large, tspan.large { /* 3.5mm */ font-size: 5.78px; }
+text.regular, tspan.regular { /* 2.5mm */ font-size: 4.13px; }
+text.small, tspan.small { /* 1.8mm */ font-size: 2.97px; }
+text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
+.material-blank { fill: white; }
+.material-diagonal1 { fill: url(#diagonal1); }
+.material-diagonal2 { fill: url(#diagonal2); }
+.material-diagonal3 { fill: url(#diagonal3); }
+.material-crosshatch1 { fill: url(#crosshatch1); }
+.material-crosshatch2 { fill: url(#crosshatch2); }
+.material-crosshatch3 { fill: url(#crosshatch3); }
+.material-brick { fill: url(#brick); }
+.material-earth { fill: url(#earth); }
+.material-stone-wall { fill: url(#stone-wall); }
+.material-glass { fill: url(#glass); }
+.material-liquid { fill: url(#liquid); }
+.material-grass { fill: url(#grass); }
+.material-honeycomb { fill: url(#honeycomb); }
+.material-sand { fill: url(#sand); }
+.material-concrete { fill: url(#concrete); stroke-width: 0.5; }
+.material-Wood {
+    fill: white !important;
+}
+
+.material-Wood.cut {
+    fill: #f4d35e !important;
+}
+
+/* Opaque finish over the facade insulation, including in sections. */
+.material-Facadefinish {
+    fill: white !important;
+}
+
+/* Recessed perimeter finish over the thinner XPS insulation. */
+.material-Perimeterfacadefinish.surface {
+    fill: #d9d9d9 !important;
+    stroke: none !important;
+}
+
+.material-Perimeterfacadefinish.projection {
+    fill: none !important;
+}
+
+/* MDF boards, including material names in older IFC files. */
+.material-MDF,
+.material-Woodfiberboard,
+.material-mdfsolid {
+    fill: white !important;
+}
+
+.material-MDF.cut,
+.material-Woodfiberboard.cut,
+.material-mdfsolid.cut {
+    fill: #f2b6d0 !important;
+    stroke: #f2b6d0 !important;
+}
+
+/* Fill closed projected faces, never open edge paths, with board joints. */
+.material-Woodsiding.surface {
+    fill: url(#wood-siding) !important;
+    stroke: none !important;
+}
+
+.material-Woodsiding.projection {
+    fill: none !important;
+    stroke: black !important;
+}
+
+.material-Woodsiding.cut {
+    fill: #f4d35e !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+/* Plain roof-edge siding and exposed framing share one color. */
+.material-Exteriorwood.surface,
+.material-Woodsidingsolid.surface {
+    fill: #f2d08b !important;
+    stroke: none !important;
+}
+
+.material-Exteriorwood.projection,
+.material-Woodsidingsolid.projection {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+.material-Exteriorwood.cut,
+.material-Woodsidingsolid.cut {
+    fill: #f4d35e !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+/* Bonsai emits projected plan beams as separate open edge paths. */
+.target-view-PLANVIEW .projected-wood-fill {
+    fill: white !important;
+    stroke: none !important;
+}
+
+/* Ordered timber fills mask the original Bonsai edges. Restore a clear
+ * perimeter afterwards, including the seam between touching beams. */
+.target-view-PLANVIEW .projected-wood-order-outline {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.10 !important;
+}
+
+/* Façade-frame laths are IfcMembers. Keep their plan outlines as light as
+ * the roof-batten outlines used in sections, without changing their 3D form. */
+.target-view-PLANVIEW .IfcMember.cut,
+.target-view-PLANVIEW .IfcMember.projection {
+    stroke-width: 0.06 !important;
+}
+
+/* Rockwool building-element parts are the blocks between façade laths. */
+.target-view-PLANVIEW .IfcBuildingElementPart.material-Rockwool.cut,
+.target-view-PLANVIEW .IfcBuildingElementPart.material-Rockwool.projection {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+/* Simplified insulation/heating/screed floor build-ups. */
+.material-Floorbuildup {
+    fill: white !important;
+}
+
+.material-Ceilingfinish {
+    fill: white !important;
+}
+
+/* A floor build-up masks the MIAKO slab below it in plan.  Bonsai may retain
+ * a concrete-cover perimeter where the two solids touch at the same height. */
+/*.target-view-PLANVIEW .material-Concretetopping.projection {
+    stroke: none !important;
+}*/
+
+/* The cast-in-place MIAKO cover is continuous concrete.  Its generated cut
+ * perimeter creates false seams where it overlaps the ring beam. */
+.IfcBuildingElementPart.material-Concretetopping.cut {
+    stroke: none !important;
+}
+
+/* Distinguish the concrete, ceramic, and steel in every MIAKO section. */
+.material-MIAKOceramicconcrete.cut,
+.material-MIAKOconcrete.cut,
+.material-Concretetopping.cut {
+    fill: #c5c7c8 !important;
+    stroke-width: 0.04 !important;
+}
+
+.material-MIAKObeamceramic.cut {
+    fill: #d98245 !important;
+    stroke-width: 0.04 !important;
+}
+
+.material-MIAKOblockceramic.cut {
+    fill: #e3b996 !important;
+    stroke-width: 0.04 !important;
+}
+
+.material-MIAKOreinforcement.cut {
+    fill: #333 !important;
+    stroke: #333 !important;
+    stroke-width: 0.025 !important;
+}
+
+.IfcBeam.material-Structuralsteel.cut,
+.IfcBuildingElementPart.material-Structuralsteel.cut {
+    fill: #aa00aa !important;
+    stroke: #aa00aa !important;
+    stroke-width: 0.04 !important;
+}
+
+.IfcBeam.material-Girderconcrete.cut {
+    fill: #c5c7c8 !important;
+    stroke: black !important;
+    stroke-width: 0.04 !important;
+}
+
+.material-Ringbeamreinforcement.cut {
+    fill: #333 !important;
+    stroke: #333 !important;
+    stroke-width: 0.025 !important;
+}
+
+/* Reveal structure behind insulation in elevation and section drawings. */
+.target-view-ELEVATIONVIEW .material-Thermalinsulation {
+    fill: none !important;
+}
+
+/* Insulated wall cores stay unhatched until section batting is added. */
+.IfcWall.cut.layer-material-Thermalinsulation {
+    fill: white !important;
+}
+
+/* Simplified west gable: cross hatch in cuts, opaque white in views. */
+.IfcWall.material-Westclosurewall.cut,
+.IfcWall.cut.layer-material-Westclosurewall {
+    fill: url(#crosshatch2) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.material-Westclosurewall.surface {
+    fill: white !important;
+    stroke: none !important;
+}
+
+.material-Westclosurewall.projection {
+    fill: none !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Gypsumplasterboard {
+    fill: #e8e5de !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Gypsumplasterboard.cut,
+.target-view-ELEVATIONVIEW .material-Gypsumplasterboard.projection {
+    stroke: black;
+    stroke-width: 0.08;
+}
+
+/* Thin reveal panels need lighter outlines than the main plasterboard slabs. */
+.target-view-ELEVATIONVIEW .IfcCovering.material-Gypsumplasterboard.cut,
+.target-view-ELEVATIONVIEW .IfcCovering.material-Gypsumplasterboard.projection {
+    stroke-width: 0.05;
+}
+
+.target-view-ELEVATIONVIEW .material-Vapourbarrier {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.08 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Vapourbarrier.cut {
+    fill: #4a90e2 !important;
+    stroke: #4a90e2 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Rooftiles {
+    fill: white !important;
+    stroke: none;
+}
+
+.target-view-ELEVATIONVIEW .material-Rooftiles.cut {
+    fill: #e46b55 !important;
+    stroke: #b33425 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Rooftiles.projection {
+    fill: none !important;
+    stroke: #b33425 !important;
+    stroke-width: 0.06 !important;
+}
+
+/* Plain roof-end trim matches the tile colours without the tile pattern. */
+.material-Roofedgetrim.surface {
+    fill: #e46b55 !important;
+    stroke: none !important;
+}
+
+.material-Roofedgetrim.cut {
+    fill: #e46b55 !important;
+    stroke: #b33425 !important;
+}
+
+.material-Roofedgetrim.projection {
+    fill: none !important;
+    stroke: #b33425 !important;
+    stroke-width: 0.06 !important;
+}
+
+.material-Guttermetal.surface,
+.material-Guttermetal.cut {
+    fill: #666666 !important;
+    stroke: none !important;
+}
+
+.material-Guttermetal.projection {
+    fill: none !important;
+    stroke: #444444 !important;
+    stroke-width: 0.06 !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Chimney.surface {
+    fill: white !important;
+    stroke: none !important;
+}
+
+.target-view-ELEVATIONVIEW .material-Chimney.projection {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+/* Lighter section/elevation outlines than Bonsai's drawing defaults. */
+.target-view-ELEVATIONVIEW .cut {
+    stroke-width: 0.08;
+}
+
+.target-view-ELEVATIONVIEW .projection {
+    stroke-width: 0.06;
+}
+.IfcSpace { fill: none; stroke: none; }
+.PredefinedType-STUD { stroke: black; stroke-width: 0.05; }
+.PredefinedType-WOOD { fill: url(#wood); stroke: black; stroke-width: 0.05; }
+.PredefinedType-STEEL { fill: url(#steel); stroke: black; stroke-width: 0.05; }
+.PredefinedType-CONCRETE { fill: url(#concrete); stroke: black; stroke-width: 0.05; }
+.PredefinedType-PLASTERBOARD { fill: url(#sand); stroke: black; stroke-width: 0.05; }
+
+/* Editable house material rules. */
+.cut.layer-material-Brick {
+    fill: white !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Keep the common 240 mm VPC walls plain, including their brick course. */
+.cut.material-LoadbearingwallVPC240mm,
+.cut.material-GroundloadbearingwallVPC240mmLiaporbasecourse.layer-material-Brick {
+    fill: white !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Paired diagonals distinguish 175/200 mm VPC from the common 240 mm walls. */
+.cut.material-LoadbearingwallVPC175mm,
+.cut.material-VPCcihla175mm,
+.cut.material-GroundloadbearingwallVPC175mmLiaporbasecourse.layer-material-Brick,
+.cut.material-LoadbearingwallVPC200mm,
+.cut.material-VPCcihla200mm,
+.cut.material-GroundloadbearingwallVPC200mmLiaporbasecourse.layer-material-Brick {
+    fill: url(#brick) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.material-YtongKlasik,
+.cut.material-LoadbearingwallYtongKlasik300mm,
+.cut.layer-material-YtongKlasik {
+    fill: url(#ytong-klasik) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.material-YtongStatik,
+.cut.material-LoadbearingwallYtongStatik200mm,
+.cut.material-LoadbearingwallYtongStatik250mm,
+.cut.layer-material-YtongStatik {
+    fill: url(#ytong-statik) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Retain the legacy Liapor material's yellow fill. */
+.cut.material-LiaporKM240AKU,
+.cut.material-LoadbearingwallLiaporKM240AKU,
+.cut.layer-material-LiaporKM240AKU {
+    fill: #fff2cc !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* VPC grade 10-1,4 uses the stronger light-blue tint. */
+.cut.material-VPCCihla240mm1014,
+.cut.material-LoadbearingwallVPCCihla240mm1014,
+.cut.material-UpperloadbearingwallVPCCihla240mm1014,
+.cut.material-GroundloadbearingwallVPCCihla240mm1014Liaporbasecourse,
+.cut.layer-material-VPCCihla240mm1014 {
+    fill: #cce6ff !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Grade 10-1,8 is halfway between that blue and white (rounded RGB). */
+.cut.material-VPCCihla240mm1018,
+.cut.material-LoadbearingwallVPCCihla240mm1018,
+.cut.layer-material-VPCCihla240mm1018 {
+    fill: #e6f3ff !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-Liaporbrick {
+    fill: url(#liapor-brick) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-ztracenebedneni {
+    fill: url(#ztracene-bedneni) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-ztracenebedneni250 {
+    fill: url(#ztracene-bedneni-green) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-tepelnakrocejovaizolace,
+.cut.material-tepelnakrocejovaizolace {
+    fill: url(#thermal-impact-insulation) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcSlab.cut.layer-material-Floorbuildup,
+.IfcSlab.material-Floorbuildup.cut {
+    fill: #c5c7c8 !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcSlab.material-Baseplateconcrete.cut {
+    fill: url(#base-plate) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcFooting.cut {
+    fill: url(#footing-cross) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Keep soil visible through footings behind an elevation/section plane.
+ * Native projection linework supplies the dashed edges, without a second
+ * overlapping outline on Bonsai's generated surface-fill polygons. */
+.target-view-ELEVATIONVIEW .IfcFooting.surface {
+    fill: none !important;
+    stroke: none !important;
+}
+
+.target-view-ELEVATIONVIEW .IfcFooting.projection {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: 0.7 0.8 !important;
+}
+
+/* In a foundation plan the strip footings are seen from above.  Keep their
+ * cross hatch for elevation/section cuts, but use a plain fill in plan. */
+.target-view-PLANVIEW .IfcFooting.cut {
+    fill: white !important;
+    stroke: white !important;
+}
+
+/* Foundation plans draw the merged footprint boundary as annotation.
+ * Suppress individual projected edges, including the lowered street strips. */
+.target-view-PLANVIEW .IfcFooting.projection,
+.target-view-PLANVIEW .IfcFooting.surface {
+    fill: none !important;
+    stroke: none !important;
+}
+
+.cut.layer-material-SDK {
+    fill: url(#drywall-diagonal1) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Wooden partitions: yellow diagonal cuts and vertical board joints in projection. */
+.material-drevenastena {
+    fill: white !important;
+}
+.material-drevenastena.projection {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.10 !important;
+}
+.target-view-ELEVATIONVIEW .material-drevenastena.surface,
+.target-view-SECTIONVIEW .material-drevenastena.surface {
+    fill: url(#railing-boards) !important;
+}
+.cut.material-drevenastena,
+.cut.layer-material-drevenastena {
+    fill: url(#wooden-wall) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-Polystyrene,
+.cut.material-Polystyrene {
+    fill: url(#polystyrene-transparent) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-XPS,
+.cut.material-XPS {
+    fill: url(#perimeter-polystyrene) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.cut.layer-material-Rockwool {
+    fill: white !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+/* Restore voids which Bonsai's elevation material-layer fill paints over. */
+.section-opening-mask {
+    fill: white !important;
+    stroke: black !important;
+    stroke-width: 0.05 !important;
+    stroke-linecap: square !important;
+    stroke-linejoin: miter !important;
+}
+
+/* Bonsai generates batting marker paths with an inline 0.18 stroke. */
+marker[id^="batting-"] path {
+    stroke-width: 0.10 !important;
+}
+
+.PredefinedType-LINEWORK.wall-insulation-rockwool-boundary,
+.PredefinedType-LINEWORK.wall-insulation-rockwool-boundary path {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.05 !important;
+}
+
+/* Only "Partition wall - VPC 115 mm" */
+.cut.material-PartitionwallVPC115mm,
+.cut.material-GroundpartitionwallVPC115mmLiaporbasecourse.layer-material-Brick {
+    fill: url(#diagonal1) !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.IfcChimney.cut {
+    fill: white !important;
+    stroke: black;
+    stroke-width: 0.05 !important;
+}
+
+.PredefinedType-FILLAREA.chimney-flue-fill {
+    fill: black !important;
+    stroke: none !important;
+}
+
+.PredefinedType-LINEWORK.chimney-flue {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.25 !important;
+}
+
+.PredefinedType-FILLAREA.drainage-stack-fill {
+    stroke: none !important;
+}
+
+.PredefinedType-FILLAREA.drainage-stack-orange {
+    fill: #ffa500 !important;
+}
+
+.PredefinedType-FILLAREA.drainage-stack-white {
+    fill: white !important;
+}
+
+.IfcFurniture.projection,
+.IfcFurniture.cut,
+.IfcSanitaryTerminal.projection,
+.IfcSanitaryTerminal.cut,
+.IfcElectricAppliance.projection,
+.IfcElectricAppliance.cut,
+.IfcUnitaryEquipment.projection,
+.IfcUnitaryEquipment.cut {
+    fill: none !important;
+    stroke: #6FB9D6 !important;
+    stroke-width: 0.13 !important;
+    stroke-dasharray: none !important;
+}
+text.furniture-label,
+tspan.furniture-label {
+    fill: #6FB9D6 !important;
+    stroke: none !important;
+    font-size: 1.7px !important;
+}
+
+/* Compact plan dimensions: thinner linework, ticks, and labels. */
+.PredefinedType-DIMENSION {
+    stroke-width: 0.1 !important;
+}
+
+.PredefinedType-LINEWORK.dimension-extension {
+    stroke-width: 0.1 !important;
+}
+
+text.DIMENSION,
+tspan.DIMENSION {
+    font-size: 2px !important;
+}
+text.ANGLE,
+tspan.ANGLE {
+    font-size: 2px !important;
+}
+
+/* Manual room identifier, separator, and area. */
+text.room-annotation,
+tspan.room-annotation {
+    fill: black !important;
+    stroke: none !important;
+}
+
+text.room-identifier,
+tspan.room-identifier {
+    font-size: 3px !important;
+}
+
+text.room-area,
+tspan.room-area {
+    font-size: 2px !important;
+}
+
+.PredefinedType-LINEWORK.room-annotation-separator {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+}
+
+/* Building entrance direction. */
+.PredefinedType-LINEWORK.entrance-arrow {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.5 !important;
+    stroke-linecap: square !important;
+    stroke-linejoin: miter !important;
+}
+
+/* Lintel reference line from the opening jamb to its numbered tag. */
+.PredefinedType-LINEWORK.lintel-leader {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+/* Section reference: dash-dot axis, open arrows and upright endpoint IDs. */
+.PredefinedType-LINEWORK.cut-symbol-line {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.13 !important;
+    stroke-dasharray: 8, 2, 0.3, 2;
+}
+.PredefinedType-LINEWORK.cut-symbol-arrow {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.13 !important;
+}
+text.cut-symbol-text,
+tspan.cut-symbol-text {
+    fill: black !important;
+    stroke: none !important;
+    font-size: 3.5px !important;
+}
+
+text.lintel-symbol,
+tspan.lintel-symbol {
+    font-size: 1.8px !important;
+}
+
+/* Fixed-size construction identifier inside the elevation hexagon marker. */
+text.hexagon-marker,
+tspan.hexagon-marker {
+    font-size: 1.44px !important;
+}
+
+.PredefinedType-LINEWORK.hexagon-marker-leader {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.06 !important;
+}
+
+.PredefinedType-LINEWORK.note-leader {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.08 !important;
+    marker-end: url(#note-arrow-marker);
+}
+
+text.note-text,
+tspan.note-text {
+    fill: black !important;
+    stroke: none !important;
+    font-size: 2px !important;
+}
+
+/* Doors: light plan swing, both overhead wall faces, and size labels. */
+.IfcDoor.projection,
+.IfcDoor.cut {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+}
+
+.door-overhead-mask {
+    fill: white !important;
+    stroke: white !important;
+    stroke-width: 0.3 !important;
+}
+
+/* Retain opening geometry for the white cover without drawing its edges. */
+.PredefinedType-LINEWORK.opening-mask-source {
+    fill: none !important;
+    stroke: none !important;
+}
+
+.PredefinedType-LINEWORK.load-bearing-wall-outline,
+.PredefinedType-LINEWORK.roof-opening {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: 0.7 0.8 !important;
+}
+
+.PredefinedType-LINEWORK.load-bearing-wall-outline.solid {
+    stroke-dasharray: none !important;
+}
+
+/* Door openings retain thin solid wall-face continuations. */
+.PredefinedType-LINEWORK.door-overhead {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: none !important;
+}
+
+/* Continue the facade edge across door/window openings without a cut outline.
+ * Keep the width used by the former dashed continuation, including old IFCs. */
+.PredefinedType-LINEWORK.wall-insulation-opening {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: none !important;
+}
+
+/* Generic drawing-only lines; export injects their per-color CSS rules. */
+.PredefinedType-LINEWORK.drawing-line {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.1 !important;
+    stroke-dasharray: none !important;
+}
+
+.PredefinedType-LINEWORK.drawing-line.dashed {
+    stroke-dasharray: 0.7 0.8 !important;
+}
+
+/* Section waterproofing uses long, heavy dashes; width comes from the annotation. */
+.PredefinedType-LINEWORK.drawing-line.dashed.hydroizolace {
+    stroke-dasharray: 4 1.5 !important;
+    stroke-linecap: butt !important;
+}
+
+/* Clip section soil hatching without outlining its artificial display limits. */
+.PredefinedType-FILLAREA.drawing-fill-pattern-earth-section {
+    stroke: none !important;
+}
+
+/* Inserted immediately behind the four roof-window outline lines. */
+.roof-opening-mask {
+    fill: white !important;
+    stroke: none !important;
+}
+
+/* Rendering postprocessing replaces this full-opening reference with the
+ * white mask polygon. Keep it invisible if the SVG is viewed before that. */
+.PredefinedType-LINEWORK.roof-opening-mask-source {
+    fill: none !important;
+    stroke: none !important;
+}
+
+text.door-dimension,
+tspan.door-dimension {
+    fill: black !important;
+    stroke: none !important;
+    font-size: 2px !important;
+}
+
+.PredefinedType-LINEWORK.door-dimension-separator {
+    fill: none !important;
+    stroke: black !important;
+    stroke-width: 0.1 !important;
+}
+
+/* Paper-space tables appended to the optional right-side drawing panel. */
+.right-side-panel-background {
+    fill: white;
+    stroke: none;
+}
+
+.right-side-panel-separator,
+.right-panel-table-outline,
+.right-panel-table-grid,
+.material-legend-swatch,
+.timber-schedule-swatch {
+    stroke: black;
+    stroke-width: 0.18;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+}
+
+.right-side-panel-separator,
+.right-panel-table-grid {
+    fill: none;
+}
+
+.right-panel-table-outline {
+    fill: white;
+}
+
+.right-panel-table-title {
+    fill: black;
+    stroke: none;
+    font-size: 5.5px;
+    font-weight: 500;
+}
+
+.notes-bullet,
+.notes-text,
+.material-legend-description,
+.room-legend-heading,
+.room-legend-text,
+.timber-schedule-heading,
+.timber-schedule-text {
+    fill: black;
+    stroke: none;
+    font-size: 3.2px;
+}
+
+.room-legend-heading,
+.timber-schedule-heading {
+    font-weight: 500;
+}
+
+/* Equipment emphasis, limited to this drawing. */
+#product-f555ae24-2713-454a-b894-9aad9daf87fc,
+#product-50dcf96b-207b-4372-8073-5922cf0e84b6,
+#product-20c4dd6c-336f-4986-8182-4b24db8152ab,
+#product-13ca4a06-3960-4eaf-b84d-901c70386fdd,
+#product-07584170-4abb-4287-ae4a-21d9849d62a4,
+#product-35890a5a-d457-4fe4-a28f-2a6dcc40c907,
+#product-4b4d6ef8-f495-4eac-b6ea-9e29950b268b { stroke: #ff8000 !important; stroke-width: 0.25 !important; }
+.furniture-label[class~="GlobalId-3$5k$MDD58vx$GmmyBvxGw"],
+.furniture-label[class~="GlobalId-0F551Hakj0ZenlVZjByWc$"],
+.furniture-label[class~="GlobalId-0hsegdMubBnw77YdxJcF_1"],
+.furniture-label[class~="GlobalId-0AgVMGSyXDZQybNV5fXdls"],
+.furniture-label[class~="GlobalId-0VoqMdBlj4wOQ1iHTlhvq6"],
+.furniture-label[class~="GlobalId-3zUYFdgrLCshsQsO0Dcqud"],
+.furniture-label[class~="GlobalId-2jzSPnkj9Bq9owRKZPvseK"] { fill: #ff8000 !important; }
+.PredefinedType-FILLAREA.heating-connection-arrow { fill: #e82030 !important; stroke: none !important; opacity: 0.40; }

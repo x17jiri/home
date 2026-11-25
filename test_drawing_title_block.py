@@ -88,7 +88,10 @@ class DrawingTitleBlockTests(unittest.TestCase):
             pdf = Path(directory)/"D1.1.3. Půdorys podkroví.pdf"
 
             def export(command, *, check):
+                self.assertEqual(Path(command[1]), pdf.parent / "src" / pdf.with_suffix(".svg").name)
                 root = ET.parse(command[1]).getroot()
+                self.assertEqual(root.get("width"), "297mm")
+                self.assertEqual(root.get("height"), "210mm")
                 self.assertIsNotNone(root.find(f'{SVG_NS}g[@class="drawing-title-block"]'))
                 self.assertIn("D1.1.3", " ".join(root.itertext()))
                 destination = next(value.split("=", 1)[1] for value in command
@@ -100,6 +103,7 @@ class DrawingTitleBlockTests(unittest.TestCase):
                 _export_drawing_pdf(svg, pdf)
             self.assertEqual(svg.read_text(encoding="utf-8"), SVG)
             self.assertEqual(pdf.read_bytes(), b"%PDF-title-block")
+            self.assertTrue((pdf.parent / "src" / pdf.with_suffix(".svg").name).is_file())
 
 
 if __name__ == "__main__":

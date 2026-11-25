@@ -84,11 +84,11 @@ Documentation should follow Decree No. 131/2024 Sb., normally be prepared by aut
 - [ ] Structural technical report (*stavebně konstrukční řešení*).
 - [ ] Basic structural calculation (*základní statický výpočet*), including foundations and the principal load-bearing elements.
 - [ ] Foundation and load-bearing-structure drawings.
-- [ ] Fire safety report (*požárně bezpečnostní řešení, PBŘ*), where required in the prescribed scope.
+- **Externally assigned:** Fire safety report (*požárně bezpečnostní řešení, PBŘ*). Investor will supply it; excluded from the current missing-document list. Incorporate its fire zones into C.3 when available.
 
 ### Energy and building systems
 
-- [ ] Energy performance certificate (*PENB*) and demonstration of compliance with energy requirements.
+- **Externally assigned:** Energy performance certificate (*PENB*) and demonstration of compliance with energy requirements. Investor will supply it; excluded from the current missing-document list.
 - [ ] Thermal assessment and construction build-ups.
 - [ ] Water supply and internal plumbing concept.
 - [ ] Foul-water drainage concept.

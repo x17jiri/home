@@ -88,6 +88,12 @@ It creates both `house_plan.svg` and `house_plan.png`.
 ## Alternative house
 
 `house2.py` is an independent model using the shared `ifc_utils` helpers.
+Run `.venv-pdf/bin/python house2.py C` (capital `C`) to regenerate every drawing
+in `projekt2/C. Situační výkresy/`: C.1–C.2, C.3 and C.4-01. The situation plan
+is generated before the overview sheet that reads it. The PDF virtual environment
+includes the mapping dependencies needed by these drawings. Individual targets
+such as `python house2.py ground upper` continue to select only those drawings.
+
 Its `Basement` storey duplicates the selected `basement_source_walls`, including
 partitions, as solid `ztracene bedneni` walls. Every basement wall and the
 formwork sections below the base plate use the same 300 mm white-hatched
@@ -273,13 +279,13 @@ backfill replaces the natural-soil hatch there and uses the existing
 "Zhutněná zemina" material entry.
 
 Run `python3 house2.py basement found` to generate the basement and foundation
-plans. Their PDFs are `D1.1.9. Půdorys suterénu.pdf` (`PDF_BASEMENT`) and
-`D1.1.10. Základy.pdf` (`PDF_FOUND`) in the architectural folder; SVGs are
+plans. Their PDFs are `D.1.1.2-01. Půdorys 1.PP.pdf` (`PDF_BASEMENT`) and
+`D.2.3-01. Základy – půdorys a řez Z–Z.pdf` (`PDF_FOUND`) in the architectural folder; SVGs are
 `projekt2/basement.svg` and `projekt2/found.svg`. The basement cut passes
 through the middle of the basement walls.
 Run `python3 house2.py basement_ceiling` for the separate basement-ceiling
 plan, `projekt2/basement_ceiling.svg`, and
-`D1.1.13. Strop nad suterénem.pdf` (`PDF_BASEMENT_CEILING`). This simplified
+`D.2.3-02. Strop nad 1.PP.pdf` (`PDF_BASEMENT_CEILING`). This simplified
 layout shows thin solid black load-bearing wall outlines and
 one red dash-dot centreline for each beam (half the roof-rafter dash and gap lengths),
 centre-to-centre spacing dimensions at midspan, and bearing dimensions
@@ -298,7 +304,7 @@ that length. A room with different beam lengths contributes to separate rows.
 This keeps all four ceiling schedules in sync when wall positions change.
 The previous detailed format is preserved as `basement_ceiling2`:
 `python3 house2.py basement_ceiling2` produces `projekt2/basement_ceiling2.svg`
-and `D1.1.14. Strop nad suterénem - podrobný plán.pdf`
+and `D.2.3-03. Strop nad 1.PP – kladečský plán MIAKO.pdf`
 (`PDF_BASEMENT_CEILING2`). It keeps the modelled MIAKO blocks, beams, ring
 beams, perimeter insulation, dimensions, schedule, notes and AA/BB markers.
 Both targets can be generated in one command. The existing `ceiling` target
@@ -447,7 +453,7 @@ footings through the roof. AA cuts at `Y = HOUSE_DEPTH/2 - 0.2` and looks
 towards -Y; BB cuts at `X = HOUSE_WIDTH/2 + 0.35` and looks towards +X. Their shared
 `CutDefinition` instances also place matching symbols on the ground, upper,
 ceiling, roof, basement and foundation plans. PDFs are
-`D1.1.11. Řez AA.pdf` (`PDF_AA`) and `D1.1.12. Řez BB.pdf` (`PDF_BB`)
+`D.1.1.2-04. Řez A–A.pdf` (`PDF_AA`) and `D.1.1.2-05. Řez B–B.pdf` (`PDF_BB`)
 in the architectural folder, with SVGs in `projekt2/aa.svg` and
 `projekt2/bb.svg`. Regenerate the corresponding plans to update their symbols.
 
@@ -455,7 +461,7 @@ Run `python3 house2.py cc` for the additional longitudinal section at `cc_cut`,
 currently `X = HOUSE_WIDTH - 1.0`, looking towards -X. It shares BB's dimensions,
 labels and cut-rafter insulation, but omits the horizontal ceiling batting near
 the ridge because the roof hides it in this view. The outputs are
-`projekt2/cc.svg` and `D1.1.16. Řez CC.pdf` (`PDF_CC`). Its C markers are included
+`projekt2/cc.svg` and `D.1.1.2-06. Řez C–C.pdf` (`PDF_CC`). Its C markers are included
 when the corresponding plans are next regenerated.
 
 All exterior finishes belong to the separate `Facades` visibility storey.
@@ -508,9 +514,9 @@ east/west X overhang from the outside structural walls, while
 
 Run `python3 house2.py pohledy` for all four exterior views on one A3 landscape
 sheet at 1:130. `projekt2/pohledy.svg` and the architectural folder's
-`D1.1.5. Pohledy.pdf` replace the four separate elevation PDFs. Both house
-scripts share `pdf_utils.PDFFolder` for automatic numbering; the three former
-view numbers are reserved so subsequent plans keep their existing names.
+`D.1.1.2-07. Pohledy.pdf` replace the four separate elevation PDFs. The new
+house uses stable document identifiers from `project_documents.py`; the old
+house keeps its original `pdf_utils.PDFFolder` numbering.
 `POHLEDY_SCALE` sets
 the shared scale denominator; each view has its own title and scale label.
 The four `pohledy_sheet.add(...)` placements use normalized centre coordinates
@@ -521,9 +527,10 @@ facades, closes doors for rendering, and suppresses plan annotations.
 Run `python house2.py sousede` for a separate A3 landscape comparison at 1:150,
 looking perpendicular to the proposed house's front façade. It renders only
 one new elevation and writes `projekt2/sousede.svg` and
-`D1.1.18. Porovnání se sousední zástavbou.pdf` in the architectural folder.
-`neighbour_comparison.py` sets the approximate neighbour widths (10 m left,
-7 m right) and the reference corners in the two editable neighbour SVGs.
+`D.1.1.2-08. Začlenění stavby do okolní zástavby.pdf` in the architectural folder.
+`neighbour_comparison.py` sets the neighbour widths (16.8 m overall on the left,
+including the open carport, and approximately 7 m on the right) and the
+reference corners in the two editable neighbour SVGs.
 The left house's bottom right corner is anchored at survey point 94, with
 its ridge 9 m above that point; the right house's bottom left corner is at
 point 13, with its ridge at 422.87 m Bpv. Positions are projected onto the
@@ -924,14 +931,15 @@ the right panel is 60 mm wide to keep the extra column readable.
 
 Run `python3 house2.py` to export `house2.ifc`. Run
 `python3 house2.py ground` to also render `projekt2/ground.svg` and
-`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.1. Půdorys 1.NP.pdf`
-(A4 landscape, 1:100), matching the original project's PDF directory structure.
+`projekt2/D.1.1. Architektonicko-stavební řešení/D.1.1.2-02. Půdorys 1.NP.pdf`
+(A4 landscape, 1:100).
 Run `python3 house2.py kanal` for the drainage schematic and three plans, or select
 `kanal_basement`, `kanal_ground`, and `kanal_upper` individually. Their numbered
-PDFs use a separate `PDFFolder("D1.5.", ...)` in
-`projekt2/D1.5. Zdravotechnické Instalace`: basement 1, ground 2, upper 3.
+PDFs use the stable `D.1.2.2-ZTI-xx` document catalog in
+`projekt2/D.1.2. Technologické řešení/ZTI. Zdravotně technické instalace`:
+basement 01, ground 02, upper 03, schematic 04, followed by water plans 05–07.
 `python3 house2.py kanal_schematic` creates the schematic,
-`projekt2/kanal.svg` and `D1.5.4. Kanalizace.pdf`. Its black horizontal lines
+`projekt2/kanal.svg` and `D.1.2.2-ZTI-04. Kanalizace – rozvinuté schéma.pdf`. Its black horizontal lines
 mark the finished floors and ceilings of the basement, ground floor and attic,
 plus the roof-tile top at the ridge. Floor and roof labels show millimetres
 relative to the finished ground floor; the attic ceiling line follows its
@@ -997,7 +1005,7 @@ above uses the up-right (`to up`) symbol: it shows continuation, not water flow.
 Routes are drawing annotations; they do not create physical pipes or openings.
 Run `python3 house2.py voda_ground` for the ground-floor water plan,
 `projekt2/voda_ground.svg` and
-`projekt2/D1.5. Zdravotechnické Instalace/D1.5.5. Vodovod - Půdorys 1.NP.pdf`.
+`projekt2/D.1.2. Technologické řešení/ZTI. Zdravotně technické instalace/D.1.2.2-ZTI-06. Vodovod – půdorys 1.NP.pdf`.
 The blue cold-water route follows the bathroom's bottom and right walls,
 100 mm inside their room-facing surfaces, from bottom left via bottom right
 to top right. Black floor-change symbols mark the basement supply 500 mm along
@@ -1009,7 +1017,7 @@ keeping their arrows separate. Hot water has only a `to up` symbol, with no
 basement supply symbol. The plan includes room labels, furniture, a room legend
 and a hot/cold-water line legend.
 Run `python3 house2.py voda_upper` for `projekt2/voda_upper.svg` and
-`projekt2/D1.5. Zdravotechnické Instalace/D1.5.6. Vodovod - Půdorys podkroví.pdf`.
+`projekt2/D.1.2. Technologické řešení/ZTI. Zdravotně technické instalace/D.1.2.2-ZTI-07. Vodovod – půdorys 2.NP.pdf`.
 Both supplies are received from below at the shared `water_riser_positions()`
 coordinates. Red and blue branches run right then up to the hallway basin,
 and left then up to the kitchen sink. A cold-water-only branch runs directly
@@ -1017,7 +1025,7 @@ from that shared horizontal supply through the bathroom's street-side wall,
 using the same post-clearing connection as its sewer branch. Routes follow the modelled fixture
 centres, with 100 mm separation between hot and cold lines.
 Run `python3 house2.py voda_basement` for `projekt2/voda_basement.svg` and
-`projekt2/D1.5. Zdravotechnické Instalace/D1.5.7. Vodovod - Půdorys suterénu.pdf`.
+`projekt2/D.1.2. Technologické řešení/ZTI. Zdravotně technické instalace/D.1.2.2-ZTI-05. Vodovod – půdorys 1.PP.pdf`.
 The blue supply is received from below at the bottom-right corner of S.04,
 continues 500 mm along positive Y, then rises to the ground floor. The route
 aligns with the ground-floor cold-water line; `water_basement_layout()` shares
@@ -1026,7 +1034,7 @@ walls leave 70 mm between the route and their inner faces. `voda` generates
 all three floor plans.
 Run `python3 house2.py vetrani_ground` for the ground-floor
 ventilation plan, `projekt2/vetrani_ground.svg` and
-`projekt2/D1.6. Řízené Větrání/D1.6.1. Řízené větrání - Půdorys 1.NP.pdf`.
+`projekt2/D.1.2. Technologické řešení/VZT. Vzduchotechnika/D.1.2.2-VZT-01. Řízené větrání – půdorys 1.NP.pdf`.
 Its symbol legend has a red dot with four inward arrows (`ventilation_extract`,
 Odvod vzduchu) and a blue dot with four outward arrows (`ventilation_supply`,
 Přívod vzduchu). Both are supported by `Drawing.add_symbol_legend()`.
@@ -1036,16 +1044,26 @@ of the garden wall and their shared partition, each labelled `+40`.
 Room 0.03 has a `+40` supply in its top-right (narrow-part) corner; the
 bathroom has a red `-60` extraction in its top-left corner, clear of the FCU.
 Run `python3 house2.py vetrani_upper` for `projekt2/vetrani_upper.svg` and
-`projekt2/D1.6. Řízené Větrání/D1.6.2. Řízené větrání - Půdorys podkroví.pdf`.
+`projekt2/D.1.2. Technologické řešení/VZT. Vzduchotechnika/D.1.2.2-VZT-02. Řízené větrání – půdorys 2.NP.pdf`.
 The upper plan has two `-40` extractions along the front wall, three `+40`
 supplies on the garden side of the middle VPC wall, `-60` above the washing
 machine and `-40` in the bathroom. The combined design totals are 240 supply
 and 240 extraction (ground: 120/60; upper: 120/180).
 `vetrani` generates both ventilation plans.
 
+Check their supply flows against room volumes with
+`.venv-pdf/bin/python ventilation_airflow.py 0.01=40 0.02=40 0.03=40 1.01=120`.
+The checker reads the room-floor polygons from `house2.ifc` and finished ceiling
+levels from `house2.py`; it rejects an IFC older than the source. Upstairs volume
+is integrated under both sloping SDK faces and the flat ceiling. Results include
+area, volume, the required flow at 0.5 air changes/hour and the achieved rate.
+Supply flows are explicit inputs; the checker does not change drawing labels.
+The current results are recorded in section 3.4 of the VZT report. Re-run the
+check and update the report when the room geometry or flows change.
+
 Run `python3 house2.py vytapeni_ground` for the ground-floor
 heating plan, `projekt2/vytapeni_ground.svg` and
-`projekt2/D1.7. Vytápění/D1.7.1. Vytápění - Půdorys 1.NP.pdf`.
+`projekt2/D.1.2. Technologické řešení/VYT. Vytápění a chlazení/D.1.2.2-VYT-01. Vytápění a chlazení – půdorys 1.NP.pdf`.
 It starts with the same bare-wall service plan, room labels and room legend,
 including the existing fan coils and other furniture.
 The outdoor heat pump is explicitly included from the basement storey.
@@ -1059,7 +1077,7 @@ control points; these drawing annotations do not add physical pipework.
 Two matching arrows connect the heat pump to the hydrobox and the hydrobox
 to TUV, with the latter bowing toward the stairway before returning to the tank.
 Run `python3 house2.py vytapeni_upper` for `projekt2/vytapeni_upper.svg` and
-`projekt2/D1.7. Vytápění/D1.7.2. Vytápění - Půdorys podkroví.pdf`.
+`projekt2/D.1.2. Technologické řešení/VYT. Vytápění a chlazení/D.1.2.2-VYT-02. Vytápění a chlazení – půdorys 2.NP.pdf`.
 The upper FCU is orange between the garden windows. A schematic arrow starts
 at the downstairs hydrobox's XY position. An orange dashed outline labelled
 `Hydrobox (1.NP)` shows the projected equipment at the arrow's start without
@@ -1069,8 +1087,8 @@ Run `python3 house2.py elektro` for all three electrical plans and the
 distribution-board schematic, or select
 `elektro_ground`, `elektro_upper`, and `elektro_basement` individually.
 Their SVGs are in `projekt2/`; PDFs use
-`projekt2/D1.4. Zařízení Silnoproudé Elektrotechniky/`, numbered ground 1,
-upper 2 and basement 3. Blue circle-with-X light symbols sit near room/area
+`projekt2/D.1.2. Technologické řešení/ELE. Elektroinstalace/`, numbered basement 01,
+ground 02, upper 03 and distribution board 04. Blue circle-with-X light symbols sit near room/area
 centroids, nudged to maintain 250 mm clearance from the room boundary where
 needed. Room IDs are offset from the lights, and the symbol legend uses
 the original electrical plans' `Světlo` sample. All three electrical plans
@@ -1083,7 +1101,7 @@ shown for context. The ground-floor plan adds an outside landing light 250 mm
 from the finished west facade, aligned in Y with the entrance opening's centre.
 The plans contain 5 basement, 6 ground-floor and 5 upper-floor lights.
 Run `python3 house2.py rozvadec` to generate only `projekt2/rozvadec.svg` and
-`D1.4.4. Rozvaděč - jednopólové schéma.pdf` in the electrical folder.
+`D.1.2.2-ELE-04. Rozvaděč – jednopólové schéma.pdf` in the electrical folder.
 The A2 landscape sheet has an incoming supply, main switch, surge protector,
 HEP and earthing section, followed by 28 circuit columns grouped by floor
 (12 ground/shared, 7 upper and 9 basement/garden). The shared stair-light
@@ -1310,14 +1328,14 @@ All native light, switch and socket symbols are painted in a final electrical
 symbol layer above model geometry, opening masks and cable routes, so complete
 symbols remain visible in every electrical plan.
 Run `python3 house2.py ceiling` for `projekt2/ceiling.svg` and
-`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.2. Strop nad 1.NP.pdf`.
+`projekt2/D.2. Základní stavebně konstrukční řešení/D.2.3-04. Strop nad 1.NP.pdf`.
 The `ceiling` plan has thin solid wall outlines, red dash-dot beam axes,
 spacing, end-bearing and wall-offset dimensions, a beam schedule and the
 optional green purlin-post planning markers. Its bearing dimensions use the
 actual ground-floor wall faces, which differ from the cloned basement offsets.
 Run `python3 house2.py ceiling2` for the separate detailed model view,
 `projekt2/ceiling2.svg`, and
-`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.15. Strop nad 1.NP - podrobný plán.pdf`
+`projekt2/D.2. Základní stavebně konstrukční řešení/D.2.3-05. Strop nad 1.NP – kladečský plán MIAKO.pdf`
 (`PDF_CEILING2`). It has the independent upper schedule, notes, facade wool,
 ring beams, chimney and AA/BB symbols. Generate both with
 `python3 house2.py ceiling ceiling2`; the basement targets remain separate.
@@ -1626,7 +1644,7 @@ The ground-floor plan also projects the upstairs stove as a green outline
 labelled `Kamna` under this same switch. Its footprint follows the stove's
 actual placement and rotation without adding a second stove to the model.
 Run `python3 house2.py roof` for the roof framing plan (`projekt2/roof.svg`)
-and `projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.4. Krov.pdf`.
+and `projekt2/D.2. Základní stavebně konstrukční řešení/D.2.3-06. Krov.pdf`.
 The roof PDF is an A3 portrait sheet: the framing plan with its schedule above
 and sections XX and YY below, all at 1:100. `roof_xx_cut` is fixed at `Y = 4.00 m`,
 looking toward −Y; it does not depend on AA's position. `roof_yy_cut` runs along
@@ -1671,7 +1689,7 @@ green `#c8e6c9`. The schedule uses the same colours. Gutters remain in the 3D
 model and exterior views. Use `ground ceiling upper roof` to
 generate all four drawing targets in one run.
 Run `python3 house2.py upper` to create `projekt2/upper.svg` and
-`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.3. Půdorys podkroví.pdf`.
+`projekt2/D.1.1. Architektonicko-stavební řešení/D.1.1.2-03. Půdorys 2.NP – podkroví.pdf`.
 Use `python3 house2.py ground ceiling upper` to generate all three plans.
 
 ## IFC wall types and material layers
@@ -3009,6 +3027,26 @@ on each render, including when the drawing no longer contains dimensions.
 
 ### Multiple drawings on one sheet
 
+New-house document numbers and output paths are defined in
+`project_documents.py`, independently of the order in which drawings render.
+Architectural sheets use `D.1.1.2-xx`, structural sheets `D.2.3-xx`, and
+services `D.1.2.2-{ZTI,ELE,VZT,VYT}-xx`. Services are grouped under
+`projekt2/D.1.2. Technologické řešení/`; situations use
+`projekt2/C. Situační výkresy/` with C.1-C.2, C.3 and C.4-01 identifiers.
+`projekt2/seznam_vykresu.json` lists the current PDF/SVG paths and former names.
+`python reorganize_project.py` migrates a legacy set using its cached SVGs,
+updates headings and title blocks, and exports PDFs without running Blender.
+It creates a ZIP backup in `/tmp` before modifying files. The old-house
+generator retains its original naming scheme.
+
+The B and ZTI reports also have editable `.md` sources beside their original
+`.docx` files. Edit the Markdown for subsequent report work; the Word originals
+are retained as conversion references and are not synchronized automatically.
+The conversion preserves body text, tables and images, simplifies merged cells,
+and removes the old page-numbered contents. ZTI's WMF equation also has an SVG
+copy under `assets/zti-report/media/`. Technical corrections remain in `TODO.md`;
+the shared report layout and generated contents still need to be finalized.
+
 Set `house.add_drawing(..., scale=200)` to render a drawing at 1:200;
 the default denominator is 100. Sheet composition preserves that scale and
 the physical text sizes and line widths.
@@ -3044,6 +3082,18 @@ exports. Sheet SVGs remain vector drawings, with separately scoped styles,
 marker/pattern IDs and references for each view. `house.write(...)` must precede
 rendering, just as with standalone drawings. Old separate-cut PDF files are not
 automatically deleted.
+
+Every SVG-based PDF export also saves the complete editable paper sheet in
+`src/` inside the PDF's folder, with the same basename. For example,
+`projekt2/D.1.1. Architektonicko-stavební řešení/D.1.1.2-02. Půdorys 1.NP.pdf`
+has source `projekt2/D.1.1. Architektonicko-stavební řešení/src/D.1.1.2-02. Půdorys 1.NP.svg`.
+This version includes the paper size, drawing placement and title block used
+for the PDF. Original working SVGs and drawing caches keep their existing
+paths. Relative resource links are adjusted for the new source location.
+The same convention applies to the cadastral and neighbour-comparison sheets.
+To export an edited source without rerendering the model, run
+`inkscape 'path/to/src/Drawing.svg' --export-type=pdf --export-area-page --export-filename='path/to/Drawing.pdf'`.
+Generating that drawing again replaces its saved SVG and PDF.
 
 ### Drainage schematic
 
@@ -3348,7 +3398,7 @@ The shading-clearance diagram is generated independently of Bonsai with:
 ```
 
 It writes `projekt2/zastineni.svg` and
-`projekt2/D1.1. Architektonicko Stavební Řešení/D1.1.17. Zastínění sousedního RD.pdf`.
+`projekt2/C. Situační výkresy/C.4-01. Posouzení odstupového úhlu stínění.pdf`.
 `.venv-pdf/bin/python house2.py zastineni` selects the same drawing through the house generator.
 The A3 landscape cadastral plan at 1:250 follows the current
 `survey_points.HOUSE_PLACEMENT`. The house has a thick black outline. The
@@ -3362,26 +3412,28 @@ maxima checked analytically. The supplied compliance note is included verbatim.
 If the current geometry reaches 45°, generation stops rather than publishing
 that note with an inconsistent result. The shared project title block is included.
 
-The companion C1.1 sheet is generated with:
+The companion C.1-C.2 sheet is generated with:
 
 ```sh
 .venv-pdf/bin/python cadastral_overview.py
 ```
 
 It writes `projekt2/situace_prehled.svg` and
-`projekt2/C. Situace Stavby/C1.1. Přehledová a katastrální mapa.pdf`.
+`projekt2/C. Situační výkresy/C.1-C.2. Přehledová a katastrální situace.pdf`.
 The A3 landscape sheet places `lokalizace.jpg` on the left and a north-up
-cadastral map at 1:1000 on the right. Only parcels 105, 106/1 and 103/2 are
-highlighted, with an arrow labelled **Zájmové území**. The map uses the frame
-and centre saved in `projekt2/situace.svg`; it omits the proposed house,
-survey points, site surfaces and utilities. The shared project title block
+cadastral map at 1:1000 on the right. Parcels 105, 106/1 and 103/2 are
+highlighted, with an arrow labelled **Zájmové území**. The proposed house,
+existing utility networks, NN supply from the pillar at survey point 14,
+and the existing entrances are also shown. The map uses the frame and centre
+saved in `projekt2/situace.svg`; detailed surfaces, levels and setbacks are
+shown on C.3. The shared project title block
 is included. `--image`, `--source-map`, `--cadastre`, `--output` and `--pdf`
 override the default inputs and outputs.
 
 `cadastral_situation.py` draws the cadastral neighbourhood around the surveyed
 points, independently of the IFC model and Bonsai. The default outputs are
 `projekt2/situace.svg` and
-`projekt2/C Situace Stavby/C1.2 Koordinační Situace.pdf`.
+`projekt2/C. Situační výkresy/C.3. Koordinační situační výkres.pdf`.
 
 Install the mapping dependencies from `requirements-situation.txt` in your
 Python environment. In the existing PDF environment, regenerate with:
@@ -3390,10 +3442,22 @@ Python environment. In the existing PDF environment, regenerate with:
 .venv-pdf/bin/python cadastral_situation.py
 ```
 
-The A3 landscape sheet uses scale 1:500 and covers 153 × 128.5 m, centred on
-the extent of `points.txt`. Edit that file to change the survey overlay;
-`--scale 1000` increases the surrounding area. `--cadastre`, `--points`,
-`--output` and `--pdf` override the input and output paths.
+The A3 landscape sheet uses scale 1:200 and covers 61.2 × 51.4 m, centred on
+the investor's parcels 105, 106/1 and 103/2. Distant survey points are clipped
+to this local viewport; the wider context stays on C.1-C.2. `--cadastre`,
+`--points`, `--output` and `--pdf` override the input and output paths.
+`site_plan_annotations.py` reads facade dimensions, floor datum, roof/chimney
+heights and design terrain levels directly from the current arithmetic model
+inputs. It adds facade corner coordinates, footprint dimensions, minimum
+setbacks to cadastral boundaries and clearance to the surveyed retaining wall.
+The neighbour dimensions include the clearance at the garden corner and at
+the street corner B. Survey points 142 and 143 identify the cadastral edge
+of forest parcel 806/16 used for the forest distance.
+The existing building is marked for removal under its separate permit. The
+site/working boundary stays within the three owned parcels, the entrances are
+retained, and the NN connection from point 14 is schematic. The ČOV and rainwater
+design are explicitly deferred. PBŘ and PENB are externally assigned; fire zones
+will be coordinated from the separately supplied PBŘ rather than invented here.
 
 Parcel boundaries, parcel labels, building footprints and house numbers come
 from the SHP/DBF layers in `katastr/679453`. Additional cadastral linework is

@@ -6080,6 +6080,8 @@ def _export_drawing_pdf(
     margin: Number = 10,
     inkscape: str | PathLike[str] = "inkscape",
 ) -> None:
+    from pdf_utils import save_drawing_svg
+
     pdf_path, width, height, margin = _drawing_pdf_options(pdf, paper, orientation, margin)
     assert pdf_path is not None
     sheet = _drawing_pdf_sheet(
@@ -6090,22 +6092,18 @@ def _export_drawing_pdf(
     if inkscape_command is None:
         raise FileNotFoundError(f"Inkscape executable not found: {inkscape}")
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    # Keep the sheet beside the source so relative SVG asset links still work.
+    sheet_path = save_drawing_svg(svg_path, pdf_path, svg=sheet)
     # Replace an existing PDF only after a successful, nonempty export.
-    with NamedTemporaryFile(mode="w", suffix=".svg", prefix=".pdf-sheet-",
-                            dir=svg_path.parent, encoding="utf-8") as temporary_svg:
-        temporary_svg.write(sheet)
-        temporary_svg.flush()
-        with TemporaryDirectory(prefix=f".{pdf_path.stem}-pdf-", dir=pdf_path.parent) as directory:
-            temporary_pdf = Path(directory) / pdf_path.name
-            subprocess.run([
-                inkscape_command, temporary_svg.name,
-                f"--export-filename={temporary_pdf}", "--export-type=pdf",
-                "--export-area-page", "--batch-process",
-            ], check=True)
-            if not temporary_pdf.is_file() or temporary_pdf.stat().st_size == 0:
-                raise RuntimeError(f"Inkscape did not create the PDF drawing: {pdf_path}")
-            temporary_pdf.replace(pdf_path)
+    with TemporaryDirectory(prefix=f".{pdf_path.stem}-pdf-", dir=pdf_path.parent) as directory:
+        temporary_pdf = Path(directory) / pdf_path.name
+        subprocess.run([
+            inkscape_command, str(sheet_path),
+            f"--export-filename={temporary_pdf}", "--export-type=pdf",
+            "--export-area-page", "--batch-process",
+        ], check=True)
+        if not temporary_pdf.is_file() or temporary_pdf.stat().st_size == 0:
+            raise RuntimeError(f"Inkscape did not create the PDF drawing: {pdf_path}")
+        temporary_pdf.replace(pdf_path)
     print(f"[drawing render] Inkscape PDF created: {pdf_path} "
           f"({paper} {orientation}, scale preserved)", flush=True)
 
@@ -15620,6 +15618,8 @@ class Drawing:
         A title_block.json beside the output SVG adds a project title block
         to the PDF; compact plans move left to leave space for it, using a
         5 mm left margin. The SVG's own geometry and layout remain unchanged.
+        The complete paper sheet is also saved beside the PDF in
+        ``src/<PDF filename stem>.svg`` and used for the PDF export.
         A compact title is added to SVG, PNG and PDF. If omitted, use the PDF
         filename stem (or SVG filename stem when pdf=None). The title adds a
         10 mm header without rescaling geometry and appends the drawing scale,

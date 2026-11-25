@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="350mm" height="232mm" viewBox="-350 -210 1750 1160">
+  <title>Sousední dům – schematický pohled</title>
+  <desc>Approximate front elevation interpreted from the supplied oblique photographs, including the open carport under the extended left roof. Unscaled black vector outlines; dimensions and hidden geometry have not been surveyed.</desc>
+  <metadata>{"drawing":"neighbour-house-elevation","units":"schematic","scale":"not measured","source":"user-supplied photograph","view":"approximate front elevation"}</metadata>
+  <style>
+    .outline{fill:white;stroke:#000;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+    .detail{fill:none;stroke:#000;stroke-width:1;stroke-linejoin:round;stroke-linecap:round}
+    .fine{fill:none;stroke:#000;stroke-width:.75;stroke-linejoin:round;stroke-linecap:round}
+  </style>
+
+  <!-- Main façade; basement and principal storey. -->
+  <g id="main-facade">
+    <path class="outline" d="M460 264H1270V825H460Z"/>
+    <path class="detail" d="M460 610H1270"/>
+  </g>
+
+  <!-- Simplified visible main roof plane and its dormer. -->
+  <g id="main-roof">
+    <path class="outline" d="M432 -60H1288L1300 248H442Z"/>
+    <path class="outline" d="M442 248H1300V261H442Z"/>
+    <path class="fine" d="M443 251H1298"/>
+  </g>
+  <g id="metal-flue" transform="translate(0 -210)">
+    <path class="outline" d="M456 150V63H469V150"/>
+    <rect class="outline" x="454" y="54" width="17" height="10"/>
+    <path class="fine" d="M463 64V148"/>
+  </g>
+  <g id="rear-chimney" transform="translate(0 -210)">
+    <path class="outline" d="M798 174V112H844V180"/>
+    <path class="detail" d="M795 112H847V106H795Z"/>
+  </g>
+  <g id="dormer">
+    <path class="outline" d="M943 239V80H1159V245Z"/>
+    <path class="outline" d="M935 74H1167V82H935Z"/>
+    <g id="dormer-window">
+      <rect class="outline" x="964" y="126" width="173" height="105"/>
+      <rect class="fine" x="970" y="132" width="161" height="93"/>
+      <path class="fine" d="M1050.5 132V225"/>
+      <path class="detail" d="M958 233H1143"/>
+    </g>
+  </g>
+
+  <!-- Open carport to the left of the enclosed wing. Its roof continues the
+       wing's existing slope. The left support is the overall façade edge. -->
+  <g id="carport">
+    <path id="carport-opening" class="outline" d="M-240 532.6L113 393V825H-240Z"/>
+    <path id="carport-left-wall" class="outline" d="M-260 540.5L-240 532.6V825H-260Z"/>
+  </g>
+
+  <!-- Lower left wing; one continuous roof covers this wing and the carport. -->
+  <g id="left-wing">
+    <path class="outline" d="M113 390L460 255V825H113Z"/>
+    <path class="detail" d="M113 610H460"/>
+    <g id="left-wing-roof">
+      <path class="outline" d="M-300 537.343284L472 232V251L-300 556.343284Z"/>
+      <path class="fine" d="M-297 547.343284L470 244"/>
+    </g>
+    <g id="left-wing-window">
+      <rect class="outline" x="237" y="407" width="174" height="119"/>
+      <rect class="fine" x="244" y="414" width="160" height="105"/>
+      <path class="fine" d="M324 414V519"/>
+      <path class="detail" d="M231 528H417"/>
+    </g>
+    <g id="left-basement-door">
+      <rect class="outline" x="243" y="633" width="105" height="192"/>
+      <rect class="fine" x="250" y="640" width="91" height="185"/>
+      <path class="fine" d="M328 733H338"/>
+    </g>
+  </g>
+
+  <!-- Openings behind the entrance canopy. -->
+  <g id="main-left-window">
+    <rect class="outline" x="595" y="432" width="104" height="126"/>
+    <rect class="fine" x="601" y="438" width="92" height="114"/>
+    <path class="detail" d="M590 560H704"/>
+  </g>
+  <g id="main-entrance-door">
+    <rect class="outline" x="824" y="419" width="91" height="191"/>
+    <rect class="fine" x="830" y="425" width="79" height="185"/>
+    <path class="fine" d="M838 501H849"/>
+  </g>
+  <g id="main-right-window">
+    <rect class="outline" x="1112" y="439" width="124" height="121"/>
+    <rect class="fine" x="1118" y="445" width="112" height="109"/>
+    <path class="fine" d="M1174 445V554"/>
+    <path class="detail" d="M1106 562H1242"/>
+  </g>
+  <g id="right-basement-door">
+    <rect class="outline" x="1139" y="699" width="75" height="126"/>
+    <path class="fine" d="M1145 825V705H1208V825"/>
+  </g>
+
+  <!-- Raised entrance landing, solid stair-side wall and simple balustrade. -->
+  <g id="entrance-stair-and-landing">
+    <path class="outline" d="M487 825L820 610H1069V825Z"/>
+    <path class="outline" d="M487 725L820 510H1069V610H820L487 825Z"/>
+    <path class="detail" d="M487 716L820 501H1069"/>
+    <path class="fine" d="M820 510V610"/>
+    <path class="fine" d="M1062 501V610"/>
+    <path class="fine" d="M1069 610H1076"/>
+  </g>
+
+  <!-- Timber canopy: four posts, fascia and the two visible diagonal braces. -->
+  <g id="entrance-canopy">
+    <path class="outline" d="M459 350H476V825H459Z"/>
+    <path class="outline" d="M720 350H735V565L720 575Z"/>
+    <path class="outline" d="M941 350H956V510H941Z"/>
+    <path class="outline" d="M1052 350H1069V510H1052Z"/>
+    <path class="outline" d="M476 435L560 350H578L476 453Z"/>
+    <path class="outline" d="M957 350H975L1052 428V446Z"/>
+    <path class="outline" d="M444 330H1094L1084 350H444Z"/>
+    <path class="outline" d="M441 350H1084V365H441Z"/>
+    <path class="fine" d="M446 354H1081"/>
+  </g>
+
+  <!-- Roof rainwater pipes, represented only by their visible outer lines. -->
+  <g id="rainwater-pipes" class="detail">
+    <path d="M1271 261V397L1259 420V825 M1280 261V400L1268 423V825"/>
+    <path d="M1080 365V403L1058 453 M1088 365V405L1066 457"/>
+  </g>
+  <path id="ground-line" class="detail" d="M-280 825H1290"/>
+</svg>

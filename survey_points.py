@@ -22,6 +22,8 @@ from pathlib import Path
 import re
 from tempfile import gettempdir
 
+from pdf_utils import save_drawing_svg
+
 
 @dataclass(frozen=True)
 class SurveyPoint:
@@ -836,6 +838,8 @@ def render_survey_points(
             tooltip += "; uzavřeno"
         svg = svg.replace(opening, opening+f"<title>{escape(tooltip)}</title>")
     output.write_text(svg, encoding="utf-8")
+    if pdf is not None:
+        save_drawing_svg(output, pdf)
     print(f"Survey: {len(points)} points, Y span {np.ptp([p.y for p in points]):.2f} m, "
           f"X span {np.ptp([p.x for p in points]):.2f} m, Z {min(p.z for p in points):.2f}–{max(p.z for p in points):.2f} m Bpv")
     print(f"Survey drawing: {output} ({paper} {orientation}, 1:{scale:g})")
