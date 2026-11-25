@@ -496,6 +496,7 @@ PDF_BASEMENT_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad suterénem - podrobn�
 PDF_CEILING2 = Path(PDF_FOLDER.add_pdf("Strop nad 1.NP - podrobný plán"))
 PDF_CC = Path(PDF_FOLDER.add_pdf("Řez CC"))
 PDF_ZASTINENI = Path(PDF_FOLDER.add_pdf("Zastínění sousedního RD"))
+PDF_SOUSEDI = Path(PDF_FOLDER.add_pdf("Porovnání se sousední zástavbou"))
 DIR_ZDRAVOTECHNICKE_INSTALACE = PROJECT_DIR / "D1.5. Zdravotechnické Instalace"
 PDF_KANAL_FOLDER = PDFFolder("D1.5.", DIR_ZDRAVOTECHNICKE_INSTALACE)
 PDF_KANAL_BASEMENT = Path(PDF_KANAL_FOLDER.add_pdf("Kanalizace - Půdorys suterénu"))
@@ -6715,7 +6716,8 @@ def add_heat_pump_front_symbol(drawing):
         )
 
 
-def add_exterior_view(name, camera, direction):
+def add_exterior_view(name, camera, direction, *, drawing_name=None,
+                      scale=POHLEDY_SCALE, street_uphill_endpoint=None):
     """Create a complete elevation for the shared exterior-view sheet."""
     view_top = max(roof_tiles_top_z, chimney.storey.elevation+chimney.end_height)
     terrain_profile = list(TERRAIN_PROFILES[name])
@@ -6764,6 +6766,8 @@ def add_exterior_view(name, camera, direction):
         uphill_end_elevation = STREET_STONE_WALL_TOP_ELEVATION+math.tan(
             math.radians(STREET_STONE_WALL_TERRAIN_SLOPE_DEGREES)
         )*STREET_STONE_WALL_TERRAIN_LENGTH
+        if street_uphill_endpoint is not None:
+            uphill_end_x, uphill_end_elevation = street_uphill_endpoint
         # Both access pockets follow the construction openings, including the
         # clearance around the pedestrian door's narrower leaf.
         street_access_ranges = []
@@ -6818,13 +6822,13 @@ def add_exterior_view(name, camera, direction):
     view_bottom = (east_wall_bottom_z if name == "pohled_vychod"
                    else min(earth_to_z(height) for _, height in terrain_profile)-.4)
     drawing = house.add_drawing(
-        name, x=camera[0], y=camera[1], z=(view_bottom+view_top)/2,
+        drawing_name or name, x=camera[0], y=camera[1], z=(view_bottom+view_top)/2,
         radius=max(radius, (view_top-view_bottom)/2+.5), view="elevation", direction=direction,
         storeys=[foundation, basement, basement_ceiling_storey, ground, ceiling_storey, upper, facade_storey, rainwater_storey,
                  *roof_layer_storeys.values()],
         door_annotations=False, automatic_plan_annotations=False,
         doors_closed=True, surface_fills=True,
-        scale=POHLEDY_SCALE,
+        scale=scale,
     )
     if name != "pohled_vychod":
         drawing.add_terrain(terrain_profile, earth_to_z=earth_to_z)
@@ -6906,6 +6910,20 @@ def add_exterior_view(name, camera, direction):
         )
     return drawing
 
+
+if "sousede" in sys.argv:
+    from neighbour_comparison import render_comparison
+    render_comparison(
+        width=HOUSE_WIDTH,
+        floor_z=ground.elevation+GROUND_FLOOR_THICKNESS,floor_bpv=GROUND_FINISHED_FLOOR_ELEVATION,
+        top_z=max(roof_tiles_top_z,chimney.storey.elevation+chimney.end_height),
+        street_terrain=TERRAIN_PROFILES["pohled_ulice"],
+        create_view=lambda **options: add_exterior_view(
+            "pohled_ulice",(HOUSE_WIDTH/2,-ROOF_GABLE_OVERHANG-1),(0,1,0),
+            drawing_name="comparison_front",**options,
+        ),
+        output=PROJECT_DIR / "sousede.svg",pdf=PDF_SOUSEDI,
+    )
 
 if "pohledy" in sys.argv:
     pohledy_sheet = DrawingSheet(paper="A3", orientation="landscape")

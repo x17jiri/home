@@ -518,6 +518,20 @@ in a 2×2 layout. The shared
 `add_exterior_view()` helper includes the basement, ceilings, roof and
 facades, closes doors for rendering, and suppresses plan annotations.
 
+Run `python house2.py sousede` for a separate A3 landscape comparison at 1:150,
+looking perpendicular to the proposed house's front façade. It renders only
+one new elevation and writes `projekt2/sousede.svg` and
+`D1.1.18. Porovnání se sousední zástavbou.pdf` in the architectural folder.
+`neighbour_comparison.py` sets the approximate neighbour widths (10 m left,
+7 m right) and the reference corners in the two editable neighbour SVGs.
+The left house's bottom right corner is anchored at survey point 94, with
+its ridge 9 m above that point; the right house's bottom left corner is at
+point 13, with its ridge at 422.87 m Bpv. Positions are projected onto the
+proposed façade direction from `points.txt` and `HOUSE_PLACEMENT`.
+The comparison reuses the street view's stone retaining walls and access
+recesses, extending the uphill terrain line from the wall top to point 94.
+`LEFT_ROOF_FILL` controls the grey highlight on the left neighbour's roof.
+
 The four corner constants in `house2.py` define terrain heights above sea level:
 `TERRAIN_STREET_EAST_ELEVATION`, `TERRAIN_STREET_WEST_ELEVATION`,
 `TERRAIN_GARDEN_EAST_ELEVATION` and `TERRAIN_GARDEN_WEST_ELEVATION`.
