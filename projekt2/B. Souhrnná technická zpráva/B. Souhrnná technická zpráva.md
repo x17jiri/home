@@ -70,11 +70,19 @@ Nejsou navrhována ani nevznikají žádná ochranná a bezpečnostní pásma.
 
 10) **navrhované parametry stavby – například zastavěná plocha, obestavěný prostor, podlahová plocha podle jednotlivých funkcí (bytů, služeb, administrativy apod.), typ navržené technologie, předpokládané kapacity provozu výroby**
 
-Zastavěná plocha: 86.01 m²
+Zastavěná plocha hlavního objemu domu včetně zateplení: **86,20 m²** (obrys 9,16 × 9,41 m, shodně s C.3).
 
-Obestavěný prostor: 911.60 m³
+Obestavěný prostor: **k přepočtu podle aktualizovaného stavebního řešení**.
 
-Podlahová plocha 209.88 m²
+Součet čistých půdorysných ploch místností podle půdorysů: **184,47 m²**, v tomto členění:
+
+| Podlaží | Plocha místností |
+|---|---:|
+| 1.PP – skladovací prostory a garáž | 62,90 m² |
+| 1.NP – pokoje, koupelna a chodba | 61,17 m² |
+| 2.NP – obytné podkroví | 60,39 m² |
+
+Celková hodnota je zaokrouhlena ze součtu nezaokrouhlených ploch místností. Jde o půdorysné plochy uvedené v legendách; nejsou v nich zahrnuty konstrukce stěn ani venkovní schodiště a podesta.
 
 11) **Územně technické podmínky (zejména možnost napojení na stávající dopravní a technickou infrastrukturu)\
     \
@@ -169,7 +177,7 @@ Stavba využívá stávající dopravní a technickou infrastrukturu. Limitován
 
 2)  **architektonické řešení – kompozice tvarového řešení, materiálové a barevné řešení**
 
-Rodinný dům SO 01 je obdélníkového tvaru o vnějších rozměrech 9.15 x 9.4 m. Zastřešení domu je sedlovou střechou se sklonem 36°. Objekt je řešen jako podsklepená zděná stavba. Objekt je založen na základových pasech. Střešní krytina je zvolena skládaná taška červené barvy. Finální vrstva fasády bude tvořena silikonovou omítkou v bílé barvě. Zastavěná plocha činí 86 m2.
+Rodinný dům SO 01 je podsklepená zděná stavba s přízemím a obytným podkrovím. Hlavní obdélníkový objem má vnější rozměry **9,16 × 9,41 m včetně zateplení a finální fasádní vrstvy**, se zastavěnou plochou **86,20 m²**, shodně s koordinační situací C.3. Rozměry nosného obvodového zdiva jsou 8,75 × 9,00 m. Stavba je založena na výškově odstupňovaných základových pasech. Sedlovou střechu se sklonem přibližně 36° kryje skládaná taška červené barvy; fasáda je navržena bílá se silikonovou omítkou.
 
 ## B.3 Základní stavebně technické a technologické řešení
 
@@ -183,7 +191,7 @@ Zásobování vodou bude zajištěno ze stávající vodovodní přípojky kter�
 
 Pro splaškové vody je uvažováno s vybudováním domovní čistírny odpadních vod s kapacitou pro 5 ekvivalentních obyvatel s tím, že přečištěné vody budou odváděny stávajícící přípojkou do dešťové kanalizační stoky.
 
-Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Jako záložní zdroj bude využit teplovzdušný krb (5kW) umístěný v obývacím pokoji, Odtah spalin bude přes zděný komín s průměrem sopouchu 180 mm. Krb bude mít přivedený přívod spalovacího vzduchu z venkovního prostoru.
+Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Pro doplňkové lokální vytápění jsou uvažována kamna o výkonu přibližně 5 kW v obývacím pokoji. Spaliny budou odváděny systémovým komínem s navrhovaným průměrem průduchu 200 mm; konečné napojení se sladí s vybranými kamny a komínovým systémem. Kamna budou mít samostatný přívod spalovacího vzduchu z venkovního prostoru.
 
 V objektu bude systém výměny vzduchu pomocí rekuperace. Větrací jednotka bude umístěná v nevytápěném 1.PP, v místnosti S.04 a pomocí rozvodů ve šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
 
@@ -203,33 +211,79 @@ Na pozemku je v současné době rodinný dům s povolením k demolici.
 
 2)  **popis navrženého stavebně technického a konstrukčního řešení**
 
-> Základové konstrukce budou provedeny systémem liniových základových pasů z betonu C 20/25 X1 šířky 900 mm a výšky 600 mm v kombinaci s betonovými bednícími tvarovkami šířky 300 mm, výškový modul 250 mm a ŽB základovou podkladní deskou tl. 150 mm z betonu C 20/25 XC1 s vyztužením KARI sítí 6/150/150 mm. Základové pasy budou výškově v různých úrovnich, více podrobností viz výkres “D1.1.10. Základy”. Vyztužení podkladního betonu bude provedeno v ploše u spodního okraje desky. Základové pasy budou provedeny pod všemi obvodovými stěnami a pod vnitřními nosnými stěnami. Z vnějšího líce budou bednící tvarovky a základová podkladní deska po obvodě zateplená svislou tepelnou nenasákavou izolací z extrudovaného polystyrenu tl.100 mm. více podrobností viz výkres “D1.1.10. Základy”.
->
-> Na provedenou základovou desku bude umístěna vodorovná hydroizolace z folie Fatrafol splňující minimální požadavky izolace proti zemní vlhkosti a pronikání radonu z podloží (dle výsledku měření indexu radonového rizika – střední, propustnost podloží: střední) dle ČSN 730601 a dalších souvisejících předpisů.
->
-> Obvodové a vnitřní nosné stěny v suterénu budou provedeny ze ztraceného bednění 300mm. Svislé obvodové nosné stěny v 1NP budou provedeny kombinací vápencopískových cihel 240mm a systémem YTONG 30. Vnitřní nenosné příčky budou provedeny ze sádrokartonu.
->
-> Vodorovná nosná konstrukce bude tvořená stropem MIAKO 210 mm.
->
-> Konstrukce střechy bude provedena z tradičního krovu (viz výkres “D1.1.4. Krov”). Střešní krytina je skládaná taška v červené barvě. Střešní plášť bude zateplen 400mm minerální vaty.
->
-> Pro otvory v nosných stěnách budou použity systémové nosné překlady.
->
-> Na nosných stěnách tl. 300mm bude proveden ztužující ŽB věnec z betonu C 20/25 XC1 o výšce 200 mm včetně vodorovné žebírkové výztuže 4x R Ø 12 mm včetně třmínků R Ø 6 mm po 250 mm.
->
-> Výplňové okenní prvky budou provedeny z plastového profilu včetně izolačního trojskla. Vstupní dveře budou provedeny z plastového profilu v provedení částečně prosklené (trojsklo). Vnitřní dveře a vnitřní obložkové zárubně budou dle přání investora.
->
-> Klempířské konstrukce budou provedeny z pozinkovaného plechu, včetně povrchové úpravy nátěrem. Vnější parapety budou provedeny jako hliníkové.
->
-> V podlahách suterénu nebude použita tepelná izolace. V podlahách 1NP bude použita tepelná izolace z polystyrénových podlahových desek v tl. 60/60 mm + 30mm kročejové izolace (celkem 150 mm). Po obvodě jednotlivých místností bude provedena dilatace podlahové konstrukce od svislých konstrukcí tepelnou izolací tl. 3 mm. Izolace bude provedena v rámci roznášecí vrstvy z cementového potěru. Na podlahách bude keramická dlažba a vinylová podlaha. Na podlaze venkovní podesty skládaná betonová dlažba. Stěny v hygienických místnostech budou obloženy keramickým obkladem. Zdivo z vnější strany bude opatřeno tepelnou izolací z minerální vaty 200mm, lepidlem s perlinkou a zapraveno silikonovou omítkou.
->
-> Světlá výška 1NP bude 2,610 m a 1PP bude 2,285 m. Rodinný dům se nachází ve svahu. V nejvyšší části bude úroveň podlahy 1NP rodinného domu cca 1,200 m nad okolním upraveným terénem.
->
-> Veškeré obytné prostory v RD budou odvětrány pomocí rekuperace. Jednotka rekuperace HERU 100 T EC-y2 bude umístěná v nevytápěném 1.PP, v místnosti S.04 na stěně společné s S.05. Potrubí sání venkovního vzduchu a výfuku odpadního vzduchu budou vedena přes 1PP a obě venkovní zakončení budou na zahradní straně domu. Suterén a garáž nemají přívodní ani odvodní vyústky; v suterénu je umístěna jednotka a navazující izolované rozvody. Přestup vzduchu mezi místnostmi bude zajištěn i při zavřených dveřích; konkrétní přestupní prvky se upřesní v prováděcí dokumentaci. Krb v podkroví bude mít samostatný přívod spalovacího vzduchu. Všechny prostory RD budou vybaveny umělým osvětlením.
->
-> **Výkopy**
->
-> Budou provedeny výkopy pro založení objektu a domovní přípojky. Zajištění terénu proti sesunutí bude zajištěno svahováním.
+**Nosný systém a založení**
+
+Rodinný dům je podsklepený, s jedním podzemním podlažím, přízemím a obytným podkrovím. Nosný systém tvoří zděné stěny, železobetonové věnce, keramobetonové stropy MIAKO a dřevěný vaznicový krov s ocelovými podpěrnými nosníky HEB 180.
+
+Pod obvodovými a vnitřními nosnými stěnami jsou navrženy betonové základové pasy výšky 600 mm. Jejich šířky jsou rozlišeny podle podporované stěny:
+
+| Základový pas pod stěnou | Šířka |
+|---|---:|
+| Obvodové stěny – uliční, zahradní, východní a západní | 800 mm |
+| Vnitřní stěny S.03–S.04 a S.04–S.05 | 900 mm |
+| Příčná stěna mezi zahradními a uličními místnostmi | 700 mm |
+| Stěna S.01–S.02 | 600 mm |
+
+Uliční část pasů je výškově snížena o 400 mm. Mezi sníženými pasy a základovou deskou jsou doplněny stěny ze ztraceného bednění tl. 300 mm. Pod komínem je samostatná základová patka. Rozsah snížení, výškové úrovně a návaznosti jsou vyznačeny ve výkresu **D.2.3-01 – Základy, půdorys a řez Z–Z**.
+
+Železobetonová základová deska má tloušťku 150 mm. Pro základové konstrukce a desku je uvažován beton C 20/25; třídy prostředí, vyztužení a konečné ověření založení určí stavebně konstrukční část D.2 podle podloží a zatížení. Na horním líci desky je navržena vodorovná hydroizolace tl. 5 mm, navazující na svislou izolaci a utěsnění prostupů. Provedení ochrany proti zemní vlhkosti a radonu bude vycházet z příslušných průzkumných podkladů.
+
+**Svislé konstrukce**
+
+| Podlaží a konstrukce | Materiál a návrhová tloušťka |
+|---|---|
+| 1.PP – obvodové a vnitřní nosné stěny | Ztracené bednění vyplněné betonem, 300 mm |
+| 1.NP – obvodové nosné stěny | Vápencopískové zdivo VPC (10-2,0), 250 mm |
+| 1.NP – příčná stěna mezi zahradními a uličními místnostmi a stěna mezi pokoji 0.01 a 0.02 | Porfix P2-440 PDK, 300 mm |
+| 1.NP – dvě podélné nosné stěny po stranách koupelny, směrem k pokoji 0.03 a ke schodišti | Ytong Klasik, 300 mm |
+| 2.NP – obvodové nosné stěny | Vápencopískové zdivo VPC (10-1,8), 250 mm |
+| 2.NP – příčná nosná stěna nad příčnou stěnou 1.NP | Porfix P2-440 PDK, 300 mm |
+| 2.NP – nosná stěna mezi kuchyní a schodištěm | Ytong Klasik, 300 mm |
+| 1.NP a 2.NP – nenosné příčky | Sádrokartonové příčky, celková tloušťka 100 mm |
+
+První řada nosného zdiva 1.NP je provedena z liaporových tvárnic výšky 125 mm na zakládací maltě tl. 20 mm. Nosné stěny a jejich podpory jsou uspořádány v návaznosti na suterénní stěny a základové pasy. Polohy a otvory určují půdorysy **D.1.1.2-01 až D.1.1.2-03**. Pro otvory v nosném zdivu jsou navrženy systémové nosné překlady podle tabulek ve výkresech.
+
+**Stropy, věnce a schodiště**
+
+Stropy nad 1.PP a 1.NP tvoří keramobetonová konstrukce MIAKO celkové tloušťky 210 mm. Nosníky, vložky, otvory a uložení jsou určeny výkresy **D.2.3-02 až D.2.3-05**. Na nosných stěnách jsou ve výšce stropů železobetonové věnce výšky 210 mm; věnce pod pozednicemi v podkroví mají výšku 300 mm. Jejich šířka navazuje na podporující zdivo, vyztužení určí stavebně konstrukční část.
+
+Pod sloupky vaznic a při hranách schodišťových otvorů jsou navrženy ocelové nosníky **HEB 180 bez obetonování**, výškově vystředěné ve stropní konstrukci tl. 210 mm. Požární odolnost konstrukcí a případná ochrana ocelových a dřevěných prvků se stanoví v samostatném PBŘ v koordinaci se statickým řešením.
+
+Vnitřní schodiště z 1.NP do podkroví je dřevěné, dvouramenné s mezipodestou. Mezipodestu podporuje šest dřevěných sloupků průřezu 120 × 120 mm, vedených od základové desky. Sloupky pod vaznicemi v podkroví mají průřez 160 × 160 mm. Venkovní vstup do 1.NP je přístupný po dřevěném vstupním schodišti s betonovou podestou a zábradlím podle půdorysu a řezů.
+
+Schodiště mezi 1.PP a 1.NP není součástí nynějšího návrhu. Rezervované místo nad S.05 je uzavřeno dřevěnou podlahovou deskou tl. 50 mm. Pod ní je minerální vata tl. 200 mm a sádrokartonový podhled tl. 12,5 mm, výškově navazující na spodní líc ostatních dokončených stropů suterénu; skladba obsahuje také vzduchové mezery. Toto místo je řešeno samostatnou skladbou SK7 v řezu **D.1.1.2-06 – Řez C–C**.
+
+**Střecha**
+
+Střecha je sedlová se sklonem přibližně 36°, s dřevěným vaznicovým krovem podle výkresu **D.2.3-06 – Krov**. Krokve mají průřez 80 × 200 mm, pozednice 160 × 120 mm a vaznice 180 × 260 mm. Krytinu tvoří skládaná střešní taška v červené barvě.
+
+Skladba střešního pláště SK1 od exteriéru: taška tl. 30 mm, latě 40 × 60 mm s výškou 40 mm, kontralatě 60 × 60 mm, pojistná hydroizolace, MDF záklop tl. 15 mm, krokve s mezikrokevní minerální vatou tl. 200 mm, podkrokevní minerální vata tl. 200 mm, OSB záklop tl. 15 mm, parobrzda, instalační rošt výšky 30 mm a dvojitý sádrokartonový podhled celkové tl. 25 mm. Celková tloušťka minerální izolace je 400 mm. Typ desek, upevnění a souvrství budou koordinovány s požadavky PBŘ.
+
+Komínové těleso má vnější rozměr 400 × 400 mm, s navrhovaným průměrem průduchu 200 mm. Konečné provedení komínového systému, napojení kamen a odstupy od hořlavých konstrukcí se určí podle vybraných výrobků a požárního řešení; konstrukční mezery v půdorysech nenahrazují tyto požadavky.
+
+**Podlahy a spodní povrchy stropů**
+
+| Skladba | Vrstvy od horního povrchu směrem dolů |
+|---|---|
+| SK2 – podlaha 2.NP a strop nad 1.NP | Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm; MIAKO 210 mm; omítka 15 mm |
+| SK3 – podlaha 1.NP a strop nad 1.PP, mimo SK7 | Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm; podlahový polystyren 120 mm; MIAKO 210 mm; omítka 15 mm |
+| SK4 – podlaha 1.PP | Cementový potěr 65 mm; hydroizolace 5 mm; železobetonová deska 150 mm |
+
+Podlahová skladba 1.NP nad MIAKO má celkovou tloušťku 220 mm, v podkroví 100 mm. Suterénní podlaha není tepelně izolována. Na spodním líci běžných stropů suterénu je navržena omítka tl. 15 mm; podstropní tepelná izolace ani sádrokartonový podhled se zde neuvažují. Výjimkou je samostatná skladba SK7 uvedená výše. Podlahové potěry jsou odděleny od svislých konstrukcí obvodovými dilatačními pásky. Finální povrchy obytných podlaží tvoří keramická dlažba a vinyl; stěny hygienických místností budou opatřeny keramickým obkladem.
+
+**Obvodový plášť a výplně otvorů**
+
+Obvodové stěny obytných podlaží jsou zatepleny fasádní minerální vatou tl. 200 mm s armovací vrstvou a finální fasádní omítkou tl. 5 mm v bílé barvě. Vnitřní omítka zdiva je uvažována tl. 5 mm. Obvodové konstrukce suterénu a navazující základové konstrukce jsou z vnější strany opatřeny perimetrickou izolací z extrudovaného polystyrenu tl. 100 mm v rozsahu vyznačeném v půdorysech a řezech. V suterénu se vnitřní omítka stěn nenavrhuje. Skladby SK5 a SK6 jsou uvedeny ve výkresech **D.1.1.2-04 až D.1.1.2-06**.
+
+Okna jsou navržena z plastových profilů s izolačním trojsklem. Vstupní dveře budou z plastového profilu, částečně prosklené izolačním trojsklem. Vnitřní dveře a obložkové zárubně budou zvoleny podle požadovaných rozměrů a případných požárních požadavků. Klempířské konstrukce budou z povrchově upraveného pozinkovaného plechu, vnější parapety hliníkové.
+
+Světlá výška běžných místností 1.NP po dokončení stropní omítky je 2,610 m, v 1.PP 2,285 m. V podkroví se výška mění podle šikmých a vodorovných podhledů; rozhodující úrovně jsou uvedeny v řezech. Výškové osazení stavby je **±0,000 = 418,070 m Bpv**, úroveň podlahy 1.PP je 415,340 m Bpv a podlahy 2.NP 421,005 m Bpv.
+
+Veškeré obytné prostory jsou větrány centrální jednotkou HERU 100 T EC-y2 v nevytápěném 1.PP, v místnosti S.04 na stěně společné s S.05. Sání i výfuk jsou na zahradní straně domu; suterén a garáž nemají přívodní ani odvodní vyústky. Řešení větrání je popsáno v části **D.1.2-VZT**. Doplňková kamna v podkroví budou mít samostatný přívod spalovacího vzduchu.
+
+**Výkopy**
+
+Budou provedeny výkopy pro založení objektu a domovní přípojky. Zajištění výkopů a přilehlého terénu se navrhne podle místních podmínek a výsledků geotechnického posouzení, s ohledem na sousední stavby a opěrné stěny.
 
 ### B.3.4 Technologické řešení – základní popis technických a technologických zařízení
 
@@ -247,7 +301,7 @@ Pro splaškové vody je uvažováno s vybudováním domovní čistírny odpadní
 
 Dešťová kanalizace bude odvedená pomocí KG potrubí DN125 do podzemní plastové nádrže o objemu 10 m3. Přepad bude řešen napojením do existující dešťové kanalizační stoky, která se nachází v komunikaci před domem.
 
-Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Jako záložní zdroj bude využit teplovzdušný krb (5kW) umístěný v obývacím pokoji, Odtah spalin bude přes zděný komín s průměrem sopouchu 180 mm. Krb bude mít přívod spalovacího vzduchu z venkovního prostoru.
+Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Pro doplňkové lokální vytápění jsou uvažována kamna o výkonu přibližně 5 kW v obývacím pokoji. Spaliny budou odváděny systémovým komínem s navrhovaným průměrem průduchu 200 mm; konečné napojení se sladí s vybranými kamny a komínovým systémem. Kamna budou mít samostatný přívod spalovacího vzduchu z venkovního prostoru.
 
 V objektu bude systém výměny vzduchu pomocí rekuperace. Větrací jednotka bude umístěná v nevytápěném 1.PP, v místnosti S.04 a pomocí rozvodů v šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
 
@@ -261,11 +315,11 @@ Energetické výpočty jsou součástí průkazu energetické náročnosti budov
 
 Obestavěný prostor
 
-SO 01: 911.6 m³
+SO 01: **k přepočtu podle aktualizovaného stavebního řešení**.
 
 Výška stavby
 
-SO 01: 8.0 m
+SO 01: vrchol střešní krytiny **425,987 m Bpv**, tj. **7,917 m nad podlahou 1.NP (±0,000)**; nejvyšší bod komína **427,237 m Bpv**, tj. 9,167 m nad ±0,000. Přilehlý upravený terén je na uliční straně v úrovni 415,30–415,80 m Bpv a na zahradní straně 416,80 m Bpv podle C.3 a řezů. Požární výšku a zařazení stavby stanoví PBŘ podle skutečného výškového uspořádání a přístupnosti podlaží.
 
 Počet podzemních podlaží
 
@@ -277,11 +331,11 @@ SO 01: 2 podlaží
 
 Zastavěná plocha
 
-SO 01: 86.0 m²
+SO 01: **86,20 m²**, hlavní objem včetně zateplení.
 
 Podlahová plocha
 
-SO 01: 209.88 m²
+SO 01: **184,47 m²**, součet čistých půdorysných ploch místností v 1.PP, 1.NP a 2.NP podle kapitoly B.1 bodu 10.
 
 Předpokládaná kapacita počtu osob ve stavbě
 
@@ -329,7 +383,7 @@ V průběhu výstavby bude pečlivě dbáno na dodržování pracovních postup�
 
 **Ochrana před pronikáním radonu z podloží:**
 
-Objekt rodinného domu je částečně podsklepený. Pronikání radonu do objektu je zamezeno pomocí vhodného návrhu hydroizolace odolné vůči radonu.
+Objekt rodinného domu je podsklepený v celém hlavním půdorysu. Pronikání radonu do objektu je zamezeno pomocí vhodného návrhu hydroizolace odolné vůči radonu.
 
 **Ochrana před bludnými proudy:**
 

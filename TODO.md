@@ -14,13 +14,9 @@ Interní pracovní seznam konkrétních zjištění z kontroly dokumentace. Nen�
 
 ## Nesoulady ve zprávách a mezi profesemi
 
-- [ ] **Aktualizovat B podle konečného modelu a výkresů.** Kontrola našla zejména:
-  - jednotný údaj o šířce základových pasů **900 mm**, ačkoli model používá více různých šířek;
-  - popis části zdiva jako **YTONG 30**, zatímco aktuální model používá **Porfix P2-440 PDK 300 mm**;
-  - starší popis podlahových izolací; porovnat jej se současnými skladbami a odstraněním izolace ze stropu suterénu;
-  - rozměry domu **9,15 × 9,40 m** a několik údajů o zastavěné ploše (**86 / 86,01 m²**); sjednotit se současným výpočtem a vyjasnit, ke kterému obrysu se plocha vztahuje. C nyní používá obrys **9,16 × 9,41 m**;
-  - po sjednocení konstrukcí přepočítat také související objemy, plochy a uvedené světlé výšky.
-- [ ] **Opravit staré odkazy a obsahy zpráv po přečíslování.** Například B stále odkazuje na „D1.1.10. Základy“ a „D1.1.4. Krov“; aktuálně jde o **D.2.3-01** a **D.2.3-06**. Přejmenování souborů nezměnilo obsah Word dokumentů. Zkontrolovat také titulní strany a vnitřní odkazy A, ELE a ZTI.
+- [ ] **Přepočítat obestavěný prostor v B.** Původních 911,60 m³ není doloženo výpočtem současné geometrie; v B je údaj označen k přepočtu. Konstrukční popis, zastavěná plocha hlavního objemu 86,20 m², úrovně a součet čistých ploch místností 184,47 m² jsou aktualizovány. Při konečné bilanci zachovat výslovné rozlišení čistých ploch místností od jinak definovaných podlahových či energetických ploch.
+- [ ] **Sjednotit materiálové názvy a legendy stavebních výkresů.** B vychází z vykreslené tloušťky obvodového zdiva 250 mm; horní podlaží má dosud v názvu materiálu 240 mm. Potvrdit výslednou specifikaci výrobku a sjednotit ji s tloušťkami. V půdorysných legendách ověřit také rozlišení Porfixu 300 mm od Ytongu Klasik 300 mm, použitého na dvou podélných stěnách 1.NP a mezi kuchyní a schodištěm v podkroví. Model ani výkresy se při aktualizaci zprávy B neměnily.
+- [ ] **Opravit staré odkazy a obsahy ostatních zpráv po přečíslování.** Výkresové odkazy v konstrukčním popisu B jsou aktualizovány na D.1.1.2 a D.2.3. Zkontrolovat také titulní strany a vnitřní odkazy A, ELE a ZTI; původní DOCX nebyly automaticky přepsány.
 - [ ] **Vyčistit obsah zprávy ZTI.** V obsahu zůstaly kapitoly o vnitřním plynovodu, přestože se plynová přípojka nenavrhuje. Sjednotit obsah se skutečným rozsahem zprávy a aktualizovat pole obsahu.
 - [ ] **Sjednotit popis likvidace dešťových vod v B a ZTI.** B uvádí přepad akumulační nádrže do dešťové kanalizace, ZTI uvádí vsakování. Výběr konečného řešení navazuje na samostatný návrh uvedený níže.
 - [ ] **Sjednotit bilanci dešťových vod v B.** V textu je **73 m³/rok**, zatímco v tabulce **78,26 m³/rok**. Přepočítat podle konečných ploch a zvoleného řešení.
@@ -48,6 +44,8 @@ Interní pracovní seznam konkrétních zjištění z kontroly dokumentace. Nen�
 - [ ] Po převzetí **PENB** ověřit shodu jeho vstupů se skutečnými skladbami, otvory a technickými systémy.
 
 ## Již vyřešené body z této kontroly
+
+- [x] Aktualizace konstrukčního popisu B podle současného návrhu: základové pasy a odskok, zdivo včetně Porfixu a Ytongu podle polohy, věnce, MIAKO a HEB, dřevěné schodiště a podpory, skladby SK1–SK7, uzavření rezervy pro schody do suterénu, fasáda, komín, světlé výšky a výškové osazení. Opraveny související zastavěné a čisté půdorysné plochy; obestavěný prostor zůstává k samostatnému přepočtu.
 
 - [x] Převod zpráv B a ZTI z DOCX do editovatelných Markdown souborů vedle originálů. Zachován text, tabulky a vložené obrázky; starý stránkovaný obsah byl odstraněn. Technické nesoulady uvedené výše zůstávají k opravě. Originální DOCX zůstaly beze změny.
 - [x] Přeorganizování a přečíslování výkresů, včetně názvů souborů a razítek.
