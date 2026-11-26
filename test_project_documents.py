@@ -28,7 +28,7 @@ class ProjectDocumentTests(unittest.TestCase):
 
     def test_document_ids_and_source_paths_are_unique(self):
         drawings=list(DRAWINGS.values())
-        self.assertEqual(len(drawings),32)
+        self.assertEqual(len(drawings),33)
         self.assertEqual(len({d.number for d in drawings}),len(drawings))
         self.assertEqual(len({d.pdf() for d in drawings}),len(drawings))
         for d in drawings:

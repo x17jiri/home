@@ -1049,7 +1049,8 @@ The upper plan has two `-40` extractions along the front wall, three `+40`
 supplies on the garden side of the middle VPC wall, `-60` above the washing
 machine and `-40` in the bathroom. The combined design totals are 240 supply
 and 240 extraction (ground: 120/60; upper: 120/180).
-`vetrani` generates both ventilation plans.
+`vetrani_basement` generates D.1.2.2-VZT-03 with the HERU unit and its service
+space in S.04. `vetrani` generates all three ventilation plans.
 
 Check their supply flows against room volumes with
 `.venv-pdf/bin/python ventilation_airflow.py 0.01=40 0.02=40 0.03=40 1.01=120`.
@@ -1498,13 +1499,19 @@ the hallway's second half, with a 50 mm gap before the nearby VPC segment.
 It faces into the hallway (-X, `rotation=-90`).
 `UPPER_BASIN_SIZE` controls its plan size;
 its top remains 850 mm above the finished floor. The
-1000 × 500 × 1500 mm recuperation unit is on the ground floor under the higher
-stair flight. `ground_recuperation_center` places it 50 mm from the stair-side
-face of the bathroom wall, controlled by `RECUPERATION_BATHROOM_WALL_CLEARANCE`.
-Its 1000 mm side runs along Y; `RECUPERATION_STAIR_END_CLEARANCE` keeps its
-garden end 500 mm before the stair arrival. `RECUPERATION_SIZE` controls its
-dimensions. Its base is 30 mm above the ground finished floor. AA includes its
-label, and AA, BB and CC include the `Rozvaděč` label.
+HERU 100 T EC-y2 recuperation unit is mounted in basement S.04 on the
+wall shared with S.05, streetward of the opening. `RECUPERATION_SIZE` is
+796 × 492 × 759 mm (width, depth, overall height). Its width runs along Y;
+`basement_recuperation_center` follows the S.04 wall face and opening position.
+`RECUPERATION_WALL_CLEARANCE` is 50 mm and
+`RECUPERATION_OPENING_CLEARANCE` is 200 mm. The unit starts 800 mm above the
+finished basement floor (`RECUPERATION_BOTTOM_ABOVE_FLOOR`); an 800 mm service
+zone faces into S.04 (`RECUPERATION_SERVICE_CLEARANCE`).
+Run `python house2.py vetrani_basement` for the new D.1.2.2-VZT-03 equipment
+plan, or `vetrani` for all three ventilation plans. Ground and upper plans
+refer to the basement drawing without projecting another unit. Basement and
+garage rooms have no ventilation terminals. All sections retain automatic
+furniture labels; AA, BB and CC also include the `Rozvaděč` label.
 The toilet faces the garden and stands gardenward of the first west-purlin
 post; `upper_toilet_center` controls its placement. The hydrobox has moved
 to the ground-floor bathroom under the window.

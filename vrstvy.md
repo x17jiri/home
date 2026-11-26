@@ -17,9 +17,13 @@
 
 ## Rekuperace:
 
-	https://www.luftuj.cz/p/save-vtc-200-rekuperacni-jednotka/
-	https://www.google.com/search?client=ubuntu-sn&channel=fs&q=jak+funguje+rekuperace&udm=50&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8c4u0nXx4bEIpwm1lnNH832cSpkWkfSwsmpNIrD_OQ-UdFAe4qAwsQWVbrtprjzBSpnJQOWUbUFy0AZP2fc5_e7wQK9SpSaccWZEM8174slgzA7lL9Jp-FedBms3jKtDYRkzLfYMnDYMy5pBIIBgIQaS46ps0&aep=10&ntc=1&mstk=AUtExfASHPWgJFh363hvFhFYdYgL4LKeqryUnlKO8msX0vpy1JFD_5VuGnT899EFZtKmhm2ebntKIw9PkYhxf2V43wflh4WPtztPUYHVy3s1Db8Gni5Hz1JmIhoKiP1UP8xFBxbdPVZ6L39lfAfcZj0rOgoRYIzmyuTUnbvHjhT-ziPk6Lfywx8RLdHkXEgw8vr99pJIJ9SyPpcO88Ew0QatpD1aGKJfztBc_lKr5c3gALvO8E0dkMJ-qpzKKRg2SrypzWKssMjzkWCFYIi8lbaJsXoXymUyZaM7_5fQGlTfGD_sBvxBvmyLUrGMDAkUoJdo7xIqYTQrfJ-hMQ&aioh=3&csuir=1&mtid=iZBraterBc7fi-gP6pua0QM
-	https://www.czvzduchotechnika.cz/systemair-save-vtc-300-l/
+- Östberg HERU 100 T EC-y2, levé/pravé provedení podle napojení.
+- https://fsp.ostberg.com/products/4984/heru-100-t-ec/?region=se
+- Příslušenství Pressure Control IQC; normální režim 240/240 m³/h, ruční boost 300/300 m³/h na 20 minut.
+- Hliníkový rotační výměník a pozinkované vnitřní panely. Polymerní části zahrnují oběžná kola PA66-GF25, těsnění EPDM, PP kartáčové těsnění a pásky s PVC/PE.
+- Vestavěný dohřev 1,2 kW, celkový katalogový příkon 1,41 kW; horní hrdla Ø 125 mm s přechody na hlavní DN 200.
+- Umístění: nevytápěný suterén, S.04 na stěně k S.05; spodní hrana 800 mm nad podlahou, servisní prostor 800 mm.
+- Ověřit přenos hluku ze suterénu a tlumení pro cíl nejvýše 25 dB(A) v pokojích 0.01–0.03; rozměry jednotky 796 × 492 × 759 mm, hmotnost 66 kg.
 
 ## Dalsi vybava:
 

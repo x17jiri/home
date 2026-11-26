@@ -185,7 +185,7 @@ Pro splaškové vody je uvažováno s vybudováním domovní čistírny odpadní
 
 Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Jako záložní zdroj bude využit teplovzdušný krb (5kW) umístěný v obývacím pokoji, Odtah spalin bude přes zděný komín s průměrem sopouchu 180 mm. Krb bude mít přivedený přívod spalovacího vzduchu z venkovního prostoru.
 
-V objektu bude systém výměny vzduchu pomocí rekuperace. Řídící jednotka bude umístěná v 1 NP a pomocí rozvodů ve šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
+V objektu bude systém výměny vzduchu pomocí rekuperace. Větrací jednotka bude umístěná v nevytápěném 1.PP, v místnosti S.04 a pomocí rozvodů ve šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
 
 ### B.3.2 Zásady bezpečnosti při užívání stavby
 
@@ -225,7 +225,7 @@ Na pozemku je v současné době rodinný dům s povolením k demolici.
 >
 > Světlá výška 1NP bude 2,610 m a 1PP bude 2,285 m. Rodinný dům se nachází ve svahu. V nejvyšší části bude úroveň podlahy 1NP rodinného domu cca 1,200 m nad okolním upraveným terénem.
 >
-> Veškeré obytné prostory v RD budou odvětrány pomocí rekuperace. Jednotka rekuperace bude umístěná v 1NP. Přívod a odvod vzduchu povedou přes 1PP. Krb v podkroví bude mít samostatný přívod spalovacího vzduchu. Všechny prostory RD budou vybaveny umělým osvětlením.
+> Veškeré obytné prostory v RD budou odvětrány pomocí rekuperace. Jednotka rekuperace HERU 100 T EC-y2 bude umístěná v nevytápěném 1.PP, v místnosti S.04 na stěně společné s S.05. Potrubí sání venkovního vzduchu a výfuku odpadního vzduchu budou vedena přes 1PP a obě venkovní zakončení budou na zahradní straně domu. Suterén a garáž nemají přívodní ani odvodní vyústky; v suterénu je umístěna jednotka a navazující izolované rozvody. Přestup vzduchu mezi místnostmi bude zajištěn i při zavřených dveřích; konkrétní přestupní prvky se upřesní v prováděcí dokumentaci. Krb v podkroví bude mít samostatný přívod spalovacího vzduchu. Všechny prostory RD budou vybaveny umělým osvětlením.
 >
 > **Výkopy**
 >
@@ -249,7 +249,7 @@ Dešťová kanalizace bude odvedená pomocí KG potrubí DN125 do podzemní plas
 
 Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Jako záložní zdroj bude využit teplovzdušný krb (5kW) umístěný v obývacím pokoji, Odtah spalin bude přes zděný komín s průměrem sopouchu 180 mm. Krb bude mít přívod spalovacího vzduchu z venkovního prostoru.
 
-V objektu bude systém výměny vzduchu pomocí rekuperace. Řídící jednotka bude umístěná v 1 NP a pomocí rozvodů v šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
+V objektu bude systém výměny vzduchu pomocí rekuperace. Větrací jednotka bude umístěná v nevytápěném 1.PP, v místnosti S.04 a pomocí rozvodů v šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
 
 3)  **energetické výpočty**
 

@@ -451,7 +451,11 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .cut.material-YtongKlasik,
 .cut.material-LoadbearingwallYtongKlasik300mm,
-.cut.layer-material-YtongKlasik {
+.cut.layer-material-YtongKlasik,
+.cut.material-PorfixP2440PDK300mm,
+.cut.material-LoadbearingwallPorfixP2440PDK300mm,
+.cut.material-UpperloadbearingwallPorfixP2440PDK300mm,
+.cut.layer-material-PorfixP2440PDK300mm {
     fill: url(#ytong-klasik) !important;
     stroke: black;
     stroke-width: 0.05 !important;
@@ -949,18 +953,18 @@ tspan.door-dimension {
 }
 
 /* Equipment emphasis, limited to this drawing. */
-#product-f555ae24-2713-454a-b894-9aad9daf87fc,
-#product-50dcf96b-207b-4372-8073-5922cf0e84b6,
-#product-20c4dd6c-336f-4986-8182-4b24db8152ab,
-#product-13ca4a06-3960-4eaf-b84d-901c70386fdd,
-#product-07584170-4abb-4287-ae4a-21d9849d62a4,
-#product-35890a5a-d457-4fe4-a28f-2a6dcc40c907,
-#product-4b4d6ef8-f495-4eac-b6ea-9e29950b268b { stroke: #ff8000 !important; stroke-width: 0.25 !important; }
-.furniture-label[class~="GlobalId-3$5k$MDD58vx$GmmyBvxGw"],
-.furniture-label[class~="GlobalId-0F551Hakj0ZenlVZjByWc$"],
-.furniture-label[class~="GlobalId-0hsegdMubBnw77YdxJcF_1"],
-.furniture-label[class~="GlobalId-0AgVMGSyXDZQybNV5fXdls"],
-.furniture-label[class~="GlobalId-0VoqMdBlj4wOQ1iHTlhvq6"],
-.furniture-label[class~="GlobalId-3zUYFdgrLCshsQsO0Dcqud"],
-.furniture-label[class~="GlobalId-2jzSPnkj9Bq9owRKZPvseK"] { fill: #ff8000 !important; }
+#product-b633b057-8386-4a78-ad2d-5cf9919234de,
+#product-6eb1e6db-2fca-4098-bcfa-616c041f4f6b,
+#product-ec2f76b5-b865-4957-a4f5-3d12817ed5a5,
+#product-3147331d-102b-4265-8bc8-b121e3e6c867,
+#product-e65e6449-9663-4753-b289-15f78267a8b1,
+#product-d0dd427e-c42a-4303-99a2-f97a174981a4,
+#product-e04c250a-1abf-4946-a1c0-c3c0bb4ce1d1 { stroke: #ff8000 !important; stroke-width: 0.25 !important; }
+.furniture-label[class~="GlobalId-1h$WqbLp1AMxqmeqKcZBD8"],
+.furniture-label[class~="GlobalId-1s2Bi5gyTAK9x4P7cnsd94"],
+.furniture-label[class~="GlobalId-0EBFgqsO118O8FTiLPWQNv"],
+.furniture-label[class~="GlobalId-2CFWMx3U123ATp6iuH8Pls"],
+.furniture-label[class~="GlobalId-1dImWVBcL5i9NUxj9$YG$a"],
+.furniture-label[class~="GlobalId-0hRm2loGf9FR$ihim$oUMk"],
+.furniture-label[class~="GlobalId-0sZzawE41Cdf4zcSP0n1Sb"] { fill: #ff8000 !important; }
 .PredefinedType-FILLAREA.heating-connection-arrow { fill: #e82030 !important; stroke: none !important; opacity: 0.40; }

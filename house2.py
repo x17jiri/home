@@ -83,9 +83,11 @@ BATHROOM_TUV_ZONE_DEPTH = 0.80
 BATHROOM_TUV_STAIRWAY_CLEARANCE = 0.10
 BATHROOM_HYDROBOX_WALL_GAP = 0.05
 HYDROBOX_SIZE = (0.8, 0.5, 0.9)
-RECUPERATION_SIZE = (1.0, 0.5, 1.5)
-RECUPERATION_STAIR_END_CLEARANCE = 0.5
-RECUPERATION_BATHROOM_WALL_CLEARANCE = 0.05
+RECUPERATION_SIZE = (.796, .492, .759)  # HERU 100 T EC-y2: width, depth, overall height.
+RECUPERATION_WALL_CLEARANCE = .05
+RECUPERATION_OPENING_CLEARANCE = .20
+RECUPERATION_BOTTOM_ABOVE_FLOOR = .80
+RECUPERATION_SERVICE_CLEARANCE = .80
 THIRD_ROOM_OPENING_LENGTH = HALLWAY_OPENING_LENGTH  # Room 3 to hallway; independent of the stairway opening.
 THIRD_ROOM_OPENING_START_Y = GARDEN_ROOMS_WALL_Y-THIRD_ROOM_OPENING_LENGTH
 THIRD_ROOM_STEP_Y = THIRD_ROOM_OPENING_START_Y-DRY_WALL_WIDTH  # Hallway face meets the opening end.
@@ -515,6 +517,7 @@ PDF_VYTAPENI_GROUND = document_path("vytapeni_ground", PROJECT_DIR)
 PDF_VYTAPENI_UPPER = document_path("vytapeni_upper", PROJECT_DIR)
 PDF_VETRANI_GROUND = document_path("vetrani_ground", PROJECT_DIR)
 PDF_VETRANI_UPPER = document_path("vetrani_upper", PROJECT_DIR)
+PDF_VETRANI_BASEMENT = document_path("vetrani_basement", PROJECT_DIR)
 
 ELECTRICAL_LINE_WIDTH = 0.30  # Printed millimetres, matching the reference electrical plans.
 ELECTRICAL_FLOOR_CHANGE_LINE_WIDTH = 0.30  # Black riser symbols, matching sewer and water drawings.
@@ -3039,23 +3042,30 @@ upper_hallway_basin = upper.asset(
     start_height=UPPER_FLOOR_THICKNESS+0.85-0.25,
     rotation=-90,  # Front towards -X, facing into the hallway from the west wall.
 )
-# Turn the unit along the higher flight, 50 mm from the bathroom wall.
-recuperation_bathroom_wall_face_x = (
-    float(wall_body_centreline_point(wall_stairway_g)[0])+wall_stairway_g.thickness/2
-)
-ground_recuperation_center = (
-    recuperation_bathroom_wall_face_x+RECUPERATION_BATHROOM_WALL_CLEARANCE+RECUPERATION_SIZE[1]/2,
-    upper_stairs.end[1]-RECUPERATION_STAIR_END_CLEARANCE-RECUPERATION_SIZE[0]/2,
+# Mount on the S.04 face of the S.04/S.05 wall, streetward of its opening.
+recuperation_wall_face_x = basement_rooms_by_id["S.04"].bounds[2]
+recuperation_opening_y = float(ifcopenshell.util.placement.get_local_placement(
+    basement_stairway_opening.ObjectPlacement,
+)[1, 3])
+basement_recuperation_center = (
+    recuperation_wall_face_x-RECUPERATION_WALL_CLEARANCE-RECUPERATION_SIZE[1]/2,
+    recuperation_opening_y-RECUPERATION_OPENING_CLEARANCE-RECUPERATION_SIZE[0]/2,
 )
 upper_toilet_center = (
     upper_technical_right_x - 0.5,
     UPPER_TECHNICAL_CROSS_Y+PURLIN_SUPPORT_SIZE[1]/2+upper_fixture_wall_gap+0.35,
 )
-ground_recuperation = ground.furniture(
+basement_recuperation = basement.furniture(
     "Rekuperace", kind="USERDEFINED", size=RECUPERATION_SIZE, color="#ffff00",
-    center=ground_recuperation_center,
-    rotation=90,
-    start_height=GROUND_FLOOR_THICKNESS+0.03,
+    center=basement_recuperation_center,
+    rotation=-90,  # Service face towards S.04, away from the supporting wall.
+    start_height=BASEMENT_FLOOR_THICKNESS+RECUPERATION_BOTTOM_ABOVE_FLOOR,
+)
+basement_recuperation_service_region = box(
+    basement_recuperation_center[0]-RECUPERATION_SIZE[1]/2-RECUPERATION_SERVICE_CLEARANCE,
+    basement_recuperation_center[1]-RECUPERATION_SIZE[0]/2,
+    basement_recuperation_center[0]-RECUPERATION_SIZE[1]/2,
+    basement_recuperation_center[1]+RECUPERATION_SIZE[0]/2,
 )
 upper_toilet = upper.asset(
     "Upper bathroom WC", asset="toilet_with_cistern",
@@ -7180,6 +7190,29 @@ if "kanal" in sys.argv or "kanal_schematic" in sys.argv:
     sewer_schematic.render(PROJECT_DIR / "kanal.svg", pdf=PDF_KANAL)
 
 
+if "vetrani" in sys.argv or "vetrani_basement" in sys.argv:
+    vetrani_basement = add_plumbing_plan(
+        "vetrani_basement", basement, BASEMENT_FLOOR_THICKNESS+1.01, basement_room_floors,
+    )
+    vetrani_basement.add_poly_line(
+        tuple(basement_recuperation_service_region.exterior.coords),
+        style="dashed", color="#ff8000", line_width=.20,
+        foreground=True, name="Basement recuperation service space",
+    )
+    vetrani_basement.add_notes([
+        "Rekuperace HERU 100 T EC-y2 v místnosti S.04, na stěně k S.05.",
+        "Servisní prostor před čelem jednotky: 800 mm.",
+        "Spodní hrana jednotky: 800 mm nad hotovou podlahou.",
+        "Normální provoz 240/240 m³/h; ruční boost 300/300 m³/h.",
+        "Sání i výfuk na zahradní straně; rozvody v suterénu tepelně izolovat.",
+        "Suterén a garáž bez přívodních a odvodních vyústek.",
+    ])
+    vetrani_basement.render(
+        PROJECT_DIR / "vetrani_basement.svg", pdf=PDF_VETRANI_BASEMENT,
+        stylesheet=equipment_plan_stylesheet(vetrani_basement, (basement_recuperation,)),
+    )
+
+
 if "vetrani" in sys.argv or "vetrani_ground" in sys.argv:
     vetrani_ground = add_plumbing_plan("vetrani_ground", ground, 2.0, ground_room_floors)
     for room in (pokoj1, pokoj2):
@@ -7213,10 +7246,10 @@ if "vetrani" in sys.argv or "vetrani_ground" in sys.argv:
         ("ventilation_extract", "Odvod vzduchu"),
         ("ventilation_supply", "Přívod vzduchu"),
     ], line_width=.20)
-    vetrani_ground.render(
-        PROJECT_DIR / "vetrani_ground.svg", pdf=PDF_VETRANI_GROUND,
-        stylesheet=equipment_plan_stylesheet(vetrani_ground, (ground_recuperation,)),
-    )
+    vetrani_ground.add_notes([
+        "Rekuperační jednotka je v 1.PP, místnost S.04; viz D.1.2.2-VZT-03.",
+    ])
+    vetrani_ground.render(PROJECT_DIR / "vetrani_ground.svg", pdf=PDF_VETRANI_GROUND)
 
 
 if "vetrani" in sys.argv or "vetrani_upper" in sys.argv:
@@ -7229,25 +7262,9 @@ if "vetrani" in sys.argv or "vetrani_upper" in sys.argv:
             upper_hallway.room_id: (STAIR_LEFT_X+.45, STAIR_UPPER_END_Y+.30),
         },
     )
-    # Project the downstairs recuperation footprint without adding another unit.
-    recuperation_placement = ifcopenshell.util.placement.get_local_placement(ground_recuperation.ObjectPlacement)
-    recuperation = recuperation_placement[:2, 3]
-    half_width, half_depth = RECUPERATION_SIZE[0]/2, RECUPERATION_SIZE[1]/2
-    recuperation_outline = [
-        tuple(recuperation+recuperation_placement[:2, :2]@np.array(point))
-        for point in ((-half_width, -half_depth), (half_width, -half_depth),
-                      (half_width, half_depth), (-half_width, half_depth),
-                      (-half_width, -half_depth))
-    ]
-    vetrani_upper.add_poly_line(
-        recuperation_outline, style="dashed", color="#ff8000", line_width=.25,
-        foreground=True, name="Ground recuperation dashed projection on upper plan",
-    )
-    vetrani_upper.add_text(
-        (max(x for x, _ in recuperation_outline)+.15, float(recuperation[1])),
-        "Rekuperace\n(1.NP)", font_size=1.7, color="#ff8000", alignment="left",
-        name="Ground recuperation projection label on upper plan",
-    )
+    vetrani_upper.add_notes([
+        "Rekuperační jednotka je v 1.PP, místnost S.04; viz D.1.2.2-VZT-03.",
+    ])
     upper_ventilation_terminals = []
     # Two extractions over the kitchen/front-wall area.
     for index, fraction in enumerate((1/3, 2/3), 1):

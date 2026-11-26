@@ -73,6 +73,7 @@ _ROWS = (
     ProjectDrawing("rozvadec", "D.1.2.2-ELE-04", "Rozvaděč – jednopólové schéma", ELE, f"{_OLD_ELE}/D1.4.4. Rozvaděč - jednopólové schéma.pdf"),
     ProjectDrawing("vetrani_ground", "D.1.2.2-VZT-01", "Řízené větrání – půdorys 1.NP", VZT, f"{_OLD_VZT}/D1.6.1. Řízené větrání - Půdorys 1.NP.pdf"),
     ProjectDrawing("vetrani_upper", "D.1.2.2-VZT-02", "Řízené větrání – půdorys 2.NP", VZT, f"{_OLD_VZT}/D1.6.2. Řízené větrání - Půdorys podkroví.pdf"),
+    ProjectDrawing("vetrani_basement", "D.1.2.2-VZT-03", "Řízené větrání – půdorys 1.PP", VZT, f"{_OLD_VZT}/D1.6.3. Řízené větrání - Půdorys suterénu.pdf"),
     ProjectDrawing("vytapeni_ground", "D.1.2.2-VYT-01", "Vytápění a chlazení – půdorys 1.NP", VYT, f"{_OLD_VYT}/D1.7.1. Vytápění - Půdorys 1.NP.pdf"),
     ProjectDrawing("vytapeni_upper", "D.1.2.2-VYT-02", "Vytápění a chlazení – půdorys 2.NP", VYT, f"{_OLD_VYT}/D1.7.2. Vytápění - Půdorys podkroví.pdf"),
     ProjectDrawing("situace_prehled", "C.1-C.2", "Přehledová a katastrální situace", SITUATION, f"{_OLD_SITE}/C1.1. Přehledová a katastrální mapa.pdf"),

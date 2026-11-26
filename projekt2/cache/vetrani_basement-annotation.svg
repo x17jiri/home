@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:ifc="http://www.ifcopenshell.org/ns" xmlns:xlink="http://www.w3.org/1999/xlink" baseProfile="full" data-scale="1:100" height="130.0mm" id="root" version="1.1" viewBox="0 0 130.0 130.0" width="130.0mm">
+  <defs/>
+  <line class="GlobalId-3eIkVTtv90a95ph8xem6QT IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff8000 drawing-line-width-0p2 drawing-foreground" x1="75.58000183105469" x2="75.58000183105469" y1="87.70999908447266" y2="79.75"/>
+  <line class="GlobalId-3eIkVTtv90a95ph8xem6QT IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff8000 drawing-line-width-0p2 drawing-foreground" x1="75.58000183105469" x2="67.58000183105469" y1="79.75" y2="79.75"/>
+  <line class="GlobalId-3eIkVTtv90a95ph8xem6QT IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff8000 drawing-line-width-0p2 drawing-foreground" x1="67.58000183105469" x2="67.58000183105469" y1="79.75" y2="87.70999908447266"/>
+  <line class="GlobalId-3eIkVTtv90a95ph8xem6QT IfcAnnotation PredefinedType-LINEWORK drawing-line dashed drawing-line-color-ff8000 drawing-line-width-0p2 drawing-foreground" x1="67.58000183105469" x2="75.58000183105469" y1="87.70999908447266" y2="87.70999908447266"/>
+  <line class="GlobalId-3_8ceQV3z1nQlONKphGfwn IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="38.75" x2="48.25" y1="57.75" y2="57.75"/>
+  <line class="GlobalId-3_8ceQV3z1nQlONKphGfwn IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="38.75" x2="48.25" y1="54.75" y2="54.75"/>
+  <path class="GlobalId-0hHf3$cUj0P8cInbqHZArv IfcAnnotation PredefinedType-FILLAREA chimney-flue-fill" d="M 64.16852951049805 59.69442844390869 L 64.07611846923828 59.8673152923584 L 64.01921272277832 60.05491256713867 L 64.00000095367432 60.250000953674316 L 64.01921272277832 60.44508934020996 L 64.07611846923828 60.632686614990234 L 64.16852951049805 60.80557346343994 L 64.292893409729 60.95710754394531 L 65.707106590271 59.54289436340332 L 65.55557250976562 59.41853046417236 L 65.38268566131592 59.3261194229126 L 65.19508838653564 59.26921367645264 L 65.0 59.25000190734863 L 64.80491161346436 59.26921367645264 L 64.61731433868408 59.3261194229126 L 64.44442749023438 59.41853046417236 L 64.292893409729 59.54289436340332 L 64.16852951049805 59.69442844390869"/>
+  <line class="GlobalId-0z1IR6mUDEwwty9ga3psFg IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="66.5" x2="66.5" y1="44.5" y2="35.0"/>
+  <line class="GlobalId-0z1IR6mUDEwwty9ga3psFg IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="63.5" x2="63.5" y1="44.5" y2="35.0"/>
+  <line class="GlobalId-1qJ52YfqbAb8nl84WmPy0c IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="61.5" x2="61.5" y1="97.0" y2="87.5"/>
+  <line class="GlobalId-1qJ52YfqbAb8nl84WmPy0c IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="58.5" x2="58.500003814697266" y1="97.0" y2="87.5"/>
+  <line class="GlobalId-3f9IMf82jCcxs2_HPY27z2 IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="91.25" x2="100.75" y1="57.75" y2="57.75"/>
+  <line class="GlobalId-3f9IMf82jCcxs2_HPY27z2 IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="91.25" x2="100.75" y1="54.75" y2="54.75"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="66.0" x2="65.98078918457031" y1="60.25" y2="60.05491256713867"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.98078918457031" x2="65.92388153076172" y1="60.05491256713867" y2="59.86731719970703"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.92388153076172" x2="65.83146667480469" y1="59.86731719970703" y2="59.694427490234375"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.83146667480469" x2="65.70710754394531" y1="59.694427490234375" y2="59.54289245605469"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.70710754394531" x2="65.55557250976562" y1="59.54289245605469" y2="59.41852951049805"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.55557250976562" x2="65.38268280029297" y1="59.41852951049805" y2="59.32611846923828"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.38268280029297" x2="65.1950912475586" y1="59.32611846923828" y2="59.26921463012695"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.1950912475586" x2="65.0" y1="59.26921463012695" y2="59.25"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.0" x2="64.8049087524414" y1="59.25" y2="59.26921463012695"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.8049087524414" x2="64.61731719970703" y1="59.26921463012695" y2="59.32611846923828"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.61731719970703" x2="64.44442749023438" y1="59.32611846923828" y2="59.41852951049805"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.44442749023438" x2="64.29289245605469" y1="59.41852951049805" y2="59.54289245605469"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.29289245605469" x2="64.16853332519531" y1="59.54289245605469" y2="59.694427490234375"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.16853332519531" x2="64.07611846923828" y1="59.694427490234375" y2="59.86731719970703"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.07611846923828" x2="64.01921081542969" y1="59.86731719970703" y2="60.05491256713867"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.01921081542969" x2="64.0" y1="60.05491256713867" y2="60.25"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.0" x2="64.01921081542969" y1="60.25" y2="60.445091247558594"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.01921081542969" x2="64.07611846923828" y1="60.445091247558594" y2="60.632686614990234"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.07611846923828" x2="64.16853332519531" y1="60.632686614990234" y2="60.805572509765625"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.16853332519531" x2="64.29289245605469" y1="60.805572509765625" y2="60.95710754394531"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.29289245605469" x2="64.44442749023438" y1="60.95710754394531" y2="61.08147048950195"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.44442749023438" x2="64.61731719970703" y1="61.08147048950195" y2="61.17388153076172"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.61731719970703" x2="64.8049087524414" y1="61.17388153076172" y2="61.23078918457031"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="64.8049087524414" x2="65.0" y1="61.23078918457031" y2="61.25"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.0" x2="65.1950912475586" y1="61.25" y2="61.23078918457031"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.1950912475586" x2="65.38268280029297" y1="61.23078918457031" y2="61.17388153076172"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.38268280029297" x2="65.55557250976562" y1="61.17388153076172" y2="61.08147048950195"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.55557250976562" x2="65.70710754394531" y1="61.08147048950195" y2="60.95710754394531"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.70710754394531" x2="65.83146667480469" y1="60.95710754394531" y2="60.805572509765625"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.83146667480469" x2="65.92388153076172" y1="60.805572509765625" y2="60.632686614990234"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.92388153076172" x2="65.98078918457031" y1="60.632686614990234" y2="60.445091247558594"/>
+  <line class="GlobalId-2f2Z_CUVL3wRN7qyYsx2iR IfcAnnotation PredefinedType-LINEWORK chimney-flue" x1="65.98078918457031" x2="66.0" y1="60.445091247558594" y2="60.25"/>
+  <line class="GlobalId-2nD8BAM0L6rhFPZ0T1c3C4 IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="28.75" x2="51.0" y1="110.25" y2="110.25"/>
+  <line class="GlobalId-2nD8BAM0L6rhFPZ0T1c3C4 IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="28.75" x2="51.0" y1="107.25" y2="107.25"/>
+  <line class="GlobalId-2s53EnUdr1bAH_BUo5WZ1o IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="84.0" x2="84.0" y1="77.5" y2="68.0"/>
+  <line class="GlobalId-2s53EnUdr1bAH_BUo5WZ1o IfcAnnotation PredefinedType-LINEWORK opening-mask-source" x1="81.0" x2="81.0" y1="77.5" y2="68.0"/>
+  <line class="GlobalId-16p$kjxKHC5PiIRZGo3qlU IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="69.25" x2="78.75" y1="110.25" y2="110.25"/>
+  <line class="GlobalId-16p$kjxKHC5PiIRZGo3qlU IfcAnnotation PredefinedType-LINEWORK door-overhead" x1="69.25" x2="78.75" y1="107.25" y2="107.25"/>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(78.04000091552734, 83.7300033569336) rotate(89.999995674289)">
+    <tspan class="GlobalId-0gGKJntvnEmQQCr7OjY1JC IfcAnnotation PredefinedType-TEXT furniture-label small" dy="0em" x="0" y="0">Rekuperace</tspan>
+  </text>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(43.75, 38.75) rotate(-0.0)">
+    <tspan class="GlobalId-3SsyyVcaT7Wx6o9rNXtL8J IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">S.01</tspan>
+  </text>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(86.25, 38.75) rotate(-0.0)">
+    <tspan class="GlobalId-1pGdDYgHT839U5Ypn0imUz IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">S.02</tspan>
+  </text>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(71.25, 82.5) rotate(-0.0)">
+    <tspan class="GlobalId-3BCL6KDOn9kviA$qUtB78e IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">S.04</tspan>
+  </text>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(95.0, 82.5) rotate(-0.0)">
+    <tspan class="GlobalId-0aMIZ8YP59g9ihBp01n1HA IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">S.05</tspan>
+  </text>
+  <text dominant-baseline="middle" style="font-size: 0;" text-anchor="middle" transform="translate(41.25, 82.5) rotate(-0.0)">
+    <tspan class="GlobalId-3xASKm8Bf2D9kVlIJYn4xk IfcAnnotation PredefinedType-TEXT room-annotation room-identifier" dy="0em" x="0" y="0">S.03</tspan>
+  </text>
+  <text class="GlobalId-2xoaL9uBP4xAaDB6rLYhM7 IfcAnnotation PredefinedType-TEXT furniture-label small" dominant-baseline="middle" text-anchor="middle" transform="translate(59.75, 114.30000305175781) rotate(-0.0)">
+    <tspan class="GlobalId-2xoaL9uBP4xAaDB6rLYhM7 IfcAnnotation PredefinedType-TEXT furniture-label small" dy="0em" x="0" y="0">Tepelné</tspan>
+    <tspan class="GlobalId-2xoaL9uBP4xAaDB6rLYhM7 IfcAnnotation PredefinedType-TEXT furniture-label small" dy="1em" x="0" y="0">Čerpadlo</tspan>
+  </text>
+  <text class="GlobalId-11$bfTDDf6BR1X4yb5FcMf IfcAnnotation PredefinedType-TEXT furniture-label small" dominant-baseline="middle" text-anchor="middle" transform="translate(77.5, 100.5) rotate(-0.0)">
+    <tspan class="GlobalId-11$bfTDDf6BR1X4yb5FcMf IfcAnnotation PredefinedType-TEXT furniture-label small" dy="0em" x="0" y="0">Vodo-</tspan>
+    <tspan class="GlobalId-11$bfTDDf6BR1X4yb5FcMf IfcAnnotation PredefinedType-TEXT furniture-label small" dy="1em" x="0" y="0">měr</tspan>
+  </text>
+</svg>
