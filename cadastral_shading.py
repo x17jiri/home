@@ -133,9 +133,11 @@ def roof_and_chimney_checks(axes, *, house=HOUSE_PLACEMENT, source=ROOT / "house
                  key=lambda result: result["angle_degrees"])
     chimney_z = max(ridge_levels)+g("CHIMNEY_ABOVE_ROOF")
     x, y = g("CHIMNEY_CENTER")
-    half = g("CHIMNEY_SIZE")/2
+    size = g("CHIMNEY_SIZE")
+    width, depth = size if isinstance(size, tuple) else (size, size)
+    half_x, half_y = width/2, depth/2
     chimney_corners = [placed(x+dx, y+dy, chimney_z)
-                       for dx, dy in ((-half, -half), (half, -half), (half, half), (-half, half))]
+                       for dx, dy in ((-half_x, -half_y), (half_x, -half_y), (half_x, half_y), (-half_x, half_y))]
     chimney = max((maximum_segment_angle(observer, p, q)
                    for p, q in zip(chimney_corners, [*chimney_corners[1:], chimney_corners[0]])),
                   key=lambda result: result["angle_degrees"])

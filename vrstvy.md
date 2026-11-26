@@ -1,7 +1,9 @@
 
 # Technologie
 
-## Klimatizace:
+## Klimatizace – starší odkazy, nejsou aktuálním zadáním:
+
+Aktuálně se navrhuje vytápění a chlazení pěti vodními fan-coily IVAR.SL DC napojenými na LG THERMA V.
 
 	https://www.e-klimasplit.cz/klimatizace-multisplit-lg-standard-plus-1-5--2-1kw-2-1kw-2-1kw-2-1kw-2-1kw-r32-vcetne-montaze/
 
@@ -10,10 +12,12 @@
 
 ## Tepelne cerpadlo:
 
-	https://www.kpt.cz/tepelne-cerpadlo-aux-14-kw-split/
-
-	- TODO - hydrobox
-	- TODO - bojler
+- Potvrzená sestava LG THERMA V: HU051MR.U44 + hydrobox HN091MR.NK5, R32 split.
+- Vytápění 45/40 °C při −15 °C venku, s ekvitermním snižováním teploty vody.
+- Chlazení 7/12 °C; odvod kondenzátu a parotěsná izolace rozvodů.
+- Samostatný zásobník pitné teplé vody 400 l pro čtyři osoby; pro energetické hodnocení předběžně 55 °C, konkrétní typ zatím nevybrán.
+- Cirkulace TV se předběžně neuvažuje; ověřit čekací dobu u nejvzdálenějšího odběru.
+- Zásobník TV není akumulační nádoba otopné soustavy; případný buffer se řeší samostatně podle hydraulického návrhu.
 
 ## Rekuperace:
 
@@ -33,47 +37,53 @@
 	TODO
 
 ## Okna
-	TODO
 
-# Vrstvy
+- Plastová okna s izolačním trojsklem, **Uw ≤ 1,20 W/(m²·K)** pro celé okno.
+- Pro předběžný PENB uvažovat Uw = 1,20 W/(m²·K); nejde o Ug samotného skla.
+- Solární činitel g, podíl rámu a parametry vstupních dveří zůstávají k doplnění.
 
-## Podlaha dole (vse kromne chodby)
+# Aktuální skladby a tepelné vodivosti
 
-10 cm PIR, λ = 0.022
-7 cm CEMFLOW
-1 cm vynil/dlazky
+λD níže představuje nejvyšší přípustnou deklarovanou tepelnou vodivost izolace v **W/(m·K)**. Nejde o součinitel prostupu tepla U celé skladby. Pro výpočet se použije odpovídající návrhová hodnota podle materiálu a podmínek použití. Rozměry a složení jsou podle současného modelu; původní poznámky s PIR v podlaze a 350 mm izolace střechy již neplatí.
 
-Celkem U = 0.22
+| Izolace | Tloušťka a použití | Požadavek λD ≤ |
+|---|---|---:|
+| Mezikrokevní minerální vata | 200 mm, SK1 | 0,038 |
+| Podkrokevní minerální vata | 200 mm, SK1 | 0,038 |
+| Fasádní minerální vata | 200 mm, SK5 | 0,036 |
+| Kročejová minerální vata | 30 mm, SK2 a SK3 | 0,037 |
+| Podlahový polystyren EPS | 120 mm, SK3 | 0,037 |
+| Perimetrický polystyren XPS | 100 mm, SK6 | 0,035 |
+| Minerální vata pod schody | 200 mm, SK7 | 0,038 |
 
-Norma doporucuje U = 0.3, pro pasivni domy 0.15 - 0.22
+## SK1 – střešní plášť
 
-## Podlaha dole chodba
+Střešní taška 30 mm; latě 40 mm; kontralatě 60 mm; pojistná hydroizolace 1 mm; MDF záklop 15 mm; krokve 80 × 200 mm s 200 mm mezikrokevní vaty; 200 mm podkrokevní vaty; OSB 15 mm; parobrzda 1 mm; instalační rošt 30 mm; dvojitý SDK podhled 25 mm. Při výpočtu se zohlední dřevěné prvky a vzduchové vrstvy.
 
-12 cm XPS 500, λ = 0.035
-5 cm desky
-1 cm dlazky
+## SK2 – podlaha podkroví a strop nad 1.NP
 
-U = 0.3
+Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm; MIAKO 210 mm; omítka 15 mm.
 
-## Podlaha nahore
+## SK3 – podlaha 1.NP a strop nad suterénem
 
-3 cm Steprock HD
-7 cm CEMFLOW
-1 cm vynil/dlazky
+Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm; podlahový EPS 120 mm; MIAKO 210 mm; omítka 15 mm. Na spodní straně MIAKO není další izolace.
 
-## Strecha
+## SK4 – podlaha nevytápěného suterénu
 
-93%: Kamenna vata, 350 mm, λ = 0.038, U = 0.11
-7%: Drevo, 350mm, U = 0.57
+Cementový potěr 65 mm; hydroizolace 5 mm; železobetonová deska 150 mm. Bez tepelné izolace.
 
-Prumerne U = 0.15
+## SK5 – obvodové zdi obytných podlaží
 
-Norma doporucuje 0.16, pasivni domy 0.10 - 0.15
+Finální fasádní vrstva 5 mm; fasádní minerální vata 200 mm; VPC 240 mm (1.NP 10-2,0; podkroví 10-1,8); vnitřní omítka 5 mm. Tepelnou vodivost zdiva převzít pro skutečnou objemovou hmotnost a provedení výrobku.
 
-## Stena
+## SK6 – obvodové zdi suterénu
 
-Kamenna vata, 200 mm, λ = 0.038
+Finální fasádní vrstva 5 mm v nadzemní části; XPS 100 mm; ztracené bednění s betonovou výplní 300 mm; bez vnitřní omítky.
 
-Celkem U = 0.19
+## SK7 – podlaha pod schody
 
-Norma doporucuje U = 0.25, pasivni domy 0.12 - 0.18
+Dřevo 50 mm; minerální vata 200 mm; SDK 12,5 mm. Výškové uspořádání obsahuje vzduchové mezery podle řezu C–C. Spodní podhled je ve stejné výšce jako zbytek dokončeného stropu suterénu.
+
+## Podklady pro vodivosti izolací
+
+Hodnoty jsou specifikací požadované kvality, bez závazku koupit konkrétní značku. Dostupnost odpovídajících vlastností dokládají například [ROCKWOOL SUPERROCK](https://www.rockwool.com/cz/produkty/superrock/), [FRONTROCK SUPER](https://www.rockwool.com/cz/frontrock-super/), [STEPROCK HD](https://www.rockwool.com/cz/produkty/steprock-hd/), [Isover EPS 100](https://www.isover.cz/dokumenty/archiv-technicke-listy/tl-2024-isover-eps-100-cz.pdf) a [Austrotherm XPS TOP 30 SF](https://www.austrotherm.cz/produkty/austrotherm-xps/austrotherm-xps-top-30-sf). Konečný výběr musí splnit i mechanické, vlhkostní a požární požadavky daného použití.

@@ -191,7 +191,7 @@ Zásobování vodou bude zajištěno ze stávající vodovodní přípojky kter�
 
 Pro splaškové vody je uvažováno s vybudováním domovní čistírny odpadních vod s kapacitou pro 5 ekvivalentních obyvatel s tím, že přečištěné vody budou odváděny stávajícící přípojkou do dešťové kanalizační stoky.
 
-Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Pro doplňkové lokální vytápění jsou uvažována kamna o výkonu přibližně 5 kW v obývacím pokoji. Spaliny budou odváděny systémovým komínem s navrhovaným průměrem průduchu 200 mm; konečné napojení se sladí s vybranými kamny a komínovým systémem. Kamna budou mít samostatný přívod spalovacího vzduchu z venkovního prostoru.
+Vytápění a chlazení objektu zajistí potvrzená splitová sestava **LG THERMA V HU051MR.U44 + HN091MR.NK5**, vzduch/voda. Vnitřní rozvod bude napojen na pět fan-coil jednotek. Návrhový teplotní spád vytápění je **45/40 °C** při zimní návrhové venkovní teplotě −15 °C, s ekvitermním snižováním teploty vody; pro chlazení se uvažuje **7/12 °C**. Výkonové pokrytí jednotlivých místností se ověří výpočtem. Pro doplňkové lokální vytápění jsou navržena kamna **HAAS+SOHN PISA RLU na kusové dřevo**, bez teplovodního výměníku, o jmenovitém výkonu Pnom 5,0 kW, v obývacím pokoji v poloze podle půdorysu 2.NP. Spaliny budou odváděny systémovým komínem **Schiedel ABSOLUT**. Kamna budou mít samostatný těsný přívod spalovacího vzduchu z venkovního prostoru. Konečný průměr průduchu a napojení kouřovodu Ø 150 mm se ověří výpočtem spalinové cesty a podle výrobních podkladů; přesné osazení, ochrana podlahy a bezpečné odstupy se zkoordinují s PBŘ a větráním.
 
 V objektu bude systém výměny vzduchu pomocí rekuperace. Větrací jednotka bude umístěná v nevytápěném 1.PP, v místnosti S.04 a pomocí rozvodů ve šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
 
@@ -233,10 +233,10 @@ Uliční část pasů je výškově snížena o 400 mm. Mezi sníženými pasy a
 | Podlaží a konstrukce | Materiál a návrhová tloušťka |
 |---|---|
 | 1.PP – obvodové a vnitřní nosné stěny | Ztracené bednění vyplněné betonem, 300 mm |
-| 1.NP – obvodové nosné stěny | Vápencopískové zdivo VPC (10-2,0), 250 mm |
+| 1.NP – obvodové nosné stěny | Vápencopískové zdivo VPC (10-2,0), 240 mm |
 | 1.NP – příčná stěna mezi zahradními a uličními místnostmi a stěna mezi pokoji 0.01 a 0.02 | Porfix P2-440 PDK, 300 mm |
 | 1.NP – dvě podélné nosné stěny po stranách koupelny, směrem k pokoji 0.03 a ke schodišti | Ytong Klasik, 300 mm |
-| 2.NP – obvodové nosné stěny | Vápencopískové zdivo VPC (10-1,8), 250 mm |
+| 2.NP – obvodové nosné stěny | Vápencopískové zdivo VPC (10-1,8), 240 mm |
 | 2.NP – příčná nosná stěna nad příčnou stěnou 1.NP | Porfix P2-440 PDK, 300 mm |
 | 2.NP – nosná stěna mezi kuchyní a schodištěm | Ytong Klasik, 300 mm |
 | 1.NP a 2.NP – nenosné příčky | Sádrokartonové příčky, celková tloušťka 100 mm |
@@ -251,31 +251,33 @@ Pod sloupky vaznic a při hranách schodišťových otvorů jsou navrženy ocelo
 
 Vnitřní schodiště z 1.NP do podkroví je dřevěné, dvouramenné s mezipodestou. Mezipodestu podporuje šest dřevěných sloupků průřezu 120 × 120 mm, vedených od základové desky. Sloupky pod vaznicemi v podkroví mají průřez 160 × 160 mm. Venkovní vstup do 1.NP je přístupný po dřevěném vstupním schodišti s betonovou podestou a zábradlím podle půdorysu a řezů.
 
-Schodiště mezi 1.PP a 1.NP není součástí nynějšího návrhu. Rezervované místo nad S.05 je uzavřeno dřevěnou podlahovou deskou tl. 50 mm. Pod ní je minerální vata tl. 200 mm a sádrokartonový podhled tl. 12,5 mm, výškově navazující na spodní líc ostatních dokončených stropů suterénu; skladba obsahuje také vzduchové mezery. Toto místo je řešeno samostatnou skladbou SK7 v řezu **D.1.1.2-06 – Řez C–C**.
+Schodiště mezi 1.PP a 1.NP není součástí nynějšího návrhu. Rezervované místo nad S.05 je uzavřeno dřevěnou podlahovou deskou tl. 50 mm. Pod ní je minerální vata tl. 200 mm, λD ≤ 0,038 W/(m·K), a sádrokartonový podhled tl. 12,5 mm, výškově navazující na spodní líc ostatních dokončených stropů suterénu; skladba obsahuje také vzduchové mezery. Toto místo je řešeno samostatnou skladbou SK7 v řezu **D.1.1.2-06 – Řez C–C**.
 
 **Střecha**
 
 Střecha je sedlová se sklonem přibližně 36°, s dřevěným vaznicovým krovem podle výkresu **D.2.3-06 – Krov**. Krokve mají průřez 80 × 200 mm, pozednice 160 × 120 mm a vaznice 180 × 260 mm. Krytinu tvoří skládaná střešní taška v červené barvě.
 
-Skladba střešního pláště SK1 od exteriéru: taška tl. 30 mm, latě 40 × 60 mm s výškou 40 mm, kontralatě 60 × 60 mm, pojistná hydroizolace, MDF záklop tl. 15 mm, krokve s mezikrokevní minerální vatou tl. 200 mm, podkrokevní minerální vata tl. 200 mm, OSB záklop tl. 15 mm, parobrzda, instalační rošt výšky 30 mm a dvojitý sádrokartonový podhled celkové tl. 25 mm. Celková tloušťka minerální izolace je 400 mm. Typ desek, upevnění a souvrství budou koordinovány s požadavky PBŘ.
+Skladba střešního pláště SK1 od exteriéru: taška tl. 30 mm, latě 40 × 60 mm s výškou 40 mm, kontralatě 60 × 60 mm, pojistná hydroizolace, MDF záklop tl. 15 mm, krokve s mezikrokevní minerální vatou tl. 200 mm a podkrokevní minerální vata tl. 200 mm, obě s λD ≤ 0,038 W/(m·K), OSB záklop tl. 15 mm, parobrzda, instalační rošt výšky 30 mm a dvojitý sádrokartonový podhled celkové tl. 25 mm. Celková tloušťka minerální izolace je 400 mm. Typ desek, upevnění a souvrství budou koordinovány s požadavky PBŘ.
 
-Komínové těleso má vnější rozměr 400 × 400 mm, s navrhovaným průměrem průduchu 200 mm. Konečné provedení komínového systému, napojení kamen a odstupy od hořlavých konstrukcí se určí podle vybraných výrobků a požárního řešení; konstrukční mezery v půdorysech nenahrazují tyto požadavky.
+Navržen je systémový komín **Schiedel ABSOLUT**. Současné výkresy zachycují předběžné těleso 500 mm ve směru X × 400 mm ve směru Y a průduch Ø 200 mm; tato geometrie není potvrzeným rozměrem zvolené výrobkové sestavy. Konečný průměr, varianta s přívodem spalovacího vzduchu a odpovídající rozměry tělesa, základu a prostupů se zkoordinují po dimenzování spalinové cesty. Montážní návod požaduje odstup nejméně 30 mm od nehořlavých konstrukcí a 50 mm od dřeva, s předepsanou úpravou prostupů. Tyto mezery se posuzují odděleně od odstupů kamen a kouřovodu od hořlavých materiálů. [Schiedel – technický list ABSOLUT](https://www.schiedel.com/downloads/cs-CZ/Projek%C4%8Dn%C3%AD%20podklady/2023-05-technicky-list-absolut-2019%20.pdf), [montážní návod ABSOLUT, 09/2026](https://www.schiedel.com/downloads/cs-CZ/Mont%C3%A1%C5%BEn%C3%AD%20n%C3%A1vody/montazni-navod-absolut-tisk-a3-2026.pdf).
 
 **Podlahy a spodní povrchy stropů**
 
 | Skladba | Vrstvy od horního povrchu směrem dolů |
 |---|---|
-| SK2 – podlaha 2.NP a strop nad 1.NP | Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm; MIAKO 210 mm; omítka 15 mm |
-| SK3 – podlaha 1.NP a strop nad 1.PP, mimo SK7 | Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm; podlahový polystyren 120 mm; MIAKO 210 mm; omítka 15 mm |
+| SK2 – podlaha 2.NP a strop nad 1.NP | Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm, λD ≤ 0,037 W/(m·K); MIAKO 210 mm; omítka 15 mm |
+| SK3 – podlaha 1.NP a strop nad 1.PP, mimo SK7 | Finální povrch 10 mm; cementový potěr 60 mm; kročejová minerální vata 30 mm, λD ≤ 0,037 W/(m·K); podlahový polystyren EPS 120 mm, λD ≤ 0,037 W/(m·K); MIAKO 210 mm; omítka 15 mm |
 | SK4 – podlaha 1.PP | Cementový potěr 65 mm; hydroizolace 5 mm; železobetonová deska 150 mm |
 
 Podlahová skladba 1.NP nad MIAKO má celkovou tloušťku 220 mm, v podkroví 100 mm. Suterénní podlaha není tepelně izolována. Na spodním líci běžných stropů suterénu je navržena omítka tl. 15 mm; podstropní tepelná izolace ani sádrokartonový podhled se zde neuvažují. Výjimkou je samostatná skladba SK7 uvedená výše. Podlahové potěry jsou odděleny od svislých konstrukcí obvodovými dilatačními pásky. Finální povrchy obytných podlaží tvoří keramická dlažba a vinyl; stěny hygienických místností budou opatřeny keramickým obkladem.
 
+Uvedené hodnoty λD jsou nejvyšší přípustné deklarované tepelné vodivosti izolací, nikoli výsledné hodnoty U skladeb. Pro PENB se použijí odpovídající návrhové hodnoty se zohledněním podmínek použití, nehomogenních vrstev a tepelných mostů. Ostatní materiálové vlastnosti se převezmou z podkladů výrobce zdiva a dalších výrobků nebo z příslušných návrhových tabulek.
+
 **Obvodový plášť a výplně otvorů**
 
-Obvodové stěny obytných podlaží jsou zatepleny fasádní minerální vatou tl. 200 mm s armovací vrstvou a finální fasádní omítkou tl. 5 mm v bílé barvě. Vnitřní omítka zdiva je uvažována tl. 5 mm. Obvodové konstrukce suterénu a navazující základové konstrukce jsou z vnější strany opatřeny perimetrickou izolací z extrudovaného polystyrenu tl. 100 mm v rozsahu vyznačeném v půdorysech a řezech. V suterénu se vnitřní omítka stěn nenavrhuje. Skladby SK5 a SK6 jsou uvedeny ve výkresech **D.1.1.2-04 až D.1.1.2-06**.
+Obvodové stěny obytných podlaží jsou zatepleny fasádní minerální vatou tl. 200 mm, λD ≤ 0,036 W/(m·K), s armovací vrstvou a finální fasádní omítkou tl. 5 mm v bílé barvě. Vnitřní omítka zdiva je uvažována tl. 5 mm. Obvodové konstrukce suterénu a navazující základové konstrukce jsou z vnější strany opatřeny perimetrickou izolací z extrudovaného polystyrenu tl. 100 mm, λD ≤ 0,035 W/(m·K), v rozsahu vyznačeném v půdorysech a řezech. V suterénu se vnitřní omítka stěn nenavrhuje. Skladby SK5 a SK6 jsou uvedeny ve výkresech **D.1.1.2-04 až D.1.1.2-06**.
 
-Okna jsou navržena z plastových profilů s izolačním trojsklem. Vstupní dveře budou z plastového profilu, částečně prosklené izolačním trojsklem. Vnitřní dveře a obložkové zárubně budou zvoleny podle požadovaných rozměrů a případných požárních požadavků. Klempířské konstrukce budou z povrchově upraveného pozinkovaného plechu, vnější parapety hliníkové.
+Okna jsou navržena z plastových profilů s izolačním trojsklem. Pro okna je předepsán součinitel prostupu tepla celého okna **Uw ≤ 1,20 W/(m²·K)**; nejde o hodnotu samotného zasklení Ug. Pro předběžné energetické hodnocení se uvažuje Uw = 1,20 W/(m²·K). Solární činitel g a podíl rámu se doloží pro zvolený výrobek; jejich hodnoty tímto požadavkem nejsou určeny. Vstupní dveře budou z plastového profilu, částečně prosklené izolačním trojsklem. Vnitřní dveře a obložkové zárubně budou zvoleny podle požadovaných rozměrů a případných požárních požadavků. Klempířské konstrukce budou z povrchově upraveného pozinkovaného plechu, vnější parapety hliníkové.
 
 Světlá výška běžných místností 1.NP po dokončení stropní omítky je 2,610 m, v 1.PP 2,285 m. V podkroví se výška mění podle šikmých a vodorovných podhledů; rozhodující úrovně jsou uvedeny v řezech. Výškové osazení stavby je **±0,000 = 418,070 m Bpv**, úroveň podlahy 1.PP je 415,340 m Bpv a podlahy 2.NP 421,005 m Bpv.
 
@@ -301,7 +303,7 @@ Pro splaškové vody je uvažováno s vybudováním domovní čistírny odpadní
 
 Dešťová kanalizace bude odvedená pomocí KG potrubí DN125 do podzemní plastové nádrže o objemu 10 m3. Přepad bude řešen napojením do existující dešťové kanalizační stoky, která se nachází v komunikaci před domem.
 
-Vytápění objektu bude zajištěno tepelným čerpadlem (vzduch/voda). Vnitřní rozvod topné vody bude napojen na fan-coil jednotky. Pro doplňkové lokální vytápění jsou uvažována kamna o výkonu přibližně 5 kW v obývacím pokoji. Spaliny budou odváděny systémovým komínem s navrhovaným průměrem průduchu 200 mm; konečné napojení se sladí s vybranými kamny a komínovým systémem. Kamna budou mít samostatný přívod spalovacího vzduchu z venkovního prostoru.
+Vytápění a chlazení objektu zajistí potvrzená splitová sestava **LG THERMA V HU051MR.U44 + HN091MR.NK5**, vzduch/voda. Vnitřní rozvod bude napojen na pět fan-coil jednotek. Návrhový teplotní spád vytápění je **45/40 °C** při zimní návrhové venkovní teplotě −15 °C, s ekvitermním snižováním teploty vody; pro chlazení se uvažuje **7/12 °C**. Výkonové pokrytí jednotlivých místností se ověří výpočtem. Pro doplňkové lokální vytápění jsou navržena kamna **HAAS+SOHN PISA RLU na kusové dřevo**, bez teplovodního výměníku, o jmenovitém výkonu Pnom 5,0 kW, v obývacím pokoji v poloze podle půdorysu 2.NP. Spaliny budou odváděny systémovým komínem **Schiedel ABSOLUT**. Kamna budou mít samostatný těsný přívod spalovacího vzduchu z venkovního prostoru. Konečný průměr průduchu a napojení kouřovodu Ø 150 mm se ověří výpočtem spalinové cesty a podle výrobních podkladů; přesné osazení, ochrana podlahy a bezpečné odstupy se zkoordinují s PBŘ a větráním.
 
 V objektu bude systém výměny vzduchu pomocí rekuperace. Větrací jednotka bude umístěná v nevytápěném 1.PP, v místnosti S.04 a pomocí rozvodů v šachtě a podhledech bude zajišťovat čerstvý a čistý vzduch v objektu.
 

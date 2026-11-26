@@ -196,7 +196,7 @@ V kuchyni bude recirkulační digestoř s tukovou a pachovou filtrací podle zvo
 
 Dvě odvodní vyústky po 40 m³/h v kuchyňské části zajišťují obecné větrání prostoru a odvod vlhkosti, kterou recirkulační digestoř neodstraňuje. Jejich průtok v normálním režimu zůstává celkem 80 m³/h. Při potřebě zvýšeného větrání uživatel spustí centrální boost tlačítkem.
 
-U doplňkových kamen se zachová samostatný přívod spalovacího vzduchu.
+Navržena jsou kamna **HAAS+SOHN PISA RLU na kusové dřevo** v poloze podle půdorysu 2.NP, s komínovým systémem **Schiedel ABSOLUT** a samostatným těsným přívodem spalovacího vzduchu. Přívod vzduchu pro spalování není součástí větracích průtoků této zprávy. Při koordinaci se ověří podmínky souběhu podle návodu kamen a komínového systému, včetně tlakových poměrů při provozu a poruše VZT; samotné označení RLU nenahrazuje toto ověření.
 
 ## 9. Požadavky na ostatní profese
 

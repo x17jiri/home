@@ -2,7 +2,7 @@ import json
 import re
 import unittest
 import xml.etree.ElementTree as ET
-from math import hypot
+from math import hypot, pi
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
@@ -6094,6 +6094,29 @@ class HouseTests(unittest.TestCase):
                 ).Name,
                 "Chimney masonry",
             )
+
+    def test_rectangular_chimney_keeps_its_flue_and_projected_footprint(self) -> None:
+        house = House("Rectangular chimney")
+        ground = house.storey("Ground", elevation=0)
+        upper = house.storey("Upper", elevation=3)
+        chimney = upper.chimney((2, 3), size=(.5, .4), height=4, flue_diameter=.2)
+        self.assertEqual((chimney.width, chimney.depth), (.5, .4))
+        shape = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), chimney)
+        np.testing.assert_allclose((ifcopenshell.util.shape.get_x(shape.geometry),
+                                   ifcopenshell.util.shape.get_y(shape.geometry)), (.5, .4))
+        self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(shape.geometry),
+                               (.5*.4 - pi*.1**2)*4, delta=.002)
+        drawing = house.add_drawing("Ground plan", 2, 3, 1.6, 3, storeys=[ground])
+        drawing.add_chimney_annotation(chimney, projected=True)
+        rectangles = [item for item in drawing.group.IsGroupedBy[0].RelatedObjects
+                      if ifcopenshell.util.element.get_pset(item, "BBIM_DrawingRectangle")]
+        self.assertEqual(len(rectangles), 1)
+        props = ifcopenshell.util.element.get_pset(rectangles[0], "BBIM_DrawingRectangle")
+        np.testing.assert_allclose(json.loads(props["Start"]), (1.75, 2.8))
+        np.testing.assert_allclose(json.loads(props["End"]), (2.25, 3.2))
+        for size in ((.5, .1), (.1, .5)):
+            with self.subTest(size=size), self.assertRaisesRegex(ValueError, "smaller than size"):
+                upper.chimney((2, 3), size=size, height=4, flue_diameter=.2)
 
     def test_projects_upstairs_chimney_marker_without_including_or_moving_body(self) -> None:
         house = House("Chimney planning")

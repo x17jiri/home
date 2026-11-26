@@ -347,6 +347,13 @@ aligns with the regular plastered basement ceiling.
 `GROUND_STAIR_OPENING_AIR_GAP_THICKNESS` calculates the surrounding air space.
 Skladba 7 lists the timber, mineral wool and plasterboard for this
 detail on all section sheets; its SK7 marker appears only in CC.
+`INSULATION_LAMBDA_D_MAX` defines the maximum declared conductivities in
+W/(m K) printed with the insulation layers in the shared SK1–SK7 list:
+roof and under-stairs wool 0.038, facade wool 0.036, floor wool and EPS 0.037,
+and perimeter XPS 0.035. These are product requirements; PENB calculations
+must use the appropriate design values and account for timber and other
+thermal bridges. Current specifications and manufacturer references are in
+`vrstvy.md`; its former PIR and 350 mm roof notes have been superseded.
 `GROUND_STAIR_OPENING_BOARD_THICKNESS` and
 `GROUND_STAIR_OPENING_INSULATION_THICKNESS`, together with
 `GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS`, control this detail. CC also labels
@@ -1625,20 +1632,22 @@ its own `Roof - …` visibility storey, including both roof slopes.
 The chimney starts at the top of the foundation slab (`BASEMENT_FLOOR_START`), centred at
 `CHIMNEY_CENTER`. Its Y coordinate is calculated from the centreline of the
 basement garden-room wall, using
-`CHIMNEY_BASEMENT_WALL_CENTER_OFFSET = 0.15 + 0.03 m` to the chimney's garden
-face. This 180 mm setout gives 30 mm clear from the 300 mm basement wall.
-Half the chimney width is then subtracted to locate its centre.
+`CHIMNEY_WALL_CENTER_OFFSET = 0.125 + 0.075 m` to the chimney's garden
+face. This 200 mm setout gives 50 mm clear from the 300 mm basement wall.
+Half the chimney depth along Y is then subtracted to locate its centre.
 The vertical SDK wall stops at the chimney's front face,
-and the kitchen follows the shortened wall. There is no chimney-to-stair
-clearance parameter or dimension. It reuses the original model's
-400 mm square body, 200 mm circular flue and material/colour. Its top is
+and the kitchen follows the shortened wall. Ground-plan clearance dimensions
+reference the chimney faces and the stairway/bathroom walls. The new house uses
+a 500 × 400 mm body (`CHIMNEY_SIZE`, global X × Y) with a 200 mm circular flue. Its top is
 `CHIMNEY_ABOVE_ROOF` above the roof-tile ridge. It belongs to the Basement
 storey; drawing bounds use the chimney's actual storey to retain the same roof
-and chimney-top elevations. An 800 × 800 mm concrete pad below the slab is
+and chimney-top elevations. A 900 × 800 mm concrete pad below the slab is
 centred under the stack: `CHIMNEY_FOOTING_OVERHANG = 0.20` adds 200 mm on
 every side, and its height follows `FOUNDATION_FOOTING_HEIGHT`. Its outline
 joins the strip-footing outlines in the foundation plan. The roof receives
-an exact vertical shaft opening; the SDK partitions meet the chimney
+an exact vertical shaft opening. `Storey.chimney(size=(width_x, depth_y), ...)`
+supports a rectangular stack; a scalar `size` still creates a square chimney.
+Both forms expose `width` and `depth`. The SDK partitions meet the chimney
 without intersecting it. The upper plan includes the chimney/flue
 symbol. Basement, ground and ceiling plans now include the real chimney and
 flue symbol through `drawing.add_chimney_annotation(chimney)`, replacing the

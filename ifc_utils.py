@@ -15247,9 +15247,9 @@ class Drawing:
         if projected:
             placement[2, 3] = self._annotation_frame(chimney.center, "add_chimney_annotation")[2, 3]
             x, y = chimney.center
-            half = chimney.size/2
+            half_x, half_y = chimney.width/2, chimney.depth/2
             self.add_rectangle(
-                (x-half, y-half), (x+half, y+half), style="dashed",
+                (x-half_x, y-half_y), (x+half_x, y+half_y), style="dashed",
                 name=f"{annotation_name} Projected Body",
             )
         model = self.house.model
@@ -17099,7 +17099,7 @@ class CeilingLayer(ifcopenshell.entity_instance):
 
 
 class Chimney(ifcopenshell.entity_instance):
-    """An ``IfcChimney`` with a square stack and central circular flue."""
+    """An ``IfcChimney`` with a rectangular stack and central circular flue."""
 
     def __init__(
         self,
@@ -17107,7 +17107,7 @@ class Chimney(ifcopenshell.entity_instance):
         storey: Storey,
         *,
         center: tuple[float, float],
-        size: float,
+        size: float | tuple[float, float],
         height: float,
         flue_diameter: float,
         start_height: float,
@@ -17117,6 +17117,9 @@ class Chimney(ifcopenshell.entity_instance):
         object.__setattr__(self, "storey", storey)
         object.__setattr__(self, "center", center)
         object.__setattr__(self, "size", size)
+        width, depth = size if isinstance(size, tuple) else (size, size)
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "depth", depth)
         object.__setattr__(self, "height", height)
         object.__setattr__(self, "flue_diameter", flue_diameter)
         object.__setattr__(self, "start_height", start_height)
@@ -22347,7 +22350,7 @@ class Storey:
         self,
         center: Point,
         *,
-        size: Number,
+        size: Number | Point,
         height: Number,
         flue_diameter: Number,
         start_height: Number = 0,
@@ -22356,27 +22359,34 @@ class Storey:
         color: str | None = None,
         transparency: Number = 0,
     ) -> Chimney:
-        """Create a square chimney with a central circular flue void.
+        """Create a chimney with a central circular flue void.
 
-        ``center`` locates the stack in plan, ``size`` is its outside side
-        length, and ``height`` is its vertical extent.  ``start_height`` is
+        ``center`` locates the stack in plan. ``size`` is either one outside
+        side length for a square, or ``(width_x, depth_y)`` for a rectangle;
+        ``width`` and ``depth`` on the result always expose both dimensions.
+        ``height`` is its vertical extent. ``start_height`` is
         measured above this storey's elevation.  ``material`` is persisted as
         an IFC material and supplies the drawing material class.  ``color``
         and ``transparency`` affect only the 3D body.
         """
         center_x, center_y = _point(center, "center")
-        size = _number(size, "size")
+        if isinstance(size, (tuple, list)):
+            width, depth = _point(size, "size")
+            size = (width, depth)
+        else:
+            size = _number(size, "size")
+            width = depth = size
         height = _number(height, "height")
         flue_diameter = _number(flue_diameter, "flue_diameter")
         start_height = _number(start_height, "start_height")
         material_name = _name(material, "material")
-        if size <= 0:
+        if min(width, depth) <= 0:
             raise ValueError("size must be greater than zero")
         if height <= 0:
             raise ValueError("height must be greater than zero")
         if flue_diameter <= 0:
             raise ValueError("flue_diameter must be greater than zero")
-        if flue_diameter >= size:
+        if flue_diameter >= min(width, depth):
             raise ValueError("flue_diameter must be smaller than size")
         surface_style = self.house._surface_style(
             "chimney",
@@ -22423,14 +22433,14 @@ class Storey:
             is_si=True,
         )
 
-        half_size = size / 2
+        half_x, half_y = width/2, depth/2
         outer_points = model.createIfcCartesianPointList2D(
             [
-                (-half_size, -half_size),
-                (half_size, -half_size),
-                (half_size, half_size),
-                (-half_size, half_size),
-                (-half_size, -half_size),
+                (-half_x, -half_y),
+                (half_x, -half_y),
+                (half_x, half_y),
+                (-half_x, half_y),
+                (-half_x, -half_y),
             ]
         )
         outer_curve = model.createIfcIndexedPolyCurve(

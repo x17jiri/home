@@ -42,7 +42,7 @@ Vnitřní rozvod požární vody není dle požární zprávy v objektu požadov
 
 #### 4.1.3 Příprava teplé vody
 
-Teplá voda bude připravována v nepřímo vytápěném zásobníku připojeném na tepelné čerpadlo.
+Teplá voda bude připravována v samostatném nepřímo vytápěném zásobníku o jmenovitém objemu **400 l pro čtyři uživatele**, připojeném přes výměník k potvrzené sestavě **LG THERMA V HU051MR.U44 + HN091MR.NK5**. Zásobník obsahuje pitnou vodu a není akumulační nádobou otopné soustavy. Pro předběžné energetické hodnocení se uvažuje 55 °C; konečný typ, tepelná ztráta, výkon výměníku a hygienický režim se stanoví podle vybraného zásobníku v koordinaci s částí VYT. Cirkulace TV se v základní variantě předběžně nenavrhuje; ověří se objemy jednotlivých větví a čekací doby u odběrů.
 
 #### 4.1.4 Provedení tlakové zkoušky
 
@@ -55,7 +55,7 @@ Před provedením zkoušek musí být potrubí řádně naplněno a odvzdušněn
 
 Tepelná izolace bude provedena polyethylenovou návlekovou izolací o tloušťce 9 mm na studené vodě a 20 mm na teplé vodě.
 
-Od cirkulovaného rozvodu bude tepelná izolace provedena polyethylenovou návlekovou izolací o tloušťce 9 mm.
+Samostatný cirkulační rozvod TV nyní není navržen. Pokud ověření čekacích dob povede k jeho doplnění, navrhne se současně jeho tepelná izolace, řízení a zahrnutí ztrát a příkonu čerpadla do energetického hodnocení.
 
 #### 4.1.6 Uvedení do provozu
 

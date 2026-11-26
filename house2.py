@@ -30,16 +30,16 @@ from steel_profiles import heb_profile, heb_section
 from electrical_schematic import Circuit, add_distribution_board
 
 
-HOUSE_WIDTH = 8.75
-HOUSE_DEPTH = 9.00
-BWT = 0.25
-FRONT_WALL_THICKNESS = 0.25
-BACK_WALL_THICKNESS = 0.25
-UPPER_FRONT_WALL_THICKNESS = 0.25
-UPPER_BACK_WALL_THICKNESS = 0.25
+HOUSE_WIDTH = 8.74
+HOUSE_DEPTH = 8.99
+BWT = 0.24
+FRONT_WALL_THICKNESS = 0.24
+BACK_WALL_THICKNESS = 0.24
+UPPER_FRONT_WALL_THICKNESS = 0.24
+UPPER_BACK_WALL_THICKNESS = 0.24
 UPPER_EXTERIOR_WALL_MATERIAL = "VPC Cihla 240 mm (10-1,8)"
 UPPER_EXTERIOR_WALL_COLOR = "#e6f3ff"
-INNER_BWT = 0.25
+INNER_BWT = 0.24
 MID_WALL_THICKNESS = 0.30
 GARDEN_ROOMS_WALL_THICKNESS = 0.30
 GARDEN_ROOMS_WALL_MATERIAL = "Porfix P2-440 PDK 300 mm"
@@ -49,7 +49,7 @@ DRY_WALL_WIDTH = 0.10
 FACADE_INSULATION_THICKNESS = 0.20
 EXTERIOR_XPS_INSULATION_THICKNESS = 0.10
 FACADE_THICKNESS = 0.005
-GARDEN_ROOMS_DEPTH = 3.225  # Clear depth, from the divider's garden face to the back wall's inner face.
+GARDEN_ROOMS_DEPTH = 3.23  # Clear depth, from the divider's garden face to the back wall's inner face.
 GARDEN_ROOMS_WALL_CENTER_Y = (
     HOUSE_DEPTH-BACK_WALL_THICKNESS-GARDEN_ROOMS_DEPTH-GARDEN_ROOMS_WALL_THICKNESS/2
 )
@@ -62,17 +62,17 @@ THIRD_ROOM_NARROW_WALL_X = (
 )
 THIRD_ROOM_NARROW_WIDTH = THIRD_ROOM_NARROW_WALL_X-BWT-DRY_WALL_WIDTH
 # Retain the former 240 mm walls' centrelines while changing their thickness.
-THIRD_ROOM_REFERENCE_WIDTH = 3.5
-THIRD_ROOM_WALL_CENTER_X = BWT+THIRD_ROOM_REFERENCE_WIDTH+INNER_BWT/2
+THIRD_ROOM_REFERENCE_WIDTH = 3.48
+THIRD_ROOM_WALL_CENTER_X = BWT+THIRD_ROOM_REFERENCE_WIDTH+MID_WALL_THICKNESS/2
 THIRD_ROOM_WALL_X = THIRD_ROOM_WALL_CENTER_X+MID_WALL_THICKNESS/2
 THIRD_ROOM_WIDTH = THIRD_ROOM_WALL_X-MID_WALL_THICKNESS-BWT
-STAIRWAY_REFERENCE_WIDTH = 2.225
+STAIRWAY_REFERENCE_WIDTH = 2.23
 STAIRWAY_WALL_CENTER_X = HOUSE_WIDTH-BWT-STAIRWAY_REFERENCE_WIDTH-MID_WALL_THICKNESS/2.0
 STAIRWAY_WALL_X = STAIRWAY_WALL_CENTER_X+MID_WALL_THICKNESS/2
 STAIRWAY_WIDTH = HOUSE_WIDTH-BWT-STAIRWAY_WALL_X
 BATHROOM_LEFT_X = THIRD_ROOM_WALL_X
 BATHROOM_RIGHT_X = STAIRWAY_WALL_X-MID_WALL_THICKNESS
-STAIRWAY_OPENING_START_Y = BWT+3.25
+STAIRWAY_OPENING_START_Y = BWT+3.255 + 0.05
 HALLWAY_OPENING_LENGTH = GARDEN_ROOMS_WALL_Y-STAIRWAY_OPENING_START_Y
 STAIRWAY_OPENING_FRONT_Y = STAIRWAY_OPENING_START_Y
 BATHROOM_PARTITION_Y = STAIRWAY_OPENING_FRONT_Y-DRY_WALL_WIDTH
@@ -275,7 +275,7 @@ ROOF_EAVE_OVERHANG = .6
 ROOF_EAVE_DROP_BELOW_WALL_PLATE = 0.20
 ROOF_EAVE_CUT_Z = WALL_PLATE_Z-WALL_PLATE_SIZE[1]/2-ROOF_EAVE_DROP_BELOW_WALL_PLATE
 ROOF_GABLE_OVERHANG = 0.25 + 0.125
-CHIMNEY_SIZE = 0.40
+CHIMNEY_SIZE = (0.50, 0.40)  # Outside dimensions along global X and Y.
 CHIMNEY_CEILING_INFILL_CLEARANCE = 0.03
 # From the garden rooms wall centreline to the chimney's garden face.
 CHIMNEY_WALL_CENTER_OFFSET = 0.125 + 0.075
@@ -316,6 +316,17 @@ ROOF_TILE_BOTTOM = TILE_BATTEN_BOTTOM+TILE_BATTEN_SIZE[1]
 # Global IDs are shared by all section sheets; each cut selects its own marks.
 # Dimensions follow the model; the separate 1 mm membrane is specified only
 # here because the IFC currently combines the OSB and vapour-barrier geometry.
+# Maximum declared insulation conductivities, W/(m K). These are procurement
+# limits; the energy assessment must apply any required design corrections.
+INSULATION_LAMBDA_D_MAX = {
+    "roof_wool": 0.04,
+    "facade_wool": 0.04,
+    "floor_wool": 0.04,
+    "floor_eps": 0.04,
+    "perimeter_xps": 0.04,
+    "stair_floor_wool": 0.04,
+}
+
 CONSTRUCTION_ASSEMBLIES = {
     1: {"title": "Střešní plášť", "layers": (
         f"Střešní taška | {ROOF_TILE_THICKNESS*1000:g} mm",
@@ -324,25 +335,25 @@ CONSTRUCTION_ASSEMBLIES = {
         f"Pojistná hydroizolace | {UNDERLAY_THICKNESS*1000:g} mm",
         f"MDF záklop | {MDF_THICKNESS*1000:g} mm",
         f"Krokve {RAFTER_SIZE[0]*1000:g}×{RAFTER_SIZE[1]*1000:g} | {RAFTER_HEIGHT*1000:g} mm",
-        f"Mezikrokevní minerální vata | {RAFTER_HEIGHT*1000:g} mm",
-        f"Podkrokevní minerální vata | {THERMAL_INSULATION_UNDER_RAFTERS*1000:g} mm",
+        f"Mezikrokevní minerální vata | {RAFTER_HEIGHT*1000:g} mm | λD ≤ {INSULATION_LAMBDA_D_MAX['roof_wool']:.3f} W/(m·K)",
+        f"Podkrokevní minerální vata | {THERMAL_INSULATION_UNDER_RAFTERS*1000:g} mm | λD ≤ {INSULATION_LAMBDA_D_MAX['roof_wool']:.3f} W/(m·K)",
         f"OSB záklop | {VAPOUR_BARRIER_THICKNESS*1000:g} mm",
         "Pojistná parobrzda | 1 mm",
-        f"Laťový rošt {INSTALLATION_SPACE_THICKNESS*1000:g}×60 | {INSTALLATION_SPACE_THICKNESS*1000:g} mm",
+        f"Laťový rošt {INSTALLATION_SPACE_THICKNESS*1000:g}×50 | {INSTALLATION_SPACE_THICKNESS*1000:g} mm",
         f"2×SDK podhled | {GYPSUM_PLASTERBOARD_THICKNESS*1000:g} mm",
     )},
     2: {"title": "Podlaha podkroví a strop nad 1.NP", "layers": (
         "Finální povrch podlahy | 10 mm",
         f"Cementový potěr | {(CEMFLOW_AND_FINISH_THICKNESS-.01)*1000:g} mm",
-        f"Kročejová minerální vata | {(UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS)*1000:g} mm",
+        f"Kročejová minerální vata | {(UPPER_FLOOR_THICKNESS-CEMFLOW_AND_FINISH_THICKNESS)*1000:g} mm | λD ≤ {INSULATION_LAMBDA_D_MAX['floor_wool']:.3f} W/(m·K)",
         f"Stropní konstrukce MIAKO | {CEILING_THICKNESS*1000:g} mm",
         f"Omítka | {CEILING_PLASTER_THICKNESS*1000:g} mm",
     )},
     3: {"title": "Podlaha 1.NP a strop nad suterénem", "layers": (
         "Finální povrch podlahy | 10 mm",
         f"Cementový potěr | {(CEMFLOW_AND_FINISH_THICKNESS-.01)*1000:g} mm",
-        "Kročejová minerální vata | 30 mm",
-        f"Podlahový polystyren | {(GROUND_FLOOR_INSULATION_THICKNESS-.03)*1000:g} mm",
+        f"Kročejová minerální vata | 30 mm | λD ≤ {INSULATION_LAMBDA_D_MAX['floor_wool']:.3f} W/(m·K)",
+        f"Podlahový polystyren EPS | {(GROUND_FLOOR_INSULATION_THICKNESS-.03)*1000:g} mm | λD ≤ {INSULATION_LAMBDA_D_MAX['floor_eps']:.3f} W/(m·K)",
         f"Stropní konstrukce MIAKO | {CEILING_THICKNESS*1000:g} mm",
         f"Omítka | {BASEMENT_CEILING_PLASTER_ALLOWANCE*1000:g} mm",
     )},
@@ -353,19 +364,19 @@ CONSTRUCTION_ASSEMBLIES = {
     )},
     5: {"title": "Obvodové zdi", "layers": (
         f"Finální vrstva fasády | {FACADE_THICKNESS*1000:g} mm",
-        f"Fasádní minerální vata | {FACADE_INSULATION_THICKNESS*1000:g} mm",
+        f"Fasádní minerální vata | {FACADE_INSULATION_THICKNESS*1000:g} mm | λD ≤ {INSULATION_LAMBDA_D_MAX['facade_wool']:.3f} W/(m·K)",
         f"VPC cihla / {UPPER_EXTERIOR_WALL_MATERIAL} | {BWT*1000:g} mm",
         "Vnitřní omítka | 5 mm",
     )},
     6: {"title": "Obvodové zdi sklepa", "layers": (
         f"Finální vrstva fasády | {FACADE_THICKNESS*1000:g} mm",
-        f"Perimetrický polystyren | {EXTERIOR_XPS_INSULATION_THICKNESS*1000:g} mm",
+        f"Perimetrický polystyren XPS | {EXTERIOR_XPS_INSULATION_THICKNESS*1000:g} mm | λD ≤ {INSULATION_LAMBDA_D_MAX['perimeter_xps']:.3f} W/(m·K)",
         f"Ztracené bednění | {BASEMENT_WALL_THICKNESS*1000:g} mm",
         "Bez vnitřní omítky | 0 mm",
     )},
     7: {"title": "Podlaha pod schody", "layers": (
         f"Dřevo | {GROUND_STAIR_OPENING_BOARD_THICKNESS*1000:g} mm",
-        f"Minerální vata | {GROUND_STAIR_OPENING_INSULATION_THICKNESS*1000:g} mm",
+        f"Minerální vata | {GROUND_STAIR_OPENING_INSULATION_THICKNESS*1000:g} mm | λD ≤ {INSULATION_LAMBDA_D_MAX['stair_floor_wool']:.3f} W/(m·K)",
         f"Sádrokarton | {GROUND_STAIR_OPENING_PLASTERBOARD_THICKNESS*1000:g} mm",
     )},
 }
@@ -403,17 +414,17 @@ STAIR_UPPER_END_Y = STAIR_LANDING_END_Y+STAIR_UPPER_RUN_LENGTH
 BASEMENT_GARDEN_WALL_CENTER_Y = GARDEN_ROOMS_WALL_Y+GARDEN_ROOMS_WALL_THICKNESS/2
 CHIMNEY_CENTER = (
     HOUSE_WIDTH/2.0,
-    GARDEN_ROOMS_WALL_CENTER_Y-CHIMNEY_WALL_CENTER_OFFSET-CHIMNEY_SIZE/2,
+    GARDEN_ROOMS_WALL_CENTER_Y-CHIMNEY_WALL_CENTER_OFFSET-CHIMNEY_SIZE[1]/2,
 )
 chimney_ceiling_opening_region = box(
-    CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-CHIMNEY_CEILING_INFILL_CLEARANCE,
-    CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-CHIMNEY_CEILING_INFILL_CLEARANCE,
-    CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2+CHIMNEY_CEILING_INFILL_CLEARANCE,
-    CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2+CHIMNEY_CEILING_INFILL_CLEARANCE,
+    CHIMNEY_CENTER[0]-CHIMNEY_SIZE[0]/2-CHIMNEY_CEILING_INFILL_CLEARANCE,
+    CHIMNEY_CENTER[1]-CHIMNEY_SIZE[1]/2-CHIMNEY_CEILING_INFILL_CLEARANCE,
+    CHIMNEY_CENTER[0]+CHIMNEY_SIZE[0]/2+CHIMNEY_CEILING_INFILL_CLEARANCE,
+    CHIMNEY_CENTER[1]+CHIMNEY_SIZE[1]/2+CHIMNEY_CEILING_INFILL_CLEARANCE,
 )
 print("CHIMNEY_CENTER =", CHIMNEY_CENTER)
 for purlin_index, purlin_x in enumerate(PURLIN_X_POSITIONS, 1):
-    purlin_chimney_clearance = abs(purlin_x-CHIMNEY_CENTER[0])-(PURLIN_SIZE[0]+CHIMNEY_SIZE)/2
+    purlin_chimney_clearance = abs(purlin_x-CHIMNEY_CENTER[0])-(PURLIN_SIZE[0]+CHIMNEY_SIZE[0])/2
     # Ignore sub-nanometre roundoff at the exact 100 mm warning boundary.
     warning_prefix = "**** WARNING: " if purlin_chimney_clearance < 0.10-1e-9 else ""
     print(f"{warning_prefix}Purlin {purlin_index} to chimney clearance: {purlin_chimney_clearance*1000:.1f} mm")
@@ -456,11 +467,11 @@ UPPER_TOILET_DOOR_OPENING_WIDTH = 0.8
 UPPER_TOILET_DOOR_SIDE_CLEARANCE = 0.05  # From the vertical living-room wall's toilet face.
 THIRD_ROOM_DOOR_GARDEN_CLEARANCE = 0.05  # Garden-room wall's street face to the nearest opening jamb.
 BATHROOM_DOOR_SIDE_CLEARANCE = 0.05
-ENTRANCE_OPENING_AT = 4.0 + 0.025  # absolute y position
+ENTRANCE_OPENING_AT = 4.0 - 0.005 + 0.025  # absolute y position
 GARDEN_WINDOW_WIDTH = 1.25
 ROOM_WINDOW_WIDTH = 1.50
 GARDEN_WINDOW_CENTER_CLEARANCE = 0.75  # House centreline to the nearest opening jamb.
-THIRD_ROOM_WINDOW_EAST_CLEARANCE = 1.25  # Inside east wall face to the opening.
+THIRD_ROOM_WINDOW_EAST_CLEARANCE = 1.255  # Inside east wall face to the opening.
 GROUND_WINDOW_TOP_HEIGHT = ground_floor_height - 0.2
 GROUND_WINDOW_SILL_HEIGHT = GROUND_WALL_BASE_COURSE_HEIGHT+1.0
 UPPER_WINDOW_WIDTH = 1.5
@@ -474,7 +485,7 @@ BATHROOM_WINDOW_WIDTH = 0.75
 BATHROOM_WINDOW_HEIGHT = 0.75
 BATHROOM_WINDOW_STAIRWAY_CLEARANCE = 0.38  # Inside stairway wall face to the opening jamb.
 UPPER_BASIN_SIZE = (0.60, 0.5)
-BATHROOM_WINDOW_CENTER_X = 5.0 + 0.5
+BATHROOM_WINDOW_CENTER_X = 5.0 + 0.5 - 0.005
 
 from project_documents import ARCHITECTURE, ELE, VYT, VZT, ZTI, document_path, expand_drawing_targets
 
@@ -839,8 +850,9 @@ def add_ground_ceiling_heb_clearances(drawing):
 
 def add_chimney_footing(chimney):
     """Add a concrete pad beneath the foundation slab, centred under the stack."""
-    size = chimney.size+2*CHIMNEY_FOOTING_OVERHANG
-    half = size/2
+    width = chimney.width+2*CHIMNEY_FOOTING_OVERHANG
+    depth = chimney.depth+2*CHIMNEY_FOOTING_OVERHANG
+    half_x, half_y = width/2, depth/2
     model = house.model
     footing = ifcopenshell.api.root.create_entity(
         model, ifc_class="IfcFooting", predefined_type="PAD_FOOTING", name="Chimney pad footing",
@@ -851,7 +863,7 @@ def add_chimney_footing(chimney):
     ifcopenshell.api.geometry.edit_object_placement(model, product=footing, matrix=placement, is_si=True)
     body = ifcopenshell.api.geometry.add_slab_representation(
         model, context=house._body_context, depth=FOUNDATION_FOOTING_HEIGHT,
-        polyline=[(-half, -half), (half, -half), (half, half), (-half, half), (-half, -half)],
+        polyline=[(-half_x, -half_y), (half_x, -half_y), (half_x, half_y), (-half_x, half_y), (-half_x, -half_y)],
     )
     ifcopenshell.api.geometry.assign_representation(model, product=footing, representation=body)
     ifcopenshell.api.style.assign_representation_styles(
@@ -862,7 +874,7 @@ def add_chimney_footing(chimney):
     )
     for name, properties in (
         ("Pset_FootingCommon", {"LoadBearing": True}),
-        ("BBIM_ChimneyFooting", {"Chimney": chimney.GlobalId, "Width": size, "Length": size,
+        ("BBIM_ChimneyFooting", {"Chimney": chimney.GlobalId, "Width": width, "Length": depth,
                                  "Height": FOUNDATION_FOOTING_HEIGHT, "Overhang": CHIMNEY_FOOTING_OVERHANG}),
     ):
         pset = ifcopenshell.api.pset.add_pset(model, product=footing, name=name)
@@ -2730,7 +2742,7 @@ living_room_back_face_y = living_room_right_wall_y+UPPER_BEARING_WALL_THICKNESS/
 living_room_return_back_y = living_room_right_wall_front_y-LIVING_ROOM_PARTITION_RETURN_CLEARANCE
 living_room_return_y = living_room_return_back_y-DRY_WALL_WIDTH/2
 living_room_return_front_y = living_room_return_y-DRY_WALL_WIDTH/2
-living_room_chimney_face_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2
+living_room_chimney_face_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE[0]/2
 living_room_chimney_wall_x = living_room_chimney_face_x+DRY_WALL_WIDTH/2
 upper_hallway_living_wall_x = living_room_chimney_face_x+DRY_WALL_WIDTH
 living_room_step_towards_west = living_room_chimney_wall_x > living_room_wall_x
@@ -2749,12 +2761,12 @@ wall_living_room_return_u = upper.wall(
 # a second drywall volume through its masonry.
 wall_living_room_chimney_front_u = upper.wall(
     (living_room_chimney_wall_x, living_room_return_y),
-    (living_room_chimney_wall_x, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2),
+    (living_room_chimney_wall_x, CHIMNEY_CENTER[1]-CHIMNEY_SIZE[1]/2),
     wall_type=dry_wall, height=gable_wall_height, cuts=upper_partition_cuts,
 )
 # The living-room face runs straight from the chimney to the masonry opening's
 # garden-side jamb. Horizontal/vertical end cuts keep it out of both solids.
-living_room_diagonal_start = np.array((living_room_chimney_face_x, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2))
+living_room_diagonal_start = np.array((living_room_chimney_face_x, CHIMNEY_CENTER[1]+CHIMNEY_SIZE[1]/2))
 living_room_diagonal_end = np.array((LIVING_ROOM_OPENING_END_X, living_room_back_face_y))
 living_room_diagonal_delta = living_room_diagonal_end-living_room_diagonal_start
 if np.any(living_room_diagonal_delta <= 0):
@@ -2941,8 +2953,8 @@ living_room_outline = Polygon((
     (HOUSE_WIDTH-BWT, HOUSE_DEPTH-UPPER_BACK_WALL_THICKNESS),
     (BWT, HOUSE_DEPTH-UPPER_BACK_WALL_THICKNESS),
 )).difference(upper_bearing_wall_region).difference(box(
-    CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2,
-    CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2,
+    CHIMNEY_CENTER[0]-CHIMNEY_SIZE[0]/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE[1]/2,
+    CHIMNEY_CENTER[0]+CHIMNEY_SIZE[0]/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE[1]/2,
 ))
 # Both sides retain room 1.01, whether connected through a passage or separate.
 living_room_regions = sorted(
@@ -2985,8 +2997,8 @@ upper_hallway_outline = Polygon((
     (LIVING_ROOM_OPENING_END_X, living_room_right_wall_front_y),
     (LIVING_ROOM_OPENING_END_X, living_room_diagonal_hall_end_y),
 ))).difference(box(
-    CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2,
-    CHIMNEY_CENTER[0]+CHIMNEY_SIZE/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE/2,
+    CHIMNEY_CENTER[0]-CHIMNEY_SIZE[0]/2, CHIMNEY_CENTER[1]-CHIMNEY_SIZE[1]/2,
+    CHIMNEY_CENTER[0]+CHIMNEY_SIZE[0]/2, CHIMNEY_CENTER[1]+CHIMNEY_SIZE[1]/2,
 )).difference(upper_bearing_wall_region)
 upper_hallway = upper.floor_layer(
     "Chodba", room_id="1.03", outline=tuple(upper_hallway_outline.exterior.coords)[:-1],
@@ -3442,8 +3454,8 @@ chimney_footing = add_chimney_footing(chimney)
 chimney_roof_opening = roof.add_opening(
     name="Chimney roof penetration",
     rectangle=(
-        (chimney.center[0]-chimney.size/2, chimney.center[1]-chimney.size/2),
-        (chimney.center[0]+chimney.size/2, chimney.center[1]+chimney.size/2),
+        (chimney.center[0]-chimney.width/2, chimney.center[1]-chimney.depth/2),
+        (chimney.center[0]+chimney.width/2, chimney.center[1]+chimney.depth/2),
     ),
     trimmers=False,
     vertical=True,
@@ -4030,7 +4042,7 @@ def electrical_board_ports():
 def electrical_trunk_layout():
     """Basement bundle beside the chimney; upper bundle in front of the upper bathroom door."""
     ports = electrical_board_ports()
-    front_y = CHIMNEY_CENTER[1]-CHIMNEY_SIZE/2-ELECTRICAL_TRUNK_CHIMNEY_CLEARANCE
+    front_y = CHIMNEY_CENTER[1]-CHIMNEY_SIZE[1]/2-ELECTRICAL_TRUNK_CHIMNEY_CLEARANCE
     half_gap = ELECTRICAL_TRUNK_SEPARATION/2
     down = (CHIMNEY_CENTER[0]-half_gap, front_y)
     up = (ports["upper"][0], CHIMNEY_CENTER[1])
@@ -4070,7 +4082,7 @@ def electrical_ground_fan_coil_layout():
 def electrical_upper_fan_coil_layout():
     """Receive the shared circuit, clear the chimney, and meet the garden-wall unit."""
     riser = electrical_ground_fan_coil_layout()["junction"]
-    clear_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE/2-.10
+    clear_x = CHIMNEY_CENTER[0]-CHIMNEY_SIZE[0]/2-.10
     placement = ifcopenshell.util.placement.get_local_placement(upper_fan_coil.ObjectPlacement)
     end = tuple(placement[:2, 3]-placement[:2, 1]*LIVING_ROOM_FAN_COIL_SIZE[1]/2)
     return dict(riser=riser, route=(riser, (clear_x, riser[1]), (clear_x, end[1]), end))
@@ -4897,9 +4909,9 @@ if "found" in sys.argv or "foundation" in sys.argv:
         ground_load_bearing_walls, style="dashed", color="blue",
         name="Ground-floor load-bearing wall outlines",
     )
-    chimney_half = chimney.size/2
+    chimney_half_x, chimney_half_y = chimney.width/2, chimney.depth/2
     chimney_corners = tuple(
-        (chimney.center[0]+dx*chimney_half, chimney.center[1]+dy*chimney_half)
+        (chimney.center[0]+dx*chimney_half_x, chimney.center[1]+dy*chimney_half_y)
         for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))
     )
     chimney_outline = drawing1.add_poly_line(
@@ -4908,10 +4920,11 @@ if "found" in sys.argv or "foundation" in sys.argv:
     )
     # The common plan style hides individual footing cut edges to avoid
     # junction seams. Draw the boundary of their actual merged footprints.
-    chimney_footing_half = chimney.size/2+CHIMNEY_FOOTING_OVERHANG
+    chimney_footing_half_x = chimney.width/2+CHIMNEY_FOOTING_OVERHANG
+    chimney_footing_half_y = chimney.depth/2+CHIMNEY_FOOTING_OVERHANG
     footing_polygons = [box(
-        chimney.center[0]-chimney_footing_half, chimney.center[1]-chimney_footing_half,
-        chimney.center[0]+chimney_footing_half, chimney.center[1]+chimney_footing_half,
+        chimney.center[0]-chimney_footing_half_x, chimney.center[1]-chimney_footing_half_y,
+        chimney.center[0]+chimney_footing_half_x, chimney.center[1]+chimney_footing_half_y,
     )]
     for footing in foundation_footings:
         properties = ifcopenshell.util.element.get_pset(footing, "BBIM_StripFooting")
@@ -5369,13 +5382,13 @@ if "ground" in sys.argv:
 
     drawing1.add_chimney_annotation(chimney)
     drawing1.add_dimension(
-        start=(chimney.center[0]+chimney.size/2, chimney.center[1]),
+        start=(chimney.center[0]+chimney.width/2, chimney.center[1]),
         end=(BATHROOM_RIGHT_X, chimney.center[1]),
         name="Ground chimney clearance to stairway wall",
     )
     drawing1.add_dimension(
-        start=(chimney.center[0]+chimney.size/2, chimney.center[1]-chimney.size/2),
-        end=(chimney.center[0]+chimney.size/2,
+        start=(chimney.center[0]+chimney.width/2, chimney.center[1]-chimney.depth/2),
+        end=(chimney.center[0]+chimney.width/2,
              wall_bathroom_partition_g.start[1]+wall_bathroom_partition_g.body_offset
              +wall_bathroom_partition_g.thickness),
         offset=-0.2, name="Ground chimney clearance to bathroom drywall",

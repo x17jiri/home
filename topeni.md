@@ -32,10 +32,10 @@ Pro tepelnětechnický výpočet se použijí aktuální skladby konstrukcí, ro
 | Veličina | Zadání pro tento návrh |
 |---|---|
 | Lokalita | Lažánky; přesné určení staveniště podle stavební části |
-| Výpočtová venkovní teplota pro vytápění | **DOPLNIT podle klimatických podkladů pro staveniště** |
+| Výpočtová venkovní teplota pro vytápění | −15 °C, shodně s částí VZT |
 | Vnitřní teplota při vytápění | 20 °C podle požadavku investora, včetně koupelny |
 | Vnitřní teplota při chlazení | 25 °C podle požadavku investora |
-| Letní venkovní podmínky a návrhová vlhkost | **DOPLNIT pro výpočet chladicí zátěže** |
+| Letní venkovní podmínky a návrhová vlhkost | +32 °C, shodně s částí VZT; vlhkost doplnit pro výpočet chladicí zátěže |
 | Suterén | Bez aktivního vytápění a chlazení; výpočtová teplota se stanoví tepelnou bilancí |
 | Počet uživatelů pro přípravu TV | 4 osoby |
 
@@ -63,11 +63,11 @@ Chodby 0.04 a 1.03 a WC 1.02 nemají v současném rozmístění vlastní otopn�
 
 ## 4. Zdroj tepla a chladu
 
-### 4.1. Předběžně vybrané tepelné čerpadlo
+### 4.1. Potvrzené tepelné čerpadlo
 
-Výchozí variantou je **LG THERMA V, venkovní jednotka HU051MR.U44 a vnitřní hydrobox HN091MR.NK5**. Jde o splitovou sestavu s chladivem R32 a chladivovým propojením mezi jednotkami. Výrobce uvádí jmenovitý topný výkon **5,50 kW při A7/W35**. Tato hodnota charakterizuje katalogový provozní bod, nikoli ověřený výkon při návrhové zimní teplotě konkrétní stavby. [Podklad LG – R32 Split Hydro Box, specifikace sestavy](https://www.lg.com/gr/business/download/airsolution/Therma_V_R32_Split_Leaflet%5B20220621_225825898%5D.pdf)
+Investorem je potvrzena sestava **LG THERMA V, venkovní jednotka HU051MR.U44 a vnitřní hydrobox HN091MR.NK5**. Jde o splitovou sestavu s chladivem R32 a chladivovým propojením mezi jednotkami. Výrobce uvádí jmenovitý topný výkon **5,50 kW při A7/W35**. Tato hodnota charakterizuje katalogový provozní bod, nikoli ověřený výkon při návrhové zimní teplotě konkrétní stavby. [Podklad LG – R32 Split Hydro Box, specifikace sestavy](https://www.lg.com/gr/business/download/airsolution/Therma_V_R32_Split_Leaflet%5B20220621_225825898%5D.pdf)
 
-Konečný výběr se potvrdí porovnáním výkonové křivky s tepelnou ztrátou domu při zvolené teplotě topné vody. Prověří se také minimální výkon, četnost spínání, odmrazování, souběh provozních požadavků a schopnost přípravy TV. V zimní bilanci se nebude předpokládat nezbytná obsluha doplňkových kamen.
+Výkonová dostatečnost potvrzené sestavy se ověří porovnáním výkonové křivky s tepelnou ztrátou domu při návrhové teplotě topné vody. Prověří se také minimální výkon, četnost spínání, odmrazování, souběh provozních požadavků a schopnost přípravy TV. V zimní bilanci se nebude předpokládat nezbytná obsluha doplňkových kamen.
 
 Hydrobox obsahuje hydraulické a zabezpečovací prvky; pro tuto variantu katalog uvádí elektrický dohřev 6 kW ve dvou stupních, expanzní nádobu 8 l a pojistný ventil 3 bar. Zapojení a využití dohřevu, bod bivalence a dostatečnost vestavěné expanze se ověří při návrhu celé soustavy. [Technické údaje LG](https://www.lg.com/gr/business/download/airsolution/Therma_V_R32_Split_Leaflet%5B20220621_225825898%5D.pdf)
 
@@ -115,6 +115,15 @@ Katalogové výkony nejsou tepelnými ztrátami místností. Při návrhu se dol
 
 **Koordinační poznámka:** dříve použité rozměry 1 030 × 690 × 210, 830 × 690 × 210 a 1 430 × 690 × 210 mm vycházejí z přepravních rozměrů a neodpovídají skříním nyní zvolených typů. Před uzavřením výkresové dokumentace je nutné opravit modelové rozměry, zahrnout podlahové podpěry a znovu prověřit polohy u oken, dveří a sprchy. U této zprávy nebyly půdorysy ani model automaticky měněny.
 
+### 5.3. Návrhové teploty vody
+
+| Režim | Přívod / zpátečka | Návrhové podmínky |
+|---|---|---|
+| Vytápění | **45/40 °C** | Venkovní teplota −15 °C, vnitřní 20 °C |
+| Chlazení | **7/12 °C** | Vnitřní teplota 25 °C; venkovní návrhová +32 °C |
+
+Vytápění bude řízeno ekvitermně: uvedený spád platí pro zimní návrhový stav, v mírnějším počasí se teplota přívodu snižuje. Konkrétní ekvitermní křivka se nastaví podle tepelných ztrát a výkonových charakteristik jednotek. Výkony fan-coilů a jejich hluk se ověří při skutečných provozních podmínkách; údaj 7/12 °C sám nepotvrzuje dosažení 25 °C v místnosti. Chladicí provoz předpokládá odvod kondenzátu a souvislé parotěsné izolace rozvodů i armatur. Při přípravě TV se teplota nabíjecí vody řídí samostatně podle zásobníku a jeho výměníku, nikoli spádem 45/40 °C pro místnosti.
+
 ## 6. Potrubní rozvody a kondenzát
 
 ### 6.1. Vodní okruh
@@ -139,7 +148,7 @@ Pro čtyři uživatele je zadán samostatný zásobník TV o objemu **400 l**, u
 
 Přepínání mezi ohřevem zásobníku a prostorovou soustavou zajistí řízená armatura podle hydraulického schématu. Návrh ověří přenosový výkon výměníku při dostupné teplotě vody z TČ, dobu dohřevu a očekávaný odběrový profil domácnosti. Z objemu zásobníku samotného nelze určit dostatečnost zdroje ani dobu ohřevu.
 
-Provozní teplota TV, hygienický ohřev a případný elektrický dohřev zásobníku budou stanoveny podle zvolené sestavy. Cirkulace TV zatím není stanovena. Připojení studené a teplé vody, zabezpečení zásobníku na straně pitné vody a odvod z pojistných armatur řeší část D.1.2 ZTI.
+Pro předběžné energetické hodnocení se uvažuje teplota zásobníku TV **55 °C**. Konečné nastavení, hygienický ohřev a jeho elektrický dohřev se určí podle zvolené sestavy a návodů výrobce; elektrický dohřev musí být zahrnut do energetické bilance. V základní variantě se **předběžně neuvažuje cirkulace TV**. Potvrdí se po ověření skutečných délek, vnitřních průměrů a objemů větví a čekací doby u nejvzdálenějšího odběru. Cirkulace TV je vratný rozvod pitné teplé vody a nesouvisí s oběhovým čerpadlem otopné soustavy. Připojení studené a teplé vody, zabezpečení zásobníku na straně pitné vody a odvod z pojistných armatur řeší část D.1.2 ZTI.
 
 ## 8. Měření a regulace
 
@@ -149,7 +158,9 @@ Regulace musí koordinovat činnost zdroje a místních ventilů, doběhy čerpa
 
 Při chlazení se zohlední vnitřní vlhkost a rosný bod. Kondenzace na výměníku je odváděna vaničkou a drenáží; rozvody a armatury mimo tento prostor musí být chráněny proti povrchové kondenzaci. Případná porucha odvodu kondenzátu musí mít stanovenou reakci regulace.
 
-Doplňková kamna budou předávat teplo přímo do obývacího pokoje. Místní regulace umožní při jejich provozu omezit dodávku tepla příslušným fan-coilem, aniž by se zrušila potřeba vytápění ostatních místností.
+Doplňkovým zdrojem jsou navržena **HAAS+SOHN PISA RLU** na kusové dřevo, bez teplovodního výměníku, v poloze podle půdorysu 2.NP. Technický list uvádí jmenovitý výkon Pnom 5,0 kW, rozměry šířka × hloubka × výška 460 × 488 × 1441 mm, kouřovod Ø 150 mm a minimální tah 12 Pa. Minimální odstupy od hořlavých materiálů jsou 200 mm vzadu, 300 mm po stranách a 800 mm vpředu i ke stropu. [HAAS+SOHN – technický list PISA RLU, typ 291.12](https://www.nejenkrby.cz/materialy/0429112710000_TD.pdf)
+
+Spaliny bude odvádět **Schiedel ABSOLUT**; kamna budou mít těsný externí přívod spalovacího vzduchu. Konečný průměr a provedení komína, napojení kouřovodu a trasa přívodu vzduchu se ověří pro tuto sestavu. Ochrana podlahy a přesné osazení budou koordinovány s PBŘ, návody výrobců a větráním. Místní regulace umožní při provozu kamen omezit dodávku tepla příslušným fan-coilem, aniž by se zrušila potřeba vytápění ostatních místností.
 
 ## 9. Expanzní a pojistná zařízení
 
@@ -197,21 +208,21 @@ Profese elektro doplní potřebné přívody, jištění, ochrany, odpojování,
 | Zásobník TV / počet osob | 400 l / 4 osoby |
 | Suterén | Nevytápěný |
 | Kamna | Doplňková, bez propojení s vodním okruhem |
-| Výpočtová venkovní teplota | **DOPLNIT** |
+| Výpočtová venkovní teplota | −15 °C v zimě / +32 °C v létě |
 | Tepelná ztráta jednotlivých místností a domu | **DOPLNIT výpočtem** |
 | Letní citelná a celková chladicí zátěž | **DOPLNIT výpočtem** |
-| Návrhové teploty topné a chladicí vody | **DOPLNIT podle zátěží a výkonů jednotek** |
+| Návrhové teploty topné a chladicí vody | 45/40 °C vytápění, ekvitermní regulace / 7/12 °C chlazení |
 | Průtoky a tlakové ztráty | **DOPLNIT hydraulickým výpočtem** |
 | Bod bivalence a využití elektrického dohřevu | **DOPLNIT** |
 | Objem soustavy a případná objemová nádoba | **DOPLNIT** |
-| Provozní teplota TV a doba dohřevu | **DOPLNIT po výběru zásobníku** |
+| Provozní teplota TV a doba dohřevu | Předběžně 55 °C; dobu dohřevu a hygienický režim ověřit po výběru zásobníku |
 | Roční potřeba tepla a elektrické energie | **DOPLNIT energetickým výpočtem** |
 
 Při návrhu teplot vody je cílem co nejnižší teplota v topném režimu a vhodně zvolená teplota v režimu chlazení při splnění vnitřních podmínek. Katalogové teploty z kapitoly 5 slouží pouze k identifikaci uvedených výkonů. Bez výpočtů nelze prohlásit, že zvolená sestava dosahuje návrhových teplot ve všech místnostech nebo stanovit její roční spotřebu.
 
 ## 13. Závěr a dopracování
 
-Pracovní návrh stanovuje koncepci s pěti fan-coily, předběžně zvolenou sestavou LG a samostatným zásobníkem TV. Podle zadání investora neobsahuje podlahové vytápění ani vytápění suterénu. Letní provoz zahrnuje také potřebné odvodnění a izolace chladicích rozvodů.
+Pracovní návrh stanovuje koncepci s pěti fan-coily, potvrzenou sestavou LG a samostatným zásobníkem TV. Podle zadání investora neobsahuje podlahové vytápění ani vytápění suterénu. Letní provoz zahrnuje také potřebné odvodnění a izolace chladicích rozvodů.
 
 Před uzavřením návrhu budou dopracovány zejména:
 

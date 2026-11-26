@@ -81,7 +81,7 @@ class BasementCeilingFinishTests(unittest.TestCase):
     def test_sk7_is_shared_in_the_list_and_marked_only_on_cc(self):
         v = self.v
         self.assertEqual(v["CONSTRUCTION_ASSEMBLIES"][7]["layers"], (
-            "Dřevo | 50 mm", "Minerální vata | 200 mm", "Sádrokarton | 12.5 mm",
+            "Dřevo | 50 mm", "Minerální vata | 200 mm | λD ≤ 0.038 W/(m·K)", "Sádrokarton | 12.5 mm",
         ))
         markers = [e for e in v["house"].model.by_type("IfcAnnotation")
                    if element.get_pset(e, "BBIM_HexagonMarker", "Identifier") == "SK7"]
@@ -110,8 +110,8 @@ class BasementCeilingFinishTests(unittest.TestCase):
     def test_chimney_opening_continues_through_the_ground_floor_build_up(self):
         v = self.v
         cx, cy = v["CHIMNEY_CENTER"]
-        half = v["CHIMNEY_SIZE"]/2 + .03
-        opening_region = box(cx-half, cy-half, cx+half, cy+half)
+        half_x, half_y = (dimension/2+.03 for dimension in v["CHIMNEY_SIZE"])
+        opening_region = box(cx-half_x, cy-half_y, cx+half_x, cy+half_y)
         self.assertTrue(v["chimney_ceiling_opening_region"].equals(opening_region))
         layers = [v["chodba"]]
         for layer in layers:
@@ -122,8 +122,8 @@ class BasementCeilingFinishTests(unittest.TestCase):
             self.assertEqual(len(layer.HasOpenings), 1)
             opening = layer.HasOpenings[0].RelatedOpeningElement
             lo, hi = self.bounds(opening)
-            np.testing.assert_allclose(lo[:2], (cx-half, cy-half))
-            np.testing.assert_allclose(hi[:2], (cx+half, cy+half))
+            np.testing.assert_allclose(lo[:2], (cx-half_x, cy-half_y))
+            np.testing.assert_allclose(hi[:2], (cx+half_x, cy+half_y))
             layer_lo, layer_hi = self.bounds(layer)
             self.assertLess(lo[2], layer_lo[2])
             self.assertGreater(hi[2], layer_hi[2])
