@@ -451,7 +451,11 @@ text.GRID, tspan.GRID { /* 5mm */ font-size: 8.25px; }
 
 .cut.material-YtongKlasik,
 .cut.material-LoadbearingwallYtongKlasik300mm,
-.cut.layer-material-YtongKlasik {
+.cut.layer-material-YtongKlasik,
+.cut.material-PorfixP2440PDK300mm,
+.cut.material-LoadbearingwallPorfixP2440PDK300mm,
+.cut.material-UpperloadbearingwallPorfixP2440PDK300mm,
+.cut.layer-material-PorfixP2440PDK300mm {
     fill: url(#ytong-klasik) !important;
     stroke: black;
     stroke-width: 0.05 !important;
@@ -949,6 +953,6 @@ tspan.door-dimension {
 }
 
 /* Equipment emphasis, limited to this drawing. */
-#product-4a7e833d-5bc8-4612-97ce-bccc15896412 { stroke: #ff8000 !important; stroke-width: 0.25 !important; }
-.furniture-label[class~="GlobalId-0K808yd758tQBJMTYX8dZh"] { fill: #ff8000 !important; }
+#product-789f647c-52b7-4330-a8f6-3e423e956150 { stroke: #ff8000 !important; stroke-width: 0.25 !important; }
+.furniture-label[class~="GlobalId-3nOOpiX09CJhLOtksibagv"] { fill: #ff8000 !important; }
 .PredefinedType-FILLAREA.heating-connection-arrow { fill: #e82030 !important; stroke: none !important; opacity: 0.40; }

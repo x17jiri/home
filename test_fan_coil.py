@@ -90,6 +90,21 @@ class FanCoilTests(unittest.TestCase):
                 floor.fan_coil("Invalid", center=(0, 0), **options)
         self.assertFalse(house.model.by_type("IfcUnitaryEquipment"))
 
+    def test_manufacturer_console_height_includes_eighty_mm_supports(self):
+        house = House("IVAR console")
+        floor = house.storey("Ground", elevation=0)
+        unit = floor.fan_coil("SL 600", center=(0, 0), size=(1.135, .129, .659),
+                              start_height=.22, form="console", console_foot_height=.080)
+        body = ifcopenshell.util.representation.get_representation(unit, "Model", "Body", "MODEL_VIEW")
+        for foot in body.Items[-2:]:
+            self.assertAlmostEqual(foot.Depth, .080)
+        settings = ifcopenshell.geom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+        shape = ifcopenshell.geom.create_shape(settings, unit)
+        vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+        self.assertAlmostEqual(vertices[:, 2].min(), .22)
+        self.assertAlmostEqual(vertices[:, 2].max(), .879)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -953,18 +953,18 @@ tspan.door-dimension {
 }
 
 /* Equipment emphasis, limited to this drawing. */
-#product-b633b057-8386-4a78-ad2d-5cf9919234de,
-#product-6eb1e6db-2fca-4098-bcfa-616c041f4f6b,
-#product-ec2f76b5-b865-4957-a4f5-3d12817ed5a5,
-#product-3147331d-102b-4265-8bc8-b121e3e6c867,
-#product-e65e6449-9663-4753-b289-15f78267a8b1,
-#product-d0dd427e-c42a-4303-99a2-f97a174981a4,
-#product-e04c250a-1abf-4946-a1c0-c3c0bb4ce1d1 { stroke: #ff8000 !important; stroke-width: 0.25 !important; }
-.furniture-label[class~="GlobalId-1h$WqbLp1AMxqmeqKcZBD8"],
-.furniture-label[class~="GlobalId-1s2Bi5gyTAK9x4P7cnsd94"],
-.furniture-label[class~="GlobalId-0EBFgqsO118O8FTiLPWQNv"],
-.furniture-label[class~="GlobalId-2CFWMx3U123ATp6iuH8Pls"],
-.furniture-label[class~="GlobalId-1dImWVBcL5i9NUxj9$YG$a"],
-.furniture-label[class~="GlobalId-0hRm2loGf9FR$ihim$oUMk"],
-.furniture-label[class~="GlobalId-0sZzawE41Cdf4zcSP0n1Sb"] { fill: #ff8000 !important; }
+#product-a271746d-8663-4ae9-b497-5f38a8ad1bf9,
+#product-d2a7bade-83f8-4485-b5b2-9680f0d0e1a6,
+#product-cca1d907-7c92-477f-999e-f101d7a88ca7,
+#product-b519be8d-7487-4182-8d1c-fe4db08f609c,
+#product-0435757f-ef19-40b5-bc91-bebc2855f749,
+#product-07db9c69-034c-4d02-b6bb-31329c9a4c14,
+#product-ce8f79e6-386b-4402-a4dc-5b5a93527bff { stroke: #ff8000 !important; stroke-width: 0.25 !important; }
+.furniture-label[class~="GlobalId-19cUG1fP52chgEbrRtr_cO"],
+.furniture-label[class~="GlobalId-10wTTox0LBHAXIlmP_0Ptr"],
+.furniture-label[class~="GlobalId-2WOL24N_j7HvYIhQfAYHlm"],
+.furniture-label[class~="GlobalId-1vTSg5WRnAK8BcBj2tUQDU"],
+.furniture-label[class~="GlobalId-3CF5UbN8z5_A_w7S5e2ag2"],
+.furniture-label[class~="GlobalId-0RmVe5onX3wvqT8ui9310d"],
+.furniture-label[class~="GlobalId-1S$S3a9YH3txCpfLyUH8vM"] { fill: #ff8000 !important; }
 .PredefinedType-FILLAREA.heating-connection-arrow { fill: #e82030 !important; stroke: none !important; opacity: 0.40; }

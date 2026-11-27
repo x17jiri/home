@@ -646,11 +646,30 @@ space between the basin and TUV zones (currently 675 mm), centred in that space.
 `BATHROOM_TUV_ZONE_DEPTH` control the fixed zones. The 900 mm door leaf
 has a 1000 mm opening 125 mm from room 3's wall and swings into the
 bathroom. The WC and basin face inward from the stairway wall. The shower is
-900 × 900 mm. The 700 × 700 × 2000 mm hot-water tank sits at the centre of
-the bottom zone, 100 mm from the inner stairway wall face. The
-800 × 500 × 900 mm hydrobox retains its orientation and sits 50 mm from the
+900 × 900 mm. The selected QUANTUM Q7-400-WWM hot-water tank is represented
+by a 710 × 710 × 1670 mm envelope, set by `DHW_TANK_SIZE`. It retains its
+previous centre in the bottom zone, leaving 95 mm to the inner stairway wall
+face. `BATHROOM_TUV_REFERENCE_DIAMETER` retains the former 700 mm placement
+reference. The 400 l DHW cylinder has a 4.7 m² coil and a declared standing
+heat loss of 66 W (class B); it is separate from any heating buffer. The
+LG HN091MR.NK5 hydrobox uses its 490 × 850 × 315 mm manufacturer dimensions:
+315 mm along X, 490 mm along Y, and 850 mm high. It sits 50 mm from the
 stairway wall, centred in the unassigned zone. Its shared position also updates
 the heating arrows and its dashed projection on the upper heating plan.
+`HYDROBOX_BOTTOM_ABOVE_FLOOR = 1.30 m` sets its underside at LG's required
+mounting height; the top is 2.15 m above the finished floor, with 475 mm
+to the structural ceiling. Its X/Y centre is unchanged. The present gap
+toward the DHW tank remains only 102.5 mm versus LG's 200 mm side clearance;
+coordinate that service space before installation. The outdoor LG HU051MR.U44 now measures
+950 × 330 × 834 mm (X/Y/Z), with `HEAT_PUMP_WALL_CLEARANCE = .30 m`
+for its rear inlet. IVAR SL 600 / 400 / 1000 consoles use casing widths
+1135 / 935 / 1535 mm, 129 mm depth and 579 mm casing height; the shared
+`FAN_COIL_FOOT_HEIGHT = .080 m` gives 659 mm overall height. The
+`Storey.fan_coil(console_foot_height=...)` parameter controls the supports
+without changing the requested overall envelope. The preliminary hydraulic
+layout, pipe sizing, compatible accessories and outstanding checks are in
+`topeni.md`, sections 4.2, 8 and 9. Proposed buffer/valves/expansion vessels
+are documented there and have not yet been placed in the model.
 The 600 × 550 × 900 mm water-meter box is in the basement, at its former
 ground-floor X/Y position and on the basement finished floor. Fixtures start at the
 finished floor, with the basin rim at 850 mm above it.
@@ -920,11 +939,22 @@ Pokoj 3 has a 1.50 m front-wall window starting 1.26 m from the inside east
 wall face (`THIRD_ROOM_WINDOW_EAST_CLEARANCE`), leaving 0.50 m to the middle wall.
 Internal jamb dimensions sit closer to the windows than the room-width dimensions.
 The bathroom has a
-0.75 × 0.75 m front-wall window with a 380 mm gap to the inside stairway-wall face
-(`BATHROOM_WINDOW_STAIRWAY_CLEARANCE`). All window tops are at
-`GROUND_WALL_BASE_COURSE_HEIGHT + 2.25 m`; bedroom sills use
-`GROUND_WALL_BASE_COURSE_HEIGHT + 0.875 m`. The west-window sill follows from
-its 0.75 m height. All window frames use white in 3D.
+0.75 m wide front-wall window with a 380 mm gap to the inside stairway-wall face
+(`BATHROOM_WINDOW_STAIRWAY_CLEARANCE`). All ground-floor window heads follow
+`GROUND_WINDOW_TOP_HEIGHT`, currently 2375 mm above the finished floor.
+Rooms 1 and 2 use `GARDEN_WINDOW_SILL_HEIGHT` (300 mm above the floor);
+room 3 uses `GROUND_WINDOW_SILL_HEIGHT` (925 mm). The bathroom sill is
+1675 mm above the floor. The sills retain their original levels while all
+four heads are 50 mm lower, leaving 250 mm below the structural ceiling.
+Their opening heights are now 2075 / 2075 / 1450 / 700 mm for rooms 1, 2, 3
+and the bathroom respectively; X/Y positions are retained.
+All window frames use white in 3D.
+
+The entrance construction-opening head is controlled separately by
+`ENTRANCE_OPENING_TOP_HEIGHT = ROOM_DOOR_HEIGHT + 0.125 m`: it is currently
+2300 mm above the finished ground floor, versus 2175 mm for the internal door
+openings. `ENTRANCE_DOOR_HEIGHT` and the 2100 mm clear door height are retained;
+`opening_height` sets the larger construction opening and its casing.
 Exterior views fill visible window glazing light cyan (`#d9f4f7`), with
 white frames. The colour is in `bonsai_scripts/assets/plan.css`; the renderer
 identifies glazing using the native surface ray hit and its IFC aspect style,
@@ -3062,6 +3092,27 @@ The conversion preserves body text, tables and images, simplifies merged cells,
 and removes the old page-numbered contents. ZTI's WMF equation also has an SVG
 copy under `assets/zti-report/media/`. Technical corrections remain in `TODO.md`;
 the shared report layout and generated contents still need to be finalized.
+
+Edit the heating report in `topeni.md`; publishing copies that source beside
+`D.1.2.1-VYT-01. Technická zpráva.pdf` in the VYT folder. The VZT report's
+Markdown source remains beside its PDF. Regenerate both reports without Blender:
+
+```python
+from pdf_utils import markdown_to_pdf
+from project_documents import PROJECT_DIR, VYT, VZT
+from shutil import copyfile
+
+vyt = PROJECT_DIR / VYT / "D.1.2.1-VYT-01. Technická zpráva.md"
+copyfile("topeni.md", vyt)
+markdown_to_pdf(vyt, vyt.with_suffix(".pdf"))
+vzt = PROJECT_DIR / VZT / "D.1.2.1-VZT-01. Technická zpráva.md"
+markdown_to_pdf(vzt, vzt.with_suffix(".pdf"))
+```
+
+Use `.venv-pdf/bin/python` for these exports. Recheck room volumes with
+`ventilation_airflow.py` before exporting VZT after room or ceiling changes.
+The heating report retains its outstanding load calculations and equipment
+coordination items; exporting it does not complete those checks.
 
 Set `house.add_drawing(..., scale=200)` to render a drawing at 1:200;
 the default denominator is 100. Sheet composition preserves that scale and

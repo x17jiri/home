@@ -8,7 +8,7 @@
 | Investor | Ing. Jiří Bobek |
 | Autor návrhu | Ing. Jiří Bobek |
 | Stupeň dokumentace | DSP |
-| Datum | 26. 11. 2026 |
+| Datum | 27. 11. 2026 |
 | Katastrální území | Lažánky u Blanska, 679453 |
 | Pozemky řešené stavební dokumentací | 105, 106/1, 103/2 |
 | Hl. ing. projektu | Ing. Josef Chovan |
@@ -94,14 +94,14 @@ Přestup vzduchu z obytných místností do prostorů s odvodem bude zajištěn 
 
 Požadovaný přívod venkovního vzduchu se stanoví vztahem **Q = 0,5 × V**, kde V je objem místnosti v m³ a Q průtok v m³/h. Skutečná intenzita větrání je **n = Q / V**. Kontrola se vztahuje k normálnímu režimu 240/240 m³/h se současně zakresleným rozdělením průtoků.
 
-Plochy vycházejí z vnitřních obrysů místností ve stavebním modelu. V přízemí je světlá výška **2,610 m**, od finální podlahy ke stropu po odečtení 15 mm pro omítku. V podkroví se objem vypočítá integrací výšky nad půdorysem místnosti; zohledněny jsou oba šikmé sádrokartonové podhledy i vodorovný podhled mezi nimi. Pro místnost 1.01 vychází průměrná světlá výška **2,673 m**. Kuchyňská i obytná část jsou zahrnuty do společného objemu 1.01 a přívod se započítává pouze jednou.
+Plochy vycházejí z vnitřních obrysů místností ve stavebním modelu. V přízemí je světlá výška **2,610 m**, od finální podlahy ke stropu po odečtení 15 mm pro omítku. V podkroví se objem vypočítá integrací výšky nad půdorysem místnosti; zohledněny jsou oba šikmé sádrokartonové podhledy i vodorovný podhled mezi nimi. Pro místnost 1.01 vychází průměrná světlá výška **2,672 m**. Kuchyňská i obytná část jsou zahrnuty do společného objemu 1.01 a přívod se započítává pouze jednou.
 
 | Místnost | Plocha [m²] | Objem [m³] | Požadavek při 0,5 h⁻¹ [m³/h] | Navržený přívod [m³/h] | Intenzita [h⁻¹] | Výsledek |
 |---|---:|---:|---:|---:|---:|---|
-| 0.01 Pokoj 1 | 12,82 | 33,46 | 16,73 | 40 | 1,20 | Vyhovuje |
-| 0.02 Pokoj 2 | 12,82 | 33,46 | 16,73 | 40 | 1,20 | Vyhovuje |
-| 0.03 Pokoj 3 | 15,69 | 40,95 | 20,48 | 40 | 0,98 | Vyhovuje |
-| 1.01 Obývací pokoj + KK | 52,76 | 141,04 | 70,52 | 120 | 0,85 | Vyhovuje |
+| 0.01 Pokoj 1 | 12,86 | 33,55 | 16,78 | 40 | 1,19 | Vyhovuje |
+| 0.02 Pokoj 2 | 12,86 | 33,55 | 16,78 | 40 | 1,19 | Vyhovuje |
+| 0.03 Pokoj 3 | 15,78 | 41,18 | 20,59 | 40 | 0,97 | Vyhovuje |
+| 1.01 Obývací pokoj + KK | 52,82 | 141,16 | 70,58 | 120 | 0,85 | Vyhovuje |
 
 Všechny čtyři obytné místnosti při zakreslených průtocích splňují zvolené objemové kritérium.
 
@@ -129,6 +129,8 @@ Při boostu je součet přívodu i odvodu **300 m³/h**. Bilanční přestup z p
 Navrhuje se jedna centrální přívodní a odvodní jednotka se zpětným získáváním tepla, filtrací a regulací. Bude umístěna v nevytápěném suterénu, v místnosti **S.04 na stěně společné s S.05**, v uliční části před průchodem do S.05. Spodní hrana jednotky je 800 mm nad hotovou podlahou, s odstupem 50 mm od líce stěny a 200 mm od hrany průchodu. Umístění a servisní prostor jsou zachyceny ve výkresu D.1.2.2-VZT-03. Jednotka HERU T je podle instalačního návodu výrobce vhodná pro teplé i chladné vnitřní prostory.
 
 Zvolena je nástěnná jednotka **Östberg HERU 100 T EC-y2**, se dvěma EC ventilátory a nehygroskopickým hliníkovým rotačním výměníkem. Levé nebo pravé provedení se určí podle napojení potrubí. Součástí návrhu je příslušenství **Pressure Control IQC** se snímáním na přívodní i odvodní straně, které po vyregulování kompenzuje změny odporu filtrů v pevné potrubní síti. Průtoky se při uvedení do provozu nastaví měřením.
+
+Vnitřní panely jednotky jsou z pozinkovaného ocelového plechu a výměník je hliníkový. Jednotka obsahuje také polymerní části: oběžná kola ventilátorů z PA66-GF25, těsnění a polyuretanový řemen rotoru; nejde o celokovové provedení. [Östberg – popis jednotky HERU 100 T EC-y2](https://fsp.ostberg.com/products/4984/heru-100-t-ec/?lang=en), [výrobkové materiálové prohlášení HERU 100–200 T EC-y2](https://ivl-ebvd.azurewebsites.net/BMI/Document/Export/3657/0/Pdf/en-GB).
 
 Požadují se pracovní body **240 m³/h** a **300 m³/h** na přívodu i odvodu při předběžně uvažovaném externím tlaku **150 Pa na každé vzduchové cestě**. Oba body leží v rozsahu zveřejněných ventilátorových charakteristik výrobce. Tlak 150 Pa je návrhovou rezervou, nikoli výsledkem výpočtu dosud neurčených tras. Konečné tlakové ztráty včetně tlumičů, přechodů a venkovních zakončení se ověří a pracovní body se upřesní.
 

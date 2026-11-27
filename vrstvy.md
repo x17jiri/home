@@ -15,9 +15,15 @@ Aktuálně se navrhuje vytápění a chlazení pěti vodními fan-coily IVAR.SL 
 - Potvrzená sestava LG THERMA V: HU051MR.U44 + hydrobox HN091MR.NK5, R32 split.
 - Vytápění 45/40 °C při −15 °C venku, s ekvitermním snižováním teploty vody.
 - Chlazení 7/12 °C; odvod kondenzátu a parotěsná izolace rozvodů.
-- Samostatný zásobník pitné teplé vody 400 l pro čtyři osoby; pro energetické hodnocení předběžně 55 °C, konkrétní typ zatím nevybrán.
+- Potvrzený samostatný zásobník pitné teplé vody **QUANTUM Q7-400-WWM**, kód 860061, 400 l pro čtyři osoby; Ø710 × 1670 mm včetně izolace, výměník 4,7 m², statická tepelná ztráta 66 W, energetická třída B. [Výrobkový list](https://quantumas.cz/files/2024/06/quantum_produktove-listy_q7-wwm-2.pdf).
+- Pro energetické hodnocení předběžně 55 °C. Potvrdit čidlo a řízení LG, přenosový výkon výměníku při skutečných teplotách, elektrický dohřev a servisní odstupy.
 - Cirkulace TV se předběžně neuvažuje; ověřit čekací dobu u nejvzdálenějšího odběru.
-- Zásobník TV není akumulační nádoba otopné soustavy; případný buffer se řeší samostatně podle hydraulického návrhu.
+- Zásobník TV není akumulační nádoba otopné soustavy. Předběžný hydraulický návrh: **Regulus PS 50 ZC / 51 l** sériově na zpátečce prostorového okruhu a diferenční obtok **Caleffi 519500** před nádobou. Vestavěné čerpadlo LG, návrhově 15,8 l/min; při uzavření FCU zachovat nejméně 15 l/min přes buffer. Bez dalšího čerpadla a hydraulického oddělení v základní variantě.
+- Pět paralelních větví: 3× SL 600 DC, 1× SL 400 DC, 1× SL 1000 DC; 5× regulační sada **IVAR.139 V20139**, 5× regulace **IVAR.644 ECA644II**, 5 sad podstavců **LC0605II**. Skříň 1135 / 935 / 1535 × 579 × 129 mm; s 80mm podpěrami celková výška 659 mm.
+- LG pro TV: **OSHA-3V**, sada **PHLTA** včetně čidla **PHRSTA0**; pro chlazení hydroboxu vanička **PHDPC** s odvodem. Referenční pomocný dohřev TV **TJ 6/4" 2,5 kW / 230 V**: elektricky pod limitem PHLTA 3 kW, mechanické zasunutí 405 ±10 mm do QUANTUM zatím potvrdit. Nezaměňovat za 3,3kW provedení.
+- Pitná voda: předběžně redukce na 3 bar, pojistný ventil 6 bar, samostatná průtočná expanze **Refix DD 25 / 7380400** na studeném přívodu, směšování proti opaření. Nevztahuje se na vestavěnou 8l expanzi topné vody.
+- Předběžné rozvody: společné 32×3 mm, větve SL 400/600 20×2 mm a SL 1000 26×3 mm; parotěsná izolace všech chladných částí. Výpočet a podmínky kompatibility jsou v [topeni.md](topeni.md), kap. 4.2, 8 a 9. Ověřit skutečný vodní objem a odpor výměníku QUANTUM, délky a konečné průtoky místností.
+- Modelové rozměry LG opraveny na 950×834×330 mm (venkovní jednotka) a 490×850×315 mm (hydrobox, šířka×výška×hloubka). Venkovní jednotka má 300 mm za zadní stranou. Hydrobox je nově zavěšen spodní hranou 1300 mm nad hotovou podlahou, horní hrana 2150 mm; nad ním je k nosnému stropu 475 mm. Poloha X/Y zachována. **K zásobníku TV zbývá pouze 102,5 mm místo požadovaných 200 mm bočního servisního odstupu**; dořešit při koordinaci osazení.
 
 ## Rekuperace:
 
@@ -28,6 +34,7 @@ Aktuálně se navrhuje vytápění a chlazení pěti vodními fan-coily IVAR.SL 
 - Vestavěný dohřev 1,2 kW, celkový katalogový příkon 1,41 kW; horní hrdla Ø 125 mm s přechody na hlavní DN 200.
 - Umístění: nevytápěný suterén, S.04 na stěně k S.05; spodní hrana 800 mm nad podlahou, servisní prostor 800 mm.
 - Ověřit přenos hluku ze suterénu a tlumení pro cíl nejvýše 25 dB(A) v pokojích 0.01–0.03; rozměry jednotky 796 × 492 × 759 mm, hmotnost 66 kg.
+- Standardní odvod kondenzátu se u rotační HERU nenavrhuje; chladné potrubí se parotěsně izoluje. Samostatný odvod potřebuje všech pět chladicích FCU a vanička hydroboxu LG; venkovní TČ má navíc vodu z odmrazování.
 
 ## Dalsi vybava:
 

@@ -20875,6 +20875,7 @@ class Storey:
         label_rotation: Number | None = None,
         color: str = "#f5f5f2",
         form: Literal["wall", "console"] = "wall",
+        console_foot_height: Number | None = None,
     ) -> ifcopenshell.entity_instance:
         """Add a generic wall or radiator-style console fan coil and plan symbol.
 
@@ -20891,6 +20892,8 @@ class Storey:
         Dimensions describe a generic placeholder, not a manufacturer's unit.
         ``form="console"`` adds feet and a top grille instead of the wall
         unit's front outlet. Specify its size and floor-level start_height.
+        Its size includes the feet; ``console_foot_height`` sets their height
+        explicitly instead of the generic four percent of overall height.
         """
         name, label = _name(name, "name"), _name(label, "label")
         form = _enum(form, "form", {"WALL", "CONSOLE"}).lower()
@@ -20905,6 +20908,10 @@ class Storey:
                                 ((width, "width"), (depth, "depth"), (height, "height")))
         if min(width, depth, height) <= 0:
             raise ValueError("size dimensions must be greater than zero")
+        if console_foot_height is not None:
+            console_foot_height = _number(console_foot_height, "console_foot_height")
+            if form != "console" or not 0 < console_foot_height < height*.8:
+                raise ValueError("console_foot_height requires console form and must be between zero and 80% of height")
         rotation = _number(rotation, "rotation")
         if label_rotation is not None:
             label_rotation = _number(label_rotation, "label_rotation")
@@ -20935,7 +20942,7 @@ class Storey:
         lip = depth*.015
         casing_lip = 0 if form == "console" else lip
         radius = min(depth*.13, height*.10)
-        casing_bottom = height*.04 if form == "console" else 0
+        casing_bottom = (console_foot_height if console_foot_height is not None else height*.04) if form == "console" else 0
         casing_top = height*.99 if form == "console" else height
         profile_points = []
         for cy, cz, first in (
@@ -21010,6 +21017,7 @@ class Storey:
             "Width": width, "Depth": depth, "Height": height, "StartHeight": start_height,
             "Rotation": rotation, "Label": label, "PlanSymbolHeight": plan_height,
             "Form": form,
+            "FootHeight": casing_bottom,
         })
         return unit
 
