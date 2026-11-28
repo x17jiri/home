@@ -125,6 +125,8 @@ LIVING_ROOM_FAN_COIL_SIZE = (1.535, .129, .579+FAN_COIL_FOOT_HEIGHT)  # SL 1000 
 GARDEN_FAN_COIL_WALL_GAP = .01
 GARDEN_FAN_COIL_GARDEN_WALL_CLEARANCE = .75  # Inside wall face to nearest casing end.
 ROOM3_FAN_COIL_WALL_GAP = .01
+HALLWAY_FAN_COIL_WALL_GAP = .01
+HALLWAY_FAN_COIL_UPPER_END_CLEARANCE = .065  # Along Y, from the upper flight's garden end.
 LIVING_ROOM_FAN_COIL_WALL_GAP = .01
 # Bathroom placement references, independent of casing size.
 BATHROOM_FAN_COIL_CENTER_WALL_OFFSET = .160
@@ -446,7 +448,7 @@ if max(STAIR_LOWER_START_Y, STAIR_UPPER_END_Y) > GARDEN_ROOMS_WALL_Y+1e-9:
     raise ValueError("rotated stairs reach the garden-room dividing wall")
 FLOOR_INSULATION_MATERIAL = "tepelna/krocejova izolace"
 FLOOR_BUILDUP_MATERIAL = "Floor build-up"
-ENTRANCE_OPENING_WIDTH = 1.1
+ENTRANCE_OPENING_WIDTH = 1.125
 ENTRANCE_STAIR_RISERS = 8
 ENTRANCE_STAIR_TREAD_LENGTH = 0.30
 ENTRANCE_STAIR_WIDTH = ENTRANCE_OPENING_WIDTH
@@ -459,7 +461,7 @@ ENTRANCE_CLEAR_HEIGHT = 2.1
 ROOM_DOOR_WIDTH = 0.9
 ROOM_DOOR_HEIGHT = ground_floor_height-0.45
 ROOM_DOOR_CLEAR_HEIGHT = 2.1
-ENTRANCE_OPENING_TOP_HEIGHT = ROOM_DOOR_HEIGHT+0.125
+ENTRANCE_OPENING_TOP_HEIGHT = ROOM_DOOR_HEIGHT
 UPPER_DOOR_TOP_HEIGHT = ZAKLADACI_MALTA+18*UPPER_MASONRY_COURSE_HEIGHT
 UPPER_DOOR_CLEAR_HEIGHT = 2.1
 LIVING_ROOM_DOOR_WEST_CLEARANCE = 0.005 + 1.75  # From the inner west wall face to the construction opening.
@@ -1675,6 +1677,18 @@ bathroom_fan_coil = ground.fan_coil(
     start_height=GROUND_FLOOR_THICKNESS, rotation=90, form="console", label="FCU",
     console_foot_height=FAN_COIL_FOOT_HEIGHT,
 )
+# Hallway SL600 beneath the high end of the upper flight, facing into the
+# under-stairs space. Width runs along Y; the bathroom/stairway wall is behind.
+hallway_fan_coil_center = (
+    STAIRWAY_WALL_X+HALLWAY_FAN_COIL_WALL_GAP+FAN_COIL_SIZE[1]/2,
+    STAIR_UPPER_END_Y-HALLWAY_FAN_COIL_UPPER_END_CLEARANCE-FAN_COIL_SIZE[0]/2,
+)
+hallway_fan_coil = ground.fan_coil(
+    "Fan coil 0.04 console", center=hallway_fan_coil_center, size=FAN_COIL_SIZE,
+    start_height=GROUND_FLOOR_THICKNESS, rotation=90, form="console", label="FCU",
+    console_foot_height=FAN_COIL_FOOT_HEIGHT,
+)
+hallway_fan_coil.Description = "IVAR.SL DC 600, under the upper stair flight"
 basement_water_meter = basement.furniture(
     "Vodo-\nměr", kind="USERDEFINED",
     size=(0.6, 0.55, 0.5),
@@ -3980,6 +3994,7 @@ def add_ground_heating_connections(drawing):
         (ground_fan_coils[1], (1.4, 1.5), (1.3, -.6)),
         (ground_fan_coils[2], (-1.3, .35), (.6, .8)),
         (bathroom_fan_coil, (-1.2, 1.1), (0., -.6)),
+        (hallway_fan_coil, (1.2, .2), (.7, -.4)),
     ):
         placement = ifcopenshell.util.placement.get_local_placement(unit.ObjectPlacement)
         depth = ifcopenshell.util.element.get_pset(unit, "BBIM_FanCoil", "Depth")
@@ -4064,7 +4079,7 @@ def electrical_trunk_layout():
 
 
 def electrical_ground_fan_coil_layout():
-    """Horizontal feed and room-3 run, with bathroom and garden-room branches."""
+    """Shared FCU circuit with bathroom, hallway and garden-room branches."""
     port = electrical_board_ports()["fan_coils"]
     junction = (CHIMNEY_CENTER[0], port[1])
 
@@ -4080,9 +4095,14 @@ def electrical_ground_fan_coil_layout():
     room3_placement = ifcopenshell.util.placement.get_local_placement(ground_fan_coils[2].ObjectPlacement)
     room3_connection = tuple(room3_placement[:2, 3]-room3_placement[:2, 1]*FAN_COIL_SIZE[1]/2)
     room3_wall_run_x = room3_connection[0]-.10
+    hallway = center(hallway_fan_coil)
+    hallway_connection = (hallway[0]+FAN_COIL_SIZE[1]/2, hallway[1])
+    hallway_run_x = hallway_connection[0]+.10
     return dict(junction=junction, routes=(
         ("feed", (port, junction)),
         ("0.05", (junction, (junction[0], bathroom_connection[1]), bathroom_connection)),
+        ("0.04", (junction, (hallway_run_x, junction[1]),
+                  (hallway_run_x, hallway_connection[1]), hallway_connection)),
         ("0.03", (junction, branch, (room3_wall_run_x, junction[1]),
                   (room3_wall_run_x, room3_connection[1]), room3_connection)),
         ("0.01", (branch, (branch[0], room1[1]), room1)),
@@ -7409,7 +7429,26 @@ if "vytapeni" in sys.argv or "vytapeni_ground" in sys.argv:
     vytapeni_ground = add_plumbing_plan("vytapeni_ground", ground, 2.0, ground_room_floors)
     vytapeni_ground.include_element(heat_pump)
     add_ground_heating_connections(vytapeni_ground)
-    heating_equipment = (*ground_fan_coils, bathroom_fan_coil, heat_pump,
+    # Show the unit beneath the stair flight even where the stair symbol masks
+    # the ordinary projected equipment. A dashed outline denotes its position.
+    hallway_x, hallway_y = hallway_fan_coil_center
+    hallway_half_depth, hallway_half_width = FAN_COIL_SIZE[1]/2, FAN_COIL_SIZE[0]/2
+    hallway_fcu_outline = [
+        (hallway_x-hallway_half_depth, hallway_y-hallway_half_width),
+        (hallway_x+hallway_half_depth, hallway_y-hallway_half_width),
+        (hallway_x+hallway_half_depth, hallway_y+hallway_half_width),
+        (hallway_x-hallway_half_depth, hallway_y+hallway_half_width),
+        (hallway_x-hallway_half_depth, hallway_y-hallway_half_width),
+    ]
+    vytapeni_ground.add_poly_line(
+        hallway_fcu_outline, style="dashed", color="#ff8000", line_width=.25,
+        foreground=True, name="Hallway FCU below stair flight - projected outline",
+    )
+    vytapeni_ground.add_text(
+        (hallway_x+.35, hallway_y), "FCU", font_size=1.7, color="#ff8000",
+        name="Hallway FCU below stair flight label",
+    )
+    heating_equipment = (*ground_fan_coils, bathroom_fan_coil, hallway_fan_coil, heat_pump,
                          bathroom_hydrobox, bathroom_water_heater)
     vytapeni_ground.render(
         PROJECT_DIR / "vytapeni_ground.svg", pdf=PDF_VYTAPENI_GROUND,

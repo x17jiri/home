@@ -3111,8 +3111,41 @@ markdown_to_pdf(vzt, vzt.with_suffix(".pdf"))
 
 Use `.venv-pdf/bin/python` for these exports. Recheck room volumes with
 `ventilation_airflow.py` before exporting VZT after room or ceiling changes.
-The heating report retains its outstanding load calculations and equipment
-coordination items; exporting it does not complete those checks.
+The simplified winter heat-loss calculation is reproducible without Blender:
+
+```bash
+.venv-pdf/bin/python heating_loss.py --pdf
+.venv-pdf/bin/python -m unittest test_heating_loss
+```
+
+It reads current dimensions, insulation conductivities and thicknesses from
+`house2.py`, and room footprints and actual exterior openings from `house2.ifc`.
+An IFC older than the source is rejected; regenerate just one drawing first.
+The calculation writes `D.1.2.1-VYT-02. Zjednodušený výpočet tepelné ztráty.md`
+and, with `--pdf`, its PDF in the VYT folder. Detailed results, input hashes and
+room/component budgets are in `cache/heating_loss.json`. Room surface allocation
+uses a grid of at most 100 mm for the spaces between clear floor polygons; the
+whole-envelope totals are independent of that allocation and are checked exactly.
+The main report's summary in `topeni.md` must be updated when the calculation changes,
+then published with the export above. This is an approximate winter sizing check;
+cooling loads, quiet-speed FCU outputs, heat transfer to rooms without emitters,
+annual energy and the remaining equipment coordination are still open.
+
+The follow-up winter-system check uses the confirmed higher hot-water draw of
+300 litres/day mixed to 40 °C:
+
+```bash
+.venv-pdf/bin/python heating_checks.py --pdf
+.venv-pdf/bin/python -m unittest test_heating_checks
+```
+
+It verifies the existing heat-loss input hashes, applies the explicit design
+conductivity sensitivity (wool +7%, EPS +3%), and writes the VYT-03 Markdown/PDF
+and `cache/heating_checks.json`. It checks daily heating/DHW budgets, constant-water
+space-heating bivalence, necessary hall heat transfer, FCU limits, preliminary
+hydraulic routes, volumes and the actual hydrobox/tank clearance. Its report
+distinguishes manufacturer ratings, estimates and unresolved commissioning or
+supplier confirmations. It does not reposition equipment or regenerate plans.
 
 Set `house.add_drawing(..., scale=200)` to render a drawing at 1:200;
 the default denominator is 100. Sheet composition preserves that scale and

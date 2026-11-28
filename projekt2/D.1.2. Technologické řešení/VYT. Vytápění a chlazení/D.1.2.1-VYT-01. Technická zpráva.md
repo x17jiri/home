@@ -14,7 +14,7 @@
 | Katastrální území | Lažánky u Blanska, 679453 |
 | Pozemky řešené stavební dokumentací | 105, 106/1, 103/2 |
 
-Zpráva zachycuje potvrzený záměr investora a předběžné technické řešení. Označení **DOPLNIT** vymezuje údaje vyžadující výpočet nebo výběr konkrétního příslušenství. Výkonová dostatečnost soustavy bude doložena výpočtem tepelných ztrát a chladicích zátěží.
+Zpráva zachycuje potvrzený záměr investora a předběžné technické řešení. Označení **DOPLNIT** vymezuje údaje vyžadující výpočet nebo výběr konkrétního příslušenství. Zjednodušenou zimní bilanci obsahuje příloha D.1.2.1-VYT-02; navazující technickou kontrolu, vyšší odběr TV a variantu 40/35 °C obsahuje příloha D.1.2.1-VYT-03. Kapitola 12 rozlišuje původní odhad a kontrolu s návrhovými korekcemi vodivostí. Neuzavřené zůstávají zejména předání tepla do chodeb/WC, tichý výkon FCU, přesné nabíjení zásobníku a letní zátěže.
 
 ## 1. Úvod
 
@@ -39,7 +39,7 @@ Pro tepelnětechnický výpočet se použijí aktuální skladby konstrukcí, ro
 | Vnitřní teplota při vytápění | 20 °C podle požadavku investora, včetně koupelny |
 | Vnitřní teplota při chlazení | 25 °C podle požadavku investora |
 | Letní venkovní podmínky a návrhová vlhkost | +32 °C, shodně s částí VZT; vlhkost doplnit pro výpočet chladicí zátěže |
-| Suterén | Bez aktivního vytápění a chlazení; výpočtová teplota se stanoví tepelnou bilancí |
+| Suterén | Bez aktivního vytápění a chlazení; pro zjednodušenou konzervativní kontrolu −15 °C, citlivost při 0 až +10 °C; skutečná teplota není stanovena |
 | Počet uživatelů pro přípravu TV | 4 osoby |
 
 ### 2.3. Podklady
@@ -51,6 +51,8 @@ Pro tepelnětechnický výpočet se použijí aktuální skladby konstrukcí, ro
 
 Výstupy této profesní části tvoří tato technická zpráva a související výkresy:
 
+- **D.1.2.1-VYT-02 – Zjednodušený výpočet tepelné ztráty.**
+- **D.1.2.1-VYT-03 – Technické ověření vytápění a přípravy TV.**
 - **D.1.2.2-VYT-01 – Vytápění a chlazení, půdorys 1.NP.**
 - **D.1.2.2-VYT-02 – Vytápění a chlazení, půdorys 2.NP.**
 
@@ -64,7 +66,7 @@ Za hydraulickým modulem bude uzavřená dvoutrubková soustava s nuceným oběh
 
 Soustava bude mít společný režim vytápění nebo chlazení. Jednotlivé místnosti budou regulovány samostatně, avšak dvoutrubkové zapojení neumožní současné vytápění jedné místnosti a chlazení jiné. Při požadavku na ohřev TV bude tepelné čerpadlo přepnuto do režimu nabíjení zásobníku; konkrétní priority a časová omezení se nastaví při uvedení do provozu.
 
-Chodby 0.04 a 1.03 a WC 1.02 nemají v současném rozmístění vlastní otopné těleso. Při výpočtu se prověří jejich teplotní režim a předávání tepla z navazujících prostorů. Samotná existence rekuperačního větrání nedokládá pokrytí jejich tepelné ztráty. Záměr s pěti jednotkami musí být posouzen pro všechny požadované vnitřní teploty.
+Chodby 0.04 a 1.03 a WC 1.02 nemají v současném rozmístění vlastní otopné těleso. Kontrola VYT-03 dává při 20 °C přibližně **600 W / 275 W / 19 W** jejich vlastních ztrát. Vzduch přestupující ze stejně teplých místností tyto ztráty nepokrývá. Při snížení teploty obou chodeb na 18 °C předá předepsaných 160 m³/h přestupujícího vzduchu jen asi 109 W, zatímco jejich ztráta zůstává přibližně 825 W v konzervativním případě. Bez doložení dalšího přenosu nelze tvrdit, že ani 18 °C bude dosaženo. **Koncepce pěti FCU při požadavku 20 °C ve všech těchto prostorech není uzavřena:** je nutné rozhodnout o konkrétním předání tepla nebo rozdělení koncových zařízení. Touto kontrolou se počet ani poloha FCU nemění.
 
 ## 4. Zdroj tepla a chladu
 
@@ -72,9 +74,9 @@ Chodby 0.04 a 1.03 a WC 1.02 nemají v současném rozmístění vlastní otopn�
 
 Investorem je potvrzena sestava **LG THERMA V, venkovní jednotka HU051MR.U44 a vnitřní hydrobox HN091MR.NK5**. Jde o splitovou sestavu s chladivem R32 a chladivovým propojením mezi jednotkami. Výrobce uvádí jmenovitý topný výkon **5,50 kW při A7/W35**. Tato hodnota charakterizuje katalogový provozní bod, nikoli ověřený výkon při návrhové zimní teplotě konkrétní stavby. [Podklad LG – R32 Split Hydro Box, specifikace sestavy](https://www.lg.com/gr/business/download/airsolution/Therma_V_R32_Split_Leaflet%5B20220621_225825898%5D.pdf)
 
-Výkonová dostatečnost potvrzené sestavy se ověří porovnáním výkonové křivky s tepelnou ztrátou domu při návrhové teplotě topné vody. Prověří se také minimální výkon, četnost spínání, odmrazování, souběh provozních požadavků a schopnost přípravy TV. V zimní bilanci se nebude předpokládat nezbytná obsluha doplňkových kamen.
+Výrobní tabulka uvádí pro tuto sestavu maximální výkon **4,99 kW při A−15/W40** a **4,85 kW při A−15/W45**, včetně vlivu odmrazování. Kontrola VYT-03 s návrhovými korekcemi λ dává ztrátu **4,80 kW** při suterénu −15 °C a **4,40 kW** při suterénu +5 °C. Při W40 tedy zbývá v konzervativním případě jen asi 0,19 kW. Nejde o automatickou rezervu pro ohřev TV nebo zátop ani o výkon v tichém režimu. Ponechává se automatický elektrický dohřev, v zimní bilanci se nepředpokládá obsluha kamen. Minimální modulace a počet startů nejsou z těchto maximálních výkonů určitelné. [LG – tabulka maximálních výkonů R32 Split, strana 2](https://www.lg.com/content/dam/channel/wcms/hu/business/download/airsolution/2021_THERMA_V_%28AWHP%29_R32_Split_R410A_Split_leaflet_0302_FIN_20211102_223018918_.pdf).
 
-Hydrobox obsahuje hydraulické a zabezpečovací prvky; pro tuto variantu katalog uvádí elektrický dohřev 6 kW ve dvou stupních, expanzní nádobu 8 l a pojistný ventil 3 bar. Zapojení a využití dohřevu, bod bivalence a dostatečnost vestavěné expanze se ověří při návrhu celé soustavy. [Technické údaje LG](https://www.lg.com/gr/business/download/airsolution/Therma_V_R32_Split_Leaflet%5B20220621_225825898%5D.pdf)
+Hydrobox obsahuje hydraulické a zabezpečovací prvky; pro tuto variantu katalog uvádí elektrický dohřev 6 kW ve dvou stupních, expanzní nádobu 8 l a pojistný ventil 3 bar. Předběžná kontrola expanze a prostorového bodu bivalence je v příloze VYT-03; neznamená zákaz dohřevu nad tímto bodem. Souběhy, režim TV a definitivní nastavení se ověří podle skutečného zapojení. [Technické údaje LG](https://www.lg.com/gr/business/download/airsolution/Therma_V_R32_Split_Leaflet%5B20220621_225825898%5D.pdf)
 
 ### 4.2. Hydraulické uspořádání
 
@@ -94,7 +96,7 @@ Objem 51 l zajišťuje rezervu proti minimu LG, ale nepotvrzuje konkrétní mini
 
 Hydrobox s vestavěným čerpadlem → **třícestný přepínací ventil TV** → buď pět paralelních fan-coilů, nebo výměník zásobníku QUANTUM. Vratná voda z fan-coilů a z jejich obtoku prochází sériovou 51l nádobou; vratná voda z výměníku TV se připojí až za ní. Společná vratná větev vede přes magnetický odlučovač nečistot a předepsaný filtr do hydroboxu. Doplní se uzávěry, plnění, vypouštění a odvzdušnění přístupných nejvyšších míst. Mezi pojistným zařízením a chráněnou částí nesmí běžná poloha servisních uzávěrů zrušit jejich propojení.
 
-Toto zapojení neohřívá celý chladicí buffer při každém letním nabíjení TV. Pro samostatnou větev TV však musí být před objednáním ověřen i její dostupný vodní objem a odpor. QUANTUM ve zveřejněném listu neuvádí objem vody výměníku ani jeho tlakovou charakteristiku. List Hu.Ray pro stejně označený Q7 400 WWM se shodnou plochou 4,7 m² a rozměry uvádí **25 l** a ztrátu **186 kPa při 5,6 m³/h**; kvadratický přepočet na 0,948 m³/h vychází přibližně 5,3 kPa. Jde pouze o podpůrný údaj pro předběžný návrh, **nikoli o potvrzení parametrů dodávky QUANTUM**. Dodavatel má potvrdit vodní objem nejméně 20 l, skutečnou charakteristiku výměníku a dosažení průtoku také při nabíjení TV. Pokud by dostupný objem nedosáhl minima LG, doplní se objem do této větve samostatně. [Hu.Ray – Q7 WWM, srovnávací výrobní podklad](https://huray.hu/ckfinder/userfiles/files/Huray%20T%C3%A1rol%C3%B3k/WWM/HRQ7WWM02.pdf).
+Toto zapojení neohřívá celý chladicí buffer při každém letním nabíjení TV. Pro samostatnou větev TV však musí být před objednáním ověřen i její dostupný vodní objem a odpor. QUANTUM ve zveřejněném listu neuvádí objem vody výměníku ani jeho tlakovou charakteristiku. List Hu.Ray pro stejně označený Q7 400 WWM se shodnou plochou 4,7 m² a rozměry uvádí **25 l** a ztrátu **186 kPa při 5,6 m³/h**; kvadratický přepočet na 0,948 m³/h vychází přibližně 5,3 kPa. Jde pouze o podpůrný údaj pro předběžný návrh, **nikoli o potvrzení parametrů dodávky QUANTUM**. Dodavatel má potvrdit objem a skutečnou charakteristiku výměníku. Součet dostupné vody ve výměníku, příslušném potrubí a hydroboxu musí i v režimu TV splnit nejméně 20 l; výměník sám nemusí mít 20 l, pokud vyhovuje součet. Pokud by dostupný objem nedosáhl minima LG, doplní se objem do této větve samostatně. [Hu.Ray – Q7 WWM, srovnávací výrobní podklad](https://huray.hu/ckfinder/userfiles/files/Huray%20T%C3%A1rol%C3%B3k/WWM/HRQ7WWM02.pdf).
 
 Hydraulický oddělovač ani druhé oběhové čerpadlo se v základní variantě **nepřidávají**. Dvoutrubkový sériový buffer je objemová nádoba, nikoli čtyřhrdlové hydraulické oddělení se samostatným sekundárním čerpadlem.
 
@@ -113,6 +115,8 @@ Tabulka je **výpočet předběžného rozsahu, nikoli zaměření tras nebo nas
 Průtok místnosti se určí z její skutečné ztráty/zátěže, přibližně **q [l/h] = 860 × P [kW] / ΔT [K]**. Není správné současně nastavit katalogové maximální průtoky všech fan-coilů: jejich součet při 45/40 °C je 2,748 m³/h a odpovídá vyššímu tepelnému výkonu než tato sestava TČ. Při menším součtu průtoků větví doplní potřebný průtok hydroboxu obtok. Konečné vyvážení po místnostech zůstává navázané na výpočet zátěží.
 
 Hodnota 0,948 m³/h při spádu 5 K odpovídá přenosu přibližně 5,5 kW. Při návrhu souběhu kompresoru a elektrického dohřevu se ověří také celkový přenášený výkon, průtok a přípustný spád; uvedená tlaková kontrola sama nepotvrzuje přenos součtu 5,5 + 6 kW při stejném spádu a průtoku.
+
+Navazující kontrola VYT-03 používá návrhově korigované ztráty a delší 30m větve (součet přívodu a zpátečky). Součet bilančních průtoků vychází **825 l/h**, nejnepříznivější cesta asi **34,5 kPa** proti dostupným 71,6 kPa. Při průtoku zdrojem 948 l/h doplňuje obtok asi 123 l/h; při přívodu 40 °C vychází smíšená zpátečka přibližně 35,6 °C. Obtok proto ovlivňuje skutečný teplotní spád zdroje. Rozdělení průtoků pro chodby je pouze bilanční, dokud nebude doložena skutečná cesta dodávky jejich tepla. Rozsah měřidel vyvážení musí pokrýt i zhruba 6 l/min horní větve a malé průtoky koupelny. Skutečné trasy, armatury a průtok při zavřených ventilech zůstávají předmětem dopracování a měření.
 
 #### 4.2.4. Referenční příslušenství a kompatibilita
 
@@ -192,6 +196,8 @@ Topné hodnoty platí pro vodu 45/40 °C a vzduch 20 °C; chladicí pro vodu 7/1
 
 Katalogové výkony nejsou tepelnými ztrátami místností. Při návrhu se doloží výkon každé jednotky při skutečných teplotách vody a přijatelných otáčkách ventilátoru, zejména v pokojích určených ke spaní. Součet katalogových výkonů jednotek neurčuje potřebný výkon tepelného čerpadla.
 
+Příloha VYT-03 obsahuje první přepočet na 40/35/20 °C: odhadem **1,71 / 2,34 / 3,35 kW** maximálně pro SL400 / SL600 / SL1000. Nejde o výrobkový výběr. Referenční certifikovaný INNOVA SL600 při 45/40/20 °C dává 1,20 kW na nízké a 2,16 kW na střední rychlosti; totožnost konkrétní dodávky IVAR je nutné potvrdit. Horní SL1000 při nejnižším publikovaném průtoku 262 m³/h nemůže s přívodem 40 °C přenést více než teoretických 1,78 kW, zatímco bilanční potřeba horního podlaží je přibližně 2,05 kW. Pro návrhový stav proto nelze počítat s nejnižším průtokem. Akustický tlak SL600 26/34 dB(A) a SL1000 28/38 dB(A) při nízké/střední rychlosti je katalogový údaj v 1 m, nikoli doložení hluku v místě pobytu. [Eurovent – referenční SL600](https://www.eurovent-certification.com/en/catalog/program/certificate/participant/model/show/200275034).
+
 Pro prostorovou koordinaci se používají rozměry skříní z tabulky a **80mm podlahové podpěry**, tedy celková výška 659 mm. Hydrobox má rozměry šířka × výška × hloubka **490 × 850 × 315 mm**; šířka vede podél schodišťové stěny, hloubka do koupelny. Venkovní jednotka má **950 × 834 × 330 mm** a zadní stranu 300 mm od dokončené fasády kvůli sání vzduchu. Zásobník TV má rozměry Ø710 × 1670 mm.
 
 Rozměry kamen PISA RLU jsou 460 × 488 × 1441 mm. Předepsané požární odstupy a ochrana podlahy se koordinují samostatně podle kapitoly 8 a PBŘ.
@@ -205,9 +211,12 @@ Hydrobox je zavěšen **spodní hranou 1300 mm nad hotovou podlahou**, horní hr
 | Režim | Přívod / zpátečka | Návrhové podmínky |
 |---|---|---|
 | Vytápění | **45/40 °C** | Venkovní teplota −15 °C, vnitřní 20 °C |
+| Vytápění – prověřovaná nižší varianta | **40/35 °C** | Zimní varianta VYT-03; výkon při požadovaných otáčkách a skutečném průtoku potvrdit |
 | Chlazení | **7/12 °C** | Vnitřní teplota 25 °C; venkovní návrhová +32 °C |
 
 Vytápění bude řízeno ekvitermně: uvedený spád platí pro zimní návrhový stav, v mírnějším počasí se teplota přívodu snižuje. Konkrétní ekvitermní křivka se nastaví podle tepelných ztrát a výkonových charakteristik jednotek. Výkony fan-coilů a jejich hluk se ověří při skutečných provozních podmínkách; údaj 7/12 °C sám nepotvrzuje dosažení 25 °C v místnosti. Chladicí provoz předpokládá odvod kondenzátu a souvislé parotěsné izolace rozvodů i armatur. Při přípravě TV se teplota nabíjecí vody řídí samostatně podle zásobníku a jeho výměníku, nikoli spádem 45/40 °C pro místnosti.
+
+Pro první zprovoznění nižší varianty se předpokládá přívod přibližně 36–40 °C a zachování možnosti 45/40 °C při nedostatečném výkonu či komfortu. Mez přívodu zohledňuje čidlo ve výměníku a 30°C blokovací práh ventilátoru; při přibližně 5K rozdílu vody nemá výměník opakovaně přecházet do blokace. Konečnou křivku nastavit podle měřených teplot a výkonu, nikoli pouze podle katalogového spádu. Snížením teploty vody se samo neřeší nedostatek přenosu tepla do chodeb.
 
 ## 6. Potrubní rozvody a kondenzát
 
@@ -254,6 +263,12 @@ Pro předběžné energetické hodnocení se uvažuje teplota zásobníku TV **5
 
 Ohřev celých 400 l z 10 na 55 °C představuje přibližně **20,9 kWh**; při hypotetickém stálém výkonu 5,5 kW trvá nejméně 3,8 h bez započtení ztrát. Jde o studený start celého zásobníku, nikoli běžný denní odběr ani slíbenou dobu dohřevu. Při nabíjení musí být topná voda teplejší než aktuální voda v zásobníku; katalogový výkon výměníku při 80/60 °C nelze použít pro TČ. Nastavení 55 °C v zásobníku a hygienický cyklus se ověří proti teplotní obálce LG při skutečné venkovní teplotě a možnostem elektrického dohřevu. Vestavěný 6kW dohřev hydroboxu a navrhovaná 2,5kW patrona pitné vody jsou dvě různá zařízení a nemají se zaměňovat.
 
+Investor pro kontrolu potvrdil vyšší denní odběr **300 l vody smíchané na 40 °C** pro čtyři osoby. Při studené vodě 10 °C jde o **10,47 kWh/den**, se štítkovou ztrátou zásobníku o **12,05 kWh/den** bez ztrát rozvodů. Ideálních 400 l při 55 °C odpovídá 600 l při 40 °C; skutečný využitelný objem závisí na rozvrstvení a regulaci a není tímto doložen výrobkový odběrový profil.
+
+VYT-03 počítá idealizované nabíjení při A−15/W55 výkonem zdroje 4,58 kW, přibližně **2,63 h/den**. Pokud se po tuto dobu netopí do místností a zbývající čas kompresor pracuje při W40, konzervativní případ se suterénem −15 °C vyžaduje přibližně **8,54 kWh/den prostorové pomoci**. Jde o optimistickou časovou bilanci při konstantním přenosu celého výkonu, nikoli garantovanou dobu nabití ani skutečný podíl elektřiny. Při suterénu +5 °C nebo při −5 °C venku tento idealizovaný součet vychází bez prostorového dohřevu; dokončení ohřevu TV však stále může potřebovat patronu.
+
+Výkon při W55 neznamená ohřev zásobníku na 55 °C beze zbytku: při vyrovnání teplot spirály a vody přestup klesá k nule a při A−15/W60 není doložen tabulkový provoz. Přenosovou křivku QUANTUM a nastavení čidla musí potvrdit dodavatel. Pro chladné období je dostupná záložní varianta s prioritou prostorového vytápění a ohřevem TV patronou, kterou LG popisuje v návodu. Samostatná patrona **2,5 kW** dodá uvedených 12,05 kWh přibližně za **4,82 h/den**. To vyžaduje ověřené fyzické osazení patrony, regulaci LG/PHLTA a elektrické souběhy. Nabíjení TV má mít časové omezení a přestávky pro vytápění místností; jeden souvislý mnohahodinový výpadek vytápění se nepředpokládá. [LG – instalační nastavení priorit a časování TV](https://www.lgklimaat.nl/media/reofgoez/installatie-handleiding-hn091mrnk5.pdf).
+
 ## 8. Měření a regulace
 
 Pracovní koncepce počítá s regulací teploty topné vody podle venkovních podmínek a s místními ovladači **IVAR.644 ECA644II** a ventily **IVAR.139 V20139**. V zimě bude požadováno 20 °C, v létě 25 °C. Ovladače řídí DC ventilátor a 230V hlavici Y1. Čidla vody T2 zůstanou osazena; automatické blokování ventilátoru při nevhodné teplotě vody je součástí řízení. Při nastavení ekvitermní křivky je nutné zohlednit výchozí topný práh 30 °C pro spouštění ventilátoru, aby jednotky při nižší teplotě přívodu nepřestaly nechtěně topit.
@@ -273,6 +288,8 @@ Spaliny bude odvádět **Schiedel ABSOLUT**; kamna budou mít těsný externí p
 ## 9. Expanzní a pojistná zařízení
 
 Topný/chladicí okruh využije vestavěnou expanzní nádobu LG 8 l. Výrobce při výchozím předtlaku 1 bar uvádí celkový objem soustavy do 230 l a statickou výšku pod 7 m jako základní případ bez úpravy předtlaku. Předběžný součet 51 l buffer + 5,99 l fan-coily + přibližně 20–35 l potrubí + výměník TV a vnitřní objem hydroboxu bude pravděpodobně výrazně pod tímto objemem. Další topná expanze se tedy nyní nepředepisuje; konečný součet, skutečná statická výška, maximální teplota i nastavení se ověří podle grafu LG. Rozdíl výšek v uzavřené soustavě určuje tlakové poměry expanze, nepřičítá se přímo k tlakové ztrátě oběhového čerpadla.
+
+Delší kontrolní rozvody VYT-03 obsahují asi 44 l vody; s 51l bufferem a FCU vychází prostorová větev asi 101 l. Po přičtení srovnávacího 25l výměníku TV a 10l rezervy zůstává součet kolem 136 l pod referenční hranicí LG. Jde o objem z kontrolních délek, nikoli změřený stav. Buffer při 5K využitelné hysterezi uchová pouze 0,297 kWh: proti přebytku 1 kW asi 18 minut, proti 3 kW asi 6 minut. Není tím potvrzen počet startů kompresoru.
 
 **Zásobník pitné TV má samostatné zabezpečení.** Pro předběžný návrh se uvažuje redukovaný studený tlak 3 bar a pojistný ventil 6 bar. Mezi zpětnou armaturou a zásobníkem bude **průtočná pitná expanze 25 l**, referenčně **Reflex Refix DD 25, 7380400**, s průtočným připojením výrobce; případná servisní armatura Flowjet nesmí zrušit funkci zabezpečení. Tento typ se osazuje do **studeného přívodu**, nikoli do horkého výstupu nebo topné vody. Výchozí tovární předtlak 4 bar se upraví na hodnotu odpovídající redukovanému tlaku. [Reflex – Refix DD 25, 7380400](https://reflex-winkelmann.com/nl/producten/7380400).
 
@@ -303,6 +320,8 @@ Sestava LG je v citované variantě jednofázová, 220–240 V / 50 Hz; elektric
 
 Profese elektro doplní potřebné přívody, jištění, ochrany, odpojování, komunikaci a regulaci podle výrobních návodů a výpočtu instalace. Posoudí příkon a souběhy kompresoru, dohřevu, případné patrony zásobníku a ostatních spotřebičů domu. Fan-coily a případná čerpadla kondenzátu budou zahrnuty do napájení a ovládání. Parametry kabelů a ochranných prvků zde nejsou předepsány.
 
+Kontrolní souběh při A−15/W40: přibližně 2,39 kW příkon kompresorové sestavy podle COP 2,09, k tomu až 6 kW dohřev a 2,5 kW patrona TV, tedy přibližně **10,9 kW před ostatními spotřebiči**. Nejde o maximum příkonu ve všech stavech. Jednofázové přívody je nutné ověřit po jednotlivých fázích a případně řídit souběhy; celkový třífázový příkon domu sám neprokazuje vhodné rozložení těchto spotřebičů.
+
 ### 11.3. Zdravotnětechnické instalace a větrání
 
 - Připojit zásobník TV, řešit jeho zabezpečení, případnou cirkulaci a napouštění otopné soustavy.
@@ -321,16 +340,41 @@ Profese elektro doplní potřebné přívody, jištění, ochrany, odpojování,
 | Suterén | Nevytápěný |
 | Kamna | Doplňková, bez propojení s vodním okruhem |
 | Výpočtová venkovní teplota | −15 °C v zimě / +32 °C v létě |
-| Tepelná ztráta jednotlivých místností a domu | **DOPLNIT výpočtem** |
+| Tepelná ztráta domu | VYT-02 s λD: 4,68 / 4,30 kW; VYT-03 s návrhovou korekcí λ: **4,80 / 4,40 kW** při suterénu −15 / +5 °C, venku −15 °C |
 | Letní citelná a celková chladicí zátěž | **DOPLNIT výpočtem** |
-| Návrhové teploty topné a chladicí vody | 45/40 °C vytápění, ekvitermní regulace / 7/12 °C chlazení |
-| Průtoky a tlakové ztráty | Zdroj 0,948 m³/h; kontrolní cesta přibližně 37 kPa pro předpoklady kap. 4.2.3; konečné trasy a vyvážení podle zátěží dopracovat |
-| Bod bivalence a využití elektrického dohřevu | **DOPLNIT** |
+| Návrhové teploty topné a chladicí vody | Prověřovaná varianta **40/35 °C**, možnost 45/40 °C; konečné otáčky/hluk FCU potvrdit / 7/12 °C chlazení |
+| Průtoky a tlakové ztráty | Zdroj 0,948 m³/h; bilanční větve 0,825 m³/h; cesta asi 34,5 kPa pro kontrolní délky VYT-03; skutečné trasy a vyvážení dopracovat |
+| Prostorový bod bivalence | Při W40 asi −15,8 / −17,4 °C, při W45 asi −15,2 / −16,9 °C pro suterén −15 / +5 °C; orientační průsečíky bez TV, nikoli zákazy dohřevu |
 | Objem soustavy a objemová nádoba | FCU 5,99 l; návrh Regulus PS 50 ZC / 51 l v prostorové větvi; konečný objem potrubí a výměníku QUANTUM potvrdit |
-| Provozní teplota TV a doba dohřevu | Předběžně 55 °C; dobu dohřevu a hygienický režim ověřit pro sestavu LG + QUANTUM |
+| Provozní teplota TV a doba dohřevu | Předběžně 55 °C; 300 l/den při 40 °C, asi 12,05 kWh/den se štítkovou ztrátou. Ideální nabíjení při A−15/W55 asi 2,63 h; skutečný přenos a dokončení na 55 °C potvrdit, patrona 2,5 kW zůstává součástí návrhu |
 | Roční potřeba tepla a elektrické energie | **DOPLNIT energetickým výpočtem** |
 
 Při návrhu teplot vody je cílem co nejnižší teplota v topném režimu a vhodně zvolená teplota v režimu chlazení při splnění vnitřních podmínek. Katalogové teploty z kapitoly 5 slouží pouze k identifikaci uvedených výkonů. Bez výpočtů nelze prohlásit, že zvolená sestava dosahuje návrhových teplot ve všech místnostech nebo stanovit její roční spotřebu.
+
+### 12.1. Zjednodušená zimní bilance
+
+Příloha **D.1.2.1-VYT-02 – Zjednodušený výpočet tepelné ztráty** obsahuje reprodukovatelný ustálený odhad z aktuální geometrie a skladeb. Započítává obvodové stěny, konstrukční otvory, šikmé a vodorovné části podhledu, podlahu nad suterénem i samostatnou podlahu pod schody. Ztráta nevytápěného suterénu se nepřičítá podruhé. Vnitřní schodiště propojuje vytápěná podlaží; předpokládá se vzduchové oddělení suterénu.
+
+Hlavní předpoklady: interiér +20 °C, exteriér a konzervativně i suterén −15 °C; normální větrání 240 m³/h, referenční účinnost 77 %; dodatečná provozní infiltrace 0,10 h⁻¹ z hrubého objemu obálky; přirážka na tepelné mosty ΔU = 0,05 W/(m²·K). Aktuální požadavek λ izolací je 0,040 W/(m·K); pro střešní izolace se předpokládá 10 % dřevěných prvků. Kladné odpory zdiva, MIAKO, potěrů a desek se zanedbávají. Nad vodorovným podhledem se konzervativně uvažuje studená dutina a nepřičítá se další izolace mezi krokvemi nad ní. Pro okna platí Uw = 1,20, pro dosud nevybrané vstupní dveře se předpokládá Ud = 1,50 W/(m²·K). Tepelné zisky od osob, spotřebičů, slunce, zásobníku TV ani kamen se nezapočítávají.
+
+| Případ při venkovní teplotě −15 °C | Odhad ztráty domu |
+|---|---:|
+| Suterén −15 °C, normální větrání | **4,68 kW** |
+| Suterén 0 °C | 4,40 kW |
+| Suterén +5 °C | 4,30 kW |
+| Suterén +10 °C | 4,21 kW |
+| Boost 300 m³/h, ostatní předpoklady základní | 4,85 kW |
+| Kombinovaný nepříznivý případ: účinnost 65 %, infiltrace 0,20 h⁻¹, ΔU = 0,10 a λ izolací +10 % | 6,32 kW |
+
+Pro kontrolu koncových jednotek se ztráta chodby 0.04 rozdělila podle ploch mezi čtyři přízemní FCU a ztráty 1.02 a 1.03 se přiřadily FCU obývacího pokoje. Takto vycházejí rozpočtové výkony přibližně **0,77 / 0,77 / 0,87 / 0,26 / 2,00 kW** pro místnosti **0.01 / 0.02 / 0.03 / 0.05 / 1.01**. Součet je 4,68 kW. Jejich katalogové maximální výkony při 45/40/20 °C mají rezervu; výkon při nejnižších otáčkách tím není doložen. Orientační součet průtoků větví při spádu 5 K je 0,81 m³/h; průtok hydroboxem musí nadále zajistit obtok podle kapitoly 4.2 a chlazení může vyžadovat jiné průtoky.
+
+Rozdělení výkonu společných prostor je pouze bilanční. **Nepotvrzuje udržení 20 °C v chodbách a WC bez těles při zavřených dveřích.** Rovněž nejde o normový výpočet podle ČSN EN 12831-1 ani zaručenou horní mez ztráty. Výsledek závisí zejména na skutečné těsnosti, tepelných mostech, návrhových U skladeb a zimní účinnosti VZT včetně rozvodů v suterénu. Nezahrnuje ztráty rozvodů, ohřev TV a zátop po útlumu. Chladicí zátěže, roční energie a bod bivalence z této bilance nevyplývají.
+
+### 12.2. Navazující technická kontrola VYT-03
+
+Příloha **D.1.2.1-VYT-03 – Technické ověření vytápění a přípravy TV** doplňuje prostorový bod bivalence, denní bilanci TV a kontrolu přenosu do místností. Pro tuto kontrolu jsou navíc zvýšeny λ minerálních vat o 7 % a EPS o 3 %; jde o zjednodušenou návrhovou variantu podle přílohy 5 části C vyhlášky 264/2020 Sb., nikoli o změnu tlouštěk modelu. Odhad ztráty je 4,80 kW při venku/suterénu −15/−15 °C, 4,40 kW při −15/+5 °C a 3,23 kW při −5/+5 °C. Současně s těmito hodnotami se nesmějí bez rozlišení používat starší hodnoty s λD z VYT-02.
+
+Početně byly zkontrolovány kontrolní hydraulické cesty, průtoky a obtok, objem/expanzní rezerva, denní energie vyššího odběru TV a základní kapacita dohřevu. Přenos do chodeb/WC, tichý pracovní bod horní FCU a boční mezera hydroboxu nevyšly jako hotové řešení. Ověřený výběr přesné dodávky FCU a přenosovou charakteristiku zásobníku nemůže nahradit přibližný přepočet teplot. Přesné podmínky otevřených bodů jsou uvedeny ve VYT-03 a v závěru níže.
 
 ## 13. Závěr a dopracování
 
@@ -338,10 +382,10 @@ Pracovní návrh stanovuje koncepci s pěti fan-coily, potvrzenou sestavou LG a 
 
 Před uzavřením návrhu budou dopracovány zejména:
 
-1. Výpočty tepelné ztráty a chladicí zátěže včetně místností bez vlastní koncové jednotky.
-2. Ověření výkonu TČ v návrhových podmínkách, teplot vody, výkonů fan-coilů a přijatelných otáček ventilátorů.
-3. Dokončení hydraulického schématu podle kapitoly 4.2: skutečné délky, vyvážení po místnostech, objem/odpor výměníku QUANTUM a kontrola čerpadla i obtoku měřením.
-4. Napojení potvrzeného zásobníku QUANTUM Q7-400-WWM, výkon výměníku při skutečných teplotách vody, čidlo LG, elektrický dohřev, regulace a bilance přípravy TV.
+1. Rozhodnutí o konkrétním vytápění chodeb a WC: doložený přenos s přijatými teplotami, nebo změna rozdělení koncových zařízení; pouhé připsání ztráty sousedním FCU nestačí. Ověřit předpoklady těsnosti, tepelných mostů a čisté zimní účinnosti VZT. Samostatně doplnit letní chladicí zátěže.
+2. Výrobkový výběr přesného IVAR při 40/35 °C a skutečném průtoku: nízké otáčky pokojů a vyšší potřebný průtok horní FCU, hluk v místě pobytu. Konečná ekvitermní křivka, modulace a počty startů podle dat LG a zprovoznění.
+3. Dokončení hydraulického schématu podle kapitoly 4.2: skutečné délky, armatury, rozsahy měřidel vyvážení, objem/odpor výměníku QUANTUM a měření průtoku při otevřených i zavřených FCU a při TV.
+4. QUANTUM: nabíjecí výkon/UA při dostupné teplotě vody, poloha čidla LG a kompatibilita zástavby 2,5kW patrony; časování TV/topení a dokončení na 55 °C. Denní energetická potřeba pro potvrzený odběr 300 l při 40 °C je již vyčíslena ve VYT-03, není však změřenou dobou nabití.
 5. Materiál a dimenze rozvodů, trasy kondenzátu a podrobnosti regulace.
 6. Dořešení bočních servisních odstupů zvýšeného hydroboxu, umístění bufferu a expanzní nádoby TV, koordinace jednofázového elektrického napájení a konkrétního schématu řízení.
 7. Posouzení venkovního osazení a hluku a doplnění navazujících výkresů.
